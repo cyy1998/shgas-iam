@@ -117,7 +117,7 @@ export function createUserRepository(db: DbClient) {
           .set({ mobile: phoneNumber })
           .where(and(eq(users.id, userId), eq(users.status, UserStatus.Enable), eq(users.isDelete, false)))
           .returning(),
-      )!;
+      );
     },
     async updateEnabledUserStatus(userId: number, status: UserStatus) {
       return (

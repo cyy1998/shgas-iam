@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import { access, mkdir, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
+import { USER_DOCUMENT_SCHEMA_VERSION } from "@iam/user-document/document";
 import {
   cleanupManagedResources,
   createManagedResourceRun,
@@ -466,9 +467,9 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
       if (failures.length > 1) throw new AggregateError(failures, "E2E seed or required receipt export failed");
     },
 
-    async verifyUserProfileReadiness(descriptor: RunDescriptor, signal?: AbortSignal) {
+    async verifyUserDocumentReadiness(descriptor: RunDescriptor, signal?: AbortSignal) {
       for (const operation of ["verify-postgres", "verify-redis"] as const) {
-        const script = `user-profile:${operation}`;
+        const script = `user-document:${operation}`;
         const result = await options.captureCommand(
           "docker",
           projectArguments(descriptor, [
@@ -489,7 +490,7 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
             signal: signal ?? options.signal,
           },
         );
-        assertUserProfileGateOutput(operation, `${result.stdout}\n${result.stderr}`);
+        assertUserDocumentGateOutput(operation, `${result.stdout}\n${result.stderr}`);
       }
     },
 
@@ -599,18 +600,22 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
   };
 }
 
-function assertUserProfileGateOutput(operation: "verify-postgres" | "verify-redis", output: string) {
+function assertUserDocumentGateOutput(operation: "verify-postgres" | "verify-redis", output: string) {
   const expectedGate = operation === "verify-postgres" ? "postgres" : "redis-access";
   const passed = output.split(/\r?\n/u).some((line) => {
     try {
       const record = JSON.parse(line) as Record<string, unknown>;
-      return record.version === 4 && record.gate === expectedGate && record.status === "passed";
+      return (
+        record.version === USER_DOCUMENT_SCHEMA_VERSION && record.gate === expectedGate && record.status === "passed"
+      );
     } catch {
       return false;
     }
   });
   if (!passed) {
-    throw new Error(`User Profile ${expectedGate} gate did not report a passing v4 inventory`);
+    throw new Error(
+      `User Document ${expectedGate} gate did not report a passing v${USER_DOCUMENT_SCHEMA_VERSION} inventory`,
+    );
   }
 }
 

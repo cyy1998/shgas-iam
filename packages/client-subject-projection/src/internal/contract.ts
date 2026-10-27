@@ -1,7 +1,8 @@
 import {
-  ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG,
-  OrganizationResponsibilityTypeCode,
-  OrganizationType,
+  DocumentResponsibilitySchema,
+  OrganizationLevel,
+  OrganizationPathNodeSchema,
+  OrganizationReferenceSchema,
 } from "@iam/contracts";
 import { z } from "zod";
 import type {
@@ -18,54 +19,20 @@ export interface SubjectClaimSelection {
   readonly optionalClaims: readonly OptionalSubjectClaim[];
 }
 
-const ResponsibilityOrganizationNodeSchema = z
-  .object({
-    code: z.string().min(1),
-    name: z.string().min(1),
-    type: z.enum(OrganizationType),
-  })
-  .strict();
-
-export const EmploymentResponsibilitySnapshotSchema = z
-  .object({
-    type: z
-      .object({
-        code: z.enum(OrganizationResponsibilityTypeCode),
-        name: z.string().min(1),
-      })
-      .strict(),
-    targetOrganization: ResponsibilityOrganizationNodeSchema.extend({
-      path: z.array(ResponsibilityOrganizationNodeSchema).min(1),
-    }).strict(),
-  })
-  .strict()
-  .superRefine((responsibility, context) => {
-    const catalogEntry = ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG.find(
-      (entry) => entry.code === responsibility.type.code,
-    );
-    if (!catalogEntry || catalogEntry.name !== responsibility.type.name) {
-      context.addIssue({
-        code: "custom",
-        path: ["type", "name"],
-        message: "Responsibility type name is not canonical",
-      });
-    }
-
-    const target = responsibility.targetOrganization;
-    const terminal = target.path.at(-1);
-    if (!terminal || terminal.code !== target.code || terminal.name !== target.name || terminal.type !== target.type) {
-      context.addIssue({
-        code: "custom",
-        path: ["targetOrganization", "path"],
-        message: "Responsibility path must end at its target organization",
-      });
-    }
-  });
+export const EmploymentResponsibilitySnapshotSchema = DocumentResponsibilitySchema.safeExtend({
+  type: DocumentResponsibilitySchema.shape.type.strict(),
+  targetOrganization: OrganizationReferenceSchema.safeExtend({
+    path: z.array(OrganizationPathNodeSchema.strict()).min(1).max(OrganizationLevel.Five),
+  }).strict(),
+}).strict();
 
 export type EmploymentResponsibilitySnapshot = z.infer<typeof EmploymentResponsibilitySnapshotSchema>;
 
 export interface SubjectFactsEmployment extends SubjectFactsEmploymentBase {
-  readonly responsibilities: readonly EmploymentResponsibilitySnapshot[];
+  readonly responsibilities: readonly {
+    readonly type: EmploymentResponsibilitySnapshot["type"];
+    readonly targetOrganization: SubjectFactsEmploymentBase["organization"];
+  }[];
 }
 
 export interface SubjectFactsSnapshot extends SubjectFactsSnapshotBase {

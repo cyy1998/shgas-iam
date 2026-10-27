@@ -121,7 +121,7 @@ function createTransaction(): ResignUserTransactionPorts {
       }),
     },
     responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
-    userProfileInvalidation: { recordChanges: mock(async () => undefined) },
+    userDocumentInvalidation: { recordChanges: mock(async () => undefined) },
     userStore: createUserStore(),
   };
 }
@@ -221,7 +221,7 @@ describe("createResignUserUseCase", () => {
         }),
       },
       responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
-      userProfileInvalidation: { recordChanges: mock(async () => undefined) },
+      userDocumentInvalidation: { recordChanges: mock(async () => undefined) },
       userStore: {
         ...userReader,
         lockUserByUsername: mock(async () => target),
@@ -311,7 +311,7 @@ describe("createResignUserUseCase", () => {
             }),
           },
           responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
-          userProfileInvalidation: { recordChanges: mock(async () => undefined) },
+          userDocumentInvalidation: { recordChanges: mock(async () => undefined) },
           userStore: createUserStore(),
         }),
         userReader,
@@ -355,7 +355,7 @@ describe("createResignUserUseCase", () => {
         }),
       },
       responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
-      userProfileInvalidation: { recordChanges: mock(async () => undefined) },
+      userDocumentInvalidation: { recordChanges: mock(async () => undefined) },
       userStore: {
         lockUserByUsername: mock(async () => target),
         getUserByUsernameForAdmin: mock(async () => target),
@@ -385,7 +385,7 @@ describe("createResignUserUseCase", () => {
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
     expect(tx.userStore.updateUserByUsername).not.toHaveBeenCalled();
     expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
     expect(sessionRevocation.revokeUserSessions).not.toHaveBeenCalled();
   });
 
@@ -419,7 +419,7 @@ describe("createResignUserUseCase", () => {
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
     expect(tx.userStore.updateUserByUsername).not.toHaveBeenCalled();
     expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("treats only the scoped completed shape as a no-op retry and revokes Sessions again", async () => {
@@ -449,7 +449,7 @@ describe("createResignUserUseCase", () => {
         }),
       },
       responsibilityParentLifecycle: createResponsibilityParentLifecycle(),
-      userProfileInvalidation: { recordChanges: mock(async () => undefined) },
+      userDocumentInvalidation: { recordChanges: mock(async () => undefined) },
       userStore: {
         ...createEligibilityReader(),
         lockUserByUsername: mock(async () => target),
@@ -484,7 +484,7 @@ describe("createResignUserUseCase", () => {
         details: expect.objectContaining({ changed: false }),
       }),
     );
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
     expect(sessionRevocation.revokeUserSessions).toHaveBeenCalledTimes(1);
   });
 });

@@ -25,7 +25,11 @@ type StaticModulePattern = Readonly<{
 }>;
 
 type StaticModuleOwnershipRule = Readonly<{
-  ruleId: "client-subject-projection-owner" | "session-runtime-owner" | "worker-ownership";
+  ruleId:
+    | "client-subject-projection-owner"
+    | "session-runtime-owner"
+    | "worker-ownership"
+    | "organization-responsibility-parent-lifecycle-owner";
   sourceScopes: readonly string[];
   targets: readonly StaticModulePattern[];
   allowedTargets?: readonly StaticModulePattern[];
@@ -54,10 +58,11 @@ const architectureWorkspaces: readonly (readonly [
     ["source", "docker", "canonical"],
   ],
   ["@iam/role-assignment-resolution", "packages/role-assignment-resolution", ["source", "docker"]],
-  ["@iam/user-profile-read-model", "packages/user-profile-read-model", ["source", "docker", "canonical"]],
+  ["@iam/user-document", "packages/user-document", ["source", "docker", "canonical"]],
   ["@iam/delegation", "packages/delegation", ["source", "docker", "canonical"]],
   ["@iam/filter-engine", "packages/filter-engine", ["source", "docker"]],
-  ["@iam/organization-search-read-model", "packages/organization-search-read-model", ["source", "docker", "canonical"]],
+  ["@iam/organization-document", "packages/organization-document", ["source", "docker", "canonical"]],
+  ["@iam/document-update", "packages/document-update", ["source", "docker", "canonical"]],
   ["@iam/admin", "apps/admin", ["canonical"]],
   ["@iam/api-core", "packages/api-core", ["canonical"]],
   ["@iam/db", "packages/db", ["canonical"]],
@@ -114,7 +119,7 @@ const clientSubjectProjectionExternalOwnerTargets: readonly StaticModulePattern[
   { kind: "prefix", module: "packages/api-core/src" },
   { kind: "prefix", module: "packages/db/src" },
   { kind: "prefix", module: "packages/domain/src" },
-  { kind: "prefix", module: "packages/user-profile-read-model/src" },
+  { kind: "prefix", module: "packages/user-document/src" },
   { kind: "prefix", module: "apps" },
   { kind: "prefix", module: "@hono" },
   { kind: "package", module: "hono" },
@@ -124,6 +129,20 @@ const clientSubjectProjectionExternalOwnerTargets: readonly StaticModulePattern[
 ];
 
 const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
+  {
+    ruleId: "organization-responsibility-parent-lifecycle-owner",
+    sourceScopes: ["apps", "packages"],
+    targets: [{ kind: "prefix", module: "packages/organization-responsibility-resolution/src/parent-lifecycle" }],
+    allowedSources: [
+      "apps/api/src/composition",
+      "apps/admin-api/src/composition",
+      "apps/admin-api/src/services/organization-responsibility/organization-responsibility.repository.ts",
+      "apps/admin-api/src/services/organization-responsibility/organization-responsibility-parent-lifecycle.participant.ts",
+    ],
+    message: (moduleSpecifier, declaration) =>
+      `Only API/Admin composition and Admin Responsibility lifecycle owners may ${dependencyOperation(declaration)} ` +
+      `the parent lifecycle capability "${moduleSpecifier}"; consume an injected business port.`,
+  },
   {
     ruleId: "session-runtime-owner",
     sourceScopes: ["packages/oidc/src"],
@@ -230,7 +249,7 @@ export function analyzeRepositoryArchitecture(repoRoot: string): readonly Archit
     ...collectConsumerOwnedPortViolations(sources),
     ...collectDependencyDirectionViolations(sources),
     ...collectRoleResolutionOwnerViolations(sources),
-    ...collectUserProfileOwnerViolations(sources),
+    ...collectUserDocumentOwnerViolations(sources),
     ...collectStaticModuleOwnershipViolations(sources),
     ...collectDockerBuildClosureViolations(repoRoot),
   ].sort(compareViolations);
@@ -383,7 +402,7 @@ function collectRoleResolutionOwnerViolations(sources: readonly IndexedSourceFil
               file: source.file,
               line: lineOf(source.sourceFile, declaration),
               message:
-                `Only declared composition and User Profile module owners may ` +
+                `Only declared composition and User Document module owners may ` +
                 `${valueDependencyOperation(declaration)} Role Assignment Resolver package ` +
                 `"${moduleSpecifier}".`,
             },
@@ -394,48 +413,48 @@ function collectRoleResolutionOwnerViolations(sources: readonly IndexedSourceFil
   });
 }
 
-function collectUserProfileOwnerViolations(sources: readonly IndexedSourceFile[]): ArchitectureViolation[] {
+function collectUserDocumentOwnerViolations(sources: readonly IndexedSourceFile[]): ArchitectureViolation[] {
   return sources.flatMap((source) =>
     [...source.imports, ...source.reExports].flatMap((declaration): ArchitectureViolation[] => {
       if (!declaration.moduleSpecifier || !ts.isStringLiteral(declaration.moduleSpecifier)) return [];
       const moduleSpecifier = declaration.moduleSpecifier.text;
       const normalizedModule = normalizeStaticModulePath(moduleSpecifier);
-      if (normalizedModule === "@iam/user-profile-read-model/producer" && !isUserProfileProducerOwner(source.file)) {
+      if (normalizedModule === "@iam/user-document/producer" && !isUserDocumentProducerOwner(source.file)) {
         return [
           {
-            ruleId: "user-profile-owner",
+            ruleId: "user-document-owner",
             file: source.file,
             line: lineOf(source.sourceFile, declaration),
             message:
               `Only API and Admin API composition owners may ${dependencyOperation(declaration)} ` +
-              `User Profile producer entry "${moduleSpecifier}".`,
+              `User Document producer entry "${moduleSpecifier}".`,
           },
         ];
       }
-      if (normalizedModule === "@iam/user-profile-read-model/worker" && !isUserProfileWorkerOwner(source.file)) {
+      if (normalizedModule === "@iam/user-document/worker" && !isUserDocumentWorkerOwner(source.file)) {
         return [
           {
-            ruleId: "user-profile-owner",
+            ruleId: "user-document-owner",
             file: source.file,
             line: lineOf(source.sourceFile, declaration),
             message:
               `Only Worker composition may ${dependencyOperation(declaration)} ` +
-              `User Profile worker entry "${moduleSpecifier}".`,
+              `User Document worker entry "${moduleSpecifier}".`,
           },
         ];
       }
       if (
-        normalizedModule === "@iam/user-profile-read-model/query/repository" &&
-        !isUserProfileQueryRepositoryOwner(source.file)
+        normalizedModule === "@iam/user-document/query/repository" &&
+        !isUserDocumentQueryRepositoryOwner(source.file)
       ) {
         return [
           {
-            ruleId: "user-profile-owner",
+            ruleId: "user-document-owner",
             file: source.file,
             line: lineOf(source.sourceFile, declaration),
             message:
               `Only API composition may ${dependencyOperation(declaration)} ` +
-              `User Profile query repository entry "${moduleSpecifier}".`,
+              `User Document query repository entry "${moduleSpecifier}".`,
           },
         ];
       }
@@ -795,25 +814,22 @@ function isRoleAssignmentSchemaOwner(file: string) {
 function isRoleAssignmentResolverValueOwner(file: string) {
   return (
     /^apps\/(?:api|admin-api|worker)\/src\/composition(?:\/|$)/u.test(file) ||
-    file === "packages/user-profile-read-model/src/invalidation/user-profile-invalidation.ts" ||
-    file === "packages/user-profile-read-model/src/worker/user-profile-worker.module.ts"
+    file === "packages/user-document/src/invalidation/user-document-source.ts" ||
+    file === "packages/user-document/src/worker/user-document-worker.module.ts"
   );
 }
 
-function isUserProfileProducerOwner(file: string) {
+function isUserDocumentProducerOwner(file: string) {
   return (
-    file.startsWith("packages/user-profile-read-model/src/") ||
-    /^apps\/(?:api|admin-api)\/src\/composition(?:\/|$)/u.test(file)
+    file.startsWith("packages/user-document/src/") || /^apps\/(?:api|admin-api)\/src\/composition(?:\/|$)/u.test(file)
   );
 }
 
-function isUserProfileWorkerOwner(file: string) {
-  return (
-    file.startsWith("packages/user-profile-read-model/src/") || /^apps\/worker\/src\/composition(?:\/|$)/u.test(file)
-  );
+function isUserDocumentWorkerOwner(file: string) {
+  return file.startsWith("packages/user-document/src/") || /^apps\/worker\/src\/composition(?:\/|$)/u.test(file);
 }
 
-function isUserProfileQueryRepositoryOwner(file: string) {
+function isUserDocumentQueryRepositoryOwner(file: string) {
   return /^apps\/api\/src\/composition(?:\/|$)/u.test(file);
 }
 

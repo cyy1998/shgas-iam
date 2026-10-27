@@ -72,9 +72,6 @@ export function createApiRuntime(options: CreateApiRuntimeOptions = {}): ApiRunt
         clientSessionTtlSeconds: runtimeEnv.sessionKernel.clientSessionTtlSeconds,
       },
       oidc: runtimeEnv.oidc,
-      userProfile: {
-        dslMaxLimit: runtimeEnv.userProfile.dslMaxLimit,
-      },
     },
     integrations: {
       cap: createCapClient({

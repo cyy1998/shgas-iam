@@ -1,16 +1,16 @@
 import type { z } from "@hono/zod-openapi";
 import type {
   OidcAccountDtoSchema,
+  PublishedUserLoginProfileSchema,
   UserCreateDtoSchema,
   UserDetailDtoSchema,
   UserDtoSchema,
-  UserProfileBaseSchema,
   UserSchema,
 } from "./schema";
 
 export type User = z.infer<typeof UserSchema>;
+export type PublishedUserLoginProfile = z.infer<typeof PublishedUserLoginProfileSchema>;
 export type UserDto = z.infer<typeof UserDtoSchema>;
-export type UserProfileBase = z.infer<typeof UserProfileBaseSchema>;
 export type UserDetailDto = z.infer<typeof UserDetailDtoSchema>;
 export type UserCreateDto = z.infer<typeof UserCreateDtoSchema>;
 export type OidcAccountDto = z.infer<typeof OidcAccountDtoSchema>;

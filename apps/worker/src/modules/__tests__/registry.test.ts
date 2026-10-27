@@ -20,20 +20,20 @@ function module(key: string, closeOrder: string[] = []): WorkerModule {
 
 describe("worker module registry", () => {
   test("selects all, none, and explicit module keys", () => {
-    const modules = [module("user-profile")];
+    const modules = [module("user-document")];
 
-    expect(resolveModuleKeys({ mode: "all", keys: [] }, modules)).toEqual(["user-profile"]);
+    expect(resolveModuleKeys({ mode: "all", keys: [] }, modules)).toEqual(["user-document"]);
     expect(resolveModuleKeys({ mode: "none", keys: [] }, modules)).toEqual([]);
-    expect(selectModules({ mode: "list", keys: ["user-profile"] }, modules).map((item) => item.key)).toEqual([
-      "user-profile",
+    expect(selectModules({ mode: "list", keys: ["user-document"] }, modules).map((item) => item.key)).toEqual([
+      "user-document",
     ]);
     expect(selectQueueRegistrations({ mode: "all", keys: [] }, modules)).toEqual([
-      { moduleKey: "user-profile", queueName: "user-profile-queue", queue: {} },
+      { moduleKey: "user-document", queueName: "user-document-queue", queue: {} },
     ]);
   });
 
   test("rejects unknown module keys", () => {
-    expect(() => resolveModuleKeys({ mode: "list", keys: ["missing"] }, [module("user-profile")])).toThrow(
+    expect(() => resolveModuleKeys({ mode: "list", keys: ["missing"] }, [module("user-document")])).toThrow(
       "Unknown worker module key(s): missing",
     );
   });

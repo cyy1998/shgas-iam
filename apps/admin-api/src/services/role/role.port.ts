@@ -59,7 +59,7 @@ export interface AdminRoleAssignmentProfileChange {
 export interface AdminRoleTransactionPorts {
   roleRepository: AdminRoleTransactionStorePort;
   auditService: AuditLogWriterPort;
-  userProfileInvalidation: {
+  userDocumentInvalidation: {
     recordChanges: (changes: readonly (AdminRoleProfileChange | AdminRoleAssignmentProfileChange)[]) => Promise<void>;
   };
 }

@@ -174,7 +174,7 @@ export function createUserService(deps: AdminUserServiceDeps) {
                     auditContext,
                   ),
                 );
-                await tx.userProfileInvalidation.recordChanges([{ kind: "user", userId: createdUser.id }]);
+                await tx.userDocumentInvalidation.recordChanges([{ kind: "user", userId: createdUser.id }]);
                 return {
                   changed: true,
                   result: {
@@ -251,7 +251,7 @@ export function createUserService(deps: AdminUserServiceDeps) {
               );
             }
             if (changed) {
-              await tx.userProfileInvalidation.recordChanges([{ kind: "user", userId: current.id }]);
+              await tx.userDocumentInvalidation.recordChanges([{ kind: "user", userId: current.id }]);
             }
             return {
               changed,
@@ -355,7 +355,7 @@ export function createUserService(deps: AdminUserServiceDeps) {
                     auditContext,
                   ),
                 );
-                await tx.userProfileInvalidation.recordChanges([{ kind: "user", userId: current.id }]);
+                await tx.userDocumentInvalidation.recordChanges([{ kind: "user", userId: current.id }]);
                 return { changed: true, result: null };
               },
               () => "disabled",

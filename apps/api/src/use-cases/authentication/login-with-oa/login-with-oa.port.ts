@@ -1,6 +1,6 @@
 import type { SessionOrigin } from "@api/services/session/session-origin";
 import type { AuditActorType, AuditDetails, AuditOutcome } from "@iam/domain/audit";
-import type { UserDetailDto } from "@iam/domain/user";
+import type { PublishedUserLoginProfile } from "@iam/domain/user";
 import type { OaLoginUser } from "./login-with-oa.type";
 
 export interface OaLoginAuditInput {
@@ -56,6 +56,6 @@ export interface LoginWithOaDeps {
   };
   users: {
     getActiveUserByUsername: (username: string) => Promise<OaLoginUser | null>;
-    getUserDetailById: (userId: number) => Promise<UserDetailDto>;
+    getLoginProfileById: (userId: number) => Promise<PublishedUserLoginProfile>;
   };
 }

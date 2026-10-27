@@ -33,11 +33,13 @@ import {
   SubjectClaim,
 } from "@iam/contracts";
 import { createUnifiedSessionKernel } from "@iam/session-kernel";
-import { createSubjectFactsRedisCache } from "@iam/user-profile-read-model/subject-facts";
+import { createDocumentFactsCacheRecord } from "@iam/user-document/document";
+import { createSubjectFactsRedisCache } from "@iam/user-document/subject-facts";
 import Redis from "ioredis";
 import { createEntryEnvironment } from "../support/api-env.fixture";
 import { closeApiRedisConnection, ownApiTestExecutor, resetApiRedisTestDatabase } from "../support/fixture-lifecycle";
 import { createApiPostgresTestHarness } from "../support/postgres-test-harness";
+import { publishUserDocument } from "../support/user-document.fixture";
 
 requireDedicatedPostgresTestUrl({
   name: "IAM_API_TEST_DATABASE_URL",
@@ -85,18 +87,11 @@ test(
       const redirectUri = "https://rp.example/complete";
       const secret = "original-secret";
       const rotatedSecret = "rotated-secret";
-      const facts = {
-        schemaVersion: 4 as const,
-        sourceDirtyVersion: "1",
-        publishedAt: new Date().toISOString(),
-        subjectIdentifier,
-        profile: { username: "production194", name: "Published Name", phone: null },
-        facts: { employments: [] },
-      };
-      await sql`INSERT INTO user_profile (user_id, subject_identifier, username, name, mobile, wx_id, status, is_delete, search_visible, profile_schema_version, source_dirty_version, detail, search_doc, subject_facts, rebuilt_at) VALUES (${userId}, ${subjectIdentifier}, 'production194', 'Published Name', NULL, NULL, 1, FALSE, TRUE, 4, 1, '{}'::jsonb, '{}'::jsonb, ${JSON.stringify(facts.facts)}::jsonb, NOW())`;
-      await sql`INSERT INTO user_profile_dirty (user_id, dirty_version, status, reason_codes, dirty_at, processed_at) VALUES (${userId}, 1, 'processed', '["user-updated"]'::jsonb, NOW(), NOW())`;
+      await sql`INSERT INTO "user" (id, subject_identifier, username, name) VALUES (${userId}, ${subjectIdentifier}, 'production194', 'Published Name')`;
+      const publication = await publishUserDocument(pg.db, userId);
+      await sql`INSERT INTO user_document_rebuild_state (user_id, version, status, reason_codes, dirty_at, processed_at) VALUES (${userId}, 1, 'processed', '["user-updated"]'::jsonb, NOW(), NOW())`;
       const factsCache = createSubjectFactsRedisCache(redis);
-      await factsCache.publish(facts);
+      await factsCache.publish(createDocumentFactsCacheRecord(publication));
       const clientConfig = {
         protocol: ClientSsoProtocol.CustomSso,
         callbackType: ClientSsoCallbackType.Business,

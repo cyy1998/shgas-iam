@@ -41,16 +41,17 @@ import {
   organizations,
   positions,
   subjectAccessTransitions,
-  userProfileDirty,
+  userDocumentRebuildStates,
   users,
 } from "@iam/db/schema";
 import { UserHasOpenEmploymentError, UserNotFoundError, UsernameAlreadyExistsError } from "@iam/domain/user";
-import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
+import { createSubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono } from "hono";
 import { addTestAdminAuthorizationMiddleware } from "../../src/testing/admin-authorization";
 import type { AdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";
+import { createUserDocumentSourceConsumer } from "../support/user-document-workflow";
 
 let harness: AdminApiPostgresTestHarness;
 beforeAll(async () => {
@@ -83,12 +84,12 @@ function createCommand(
     db: harness.db,
     logger: { error: mock(() => undefined), warn },
     clock,
-    organizationSearchJobProducer: {
-      async enqueueSourceChanges() {
+    organizationDocumentJobProducer: {
+      async enqueueOutboxEntries() {
         return { enqueued: 0 };
       },
     },
-    userProfileJobProducer: { enqueueRebuildJobs },
+    userDocumentJobProducer: createUserDocumentSourceConsumer(harness.db, enqueueRebuildJobs, clock),
   });
   return {
     employment: createCreateEmploymentUseCase({
@@ -99,7 +100,7 @@ function createCommand(
         organizationReader: tx.repositories.organization,
         positionReader: tx.repositories.position,
         auditLogWriter: tx.auditService,
-        userProfileInvalidation: tx.userProfileInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
       })),
     }),
     endEmployment: createEndEmploymentUseCase({
@@ -109,7 +110,7 @@ function createCommand(
         organizationReader: tx.repositories.organization,
         auditLogWriter: tx.auditService,
         responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-        userProfileInvalidation: tx.userProfileInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
       })),
     }),
     barrier,
@@ -145,7 +146,7 @@ function createCommand(
           userRepository: tx.repositories.user,
           auditService: tx.auditService,
           subjectAccessMutation: tx.subjectAccessMutation,
-          userProfileInvalidation: tx.userProfileInvalidation,
+          userDocumentInvalidation: tx.userDocumentInvalidation,
         }),
       ),
     }),
@@ -241,7 +242,7 @@ async function facts() {
   return {
     users: await harness.db.select().from(users).orderBy(users.id),
     audits: await harness.db.select().from(auditLogs).orderBy(auditLogs.id),
-    dirty: await harness.db.select().from(userProfileDirty).orderBy(userProfileDirty.userId),
+    dirty: await harness.db.select().from(userDocumentRebuildStates).orderBy(userDocumentRebuildStates.userId),
   };
 }
 
@@ -531,7 +532,7 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
         expect(after.users[0]).toMatchObject({ id: user.id, isDelete: true });
         expect(after.delegations).toEqual(before.delegations);
         expect(after.audits).toMatchObject([{ action: "admin.user.delete", details: { changed: true } }]);
-        expect(after.dirty).toMatchObject([{ userId: user.id, dirtyVersion: "1" }]);
+        expect(after.dirty).toMatchObject([{ userId: user.id, version: "1" }]);
         expect(access.state).toBe("disabled");
         expect(revokeUserSessions).toHaveBeenCalledTimes(1);
       },
@@ -616,7 +617,7 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
     expect(result).toEqual({ changed: true, result: null });
     expect(after.users[0]).toMatchObject({ status: UserStatus.Enable });
     expect(after.audits).toMatchObject([{ action: "admin.user.status_update", details: { changed: true } }]);
-    expect(after.dirty).toMatchObject([{ dirtyVersion: "1" }]);
+    expect(after.dirty).toMatchObject([{ version: "1" }]);
     expect(intents).toMatchObject([{ status: "committed", targetState: "enabled" }]);
     expect(record.state).toBe("blocking");
     expect(backlog.count).toBe(1);
@@ -644,9 +645,9 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
                 }
               : stage === "dirty"
                 ? {
-                    userProfileInvalidation: {
+                    userDocumentInvalidation: {
                       recordChanges: async (changes) => {
-                        await tx.userProfileInvalidation.recordChanges(changes);
+                        await tx.userDocumentInvalidation.recordChanges(changes);
                         throw sentinel;
                       },
                     },
@@ -697,7 +698,7 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
         operation === "status" ? { status: UserStatus.Disable } : { isDelete: true },
       );
       expect(after.audits).toMatchObject([{ action, details: { changed: true } }]);
-      expect(after.dirty).toMatchObject([{ userId: user.id, dirtyVersion: "1" }]);
+      expect(after.dirty).toMatchObject([{ userId: user.id, version: "1" }]);
       expect(intents).toMatchObject([{ status: "committed", targetState: "disabled" }]);
       expect(record.state).toBe("blocking");
     });
@@ -719,7 +720,7 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
       const record = await barrier.read(user.subjectIdentifier);
       expect(result).toEqual({ changed: true, result: null });
       expect(after.audits).toMatchObject([{ action, details: { changed: true } }]);
-      expect(after.dirty).toMatchObject([{ userId: user.id, dirtyVersion: "1" }]);
+      expect(after.dirty).toMatchObject([{ userId: user.id, version: "1" }]);
       expect(record.state).toBe("disabled");
       expect(revokeUserSessions).toHaveBeenCalledTimes(1);
       expect(warn).toHaveBeenCalled();
@@ -763,7 +764,7 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
         ...(operation === "status" ? { status: UserStatus.Disable } : { isDelete: true }),
       });
       expect(after.audits.map((audit) => audit.action)).toEqual(["admin.user.update", action]);
-      expect(after.dirty).toMatchObject([{ dirtyVersion: "2" }]);
+      expect(after.dirty).toMatchObject([{ version: "2" }]);
     });
 
     test(`pending ${operation} lifecycle rejects the competing lifecycle through the durable intent fence`, async () => {
@@ -812,7 +813,7 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
         isDelete: operation === "delete",
       });
       expect(after.audits.map((audit) => audit.action)).toEqual(["admin.user.update", action]);
-      expect(after.dirty).toMatchObject([{ dirtyVersion: "2" }]);
+      expect(after.dirty).toMatchObject([{ version: "2" }]);
       expect(intents).toMatchObject([{ status: "committed", targetState: "disabled" }]);
     });
   }
@@ -850,7 +851,7 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
       const after = await facts();
       expect(after.users).toMatchObject([{ username, name: `${suffix} Name` }]);
       expect(after.audits).toMatchObject([{ action: "admin.user.create" }]);
-      expect(after.dirty).toMatchObject([{ dirtyVersion: "1" }]);
+      expect(after.dirty).toMatchObject([{ version: "1" }]);
     },
   );
 
@@ -908,7 +909,7 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
     const after = await facts();
     expect(after.users).toHaveLength(1);
     expect(after.audits).toHaveLength(1);
-    expect(after.dirty).toMatchObject([{ dirtyVersion: "1" }]);
+    expect(after.dirty).toMatchObject([{ version: "1" }]);
   });
 
   test("transaction precheck catches a tombstone appearing after the root precheck", async () => {
@@ -941,7 +942,7 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
     const after = await facts();
     expect(after.users).toHaveLength(1);
     expect(after.audits).toMatchObject([{ details: { changed: true } }]);
-    expect(after.dirty).toMatchObject([{ dirtyVersion: "1" }]);
+    expect(after.dirty).toMatchObject([{ version: "1" }]);
     expect(JSON.stringify(error)).not.toContain("Random123!");
   });
 
@@ -996,7 +997,7 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
     expect(after.audits).toMatchObject([
       { action: "admin.user.create", details: { changed: true, passwordProvided: false } },
     ]);
-    expect(after.dirty).toMatchObject([{ userId: after.users[0]!.id, dirtyVersion: "1" }]);
+    expect(after.dirty).toMatchObject([{ userId: after.users[0]!.id, version: "1" }]);
     expect(JSON.stringify(after.audits)).not.toContain("Random123!");
     expect(JSON.stringify(result)).not.toContain("hash:");
   });
@@ -1069,9 +1070,9 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
               },
             }
           : {
-              userProfileInvalidation: {
+              userDocumentInvalidation: {
                 recordChanges: async (changes) => {
-                  await tx.userProfileInvalidation.recordChanges(changes);
+                  await tx.userDocumentInvalidation.recordChanges(changes);
                   throw sentinel;
                 },
               },
@@ -1098,7 +1099,7 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
     expect(result).toEqual({ changed: true, result: null });
     expect(observed?.users[0]).toMatchObject({ mobile: "13912345678" });
     expect(observed?.audits).toMatchObject([{ action: "admin.user.update", details: { changed: true } }]);
-    expect(observed?.dirty).toMatchObject([{ userId: user.id, dirtyVersion: "1" }]);
+    expect(observed?.dirty).toMatchObject([{ userId: user.id, version: "1" }]);
     expect(JSON.stringify(observed?.audits)).not.toContain("13912345678");
   });
 
@@ -1208,7 +1209,7 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
         status: UserStatus.Enable,
       });
       expect(after.audits).toHaveLength(secondOperation === "other-field" ? 2 : 1);
-      expect(after.dirty).toMatchObject([{ dirtyVersion: secondOperation === "other-field" ? "2" : "1" }]);
+      expect(after.dirty).toMatchObject([{ version: secondOperation === "other-field" ? "2" : "1" }]);
     });
   }
 });

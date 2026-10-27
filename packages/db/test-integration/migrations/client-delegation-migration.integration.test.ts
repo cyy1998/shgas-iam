@@ -1,26 +1,66 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { readdir } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import { access, cp, mkdir, mkdtemp, readdir, rm, unlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve, sep } from "node:path";
+import { readMigrationFiles } from "drizzle-orm/migrator";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { createPostgresTestHarness, type PostgresTestHarness } from "../support/postgres-harness";
 
-const migrationFolder = new URL("../../src/migrations/", import.meta.url);
+const sourceMigrationFolder = new URL("../../src/migrations/", import.meta.url);
 const target = "20261020090553_client_delegation";
+let migrationFolder: string;
 let h: PostgresTestHarness;
 beforeEach(async () => {
+  migrationFolder = await mkdtemp(join(tmpdir(), "iam-client-delegation-migrations-"));
+  await cp(sourceMigrationFolder, migrationFolder, { recursive: true });
+  // An unregistered empty directory must not become part of the formal history.
+  await mkdir(join(migrationFolder, "20260820080352_absent_magik"), { recursive: true });
   h = await createPostgresTestHarness();
 });
 afterEach(async () => {
-  await h?.close();
+  const failures: unknown[] = [];
+  for (const cleanup of [
+    () => h?.close(),
+    async () => {
+      const expectedPrefix = `${resolve(tmpdir())}${sep}iam-client-delegation-migrations-`;
+      if (!resolve(migrationFolder).startsWith(expectedPrefix)) throw new Error("Unexpected migrations fixture path");
+      await rm(migrationFolder, { recursive: true });
+    },
+  ]) {
+    try {
+      await cleanup();
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  if (failures.length) throw new AggregateError(failures, "Client Delegation migration fixture cleanup failed");
+});
+
+async function migratePrevious() {
+  // A snapshot records migration history; missing SQL there is not an empty orphan.
+  for (const entry of await readdir(migrationFolder, { withFileTypes: true })) {
+    if (entry.isDirectory() && (await Bun.file(join(migrationFolder, entry.name, "snapshot.json")).exists()))
+      await access(join(migrationFolder, entry.name, "migration.sql"));
+  }
+  const previous = readMigrationFiles({ migrationsFolder: migrationFolder }).filter((entry) => entry.name < target);
+  for (const entry of previous) await h.sql.file(join(migrationFolder, entry.name, "migration.sql"), { cache: false });
+}
+
+test("a recorded snapshot with missing migration SQL fails instead of being silently omitted", async () => {
+  const missingSql = join(migrationFolder, "20260511051432_gorgeous_pepper_potts", "migration.sql");
+  await unlink(missingSql);
+  let failure: unknown;
+  try {
+    await migratePrevious();
+  } catch (error) {
+    failure = error;
+  }
+  expect(failure).toMatchObject({ code: "ENOENT", path: missingSql });
 });
 
 test("the actual cutover removes old Delegations while retaining audit and other domain facts", async () => {
-  const previous = (await readdir(migrationFolder, { withFileTypes: true }))
-    .filter((entry) => entry.isDirectory() && entry.name < target)
-    .sort((a, b) => a.name.localeCompare(b.name));
-  for (const entry of previous)
-    await h.sql.file(new URL(`${entry.name}/migration.sql`, migrationFolder), { cache: false });
+  await migratePrevious();
   await h.sql`insert into "user" (username, name) values ('alice','Alice'),('bob','Bob')`;
   await h.sql`insert into client (client_code,client_name,client_secret,ext_attributes) values ('one','One','retained-secret','{}')`;
   await h.sql`insert into organization (org_code,org_name,path,level,org_type) values ('ROOT','Root','ROOT',1,'company')`;
@@ -37,7 +77,7 @@ test("the actual cutover removes old Delegations while retaining audit and other
   });
   const before = await facts();
   await h.sql.begin(async (tx) => {
-    await tx.file(new URL(`${target}/migration.sql`, migrationFolder), { cache: false });
+    await tx.file(join(migrationFolder, target, "migration.sql"), { cache: false });
   });
   const after = await facts();
   expect(after).toEqual(before);
@@ -53,7 +93,7 @@ test("the actual cutover removes old Delegations while retaining audit and other
 
 test("formal migrations create the empty Client model and repeat without resetting it", async () => {
   const db = drizzle({ client: h.sql });
-  const options = { migrationsFolder: fileURLToPath(migrationFolder), migrationsSchema: h.schemaName };
+  const options = { migrationsFolder: migrationFolder, migrationsSchema: h.schemaName };
   await migrate(db, options);
   await h.sql`insert into client_delegation (delegator_user_id,delegatee_user_id,client_id,organization_scope_id,start_time,end_time) values (1,2,1,1,'2026-01-01','2027-01-01')`;
   const before = await h.sql`select * from client_delegation`;

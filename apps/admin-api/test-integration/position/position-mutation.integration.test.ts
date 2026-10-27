@@ -7,10 +7,11 @@ import { BadRequestError } from "@iam/api-core/errors";
 import { mapUnitOfWork } from "@iam/api-core/uow";
 import { EmploymentStatus, OrganizationLevel, OrganizationType, PositionStatus, UserType } from "@iam/contracts";
 import { extractPostgresError } from "@iam/db/postgres-error";
-import { auditLogs, employments, organizations, positions, userProfileDirty, users } from "@iam/db/schema";
+import { auditLogs, employments, organizations, positions, userDocumentRebuildStates, users } from "@iam/db/schema";
 import { PositionCodeExistsError, PositionHasEmploymentError, PositionNotFoundError } from "@iam/domain/position";
 import type { AdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";
+import { createUserDocumentSourceConsumer } from "../support/user-document-workflow";
 
 let harness: AdminApiPostgresTestHarness;
 beforeAll(async () => {
@@ -32,12 +33,14 @@ function createCommand(
     db: harness.db,
     logger: { error: mock(() => undefined), warn },
     clock: { nowDate: () => new Date("2026-09-07T00:00:00Z") },
-    organizationSearchJobProducer: {
-      async enqueueSourceChanges() {
+    organizationDocumentJobProducer: {
+      async enqueueOutboxEntries() {
         return { enqueued: 0 };
       },
     },
-    userProfileJobProducer: { enqueueRebuildJobs },
+    userDocumentJobProducer: createUserDocumentSourceConsumer(harness.db, enqueueRebuildJobs, {
+      nowDate: () => new Date("2026-09-07T00:00:00Z"),
+    }),
   });
   return {
     enqueueRebuildJobs,
@@ -48,7 +51,7 @@ function createCommand(
         decorate({
           positionRepository: tx.repositories.position,
           auditService: tx.auditService,
-          userProfileInvalidation: tx.userProfileInvalidation,
+          userDocumentInvalidation: tx.userDocumentInvalidation,
         }),
       ),
     }),
@@ -96,7 +99,7 @@ async function facts() {
   return {
     positions: await harness.db.select().from(positions).orderBy(positions.id),
     audits: await harness.db.select().from(auditLogs).orderBy(auditLogs.id),
-    dirty: await harness.db.select().from(userProfileDirty),
+    dirty: await harness.db.select().from(userDocumentRebuildStates),
   };
 }
 
@@ -370,9 +373,9 @@ describe("Position mutations through production PostgreSQL UnitOfWork", () => {
               },
             }
           : {
-              userProfileInvalidation: {
+              userDocumentInvalidation: {
                 recordChanges: async (changes) => {
-                  await tx.userProfileInvalidation.recordChanges(changes);
+                  await tx.userDocumentInvalidation.recordChanges(changes);
                   throw sentinel;
                 },
               },

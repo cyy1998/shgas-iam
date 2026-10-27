@@ -23,7 +23,7 @@ import {
   clients,
   organizationClosures,
   organizations,
-  userProfileDirty,
+  userDocumentRebuildStates,
   users,
 } from "@iam/db/schema";
 import { createDelegationService } from "@iam/delegation";
@@ -178,7 +178,7 @@ test("Internal creates Client-bound details, isolates searches and IDs, and audi
   ]);
   const audit = await harness.db.select().from(auditLogs);
   expect(audit.map((row) => row.actorClientCode)).toEqual(["one", "two"]);
-  const dirty = await harness.db.select().from(userProfileDirty);
+  const dirty = await harness.db.select().from(userDocumentRebuildStates);
   expect(dirty).toEqual([]);
   expect(JSON.stringify(first.body.data)).not.toContain("clientSecret");
 });

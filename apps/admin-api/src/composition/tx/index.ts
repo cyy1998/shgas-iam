@@ -5,14 +5,14 @@ import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import { createUnitOfWork } from "@iam/api-core/uow";
 import type { DbClient } from "@iam/db";
 import {
-  type CreateOrganizationSearchInvalidationInput,
-  createOrganizationSearchInvalidation,
-  type OrganizationSearchInvalidation,
-} from "@iam/organization-search-read-model/producer";
-import type { CreateUserProfileInvalidationDeps, UserProfileInvalidation } from "@iam/user-profile-read-model/producer";
-import { createUserProfileInvalidation } from "@iam/user-profile-read-model/producer";
-import type { SubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
-import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
+  type CreateOrganizationDocumentInvalidationInput,
+  createOrganizationDocumentInvalidation,
+  type OrganizationDocumentInvalidation,
+} from "@iam/organization-document/producer";
+import type { CreateUserDocumentInvalidationDeps, UserDocumentInvalidation } from "@iam/user-document/producer";
+import { createUserDocumentInvalidation } from "@iam/user-document/producer";
+import type { SubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
+import { createSubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
 import type { AdminApiRepositories } from "../repositories";
 import { createAdminApiRepositories } from "../repositories";
 import type { AfterCommitLoggerPort, ClockPort } from "../runtime";
@@ -22,15 +22,15 @@ export interface AdminApiTxPorts {
   auditService: AdminAuditService;
   responsibilityParentLifecycle: ReturnType<typeof createOrganizationResponsibilityParentLifecycleParticipant>;
   subjectAccessMutation: Pick<SubjectAccessTransitionRepository, "runMutation">;
-  userProfileInvalidation: UserProfileInvalidation;
-  organizationSearchInvalidation: OrganizationSearchInvalidation;
+  userDocumentInvalidation: UserDocumentInvalidation;
+  organizationDocumentInvalidation: OrganizationDocumentInvalidation;
 }
 
 export interface CreateAdminApiUnitOfWorkOptions {
   db: DbClient;
   logger: AfterCommitLoggerPort;
-  userProfileJobProducer: CreateUserProfileInvalidationDeps["jobProducer"];
-  organizationSearchJobProducer: CreateOrganizationSearchInvalidationInput["jobProducer"];
+  userDocumentJobProducer: CreateUserDocumentInvalidationDeps["jobProducer"];
+  organizationDocumentJobProducer: CreateOrganizationDocumentInvalidationInput["jobProducer"];
   clock: Pick<ClockPort, "nowDate">;
 }
 
@@ -46,9 +46,9 @@ export function createAdminApiUnitOfWork(options: CreateAdminApiUnitOfWorkOption
         auditLogWriter: auditService,
       });
       const subjectAccessMutation = createSubjectAccessTransitionRepository(tx);
-      const userProfileInvalidation = createUserProfileInvalidation({
+      const userDocumentInvalidation = createUserDocumentInvalidation({
         db: tx,
-        jobProducer: options.userProfileJobProducer,
+        jobProducer: options.userDocumentJobProducer,
         lifecycle,
         clock: options.clock,
       });
@@ -57,10 +57,10 @@ export function createAdminApiUnitOfWork(options: CreateAdminApiUnitOfWorkOption
         auditService,
         responsibilityParentLifecycle,
         subjectAccessMutation,
-        userProfileInvalidation,
-        organizationSearchInvalidation: createOrganizationSearchInvalidation({
+        userDocumentInvalidation,
+        organizationDocumentInvalidation: createOrganizationDocumentInvalidation({
           db: tx,
-          jobProducer: options.organizationSearchJobProducer,
+          jobProducer: options.organizationDocumentJobProducer,
           lifecycle,
           clock: options.clock,
         }),

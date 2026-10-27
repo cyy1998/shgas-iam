@@ -105,7 +105,7 @@ function createLifecycle() {
       lockAssignmentsForEmployment: mock(async () => []),
       endOpenAssignmentsForEmployment: mock(async () => true),
     },
-    userProfileInvalidation: { recordChanges: mock(async () => undefined) },
+    userDocumentInvalidation: { recordChanges: mock(async () => undefined) },
     employmentStore: {
       createEmploymentRecord: mock(async (input: AdminEmploymentRecordCreate) => ({
         id: 10,
@@ -201,7 +201,7 @@ describe("Employment Lifecycle Transfer", () => {
       endTime: transactionTime,
       selectedAssignments: [],
     });
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+    expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([
       { kind: "employment", userId: 1 },
       { kind: "organization-responsibility-assignment", userId: 1 },
     ]);
@@ -462,7 +462,7 @@ describe("Employment Lifecycle Transfer", () => {
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
     expect(tx.employmentStore.createEmploymentRecord).not.toHaveBeenCalled();
     expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("leaves a selected Primary candidate unchanged when it ended before protection", async () => {
@@ -496,7 +496,7 @@ describe("Employment Lifecycle Transfer", () => {
     expect(failure).toBeInstanceOf(EmploymentNotFoundError);
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
     expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test.each([4, 9])("rejects a zero-row update for protected Employment %s without success effects", async (id) => {
@@ -514,7 +514,7 @@ describe("Employment Lifecycle Transfer", () => {
 
     expect(failure).toBeInstanceOf(Error);
     expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("rolls back both Employments, audit, and Dirty when the transaction fails", async () => {
@@ -575,7 +575,7 @@ describe("Employment Lifecycle Transfer", () => {
                 staged.auditActions.push(input.action);
               },
             },
-            userProfileInvalidation: {
+            userDocumentInvalidation: {
               async recordChanges(changes: readonly { userId: number }[]) {
                 staged.dirtyUserIds.push(...changes.map((change) => change.userId));
                 throw failure;

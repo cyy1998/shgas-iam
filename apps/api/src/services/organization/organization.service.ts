@@ -1,11 +1,12 @@
 import { toOrganizationDto } from "@api/services/organization/organization.schema";
 import type { OrganizationCreateDto, OrganizationUpdateDto } from "@api/services/organization/organization.type";
+import { OrganizationStatus } from "@iam/contracts";
 import {
   OrganizationAlreadyExistsError,
   OrganizationCodeExistsError,
   OrganizationNotFoundError,
 } from "@iam/domain/organization";
-import type { ApiOrganizationSearchChangedField, OrganizationServiceDeps } from "./organization.port";
+import type { ApiOrganizationDocumentChangedField, OrganizationServiceDeps } from "./organization.port";
 
 export function createOrganizationService(deps: OrganizationServiceDeps) {
   async function findOrganizationByCode(orgCode: string) {
@@ -34,7 +35,7 @@ export function createOrganizationService(deps: OrganizationServiceDeps) {
         throw new OrganizationAlreadyExistsError("待创建组织已存在");
       }
       const created = await tx.organizationRepository.setOrganization(organizationCreateDto, parentOrg);
-      await tx.organizationSearchInvalidation.recordChanges([{ kind: "created", organizationId: created.id }]);
+      await tx.organizationDocumentInvalidation.recordChanges([{ kind: "created", organizationId: created.id }]);
       return true;
     });
   }
@@ -54,7 +55,7 @@ export function createOrganizationService(deps: OrganizationServiceDeps) {
       const updated = await tx.organizationRepository.updateOrganizationByCode(orgCode, data);
       // Internal writes keep their existing unlocked precheck. A same-value patch can
       // overwrite a concurrent change, so register every explicitly written public field.
-      const changedFields: ApiOrganizationSearchChangedField[] = [];
+      const changedFields: ApiOrganizationDocumentChangedField[] = [];
       if (data.orgCode !== undefined) changedFields.push("code");
       if (data.orgName !== undefined) changedFields.push("name");
       if (data.orgType !== undefined) changedFields.push("type");
@@ -62,11 +63,16 @@ export function createOrganizationService(deps: OrganizationServiceDeps) {
       // A concurrent code reassignment can change the target after the precheck.
       // Register only the stable identity returned by the actual source update.
       if (updated !== null) {
-        await tx.organizationSearchInvalidation.recordChanges([
+        if (data.status !== undefined && data.status !== OrganizationStatus.Enable)
+          await tx.responsibilityParentLifecycle.assertNoOpenAssignmentsTargetingOrganizationSubtree({
+            organizationId: updated.id,
+          });
+        await tx.organizationDocumentInvalidation.recordChanges([
           { kind: "updated", organizationId: updated.id, changedFields },
         ]);
       }
-      await tx.userProfileInvalidation.recordChanges([{ kind: "organization", organizationId: existing.id }]);
+      if (updated !== null)
+        await tx.userDocumentInvalidation.recordChanges([{ kind: "organization", organizationId: updated.id }]);
       return true;
     });
   }

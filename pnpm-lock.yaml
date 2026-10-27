@@ -265,6 +265,9 @@ importers:
       react-dom:
         specifier: ^19.2.7
         version: 19.2.7(react@19.2.7)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@iam/admin-api':
         specifier: workspace:*
@@ -341,18 +344,21 @@ importers:
       '@iam/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
-      '@iam/organization-search-read-model':
+      '@iam/organization-document':
         specifier: workspace:*
-        version: link:../../packages/organization-search-read-model
+        version: link:../../packages/organization-document
+      '@iam/organization-responsibility-resolution':
+        specifier: workspace:*
+        version: link:../../packages/organization-responsibility-resolution
       '@iam/role-assignment-resolution':
         specifier: workspace:*
         version: link:../../packages/role-assignment-resolution
       '@iam/session-kernel':
         specifier: workspace:*
         version: link:../../packages/session-kernel
-      '@iam/user-profile-read-model':
+      '@iam/user-document':
         specifier: workspace:*
-        version: link:../../packages/user-profile-read-model
+        version: link:../../packages/user-document
       '@scalar/hono-api-reference':
         specifier: ^0.11.11
         version: 0.11.11(hono@4.12.30)
@@ -386,7 +392,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.2
+        version: 1.4.4
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -432,18 +438,21 @@ importers:
       '@iam/oidc':
         specifier: workspace:*
         version: link:../../packages/oidc
-      '@iam/organization-search-read-model':
+      '@iam/organization-document':
         specifier: workspace:*
-        version: link:../../packages/organization-search-read-model
+        version: link:../../packages/organization-document
+      '@iam/organization-responsibility-resolution':
+        specifier: workspace:*
+        version: link:../../packages/organization-responsibility-resolution
       '@iam/role-assignment-resolution':
         specifier: workspace:*
         version: link:../../packages/role-assignment-resolution
       '@iam/session-kernel':
         specifier: workspace:*
         version: link:../../packages/session-kernel
-      '@iam/user-profile-read-model':
+      '@iam/user-document':
         specifier: workspace:*
-        version: link:../../packages/user-profile-read-model
+        version: link:../../packages/user-document
       '@scalar/hono-api-reference':
         specifier: ^0.11.11
         version: 0.11.11(hono@4.12.30)
@@ -492,7 +501,7 @@ importers:
         version: 1.61.1
       '@types/bun':
         specifier: latest
-        version: 1.4.2
+        version: 1.4.4
       '@types/sm-crypto':
         specifier: ^0.3.4
         version: 0.3.4
@@ -541,7 +550,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.2
+        version: 1.4.4
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -654,15 +663,15 @@ importers:
       '@iam/oidc':
         specifier: workspace:*
         version: link:../../packages/oidc
-      '@iam/organization-search-read-model':
+      '@iam/organization-document':
         specifier: workspace:*
-        version: link:../../packages/organization-search-read-model
+        version: link:../../packages/organization-document
       '@iam/session-kernel':
         specifier: workspace:*
         version: link:../../packages/session-kernel
-      '@iam/user-profile-read-model':
+      '@iam/user-document':
         specifier: workspace:*
-        version: link:../../packages/user-profile-read-model
+        version: link:../../packages/user-document
       drizzle-orm:
         specifier: 1.0.0-rc.2
         version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
@@ -684,7 +693,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.2
+        version: 1.4.4
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -709,9 +718,9 @@ importers:
       '@iam/role-assignment-resolution':
         specifier: workspace:*
         version: link:../../packages/role-assignment-resolution
-      '@iam/user-profile-read-model':
+      '@iam/user-document':
         specifier: workspace:*
-        version: link:../../packages/user-profile-read-model
+        version: link:../../packages/user-document
       drizzle-orm:
         specifier: 1.0.0-rc.2
         version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
@@ -724,7 +733,7 @@ importers:
         version: 1.61.1
       '@types/bun':
         specifier: latest
-        version: 1.4.2
+        version: 1.4.4
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -776,7 +785,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.2
+        version: 1.4.4
       '@types/sm-crypto':
         specifier: ^0.3.4
         version: 0.3.4
@@ -798,7 +807,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.2
+        version: 1.4.4
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -817,7 +826,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.2
+        version: 1.4.4
       '@types/sm-crypto':
         specifier: ^0.3.4
         version: 0.3.4
@@ -851,7 +860,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.2
+        version: 1.4.4
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -879,7 +888,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.2
+        version: 1.4.4
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -910,7 +919,26 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.2
+        version: 1.4.4
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+
+  packages/document-update:
+    dependencies:
+      '@iam/db':
+        specifier: workspace:*
+        version: link:../db
+      drizzle-orm:
+        specifier: 1.0.0-rc.2
+        version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
+    devDependencies:
+      '@types/bun':
+        specifier: latest
+        version: 1.4.4
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -938,7 +966,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.2
+        version: 1.4.4
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -973,7 +1001,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.2
+        version: 1.4.4
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1001,13 +1029,56 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.2
+        version: 1.4.4
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
       ioredis:
         specifier: ^6.0.0
         version: 6.0.0(supports-color@10.2.2)
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+
+  packages/organization-document:
+    dependencies:
+      '@iam/api-core':
+        specifier: workspace:*
+        version: link:../api-core
+      '@iam/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@iam/db':
+        specifier: workspace:*
+        version: link:../db
+      '@iam/document-update':
+        specifier: workspace:*
+        version: link:../document-update
+      '@iam/filter-engine':
+        specifier: workspace:*
+        version: link:../filter-engine
+      '@iam/jobs':
+        specifier: workspace:*
+        version: link:../jobs
+      bullmq:
+        specifier: ^6.3.8
+        version: 6.3.8(ioredis@6.0.0(supports-color@10.2.2))
+      drizzle-orm:
+        specifier: 1.0.0-rc.2
+        version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/bun':
+        specifier: latest
+        version: 1.4.4
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -1029,47 +1100,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.2
-      '@typescript/native':
-        specifier: npm:typescript@7.0.2
-        version: typescript@7.0.2
-      postgres:
-        specifier: ^3.4.9
-        version: 3.4.9
-      typescript:
-        specifier: npm:@typescript/typescript6@6.0.2
-        version: '@typescript/typescript6@6.0.2'
-
-  packages/organization-search-read-model:
-    dependencies:
-      '@iam/api-core':
-        specifier: workspace:*
-        version: link:../api-core
-      '@iam/contracts':
-        specifier: workspace:*
-        version: link:../contracts
-      '@iam/db':
-        specifier: workspace:*
-        version: link:../db
-      '@iam/filter-engine':
-        specifier: workspace:*
-        version: link:../filter-engine
-      '@iam/jobs':
-        specifier: workspace:*
-        version: link:../jobs
-      bullmq:
-        specifier: ^6.3.8
-        version: 6.3.8(ioredis@6.0.0(supports-color@10.2.2))
-      drizzle-orm:
-        specifier: 1.0.0-rc.2
-        version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-    devDependencies:
-      '@types/bun':
-        specifier: latest
-        version: 1.4.2
+        version: 1.4.4
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1094,7 +1125,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.2
+        version: 1.4.4
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1113,7 +1144,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.2
+        version: 1.4.4
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1124,7 +1155,7 @@ importers:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
 
-  packages/user-profile-read-model:
+  packages/user-document:
     dependencies:
       '@hono/zod-openapi':
         specifier: ^1.5.1
@@ -1141,6 +1172,9 @@ importers:
       '@iam/db':
         specifier: workspace:*
         version: link:../db
+      '@iam/document-update':
+        specifier: workspace:*
+        version: link:../document-update
       '@iam/domain':
         specifier: workspace:*
         version: link:../domain
@@ -1165,7 +1199,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.2
+        version: 1.4.4
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -3954,6 +3988,9 @@ packages:
   '@types/bun@1.4.2':
     resolution: {integrity: sha512-GimotNn7+ZV0uVArItBbriZsR1oNf0+WTzPkdcFrzShI7k2norL0uzEaJT8T33dWr7O/c9ZDuAFQrctKCi72oQ==}
 
+  '@types/bun@1.4.4':
+    resolution: {integrity: sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ==}
+
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
 
@@ -4973,6 +5010,9 @@ packages:
 
   bun-types@1.4.2:
     resolution: {integrity: sha512-bxV1FgK7yBIzjRe5zBozIM4Bem11ZJcCXSrjWRG3YWLt8yFDePu4cLjpebO8OvPeIE9trbyPF4fuj3Cia4Fj3w==}
+
+  bun-types@1.4.4:
+    resolution: {integrity: sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ==}
 
   bytes@2.5.0:
     resolution: {integrity: sha512-hkQtlCqf2f67v+GDlR9DImH1Bu/DxA/yNR7EmnbxCgxYgm4u7rLTJw8LYJdttHOl+H+++Fv0SQF7PgXAtqkfVg==}
@@ -12661,6 +12701,10 @@ snapshots:
     dependencies:
       bun-types: 1.4.2
 
+  '@types/bun@1.4.4':
+    dependencies:
+      bun-types: 1.4.4
+
   '@types/chai@5.2.3':
     dependencies:
       '@types/deep-eql': 4.0.2
@@ -14648,6 +14692,11 @@ snapshots:
   bun-types@1.4.2:
     dependencies:
       '@types/node': 25.9.1
+
+  bun-types@1.4.4:
+    dependencies:
+      '@types/node': 25.9.1
+      undici-types: 8.10.2
 
   bytes@2.5.0: {}
 

@@ -54,9 +54,6 @@ export interface ApiRuntimeConfig {
     clientSessionTtlSeconds: number;
   };
   oidc: Env["oidc"];
-  userProfile: {
-    dslMaxLimit: number;
-  };
 }
 
 export interface CapIntegrationPort {

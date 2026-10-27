@@ -30,7 +30,7 @@ function createRuntimeLifecycle(overrides: Partial<ExactProjectRuntimeLifecycle>
     seedE2EScenario: async () => undefined,
     startHealthyInfrastructure: async () => undefined,
     startRepoRuntimes: async () => undefined,
-    verifyUserProfileReadiness: async () => undefined,
+    verifyUserDocumentReadiness: async () => undefined,
     verifyCanonicalOriginConfiguration: async () => undefined,
     ...overrides,
   };
@@ -111,7 +111,7 @@ describe("exact-project runtime lifecycle", () => {
         startRepoRuntimes: async (value) => events.push(`runtimes:${value.project}`),
         verifyCanonicalOriginConfiguration: async (value) => events.push(`origin:${value.origin}`),
         seedE2EScenario: async (value) => events.push(`seed:${value.runId}`),
-        verifyUserProfileReadiness: async (value) => events.push(`profile-gates:${value.runId}`),
+        verifyUserDocumentReadiness: async (value) => events.push(`profile-gates:${value.runId}`),
         renderGatewayRoutes: async (value) => events.push(`routes:${value.origin}`),
         awaitGatewayRouteReadiness: async (value) => events.push(`ready:${value.origin}`),
         collectDiagnostics: async () => events.push("diagnostics"),
@@ -206,14 +206,14 @@ describe("exact-project runtime lifecycle", () => {
     expect(events).toEqual(["infra", "migrate", "runtimes", "routes", "ready", "diagnostics", "cleanup"]);
   });
 
-  test("keeps Gateway routes closed when a User Profile gate fails", async () => {
+  test("keeps Gateway routes closed when a User Document gate fails", async () => {
     const events: string[] = [];
-    const gateFailure = new Error("User Profile PostgreSQL gate failed");
+    const gateFailure = new Error("User Document PostgreSQL gate failed");
 
     const run = runExactProjectRuntimeLifecycle(
       createRuntimeLifecycle({
         seedE2EScenario: async () => events.push("seed"),
-        verifyUserProfileReadiness: async () => {
+        verifyUserDocumentReadiness: async () => {
           events.push("profile-gates");
           throw gateFailure;
         },

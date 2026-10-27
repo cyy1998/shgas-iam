@@ -51,7 +51,7 @@ function assignment(overrides: Record<string, unknown> = {}) {
 function createService() {
   const tx = {
     auditService: { recordAuditLog: mock(async () => undefined) },
-    userProfileInvalidation: {
+    userDocumentInvalidation: {
       recordChanges: mock(async () => undefined),
     },
     roleRepository: {
@@ -105,7 +105,7 @@ describe("createRoleService", () => {
       result: null,
     });
 
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "role", roleId: 1 }]);
+    expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "role", roleId: 1 }]);
   });
 
   test("creates an organization assignment and records its current domain target", async () => {
@@ -134,7 +134,7 @@ describe("createRoleService", () => {
         targetCode: "portal-admin",
       }),
     );
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+    expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([
       {
         kind: "role-assignment",
         targetType: RoleAssignmentTargetType.Organization,
@@ -156,7 +156,7 @@ describe("createRoleService", () => {
     ).rejects.toBe(conflict);
 
     expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("rejects descendant scope on non-organization assignment", async () => {
@@ -203,7 +203,7 @@ describe("createRoleService", () => {
       result: null,
     });
 
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+    expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([
       {
         kind: "role-assignment",
         targetType: RoleAssignmentTargetType.Organization,
@@ -232,7 +232,7 @@ describe("createRoleService", () => {
     await expect(service.deleteAssignment("portal-admin", 100)).resolves.toEqual({ changed: true, result: null });
 
     expect(tx.roleRepository.deleteAssignment).toHaveBeenCalledWith(1, 100);
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+    expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([
       {
         kind: "role-assignment",
         targetType: RoleAssignmentTargetType.Position,
@@ -264,7 +264,7 @@ describe("Role mutation outcomes", () => {
     const unchanged = await service.updateRole("portal-admin", { roleName: "Portal Admin", description: null });
     expect(unchanged).toEqual({ changed: false, result: null });
     expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("both status entry points and scope no-op preserve intent without dirty", async () => {
@@ -276,7 +276,7 @@ describe("Role mutation outcomes", () => {
     expect(tx.auditService.recordAuditLog).toHaveBeenCalledTimes(3);
     for (const [audit] of tx.auditService.recordAuditLog.mock.calls as unknown[][])
       expect(audit).toMatchObject({ details: { changed: false } });
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("missing role and assignment writes return not found without success facts", async () => {
@@ -298,7 +298,7 @@ describe("Role mutation outcomes", () => {
       expect(failure).toMatchObject({ httpStatus: 404 });
     }
     expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("zero-row results fail closed before success audit and dirty", async () => {
@@ -326,6 +326,6 @@ describe("Role mutation outcomes", () => {
       expect((failure as Error).message).toContain("returned no row");
     }
     expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 });

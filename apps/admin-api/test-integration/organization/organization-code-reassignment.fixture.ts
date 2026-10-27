@@ -21,13 +21,13 @@ try {
     db,
     logger: { error() {}, warn() {} },
     clock: { nowDate: () => new Date("2026-10-14T00:00:00Z") },
-    organizationSearchJobProducer: {
-      async enqueueSourceChanges() {
+    organizationDocumentJobProducer: {
+      async enqueueOutboxEntries() {
         return { enqueued: 0 };
       },
     },
-    userProfileJobProducer: {
-      async enqueueRebuildJobs() {
+    userDocumentJobProducer: {
+      async enqueueOutboxEntries() {
         return { enqueued: 0, jobIds: [] };
       },
     },
@@ -39,8 +39,8 @@ try {
       organizationRepository: tx.repositories.organization,
       auditService: tx.auditService,
       responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-      userProfileInvalidation: tx.userProfileInvalidation,
-      organizationSearchInvalidation: tx.organizationSearchInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
+      organizationDocumentInvalidation: tx.organizationDocumentInvalidation,
     })),
   });
   await service.updateOrganization("A", { orgCode: "B" });

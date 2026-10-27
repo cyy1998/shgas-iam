@@ -13,9 +13,9 @@ import type { OrganizationRepository } from "@api/services/organization/organiza
 import type { PositionRepository } from "@api/services/position/position.repository";
 import type { SessionOrigin } from "@api/services/session/session-origin";
 import type {
+  UserDocumentReaderPort,
   UserMobileBindingPort,
   UserMobileVerificationPort,
-  UserProfileReaderPort,
   UserStorePort,
   UserTransactionStorePort,
 } from "@api/services/user/user.port";
@@ -40,7 +40,7 @@ import type {
 import type { ClientDelegationResolutionPort } from "@api/use-cases/internal/resolve-client-delegations/resolve-client-delegations.port";
 
 import type { LoginRestriction } from "@iam/api-core/login-restriction";
-import type { UserProfileQueryService } from "@iam/user-profile-read-model/query";
+import type { UserDocumentQueryService } from "@iam/user-document/query";
 
 type PrincipalSessionAdapter = ReturnType<typeof createUserSessionAuthenticationAdapter>;
 
@@ -90,7 +90,7 @@ type _ClientDelegationResolutionPort = AssertAssignable<
   ClientDelegationResolutionRepository
 >;
 
-type _UserProfileReaderPort = AssertAssignable<UserProfileReaderPort, UserProfileQueryService>;
+type _UserDocumentReaderPort = AssertAssignable<UserDocumentReaderPort, UserDocumentQueryService>;
 type _UserMobileBindingPort = AssertAssignable<UserMobileBindingPort, MobileService>;
 type _UserMobileVerificationPort = AssertAssignable<UserMobileVerificationPort, MobileService>;
 type _UserStorePort = AssertAssignable<UserStorePort, UserRepository>;

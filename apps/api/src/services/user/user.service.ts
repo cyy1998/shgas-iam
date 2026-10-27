@@ -7,7 +7,6 @@ import {
 import { UserStatus } from "@iam/contracts";
 import { InvalidOldPasswordError, UserNotFoundError, UserPasswordUnchangedError } from "@iam/domain/user";
 import type { UserRequestOptions, UserServiceDeps } from "./user.port";
-import type { UserDetailDto } from "./user.type";
 
 export function createUserService(deps: UserServiceDeps) {
   async function setPassword(
@@ -88,7 +87,7 @@ export function createUserService(deps: UserServiceDeps) {
                 const updatedUser = await tx.userRepository.updateEnabledUserStatus(userId, UserStatus.Pause);
                 if (updatedUser === null) return null;
 
-                await tx.userProfileInvalidation.recordChanges([{ kind: "user", userId }]);
+                await tx.userDocumentInvalidation.recordChanges([{ kind: "user", userId }]);
                 return updatedUser;
               },
               () => "disabled",
@@ -115,11 +114,12 @@ export function createUserService(deps: UserServiceDeps) {
     try {
       await deps.uow.transaction(
         async (tx) => {
-          await tx.userRepository.setMobile(userId, phoneNumber);
+          const updated = await tx.userRepository.setMobile(userId, phoneNumber);
+          if (updated === null) throw new UserNotFoundError("用户不存在或未启用");
           await tx.auditLogWriter.recordAuditLog(
             withApiRequestContext(options.requestContext, buildMobileBindSuccessAudit(userId, phoneNumber)),
           );
-          await tx.userProfileInvalidation.recordChanges([{ kind: "user", userId }]);
+          await tx.userDocumentInvalidation.recordChanges([{ kind: "user", userId: updated.id }]);
         },
         { observability: options.requestContext },
       );
@@ -132,18 +132,13 @@ export function createUserService(deps: UserServiceDeps) {
     }
   }
 
-  async function getUserDetailById(userId: number): Promise<UserDetailDto> {
-    return await deps.profileQuery.getDetailByUserId(userId);
-  }
-
-  async function getUserDetailByUsername(username: string): Promise<UserDetailDto> {
-    return await deps.profileQuery.getDetailByUsername(username);
+  async function getLoginProfileById(userId: number) {
+    return await deps.documentQuery.getLoginProfileByUserId(userId);
   }
 
   async function getUserMobileByUsername(username: string): Promise<string | null> {
     try {
-      const profile = await deps.profileQuery.getDetailByUsername(username);
-      return profile.mobile;
+      return await deps.documentQuery.getMobileByUsername(username);
     } catch (error) {
       // A missing published Profile does not prove the account is absent.
       if (
@@ -153,14 +148,6 @@ export function createUserService(deps: UserServiceDeps) {
         return null;
       throw error;
     }
-  }
-
-  async function getUserDetailByMobile(mobile: string): Promise<UserDetailDto> {
-    return await deps.profileQuery.getDetailByMobile(mobile);
-  }
-
-  async function getUserDetailByWxId(wxId: string): Promise<UserDetailDto> {
-    return await deps.profileQuery.getDetailByWxId(wxId);
   }
 
   return {
@@ -173,11 +160,8 @@ export function createUserService(deps: UserServiceDeps) {
     getActiveUserByWxId,
     pauseEnabledUser,
     setMobile,
-    getUserDetailById,
-    getUserDetailByUsername,
+    getLoginProfileById,
     getUserMobileByUsername,
-    getUserDetailByMobile,
-    getUserDetailByWxId,
   };
 }
 

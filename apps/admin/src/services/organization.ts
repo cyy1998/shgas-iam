@@ -11,10 +11,10 @@ export type OrganizationChildrenPage = AdminOrgOutputs["children"];
 export type OrganizationTreeNode = OrganizationChildrenPage["result"][number];
 export type OrganizationSelectorNode = AdminOrgOutputs["selector"][number];
 
-export type OrganizationSearchParams = AdminOrgInputs["search"];
+export type OrganizationDocumentParams = AdminOrgInputs["search"];
 export type OrganizationSelectorParams = AdminOrgInputs["selector"];
 
-export function searchOrganizations(params: OrganizationSearchParams) {
+export function searchOrganizations(params: OrganizationDocumentParams) {
   return apiClient.admin.organization.search.query(params);
 }
 

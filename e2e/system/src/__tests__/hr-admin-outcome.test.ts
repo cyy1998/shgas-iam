@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import {
   OrganizationResponsibilityAssignmentStatus,
   OrganizationResponsibilityTypeCode,
-  UserProfileDirtyReason,
-  UserProfileDirtyStatus,
+  UserDocumentRebuildReason,
+  UserDocumentWorkStatus,
 } from "@iam/contracts";
 import type { HrAdminOutcomeScenario } from "../hr-admin-outcome.ts";
 import { verifyHrAdminOutcome } from "../hr-admin-outcome.ts";
@@ -30,7 +30,7 @@ describe("HR Admin responsibility journey outcome", () => {
     expect(result).toEqual({
       status: "passed",
       assignmentId: 51,
-      dirtyVersion: "6",
+      version: "6",
     });
   });
 
@@ -38,13 +38,13 @@ describe("HR Admin responsibility journey outcome", () => {
     const observations = [
       {
         ...completeReadBack(),
-        dirty: {
-          dirtyVersion: "6",
-          reasonCodes: [UserProfileDirtyReason.OrganizationResponsibilityAssignmentUpdated],
-          status: UserProfileDirtyStatus.Pending,
+        rebuildState: {
+          version: "6",
+          reasonCodes: [UserDocumentRebuildReason.OrganizationResponsibilityAssignmentUpdated],
+          status: UserDocumentWorkStatus.Pending,
         },
-        profile: {
-          sourceDirtyVersion: "5",
+        document: {
+          sourceVersion: "5",
           containsEndedTargetResponsibility: true,
         },
       },
@@ -107,13 +107,13 @@ function completeReadBack() {
       actorUsername: scenario.hrAdminUsername,
       outcome: "success",
     })),
-    dirty: {
-      dirtyVersion: "6",
-      reasonCodes: [UserProfileDirtyReason.OrganizationResponsibilityAssignmentUpdated],
-      status: UserProfileDirtyStatus.Processed,
+    rebuildState: {
+      version: "6",
+      reasonCodes: [UserDocumentRebuildReason.OrganizationResponsibilityAssignmentUpdated],
+      status: UserDocumentWorkStatus.Processed,
     },
-    profile: {
-      sourceDirtyVersion: "6",
+    document: {
+      sourceVersion: "6",
       containsEndedTargetResponsibility: false,
     },
     hiddenBlocker: {

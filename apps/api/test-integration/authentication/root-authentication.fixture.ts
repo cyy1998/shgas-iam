@@ -29,7 +29,7 @@ import {
 import { createUnifiedCustomSsoRedisTestScope } from "@iam/custom-sso/testing";
 import { relations } from "@iam/db/relations";
 import { createUnifiedSessionRedisTestScope } from "@iam/session-kernel/testing";
-import { createSubjectFactsReader, createSubjectFactsRedisCache } from "@iam/user-profile-read-model/subject-facts";
+import { createSubjectFactsReader, createSubjectFactsRedisCache } from "@iam/user-document/subject-facts";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { Hono } from "hono";
 import Redis from "ioredis";
@@ -174,12 +174,13 @@ export async function fixture(
         random: { uuid: () => state.generation },
       }).seedMany([{ subjectIdentifier, state: "enabled" }], new Date());
       await factsCache.publish({
-        schemaVersion: 4,
-        sourceDirtyVersion: "1",
+        kind: "document",
+        userId: user.id,
+        schemaVersion: 1,
+        sourceVersion: "1",
         publishedAt: new Date().toISOString(),
         subjectIdentifier,
-        profile: { username: user.username, name: "已发布资料", phone: null },
-        facts: { employments: [] },
+        facts: { profile: { username: user.username, name: "已发布资料", phone: null }, employments: [] },
       });
     }
     const now = 1700000000000;
@@ -250,7 +251,7 @@ export async function fixture(
           await duringFacts?.();
           return {
             subjectIdentifier,
-            sourceDirtyVersion: "1",
+            sourceVersion: "1",
             profile: { username: user.username, name: "已发布资料", phone: null },
             employments: [],
           };
@@ -270,7 +271,6 @@ export async function fixture(
       publicServices: {
         userService: {
           getActiveUserBySubjectIdentifier: async () => ({ ...user, password: null }),
-          getUserDetailById: async () => user,
           setPassword: async () => {
             state.publicBusinessReads++;
             return true;
@@ -331,7 +331,7 @@ export async function fixture(
             getActiveUserByMobile: async () => user,
             getActiveUserByWxId: async () => user,
             getActiveUserById: async () => user,
-            getUserDetailById: async () => user,
+            getLoginProfileById: async () => user,
           },
         },
       },

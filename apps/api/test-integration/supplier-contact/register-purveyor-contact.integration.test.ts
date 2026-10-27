@@ -365,7 +365,7 @@ function createTransactionPorts(tx: DbClient): RegisterPurveyorContactTransactio
         return result;
       },
     },
-    userProfileInvalidation: {
+    userDocumentInvalidation: {
       recordChanges: mock(async () => undefined),
     },
     userRepository: {

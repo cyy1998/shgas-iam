@@ -222,15 +222,15 @@ describe("exact-project Docker infrastructure", () => {
     }
   });
 
-  test("runs both production User Profile v4 gates before route publication", async () => {
+  test("runs both current User Document gates before route publication", async () => {
     const captures: string[][] = [];
     const operations = await createOperations({
       captureCommand: async (command, args) => {
         captures.push([command, ...args]);
-        const operation = args.at(-3)?.replace("user-profile:", "");
+        const operation = args.at(-3)?.replace("user-document:", "");
         return {
           stdout: JSON.stringify({
-            version: 4,
+            version: 1,
             gate: operation === "verify-postgres" ? "postgres" : "redis-access",
             status: "passed",
           }),
@@ -239,32 +239,33 @@ describe("exact-project Docker infrastructure", () => {
       },
     });
 
-    await operations.verifyUserProfileReadiness(descriptor);
+    await operations.verifyUserDocumentReadiness(descriptor);
 
     expect(captures.map((command) => command.slice(-6))).toEqual([
-      ["worker", "bun", "run", "user-profile:verify-postgres", "--batch-size", "100"],
-      ["worker", "bun", "run", "user-profile:verify-redis", "--batch-size", "100"],
+      ["worker", "bun", "run", "user-document:verify-postgres", "--batch-size", "100"],
+      ["worker", "bun", "run", "user-document:verify-redis", "--batch-size", "100"],
     ]);
     expect(captures.flat().join(" ")).not.toMatch(/password|token|secret/iu);
   });
 
-  test("rejects a gate command that does not report a passing v4 inventory", async () => {
+  test.each([
+    { reason: "retired schema", version: 4, gate: "postgres", status: "passed" },
+    { reason: "unknown schema", version: 999, gate: "postgres", status: "passed" },
+    { reason: "failed inventory", version: 1, gate: "postgres", status: "failed" },
+    { reason: "wrong gate", version: 1, gate: "redis-access", status: "passed" },
+  ])("rejects a gate command reporting $reason", async ({ reason: _reason, ...report }) => {
     const operations = await createOperations({
       captureCommand: async () => ({
-        stdout: JSON.stringify({
-          version: 3,
-          gate: "postgres",
-          status: "passed",
-        }),
+        stdout: JSON.stringify(report),
         stderr: "",
       }),
     });
 
-    const failure = await operations.verifyUserProfileReadiness(descriptor).then(
+    const failure = await operations.verifyUserDocumentReadiness(descriptor).then(
       () => undefined,
       (error) => error,
     );
-    expect(failure).toMatchObject({ message: "User Profile postgres gate did not report a passing v4 inventory" });
+    expect(failure).toMatchObject({ message: "User Document postgres gate did not report a passing v1 inventory" });
   });
 
   test("renders run-scoped client, role, and Gateway authority from the descriptor", async () => {

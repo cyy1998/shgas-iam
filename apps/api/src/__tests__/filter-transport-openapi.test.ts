@@ -1,13 +1,13 @@
 import { expect, test } from "bun:test";
-import { OrganizationSearchTransportRequestSchema } from "@api/services/organization-search/organization-search.schema";
+import { OrganizationDocumentTransportRequestSchema } from "@api/services/organization-document/organization-document.schema";
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
-import { UserProfileSearchTransportRequestSchema } from "@iam/user-profile-read-model/query";
+import { UserDocumentSearchTransportRequestSchema } from "@iam/user-document/query";
 
 test("both Filter transport entries generate independently named recursive OpenAPI components", () => {
   const app = new OpenAPIHono();
   for (const [path, schema] of [
-    ["/organizations", OrganizationSearchTransportRequestSchema],
-    ["/profiles", UserProfileSearchTransportRequestSchema],
+    ["/organizations", OrganizationDocumentTransportRequestSchema],
+    ["/profiles", UserDocumentSearchTransportRequestSchema],
   ] as const) {
     app.openapi(
       createRoute({
@@ -23,8 +23,8 @@ test("both Filter transport entries generate independently named recursive OpenA
   const schemas = document.components?.schemas;
   expect(schemas).toBeDefined();
   for (const [requestName, expressionName, otherExpressionName] of [
-    ["OrganizationSearchRequest", "OrganizationFilterExpression", "UserProfileFilterExpression"],
-    ["UserProfileSearchRequest", "UserProfileFilterExpression", "OrganizationFilterExpression"],
+    ["OrganizationDocumentRequest", "OrganizationFilterExpression", "UserDocumentFilterExpression"],
+    ["UserDocumentSearchRequest", "UserDocumentFilterExpression", "OrganizationFilterExpression"],
   ] as const) {
     expect(schemas?.[requestName]).toMatchObject({
       type: "object",

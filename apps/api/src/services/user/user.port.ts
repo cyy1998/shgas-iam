@@ -4,18 +4,17 @@ import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
 import type { MobileVerificationCodeReservation } from "@api/services/mobile/mobile.type";
 import type { SubjectAccessMutationReceipt, SubjectAccessTransitionTarget } from "@iam/api-core/subject-access";
 import type { UnitOfWorkPort } from "@iam/api-core/uow";
-import type { User, UserDetailDto } from "./user.type";
+import type { PublishedUserLoginProfile } from "@iam/domain/user";
+import type { User } from "./user.type";
 
-export interface ApiUserProfileChange {
+export interface ApiUserDocumentChange {
   readonly kind: "user";
   readonly userId: number;
 }
 
-export interface UserProfileReaderPort {
-  getDetailByUserId: (userId: number) => Promise<UserDetailDto>;
-  getDetailByUsername: (username: string) => Promise<UserDetailDto>;
-  getDetailByMobile: (mobile: string) => Promise<UserDetailDto>;
-  getDetailByWxId: (wxId: string) => Promise<UserDetailDto>;
+export interface UserDocumentReaderPort {
+  getLoginProfileByUserId: (userId: number) => Promise<PublishedUserLoginProfile>;
+  getMobileByUsername: (username: string) => Promise<string | null>;
 }
 
 export interface UserMobileBindingPort {
@@ -46,7 +45,7 @@ export interface UserStorePort {
 export interface UserTransactionStorePort {
   getUserByUsername: (username: string) => Promise<User | null>;
   setPassword: (userId: number, password: string) => Promise<unknown>;
-  setMobile: (userId: number, phoneNumber: string) => Promise<unknown>;
+  setMobile: (userId: number, phoneNumber: string) => Promise<{ id: number } | null>;
   updateEnabledUserStatus: (userId: number, status: User["status"]) => Promise<User | null>;
 }
 
@@ -99,8 +98,8 @@ export interface UserTransactionPorts {
       resolveTarget: (result: T) => SubjectAccessTransitionTarget,
     ) => Promise<T>;
   };
-  userProfileInvalidation: {
-    recordChanges: (changes: readonly ApiUserProfileChange[]) => Promise<void>;
+  userDocumentInvalidation: {
+    recordChanges: (changes: readonly ApiUserDocumentChange[]) => Promise<void>;
   };
 }
 
@@ -109,10 +108,7 @@ export type UserUnitOfWorkPort = UnitOfWorkPort<UserTransactionPorts>;
 export interface UserServiceDeps {
   userRepository: UserStorePort;
   mobileService: UserMobileVerificationPort;
-  profileQuery: Pick<
-    UserProfileReaderPort,
-    "getDetailByUserId" | "getDetailByUsername" | "getDetailByMobile" | "getDetailByWxId"
-  >;
+  documentQuery: UserDocumentReaderPort;
   mobileBinding: {
     assertCanBindMobile: (
       userId: number,

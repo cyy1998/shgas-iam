@@ -81,7 +81,11 @@ function createFixture(
       getActiveUserByMobile: mock(async () =>
         overrides.user === undefined ? { id: userDetail.id, name: userDetail.name, subjectIdentifier } : overrides.user,
       ),
-      getUserDetailById: mock(async () => userDetail),
+      getLoginProfileById: mock(async () => ({
+        username: userDetail.username,
+        name: userDetail.name,
+        mobile: userDetail.mobile,
+      })),
     },
     verificationCodes: { consumeVerificationCode },
   };

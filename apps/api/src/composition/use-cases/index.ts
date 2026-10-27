@@ -62,7 +62,7 @@ export function createApiUseCases(options: CreateApiUseCasesOptions) {
       positionRepository: tx.repositories.position,
       subjectAccessMutation: tx.subjectAccessMutation,
       userRepository: tx.repositories.user,
-      userProfileInvalidation: tx.userProfileInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
     userReader: services.user,
   });

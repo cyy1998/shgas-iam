@@ -288,13 +288,13 @@ function createService(revokeUserSessions: AdminSessionRevocationPort["revokeUse
   const unitOfWork = createAdminApiUnitOfWork({
     db: harness.db,
     logger: { error: mock(() => undefined), warn: mock(() => undefined) },
-    organizationSearchJobProducer: {
-      async enqueueSourceChanges() {
+    organizationDocumentJobProducer: {
+      async enqueueOutboxEntries() {
         return { enqueued: 0 };
       },
     },
-    userProfileJobProducer: {
-      enqueueRebuildJobs: mock(async () => ({ enqueued: 0, jobIds: [] })),
+    userDocumentJobProducer: {
+      enqueueOutboxEntries: mock(async () => ({ enqueued: 0, jobIds: [] })),
     } as never,
     clock: { nowDate: () => new Date("2026-08-24T00:00:00Z") },
   });
@@ -345,7 +345,7 @@ function createService(revokeUserSessions: AdminSessionRevocationPort["revokeUse
           return await mutation();
         },
       },
-      userProfileInvalidation: tx.userProfileInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
   });
   return { random, service, subjectAccessLifecycle };

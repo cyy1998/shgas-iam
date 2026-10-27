@@ -49,7 +49,7 @@ export interface RegisterPurveyorContactTransactionPorts {
     ) => Promise<T>;
   };
   userRepository: RegisterPurveyorUserStorePort;
-  userProfileInvalidation: {
+  userDocumentInvalidation: {
     recordChanges: (changes: readonly RegisterPurveyorContactProfileChange[]) => Promise<void>;
   };
 }

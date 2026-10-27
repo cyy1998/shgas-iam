@@ -1,14 +1,9 @@
-import type {
-  OrganizationResponsibilityAssignmentStatus,
-  OrganizationResponsibilityTypeCode,
-  UserProfileDirtyReason,
-  UserProfileDirtyStatus,
-} from "@iam/contracts";
+import type { OrganizationResponsibilityAssignmentStatus, OrganizationResponsibilityTypeCode } from "@iam/contracts";
 import {
   OrganizationResponsibilityAssignmentStatus as AssignmentStatus,
-  UserProfileDirtyReason as DirtyReason,
-  UserProfileDirtyStatus as DirtyStatus,
   OrganizationResponsibilityTypeCode as ResponsibilityTypeCode,
+  UserDocumentRebuildReason,
+  UserDocumentWorkStatus,
 } from "@iam/contracts";
 
 export const HR_ADMIN_RESPONSIBILITY_AUDIT_ACTIONS = [
@@ -34,13 +29,13 @@ export interface HrAdminOutcomeReadBack {
     actorUsername: string | null;
     outcome: string;
   }>;
-  dirty: {
-    dirtyVersion: string;
-    reasonCodes: UserProfileDirtyReason[];
-    status: UserProfileDirtyStatus;
+  rebuildState: {
+    version: string;
+    reasonCodes: UserDocumentRebuildReason[];
+    status: UserDocumentWorkStatus;
   } | null;
-  profile: {
-    sourceDirtyVersion: string;
+  document: {
+    sourceVersion: string;
     containsEndedTargetResponsibility: boolean;
   } | null;
   hiddenBlocker: {
@@ -83,7 +78,7 @@ export async function verifyHrAdminOutcome(input: {
       return {
         status: "passed" as const,
         assignmentId: readBack.assignment?.id ?? 0,
-        dirtyVersion: readBack.dirty?.dirtyVersion ?? "",
+        version: readBack.rebuildState?.version ?? "",
       };
     }
     await sleep(250);
@@ -108,14 +103,14 @@ function matchesExpectedOutcome(actual: HrAdminOutcomeReadBack, expected: HrAdmi
         audit.actorUsername === expected.hrAdminUsername &&
         audit.outcome === "success",
     ) &&
-    actual.dirty !== null &&
-    BigInt(actual.dirty.dirtyVersion) > 1n &&
-    actual.dirty.status === DirtyStatus.Processed &&
-    actual.dirty.reasonCodes.length === 1 &&
-    actual.dirty.reasonCodes[0] === DirtyReason.OrganizationResponsibilityAssignmentUpdated &&
-    actual.profile !== null &&
-    actual.profile.sourceDirtyVersion === actual.dirty.dirtyVersion &&
-    !actual.profile.containsEndedTargetResponsibility &&
+    actual.rebuildState !== null &&
+    BigInt(actual.rebuildState.version) > 1n &&
+    actual.rebuildState.status === UserDocumentWorkStatus.Processed &&
+    actual.rebuildState.reasonCodes.length === 1 &&
+    actual.rebuildState.reasonCodes[0] === UserDocumentRebuildReason.OrganizationResponsibilityAssignmentUpdated &&
+    actual.document !== null &&
+    actual.document.sourceVersion === actual.rebuildState.version &&
+    !actual.document.containsEndedTargetResponsibility &&
     actual.hiddenBlocker.count === 1 &&
     actual.hiddenBlocker.status === AssignmentStatus.Enable &&
     actual.deniedCombinationAssignments === 0 &&

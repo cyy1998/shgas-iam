@@ -43,7 +43,11 @@ test("completes a cache miss in Processing exchange session audit and final-cach
     users: {
       getActiveUserById: mock(async () => ({ id: 1001, subjectIdentifier })),
       getActiveUserByWxId,
-      getUserDetailById: mock(async () => userDetail),
+      getLoginProfileById: mock(async () => ({
+        username: userDetail.username,
+        name: userDetail.name,
+        mobile: userDetail.mobile,
+      })),
     },
     wechat: { getWxUserId },
   } as any);
@@ -103,7 +107,11 @@ test("reuses a cached user id after one delay without exchange or duplicate audi
     users: {
       getActiveUserById,
       getActiveUserByWxId: mock(async () => ({ id: 1001 })),
-      getUserDetailById: mock(async () => userDetail),
+      getLoginProfileById: mock(async () => ({
+        username: userDetail.username,
+        name: userDetail.name,
+        mobile: userDetail.mobile,
+      })),
     },
     wechat: { getWxUserId },
   } as any);
@@ -155,7 +163,7 @@ test("accepts the legacy cached user-detail payload shape", async () => {
     users: {
       getActiveUserById,
       getActiveUserByWxId: mock(async () => ({ id: 1001 })),
-      getUserDetailById: mock(async () => ({ id: 1001, mobile: null })),
+      getLoginProfileById: mock(async () => ({ id: 1001, mobile: null })),
     },
     wechat: { getWxUserId: mock(async () => "wx-user") },
   } as any);
@@ -179,7 +187,7 @@ test("polls Processing through the existing retry boundary before deleting and t
     users: {
       getActiveUserById: mock(async () => ({ id: 1001 })),
       getActiveUserByWxId: mock(async () => ({ id: 1001 })),
-      getUserDetailById: mock(async () => ({ id: 1001, mobile: null })),
+      getLoginProfileById: mock(async () => ({ id: 1001, mobile: null })),
     },
     wechat: { getWxUserId: mock(async () => "wx-user") },
   } as any);
@@ -202,7 +210,7 @@ test("preserves the Processing sentinel when the first-pass exchange fails", asy
     users: {
       getActiveUserById: mock(async () => ({ id: 1001 })),
       getActiveUserByWxId: mock(async () => ({ id: 1001 })),
-      getUserDetailById: mock(async () => ({ id: 1001, mobile: null })),
+      getLoginProfileById: mock(async () => ({ id: 1001, mobile: null })),
     },
     wechat: {
       getWxUserId: mock(async () => {

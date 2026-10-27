@@ -4,14 +4,14 @@ import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-author
 import { createHrAdministrationScopeResolver } from "@admin-api/services/admin-authorization/hr-administration-scope.resolver";
 import { createAdminAuditService } from "@admin-api/services/audit/audit.service";
 import type { CreateAppOptions } from "@iam/api-core/core/create-app";
-import type { RebuildUserProfileJobPayload, UserProfileJobName } from "@iam/contracts";
-import { USER_PROFILE_QUEUE_NAME } from "@iam/contracts";
+import type { UserDocumentJobName, UserDocumentJobPayload } from "@iam/contracts";
+import { USER_DOCUMENT_QUEUE_NAME } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import db from "@iam/db";
 import { createJobQueue } from "@iam/jobs";
-import { createOrganizationSearchWriteResources } from "@iam/organization-search-read-model/producer";
+import { createOrganizationDocumentWriteResources } from "@iam/organization-document/producer";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
-import { createUserProfileJobProducer } from "@iam/user-profile-read-model/producer";
+import { createUserDocumentJobProducer } from "@iam/user-document/producer";
 import { createAdminApiMiddlewares } from "./middlewares";
 import { createAdminApiRepositories } from "./repositories";
 import { createAdminApiRouteComposition } from "./routes";
@@ -30,9 +30,9 @@ export interface AdminApiComposition {
   roleAssignmentResolver: ReturnType<typeof createRoleAssignmentResolver>;
   auditService: ReturnType<typeof createAdminAuditService>;
   authorizationPolicy: ReturnType<typeof createAdminAuthorizationPolicy>;
-  userProfileQueue: ReturnType<typeof createJobQueue<RebuildUserProfileJobPayload, unknown, UserProfileJobName>>;
-  userProfileJobProducer: ReturnType<typeof createUserProfileJobProducer>;
-  organizationSearchWrites: ReturnType<typeof createOrganizationSearchWriteResources>;
+  userDocumentQueue: ReturnType<typeof createJobQueue<UserDocumentJobPayload, unknown, UserDocumentJobName>>;
+  userDocumentJobProducer: ReturnType<typeof createUserDocumentJobProducer>;
+  organizationDocumentWrites: ReturnType<typeof createOrganizationDocumentWriteResources>;
   unitOfWork: ReturnType<typeof createAdminApiUnitOfWork>;
   services: ReturnType<typeof createAdminApiServices>;
   useCases: ReturnType<typeof createAdminApiUseCases>;
@@ -65,20 +65,20 @@ export async function createAdminApiComposition(
     hrAdministrationScopeResolver,
     logger: runtime.logger,
   });
-  const userProfileQueue = createJobQueue<RebuildUserProfileJobPayload, unknown, UserProfileJobName>({
-    name: USER_PROFILE_QUEUE_NAME,
+  const userDocumentQueue = createJobQueue<UserDocumentJobPayload, unknown, UserDocumentJobName>({
+    name: USER_DOCUMENT_QUEUE_NAME,
     redis: runtime.config.env.redis,
   });
-  const userProfileJobProducer = createUserProfileJobProducer(userProfileQueue);
-  const organizationSearchWrites = createOrganizationSearchWriteResources({
+  const userDocumentJobProducer = createUserDocumentJobProducer(userDocumentQueue);
+  const organizationDocumentWrites = createOrganizationDocumentWriteResources({
     redis: runtime.config.env.redis,
     logger: runtime.logger,
   });
   const unitOfWork = createAdminApiUnitOfWork({
     db: compositionDb,
     logger: runtime.afterCommitLogger,
-    userProfileJobProducer,
-    organizationSearchJobProducer: organizationSearchWrites.jobProducer,
+    userDocumentJobProducer,
+    organizationDocumentJobProducer: organizationDocumentWrites.jobProducer,
     clock: runtime.clock,
   });
   const services = createAdminApiServices({
@@ -113,9 +113,9 @@ export async function createAdminApiComposition(
     roleAssignmentResolver,
     auditService,
     authorizationPolicy,
-    userProfileQueue,
-    userProfileJobProducer,
-    organizationSearchWrites,
+    userDocumentQueue,
+    userDocumentJobProducer,
+    organizationDocumentWrites,
     unitOfWork,
     services,
     useCases,

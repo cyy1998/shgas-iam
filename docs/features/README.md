@@ -10,7 +10,7 @@
 | 应用能取得哪些用户资料，更新是否及时 | [用户信息共享](sso/subject-delivery.md)                   |
 | 为应用业务指定代办人                 | [应用委托](delegation/client-delegation.md)               |
 | 管理组织责任与 HR 范围               | [组织责任管理](organization-responsibility/management.md) |
-| 按资料、任职和组织条件查找用户       | [用户搜索](search/user-profile-search.md)                 |
+| 按资料、任职和组织条件查找用户       | [用户搜索](search/user-search.md)                         |
 | 按属性和层级查找组织                 | [组织搜索](search/organization-search.md)                 |
 | 校验、预览和发布网关配置             | [网关配置发布](gateway/gateway-configuration.md)          |
 | 查询安全操作及其结果                 | [审计日志](audit/audit-logging.md)                        |

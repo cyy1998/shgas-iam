@@ -47,7 +47,7 @@ function surface(roles = ["iam:admin"]) {
         recordAuditLog,
         recordAuditLogFromContext: async () => undefined,
       },
-      userProfileInvalidation: { recordChanges: async () => undefined },
+      userDocumentInvalidation: { recordChanges: async () => undefined },
     }),
   });
   const adapter = createPositionAdapter({ positionService: service });

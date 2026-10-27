@@ -7,13 +7,13 @@ export function usersRelations(r: RelationsHelper) {
         from: r.users.id,
         to: r.employments.userId,
       }),
-      profile: r.one.userProfiles({
+      document: r.one.userDocuments({
         from: r.users.id,
-        to: r.userProfiles.userId,
+        to: r.userDocuments.userId,
       }),
-      profileDirty: r.one.userProfileDirty({
+      rebuildState: r.one.userDocumentRebuildStates({
         from: r.users.id,
-        to: r.userProfileDirty.userId,
+        to: r.userDocumentRebuildStates.userId,
       }),
       delegationTo: r.many.clientDelegations({
         from: r.users.id,

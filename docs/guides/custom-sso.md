@@ -104,7 +104,7 @@ code={urlencoded_code}&redirect_uri={urlencoded_original_redirect_url}
     "sid": "opaque-custom-token",
     "ttl": 300,
     "subject": {
-      "version": 3,
+      "version": 4,
       "subjectIdentifier": "00000000-0000-4000-8000-000000001001",
       "profile": { "username": "138550", "name": "张三" }
     }
@@ -113,7 +113,9 @@ code={urlencoded_code}&redirect_uri={urlencoded_original_redirect_url}
 ```
 
 subject 仅包含当前 Client 选择的字段，授权只含该 Client 的角色，不含数据库 ID 或兼容别名。
-完整主体仅接受 wire v3，`authorization` 及其每条任职只交付角色，不再包含权限点字段或空数组占位。
+完整主体仅接受 wire v4，`authorization` 及其每条任职只交付角色。
+任职与责任目标的组织统一使用 `code/name/type/path`；路径从根到目标并包含自身，节点含 `level` 和
+`distanceToTarget`，根层级为 1、目标距离为 0。岗位使用 `code/name`，无当前 Client 角色的有效任职仍保留空角色数组。
 `subjectClaims` 的名称和选项保持不变；接入方须适配新响应，并在恢复访问前清理或停用旧权限副本。
 业务后端自行建立本地会话、关联 sid、设置自己的 HttpOnly Cookie，再跳回原 redirectUrl；
 IAM 不建立或存储第三方自有 session。
@@ -155,7 +157,7 @@ Authorization: {sid}
 Authorization 直接使用 sid，不加 Bearer 前缀。服务端优先读取该 Client 的局部 Cookie，缺少 Cookie 才使用 Header。
 `Client: iam` 专用于根 UserInfo，须使用 global_session/UserSession Token，不能传应用 Custom Token。
 
-响应 data 是当前 Client 获准接收的 V3 主体。旧 Token 同样采用当前 subjectClaims；
+响应 data 是当前 Client 获准接收的 V4 主体。旧 Token 同样采用当前 subjectClaims；
 主体资料可能落后于源事实，接入方负责自己副本的刷新；根、原实例或账号失效仍独立阻止访问。
 共有披露与时效保证见[主体信息交付](../features/sso/subject-delivery.md)。
 

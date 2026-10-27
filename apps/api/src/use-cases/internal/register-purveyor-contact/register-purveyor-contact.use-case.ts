@@ -39,7 +39,7 @@ export function createRegisterPurveyorContactUseCase(deps: RegisterPurveyorConta
           );
           if (existingEmployment === null) {
             await tx.employmentRepository.setEmployment(existingUser.id, position.id, organization.id);
-            await tx.userProfileInvalidation.recordChanges([{ kind: "employment", userId: existingUser.id }]);
+            await tx.userDocumentInvalidation.recordChanges([{ kind: "employment", userId: existingUser.id }]);
           }
           return { targetUserId: existingUser.id, existingContact: true };
         },
@@ -81,7 +81,7 @@ export function createRegisterPurveyorContactUseCase(deps: RegisterPurveyorConta
                     subjectIdentifier,
                   });
                   await tx.employmentRepository.setEmployment(user.id, position.id, organization.id);
-                  await tx.userProfileInvalidation.recordChanges([
+                  await tx.userDocumentInvalidation.recordChanges([
                     { kind: "user", userId: user.id },
                     { kind: "employment", userId: user.id },
                   ]);

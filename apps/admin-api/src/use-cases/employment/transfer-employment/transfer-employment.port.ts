@@ -69,7 +69,7 @@ export interface TransferEmploymentTransactionPorts {
       selectedAssignments: readonly OrganizationResponsibilityAssignmentWriteTarget[];
     }) => Promise<boolean>;
   };
-  userProfileInvalidation: {
+  userDocumentInvalidation: {
     recordChanges: (
       changes: readonly (
         | {

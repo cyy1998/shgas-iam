@@ -109,7 +109,7 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
         }
         await tx.auditService.recordAuditLog(buildRoleAudit(action, current, { patch: data, changed }, auditContext));
         if (data.status !== undefined && data.status !== existing.status) {
-          await tx.userProfileInvalidation.recordChanges([{ kind: "role", roleId: existing.id }]);
+          await tx.userDocumentInvalidation.recordChanges([{ kind: "role", roleId: existing.id }]);
         }
         return { changed, result: null };
       },
@@ -143,6 +143,7 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
             auditContext,
           ),
         );
+        await tx.userDocumentInvalidation.recordChanges([{ kind: "role", roleId: deleted.id }]);
         return { changed: true, result: null };
       },
       adminAuditTransactionOptions(auditContext),
@@ -189,7 +190,7 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
           auditContext,
         ),
       );
-      await tx.userProfileInvalidation.recordChanges([
+      await tx.userDocumentInvalidation.recordChanges([
         {
           kind: "role-assignment",
           targetType: assignment.targetType,
@@ -228,7 +229,7 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
           ),
         );
         if (changed) {
-          await tx.userProfileInvalidation.recordChanges([
+          await tx.userDocumentInvalidation.recordChanges([
             {
               kind: "role-assignment",
               targetType: existing.targetType,
@@ -258,7 +259,7 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
             auditContext,
           ),
         );
-        await tx.userProfileInvalidation.recordChanges([
+        await tx.userDocumentInvalidation.recordChanges([
           {
             kind: "role-assignment",
             targetType: existing.targetType,

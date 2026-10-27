@@ -87,7 +87,7 @@ export function createEndEmploymentUseCase(deps: EndEmploymentUseCaseDeps) {
             auditContext,
           ),
         );
-        await tx.userProfileInvalidation.recordChanges([
+        await tx.userDocumentInvalidation.recordChanges([
           { kind: "employment", userId: employment.userId },
           ...(assignmentChanged
             ? [

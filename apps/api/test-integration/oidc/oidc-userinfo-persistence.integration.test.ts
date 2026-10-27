@@ -1,19 +1,23 @@
 import { afterEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
-import { OidcScope, OrganizationType, UserStatus } from "@iam/contracts";
+import { OidcScope, OrganizationLevel, OrganizationType, RoleAssignmentTargetType } from "@iam/contracts";
 import { relations } from "@iam/db/relations";
-import { createSubjectFactsReader, createSubjectFactsRedisCache } from "@iam/user-profile-read-model/subject-facts";
+import { clients, employments, organizationClosures, organizations, positions, roles, users } from "@iam/db/schema";
+import { roleAssignments } from "@iam/db/schema/role-assignments";
+import { createSubjectFactsReader, createSubjectFactsRedisCache } from "@iam/user-document/subject-facts";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import Redis from "ioredis";
 import { closeApiRedisConnection, ownApiTestExecutor, resetApiRedisTestDatabase } from "../support/fixture-lifecycle";
 import { createApiPostgresTestHarness } from "../support/postgres-test-harness";
+import { publishUserDocument } from "../support/user-document.fixture";
 import { cleanupAfterFixtureFailure, closeFixtureResources } from "./oidc.fixture";
 import { userInfoFixture } from "./oidc-userinfo.fixture";
 
 afterEach(resetApiRedisTestDatabase);
 
-test("UserInfo HTTP uses real published Facts cache, narrow PostgreSQL fallback and transient I/O boundaries", async () => {
+test("UserInfo HTTP uses real published Facts cache, canonical PostgreSQL fallback and transient I/O boundaries", async () => {
   const redisUrl = process.env.IAM_API_TEST_REDIS_URL;
   if (!redisUrl) throw new Error("IAM_API_TEST_REDIS_URL is required");
   const resources: Array<() => unknown | Promise<unknown>> = [];
@@ -51,38 +55,82 @@ test("UserInfo HTTP uses real published Facts cache, narrow PostgreSQL fallback 
     const f = await userInfoFixture(reader);
     resources.push(() => f.close());
     const issued = await f.issue();
-    const facts = {
-      employments: [
-        {
-          isPrimary: true,
-          organization: {
-            code: "org",
-            name: "组织",
-            type: OrganizationType.Department,
-            path: [{ code: "org", name: "组织", type: OrganizationType.Department }],
-          },
-          position: { code: "position", name: "岗位" },
-          responsibilities: [],
-          clientAuthorizations: [{ clientCode: f.clientId, roles: [{ code: "published-role" }] }],
-        },
-      ],
-    };
-    await pg.sql`INSERT INTO user_profile (user_id, subject_identifier, username, name, status, is_delete, search_visible, profile_schema_version, source_dirty_version, detail, search_doc, subject_facts, rebuilt_at)
-      VALUES (1, ${f.subjectIdentifier}, 'published', '已发布旧资料', ${UserStatus.Enable}, false, true, 4, 1, '{}'::jsonb, '{}'::jsonb, ${JSON.stringify(facts)}::jsonb, now())`;
+    const [user] = await pg.db
+      .insert(users)
+      .values({
+        subjectIdentifier: f.subjectIdentifier,
+        username: "published",
+        name: "已发布旧资料",
+      })
+      .returning({ id: users.id });
+    const [organization] = await pg.db
+      .insert(organizations)
+      .values({
+        orgCode: "org",
+        orgName: "组织",
+        orgType: OrganizationType.Department,
+        level: OrganizationLevel.One,
+        path: "org",
+      })
+      .returning({ id: organizations.id });
+    const [position] = await pg.db
+      .insert(positions)
+      .values({ posCode: "position", posName: "岗位" })
+      .returning({ id: positions.id });
+    const [client] = await pg.db
+      .insert(clients)
+      .values({
+        clientCode: f.clientId,
+        clientName: "UserInfo",
+        clientSecret: "test-only",
+        extAttributes: {},
+      })
+      .returning({ id: clients.id });
+    if (!user || !organization || !position || !client) throw new Error("UserInfo source fixture is missing");
+    await pg.db
+      .insert(organizationClosures)
+      .values({ ancestorId: organization.id, descendantId: organization.id, depth: 0 });
+    const [employment] = await pg.db
+      .insert(employments)
+      .values({
+        userId: user.id,
+        orgId: organization.id,
+        posId: position.id,
+        isPrimary: true,
+      })
+      .returning({ id: employments.id });
+    const [role] = await pg.db
+      .insert(roles)
+      .values({
+        roleCode: "published-role",
+        roleName: "Published Role",
+        clientId: client.id,
+      })
+      .returning({ id: roles.id });
+    if (!employment || !role) throw new Error("UserInfo role fixture is missing");
+    await pg.db
+      .insert(roleAssignments)
+      .values({ roleId: role.id, targetType: RoleAssignmentTargetType.Employment, targetId: employment.id });
+    await publishUserDocument(pg.db, user.id);
     const first = await f.me(issued.access_token);
     expect(first.status).toBe(200);
-    expect(await first.json()).toMatchObject({
+    const firstPayload = await first.json();
+    expect(firstPayload).toMatchObject({
       sub: f.subjectIdentifier,
       name: "已发布旧资料",
       "iam:authorization": { roles: ["published-role"] },
     });
+    expect(firstPayload["iam:employments"][0].organization).toEqual({
+      code: "org",
+      name: "组织",
+      type: OrganizationType.Department,
+      path: [{ code: "org", name: "组织", type: OrganizationType.Department, level: 1, distanceToTarget: 0 }],
+    });
     expect(queries).toHaveLength(1);
-    // Exact production SQL proves the accepted narrow read, independent from invalid Detail/Search and absent Dirty.
-    expect(queries[0]).toBe(
-      'select "subject_identifier", "username", "name", "mobile", "profile_schema_version", "source_dirty_version", "subject_facts", "rebuilt_at" from "user_profile" where "user_profile"."subject_identifier" = $1 limit $2',
-    );
     queries.length = 0;
-    await pg.sql`UPDATE user_profile SET name = '较新发布资料', source_dirty_version = 2, subject_facts = '{"employments":[]}'::jsonb WHERE user_id = 1`;
+    await pg.db.update(users).set({ name: "较新发布资料" }).where(eq(users.id, user.id));
+    await pg.db.delete(roleAssignments).where(eq(roleAssignments.roleId, role.id));
+    await publishUserDocument(pg.db, user.id, "2");
     const warm = await f.me(issued.access_token);
     expect(await warm.json()).toMatchObject({
       name: "已发布旧资料",
@@ -101,12 +149,12 @@ test("UserInfo HTTP uses real published Facts cache, narrow PostgreSQL fallback 
     expect(queries).toHaveLength(1);
     queries.length = 0;
     await cleanup.del(key);
-    await pg.sql`UPDATE user_profile SET subject_facts = '{}'::jsonb WHERE user_id = 1`;
+    await pg.sql`UPDATE user_document SET document = '{}'::jsonb WHERE user_id = ${user.id}`;
     const corrupt = await f.me(issued.access_token);
     expect(corrupt.status).toBe(503);
     expect(await corrupt.json()).toMatchObject({ error: "temporarily_unavailable" });
     expect(queries).toHaveLength(1);
-    await pg.sql`DELETE FROM user_profile WHERE user_id = 1`;
+    await pg.sql`DELETE FROM user_document WHERE user_id = ${user.id}`;
     const missing = await f.me(issued.access_token);
     expect(missing.status).toBe(503);
     await f.scopes([OidcScope.OpenId]);

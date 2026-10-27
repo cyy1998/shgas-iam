@@ -88,36 +88,37 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 以下登记当前保留的决定与提案；提案和待实施修订不代表当前运行行为。历史原文、已被取代的决策和合并来源见
 [固定 ADR 快照](https://github.com/cyy1998/shgas-iam/tree/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr)，各主题文末提供对应原文。
 
-| Document                                                                                   | Type     | Status  | Last verified | Next review | Notes                                                                                         |
-| ------------------------------------------------------------------------------------------ | -------- | ------- | ------------- | ----------- | --------------------------------------------------------------------------------------------- |
-| [ADR-0002](adr/0002-centralize-role-assignment-resolution.md)                              | decision | Current | 2026-09-21    | 2026-10-31  | 独立角色解析与正反向有效性边界。                                                              |
-| [ADR-0004](adr/0004-adopt-upstream-first-matt-skills.md)                                   | decision | Current | 2026-10-25    | 2026-11-25  | 上游优先与手动薄适配；AFK 按 Spec 动态实施、集中评审及本地 squash 交付。                      |
-| [ADR-0005](adr/0005-keep-live-login-state-in-redis.md)                                     | decision | Current | 2026-09-21    | 2026-10-31  | Redis 实时状态与生命周期时间权威。                                                            |
-| [ADR-0006](adr/0006-elevate-user-subject-identifier.md)                                    | decision | Current | 2026-09-21    | 2026-10-31  | 跨协议稳定 Subject Identifier 归属 IAM 身份域。                                               |
-| [ADR-0009](adr/0009-adopt-canonical-test-collections.md)                                   | decision | Current | 2026-10-15    | 2026-10-31  | 按真实资源归类、workspace 运行声明与每命令临时环境的取舍。                                    |
-| [ADR-0011](adr/0011-model-employment-as-an-immutable-tenure-lifecycle.md)                  | decision | Current | 2026-09-21    | 2026-10-31  | 不可重开的任职期、父完整性与全库诊断。                                                        |
-| [ADR-0012](adr/0012-model-client-maintenance-as-reversible-protocol-traffic-suspension.md) | decision | Current | 2026-09-21    | 2026-10-31  | Client 通行状态与永久撤销分离。                                                               |
-| [ADR-0013](adr/0013-guard-login-page-reentry-with-authentication-continuation.md)          | decision | Current | 2026-09-21    | 2026-10-31  | 认证续接、已有根复用与新鲜认证边界。                                                          |
-| [ADR-0014](adr/0014-model-organization-responsibility-as-employment-bound-fact.md)         | decision | Current | 2026-10-21    | 2026-11-21  | 任职绑定的非授权责任事实与并发边界。                                                          |
-| [ADR-0015](adr/0015-adopt-schema-driven-user-profile-filter-dsl.md)                        | decision | Current | 2026-10-20    | 2026-10-31  | Search Document 与固定 Base；旧搜索退役决定另见 ADR-0043。                                    |
-| [ADR-0017](adr/0017-centralize-admin-role-policy-with-request-time-scope.md)               | decision | Current | 2026-09-21    | 2026-10-31  | Admin 请求时授权与 HR 双端范围。                                                              |
-| [ADR-0020](adr/0020-provide-fail-closed-privilege-delegation-resolution.md)                | decision | Current | 2026-10-21    | 2026-10-31  | 单 Client 委托、调用方隔离、管理分工、写入协调与旧记录清理决定。                              |
-| [ADR-0021](adr/0021-bind-protocol-runtime-cache-consistency-to-snapshot-acquisition.md)    | decision | Current | 2026-09-21    | 2026-10-31  | Snapshot 获取时一致性、传播失败与人工恢复。                                                   |
-| [ADR-0024](adr/0024-canonicalize-historical-audit-actions.md)                              | decision | Current | 2026-09-21    | 2026-10-31  | 规范审计 action 与退出运行时别名的取舍。                                                      |
-| [ADR-0025](adr/0025-align-admin-mutation-results-with-committed-facts.md)                  | decision | Current | 2026-09-21    | 2026-10-31  | Admin 同对象写入、no-op 与提交后恢复。                                                        |
-| [ADR-0028](adr/0028-extract-session-and-grant-state.md)                                    | decision | Current | 2026-09-28    | 2026-10-31  | 会话核心、协议能力与应用适配的所有权。                                                        |
-| [ADR-0029](adr/0029-check-subject-access-once-per-business-operation.md)                   | decision | Current | 2026-09-21    | 2026-10-31  | 单次操作许可与在途账号变化边界。                                                              |
-| [ADR-0032](adr/0032-consume-published-subject-facts-for-authorization.md)                  | decision | Current | 2026-09-21    | 2026-10-31  | 共享投影、服务端 Catalog 与已发布旧事实。                                                     |
-| [ADR-0035](adr/0035-unify-user-and-client-session-lifecycles.md)                           | decision | Current | 2026-09-28    | 2026-10-31  | 两类会话、配置维护、一次消费与精确失败作用。                                                  |
-| [ADR-0036](adr/0036-bind-oidc-to-internal-and-external-issuers.md)                         | decision | Current | 2026-09-21    | 2026-10-31  | 双 issuer 身份、可信入口与 Cookie 隔离。                                                      |
-| [ADR-0038](adr/0038-derive-managed-sso-callback-from-redirect-origin.md)                   | decision | Current | 2026-09-28    | 2026-10-31  | 显式回调类型与 managed origin 信任。                                                          |
-| [ADR-0039](adr/0039-tighten-admin-reference-integrity-and-preserve-history.md)             | decision | Current | 2026-10-21    | 2026-11-21  | 管理引用完整性、输入规范化与软删除历史；详情按 ADR-0045 收缩。                                |
-| [ADR-0040](adr/0040-retire-orcas-custom-sso-integration.md)                                | decision | Current | 2026-10-10    | 2026-10-31  | ORCAS 完整退役决定；全量清理登录态、维护窗口切换及外部会话责任。                              |
-| [ADR-0041](adr/0041-unify-format-and-lint-with-biome.md)                                   | decision | Current | 2026-10-16    | 2026-10-31  | 已接受：Biome 与提交时修复；YAML 仅排版并保留专属验证，最终只读检查；实施与验收见 Spec #217。 |
-| [ADR-0042](adr/0042-search-organizations-with-published-documents.md)                      | decision | Current | 2026-10-15    | 2026-10-31  | 组织源事实、异步搜索文档与同文档响应；旧搜索退役决定另见 ADR-0043。                           |
-| [ADR-0043](adr/0043-retire-public-and-legacy-internal-directory-search.md)                 | decision | Current | 2026-10-20    | 2026-10-31  | 直接退役五个旧搜索入口；保留 Internal DSL、详情、Admin 与独立委托能力。                       |
-| [ADR-0044](adr/0044-publish-gateway-configurations-through-a-stateless-api.md)             | decision | Current | 2026-10-16    | 2026-10-31  | 无状态 Gateway API、Client 凭据校验、补偿恢复与实例内串行的已接受取舍。                       |
-| [ADR-0045](adr/0045-retire-privilege-permission-points.md)                                 | decision | Current | 2026-10-21    | 2026-11-21  | 权限点退役、契约硬切换、删表与全量重建；保留角色、Client 委托及有效登录态，发布单独验收。     |
+| Document                                                                                   | Type     | Status  | Last verified | Next review | Notes                                                                                                         |
+| ------------------------------------------------------------------------------------------ | -------- | ------- | ------------- | ----------- | ------------------------------------------------------------------------------------------------------------- |
+| [ADR-0002](adr/0002-centralize-role-assignment-resolution.md)                              | decision | Current | 2026-09-21    | 2026-10-31  | 独立角色解析与正反向有效性边界。                                                                              |
+| [ADR-0004](adr/0004-adopt-upstream-first-matt-skills.md)                                   | decision | Current | 2026-10-25    | 2026-11-25  | 上游优先与手动薄适配；AFK 按 Spec 动态实施、集中评审及本地 squash 交付。                                      |
+| [ADR-0005](adr/0005-keep-live-login-state-in-redis.md)                                     | decision | Current | 2026-09-21    | 2026-10-31  | Redis 实时状态与生命周期时间权威。                                                                            |
+| [ADR-0006](adr/0006-elevate-user-subject-identifier.md)                                    | decision | Current | 2026-09-21    | 2026-10-31  | 跨协议稳定 Subject Identifier 归属 IAM 身份域。                                                               |
+| [ADR-0009](adr/0009-adopt-canonical-test-collections.md)                                   | decision | Current | 2026-10-15    | 2026-10-31  | 按真实资源归类、workspace 运行声明与每命令临时环境的取舍。                                                    |
+| [ADR-0011](adr/0011-model-employment-as-an-immutable-tenure-lifecycle.md)                  | decision | Current | 2026-09-21    | 2026-10-31  | 不可重开的任职期、父完整性与全库诊断。                                                                        |
+| [ADR-0012](adr/0012-model-client-maintenance-as-reversible-protocol-traffic-suspension.md) | decision | Current | 2026-09-21    | 2026-10-31  | Client 通行状态与永久撤销分离。                                                                               |
+| [ADR-0013](adr/0013-guard-login-page-reentry-with-authentication-continuation.md)          | decision | Current | 2026-09-21    | 2026-10-31  | 认证续接、已有根复用与新鲜认证边界。                                                                          |
+| [ADR-0014](adr/0014-model-organization-responsibility-as-employment-bound-fact.md)         | decision | Current | 2026-10-21    | 2026-11-21  | 任职绑定的非授权责任事实与并发边界。                                                                          |
+| [ADR-0015](adr/0015-adopt-schema-driven-user-profile-filter-dsl.md)                        | decision | Current | 2026-10-26    | 2026-11-26  | 公开文档结构驱动 DSL；完整响应与 Client 隔离由 ADR-0046 修订。                                                |
+| [ADR-0017](adr/0017-centralize-admin-role-policy-with-request-time-scope.md)               | decision | Current | 2026-09-21    | 2026-10-31  | Admin 请求时授权与 HR 双端范围。                                                                              |
+| [ADR-0020](adr/0020-provide-fail-closed-privilege-delegation-resolution.md)                | decision | Current | 2026-10-21    | 2026-10-31  | 单 Client 委托、调用方隔离、管理分工、写入协调与旧记录清理决定。                                              |
+| [ADR-0021](adr/0021-bind-protocol-runtime-cache-consistency-to-snapshot-acquisition.md)    | decision | Current | 2026-09-21    | 2026-10-31  | Snapshot 获取时一致性、传播失败与人工恢复。                                                                   |
+| [ADR-0024](adr/0024-canonicalize-historical-audit-actions.md)                              | decision | Current | 2026-09-21    | 2026-10-31  | 规范审计 action 与退出运行时别名的取舍。                                                                      |
+| [ADR-0025](adr/0025-align-admin-mutation-results-with-committed-facts.md)                  | decision | Current | 2026-09-21    | 2026-10-31  | Admin 同对象写入、no-op 与提交后恢复。                                                                        |
+| [ADR-0028](adr/0028-extract-session-and-grant-state.md)                                    | decision | Current | 2026-09-28    | 2026-10-31  | 会话核心、协议能力与应用适配的所有权。                                                                        |
+| [ADR-0029](adr/0029-check-subject-access-once-per-business-operation.md)                   | decision | Current | 2026-09-21    | 2026-10-31  | 单次操作许可与在途账号变化边界。                                                                              |
+| [ADR-0032](adr/0032-consume-published-subject-facts-for-authorization.md)                  | decision | Current | 2026-10-26    | 2026-11-26  | 共享投影、服务端 Catalog 与已发布旧事实。                                                                     |
+| [ADR-0035](adr/0035-unify-user-and-client-session-lifecycles.md)                           | decision | Current | 2026-09-28    | 2026-10-31  | 两类会话、配置维护、一次消费与精确失败作用。                                                                  |
+| [ADR-0036](adr/0036-bind-oidc-to-internal-and-external-issuers.md)                         | decision | Current | 2026-09-21    | 2026-10-31  | 双 issuer 身份、可信入口与 Cookie 隔离。                                                                      |
+| [ADR-0038](adr/0038-derive-managed-sso-callback-from-redirect-origin.md)                   | decision | Current | 2026-09-28    | 2026-10-31  | 显式回调类型与 managed origin 信任。                                                                          |
+| [ADR-0039](adr/0039-tighten-admin-reference-integrity-and-preserve-history.md)             | decision | Current | 2026-10-21    | 2026-11-21  | 管理引用完整性、输入规范化与软删除历史；详情按 ADR-0045 收缩。                                                |
+| [ADR-0040](adr/0040-retire-orcas-custom-sso-integration.md)                                | decision | Current | 2026-10-10    | 2026-10-31  | ORCAS 完整退役决定；全量清理登录态、维护窗口切换及外部会话责任。                                              |
+| [ADR-0041](adr/0041-unify-format-and-lint-with-biome.md)                                   | decision | Current | 2026-10-16    | 2026-10-31  | 已接受：Biome 与提交时修复；YAML 仅排版并保留专属验证，最终只读检查；实施与验收见 Spec #217。                 |
+| [ADR-0042](adr/0042-search-organizations-with-published-documents.md)                      | decision | Current | 2026-10-26    | 2026-11-26  | 组织源事实、异步搜索文档与同文档响应；旧搜索退役决定另见 ADR-0043。                                           |
+| [ADR-0043](adr/0043-retire-public-and-legacy-internal-directory-search.md)                 | decision | Current | 2026-10-26    | 2026-11-26  | 直接退役五个旧搜索入口；保留 Internal DSL、详情、Admin 与独立委托能力。                                       |
+| [ADR-0044](adr/0044-publish-gateway-configurations-through-a-stateless-api.md)             | decision | Current | 2026-10-16    | 2026-10-31  | 无状态 Gateway API、Client 凭据校验、补偿恢复与实例内串行的已接受取舍。                                       |
+| [ADR-0045](adr/0045-retire-privilege-permission-points.md)                                 | decision | Current | 2026-10-21    | 2026-11-21  | 权限点退役、契约硬切换、删表与全量重建；保留角色、Client 委托及有效登录态，发布单独验收。                     |
+| [ADR-0046](adr/0046-unify-user-and-organization-read-documents.md)                         | decision | Current | 2026-10-26    | 2026-11-26  | 已接受：User/Organization Document、Client 角色隔离、Outbox、重建状态、墓碑与硬切换；实施与验收见 Spec #283。 |
 
 </details>
 
@@ -144,11 +145,11 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 
 | Document                                                   | Type         | Status  | Last verified | Next review | Notes                                              |
 | ---------------------------------------------------------- | ------------ | ------- | ------------- | ----------- | -------------------------------------------------- |
-| [后端架构](architecture/backend-architecture.md)           | architecture | Current | 2026-10-25    | 2026-11-25  | 分层、事务、关键模块协作与一致性约束。             |
-| [共享契约与数据库](architecture/contracts-and-database.md) | architecture | Current | 2026-10-25    | 2026-11-25  | 代码选址、包出口、运行环境、DTO 演进与持久化边界。 |
+| [后端架构](architecture/backend-architecture.md)           | architecture | Current | 2026-10-26    | 2026-11-26  | 分层、事务、关键模块协作与一致性约束。             |
+| [共享契约与数据库](architecture/contracts-and-database.md) | architecture | Current | 2026-10-26    | 2026-11-26  | 代码选址、包出口、运行环境、DTO 演进与持久化边界。 |
 | [前端架构](architecture/frontend-architecture.md)          | architecture | Current | 2026-10-25    | 2026-11-25  | 页面、请求、权限、状态与失败恢复的职责。           |
-| [仓库地图](architecture/repository-map.md)                 | architecture | Current | 2026-10-25    | 2026-11-25  | 代码、基础设施、工具与生成目录定位。               |
-| [系统架构视图](architecture/system-architecture.md)        | architecture | Current | 2026-10-25    | 2026-11-25  | 拓扑、信任边界、数据权威与恢复分工。               |
+| [仓库地图](architecture/repository-map.md)                 | architecture | Current | 2026-10-26    | 2026-11-26  | 代码、基础设施、工具与生成目录定位。               |
+| [系统架构视图](architecture/system-architecture.md)        | architecture | Current | 2026-10-26    | 2026-11-26  | 拓扑、信任边界、数据权威与恢复分工。               |
 | [测试编排架构](architecture/testing-architecture.md)       | architecture | Current | 2026-10-25    | 2026-11-25  | 收集、编排、缓存、资源隔离与生命周期。             |
 
 </details>
@@ -163,7 +164,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [架构守卫规范](development/architecture-guard.md)     | development | Current | 2026-10-25    | 2026-11-25  | 静态守卫的观察范围、规则准入与测试要求。               |
 | [后端实现约定](development/backend-implementation.md) | development | Current | 2026-10-25    | 2026-11-25  | 响应、审计、日志、编排命名、factory 与数据库文件约定。 |
 | [编码风格与命名约定](development/coding-style.md)     | development | Current | 2026-10-25    | 2026-11-25  | TypeScript、formatter、文件命名与 import 风格。        |
-| [构建、测试与开发命令](development/commands.md)       | development | Current | 2026-10-25    | 2026-11-25  | 开发、构建、验证、AFK 与维护的命令和资源入口。         |
+| [构建、测试与开发命令](development/commands.md)       | development | Current | 2026-10-26    | 2026-11-26  | 开发、构建、验证、AFK 与维护的命令和资源入口。         |
 | [测试规范](development/testing.md)                    | development | Current | 2026-10-25    | 2026-11-25  | 验证选择、测试分类、命名、断言与清理规则。             |
 
 </details>
@@ -177,17 +178,17 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 
 | Document                                                           | Type    | Status  | Last verified | Next review | Notes                                            |
 | ------------------------------------------------------------------ | ------- | ------- | ------------- | ----------- | ------------------------------------------------ |
-| [功能说明入口](features/README.md)                                 | feature | Current | 2026-10-25    | 2026-11-25  | 按使用场景查阅功能、流程和业务规则。             |
+| [功能说明入口](features/README.md)                                 | feature | Current | 2026-10-26    | 2026-11-26  | 按使用场景查阅功能、流程和业务规则。             |
 | [应用接入配置](features/admin/client-sso-configuration.md)         | feature | Current | 2026-10-25    | 2026-11-25  | 协议、回调、凭据、启停、删除及配置保存后的异常。 |
 | [审计日志](features/audit/audit-logging.md)                        | feature | Current | 2026-10-25    | 2026-11-25  | 记录范围、敏感信息、查询和操作生效后的审计失败。 |
 | [应用委托](features/delegation/client-delegation.md)               | feature | Current | 2026-10-25    | 2026-11-25  | 管理权限、创建、期间冲突、生命周期和代办人查询。 |
 | [网关配置发布](features/gateway/gateway-configuration.md)          | feature | Current | 2026-10-25    | 2026-11-25  | 校验、预览、发布、删除范围及人工恢复。           |
 | [组织责任管理](features/organization-responsibility/management.md) | feature | Current | 2026-10-25    | 2026-11-25  | HR 范围、任命、名额、生命周期和历史查看。        |
 | [组织搜索](features/search/organization-search.md)                 | feature | Current | 2026-10-25    | 2026-11-25  | 组织属性、层级与路径查询、结果范围和更新延迟。   |
-| [用户搜索](features/search/user-profile-search.md)                 | feature | Current | 2026-10-25    | 2026-11-25  | 用户与任职条件、摘要结果、限制和委托组合。       |
+| [用户搜索](features/search/user-search.md)                         | feature | Current | 2026-10-26    | 2026-11-26  | 用户与任职条件、摘要结果、限制和委托组合。       |
 | [登录与会话](features/sso/login-and-session.md)                    | feature | Current | 2026-10-25    | 2026-11-25  | 登录恢复、会话下线、改密和临时登录限制。         |
 | [应用单点登录](features/sso/single-sign-on.md)                     | feature | Current | 2026-10-25    | 2026-11-25  | 接入方式、登录流程、共享信息和退出责任。         |
-| [用户信息共享](features/sso/subject-delivery.md)                   | feature | Current | 2026-10-25    | 2026-11-25  | 可提供的资料、披露范围、更新延迟和应用责任。     |
+| [用户信息共享](features/sso/subject-delivery.md)                   | feature | Current | 2026-10-26    | 2026-11-26  | 可提供的资料、披露范围、更新延迟和应用责任。     |
 
 </details>
 
@@ -201,11 +202,11 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | Document                                    | Type  | Status  | Last verified | Next review | Notes                                      |
 | ------------------------------------------- | ----- | ------- | ------------- | ----------- | ------------------------------------------ |
 | [接入指南入口](guides/README.md)            | guide | Current | 2026-10-25    | 2026-11-25  | 选择接入流程及代码定义。                   |
-| [Custom SSO 接入指南](guides/custom-sso.md) | guide | Current | 2026-10-25    | 2026-11-25  | 业务与托管接入、可信登录、示例和错误处理。 |
+| [Custom SSO 接入指南](guides/custom-sso.md) | guide | Current | 2026-10-26    | 2026-11-26  | 业务与托管接入、可信登录、示例和错误处理。 |
 | [委托接入](guides/delegation.md)            | guide | Current | 2026-10-25    | 2026-11-25  | Client 范围、代办人解析和失败处理。        |
 | [网关配置接入](guides/gateway.md)           | guide | Current | 2026-10-25    | 2026-11-25  | 凭据、YAML、调用步骤及未知结果处理。       |
-| [OIDC 接入指南](guides/oidc.md)             | guide | Current | 2026-10-25    | 2026-11-25  | 端点、参数、示例、Scope、CORS 和退出。     |
-| [搜索接入](guides/search.md)                | guide | Current | 2026-10-25    | 2026-11-25  | 用户与组织查询示例、过滤条件及结果限制。   |
+| [OIDC 接入指南](guides/oidc.md)             | guide | Current | 2026-10-26    | 2026-11-26  | 端点、参数、示例、Scope、CORS 和退出。     |
+| [搜索接入](guides/search.md)                | guide | Current | 2026-10-26    | 2026-11-26  | 用户与组织查询示例、过滤条件及结果限制。   |
 
 </details>
 
@@ -216,14 +217,14 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 
 从操作入口选择任务，核对必要前提、完成标准和失败处理；接口定义见代码，实现边界见架构文档。
 
-| Document                                             | Type    | Status  | Last verified | Next review | Notes                                                    |
-| ---------------------------------------------------- | ------- | ------- | ------------- | ----------- | -------------------------------------------------------- |
-| [运维操作入口](releases/README.md)                   | runbook | Current | 2026-10-25    | 2026-11-25  | 任务导航、简短通用约定、独立迁移与历史版本入口。         |
-| [网关管理](releases/apisix-gateway-release.md)       | runbook | Current | 2026-10-25    | 2026-11-25  | 首次配置、HTTP 发布、数据面检查和失败恢复。              |
-| [登录与会话](releases/authentication-and-session.md) | runbook | Current | 2026-10-25    | 2026-11-25  | 密码配置、OIDC 双入口与密钥、会话清理和 Snapshot 恢复。  |
-| [数据维护](releases/data-maintenance.md)             | runbook | Current | 2026-10-25    | 2026-11-25  | Profile、Subject Access 与组织搜索分别修复、重建及核验。 |
-| [部署与发布](releases/deployment.md)                 | runbook | Current | 2026-10-25    | 2026-11-25  | 首次部署、常规更新、正式迁移、兼容回退与定向停止。       |
-| [日志与排障](releases/observability-system-logs.md)  | runbook | Current | 2026-10-25    | 2026-11-25  | 日志栈、Grafana、Trace 关联、告警与采集恢复。            |
+| Document                                             | Type    | Status  | Last verified | Next review | Notes                                                       |
+| ---------------------------------------------------- | ------- | ------- | ------------- | ----------- | ----------------------------------------------------------- |
+| [运维操作入口](releases/README.md)                   | runbook | Current | 2026-10-26    | 2026-11-26  | 任务导航、简短通用约定、独立迁移与历史版本入口。            |
+| [网关管理](releases/apisix-gateway-release.md)       | runbook | Current | 2026-10-25    | 2026-11-25  | 首次配置、HTTP 发布、数据面检查和失败恢复。                 |
+| [登录与会话](releases/authentication-and-session.md) | runbook | Current | 2026-10-25    | 2026-11-25  | 密码配置、OIDC 双入口与密钥、会话清理和 Snapshot 恢复。     |
+| [数据维护](releases/data-maintenance.md)             | runbook | Current | 2026-10-26    | 2026-11-26  | Document、Subject Access 的两阶段修复、全量重建及完整核验。 |
+| [部署与发布](releases/deployment.md)                 | runbook | Current | 2026-10-26    | 2026-11-26  | 首次部署、常规更新、正式迁移、兼容回退与定向停止。          |
+| [日志与排障](releases/observability-system-logs.md)  | runbook | Current | 2026-10-25    | 2026-11-25  | 日志栈、Grafana、Trace 关联、告警与采集恢复。               |
 
 </details>
 

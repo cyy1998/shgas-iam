@@ -46,30 +46,6 @@ describe("API environment", () => {
     expect(env.sso.externalOrigin).toBe("https://iam.example.com");
     expect(env.sso.projectionRetryAfterSeconds).toBe(3);
     expect(env.loginCredential.privateKeysByKid["2026-05-primary"]).toBe("private-key");
-    expect(env.userProfile).toEqual({
-      dslMaxLimit: 100,
-    });
-    expect("IAM_API_USER_PROFILE_DSL_MAX_LIMIT" in env).toBe(false);
-  });
-
-  test("accepts app-prefixed user-profile DSL override", () => {
-    const env = parseApiEnv({
-      ...validEnv(),
-      IAM_API_USER_PROFILE_DSL_MAX_LIMIT: "75",
-    });
-
-    expect(env.userProfile).toEqual({
-      dslMaxLimit: 75,
-    });
-  });
-
-  test("rejects unsafe user-profile DSL limits", () => {
-    expect(() =>
-      parseApiEnv({
-        ...validEnv(),
-        IAM_API_USER_PROFILE_DSL_MAX_LIMIT: "501",
-      }),
-    ).toThrow();
   });
 
   test("accepts only positive Custom SSO projection retry hints", () => {

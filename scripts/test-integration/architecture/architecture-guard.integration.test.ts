@@ -12,6 +12,33 @@ afterEach(() => {
 });
 
 describe("repository architecture guard", () => {
+  test("keeps the responsibility parent lifecycle capability with source writer owners", () => {
+    const repoRoot = createFixtureRepository({
+      "apps/api/src/composition/tx/index.ts":
+        'import { guard } from "@iam/organization-responsibility-resolution/parent-lifecycle";',
+      "apps/admin-api/src/services/organization-responsibility/organization-responsibility.repository.ts":
+        'import { reader } from "@iam/organization-responsibility-resolution/parent-lifecycle";',
+      "apps/admin-api/src/services/organization-responsibility/organization-responsibility-parent-lifecycle.participant.ts":
+        'import { guard } from "@iam/organization-responsibility-resolution/parent-lifecycle";',
+      "apps/api/src/services/organization/organization.service.ts":
+        'import { guard } from "@iam/organization-responsibility-resolution/parent-lifecycle";',
+      "apps/worker/src/composition/index.ts":
+        'export type { Guard } from "@iam/organization-responsibility-resolution/parent-lifecycle";',
+    });
+    expect(violationLocations(repoRoot)).toEqual([
+      {
+        ruleId: "organization-responsibility-parent-lifecycle-owner",
+        file: "apps/api/src/services/organization/organization.service.ts",
+        line: 1,
+      },
+      {
+        ruleId: "organization-responsibility-parent-lifecycle-owner",
+        file: "apps/worker/src/composition/index.ts",
+        line: 1,
+      },
+    ]);
+  });
+
   test("protects Gateway HTTP and consumer ports while allowing composition wiring", () => {
     const repoRoot = createFixtureRepository({
       "apps/gateway/src/http/app.ts": 'import type { Reader } from "../repositories/client-credential.repository";',
@@ -164,14 +191,14 @@ describe("repository architecture guard", () => {
   test("allows consumer and platform narrowing while excluding non-production sources", () => {
     const allowedPort = [
       'import type { IncomingMessage } from "node:http";',
-      'import type { UserProfile } from "@iam/domain/user";',
-      "interface UserProfilePort { find: (id: string) => Promise<UserProfile> }",
+      'import type { UserDocument } from "@iam/domain/user";',
+      "interface UserDocumentPort { find: (id: string) => Promise<UserDocument> }",
       'type HeaderRequest = Pick<IncomingMessage, "headers">;',
-      'type UserProfileReader = Pick<UserProfilePort, "find">;',
+      'type UserDocumentReader = Pick<UserDocumentPort, "find">;',
     ].join("\n");
     const forbiddenPort = 'import type { UserRepository } from "./user.repository";';
     const repoRoot = createFixtureRepository({
-      "apps/worker/src/modules/user-profile/user-profile.port.ts": allowedPort,
+      "apps/worker/src/modules/user-document/user-document.port.ts": allowedPort,
       "apps/worker/src/modules/__tests__/test.port.ts": forbiddenPort,
       "apps/worker/src/modules/testing/helper.port.ts": forbiddenPort,
       "apps/worker/src/modules/generated/client.port.ts": forbiddenPort,
@@ -212,12 +239,18 @@ describe("repository architecture guard", () => {
   test("rejects Role Assignment Resolver value dependencies outside composition and module owners", () => {
     const repoRoot = createFixtureRepository({
       "apps/api/src/services/user/user.service.ts": 'import "@iam/role-assignment-resolution";',
+      "packages/user-document/src/query/user-role.ts": 'import "@iam/role-assignment-resolution";',
     });
 
     expect(violationLocations(repoRoot)).toEqual([
       {
         ruleId: "role-resolution-owner",
         file: "apps/api/src/services/user/user.service.ts",
+        line: 1,
+      },
+      {
+        ruleId: "role-resolution-owner",
+        file: "packages/user-document/src/query/user-role.ts",
         line: 1,
       },
     ]);
@@ -229,93 +262,93 @@ describe("repository architecture guard", () => {
       "apps/api/src/services/user/user.port.ts":
         'import type { RoleAssignmentResolver } from "@iam/role-assignment-resolution";',
       "apps/admin-api/src/composition/index.ts": valueImport,
-      "packages/user-profile-read-model/src/invalidation/user-profile-invalidation.ts": valueImport,
-      "packages/user-profile-read-model/src/worker/user-profile-worker.module.ts": valueImport,
+      "packages/user-document/src/invalidation/user-document-source.ts": valueImport,
+      "packages/user-document/src/worker/user-document-worker.module.ts": valueImport,
     });
 
     expect(violationLocations(repoRoot)).toEqual([]);
   });
 
-  test("rejects User Profile producer and worker dependencies outside their corresponding owners", () => {
+  test("rejects User Document producer and worker dependencies outside their corresponding owners", () => {
     const repoRoot = createFixtureRepository({
       "apps/api/src/services/user/user.service.ts":
-        'export type { UserProfileInvalidation } from "@iam/user-profile-read-model/producer";',
+        'export type { UserDocumentInvalidation } from "@iam/user-document/producer";',
       "apps/admin-api/src/services/user/user.service.ts":
-        'import { createUserProfileWorkerModule } from "@iam/user-profile-read-model/worker";',
+        'import { createUserDocumentWorkerModule } from "@iam/user-document/worker";',
     });
 
     expect(violationLocations(repoRoot)).toEqual([
       {
-        ruleId: "user-profile-owner",
+        ruleId: "user-document-owner",
         file: "apps/admin-api/src/services/user/user.service.ts",
         line: 1,
       },
       {
-        ruleId: "user-profile-owner",
+        ruleId: "user-document-owner",
         file: "apps/api/src/services/user/user.service.ts",
         line: 1,
       },
     ]);
   });
 
-  test("rejects User Profile query repository dependencies outside API composition", () => {
+  test("rejects User Document query repository dependencies outside API composition", () => {
     const repoRoot = createFixtureRepository({
       "apps/api/src/services/user/user.service.ts":
-        'import type { UserProfileRepository } from "@iam/user-profile-read-model/query/repository";',
+        'import type { UserDocumentRepository } from "@iam/user-document/query/repository";',
     });
 
     expect(violationLocations(repoRoot)).toEqual([
       {
-        ruleId: "user-profile-owner",
+        ruleId: "user-document-owner",
         file: "apps/api/src/services/user/user.service.ts",
         line: 1,
       },
     ]);
   });
 
-  test("rejects complementary User Profile owner dependency kinds", () => {
+  test("rejects complementary User Document owner dependency kinds", () => {
     const repoRoot = createFixtureRepository({
       "apps/api/src/services/user/user.service.ts":
-        'import { createUserProfileJobProducer } from "@iam/user-profile-read-model/producer";',
+        'import { createUserDocumentJobProducer } from "@iam/user-document/producer";',
       "apps/admin-api/src/services/user/user.type.ts":
-        'import type { UserProfileJobProcessor } from "@iam/user-profile-read-model/worker";',
+        'import type { UserDocumentJobProcessor } from "@iam/user-document/worker";',
       "apps/admin-api/src/services/user/user.service.ts":
-        'import { createUserProfileRepository } from "@iam/user-profile-read-model/query/repository";',
+        'import { createUserDocumentRepository } from "@iam/user-document/query/repository";',
     });
 
     expect(violationLocations(repoRoot)).toEqual([
       {
-        ruleId: "user-profile-owner",
+        ruleId: "user-document-owner",
         file: "apps/admin-api/src/services/user/user.service.ts",
         line: 1,
       },
       {
-        ruleId: "user-profile-owner",
+        ruleId: "user-document-owner",
         file: "apps/admin-api/src/services/user/user.type.ts",
         line: 1,
       },
       {
-        ruleId: "user-profile-owner",
+        ruleId: "user-document-owner",
         file: "apps/api/src/services/user/user.service.ts",
         line: 1,
       },
     ]);
   });
 
-  test("allows User Profile owners plus root and query consumers", () => {
+  test("allows User Document owners plus root and query consumers", () => {
     const repoRoot = createFixtureRepository({
-      "apps/api/src/composition/index.ts": 'import "@iam/user-profile-read-model/producer";',
+      "apps/api/src/composition/index.ts": 'import "@iam/user-document/producer";',
       "apps/api/src/composition/repositories/index.ts":
-        'import { createUserProfileRepository } from "@iam/user-profile-read-model/query/repository";',
+        'import { createUserDocumentRepository } from "@iam/user-document/query/repository";',
       "apps/admin-api/src/composition/index.ts":
-        'import type { UserProfileInvalidation } from "@iam/user-profile-read-model/producer";',
+        'import type { UserDocumentInvalidation } from "@iam/user-document/producer";',
       "apps/worker/src/composition/index.ts":
-        'import { createUserProfileWorkerModule } from "@iam/user-profile-read-model/worker";',
+        'import { createUserDocumentWorkerModule } from "@iam/user-document/worker";',
       "apps/api/src/services/user/user.service.ts":
-        'import type { UserProfileQueryService } from "@iam/user-profile-read-model";',
+        'import type { UserDocumentQueryService } from "@iam/user-document";',
       "apps/admin-api/src/services/user/user.type.ts":
-        'export type { UserProfileQueryService } from "@iam/user-profile-read-model/query";',
-      "apps/api/src/composition/repositories/profile.ts": 'import "@iam/user-profile-read-model";',
+        'export type { UserDocumentQueryService } from "@iam/user-document/query";',
+      "apps/api/src/composition/repositories/profile.ts": 'import "@iam/user-document";',
     });
 
     expect(violationLocations(repoRoot)).toEqual([]);
@@ -464,7 +497,7 @@ describe("repository architecture guard", () => {
   test("keeps the Custom SSO wire mapper independent of facts and runtime owners", () => {
     const repoRoot = createFixtureRepository({
       "packages/custom-sso/src/wire.ts": [
-        'import type { SubjectFactsReader } from "@iam/user-profile-read-model/query";',
+        'import type { SubjectFactsReader } from "@iam/user-document/query";',
         'import type { Context } from "hono";',
       ].join("\n"),
     });
@@ -518,7 +551,7 @@ describe("repository architecture guard", () => {
     const repoRoot = createFixtureRepository({
       "packages/client-subject-projection/src/internal/projection.ts": [
         'import type { Context } from "hono";',
-        'import type { UserProfileQuery } from "@iam/user-profile-read-model/query";',
+        'import type { UserDocumentQuery } from "@iam/user-document/query";',
         'import type { CustomSsoSubjectProjection } from "../../../custom-sso/src/wire.ts";',
       ].join("\n"),
       "packages/custom-sso/src/wire.ts":
@@ -636,7 +669,7 @@ describe("repository architecture guard", () => {
       ].join("\n"),
       "apps/worker/src/http/server.ts": [
         'import { createApp } from "@iam/api-core";',
-        'import type { UserProfileQueryService } from "@iam/user-profile-read-model";',
+        'import type { UserDocumentQueryService } from "@iam/user-document";',
       ].join("\n"),
     });
 
@@ -670,19 +703,19 @@ describe("repository architecture guard", () => {
         name: "@iam/api",
         dependencies: {
           "@iam/role-assignment-resolution": "workspace:*",
-          "@iam/user-profile-read-model": "workspace:*",
+          "@iam/user-document": "workspace:*",
         },
       }),
       "apps/api/Dockerfile": [
         "FROM node:24-alpine",
         "COPY packages/role-assignment-resolution/package.json ./packages/role-assignment-resolution/",
-        "COPY packages/user-profile-read-model/ ./packages/user-profile-read-model/",
+        "COPY packages/user-document/ ./packages/user-document/",
       ].join("\n"),
       "packages/role-assignment-resolution/package.json": JSON.stringify({
         name: "@iam/role-assignment-resolution",
       }),
-      "packages/user-profile-read-model/package.json": JSON.stringify({
-        name: "@iam/user-profile-read-model",
+      "packages/user-document/package.json": JSON.stringify({
+        name: "@iam/user-document",
       }),
     });
 
@@ -700,8 +733,8 @@ describe("repository architecture guard", () => {
         file: "apps/api/Dockerfile",
         line: 1,
         message:
-          "Docker image @iam/api consumes @iam/user-profile-read-model but does not COPY " +
-          '"packages/user-profile-read-model/package.json" from the workspace.',
+          "Docker image @iam/api consumes @iam/user-document but does not COPY " +
+          '"packages/user-document/package.json" from the workspace.',
       },
     ]);
   });
@@ -711,16 +744,16 @@ describe("repository architecture guard", () => {
       "apps/worker/package.json": JSON.stringify({
         name: "@iam/worker",
         dependencies: {
-          "@iam/user-profile-read-model": "workspace:*",
+          "@iam/user-document": "workspace:*",
         },
       }),
       "apps/worker/Dockerfile": [
         "FROM node:24-alpine",
-        "COPY packages/user-profile-read-model/package.json ./packages/user-profile-read-model/",
-        "COPY packages/user-profile-read-model/ ./packages/user-profile-read-model/",
+        "COPY packages/user-document/package.json ./packages/user-document/",
+        "COPY packages/user-document/ ./packages/user-document/",
       ].join("\n"),
-      "packages/user-profile-read-model/package.json": JSON.stringify({
-        name: "@iam/user-profile-read-model",
+      "packages/user-document/package.json": JSON.stringify({
+        name: "@iam/user-document",
         dependencies: {
           "@iam/role-assignment-resolution": "workspace:*",
         },
@@ -755,16 +788,16 @@ describe("repository architecture guard", () => {
       "apps/api/Dockerfile": [
         "FROM node:24-alpine",
         "COPY packages/domain/package.json ./packages/domain/",
-        "COPY packages/user-profile-read-model/package.json ./packages/user-profile-read-model/",
+        "COPY packages/user-document/package.json ./packages/user-document/",
       ].join("\n"),
       "packages/domain/package.json": JSON.stringify({
         name: "@iam/domain",
         dependencies: {
-          "@iam/user-profile-read-model": "workspace:*",
+          "@iam/user-document": "workspace:*",
         },
       }),
-      "packages/user-profile-read-model/package.json": JSON.stringify({
-        name: "@iam/user-profile-read-model",
+      "packages/user-document/package.json": JSON.stringify({
+        name: "@iam/user-document",
       }),
     });
 
@@ -788,17 +821,17 @@ describe("repository architecture guard", () => {
       "apps/admin/Dockerfile": [
         "FROM node:24-alpine",
         "COPY apps/admin-api/ ./apps/admin-api/",
-        "COPY packages/user-profile-read-model/package.json ./packages/user-profile-read-model/",
-        "COPY packages/user-profile-read-model/ ./packages/user-profile-read-model/",
+        "COPY packages/user-document/package.json ./packages/user-document/",
+        "COPY packages/user-document/ ./packages/user-document/",
       ].join("\n"),
       "apps/admin-api/package.json": JSON.stringify({
         name: "@iam/admin-api",
         dependencies: {
-          "@iam/user-profile-read-model": "workspace:*",
+          "@iam/user-document": "workspace:*",
         },
       }),
-      "packages/user-profile-read-model/package.json": JSON.stringify({
-        name: "@iam/user-profile-read-model",
+      "packages/user-document/package.json": JSON.stringify({
+        name: "@iam/user-document",
       }),
     });
 
@@ -823,17 +856,17 @@ describe("repository architecture guard", () => {
         "FROM node:24-alpine",
         "COPY apps/admin-api/package.json ./apps/admin-api/",
         "COPY apps/admin-api/ ./apps/admin-api/",
-        "COPY packages/user-profile-read-model/package.json ./packages/user-profile-read-model/",
-        "COPY packages/user-profile-read-model/ ./packages/user-profile-read-model/",
+        "COPY packages/user-document/package.json ./packages/user-document/",
+        "COPY packages/user-document/ ./packages/user-document/",
       ].join("\n"),
       "apps/admin-api/package.json": JSON.stringify({
         name: "@iam/admin-api",
         dependencies: {
-          "@iam/user-profile-read-model": "workspace:*",
+          "@iam/user-document": "workspace:*",
         },
       }),
-      "packages/user-profile-read-model/package.json": JSON.stringify({
-        name: "@iam/user-profile-read-model",
+      "packages/user-document/package.json": JSON.stringify({
+        name: "@iam/user-document",
       }),
     });
 
@@ -851,17 +884,17 @@ describe("repository architecture guard", () => {
       "apps/worker/Dockerfile": [
         "FROM node:24-alpine",
         "COPY packages/optional-profile-bridge/ ./packages/optional-profile-bridge/",
-        "COPY packages/user-profile-read-model/package.json ./packages/user-profile-read-model/",
-        "COPY packages/user-profile-read-model/ ./packages/user-profile-read-model/",
+        "COPY packages/user-document/package.json ./packages/user-document/",
+        "COPY packages/user-document/ ./packages/user-document/",
       ].join("\n"),
       "packages/optional-profile-bridge/package.json": JSON.stringify({
         name: "@iam/optional-profile-bridge",
         dependencies: {
-          "@iam/user-profile-read-model": "workspace:*",
+          "@iam/user-document": "workspace:*",
         },
       }),
-      "packages/user-profile-read-model/package.json": JSON.stringify({
-        name: "@iam/user-profile-read-model",
+      "packages/user-document/package.json": JSON.stringify({
+        name: "@iam/user-document",
       }),
     });
 
@@ -886,17 +919,17 @@ describe("repository architecture guard", () => {
         "FROM node:24-alpine",
         "COPY packages/optional-profile-bridge/package.json ./packages/optional-profile-bridge/",
         "COPY packages/optional-profile-bridge/ ./packages/optional-profile-bridge/",
-        "COPY packages/user-profile-read-model/package.json ./packages/user-profile-read-model/",
-        "COPY packages/user-profile-read-model/ ./packages/user-profile-read-model/",
+        "COPY packages/user-document/package.json ./packages/user-document/",
+        "COPY packages/user-document/ ./packages/user-document/",
       ].join("\n"),
       "packages/optional-profile-bridge/package.json": JSON.stringify({
         name: "@iam/optional-profile-bridge",
         dependencies: {
-          "@iam/user-profile-read-model": "workspace:*",
+          "@iam/user-document": "workspace:*",
         },
       }),
-      "packages/user-profile-read-model/package.json": JSON.stringify({
-        name: "@iam/user-profile-read-model",
+      "packages/user-document/package.json": JSON.stringify({
+        name: "@iam/user-document",
       }),
     });
 
@@ -915,11 +948,11 @@ describe("repository architecture guard", () => {
       "packages/peer-profile-bridge/package.json": JSON.stringify({
         name: "@iam/peer-profile-bridge",
         dependencies: {
-          "@iam/user-profile-read-model": "workspace:*",
+          "@iam/user-document": "workspace:*",
         },
       }),
-      "packages/user-profile-read-model/package.json": JSON.stringify({
-        name: "@iam/user-profile-read-model",
+      "packages/user-document/package.json": JSON.stringify({
+        name: "@iam/user-document",
       }),
     });
 
@@ -935,20 +968,20 @@ describe("repository architecture guard", () => {
         "FROM node:24-alpine",
         "COPY apps/admin-api/package.json ./apps/admin-api/",
         "COPY apps/admin-api/ ./apps/admin-api/",
-        "COPY packages/user-profile-read-model/package.json ./packages/user-profile-read-model/",
-        "COPY packages/user-profile-read-model/ ./packages/user-profile-read-model/",
+        "COPY packages/user-document/package.json ./packages/user-document/",
+        "COPY packages/user-document/ ./packages/user-document/",
       ].join("\n"),
       "apps/admin-api/package.json": JSON.stringify({
         name: "@iam/admin-api",
         dependencies: {
-          "@iam/user-profile-read-model": "workspace:*",
+          "@iam/user-document": "workspace:*",
         },
       }),
       "packages/client-subject-projection/package.json": JSON.stringify({
         name: "@iam/client-subject-projection",
       }),
-      "packages/user-profile-read-model/package.json": JSON.stringify({
-        name: "@iam/user-profile-read-model",
+      "packages/user-document/package.json": JSON.stringify({
+        name: "@iam/user-document",
         dependencies: {
           "@iam/client-subject-projection": "workspace:*",
         },
@@ -978,22 +1011,22 @@ describe("repository architecture guard", () => {
         "FROM node:24-alpine",
         "COPY apps/admin-api/package.json ./apps/admin-api/",
         "COPY packages/client-subject-projection/package.json ./packages/client-subject-projection/",
-        "COPY packages/user-profile-read-model/package.json ./packages/user-profile-read-model/",
+        "COPY packages/user-document/package.json ./packages/user-document/",
         "COPY apps/admin-api/ ./apps/admin-api/",
         "COPY packages/client-subject-projection/ ./packages/client-subject-projection/",
-        "COPY packages/user-profile-read-model/ ./packages/user-profile-read-model/",
+        "COPY packages/user-document/ ./packages/user-document/",
       ].join("\n"),
       "apps/admin-api/package.json": JSON.stringify({
         name: "@iam/admin-api",
         dependencies: {
-          "@iam/user-profile-read-model": "workspace:*",
+          "@iam/user-document": "workspace:*",
         },
       }),
       "packages/client-subject-projection/package.json": JSON.stringify({
         name: "@iam/client-subject-projection",
       }),
-      "packages/user-profile-read-model/package.json": JSON.stringify({
-        name: "@iam/user-profile-read-model",
+      "packages/user-document/package.json": JSON.stringify({
+        name: "@iam/user-document",
         dependencies: {
           "@iam/client-subject-projection": "workspace:*",
         },
@@ -1008,18 +1041,18 @@ describe("repository architecture guard", () => {
       "apps/worker/package.json": JSON.stringify({
         name: "@iam/worker",
         dependencies: {
-          "@iam/user-profile-read-model": "workspace:*",
+          "@iam/user-document": "workspace:*",
         },
       }),
       "apps/worker/Dockerfile": [
         "FROM node:24-alpine",
         "COPY packages/role-assignment-resolution/package.json ./packages/role-assignment-resolution/",
-        "COPY packages/user-profile-read-model/package.json ./packages/user-profile-read-model/",
+        "COPY packages/user-document/package.json ./packages/user-document/",
         "COPY packages/role-assignment-resolution/ ./packages/role-assignment-resolution/",
-        "COPY packages/user-profile-read-model/ ./packages/user-profile-read-model/",
+        "COPY packages/user-document/ ./packages/user-document/",
       ].join("\n"),
-      "packages/user-profile-read-model/package.json": JSON.stringify({
-        name: "@iam/user-profile-read-model",
+      "packages/user-document/package.json": JSON.stringify({
+        name: "@iam/user-document",
         dependencies: {
           "@iam/role-assignment-resolution": "workspace:*",
         },

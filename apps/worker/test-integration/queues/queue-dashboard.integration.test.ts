@@ -63,8 +63,8 @@ function createFixture(readOnly = true) {
       password: "test-password",
       readOnly,
     },
-    userProfile: { concurrency: 1, rebuildBatchSize: 100, backfillBatchSize: 500, repairStaleSeconds: 300 },
-    organizationSearch: { concurrency: 2, backfillBatchSize: 500 },
+    userDocument: { concurrency: 1, rebuildBatchSize: 100, backfillBatchSize: 500, repairStaleSeconds: 300 },
+    organizationDocument: { concurrency: 2, backfillBatchSize: 500 },
   };
   const app = createWorkerHttpApp({
     env,

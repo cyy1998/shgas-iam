@@ -104,7 +104,7 @@ function employment(overrides: Record<string, unknown> = {}) {
 function createService() {
   const tx = {
     auditService: { recordAuditLog: mock(async () => undefined) },
-    userProfileInvalidation: {
+    userDocumentInvalidation: {
       recordChanges: mock(async () => undefined),
     },
     employmentRepository: {
@@ -319,7 +319,7 @@ describe("createEmploymentService", () => {
     expect(tx.employmentRepository.updateEmploymentRecord).toHaveBeenCalledWith(4, {
       description: "updated",
     });
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "employment", userId: 1 }]);
+    expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "employment", userId: 1 }]);
   });
 
   test("rejects description edits for an Ended Employment", async () => {
@@ -334,7 +334,7 @@ describe("createEmploymentService", () => {
 
     expect(tx.employmentRepository.updateEmploymentRecord).not.toHaveBeenCalled();
     expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
   test("rejects an empty description update before audit or dirty", async () => {
     const { service, tx } = createService();
@@ -346,7 +346,7 @@ describe("createEmploymentService", () => {
     }
     expect(failure).toBeInstanceOf(BadRequestError);
     expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("same description returns unchanged without writes, audit, or dirty", async () => {
@@ -355,7 +355,7 @@ describe("createEmploymentService", () => {
     expect(result).toEqual({ changed: false, result: null });
     expect(tx.employmentRepository.updateEmploymentRecord).not.toHaveBeenCalled();
     expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("fails closed when the locked update returns no row", async () => {
@@ -369,6 +369,6 @@ describe("createEmploymentService", () => {
     }
     expect(failure).toBeInstanceOf(Error);
     expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 });

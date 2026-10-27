@@ -37,8 +37,8 @@ export enum ApiErrorCode {
   UserHasOpenClientDelegation = "USER.HAS_OPEN_CLIENT_DELEGATION",
   UserSearchResultTooLarge = "USER_SEARCH_RESULT_TOO_LARGE",
   UserSearchUnavailable = "USER_SEARCH_UNAVAILABLE",
-  OrganizationSearchResultTooLarge = "ORGANIZATION_SEARCH_RESULT_TOO_LARGE",
-  OrganizationSearchUnavailable = "ORGANIZATION_SEARCH_UNAVAILABLE",
+  OrganizationDocumentResultTooLarge = "ORGANIZATION_DOCUMENT_RESULT_TOO_LARGE",
+  OrganizationDocumentUnavailable = "ORGANIZATION_DOCUMENT_UNAVAILABLE",
 
   OrganizationNotFound = "ORG.NOT_FOUND",
   OrganizationAlreadyExists = "ORG.ALREADY_EXISTS",

@@ -171,7 +171,7 @@ export function createTransferEmploymentUseCase(deps: TransferEmploymentUseCaseD
           auditContext,
         ),
       );
-      await tx.userProfileInvalidation.recordChanges([
+      await tx.userDocumentInvalidation.recordChanges([
         { kind: "employment", userId: employment.userId },
         ...(assignmentChanged
           ? [

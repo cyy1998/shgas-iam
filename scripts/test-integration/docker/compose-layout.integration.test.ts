@@ -34,8 +34,8 @@ const appServices = [
   "admin-api",
   "sso",
   "admin",
-  "worker-user-profile",
-  "worker-organization-search",
+  "worker-user-document",
+  "worker-organization-document",
   "worker-dashboard",
   "gateway-api",
 ];
@@ -61,7 +61,7 @@ test.each([
     services: [...dataServices, ...appServices, ...gatewayServices],
   },
 ])(
-  "$files renders independently or as a shared project with usable build and configuration paths",
+  "$files renders services, repository assets, and caller-owned APISIX bindings",
   async ({ files, environment, services }) => {
     await withCommandFixture("iam-production-compose-", async (root, signal) => {
       const envFile = join(root, "synthetic.env");
@@ -108,6 +108,14 @@ test.each([
           if (volume.type !== "bind" || !volume.read_only) continue;
           // The daemon socket belongs to the deployment host, not the repository checkout.
           if (volume.target === "/var/run/docker.sock") continue;
+          if (volume.target === "/usr/local/apisix/conf/config.yaml") {
+            // Caller-owned APISIX configuration is intentionally absent from a clean checkout.
+            const configName = files.some((file) => file === "compose.dev.yaml")
+              ? "config.dev.yaml"
+              : "config.prod.example.yaml";
+            expect(volume.source).toBe(join(repositoryRoot, "tmp/gateway-config/apisix", configName));
+            continue;
+          }
           const source = await stat(volume.source);
           const directoryMount = ["/etc/grafana/provisioning", "/var/lib/grafana/dashboards"].includes(volume.target);
           expect(source.isDirectory()).toBe(directoryMount);
@@ -148,9 +156,7 @@ test(
       const configMount = rendered.services.apisix.volumes.find(
         (volume: { target: string }) => volume.target === "/usr/local/apisix/conf/config.yaml",
       );
-      const config = await readFile(configMount.source, "utf8");
-      const expectedConfig = await readFile(join(repositoryRoot, "docker/apisix/config.prod.example.yaml"), "utf8");
-      expect(config).toBe(expectedConfig);
+      expect(configMount.source).toBe(join(repositoryRoot, "tmp/gateway-config/apisix/config.prod.example.yaml"));
     });
   },
   COMMAND_FIXTURE_TEST_TIMEOUT_MS,

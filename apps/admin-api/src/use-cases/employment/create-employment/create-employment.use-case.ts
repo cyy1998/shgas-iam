@@ -106,7 +106,7 @@ export function createCreateEmploymentUseCase(deps: CreateEmploymentUseCaseDeps)
           auditContext,
         ),
       );
-      await tx.userProfileInvalidation.recordChanges([{ kind: "employment", userId: user.id }]);
+      await tx.userDocumentInvalidation.recordChanges([{ kind: "employment", userId: user.id }]);
       return { changed: true, result: { id: created.id } };
     }, adminAuditTransactionOptions(auditContext));
   }

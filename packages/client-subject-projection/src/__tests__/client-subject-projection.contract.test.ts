@@ -99,7 +99,7 @@ describe("Client Subject Projection Interface", () => {
       subjectFacts: {
         read: async () => ({
           subjectIdentifier,
-          sourceDirtyVersion: "7",
+          sourceVersion: "7",
           profile: {
             username: "zhangsan",
             name: "张三",
@@ -113,8 +113,8 @@ describe("Client Subject Projection Interface", () => {
                 name: "甲部门",
                 type: OrganizationType.Department,
                 path: [
-                  { code: "root", name: "总部", type: OrganizationType.Company },
-                  { code: "org-a", name: "甲部门", type: OrganizationType.Department },
+                  { level: 1, distanceToTarget: 1, code: "root", name: "总部", type: OrganizationType.Company },
+                  { level: 2, distanceToTarget: 0, code: "org-a", name: "甲部门", type: OrganizationType.Department },
                 ],
               },
               position: { code: "position-a", name: "甲岗位" },
@@ -135,8 +135,14 @@ describe("Client Subject Projection Interface", () => {
                     name: "目标甲",
                     type: OrganizationType.Department,
                     path: [
-                      { code: "root", name: "总部", type: OrganizationType.Company },
-                      { code: "target-a", name: "目标甲", type: OrganizationType.Department },
+                      { level: 1, distanceToTarget: 1, code: "root", name: "总部", type: OrganizationType.Company },
+                      {
+                        level: 2,
+                        distanceToTarget: 0,
+                        code: "target-a",
+                        name: "目标甲",
+                        type: OrganizationType.Department,
+                      },
                     ],
                   },
                 },
@@ -149,8 +155,8 @@ describe("Client Subject Projection Interface", () => {
                 name: "乙部门",
                 type: OrganizationType.Department,
                 path: [
-                  { code: "root", name: "总部", type: OrganizationType.Company },
-                  { code: "org-b", name: "乙部门", type: OrganizationType.Department },
+                  { level: 1, distanceToTarget: 1, code: "root", name: "总部", type: OrganizationType.Company },
+                  { level: 2, distanceToTarget: 0, code: "org-b", name: "乙部门", type: OrganizationType.Department },
                 ],
               },
               position: { code: "position-b", name: "乙岗位" },
@@ -183,13 +189,21 @@ describe("Client Subject Projection Interface", () => {
             name: "目标甲",
             type: OrganizationType.Department,
             path: [
-              { code: "root", name: "总部", type: OrganizationType.Company },
-              { code: "target-a", name: "目标甲", type: OrganizationType.Department },
+              { level: 1, distanceToTarget: 1, code: "root", name: "总部", type: OrganizationType.Company },
+              { level: 2, distanceToTarget: 0, code: "target-a", name: "目标甲", type: OrganizationType.Department },
             ],
           },
         },
       ],
       [],
+    ]);
+    expect(projection.employments?.[0]?.organization.path).toEqual([
+      { level: 1, distanceToTarget: 1, code: "root", name: "总部", type: OrganizationType.Company },
+      { level: 2, distanceToTarget: 0, code: "org-a", name: "甲部门", type: OrganizationType.Department },
+    ]);
+    expect(projection.authorization?.employments[0]?.organization.path).toEqual([
+      { level: 1, distanceToTarget: 1, code: "root", name: "总部", type: OrganizationType.Company },
+      { level: 2, distanceToTarget: 0, code: "org-a", name: "甲部门", type: OrganizationType.Department },
     ]);
     for (const employment of projection.authorization?.employments ?? [])
       expect(employment).not.toHaveProperty("responsibilities");
@@ -323,7 +337,7 @@ describe("Client Subject Projection Interface", () => {
       subjectFacts: {
         read: async () => ({
           subjectIdentifier,
-          sourceDirtyVersion: "7",
+          sourceVersion: "7",
           profile: {
             username: "zhangsan",
             name: "张三",
@@ -354,7 +368,7 @@ describe("Client Subject Projection Interface", () => {
       subjectFacts: {
         read: async () => ({
           subjectIdentifier,
-          sourceDirtyVersion: "7",
+          sourceVersion: "7",
           profile: {
             username: "zhangsan",
             name: "张三",
@@ -383,15 +397,17 @@ describe("Client Subject Projection Interface", () => {
 
   test("sorts Employment Profiles and ignores fields outside the narrow Facts contract", async () => {
     const rootOrganization = {
+      level: 1,
+      distanceToTarget: 1,
       code: "root",
       name: "总部",
-      type: "company",
+      type: OrganizationType.Company,
     };
     const service = createService({
       subjectFacts: {
         read: async () => ({
           subjectIdentifier,
-          sourceDirtyVersion: "7",
+          sourceVersion: "7",
           profile: {
             username: "zhangsan",
             name: "张三",
@@ -407,14 +423,10 @@ describe("Client Subject Projection Interface", () => {
               organization: {
                 code: "org-b",
                 name: "乙部门",
-                type: "department",
+                type: OrganizationType.Department,
                 path: [
-                  rootOrganization,
-                  {
-                    code: "org-b",
-                    name: "乙部门",
-                    type: "department",
-                  },
+                  { ...rootOrganization, level: 1, distanceToTarget: 1 },
+                  { level: 2, distanceToTarget: 0, code: "org-b", name: "乙部门", type: OrganizationType.Department },
                 ],
               },
               position: {
@@ -434,13 +446,15 @@ describe("Client Subject Projection Interface", () => {
               organization: {
                 code: "org-z",
                 name: "主任职部门",
-                type: "department",
+                type: OrganizationType.Department,
                 path: [
-                  rootOrganization,
+                  { ...rootOrganization, level: 1, distanceToTarget: 1 },
                   {
+                    level: 2,
+                    distanceToTarget: 0,
                     code: "org-z",
                     name: "主任职部门",
-                    type: "department",
+                    type: OrganizationType.Department,
                   },
                 ],
               },
@@ -460,14 +474,10 @@ describe("Client Subject Projection Interface", () => {
               organization: {
                 code: "org-a",
                 name: "甲部门",
-                type: "department",
+                type: OrganizationType.Department,
                 path: [
-                  rootOrganization,
-                  {
-                    code: "org-a",
-                    name: "甲部门",
-                    type: "department",
-                  },
+                  { ...rootOrganization, level: 1, distanceToTarget: 1 },
+                  { level: 2, distanceToTarget: 0, code: "org-a", name: "甲部门", type: OrganizationType.Department },
                 ],
               },
               position: {
@@ -510,8 +520,11 @@ describe("Client Subject Projection Interface", () => {
           organization: {
             code: "org-z",
             name: "主任职部门",
-            type: "department",
-            path: [rootOrganization, { code: "org-z", name: "主任职部门", type: "department" }],
+            type: OrganizationType.Department,
+            path: [
+              rootOrganization,
+              { level: 2, distanceToTarget: 0, code: "org-z", name: "主任职部门", type: OrganizationType.Department },
+            ],
           },
           position: {
             code: "position-z",
@@ -524,8 +537,11 @@ describe("Client Subject Projection Interface", () => {
           organization: {
             code: "org-a",
             name: "甲部门",
-            type: "department",
-            path: [rootOrganization, { code: "org-a", name: "甲部门", type: "department" }],
+            type: OrganizationType.Department,
+            path: [
+              rootOrganization,
+              { level: 2, distanceToTarget: 0, code: "org-a", name: "甲部门", type: OrganizationType.Department },
+            ],
           },
           position: {
             code: "position-a",
@@ -538,8 +554,11 @@ describe("Client Subject Projection Interface", () => {
           organization: {
             code: "org-b",
             name: "乙部门",
-            type: "department",
-            path: [rootOrganization, { code: "org-b", name: "乙部门", type: "department" }],
+            type: OrganizationType.Department,
+            path: [
+              rootOrganization,
+              { level: 2, distanceToTarget: 0, code: "org-b", name: "乙部门", type: OrganizationType.Department },
+            ],
           },
           position: {
             code: "position-b",
@@ -553,7 +572,7 @@ describe("Client Subject Projection Interface", () => {
   test("crops authorization to each client and retains employments without roles", async () => {
     const facts = {
       subjectIdentifier,
-      sourceDirtyVersion: "11",
+      sourceVersion: "11",
       profile: {
         username: "zhangsan",
         name: "张三",
@@ -565,10 +584,10 @@ describe("Client Subject Projection Interface", () => {
           organization: {
             code: "org-a",
             name: "甲部门",
-            type: "department",
+            type: OrganizationType.Department,
             path: [
-              { code: "root", name: "总部", type: "company" },
-              { code: "org-a", name: "甲部门", type: "department" },
+              { level: 1, distanceToTarget: 1, code: "root", name: "总部", type: OrganizationType.Company },
+              { level: 2, distanceToTarget: 0, code: "org-a", name: "甲部门", type: OrganizationType.Department },
             ],
           },
           position: {
@@ -592,10 +611,10 @@ describe("Client Subject Projection Interface", () => {
           organization: {
             code: "org-z",
             name: "主任职部门",
-            type: "department",
+            type: OrganizationType.Department,
             path: [
-              { code: "root", name: "总部", type: "company" },
-              { code: "org-z", name: "主任职部门", type: "department" },
+              { level: 1, distanceToTarget: 1, code: "root", name: "总部", type: OrganizationType.Company },
+              { level: 2, distanceToTarget: 0, code: "org-z", name: "主任职部门", type: OrganizationType.Department },
             ],
           },
           position: {
@@ -648,10 +667,10 @@ describe("Client Subject Projection Interface", () => {
       organization: {
         code: "org-z",
         name: "主任职部门",
-        type: "department",
+        type: OrganizationType.Department,
         path: [
-          { code: "root", name: "总部", type: "company" },
-          { code: "org-z", name: "主任职部门", type: "department" },
+          { level: 1, distanceToTarget: 1, code: "root", name: "总部", type: OrganizationType.Company },
+          { level: 2, distanceToTarget: 0, code: "org-z", name: "主任职部门", type: OrganizationType.Department },
         ],
       },
       position: {
@@ -664,10 +683,10 @@ describe("Client Subject Projection Interface", () => {
       organization: {
         code: "org-a",
         name: "甲部门",
-        type: "department",
+        type: OrganizationType.Department,
         path: [
-          { code: "root", name: "总部", type: "company" },
-          { code: "org-a", name: "甲部门", type: "department" },
+          { level: 1, distanceToTarget: 1, code: "root", name: "总部", type: OrganizationType.Company },
+          { level: 2, distanceToTarget: 0, code: "org-a", name: "甲部门", type: OrganizationType.Department },
         ],
       },
       position: {
@@ -718,10 +737,10 @@ describe("Client Subject Projection Interface", () => {
       organization: {
         code: "org-a",
         name: "甲部门",
-        type: "department",
+        type: OrganizationType.Department,
         path: [
-          { code: "root", name: "总部", type: "company" },
-          { code: "org-a", name: "甲部门", type: "department" },
+          { level: 1, distanceToTarget: 1, code: "root", name: "总部", type: OrganizationType.Company },
+          { level: 2, distanceToTarget: 0, code: "org-a", name: "甲部门", type: OrganizationType.Department },
         ],
       },
       position: {
@@ -729,9 +748,20 @@ describe("Client Subject Projection Interface", () => {
         name: "甲岗位",
       },
     };
+    const publishedEmployment = {
+      ...employment,
+      organization: {
+        ...employment.organization,
+        path: employment.organization.path.map((node, index, path) => ({
+          ...node,
+          level: index + 1,
+          distanceToTarget: path.length - index - 1,
+        })),
+      },
+    };
     const observedFacts = {
       subjectIdentifier,
-      sourceDirtyVersion: "12",
+      sourceVersion: "12",
       profile: {
         username: "zhangsan",
         name: "旧姓名",
@@ -739,7 +769,7 @@ describe("Client Subject Projection Interface", () => {
       },
       employments: [
         {
-          ...employment,
+          ...publishedEmployment,
           responsibilities: [],
           clientAuthorizations: [
             {
@@ -752,7 +782,7 @@ describe("Client Subject Projection Interface", () => {
     } satisfies SubjectFactsSnapshot;
     const refreshedFacts = {
       subjectIdentifier,
-      sourceDirtyVersion: "13",
+      sourceVersion: "13",
       profile: {
         username: "zhangsan",
         name: "新姓名",
@@ -760,7 +790,7 @@ describe("Client Subject Projection Interface", () => {
       },
       employments: [
         {
-          ...employment,
+          ...publishedEmployment,
           responsibilities: [],
           clientAuthorizations: [
             {
@@ -865,7 +895,7 @@ describe("Projection access proof", () => {
             ? null
             : {
                 subjectIdentifier: subject,
-                sourceDirtyVersion: "1",
+                sourceVersion: "1",
                 profile: { username: "user", name: "Name", phone: null },
                 employments: [],
               };

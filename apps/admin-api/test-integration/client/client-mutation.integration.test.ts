@@ -81,13 +81,13 @@ function createMutation(invalidateClient: (clientCode: string) => Promise<unknow
       error: mock(() => undefined),
       warn: mock(() => undefined),
     },
-    organizationSearchJobProducer: {
-      async enqueueSourceChanges() {
+    organizationDocumentJobProducer: {
+      async enqueueOutboxEntries() {
         return { enqueued: 0 };
       },
     },
-    userProfileJobProducer: {
-      enqueueRebuildJobs: mock(async () => ({ enqueued: 0, jobIds: [] })),
+    userDocumentJobProducer: {
+      enqueueOutboxEntries: mock(async () => ({ enqueued: 0, jobIds: [] })),
     } as never,
     clock: {
       nowDate: () => new Date("2026-09-03T00:00:00Z"),

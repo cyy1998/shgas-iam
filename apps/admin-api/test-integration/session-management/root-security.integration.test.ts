@@ -61,12 +61,12 @@ import {
   organizations,
   positions,
   roles,
-  userProfileDirty,
+  userDocumentRebuildStates,
   users,
 } from "@iam/db/schema";
 import type { CapturedSession } from "@iam/session-kernel";
 import { createUnifiedSessionRedisTestScope } from "@iam/session-kernel/testing";
-import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
+import { createSubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
@@ -143,12 +143,12 @@ async function fixture() {
       db: pg.db,
       logger,
       clock: { nowDate: () => new Date() },
-      organizationSearchJobProducer: {
-        async enqueueSourceChanges() {
+      organizationDocumentJobProducer: {
+        async enqueueOutboxEntries() {
           return { enqueued: 0 };
         },
       },
-      userProfileJobProducer: { enqueueRebuildJobs: async () => ({ enqueued: 0, jobIds: [] }) },
+      userDocumentJobProducer: { enqueueOutboxEntries: async () => ({ enqueued: 0, jobIds: [] }) },
     });
     let failAudit = false;
     let unavailable = false;
@@ -191,7 +191,7 @@ async function fixture() {
           userRepository: tx.repositories.user,
           auditService: tx.auditService,
           subjectAccessMutation: tx.subjectAccessMutation,
-          userProfileInvalidation: tx.userProfileInvalidation,
+          userDocumentInvalidation: tx.userDocumentInvalidation,
         })),
       },
       sessions: {
@@ -722,7 +722,10 @@ test("delegation-blocked User deletion restores real access and preserves both s
       .from(clientDelegations)
       .where(eq(clientDelegations.id, delegation!.id));
     const audits = await pg.db.select().from(auditLogs).where(eq(auditLogs.targetId, f.account.id));
-    const dirty = await pg.db.select().from(userProfileDirty).where(eq(userProfileDirty.userId, f.account.id));
+    const dirty = await pg.db
+      .select()
+      .from(userDocumentRebuildStates)
+      .where(eq(userDocumentRebuildStates.userId, f.account.id));
     expect(barrierAfter).toEqual(barrierBefore);
     expect(accountAfter).toEqual([f.account]);
     expect(delegationAfter).toEqual([delegation!]);

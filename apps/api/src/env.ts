@@ -148,7 +148,6 @@ const RawEnvSchema = z
           ? undefined
           : ["1", "true", "yes", "on"].includes(value.trim().toLowerCase()),
       ),
-    IAM_API_USER_PROFILE_DSL_MAX_LIMIT: z.coerce.number().int().positive().max(500).default(100),
   })
   .superRefine((raw, ctx) => {
     if (raw.IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON[raw.IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID] === undefined) {
@@ -235,9 +234,6 @@ export interface Env extends Record<string, unknown> {
     thirdPartyOAEndpoint: string;
     projectionRetryAfterSeconds: number;
   };
-  userProfile: {
-    dslMaxLimit: number;
-  };
 }
 
 function toApiEnv(raw: RawEnv): Env {
@@ -313,9 +309,6 @@ function toApiEnv(raw: RawEnv): Env {
       logoutEndpoint: raw.IAM_API_LOGOUT_ENDPOINT,
       thirdPartyOAEndpoint: raw.IAM_API_THIRDPARTY_OA_ENDPOINT,
       projectionRetryAfterSeconds: raw.IAM_API_CUSTOM_SSO_PROJECTION_RETRY_AFTER_SECONDS,
-    },
-    userProfile: {
-      dslMaxLimit: raw.IAM_API_USER_PROFILE_DSL_MAX_LIMIT,
     },
   };
 }

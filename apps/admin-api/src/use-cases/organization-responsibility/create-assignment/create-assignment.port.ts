@@ -46,7 +46,7 @@ export interface CreateOrganizationResponsibilityAssignmentTransactionPorts {
       isDelete: boolean;
     } | null>;
   };
-  userProfileInvalidation: {
+  userDocumentInvalidation: {
     recordChanges: (
       changes: readonly {
         readonly kind: "organization-responsibility-assignment";

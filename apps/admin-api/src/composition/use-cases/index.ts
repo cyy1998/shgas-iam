@@ -31,7 +31,7 @@ export function createAdminApiUseCases(options: CreateAdminApiUseCasesOptions) {
       organizationReader: tx.repositories.organization,
       auditLogWriter: tx.auditService,
       responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-      userProfileInvalidation: tx.userProfileInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
   });
 
@@ -43,7 +43,7 @@ export function createAdminApiUseCases(options: CreateAdminApiUseCasesOptions) {
       positionReader: tx.repositories.position,
       userReader: tx.repositories.user,
       auditLogWriter: tx.auditService,
-      userProfileInvalidation: tx.userProfileInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
   });
 
@@ -53,7 +53,7 @@ export function createAdminApiUseCases(options: CreateAdminApiUseCasesOptions) {
       employmentStore: tx.repositories.employment,
       auditLogWriter: tx.auditService,
       responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-      userProfileInvalidation: tx.userProfileInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
   });
 
@@ -61,7 +61,7 @@ export function createAdminApiUseCases(options: CreateAdminApiUseCasesOptions) {
     uow: mapUnitOfWork(options.unitOfWork, (tx) => ({
       employmentStore: tx.repositories.employment,
       auditLogWriter: tx.auditService,
-      userProfileInvalidation: tx.userProfileInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
   });
 
@@ -74,7 +74,7 @@ export function createAdminApiUseCases(options: CreateAdminApiUseCasesOptions) {
       userReader: tx.repositories.user,
       auditLogWriter: tx.auditService,
       responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-      userProfileInvalidation: tx.userProfileInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
   });
 
@@ -87,7 +87,7 @@ export function createAdminApiUseCases(options: CreateAdminApiUseCasesOptions) {
       employmentStore: tx.repositories.employment,
       responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
       subjectAccessMutation: tx.subjectAccessMutation,
-      userProfileInvalidation: tx.userProfileInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
       userStore: tx.repositories.user,
     })),
     userReader: options.userReader,
@@ -100,7 +100,7 @@ export function createAdminApiUseCases(options: CreateAdminApiUseCasesOptions) {
       auditLogWriter: tx.auditService,
       employmentReader: tx.repositories.organizationResponsibility,
       organizationReader: tx.repositories.organizationResponsibility,
-      userProfileInvalidation: tx.userProfileInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
   });
   const manageOrganizationResponsibilityAssignmentLifecycle =
@@ -109,7 +109,7 @@ export function createAdminApiUseCases(options: CreateAdminApiUseCasesOptions) {
       uow: mapUnitOfWork(options.unitOfWork, (tx) => ({
         assignmentStore: tx.repositories.organizationResponsibility,
         auditLogWriter: tx.auditService,
-        userProfileInvalidation: tx.userProfileInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
       })),
     });
 

@@ -57,7 +57,7 @@ describe("createOrganizationService", () => {
   });
 
   test("records an organization change when updating an organization", async () => {
-    const userProfileInvalidation = {
+    const userDocumentInvalidation = {
       recordChanges: mock(async () => undefined),
     };
     const organizationRepository = {
@@ -75,8 +75,8 @@ describe("createOrganizationService", () => {
           async (callback: any) =>
             await callback({
               organizationRepository,
-              userProfileInvalidation,
-              organizationSearchInvalidation: { recordChanges: async () => undefined },
+              userDocumentInvalidation,
+              organizationDocumentInvalidation: { recordChanges: async () => undefined },
             }),
         ),
       },
@@ -84,6 +84,6 @@ describe("createOrganizationService", () => {
 
     await expect(service.updateOrganization("ORG", { orgName: "New Organization" })).resolves.toBe(true);
 
-    expect(userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "organization", organizationId: 1 }]);
+    expect(userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "organization", organizationId: 1 }]);
   });
 });

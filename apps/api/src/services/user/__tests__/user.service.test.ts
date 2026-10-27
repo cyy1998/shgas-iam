@@ -42,7 +42,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
       updateEnabledUserStatus: mock(async () => user),
     },
     auditLogWriter: { recordAuditLog: mock(async () => undefined) },
-    userProfileInvalidation: {
+    userDocumentInvalidation: {
       recordChanges: mock(async () => undefined),
     },
   };
@@ -82,11 +82,9 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     uow: createImmediateUnitOfWork(tx),
     tx,
     user,
-    profileQuery: {
-      getDetailByMobile: mock(async () => user),
-      getDetailByUserId: mock(async () => user),
-      getDetailByUsername: mock(async () => user),
-      getDetailByWxId: mock(async () => user),
+    documentQuery: {
+      getLoginProfileByUserId: mock(async () => user),
+      getMobileByUsername: mock(async () => user.mobile),
     },
     userRepository: {
       getUserById: mock(async () => user),
@@ -103,14 +101,14 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 describe("createUserService", () => {
   test.each(["13800000000", null])("returns only the published mobile for account recovery: %s", async (mobile) => {
     const deps = createDeps();
-    deps.profileQuery.getDetailByUsername.mockResolvedValue({ ...deps.user, mobile });
+    deps.documentQuery.getMobileByUsername.mockResolvedValue(mobile);
     const result = await createUserService(deps).getUserMobileByUsername("zhangsan");
     expect(result).toBe(mobile);
   });
 
   test("returns null only when a missing Profile belongs to an absent account", async () => {
     const deps = createDeps();
-    deps.profileQuery.getDetailByUsername.mockRejectedValue(new UserNotFoundError("用户画像不存在"));
+    deps.documentQuery.getMobileByUsername.mockRejectedValue(new UserNotFoundError("用户画像不存在"));
     deps.userRepository.findUserIdentityByUsername.mockResolvedValue(null);
     const result = await createUserService(deps).getUserMobileByUsername("unknown");
     expect(result).toBeNull();
@@ -121,7 +119,7 @@ describe("createUserService", () => {
     "preserves Profile failures for an existing account: %s",
     async (error) => {
       const deps = createDeps();
-      deps.profileQuery.getDetailByUsername.mockRejectedValue(error);
+      deps.documentQuery.getMobileByUsername.mockRejectedValue(error);
       let failure: unknown;
       try {
         await createUserService(deps).getUserMobileByUsername("zhangsan");
@@ -177,7 +175,7 @@ describe("createUserService", () => {
         traceId: "11111111111111111111111111111111",
       }),
     );
-    expect(deps.tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(deps.tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("rejects unchanged password with domain bad request error", async () => {
@@ -196,10 +194,10 @@ describe("createUserService", () => {
 
     await expect(service.setMobile(1, "13900000000", "1234")).resolves.toBe(true);
 
-    expect(deps.profileQuery.getDetailByUserId).not.toHaveBeenCalled();
+    expect(deps.documentQuery.getLoginProfileByUserId).not.toHaveBeenCalled();
     expect(deps.mobileService.confirmReservedVerificationCode).toHaveBeenCalledWith(deps.bindPhoneReservation);
     expect(deps.mobileService.releaseReservedVerificationCode).not.toHaveBeenCalled();
-    expect(deps.tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "user", userId: 1 }]);
+    expect(deps.tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "user", userId: 1 }]);
   });
 
   test("releases mobile binding verification reservation when transaction fails", async () => {
@@ -220,7 +218,7 @@ describe("createUserService", () => {
     await expect(service.pauseEnabledUser(1)).resolves.toMatchObject({ id: 1 });
 
     expect(deps.tx.userRepository.updateEnabledUserStatus).toHaveBeenCalledWith(1, UserStatus.Pause);
-    expect(deps.tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "user", userId: 1 }]);
+    expect(deps.tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "user", userId: 1 }]);
     expect(deps.subjectAccessLifecycle.run).toHaveBeenCalledWith(
       expect.objectContaining({
         subjectIdentifier: deps.user.subjectIdentifier,
@@ -248,16 +246,20 @@ describe("createUserService", () => {
     await expect(service.pauseEnabledUser(1)).rejects.toBe(barrierError);
 
     expect(deps.tx.userRepository.updateEnabledUserStatus).not.toHaveBeenCalled();
-    expect(deps.tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(deps.tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
     expect(deps.sessionRevocation.revokeUserSessions).not.toHaveBeenCalled();
   });
 
-  test("delegates user detail reads to profile query service", async () => {
+  test("returns published login data without requiring a detail facade", async () => {
     const deps = createDeps();
     const service = createUserService(deps);
 
-    await service.getUserDetailByUsername("zhangsan");
-
-    expect(deps.profileQuery.getDetailByUsername).toHaveBeenCalledWith("zhangsan");
+    deps.documentQuery.getLoginProfileByUserId.mockResolvedValue({
+      username: "published",
+      name: "Published",
+      mobile: null,
+    });
+    const result = await service.getLoginProfileById(1);
+    expect(result).toEqual({ username: "published", name: "Published", mobile: null });
   });
 });

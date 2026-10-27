@@ -1,4 +1,4 @@
-import { SubjectClaim } from "@iam/contracts";
+import { OrganizationReferenceSchema, SubjectClaim } from "@iam/contracts";
 import { z } from "zod";
 import { SubjectProjectionNotReadyError } from "../errors";
 import type { EmploymentProfileBase, SubjectFactsEmploymentBase } from "../index";
@@ -67,7 +67,12 @@ async function resolveProjection(
 function toEmploymentProfileWithResponsibilities(employment: SubjectFactsEmployment): EmploymentProfile {
   return {
     ...toEmploymentProfile(employment),
-    responsibilities: z.array(EmploymentResponsibilitySnapshotSchema).parse(employment.responsibilities),
+    responsibilities: z.array(EmploymentResponsibilitySnapshotSchema).parse(
+      employment.responsibilities.map((responsibility) => ({
+        type: responsibility.type,
+        targetOrganization: OrganizationReferenceSchema.parse(responsibility.targetOrganization),
+      })),
+    ),
   };
 }
 
@@ -98,16 +103,7 @@ function toClientAuthorization(facts: SubjectFactsSnapshot, clientCode: string):
 function toEmploymentProfile(employment: SubjectFactsEmploymentBase): EmploymentProfileBase {
   return {
     isPrimary: employment.isPrimary,
-    organization: {
-      code: employment.organization.code,
-      name: employment.organization.name,
-      type: employment.organization.type,
-      path: employment.organization.path.map((organization) => ({
-        code: organization.code,
-        name: organization.name,
-        type: organization.type,
-      })),
-    },
+    organization: OrganizationReferenceSchema.parse(employment.organization),
     position: {
       code: employment.position.code,
       name: employment.position.name,

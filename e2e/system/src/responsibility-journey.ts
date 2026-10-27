@@ -1,4 +1,4 @@
-import { parseUserProfileDetailDocument } from "@iam/user-profile-read-model";
+import { UserDocumentSchema } from "@iam/contracts";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 
@@ -85,9 +85,9 @@ export async function expectInternalResponsibilityDsl(input: ResponsibilityJourn
   expect(response.status()).toBe(200);
   const body = readRecord(await response.json());
   const profiles = body?.data;
-  if (!Array.isArray(profiles)) throw new Error("Internal user search requires a profile array");
-  for (const profile of profiles) expect(typeof readRecord(profile)?.username).toBe("string");
-  expect(profiles.some((profile) => readRecord(profile)?.username === input.adminUsername)).toBe(true);
+  if (!Array.isArray(profiles)) throw new Error("Internal user search requires a document array");
+  const documents = profiles.map((profile) => UserDocumentSchema.parse(profile));
+  expect(documents.some((document) => document.user.username === input.adminUsername)).toBe(true);
 
   const legacyResponse = await input.request.post(`${input.origin}/api/iam/internal/users/search-dsl`, {
     headers: { apikey: input.internalApiKey },
@@ -103,18 +103,18 @@ export async function expectInternalResponsibilityDsl(input: ResponsibilityJourn
 
 export function internalDetailHasResponsibility(value: unknown, expectation: ResponsibilityExpectation) {
   const body = readRecord(value);
-  return profileHasResponsibility(body?.data, expectation, "posCode");
+  return profileHasResponsibility(body?.data, expectation);
 }
 
 export function customSsoProfileHasResponsibility(value: unknown, expectation: ResponsibilityExpectation) {
   const body = readRecord(value);
   const data = readRecord(body?.data);
-  return profileHasResponsibility(data?.profile, expectation, "code");
+  return profileHasResponsibility(data?.profile, expectation);
 }
 
 export function oidcUserInfoHasResponsibility(value: unknown, expectation: ResponsibilityExpectation) {
   const claims = readRecord(value);
-  return employmentsHaveResponsibility(claims?.["iam:employments"], expectation, "posCode");
+  return employmentsHaveResponsibility(claims?.["iam:employments"], expectation);
 }
 
 export async function readInternalResponsibility(input: ResponsibilityJourneyInput) {
@@ -133,32 +133,23 @@ export function parseInternalResponsibilityResponse(
   input: ResponsibilityExpectation & { adminUsername: string },
 ) {
   expect(status).toBe(200);
-  const profile = parseUserProfileDetailDocument(readRecord(body)?.data);
-  expect(profile.username).toBe(input.adminUsername);
+  const profile = UserDocumentSchema.parse(readRecord(body)?.data);
+  expect(profile.user.username).toBe(input.adminUsername);
   return internalDetailHasResponsibility(body, input);
 }
 
-function profileHasResponsibility(
-  value: unknown,
-  expectation: ResponsibilityExpectation,
-  positionCodeField: "code" | "posCode",
-) {
-  return employmentsHaveResponsibility(readRecord(value)?.employments, expectation, positionCodeField);
+function profileHasResponsibility(value: unknown, expectation: ResponsibilityExpectation) {
+  return employmentsHaveResponsibility(readRecord(value)?.employments, expectation);
 }
 
-function employmentsHaveResponsibility(
-  value: unknown,
-  expectation: ResponsibilityExpectation,
-  positionCodeField: "code" | "posCode",
-) {
+function employmentsHaveResponsibility(value: unknown, expectation: ResponsibilityExpectation) {
   if (!Array.isArray(value)) throw new Error("Responsibility disclosure requires an employments array");
   const employments = value.map((employment) => {
     const record = readRecord(employment);
     const position = readRecord(record?.position);
-    if (typeof position?.[positionCodeField] !== "string")
-      throw new Error("Responsibility disclosure requires a position code");
+    if (typeof position?.code !== "string") throw new Error("Responsibility disclosure requires a position code");
     const matches = responsibilitiesMatch(record?.responsibilities, expectation);
-    return { positionCode: position[positionCodeField], matches };
+    return { positionCode: position.code, matches };
   });
   return employments.some((employment) => employment.positionCode === expectation.positionCode && employment.matches);
 }

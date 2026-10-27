@@ -7,12 +7,12 @@ import {
   organizations,
   positions,
   roles,
-  userProfileDirty,
-  userProfiles,
+  userDocumentRebuildStates,
+  userDocuments,
   users,
 } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
-import { ProfileSubjectFactsDocumentSchema } from "@iam/user-profile-read-model";
+import { StoredUserDocumentSchema } from "@iam/user-document/document";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import type { HrAdminOutcomeOwner, HrAdminOutcomeScenario } from "./hr-admin-outcome.ts";
 import { HR_ADMIN_RESPONSIBILITY_AUDIT_ACTIONS } from "./hr-admin-outcome.ts";
@@ -65,15 +65,15 @@ export function createProductionHrAdminOutcomeOwner(db: typeof database): HrAdmi
           : (
               await db
                 .select({
-                  dirtyVersion: userProfileDirty.dirtyVersion,
-                  reasonCodes: userProfileDirty.reasonCodes,
-                  status: userProfileDirty.status,
-                  sourceDirtyVersion: userProfiles.sourceDirtyVersion,
-                  subjectFacts: userProfiles.subjectFacts,
+                  version: userDocumentRebuildStates.version,
+                  reasonCodes: userDocumentRebuildStates.reasonCodes,
+                  status: userDocumentRebuildStates.status,
+                  sourceVersion: userDocuments.sourceVersion,
+                  document: userDocuments.document,
                 })
-                .from(userProfileDirty)
-                .innerJoin(userProfiles, eq(userProfiles.userId, userProfileDirty.userId))
-                .where(eq(userProfileDirty.userId, admin.id))
+                .from(userDocumentRebuildStates)
+                .innerJoin(userDocuments, eq(userDocuments.userId, userDocumentRebuildStates.userId))
+                .where(eq(userDocumentRebuildStates.userId, admin.id))
                 .limit(1)
             )[0];
 
@@ -141,21 +141,21 @@ export function createProductionHrAdminOutcomeOwner(db: typeof database): HrAdmi
           actorUsername: audit.actorUsername,
           outcome: audit.outcome,
         })),
-        dirty:
+        rebuildState:
           publication === undefined
             ? null
             : {
-                dirtyVersion: publication.dirtyVersion,
+                version: publication.version,
                 reasonCodes: publication.reasonCodes,
                 status: publication.status,
               },
-        profile:
+        document:
           publication === undefined
             ? null
             : {
-                sourceDirtyVersion: publication.sourceDirtyVersion,
+                sourceVersion: publication.sourceVersion,
                 containsEndedTargetResponsibility: containsResponsibilityTarget(
-                  publication.subjectFacts,
+                  publication.document,
                   scenario.hrResponsibilityTargetOrganizationCode,
                 ),
               },
@@ -172,8 +172,8 @@ export function createProductionHrAdminOutcomeOwner(db: typeof database): HrAdmi
   };
 }
 
-function containsResponsibilityTarget(subjectFacts: unknown, code: string) {
-  const parsed = ProfileSubjectFactsDocumentSchema.parse(subjectFacts);
+function containsResponsibilityTarget(document: unknown, code: string) {
+  const parsed = StoredUserDocumentSchema.parse(document);
   return parsed.employments.some((employment) =>
     employment.responsibilities.some((responsibility) => responsibility.targetOrganization.code === code),
   );

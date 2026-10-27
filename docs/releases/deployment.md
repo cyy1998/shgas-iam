@@ -2,10 +2,10 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-10-25
-Next review: 2026-11-25
+Last verified: 2026-10-26
+Next review: 2026-11-26
 
-本页覆盖当前版本首次部署、常规更新和兼容版本回退。跨代切换先查[独立迁移指引](README.md#一次性迁移与旧版本)。
+本页覆盖当前版本首次部署、常规更新和兼容版本回退。旧 Profile/Organization Search 升级先按[统一 Document 硬切换](data-maintenance.md#统一-document-硬切换)，其他跨代来源见[独立迁移指引](README.md#一次性迁移与旧版本)。
 本地开发见[项目快速开始](../../README.md#-快速开始)；网关、登录密钥、数据重建和日志栈按[专题入口](README.md)操作。
 
 ## 部署输入
@@ -53,7 +53,7 @@ Gateway 需要独立数据库只读账号及 APISIX Admin 凭据；首次发布�
 
    ```bash
    docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml config --quiet
-   docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml up -d api admin-api worker-user-profile worker-organization-search sso admin gateway-api
+   docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml up -d api admin-api worker-user-document worker-organization-document sso admin gateway-api
    ```
 
    通过已有的受控初始化/管理流程准备管理员与 Client 配置。不能使用测试 seed 或假定空库会自动创建生产账号。

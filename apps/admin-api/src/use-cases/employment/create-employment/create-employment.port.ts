@@ -38,7 +38,7 @@ export interface CreateEmploymentTransactionPorts {
   auditLogWriter: {
     recordAuditLog: (input: AuditLogInput) => Promise<void>;
   };
-  userProfileInvalidation: {
+  userDocumentInvalidation: {
     recordChanges: (
       changes: readonly {
         readonly kind: "employment";

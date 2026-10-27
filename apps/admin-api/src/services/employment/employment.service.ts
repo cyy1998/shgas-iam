@@ -115,7 +115,7 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
             auditContext,
           ),
         );
-        await tx.userProfileInvalidation.recordChanges([{ kind: "employment", userId: existing.userId }]);
+        await tx.userDocumentInvalidation.recordChanges([{ kind: "employment", userId: existing.userId }]);
         return { changed: true, result: null };
       },
       adminAuditTransactionOptions(auditContext),

@@ -83,7 +83,11 @@ function createFixture(
           ? { id: userDetail.id, username: userDetail.username, name: userDetail.name, subjectIdentifier }
           : overrides.user,
       ),
-      getUserDetailById: mock(async () => userDetail),
+      getLoginProfileById: mock(async () => ({
+        username: userDetail.username,
+        name: userDetail.name,
+        mobile: userDetail.mobile,
+      })),
     },
   };
 
@@ -131,6 +135,14 @@ describe("createLoginWithPasswordUseCase", () => {
 
     expect(fixture.getRestriction).toHaveBeenCalledWith(userDetail.id);
     expect(fixture.clearLoginState).toHaveBeenCalledWith(userDetail.id);
+    expect(fixture.auditLogs).toContainEqual(
+      expect.objectContaining({
+        actorUserId: 1001,
+        actorUsername: "138550",
+        targetId: 1001,
+        targetName: "测试用户",
+      }),
+    );
     expect(fixture.createPrincipalSession).toHaveBeenCalledWith(subjectIdentifier, {
       amr: ["pwd"],
       origin: {

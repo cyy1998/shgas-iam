@@ -64,14 +64,13 @@ function createContractApp() {
           getActiveUserByMobile: unexpectedDependencyCall,
           getActiveUserByWxId: unexpectedDependencyCall,
           getActiveUserById: unexpectedDependencyCall,
-          getUserDetailById: unexpectedDependencyCall,
+          getLoginProfileById: unexpectedDependencyCall,
         },
       },
     },
     publicServices: {
       userService: {
         getActiveUserBySubjectIdentifier: unexpectedDependencyCall,
-        getUserDetailById: unexpectedDependencyCall,
         setMobile: unexpectedDependencyCall,
         setPassword: unexpectedDependencyCall,
       },
@@ -99,7 +98,7 @@ function createContractApp() {
 }
 
 describe("Custom SSO delivery OpenAPI", () => {
-  test("publishes the shared V3 user-info projection and retryable 503", async () => {
+  test("publishes the shared V4 user-info projection and retryable 503", async () => {
     const app = createContractApp();
     const response = await app.request("/public/doc");
     const document = (await response.json()) as {
@@ -131,7 +130,7 @@ describe("Custom SSO delivery OpenAPI", () => {
     });
     const contract = JSON.stringify({
       operation,
-      projection: document.components.schemas.CustomSsoSubjectProjectionV3,
+      projection: document.components.schemas.CustomSsoSubjectProjectionV4,
       unavailable: document.components.schemas.CustomSsoUnavailableResponse,
     });
     expect(contract).toContain("subjectIdentifier");
@@ -141,10 +140,10 @@ describe("Custom SSO delivery OpenAPI", () => {
     expect(contract).toContain(ApiErrorCode.InternalError);
     expect(contract).not.toContain('"id"');
     expect(contract).not.toContain("userInfo");
-    expect(document.components.schemas.CustomSsoSubjectProjectionV3).toMatchObject({
+    expect(document.components.schemas.CustomSsoSubjectProjectionV4).toMatchObject({
       additionalProperties: false,
       properties: {
-        version: { enum: [3] },
+        version: { enum: [4] },
         profile: {
           additionalProperties: false,
           properties: {

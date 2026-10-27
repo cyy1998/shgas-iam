@@ -49,10 +49,10 @@ Schema 必须在实际解析或输出边界生效，只声明类型不证明字�
 ## Repository 与数据库
 
 Repository 通过 factory 接收 root 或 transaction `DbClient`；事务由调用方的 UnitOfWork 统一拥有。
-数据库事实、审计和 dirty 的原子关系，以及提交后作用，遵守[事务边界](backend-architecture.md#transactions-与-aftercommit)。
+数据库事实、审计和文档 Outbox 的原子关系，以及提交后作用，遵守[事务边界](backend-architecture.md#transactions-与-aftercommit)。
 
 数据库约束保护存储完整性，应用 schema 保护输入输出，两者不能互相代替。特定读模型的版本、发布与核验规则
-集中在[Profile](backend-architecture.md#user-profile-subject-facts-publication)和
+集中在[User Document](backend-architecture.md#user-document-subject-facts-publication)和
 [组织搜索](backend-architecture.md#organization-search-发布与核验)。
 
 修改 PostgreSQL schema、索引、约束或 Drizzle 派生 schema 前使用

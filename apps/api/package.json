@@ -37,14 +37,16 @@
     "@iam/contracts": "workspace:*",
     "@iam/custom-sso": "workspace:*",
     "@iam/db": "workspace:*",
+    "@iam/delegation": "workspace:*",
     "@iam/domain": "workspace:*",
     "@iam/filter-engine": "workspace:*",
     "@iam/jobs": "workspace:*",
     "@iam/oidc": "workspace:*",
-    "@iam/organization-search-read-model": "workspace:*",
+    "@iam/organization-document": "workspace:*",
+    "@iam/organization-responsibility-resolution": "workspace:*",
     "@iam/role-assignment-resolution": "workspace:*",
     "@iam/session-kernel": "workspace:*",
-    "@iam/user-profile-read-model": "workspace:*",
+    "@iam/user-document": "workspace:*",
     "@scalar/hono-api-reference": "^0.11.11",
     "@trpc/server": "^11.18.0",
     "bcrypt": "^6.0.0",
@@ -58,8 +60,7 @@
     "postgres": "^3.4.9",
     "sm-crypto": "^0.4.0",
     "ts-enum-util": "^4.1.0",
-    "zod": "^4.4.3",
-    "@iam/delegation": "workspace:*"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",

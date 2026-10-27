@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { createApiRepositories } from "@api/composition/repositories";
 import { createApiUnitOfWork } from "@api/composition/tx";
@@ -12,18 +13,35 @@ import createApp from "@iam/api-core/core/create-app";
 import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares";
 import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/api-core/testing/process-smoke-harness";
 import { mapUnitOfWork } from "@iam/api-core/uow";
-import { ClientStatus, OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
-import { auditLogs, organizationClosures, organizationSearchChanges, organizations } from "@iam/db/schema";
+import {
+  ClientStatus,
+  OrganizationLevel,
+  OrganizationResponsibilityAssignmentStatus,
+  OrganizationResponsibilityTypeCode,
+  OrganizationStatus,
+  OrganizationType,
+} from "@iam/contracts";
+import {
+  auditLogs,
+  employments,
+  organizationClosures,
+  organizationDocumentOutboxEntries,
+  organizationResponsibilityAssignments,
+  organizations,
+  positions,
+  userDocumentOutboxEntries,
+  users,
+} from "@iam/db/schema";
 import type { GenericClientRuntimeDto } from "@iam/domain/client";
 import {
-  createOrganizationSearchQueryRepository,
-  createOrganizationSearchQueryService,
-} from "@iam/organization-search-read-model";
+  createOrganizationDocumentQueryRepository,
+  createOrganizationDocumentQueryService,
+} from "@iam/organization-document";
 import {
-  createOrganizationSearchProcessor,
+  createOrganizationDocumentProcessor,
+  type OrganizationOutboxJobPayload,
   type OrganizationRebuildJobPayload,
-  type OrganizationSourceChangeJobPayload,
-} from "@iam/organization-search-read-model/worker";
+} from "@iam/organization-document/worker";
 import { eq } from "drizzle-orm";
 import pino from "pino";
 import appConfig from "~api/app.config";
@@ -53,6 +71,8 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+  await harness.db.delete(organizationResponsibilityAssignments);
+  await harness.db.delete(positions);
   await harness.reset();
   const [parent] = await harness.db
     .insert(organizations)
@@ -91,13 +111,13 @@ function createOrganizationApp(options: OrganizationAppOptions = {}) {
     db: harness.db,
     logger: { error() {}, warn() {} },
     clock: { nowDate: () => now },
-    organizationSearchJobProducer: {
-      async enqueueSourceChanges() {
+    organizationDocumentJobProducer: {
+      async enqueueOutboxEntries() {
         return { enqueued: 0 };
       },
     },
-    userProfileJobProducer: {
-      async enqueueRebuildJobs() {
+    userDocumentJobProducer: {
+      async enqueueOutboxEntries() {
         return { enqueued: 0, jobIds: [] };
       },
     },
@@ -115,8 +135,9 @@ function createOrganizationApp(options: OrganizationAppOptions = {}) {
                   : await tx.repositories.organization.getAnyOrganizationByCode(orgCode),
             }
           : tx.repositories.organization,
-        userProfileInvalidation: tx.userProfileInvalidation,
-        organizationSearchInvalidation: tx.organizationSearchInvalidation,
+        responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
+        organizationDocumentInvalidation: tx.organizationDocumentInvalidation,
       };
       return options.decorateTransaction?.(ports) ?? ports;
     }),
@@ -124,8 +145,8 @@ function createOrganizationApp(options: OrganizationAppOptions = {}) {
   const handlers = createOrganizationHandlers({
     auditLogWriter,
     organizationService,
-    organizationSearch: createOrganizationSearchQueryService({
-      repository: createOrganizationSearchQueryRepository(harness.db),
+    organizationDocument: createOrganizationDocumentQueryService({
+      repository: createOrganizationDocumentQueryRepository(harness.db),
     }),
   });
   return createApp(appConfig, {
@@ -149,25 +170,86 @@ function createOrganizationApp(options: OrganizationAppOptions = {}) {
 }
 
 async function request(method: "POST" | "PUT", path: string, body: unknown, options: OrganizationAppOptions = {}) {
-  const response = await createOrganizationApp(options).request(`http://localhost/internal/organizations${path}`, {
-    method,
-    headers: {
-      apikey: internalClient.clientSecret,
-      Client: internalClient.clientCode,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(body),
+  const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: createOrganizationApp(options).fetch });
+  try {
+    const response = await fetch(new URL(`/internal/organizations${path}`, server.url), {
+      method,
+      headers: {
+        apikey: internalClient.clientSecret,
+        Client: internalClient.clientCode,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    return { status: response.status, body: await response.json() };
+  } finally {
+    await server.stop(true);
+  }
+}
+
+async function attachCrossTreeResponsibility(orgCode: string, status: OrganizationResponsibilityAssignmentStatus) {
+  const [target] = await harness.db.select().from(organizations).where(eq(organizations.orgCode, orgCode));
+  if (!target) throw new Error("Missing responsibility target");
+  const [holderOrganization] = await harness.db
+    .insert(organizations)
+    .values({
+      orgCode: "HOLDER",
+      orgName: "Independent holder tree",
+      path: "",
+      level: OrganizationLevel.One,
+      orgType: OrganizationType.Company,
+    })
+    .returning();
+  await harness.db
+    .update(organizations)
+    .set({ path: `/${holderOrganization!.id}` })
+    .where(eq(organizations.id, holderOrganization!.id));
+  await harness.db
+    .insert(organizationClosures)
+    .values({ ancestorId: holderOrganization!.id, descendantId: holderOrganization!.id, depth: 0 });
+  const [holder] = await harness.db.insert(users).values({ username: "holder", name: "Holder" }).returning();
+  const [position] = await harness.db
+    .insert(positions)
+    .values({ posCode: randomUUID(), posName: "Holder" })
+    .returning();
+  const [employment] = await harness.db
+    .insert(employments)
+    .values({
+      userId: holder!.id,
+      orgId: holderOrganization!.id,
+      posId: position!.id,
+      startTime: now,
+    })
+    .returning();
+  await harness.db.insert(organizationResponsibilityAssignments).values({
+    employmentId: employment!.id,
+    targetOrganizationId: target.id,
+    typeCode: OrganizationResponsibilityTypeCode.Supervising,
+    status,
+    startTime: now,
+    endTime: status === OrganizationResponsibilityAssignmentStatus.Disable ? new Date(now.getTime() + 1) : null,
   });
-  return { status: response.status, body: await response.json() };
+}
+
+async function organizationWriteState() {
+  return {
+    organizations: await harness.db.select().from(organizations).orderBy(organizations.id),
+    audits: await harness.db.select().from(auditLogs).orderBy(auditLogs.id),
+    userOutbox: await harness.db.select().from(userDocumentOutboxEntries).orderBy(userDocumentOutboxEntries.id),
+    organizationOutbox: await harness.db
+      .select()
+      .from(organizationDocumentOutboxEntries)
+      .orderBy(organizationDocumentOutboxEntries.id),
+  };
 }
 
 async function publishOrganizationChanges(mode: "ordinary" | "repair" = "ordinary") {
   const rebuilds: OrganizationRebuildJobPayload[] = [];
-  const sourceJobs: OrganizationSourceChangeJobPayload[] = [];
-  const processor = createOrganizationSearchProcessor({
+  const sourceJobs: OrganizationOutboxJobPayload[] = [];
+  const processor = createOrganizationDocumentProcessor({
     db: harness.db,
     jobProducer: {
-      async enqueueSourceChanges(payloads) {
+      async enqueueOutboxEntries(payloads) {
         sourceJobs.push(...payloads);
         return { enqueued: payloads.length };
       },
@@ -182,11 +264,11 @@ async function publishOrganizationChanges(mode: "ordinary" | "repair" = "ordinar
   } else {
     const changes = await harness.db
       .select()
-      .from(organizationSearchChanges)
-      .where(eq(organizationSearchChanges.status, "pending"));
-    sourceJobs.push(...changes.map((change) => ({ changeId: change.id })));
+      .from(organizationDocumentOutboxEntries)
+      .where(eq(organizationDocumentOutboxEntries.status, "pending"));
+    sourceJobs.push(...changes.map((change) => ({ outboxId: change.id })));
   }
-  for (const payload of sourceJobs) await processor.processSourceChange(payload);
+  for (const payload of sourceJobs) await processor.processOutbox(payload);
   for (const payload of rebuilds) await processor.processRebuild(payload);
   if (mode === "repair") return await processor.repairFailedOrStale({ staleBefore: new Date(0), limit: 100 });
 }
@@ -208,6 +290,98 @@ async function reassignCodeWithAdmin(mode: "replace" | "rename-only") {
 }
 
 describe("Internal Organization HTTP writes with production PostgreSQL", () => {
+  test.each([
+    { assignmentStatus: OrganizationResponsibilityAssignmentStatus.Enable, status: OrganizationStatus.Pause },
+    { assignmentStatus: OrganizationResponsibilityAssignmentStatus.Enable, status: OrganizationStatus.Disable },
+    { assignmentStatus: OrganizationResponsibilityAssignmentStatus.Pause, status: OrganizationStatus.Pause },
+    { assignmentStatus: OrganizationResponsibilityAssignmentStatus.Pause, status: OrganizationStatus.Disable },
+  ])("rejects status $status with an Open responsibility in state $assignmentStatus atomically", async (input) => {
+    await request("POST", "/purveyors", { orgCode: "TARGET", orgName: "Target" });
+    await attachCrossTreeResponsibility("TARGET", input.assignmentStatus);
+    const before = await organizationWriteState();
+    const result = await request("PUT", "/TARGET", { status: input.status, orgName: "Must roll back" });
+    const after = await organizationWriteState();
+    expect(result).toMatchObject({ status: 409, body: { code: "ORG.HAS_OPEN_RESPONSIBILITY_ASSIGNMENT" } });
+    expect(after).toEqual(before);
+  });
+
+  test("also blocks an ancestor whose descendant has an Open responsibility", async () => {
+    await request("POST", "/purveyors", { orgCode: "TARGET", orgName: "Target" });
+    await attachCrossTreeResponsibility("TARGET", OrganizationResponsibilityAssignmentStatus.Pause);
+    const before = await organizationWriteState();
+    const result = await request("PUT", "/GY", { status: OrganizationStatus.Disable });
+    const after = await organizationWriteState();
+    expect(result.status).toBe(409);
+    expect(after).toEqual(before);
+  });
+
+  test.each([OrganizationStatus.Pause, OrganizationStatus.Disable])(
+    "allows status %s when no Open responsibility targets the organization",
+    async (status) => {
+      await request("POST", "/purveyors", { orgCode: "TARGET", orgName: "Target" });
+      await attachCrossTreeResponsibility("TARGET", OrganizationResponsibilityAssignmentStatus.Disable);
+      const before = await organizationWriteState();
+      const result = await request("PUT", "/TARGET", { status });
+      const after = await organizationWriteState();
+      expect(result).toMatchObject({ status: 200, body: { data: true } });
+      expect(after.organizations.find(({ orgCode }) => orgCode === "TARGET")).toMatchObject({ status });
+      expect(after.userOutbox).toHaveLength(before.userOutbox.length + 1);
+      expect(after.organizationOutbox).toHaveLength(before.organizationOutbox.length + 1);
+    },
+  );
+
+  test("keeps legal name and Enable updates available for an Open responsibility target", async () => {
+    await request("POST", "/purveyors", { orgCode: "TARGET", orgName: "Target" });
+    await attachCrossTreeResponsibility("TARGET", OrganizationResponsibilityAssignmentStatus.Enable);
+    const renamed = await request("PUT", "/TARGET", { orgName: "Updated target" });
+    const enabled = await request("PUT", "/TARGET", { status: OrganizationStatus.Enable });
+    const after = await organizationWriteState();
+    expect(renamed).toMatchObject({ status: 200, body: { data: true } });
+    expect(enabled).toMatchObject({ status: 200, body: { data: true } });
+    expect(after.organizations.find(({ orgCode }) => orgCode === "TARGET")).toMatchObject({
+      orgName: "Updated target",
+      status: OrganizationStatus.Enable,
+    });
+  });
+
+  test("checks the actual updated organization after a concurrent code reassignment", async () => {
+    await request("POST", "/purveyors", { orgCode: "A", orgName: "Original" });
+    const prechecked = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const pending = request(
+      "PUT",
+      "/A",
+      { status: OrganizationStatus.Pause },
+      {
+        decorateTransaction: (tx) => ({
+          ...tx,
+          organizationRepository: {
+            ...tx.organizationRepository,
+            async updateOrganizationByCode(code, patch) {
+              prechecked.resolve();
+              await release.promise;
+              return await tx.organizationRepository.updateOrganizationByCode(code, patch);
+            },
+          },
+        }),
+      },
+    );
+    let before: Awaited<ReturnType<typeof organizationWriteState>> | undefined;
+    try {
+      await Promise.race([prechecked.promise, pending]);
+      await reassignCodeWithAdmin("replace");
+      await attachCrossTreeResponsibility("A", OrganizationResponsibilityAssignmentStatus.Enable);
+      before = await organizationWriteState();
+    } finally {
+      release.resolve();
+      await pending;
+    }
+    const result = await pending;
+    const after = await organizationWriteState();
+    expect(result.status).toBe(409);
+    expect(after).toEqual(before);
+  }, 20_000);
+
   test.each(["ordinary", "repair"] as const)(
     "%s consumption publishes the actual updated organization and its descendants after Admin transfers a prechecked code",
     async (mode) => {
@@ -235,6 +409,7 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
           }),
         },
       );
+      let userSourcesBefore: string[] = [];
       try {
         await Promise.race([prechecked.promise, pending]);
         await reassignCodeWithAdmin("replace");
@@ -250,6 +425,9 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
             ],
           },
         });
+        userSourcesBefore = (
+          await harness.db.select({ id: userDocumentOutboxEntries.id }).from(userDocumentOutboxEntries)
+        ).map(({ id }) => id);
       } finally {
         release.resolve();
         await pending;
@@ -259,6 +437,10 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
       const [actualTarget] = await harness.db.select().from(organizations).where(eq(organizations.orgCode, "A"));
       expect(actualTarget).toMatchObject({ orgName: "Actual updated name" });
       expect(actualTarget?.id).not.toBe(original.id);
+      const userSources = await harness.db.select().from(userDocumentOutboxEntries);
+      expect(userSources.filter(({ id }) => !userSourcesBefore.includes(id))).toMatchObject([
+        { source: { change: { kind: "organization", organizationId: actualTarget!.id } } },
+      ]);
       const completedRepair = await publishOrganizationChanges(mode);
       if (mode === "repair") expect(completedRepair).toMatchObject({ enqueued: 0, failed: 0 });
       const publishedAfter = await request("POST", "/search-dsl", {
@@ -307,17 +489,22 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
         }),
       },
     );
-    let committedChanges: (typeof organizationSearchChanges.$inferSelect)[] = [];
+    let committedChanges: (typeof organizationDocumentOutboxEntries.$inferSelect)[] = [];
     let committedSource: (typeof organizations.$inferSelect)[] = [];
+    let committedUserSources: (typeof userDocumentOutboxEntries.$inferSelect)[] = [];
     try {
       await Promise.race([prechecked.promise, pending]);
       await reassignCodeWithAdmin("rename-only");
       await publishOrganizationChanges();
       committedChanges = await harness.db
         .select()
-        .from(organizationSearchChanges)
-        .orderBy(organizationSearchChanges.id);
+        .from(organizationDocumentOutboxEntries)
+        .orderBy(organizationDocumentOutboxEntries.id);
       committedSource = await harness.db.select().from(organizations).orderBy(organizations.id);
+      committedUserSources = await harness.db
+        .select()
+        .from(userDocumentOutboxEntries)
+        .orderBy(userDocumentOutboxEntries.id);
     } finally {
       release.resolve();
       await pending;
@@ -325,12 +512,17 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
     const result = await pending;
     const afterChanges = await harness.db
       .select()
-      .from(organizationSearchChanges)
-      .orderBy(organizationSearchChanges.id);
+      .from(organizationDocumentOutboxEntries)
+      .orderBy(organizationDocumentOutboxEntries.id);
     const afterSource = await harness.db.select().from(organizations).orderBy(organizations.id);
     expect(result).toMatchObject({ status: 200, body: { data: true } });
     expect(afterChanges).toEqual(committedChanges);
     expect(afterSource).toEqual(committedSource);
+    const afterUserSources = await harness.db
+      .select()
+      .from(userDocumentOutboxEntries)
+      .orderBy(userDocumentOutboxEntries.id);
+    expect(afterUserSources).toEqual(committedUserSources);
     const completedRepair = await publishOrganizationChanges("repair");
     expect(completedRepair).toMatchObject({ enqueued: 0, failed: 0 });
     const retained = await request("POST", "/search-dsl", {
@@ -376,7 +568,7 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
       },
     });
   });
-  test("keeps organization detail on enabled source facts without requiring published documents", async () => {
+  test("returns the same published Organization in detail and search without falling back to source-only facts", async () => {
     await harness.db.insert(organizations).values([
       {
         orgCode: "PAUSED",
@@ -405,19 +597,31 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
     ]);
     const dsl = await request("POST", "/search-dsl", { filter: { field: "organization.code", op: "eq", value: "GY" } });
     expect(dsl).toMatchObject({ status: 200, body: { data: [] } });
-    for (const [orgCode, status] of [
-      ["GY", 200],
-      ["PAUSED", 404],
-      ["DISABLED", 404],
-      ["DELETED", 404],
-    ] as const) {
+    for (const orgCode of ["GY", "PAUSED", "DISABLED", "DELETED"]) {
       const response = await createOrganizationApp().request(`http://localhost/internal/organizations/${orgCode}`, {
         headers: { apikey: internalClient.clientSecret, Client: internalClient.clientCode },
       });
-      const body = await response.json();
-      expect(response.status).toBe(status);
-      if (status === 200) expect(body.data).toMatchObject({ orgCode: "GY", orgName: "供应商根组织" });
+      expect(response.status).toBe(404);
     }
+    await request("PUT", "/GY", { orgName: "Published root" });
+    await publishOrganizationChanges();
+    const detail = await createOrganizationApp().request("http://localhost/internal/organizations/GY", {
+      headers: { apikey: internalClient.clientSecret, Client: internalClient.clientCode },
+    });
+    const published = await detail.json();
+    const search = await request("POST", "/search-dsl", {
+      filter: { field: "organization.code", op: "eq", value: "GY" },
+    });
+    expect(detail.status).toBe(200);
+    expect(published.data).toEqual(search.body.data[0]);
+    expect(published.data).toMatchObject({ organization: { code: "GY", name: "Published root" } });
+    await request("PUT", "/GY", { orgName: "Unpublished root" });
+    const retained = await createOrganizationApp().request("http://localhost/internal/organizations/GY", {
+      headers: { apikey: internalClient.clientSecret, Client: internalClient.clientCode },
+    });
+    const retainedBody = await retained.json();
+    expect(retained.status).toBe(200);
+    expect(retainedBody.data).toEqual(published.data);
   });
 
   test("normalizes a purveyor before the first code lookup and persists it once", async () => {
@@ -543,7 +747,7 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
       const before = {
         source: await harness.db.select().from(organizations),
         closures: await harness.db.select().from(organizationClosures),
-        changes: await harness.db.select().from(organizationSearchChanges),
+        changes: await harness.db.select().from(organizationDocumentOutboxEntries),
       };
       const result = await request(
         operation === "create" ? "POST" : "PUT",
@@ -552,9 +756,9 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
         {
           decorateTransaction: (tx) => ({
             ...tx,
-            organizationSearchInvalidation: {
+            organizationDocumentInvalidation: {
               async recordChanges(changes) {
-                await tx.organizationSearchInvalidation.recordChanges(changes);
+                await tx.organizationDocumentInvalidation.recordChanges(changes);
                 throw new Error("injected search registration failure");
               },
             },
@@ -565,7 +769,7 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
       const after = {
         source: await harness.db.select().from(organizations),
         closures: await harness.db.select().from(organizationClosures),
-        changes: await harness.db.select().from(organizationSearchChanges),
+        changes: await harness.db.select().from(organizationDocumentOutboxEntries),
       };
       expect(after).toEqual(before);
     },

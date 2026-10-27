@@ -1,1 +1,1 @@
-export type { User, UserCreateDto, UserDetailDto, UserDto } from "@iam/domain/user";
+export type { User, UserCreateDto, UserDto } from "@iam/domain/user";

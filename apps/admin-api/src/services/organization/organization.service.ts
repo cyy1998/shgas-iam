@@ -22,8 +22,8 @@ import {
   OrganizationNotFoundError,
 } from "@iam/domain/organization";
 import type {
+  AdminOrganizationDocumentChangedField,
   AdminOrganizationReadScope,
-  AdminOrganizationSearchChangedField,
   AdminOrganizationServiceDeps,
 } from "./organization.port";
 
@@ -100,7 +100,7 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
           parentOrg,
         );
         if (created === null) throw new Error("Organization insert returned no row");
-        await tx.organizationSearchInvalidation.recordChanges([{ kind: "created", organizationId: created.id }]);
+        await tx.organizationDocumentInvalidation.recordChanges([{ kind: "created", organizationId: created.id }]);
         await tx.auditService.recordAuditLog(
           buildOrganizationAudit(
             "admin.organization.create",
@@ -254,7 +254,7 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
             reason: "ACTION_NOT_GRANTED",
           });
         }
-        const changedFields: AdminOrganizationSearchChangedField[] = [];
+        const changedFields: AdminOrganizationDocumentChangedField[] = [];
         if (data.orgCode !== undefined && data.orgCode !== existing.orgCode) changedFields.push("code");
         if (data.orgName !== undefined && data.orgName !== existing.orgName) changedFields.push("name");
         if (data.orgType !== undefined && data.orgType !== existing.orgType) changedFields.push("type");
@@ -298,10 +298,19 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
           ),
         );
         if (changed) {
-          await tx.organizationSearchInvalidation.recordChanges([
+          await tx.organizationDocumentInvalidation.recordChanges([
             { kind: "updated", organizationId: existing.id, changedFields },
           ]);
-          await tx.userProfileInvalidation.recordChanges([{ kind: "organization", organizationId: existing.id }]);
+          await tx.userDocumentInvalidation.recordChanges([{ kind: "organization", organizationId: existing.id }]);
+          if (
+            data.status !== undefined &&
+            data.status !== existing.status &&
+            data.status !== OrganizationStatus.Enable
+          ) {
+            await tx.responsibilityParentLifecycle.assertNoOpenAssignmentsTargetingOrganizationSubtree({
+              organizationId: existing.id,
+            });
+          }
         }
         return { changed, result: null };
       },
@@ -356,7 +365,7 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
         }
         const deleted = await tx.organizationRepository.softDeleteOrganizationByCode(orgCode);
         if (deleted === null) throw new Error("Locked Organization delete returned no row");
-        await tx.organizationSearchInvalidation.recordChanges([{ kind: "deleted", organizationId: existing.id }]);
+        await tx.organizationDocumentInvalidation.recordChanges([{ kind: "deleted", organizationId: existing.id }]);
         await tx.auditService.recordAuditLog(
           buildOrganizationAudit(
             "admin.organization.delete",
@@ -368,7 +377,10 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
             auditContext,
           ),
         );
-        await tx.userProfileInvalidation.recordChanges([{ kind: "organization", organizationId: existing.id }]);
+        await tx.userDocumentInvalidation.recordChanges([{ kind: "organization", organizationId: existing.id }]);
+        await tx.responsibilityParentLifecycle.assertNoOpenAssignmentsTargetingOrganizationSubtree({
+          organizationId: deleted.id,
+        });
         return { changed: true, result: null };
       },
       adminAuditTransactionOptions(auditContext),

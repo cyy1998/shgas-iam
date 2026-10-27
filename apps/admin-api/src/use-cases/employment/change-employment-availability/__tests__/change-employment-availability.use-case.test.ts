@@ -81,7 +81,7 @@ function createLifecycle() {
       lockAssignmentsForEmployment: mock(async () => []),
       pauseEnabledAssignmentsForEmployment: mock(async () => true),
     },
-    userProfileInvalidation: { recordChanges: mock(async () => undefined) },
+    userDocumentInvalidation: { recordChanges: mock(async () => undefined) },
     employmentStore: {
       lockEmploymentLifecycleContextById: mock(async () => ({
         employment: currentEmployment,
@@ -132,7 +132,7 @@ describe("Employment Lifecycle Pause/Resume", () => {
       selectedAssignments: [],
       employmentId: 4,
     });
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+    expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([
       { kind: "employment", userId: 1 },
       { kind: "organization-responsibility-assignment", userId: 1 },
     ]);
@@ -160,7 +160,7 @@ describe("Employment Lifecycle Pause/Resume", () => {
         details: expect.objectContaining({ changed: false }),
       }),
     );
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("resumes a paused employment after revalidating parents, scope, and Open uniqueness", async () => {
@@ -212,7 +212,7 @@ describe("Employment Lifecycle Pause/Resume", () => {
         details: expect.objectContaining({ changed: false }),
       }),
     );
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test.each([
@@ -239,7 +239,7 @@ describe("Employment Lifecycle Pause/Resume", () => {
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
     expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("rejects Resume when the assigned Organization is disabled", async () => {
@@ -357,7 +357,7 @@ describe("Employment Lifecycle Pause/Resume", () => {
                 throw failure;
               },
             },
-            userProfileInvalidation: {
+            userDocumentInvalidation: {
               async recordChanges(changes: readonly { userId: number }[]) {
                 staged.dirtyUserIds.push(...changes.map((change) => change.userId));
               },

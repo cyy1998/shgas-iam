@@ -46,7 +46,7 @@ export function createLoginWithOaUseCase(deps: LoginWithOaDeps) {
       }
       if (current !== null) await deps.currentSessions.logout(input.currentSessionToken);
     }
-    const userDetail = await deps.users.getUserDetailById(liveUser.id);
+    const loginProfile = await deps.users.getLoginProfileById(liveUser.id);
     const { token: sessionId, remainingSeconds } = await deps.principalSessions.createPrincipalSession(
       liveUser.subjectIdentifier,
       {
@@ -56,13 +56,13 @@ export function createLoginWithOaUseCase(deps: LoginWithOaDeps) {
     );
     await deps.auditLogWriter.recordAuditLog({
       ...options.requestContext,
-      ...buildOaLoginSuccessAudit(userDetail, input.clientCode),
+      ...buildOaLoginSuccessAudit({ ...loginProfile, id: liveUser.id }, input.clientCode),
     });
     return {
       kind: "authenticated",
       token: sessionId,
       ...(remainingSeconds === undefined ? {} : { remainingSeconds }),
-      isMobileSet: userDetail.mobile !== null,
+      isMobileSet: loginProfile.mobile !== null,
     };
   }
 

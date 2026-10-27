@@ -1,8 +1,9 @@
-import type { UserInfo } from "@sso/types/api";
+import { CustomSsoSubjectProjectionSchema } from "@iam/custom-sso/wire";
 import { request } from "@sso/utils/request";
 
-export function getCurrentUserInfo() {
-  return request<UserInfo>("/public/user-info", { suppressErrorMessage: true });
+export async function getCurrentUserInfo() {
+  const response = await request<unknown>("/public/user-info", { suppressErrorMessage: true });
+  return CustomSsoSubjectProjectionSchema.parse(response);
 }
 
 export function passwordChange(body: { oldPassword: string; newPassword: string }) {

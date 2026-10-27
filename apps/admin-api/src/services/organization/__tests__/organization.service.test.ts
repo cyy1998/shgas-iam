@@ -54,10 +54,10 @@ function createService() {
     responsibilityParentLifecycle: {
       assertNoOpenAssignmentsTargetingOrganizationSubtree: mock(async () => undefined),
     },
-    userProfileInvalidation: {
+    userDocumentInvalidation: {
       recordChanges: mock(async () => undefined),
     },
-    organizationSearchInvalidation: { recordChanges: mock(async () => undefined) },
+    organizationDocumentInvalidation: { recordChanges: mock(async () => undefined) },
     organizationRepository: {
       hasOpenDelegationsByOrganizationId: mock(async (_id: number) => false),
       countActiveChildrenByOrgCode: mock(async () => 0),
@@ -140,7 +140,7 @@ describe("createOrganizationService", () => {
     );
     expect(tx.organizationRepository.lockOrganizationByCode).toHaveBeenCalledTimes(2);
     expect(tx.organizationRepository.updateOrganizationByCode).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test.each(["update", "delete"])("zero-row %s after lock fails without success audit or dirty", async (operation) => {
@@ -156,7 +156,7 @@ describe("createOrganizationService", () => {
     }
     expect(failure).toBeInstanceOf(Error);
     expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("applies the HR scope to selector, search, tree, and detail reads", async () => {
@@ -369,7 +369,7 @@ describe("createOrganizationService", () => {
     });
     expect(tx.organizationRepository.updateOrganizationByCode).not.toHaveBeenCalled();
     expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("rejects an HR Organization code change while allowing approved mutable fields", async () => {
@@ -483,7 +483,7 @@ describe("createOrganizationService", () => {
     expect(tx.organizationRepository.countActiveChildrenByOrgCode).not.toHaveBeenCalled();
     expect(tx.organizationRepository.softDeleteOrganizationByCode).not.toHaveBeenCalled();
     expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test.each([
@@ -520,7 +520,7 @@ describe("createOrganizationService", () => {
       result: null,
     });
 
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+    expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([
       { kind: "organization", organizationId: 1 },
     ]);
   });
@@ -582,7 +582,7 @@ describe("createOrganizationService", () => {
     expect(tx.organizationRepository.updateOrganizationByCode).toHaveBeenCalledWith("ORG", {
       status: OrganizationStatus.Disable,
     });
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+    expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([
       { kind: "organization", organizationId: 1 },
     ]);
   });
@@ -652,7 +652,7 @@ describe("createOrganizationService", () => {
     expect(tx.organizationRepository.countActiveChildrenByOrgCode).toHaveBeenCalledWith("ORG");
     expect(tx.organizationRepository.countOpenEmploymentsByOrgCode).toHaveBeenCalledWith("ORG");
     expect(tx.organizationRepository.softDeleteOrganizationByCode).toHaveBeenCalledWith("ORG");
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+    expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([
       { kind: "organization", organizationId: 1 },
     ]);
   });

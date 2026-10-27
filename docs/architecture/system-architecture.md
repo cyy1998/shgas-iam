@@ -80,8 +80,8 @@ Gateway 配置 API 是独立入口，首次发布可直连，通过固定 APISIX
 | 数据或状态                           | 权威来源                                                         | 恢复责任                                         |
 | ------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------ |
 | 用户、任职、组织、角色、Client       | PostgreSQL 业务表                                                | 业务入口维护源事实                               |
-| User Profile / Subject Facts         | PostgreSQL 发布结果与 dirty 版本                                 | 读模型与 Worker 重建发布；Facts reader 修复缓存  |
-| Organization Search                  | PostgreSQL 源变化、dirty、文档与墓碑                             | 独立读模型与 Worker 恢复两阶段工作               |
+| User Document / Subject Facts        | PostgreSQL Document、Outbox 与 Rebuild State                     | 读模型与 Worker 重建发布；Facts reader 修复缓存  |
+| Organization Search                  | PostgreSQL Outbox、Rebuild State、文档与墓碑                     | 独立读模型与 Worker 恢复两阶段工作               |
 | UserSession、ClientSession、登录限制 | Redis 实时状态                                                   | Kernel / LoginRestriction；丢失后不能从审计重建  |
 | Subject Access                       | Redis 请求时屏障，恢复依据为 PostgreSQL 账号和 transition intent | 生命周期协调器与 Worker 对照当前 Facts 收敛      |
 | Client Snapshot                      | PostgreSQL Client 配置                                           | Snapshot 模块维护缓存，Worker 执行修复与独立核验 |

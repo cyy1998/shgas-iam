@@ -8,25 +8,13 @@ import type {
 } from "@iam/client-subject-projection";
 import { EmploymentResponsibilitySnapshotSchema, parseSubjectClaimSelection } from "@iam/client-subject-projection";
 import type { SubjectClaimName } from "@iam/contracts";
-import { SubjectClaim } from "@iam/contracts";
+import { OrganizationReferenceSchema, SubjectClaim } from "@iam/contracts";
 import { z } from "zod";
-
-const CustomSsoOrganizationObjectSchema = z
-  .object({
-    code: z.string(),
-    name: z.string(),
-    type: z.string(),
-  })
-  .strict();
-
-export const CustomSsoOrganizationSchema = CustomSsoOrganizationObjectSchema.readonly();
 
 const CustomSsoEmploymentBaseObjectSchema = z
   .object({
     isPrimary: z.boolean(),
-    organization: CustomSsoOrganizationObjectSchema.extend({
-      path: z.array(CustomSsoOrganizationSchema).readonly(),
-    }).readonly(),
+    organization: OrganizationReferenceSchema.strict().readonly(),
     position: z
       .object({
         code: z.string(),
@@ -51,7 +39,7 @@ const CustomSsoAuthorizationEmploymentSchema = CustomSsoEmploymentBaseObjectSche
 
 export const CustomSsoSubjectProjectionSchema = z
   .object({
-    version: z.literal(3),
+    version: z.literal(4),
     subjectIdentifier: z.uuid(),
     profile: z
       .object({
@@ -118,7 +106,7 @@ export function buildCustomSsoPlaceholderPreview(subjectClaims: readonly Subject
   });
   const selected = new Set(selection.optionalClaims);
   return CustomSsoSubjectProjectionSchema.parse({
-    version: 3,
+    version: 4,
     subjectIdentifier: PLACEHOLDER_SUBJECT_IDENTIFIER,
     ...(selected.has(SubjectClaim.ProfileUsername) ||
     selected.has(SubjectClaim.ProfileName) ||
@@ -146,12 +134,12 @@ export function buildCustomSsoPlaceholderPreview(subjectClaims: readonly Subject
 
 function mapClientSubjectProjectionToCustomSso(projection: ClientSubjectProjection): CustomSsoSubjectProjection {
   const wire: {
-    version: 3;
+    version: 4;
     subjectIdentifier: string;
     profile?: CustomSsoSubjectProfile;
     authorization?: CustomSsoClientAuthorization;
   } = {
-    version: 3,
+    version: 4,
     subjectIdentifier: projection.subjectIdentifier,
   };
   const profile: {
@@ -191,16 +179,7 @@ function mapEmploymentProfile(employment: EmploymentProfile): CustomSsoEmploymen
         code: responsibility.type.code,
         name: responsibility.type.name,
       },
-      targetOrganization: {
-        code: responsibility.targetOrganization.code,
-        name: responsibility.targetOrganization.name,
-        type: responsibility.targetOrganization.type,
-        path: responsibility.targetOrganization.path.map((organization) => ({
-          code: organization.code,
-          name: organization.name,
-          type: organization.type,
-        })),
-      },
+      targetOrganization: OrganizationReferenceSchema.parse(responsibility.targetOrganization),
     })),
   };
 }
@@ -208,16 +187,7 @@ function mapEmploymentProfile(employment: EmploymentProfile): CustomSsoEmploymen
 function mapEmploymentBase(employment: EmploymentProfileBase) {
   return {
     isPrimary: employment.isPrimary,
-    organization: {
-      code: employment.organization.code,
-      name: employment.organization.name,
-      type: employment.organization.type,
-      path: employment.organization.path.map((organization) => ({
-        code: organization.code,
-        name: organization.name,
-        type: organization.type,
-      })),
-    },
+    organization: OrganizationReferenceSchema.parse(employment.organization),
     position: {
       code: employment.position.code,
       name: employment.position.name,

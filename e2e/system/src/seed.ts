@@ -166,7 +166,7 @@ export interface E2EScenarioReadBack {
   subjectFacts: {
     ready: boolean;
     subjectIdentifier: string;
-    sourceDirtyVersion: string;
+    sourceVersion: string;
     profileUsername: string;
     organizationCodes: string[];
     positionCodes: string[];
@@ -175,23 +175,23 @@ export interface E2EScenarioReadBack {
     responsibilityTypeCodes: string[];
     responsibilityTargetOrganizationCodes: string[];
   };
-  subjectProfileReady: boolean;
-  subjectProfileVersion: string;
-  subjectProfileSchemaVersion: number;
+  subjectDocumentReady: boolean;
+  subjectDocumentVersion: string;
+  subjectDocumentSchemaVersion: number;
   hrSubjectAccess: "enabled" | "disabled" | "blocking" | "missing" | "invalid";
   hrSubjectFacts: {
     ready: boolean;
     subjectIdentifier: string;
-    sourceDirtyVersion: string;
+    sourceVersion: string;
     profileUsername: string;
     organizationCodes: string[];
     positionCodes: string[];
     clientCodes: string[];
     roleCodes: string[];
   };
-  hrSubjectProfileReady: boolean;
-  hrSubjectProfileVersion: string;
-  hrSubjectProfileSchemaVersion: number;
+  hrSubjectDocumentReady: boolean;
+  hrSubjectDocumentVersion: string;
+  hrSubjectDocumentSchemaVersion: number;
 }
 
 export interface E2EScenarioOwner {
@@ -397,24 +397,28 @@ function assertScenarioReadBack(expected: E2EScenarioReferences, actual: E2EScen
     actual.subjectAccess === "enabled" &&
     actual.subjectFacts.ready &&
     actual.subjectFacts.subjectIdentifier === expected.adminSubjectIdentifier &&
-    actual.subjectFacts.sourceDirtyVersion === actual.subjectProfileVersion &&
-    actual.subjectProfileSchemaVersion === 4 &&
+    actual.subjectFacts.sourceVersion === actual.subjectDocumentVersion &&
+    actual.subjectDocumentSchemaVersion === 1 &&
     actual.subjectFacts.profileUsername === expected.adminUsername &&
     exactlyAll(actual.subjectFacts.organizationCodes, [
       expected.organizationCode,
       expected.responsibilityHolderOrganizationCode,
     ]) &&
     exactlyAll(actual.subjectFacts.positionCodes, [expected.positionCode, expected.responsibilityHolderPositionCode]) &&
-    exactly(actual.subjectFacts.clientCodes, expected.adminClientCode) &&
-    exactlyAll(actual.subjectFacts.roleCodes, [expected.adminRoleCode, expected.hrAdminRoleCode]) &&
+    exactlyAll(actual.subjectFacts.clientCodes, [expected.adminClientCode, expected.internalClientCode]) &&
+    exactlyAll(actual.subjectFacts.roleCodes, [
+      expected.adminRoleCode,
+      expected.hrAdminRoleCode,
+      `${expected.adminRoleCode}-internal`,
+    ]) &&
     actual.subjectFacts.responsibilityTypeCodes.length === 0 &&
     actual.subjectFacts.responsibilityTargetOrganizationCodes.length === 0 &&
-    actual.subjectProfileReady;
+    actual.subjectDocumentReady;
   const hrMatches =
     actual.hrSubjectAccess === "enabled" &&
     actual.hrSubjectFacts.ready &&
     actual.hrSubjectFacts.subjectIdentifier === expected.hrAdminSubjectIdentifier &&
-    actual.hrSubjectFacts.sourceDirtyVersion === actual.hrSubjectProfileVersion &&
+    actual.hrSubjectFacts.sourceVersion === actual.hrSubjectDocumentVersion &&
     actual.hrSubjectFacts.profileUsername === expected.hrAdminUsername &&
     exactlyAll(actual.hrSubjectFacts.organizationCodes, [
       expected.responsibilityHolderOrganizationCode,
@@ -427,8 +431,8 @@ function assertScenarioReadBack(expected: E2EScenarioReferences, actual: E2EScen
     ]) &&
     exactly(actual.hrSubjectFacts.clientCodes, expected.adminClientCode) &&
     exactly(actual.hrSubjectFacts.roleCodes, expected.hrAdminRoleCode) &&
-    actual.hrSubjectProfileReady &&
-    actual.hrSubjectProfileSchemaVersion === 4;
+    actual.hrSubjectDocumentReady &&
+    actual.hrSubjectDocumentSchemaVersion === 1;
   if (!matches || !hrMatches)
     throw new Error("E2E scenario owner read-back did not confirm the complete fixed scenario");
 }

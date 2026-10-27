@@ -21,13 +21,13 @@ describe("responsibility journey payload assertions", () => {
     ).toThrow();
   });
   test("rejects missing or malformed disclosure instead of proving absence", () => {
-    for (const employments of [undefined, null, {}, [null], [{ position: { posCode: "p" } }]]) {
+    for (const employments of [undefined, null, {}, [null], [{ position: { code: "p" } }]]) {
       expect(() => oidcUserInfoHasResponsibility({ "iam:employments": employments }, expectation)).toThrow();
     }
     expect(oidcUserInfoHasResponsibility({ "iam:employments": [] }, expectation)).toBe(false);
     expect(
       oidcUserInfoHasResponsibility(
-        { "iam:employments": [{ position: { posCode: "p" }, responsibilities: [] }] },
+        { "iam:employments": [{ position: { code: "p" }, responsibilities: [] }] },
         expectation,
       ),
     ).toBe(false);
@@ -37,7 +37,7 @@ describe("responsibility journey payload assertions", () => {
     expect(() =>
       oidcUserInfoHasResponsibility(
         {
-          "iam:employments": [{ ...responsibilityEmployment(), position: { posCode: expectation.positionCode } }, null],
+          "iam:employments": [responsibilityEmployment(), null],
         },
         expectation,
       ),
@@ -86,12 +86,7 @@ describe("responsibility journey payload assertions", () => {
     expect(
       oidcUserInfoHasResponsibility(
         {
-          "iam:employments": [
-            {
-              ...responsibilityEmployment(),
-              position: { posCode: expectation.positionCode },
-            },
-          ],
+          "iam:employments": [responsibilityEmployment()],
         },
         expectation,
       ),
@@ -107,7 +102,18 @@ describe("responsibility journey payload assertions", () => {
     ).toBe(false);
   });
 
-  test("uses the Internal Profile Employment position contract", () => {
+  test("rejects the retired OIDC position field instead of treating it as the current wire", () => {
+    expect(() =>
+      oidcUserInfoHasResponsibility(
+        {
+          "iam:employments": [{ ...responsibilityEmployment(), position: { posCode: expectation.positionCode } }],
+        },
+        expectation,
+      ),
+    ).toThrow("Responsibility disclosure requires a position code");
+  });
+
+  test("uses the Internal Document Employment position contract", () => {
     expect(
       internalDetailHasResponsibility(
         {
@@ -115,7 +121,7 @@ describe("responsibility journey payload assertions", () => {
             employments: [
               {
                 ...responsibilityEmployment(),
-                position: { posCode: expectation.positionCode },
+                position: { code: expectation.positionCode },
               },
             ],
           },

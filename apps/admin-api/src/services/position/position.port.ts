@@ -30,7 +30,7 @@ export interface AdminPositionProfileChange {
 export interface AdminPositionTransactionPorts {
   positionRepository: AdminPositionTransactionStorePort;
   auditService: AuditLogWriterPort;
-  userProfileInvalidation: {
+  userDocumentInvalidation: {
     recordChanges: (changes: readonly AdminPositionProfileChange[]) => Promise<void>;
   };
 }

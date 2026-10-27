@@ -11,7 +11,7 @@ import {
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
 
-describe("Custom SSO V3 subject wire mapping contract", () => {
+describe("Custom SSO V4 subject wire mapping contract", () => {
   test("maps responsibilities only into profile employments", async () => {
     const employment = {
       isPrimary: true,
@@ -20,8 +20,8 @@ describe("Custom SSO V3 subject wire mapping contract", () => {
         name: "甲部门",
         type: OrganizationType.Department,
         path: [
-          { code: "root", name: "总部", type: OrganizationType.Company },
-          { code: "org-a", name: "甲部门", type: OrganizationType.Department },
+          { level: 1, distanceToTarget: 1, code: "root", name: "总部", type: OrganizationType.Company },
+          { level: 2, distanceToTarget: 0, code: "org-a", name: "甲部门", type: OrganizationType.Department },
         ],
       },
       position: { code: "position-a", name: "甲岗位" },
@@ -37,8 +37,10 @@ describe("Custom SSO V3 subject wire mapping contract", () => {
           name: "目标甲",
           type: OrganizationType.Department,
           path: [
-            { code: "root", name: "总部", type: OrganizationType.Company },
+            { level: 1, distanceToTarget: 1, code: "root", name: "总部", type: OrganizationType.Company },
             {
+              level: 2,
+              distanceToTarget: 0,
               code: "target-a",
               name: "目标甲",
               type: OrganizationType.Department,
@@ -81,7 +83,7 @@ describe("Custom SSO V3 subject wire mapping contract", () => {
     );
 
     expect(wire).toMatchObject({
-      version: 3,
+      version: 4,
       profile: {
         employments: [
           {
@@ -105,6 +107,18 @@ describe("Custom SSO V3 subject wire mapping contract", () => {
         ],
       },
     });
+    expect(wire.profile?.employments?.[0]?.organization.path).toEqual([
+      { level: 1, distanceToTarget: 1, code: "root", name: "总部", type: OrganizationType.Company },
+      { level: 2, distanceToTarget: 0, code: "org-a", name: "甲部门", type: OrganizationType.Department },
+    ]);
+    expect(wire.authorization?.employments[0]?.organization.path).toEqual([
+      { level: 1, distanceToTarget: 1, code: "root", name: "总部", type: OrganizationType.Company },
+      { level: 2, distanceToTarget: 0, code: "org-a", name: "甲部门", type: OrganizationType.Department },
+    ]);
+    expect(wire.profile?.employments?.[0]?.responsibilities[0]?.targetOrganization.path).toEqual([
+      { level: 1, distanceToTarget: 1, code: "root", name: "总部", type: OrganizationType.Company },
+      { level: 2, distanceToTarget: 0, code: "target-a", name: "目标甲", type: OrganizationType.Department },
+    ]);
     expect(wire.authorization?.employments[0]).not.toHaveProperty("responsibilities");
   });
 
@@ -115,24 +129,18 @@ describe("Custom SSO V3 subject wire mapping contract", () => {
         code: "org-a",
         name: "甲部门",
         type: OrganizationType.Department,
-        path: [
-          {
-            code: "org-a",
-            name: "甲部门",
-            type: OrganizationType.Department,
-          },
-        ],
+        path: [{ level: 1, distanceToTarget: 0, code: "org-a", name: "甲部门", type: OrganizationType.Department }],
       },
       position: { code: "position-a", name: "甲岗位" },
     };
     const invalidWires = [
       {
-        version: 3,
+        version: 4,
         subjectIdentifier,
         profile: { employments: [baseEmployment] },
       },
       {
-        version: 3,
+        version: 4,
         subjectIdentifier,
         profile: {
           employments: [
@@ -150,6 +158,8 @@ describe("Custom SSO V3 subject wire mapping contract", () => {
                     type: OrganizationType.Department,
                     path: [
                       {
+                        level: 1,
+                        distanceToTarget: 0,
                         code: "different-target",
                         name: "另一组织",
                         type: OrganizationType.Department,
@@ -163,7 +173,7 @@ describe("Custom SSO V3 subject wire mapping contract", () => {
         },
       },
       {
-        version: 3,
+        version: 4,
         subjectIdentifier,
         profile: {
           employments: [
@@ -182,6 +192,8 @@ describe("Custom SSO V3 subject wire mapping contract", () => {
                     type: OrganizationType.Department,
                     path: [
                       {
+                        level: 1,
+                        distanceToTarget: 0,
                         code: "target-a",
                         name: "目标甲",
                         type: OrganizationType.Department,
@@ -195,7 +207,7 @@ describe("Custom SSO V3 subject wire mapping contract", () => {
         },
       },
       {
-        version: 3,
+        version: 4,
         subjectIdentifier,
         profile: {
           employments: [
@@ -210,6 +222,8 @@ describe("Custom SSO V3 subject wire mapping contract", () => {
                     type: OrganizationType.Department,
                     path: [
                       {
+                        level: 1,
+                        distanceToTarget: 0,
                         code: "target-a",
                         name: "目标甲",
                         type: OrganizationType.Department,
@@ -337,7 +351,7 @@ describe("Custom SSO V3 subject wire mapping contract", () => {
     expect(result).toBe(error);
   });
 
-  test("owns one strict runtime schema for every Custom SSO V3 consumer", async () => {
+  test("owns one strict runtime schema for every Custom SSO V4 consumer", async () => {
     const wire = await resolveWire({
       subjectIdentifier,
       username: "zhangsan",
@@ -355,7 +369,7 @@ describe("Custom SSO V3 subject wire mapping contract", () => {
 
   test("accepts an omitted profile parent and rejects an empty profile parent", () => {
     const wire = {
-      version: 3 as const,
+      version: 4 as const,
       subjectIdentifier,
     };
 
@@ -374,7 +388,7 @@ describe("Custom SSO V3 subject wire mapping contract", () => {
     });
 
     expect(wire).toEqual({
-      version: 3,
+      version: 4,
       subjectIdentifier,
     });
   });
@@ -395,7 +409,7 @@ describe("Custom SSO V3 subject wire mapping contract", () => {
 
     expect([populated, empty]).toEqual([
       {
-        version: 3,
+        version: 4,
         subjectIdentifier,
         profile: {
           username: "zhangsan",
@@ -403,7 +417,7 @@ describe("Custom SSO V3 subject wire mapping contract", () => {
         },
       },
       {
-        version: 3,
+        version: 4,
         subjectIdentifier,
       },
     ]);
@@ -420,7 +434,7 @@ describe("Custom SSO V3 subject wire mapping contract", () => {
     });
 
     expect(wire).toEqual({
-      version: 3,
+      version: 4,
       subjectIdentifier,
       profile: {
         employments: [],
@@ -476,20 +490,10 @@ describe("Custom SSO V3 subject wire mapping contract", () => {
         status: 1,
         code: "org-a",
         name: "甲部门",
-        type: "department",
+        type: OrganizationType.Department,
         path: [
-          {
-            id: 200,
-            code: "root",
-            name: "总部",
-            type: "company",
-          },
-          {
-            id: 201,
-            code: "org-a",
-            name: "甲部门",
-            type: "department",
-          },
+          { level: 1, distanceToTarget: 1, id: 200, code: "root", name: "总部", type: OrganizationType.Company },
+          { level: 2, distanceToTarget: 0, id: 201, code: "org-a", name: "甲部门", type: OrganizationType.Department },
         ],
       },
       position: {
@@ -527,10 +531,10 @@ describe("Custom SSO V3 subject wire mapping contract", () => {
       organization: {
         code: "org-a",
         name: "甲部门",
-        type: "department",
+        type: OrganizationType.Department,
         path: [
-          { code: "root", name: "总部", type: "company" },
-          { code: "org-a", name: "甲部门", type: "department" },
+          { level: 1, distanceToTarget: 1, code: "root", name: "总部", type: OrganizationType.Company },
+          { level: 2, distanceToTarget: 0, code: "org-a", name: "甲部门", type: OrganizationType.Department },
         ],
       },
       position: {
@@ -539,7 +543,7 @@ describe("Custom SSO V3 subject wire mapping contract", () => {
       },
     };
     expect(wire).toEqual({
-      version: 3,
+      version: 4,
       subjectIdentifier,
       profile: {
         username: "zhangsan",

@@ -20,15 +20,11 @@ export const UserDtoSchema = UserSchema.pick({
   updateTime: true,
 }).openapi("UserDto");
 
-export const UserProfileBaseSchema = UserSchema.pick({
-  subjectIdentifier: true,
+export const PublishedUserLoginProfileSchema = UserSchema.pick({
   username: true,
   name: true,
   mobile: true,
-  wxId: true,
-})
-  .strict()
-  .openapi("UserProfileBase");
+});
 
 export const UsernameWriteSchema = z
   .string()

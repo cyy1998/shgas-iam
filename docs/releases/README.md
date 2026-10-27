@@ -2,18 +2,18 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-10-25
-Next review: 2026-11-25
+Last verified: 2026-10-26
+Next review: 2026-11-26
 
 面向具备基础部署能力、需要维护当前 IAM 的操作者。按任务进入专题，每个操作说明适用情况、前提、步骤、完成标准和失败处理。
 
-| 我要做什么                                                              | 操作手册                                    |
-| ----------------------------------------------------------------------- | ------------------------------------------- |
-| 首次部署、更新应用、执行数据库迁移或回退版本                            | [部署与发布](deployment.md)                 |
-| 发布网关配置、检查路由或处理发布失败                                    | [网关管理](apisix-gateway-release.md)       |
-| 更新登录配置、轮换 OIDC 密钥、清理会话或修复 Client Snapshot            | [登录与会话](authentication-and-session.md) |
-| 修复积压、重建 User Profile 或 Organization Search、恢复 Subject Access | [数据维护](data-maintenance.md)             |
-| 启停日志栈、查询错误、关联请求或处理日志采集故障                        | [日志与排障](observability-system-logs.md)  |
+| 我要做什么                                                                 | 操作手册                                    |
+| -------------------------------------------------------------------------- | ------------------------------------------- |
+| 首次部署、更新应用、执行数据库迁移或回退版本                               | [部署与发布](deployment.md)                 |
+| 发布网关配置、检查路由或处理发布失败                                       | [网关管理](apisix-gateway-release.md)       |
+| 更新登录配置、轮换 OIDC 密钥、清理会话或修复 Client Snapshot               | [登录与会话](authentication-and-session.md) |
+| 修复积压、重建 User Document 或 Organization Document、恢复 Subject Access | [数据维护](data-maintenance.md)             |
+| 启停日志栈、查询错误、关联请求或处理日志采集故障                           | [日志与排障](observability-system-logs.md)  |
 
 ## 通用约定
 
@@ -25,7 +25,8 @@ Next review: 2026-11-25
 
 ## 一次性迁移与旧版本
 
-以下指引保存在整理前的固定版本中，按实际来源环境选择；本次整理不表示目标环境已经执行迁移。
+当前旧 Profile/Organization Search → Document 的升级使用[统一 Document 硬切换](data-maintenance.md#统一-document-硬切换)。
+以下更早指引保存在整理前的固定版本中，按实际来源环境选择；本次整理不表示目标环境已经执行迁移。
 尚待迁移的环境先完成对应独立流程，再使用当前代日常维护步骤；不能把当前命令直接套到其他旧布局。
 
 | 迁移任务                         | 固定版本指引                                                                                                                                                                         |

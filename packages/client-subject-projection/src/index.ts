@@ -34,7 +34,7 @@ export interface SubjectOrganization {
 }
 
 export interface SubjectOrganizationWithPath extends SubjectOrganization {
-  readonly path: readonly SubjectOrganization[];
+  readonly path: readonly SubjectFactsOrganizationPathNode[];
 }
 
 export interface SubjectPosition {
@@ -51,16 +51,25 @@ export interface SubjectFactsClientAuthorization {
   readonly roles: readonly SubjectFactsRole[];
 }
 
+export interface SubjectFactsOrganizationPathNode extends SubjectOrganization {
+  readonly level: number;
+  readonly distanceToTarget: number;
+}
+
+export interface SubjectFactsOrganization extends SubjectOrganization {
+  readonly path: readonly SubjectFactsOrganizationPathNode[];
+}
+
 export interface SubjectFactsEmploymentBase {
   readonly isPrimary: boolean;
-  readonly organization: SubjectOrganizationWithPath;
+  readonly organization: SubjectFactsOrganization;
   readonly position: SubjectPosition;
   readonly clientAuthorizations: readonly SubjectFactsClientAuthorization[];
 }
 
 export interface SubjectFactsSnapshotBase {
   readonly subjectIdentifier: string;
-  readonly sourceDirtyVersion: string;
+  readonly sourceVersion: string;
   readonly profile: {
     readonly username: string;
     readonly name: string;

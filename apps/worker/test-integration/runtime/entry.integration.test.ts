@@ -69,7 +69,7 @@ describe("Worker entry", () => {
             executable: process.execPath,
             args: ["--no-env-file", "run", "src/index.ts"],
             cwd: workerRoot,
-            env: createEntryEnvironment(context, "organization-search"),
+            env: createEntryEnvironment(context, "organization-document"),
           });
         },
         probe: (context, signal) => probeWorkerReadiness(entryOrigin(context), signal),
@@ -77,7 +77,7 @@ describe("Worker entry", () => {
       });
       expect(result).toMatchObject({
         ok: false,
-        enabledModules: ["organization-search"],
+        enabledModules: ["organization-document"],
         modulesStarted: true,
         dependencies: { db: "error", redis: "error" },
       });

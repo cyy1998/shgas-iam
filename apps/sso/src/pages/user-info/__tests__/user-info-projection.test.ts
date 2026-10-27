@@ -14,11 +14,15 @@ const employment = {
     type: OrganizationType.Department,
     path: [
       {
+        level: 1,
+        distanceToTarget: 1,
         code: "COMPANY",
         name: "集团",
         type: OrganizationType.Company,
       },
       {
+        level: 2,
+        distanceToTarget: 0,
         code: "FIN",
         name: "财务部",
         type: OrganizationType.Department,
@@ -32,8 +36,8 @@ const employment = {
   responsibilities: [],
 } as const;
 
-describe("Custom SSO V3 user-info projection presentation", () => {
-  it("formats company, organization path and position from nested V3 fields", () => {
+describe("Custom SSO V4 user-info projection presentation", () => {
+  it("formats company, organization path and position from the shared organization structure", () => {
     expect(formatProjectionCompany(employment)).toBe("集团");
     expect(formatProjectionOrganizationPath(employment)).toBe("集团 / 财务部");
     expect(formatProjectionPosition(employment)).toBe("财务经理 (FIN-001)");

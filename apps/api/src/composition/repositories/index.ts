@@ -5,7 +5,7 @@ import { createOrganizationRepository } from "@api/services/organization/organiz
 import { createPositionRepository } from "@api/services/position/position.repository";
 import { createUserRepository } from "@api/services/user/user.repository";
 import type { DbClient } from "@iam/db";
-import { createUserProfileQueryRepository } from "@iam/user-profile-read-model/query/repository";
+import { createUserDocumentQueryRepository } from "@iam/user-document/query/repository";
 
 export function createApiRepositories(client: DbClient) {
   return {
@@ -15,7 +15,7 @@ export function createApiRepositories(client: DbClient) {
     organization: createOrganizationRepository(client),
     position: createPositionRepository(client),
     user: createUserRepository(client),
-    userProfile: createUserProfileQueryRepository(client),
+    userDocument: createUserDocumentQueryRepository(client),
   };
 }
 

@@ -81,7 +81,7 @@ function createLifecycle(
       })),
     },
     auditLogWriter: { recordAuditLog: mock(async () => undefined) },
-    userProfileInvalidation: { recordChanges: mock(async () => undefined) },
+    userDocumentInvalidation: { recordChanges: mock(async () => undefined) },
   };
   const rawUseCase = createManageOrganizationResponsibilityAssignmentLifecycleUseCase({
     clock,
@@ -156,7 +156,7 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
       });
       expect(tx.assignmentStore.updateLockedAssignmentLifecycle).not.toHaveBeenCalled();
       expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
-      expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+      expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
     }
   });
 
@@ -197,7 +197,7 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
         },
       }),
     );
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+    expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([
       {
         kind: "organization-responsibility-assignment",
         userId: 7,
@@ -272,7 +272,7 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
     expect(caught.message).not.toContain("999");
     expect(caught.message).not.toContain("888");
     expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("ends either Open state once with the injected transaction time", async () => {
@@ -317,7 +317,7 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
           details: expect.objectContaining({ changed: false }),
         }),
       );
-      expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+      expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
     }
   });
 
@@ -338,6 +338,6 @@ describe("Manage Organization Responsibility Assignment lifecycle", () => {
     const caught = await useCase.execute({ id: 31, command: "pause" }).catch((error) => error);
     expect(caught).toBe(failure);
     expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 });

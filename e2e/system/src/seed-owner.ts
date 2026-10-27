@@ -16,7 +16,7 @@ import {
   RoleAssignmentTargetType,
   RoleStatus,
   SubjectClaim,
-  UserProfileDirtyStatus,
+  UserDocumentWorkStatus,
   UserStatus,
 } from "@iam/contracts";
 import type { db as database } from "@iam/db";
@@ -28,15 +28,15 @@ import {
   organizations,
   positions,
   roles,
-  userProfileDirty,
-  userProfiles,
+  userDocumentRebuildStates,
+  userDocuments,
   users,
 } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
-import { createSubjectFactsRedisInspector } from "@iam/user-profile-read-model/subject-facts";
-import type { CreateUserProfileWorkerModuleInput } from "@iam/user-profile-read-model/worker";
-import { createUserProfileWorkerModule } from "@iam/user-profile-read-model/worker";
+import { createSubjectFactsRedisInspector } from "@iam/user-document/subject-facts";
+import type { CreateUserDocumentWorkerModuleInput } from "@iam/user-document/worker";
+import { createUserDocumentWorkerModule } from "@iam/user-document/worker";
 import { and, eq } from "drizzle-orm";
 import type { Redis } from "ioredis";
 import { createE2EGatewayApiKey } from "./gateway-credential";
@@ -50,7 +50,7 @@ import type {
 export interface CreateProductionE2EScenarioOwnerInput {
   db: typeof database;
   redis: Redis;
-  queueRedis: CreateUserProfileWorkerModuleInput["redis"];
+  queueRedis: CreateUserDocumentWorkerModuleInput["redis"];
   clock: { nowDate: () => Date };
   random: { uuid: () => string };
   passwordHashCost: number;
@@ -135,14 +135,18 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
         ssoSecret: null,
       });
 
-      await tx.insert(clients).values({
-        clientCode: scenario.internalClientCode,
-        clientName: `E2E Internal Client ${scenario.runId}`,
-        clientSecret: scenario.internalApiKey,
-        url: `${scenario.canonicalOrigin}/e2e/internal`,
-        status: ClientStatus.Enable,
-        extAttributes: {},
-      });
+      const [internalClient] = await tx
+        .insert(clients)
+        .values({
+          clientCode: scenario.internalClientCode,
+          clientName: `E2E Internal Client ${scenario.runId}`,
+          clientSecret: scenario.internalApiKey,
+          url: `${scenario.canonicalOrigin}/e2e/internal`,
+          status: ClientStatus.Enable,
+          extAttributes: {},
+        })
+        .returning({ id: clients.id });
+      if (!internalClient) throw new Error("E2E Internal client was not created");
 
       await tx.insert(clients).values({
         clientCode: scenario.oidcClientCode,
@@ -568,6 +572,22 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
         })
         .returning({ id: roles.id });
       if (hrRole === undefined) throw new Error("E2E HR Admin role was not created");
+      const [internalRole] = await tx
+        .insert(roles)
+        .values({
+          roleCode: `${scenario.adminRoleCode}-internal`,
+          roleName: `E2E Internal Role ${scenario.runId}`,
+          clientId: internalClient.id,
+          status: RoleStatus.Enable,
+        })
+        .returning({ id: roles.id });
+      if (!internalRole) throw new Error("E2E Internal role was not created");
+      await tx.insert(roleAssignments).values({
+        roleId: internalRole.id,
+        targetType: RoleAssignmentTargetType.Employment,
+        targetId: employment.id,
+        includeDescendants: false,
+      });
       const createdRoleAssignments = await tx
         .insert(roleAssignments)
         .values([
@@ -642,36 +662,28 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
         responsibilityHolderEmploymentId: responsibilityHolderEmployment.id,
       };
 
-      await tx.insert(userProfiles).values({
+      await tx.insert(userDocuments).values({
         userId: admin.id,
         subjectIdentifier: scenario.adminSubjectIdentifier,
-        username: scenario.adminUsername,
-        name: `E2E Admin ${scenario.runId}`,
-        mobile: null,
-        wxId: null,
-        status: UserStatus.Enable,
-        isDelete: false,
-        searchVisible: true,
-        profileSchemaVersion: 2,
-        sourceDirtyVersion: "1",
-        detail: {},
-        searchDoc: {},
-        subjectFacts: {},
-        rebuiltAt: input.clock.nowDate(),
+        // Deliberately noncurrent storage metadata exercises production backfill.
+        schemaVersion: 2,
+        sourceVersion: "1",
+        document: {},
+        publishedAt: input.clock.nowDate(),
       });
     });
 
-    const legacyProfile = await input.db.query.userProfiles.findFirst({
-      columns: { profileSchemaVersion: true },
+    const nonCurrentDocument = await input.db.query.userDocuments.findFirst({
+      columns: { schemaVersion: true },
       where: {
         subjectIdentifier: scenario.adminSubjectIdentifier,
       },
     });
-    if (legacyProfile?.profileSchemaVersion !== 2) {
-      throw new Error("E2E User Profile cutover did not start from a stored v2 row");
+    if (nonCurrentDocument?.schemaVersion !== 2) {
+      throw new Error("E2E User Document cutover did not start from a stored v2 row");
     }
 
-    const profileModule = createUserProfileWorkerModule({
+    const documentModule = createUserDocumentWorkerModule({
       db: input.db,
       redis: input.queueRedis,
       subjectFactsRedis: input.redis,
@@ -689,15 +701,15 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
       },
     });
     try {
-      const backfill = await profileModule.maintenance.backfillAllUsers({ batchSize: 100 });
+      const backfill = await documentModule.maintenance.backfillAllUsers({ batchSize: 100 });
       if (backfill.enqueued !== 6) {
-        throw new Error("E2E User Profile backfill did not enqueue all six seeded users");
+        throw new Error("E2E User Document backfill did not enqueue all six seeded users");
       }
     } finally {
-      await profileModule.close();
+      await documentModule.close();
     }
 
-    await waitForPublishedProfiles(scenario);
+    await waitForPublishedUserDocuments(scenario);
     const access = await subjectAccess.seedMany(
       [
         {
@@ -736,7 +748,7 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
     return generatedReferences;
   }
 
-  async function waitForPublishedProfiles(references: E2EScenarioSeedReferences) {
+  async function waitForPublishedUserDocuments(references: E2EScenarioSeedReferences) {
     const deadline = Date.now() + 30_000;
     const subjectIdentifiers = [
       references.adminSubjectIdentifier,
@@ -749,31 +761,31 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
     while (Date.now() < deadline) {
       const rows = await input.db
         .select({
-          subjectIdentifier: userProfiles.subjectIdentifier,
-          profileSchemaVersion: userProfiles.profileSchemaVersion,
-          profileVersion: userProfiles.sourceDirtyVersion,
-          dirtyVersion: userProfileDirty.dirtyVersion,
-          dirtyStatus: userProfileDirty.status,
+          subjectIdentifier: userDocuments.subjectIdentifier,
+          documentSchemaVersion: userDocuments.schemaVersion,
+          documentVersion: userDocuments.sourceVersion,
+          version: userDocumentRebuildStates.version,
+          rebuildStatus: userDocumentRebuildStates.status,
         })
-        .from(userProfiles)
-        .innerJoin(userProfileDirty, eq(userProfileDirty.userId, userProfiles.userId));
+        .from(userDocuments)
+        .innerJoin(userDocumentRebuildStates, eq(userDocumentRebuildStates.userId, userDocuments.userId));
       const selectedRows = rows.filter((row) => subjectIdentifiers.includes(row.subjectIdentifier));
       const facts = await subjectFactsInspector.inspectMany(subjectIdentifiers);
       if (
         selectedRows.length === subjectIdentifiers.length &&
         selectedRows.every(
           (row) =>
-            row.profileSchemaVersion === 4 &&
-            row.profileVersion === row.dirtyVersion &&
-            row.dirtyStatus === UserProfileDirtyStatus.Processed,
+            row.documentSchemaVersion === 1 &&
+            row.documentVersion === row.version &&
+            row.rebuildStatus === UserDocumentWorkStatus.Processed,
         ) &&
-        facts.every((result) => result.status === "valid")
+        facts.every((result) => result.status === "valid" && result.record.kind === "document")
       ) {
         return;
       }
       await Bun.sleep(250);
     }
-    throw new Error("E2E production Worker did not publish all v4 User Profiles before the deadline");
+    throw new Error("E2E production Worker did not publish all v1 User Documents before the deadline");
   }
 
   async function readBack(references: E2EScenarioReferences) {
@@ -999,44 +1011,44 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
               clientId: adminClient.id,
             })
           ).get(noScopeHrRoleBearingEmployment.id) ?? []);
-    const profileState =
+    const documentState =
       admin === undefined
         ? undefined
         : (
             await input.db
               .select({
-                profileVersion: userProfiles.sourceDirtyVersion,
-                profileSchemaVersion: userProfiles.profileSchemaVersion,
-                dirtyVersion: userProfileDirty.dirtyVersion,
-                dirtyStatus: userProfileDirty.status,
+                documentVersion: userDocuments.sourceVersion,
+                documentSchemaVersion: userDocuments.schemaVersion,
+                version: userDocumentRebuildStates.version,
+                rebuildStatus: userDocumentRebuildStates.status,
               })
-              .from(userProfiles)
-              .innerJoin(userProfileDirty, eq(userProfileDirty.userId, userProfiles.userId))
+              .from(userDocuments)
+              .innerJoin(userDocumentRebuildStates, eq(userDocumentRebuildStates.userId, userDocuments.userId))
               .where(
                 and(
-                  eq(userProfiles.userId, admin.id),
-                  eq(userProfiles.subjectIdentifier, references.adminSubjectIdentifier),
+                  eq(userDocuments.userId, admin.id),
+                  eq(userDocuments.subjectIdentifier, references.adminSubjectIdentifier),
                 ),
               )
               .limit(1)
           )[0];
-    const hrProfileState =
+    const hrDocumentState =
       hrAdmin === undefined
         ? undefined
         : (
             await input.db
               .select({
-                profileVersion: userProfiles.sourceDirtyVersion,
-                profileSchemaVersion: userProfiles.profileSchemaVersion,
-                dirtyVersion: userProfileDirty.dirtyVersion,
-                dirtyStatus: userProfileDirty.status,
+                documentVersion: userDocuments.sourceVersion,
+                documentSchemaVersion: userDocuments.schemaVersion,
+                version: userDocumentRebuildStates.version,
+                rebuildStatus: userDocumentRebuildStates.status,
               })
-              .from(userProfiles)
-              .innerJoin(userProfileDirty, eq(userProfileDirty.userId, userProfiles.userId))
+              .from(userDocuments)
+              .innerJoin(userDocumentRebuildStates, eq(userDocumentRebuildStates.userId, userDocuments.userId))
               .where(
                 and(
-                  eq(userProfiles.userId, hrAdmin.id),
-                  eq(userProfiles.subjectIdentifier, references.hrAdminSubjectIdentifier),
+                  eq(userDocuments.userId, hrAdmin.id),
+                  eq(userDocuments.subjectIdentifier, references.hrAdminSubjectIdentifier),
                 ),
               )
               .limit(1)
@@ -1053,8 +1065,14 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
     ]);
     const factsResult = facts[0];
     const hrFactsResult = facts[1];
-    const factEmployments = factsResult?.status === "valid" ? factsResult.record.facts.employments : [];
-    const hrFactEmployments = hrFactsResult?.status === "valid" ? hrFactsResult.record.facts.employments : [];
+    const factEmployments =
+      factsResult?.status === "valid" && factsResult.record.kind === "document"
+        ? factsResult.record.facts.employments
+        : [];
+    const hrFactEmployments =
+      hrFactsResult?.status === "valid" && hrFactsResult.record.kind === "document"
+        ? hrFactsResult.record.facts.employments
+        : [];
 
     return {
       admin: {
@@ -1241,10 +1259,19 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
       subjectAccess:
         barrierResult?.status === "valid" ? barrierResult.record.state : (barrierResult?.status ?? "missing"),
       subjectFacts: {
-        ready: factsResult?.status === "valid",
-        subjectIdentifier: factsResult?.status === "valid" ? factsResult.record.subjectIdentifier : "",
-        sourceDirtyVersion: factsResult?.status === "valid" ? factsResult.record.sourceDirtyVersion : "",
-        profileUsername: factsResult?.status === "valid" ? factsResult.record.profile.username : "",
+        ready: factsResult?.status === "valid" && factsResult.record.kind === "document",
+        subjectIdentifier:
+          factsResult?.status === "valid" && factsResult.record.kind === "document"
+            ? factsResult.record.subjectIdentifier
+            : "",
+        sourceVersion:
+          factsResult?.status === "valid" && factsResult.record.kind === "document"
+            ? factsResult.record.sourceVersion
+            : "",
+        profileUsername:
+          factsResult?.status === "valid" && factsResult.record.kind === "document"
+            ? factsResult.record.facts.profile.username
+            : "",
         organizationCodes: unique(factEmployments.map((fact) => fact.organization.code)),
         positionCodes: unique(factEmployments.map((fact) => fact.position.code)),
         clientCodes: unique(
@@ -1264,19 +1291,28 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
           ),
         ),
       },
-      subjectProfileReady:
-        profileState !== undefined &&
-        profileState.dirtyStatus === UserProfileDirtyStatus.Processed &&
-        profileState.profileVersion === profileState.dirtyVersion,
-      subjectProfileVersion: profileState?.profileVersion ?? "",
-      subjectProfileSchemaVersion: profileState?.profileSchemaVersion ?? 0,
+      subjectDocumentReady:
+        documentState !== undefined &&
+        documentState.rebuildStatus === UserDocumentWorkStatus.Processed &&
+        documentState.documentVersion === documentState.version,
+      subjectDocumentVersion: documentState?.documentVersion ?? "",
+      subjectDocumentSchemaVersion: documentState?.documentSchemaVersion ?? 0,
       hrSubjectAccess:
         hrBarrierResult?.status === "valid" ? hrBarrierResult.record.state : (hrBarrierResult?.status ?? "missing"),
       hrSubjectFacts: {
-        ready: hrFactsResult?.status === "valid",
-        subjectIdentifier: hrFactsResult?.status === "valid" ? hrFactsResult.record.subjectIdentifier : "",
-        sourceDirtyVersion: hrFactsResult?.status === "valid" ? hrFactsResult.record.sourceDirtyVersion : "",
-        profileUsername: hrFactsResult?.status === "valid" ? hrFactsResult.record.profile.username : "",
+        ready: hrFactsResult?.status === "valid" && hrFactsResult.record.kind === "document",
+        subjectIdentifier:
+          hrFactsResult?.status === "valid" && hrFactsResult.record.kind === "document"
+            ? hrFactsResult.record.subjectIdentifier
+            : "",
+        sourceVersion:
+          hrFactsResult?.status === "valid" && hrFactsResult.record.kind === "document"
+            ? hrFactsResult.record.sourceVersion
+            : "",
+        profileUsername:
+          hrFactsResult?.status === "valid" && hrFactsResult.record.kind === "document"
+            ? hrFactsResult.record.facts.profile.username
+            : "",
         organizationCodes: unique(hrFactEmployments.map((fact) => fact.organization.code)),
         positionCodes: unique(hrFactEmployments.map((fact) => fact.position.code)),
         clientCodes: unique(
@@ -1290,12 +1326,12 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
           ),
         ),
       },
-      hrSubjectProfileReady:
-        hrProfileState !== undefined &&
-        hrProfileState.dirtyStatus === UserProfileDirtyStatus.Processed &&
-        hrProfileState.profileVersion === hrProfileState.dirtyVersion,
-      hrSubjectProfileVersion: hrProfileState?.profileVersion ?? "",
-      hrSubjectProfileSchemaVersion: hrProfileState?.profileSchemaVersion ?? 0,
+      hrSubjectDocumentReady:
+        hrDocumentState !== undefined &&
+        hrDocumentState.rebuildStatus === UserDocumentWorkStatus.Processed &&
+        hrDocumentState.documentVersion === hrDocumentState.version,
+      hrSubjectDocumentVersion: hrDocumentState?.documentVersion ?? "",
+      hrSubjectDocumentSchemaVersion: hrDocumentState?.documentSchemaVersion ?? 0,
     };
   }
 

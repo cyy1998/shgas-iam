@@ -6,7 +6,7 @@ import * as selfUserAudit from "../events/self-user.audit";
 
 describe("api audit event builders", () => {
   test("builds password login success and failure payloads with canonical action", () => {
-    const user = { id: 1001, username: "zhangsan", name: "张三" } as never;
+    const user = { id: 1001, username: "zhangsan", name: "张三" };
 
     expect(authAudit.buildPasswordLoginFailureAudit("zhangsan", "invalid_password", user)).toMatchObject({
       action: "auth.login.password",
@@ -29,7 +29,7 @@ describe("api audit event builders", () => {
   });
 
   test("builds mobile login success and failure payloads with masked phone", () => {
-    const user = { id: 1001, username: "zhangsan", name: "张三" } as never;
+    const user = { id: 1001, username: "zhangsan", name: "张三" };
 
     expect(authAudit.buildMobileLoginFailureAudit("17721462865", "invalid_verification_code", user)).toMatchObject({
       action: "auth.login.mobile",
@@ -53,7 +53,7 @@ describe("api audit event builders", () => {
   });
 
   test("builds sso and third-party login success payloads", () => {
-    const user = { id: 1001, username: "zhangsan", name: "张三" } as never;
+    const user = { id: 1001, username: "zhangsan", name: "张三" };
 
     const gatewayAudit = customSsoAuditEvents.buildGatewayLoginSuccessAudit(
       "00000000-0000-4000-8000-000000001001",

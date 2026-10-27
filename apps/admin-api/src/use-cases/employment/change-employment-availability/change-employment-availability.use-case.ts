@@ -165,7 +165,7 @@ async function persistAvailabilityChange(
   await tx.auditLogWriter.recordAuditLog(
     buildEmploymentAudit(action, employment, { changed: true, fromStatus, toStatus }, auditContext),
   );
-  await tx.userProfileInvalidation.recordChanges([
+  await tx.userDocumentInvalidation.recordChanges([
     { kind: "employment", userId: employment.userId },
     ...(assignmentChanged
       ? [

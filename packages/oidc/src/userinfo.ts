@@ -2,24 +2,15 @@ import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
 import { requireSubjectAccessOperation } from "@iam/api-core/subject-access";
 import type { EmploymentProfileBase, OptionalSubjectClaim, SubjectFactsSnapshot } from "@iam/client-subject-projection";
 import { createPermittedClientSubjectProjectionService } from "@iam/client-subject-projection";
-import { OidcScope, SubjectClaim } from "@iam/contracts";
+import { OidcScope, OrganizationReferenceSchema, SubjectClaim } from "@iam/contracts";
 import { OidcProtocolError } from "./errors";
 import type { OidcTokens } from "./tokens";
 
 function employmentBase(employment: EmploymentProfileBase) {
   return {
     isPrimary: employment.isPrimary,
-    organization: {
-      orgCode: employment.organization.code,
-      orgName: employment.organization.name,
-      orgType: employment.organization.type,
-      fullOrgPath: employment.organization.path.map((node) => ({
-        orgCode: node.code,
-        orgName: node.name,
-        orgType: node.type,
-      })),
-    },
-    position: { posCode: employment.position.code, posName: employment.position.name },
+    organization: OrganizationReferenceSchema.parse(employment.organization),
+    position: { code: employment.position.code, name: employment.position.name },
   };
 }
 

@@ -32,7 +32,7 @@ function createLifecycle() {
       lockAssignmentsForEmployment: mock(async () => []),
       endOpenAssignmentsForEmployment: mock(async () => true),
     },
-    userProfileInvalidation: { recordChanges: mock(async () => undefined) },
+    userDocumentInvalidation: { recordChanges: mock(async () => undefined) },
     employmentStore: {
       lockEmploymentLifecycleContextById: mock(async () => ({ employment: currentEmployment })),
       updateEmploymentRecord: mock(async (_id: number, patch: Record<string, unknown>) => ({
@@ -80,7 +80,7 @@ describe("Employment Lifecycle End", () => {
       employmentId: 4,
       endTime: transactionTime,
     });
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+    expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([
       { kind: "employment", userId: 1 },
       { kind: "organization-responsibility-assignment", userId: 1 },
     ]);
@@ -121,7 +121,7 @@ describe("Employment Lifecycle End", () => {
         details: expect.objectContaining({ changed: false }),
       }),
     );
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("rolls back End, audit, and Dirty when the transaction fails", async () => {
@@ -166,7 +166,7 @@ describe("Employment Lifecycle End", () => {
                 staged.auditActions.push(input.action);
               },
             },
-            userProfileInvalidation: {
+            userDocumentInvalidation: {
               async recordChanges(changes: readonly { userId: number }[]) {
                 staged.dirtyUserIds.push(...changes.map((change) => change.userId));
                 throw failure;

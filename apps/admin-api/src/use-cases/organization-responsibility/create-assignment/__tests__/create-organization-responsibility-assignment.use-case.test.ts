@@ -64,7 +64,7 @@ function createLifecycle() {
     organizationReader: {
       getOrganizationForResponsibilityByCode: mock(async (): Promise<typeof organization | null> => organization),
     },
-    userProfileInvalidation: { recordChanges: mock(async () => undefined) },
+    userDocumentInvalidation: { recordChanges: mock(async () => undefined) },
   };
 
   const rawUseCase = createCreateOrganizationResponsibilityAssignmentUseCase({
@@ -135,7 +135,7 @@ describe("Create Organization Responsibility Assignment", () => {
     expect(tx.assignmentStore.findOpenAssignmentForSlot).not.toHaveBeenCalled();
     expect(tx.assignmentStore.createAssignmentRecord).not.toHaveBeenCalled();
     expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("atomically creates, audits, and dirties an immediately enabled cross-tree assignment", async () => {
@@ -183,7 +183,7 @@ describe("Create Organization Responsibility Assignment", () => {
         },
       }),
     );
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+    expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([
       {
         kind: "organization-responsibility-assignment",
         userId: 7,
@@ -302,7 +302,7 @@ describe("Create Organization Responsibility Assignment", () => {
     expect(JSON.stringify(caught)).not.toContain("99");
     expect(tx.assignmentStore.createAssignmentRecord).not.toHaveBeenCalled();
     expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("rejects a duplicate supervising holder while allowing other holders", async () => {

@@ -32,7 +32,11 @@ test("creates an OA PrincipalSession and audits the active Formal user", async (
         subjectIdentifier,
         userType: UserType.Formal,
       })),
-      getUserDetailById: mock(async () => userDetail),
+      getLoginProfileById: mock(async () => ({
+        username: userDetail.username,
+        name: userDetail.name,
+        mobile: userDetail.mobile,
+      })),
     },
   } as any);
 
@@ -89,7 +93,7 @@ test("rejects a timestamp exactly five minutes old in production before user loo
     principalSessions: { createPrincipalSession: mock(async () => ({ token: "session" })) },
     users: {
       getActiveUserByUsername,
-      getUserDetailById: mock(async () => ({ id: 1001 })),
+      getLoginProfileById: mock(async () => ({ id: 1001 })),
     },
   } as any);
 
@@ -115,7 +119,7 @@ test("rejects an invalid OA signature before user lookup", async () => {
     principalSessions: { createPrincipalSession: mock(async () => ({ token: "session" })) },
     users: {
       getActiveUserByUsername,
-      getUserDetailById: mock(async () => ({ id: 1001 })),
+      getLoginProfileById: mock(async () => ({ id: 1001 })),
     },
   } as any);
 
@@ -132,7 +136,7 @@ test("rejects an invalid OA signature before user lookup", async () => {
 });
 
 test("rejects a non-Formal user before detail and session work", async () => {
-  const getUserDetailById = mock(async () => ({ id: 1001 }));
+  const getLoginProfileById = mock(async () => ({ id: 1001 }));
   const createPrincipalSession = mock(async () => ({ token: "session" }));
   const useCase = createLoginWithOaUseCase({
     auditLogWriter: { recordAuditLog: mock(async () => undefined) },
@@ -142,7 +146,7 @@ test("rejects a non-Formal user before detail and session work", async () => {
     principalSessions: { createPrincipalSession },
     users: {
       getActiveUserByUsername: mock(async () => ({ id: 1001, userType: UserType.External })),
-      getUserDetailById,
+      getLoginProfileById,
     },
   } as any);
 
@@ -155,6 +159,6 @@ test("rejects a non-Formal user before detail and session work", async () => {
     }),
   ).rejects.toThrow("用户类别不支持OA登录");
 
-  expect(getUserDetailById).not.toHaveBeenCalled();
+  expect(getLoginProfileById).not.toHaveBeenCalled();
   expect(createPrincipalSession).not.toHaveBeenCalled();
 });

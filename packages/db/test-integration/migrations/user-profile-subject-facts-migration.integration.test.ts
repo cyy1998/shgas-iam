@@ -24,7 +24,7 @@ beforeEach(async () => {
 describe("User Profile Subject Facts migration", () => {
   test("stages nullable publication columns while preserving legacy rows", async () => {
     const sql = requireHarness().sql;
-    await createLegacyUserProfileTable(sql);
+    await createLegacyUserDocumentTable(sql);
     await sql`
       INSERT INTO user_profile (
         user_id,
@@ -68,14 +68,14 @@ describe("User Profile Subject Facts migration", () => {
     const [legacy] = await sql<
       {
         name: string | null;
-        sourceDirtyVersion: string | null;
+        sourceDocumentVersion: string | null;
         subjectFacts: unknown;
         subjectIdentifier: string | null;
       }[]
     >`
       SELECT
         name,
-        source_dirty_version::text AS "sourceDirtyVersion",
+        source_dirty_version::text AS "sourceDocumentVersion",
         subject_facts AS "subjectFacts",
         subject_identifier::text AS "subjectIdentifier"
       FROM user_profile
@@ -83,7 +83,7 @@ describe("User Profile Subject Facts migration", () => {
     `;
     expect(legacy).toEqual({
       name: null,
-      sourceDirtyVersion: null,
+      sourceDocumentVersion: null,
       subjectFacts: null,
       subjectIdentifier: null,
     });
@@ -92,7 +92,7 @@ describe("User Profile Subject Facts migration", () => {
       userId: 2,
       username: "first-subject",
       subjectIdentifier: SUBJECT_IDENTIFIER,
-      sourceDirtyVersion: "1",
+      sourceDocumentVersion: "1",
       subjectFacts: {},
     });
     expect(firstInsert).toHaveLength(1);
@@ -100,7 +100,7 @@ describe("User Profile Subject Facts migration", () => {
       userId: 3,
       username: "duplicate-subject",
       subjectIdentifier: SUBJECT_IDENTIFIER,
-      sourceDirtyVersion: "2",
+      sourceDocumentVersion: "2",
       subjectFacts: { employments: [] },
     });
     expect(duplicateSubjectInsert).toHaveLength(1);
@@ -108,7 +108,7 @@ describe("User Profile Subject Facts migration", () => {
       userId: 4,
       username: "staged-null-subject",
       subjectIdentifier: null,
-      sourceDirtyVersion: null,
+      sourceDocumentVersion: null,
       subjectFacts: null,
     });
     expect(nullSubjectInsert).toHaveLength(1);
@@ -116,7 +116,7 @@ describe("User Profile Subject Facts migration", () => {
 
   test("enforces only the staged positive-version and object-shape checks", async () => {
     const sql = requireHarness().sql;
-    await createLegacyUserProfileTable(sql);
+    await createLegacyUserDocumentTable(sql);
     await sql.file(FEATURE_MIGRATION, { cache: false });
 
     await expectPostgresErrorCode(
@@ -124,7 +124,7 @@ describe("User Profile Subject Facts migration", () => {
         userId: 1,
         username: "zero-version",
         subjectIdentifier: SUBJECT_IDENTIFIER,
-        sourceDirtyVersion: "0",
+        sourceDocumentVersion: "0",
         subjectFacts: {},
       }),
       "23514",
@@ -134,7 +134,7 @@ describe("User Profile Subject Facts migration", () => {
         userId: 2,
         username: "array-facts",
         subjectIdentifier: SUBJECT_IDENTIFIER,
-        sourceDirtyVersion: "1",
+        sourceDocumentVersion: "1",
         subjectFacts: [],
       }),
       "23514",
@@ -147,7 +147,7 @@ function requireHarness(): PostgresTestHarness {
   return harness;
 }
 
-async function createLegacyUserProfileTable(sql: PostgresTestHarness["sql"]) {
+async function createLegacyUserDocumentTable(sql: PostgresTestHarness["sql"]) {
   await sql.unsafe(`
     CREATE TABLE user_profile (
       user_id integer PRIMARY KEY,
@@ -173,7 +173,7 @@ async function insertProfile(
     userId: number;
     username: string;
     subjectIdentifier: string | null;
-    sourceDirtyVersion: string | null;
+    sourceDocumentVersion: string | null;
     subjectFacts: JsonValue;
   },
 ) {
@@ -198,7 +198,7 @@ async function insertProfile(
       ${input.username},
       1,
       1,
-      ${input.sourceDirtyVersion},
+      ${input.sourceDocumentVersion},
       '{}',
       '{}',
       ${subjectFacts}

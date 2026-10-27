@@ -28,7 +28,7 @@ function createLifecycle() {
   const currentEmployment = employment();
   const tx = {
     auditLogWriter: { recordAuditLog: mock(async () => undefined) },
-    userProfileInvalidation: { recordChanges: mock(async () => undefined) },
+    userDocumentInvalidation: { recordChanges: mock(async () => undefined) },
     employmentStore: {
       getEmploymentLifecycleContextById: mock(async () => ({ employment: currentEmployment })),
       getOpenPrimaryEmploymentIdsByUserId: mock(async () => [9]),
@@ -71,7 +71,7 @@ describe("Employment Lifecycle Primary", () => {
         details: expect.objectContaining({ changed: true, primary: true }),
       }),
     );
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "employment", userId: 1 }]);
+    expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "employment", userId: 1 }]);
   });
 
   test("allows a paused Employment to become Primary", async () => {
@@ -127,7 +127,7 @@ describe("Employment Lifecycle Primary", () => {
         details: expect.objectContaining({ changed: false }),
       }),
     );
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test.each(["set" as const, "clear" as const])("rejects %s for an Ended Employment", async (command) => {
@@ -143,7 +143,7 @@ describe("Employment Lifecycle Primary", () => {
 
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
     expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("rejects a Legacy Employment Tombstone without rewriting its Primary field", async () => {
@@ -186,7 +186,7 @@ describe("Employment Lifecycle Primary", () => {
     expect(failure).toBeInstanceOf(EmploymentNotFoundError);
     expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
     expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test.each([4, 9])("rejects a zero-row update for protected Employment %s without success effects", async (id) => {
@@ -204,7 +204,7 @@ describe("Employment Lifecycle Primary", () => {
 
     expect(failure).toBeInstanceOf(Error);
     expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("rolls back Primary replacement, audit, and Dirty when the transaction fails", async () => {
@@ -238,7 +238,7 @@ describe("Employment Lifecycle Primary", () => {
                 staged.auditActions.push(input.action);
               },
             },
-            userProfileInvalidation: {
+            userDocumentInvalidation: {
               async recordChanges(changes: readonly { userId: number }[]) {
                 staged.dirtyUserIds.push(...changes.map((change) => change.userId));
                 throw failure;

@@ -195,7 +195,7 @@ Gateway API：`pnpm --filter @iam/gateway-apisix start`；开发监听使用 `de
 当前会话和 Snapshot 维护入口为 Worker `session:clear:inventory`、`session:clear`、`session:clear:verify`、`client-snapshot:repair`、`client-snapshot:verify`。
 同名 scripts 通过 `bun run` 默认读取 `apps/worker/.env`，已有进程环境变量优先。
 资源、当前布局、namespace、停流/排空与失败处理见[统一维护手册](../releases/authentication-and-session.md)。
-Profile 重建及 Subject Access 恢复见[Profile 维护手册](../releases/data-maintenance.md)；
+User Document 重建及 Subject Access 恢复见[Document 维护手册](../releases/data-maintenance.md)；
 一次性升级工具集中在[历史数据维护工具](#历史数据维护工具)，不用于当前代日常恢复。
 
 - `pnpm dev`
@@ -225,15 +225,15 @@ Profile 重建及 Subject Access 恢复见[Profile 维护手册](../releases/dat
 - 后端 Architecture Guard（唯一静态架构入口）：`pnpm check:architecture`
 - 文档索引与本地链接检查：`pnpm check:docs`
 - Env naming guard：`pnpm check:env-names`
-- 组织搜索首建：`pnpm --filter @iam/worker organization-search:backfill`。命令使用 `IAM_WORKER_DATABASE_URL` 与
+- 组织搜索首建：`pnpm --filter @iam/worker organization-document:backfill`。命令使用 `IAM_WORKER_DATABASE_URL` 与
   Worker Redis 配置，只创建组织队列及数据库资源，退出时关闭；按批保存全部组织（含删除组织）的源变化记录并唤醒普通
-  `organization-search` consumer，报告中的 `enqueued` 不表示已经发布。消费者由 dev/prod Compose 的
-  `worker-organization-search` 服务独立启动；完整维护窗口与放流要求见
+  `organization-document` consumer，报告中的 `enqueued` 不表示已经发布。消费者由 dev/prod Compose 的
+  `worker-organization-document` 服务独立启动；完整维护窗口与放流要求见
   [组织搜索全量重建](../releases/data-maintenance.md#组织搜索全量重建)。
-- 组织搜索补偿：`pnpm --filter @iam/worker organization-search:repair -- --limit 500 --deadline-ms 30000`。
+- 组织搜索补偿：`pnpm --filter @iam/worker organization-document:repair -- --limit 500 --deadline-ms 30000`。
   两个持久阶段的回收、报告、重复执行和外部周期责任见
   [组织搜索维护](../releases/data-maintenance.md#组织搜索日常修复)。
-- 组织搜索全量只读核验：`pnpm --filter @iam/worker organization-search:verify -- --deadline-ms 30000`。
+- 组织搜索全量只读核验：`pnpm --filter @iam/worker organization-document:verify -- --deadline-ms 30000`。
   只使用 `IAM_WORKER_DATABASE_URL`，同一 `REPEATABLE READ READ ONLY` transaction 完整观察源组织、闭包、文档、
   删除墓碑和两阶段工作；`status: passed` 且退出 0 才通过数据门禁。没有 schema 选择、部分 batch 或入队副作用。
   首次、升级、失败重跑与人工放流见[组织搜索维护](../releases/data-maintenance.md#组织搜索全量重建)。
@@ -400,10 +400,10 @@ pnpm test:integration --workspace @iam/worker
 
 # 共享 PostgreSQL owners
 pnpm test:integration --workspace @iam/role-assignment-resolution --workspace @iam/organization-responsibility-resolution
-pnpm test:integration --workspace @iam/organization-search-read-model
+pnpm test:integration --workspace @iam/organization-document
 
-# Admin 事务和缓存；User Profile 同时声明 PG/Redis
-pnpm test:integration --workspace @iam/admin-api --workspace @iam/user-profile-read-model
+# Admin 事务和缓存；User Document 同时声明 PG/Redis
+pnpm test:integration --workspace @iam/admin-api --workspace @iam/user-document
 
 # 共享 Redis owners；Core 集合仍按其 manifest 提供完整资源需求
 pnpm test:integration --workspace @iam/session-kernel --workspace @iam/api-core --workspace @iam/oidc
@@ -425,38 +425,44 @@ Worker targeted/full Snapshot repair 与独立 verify 共用本次 `IAM_WORKER_T
 生产部分失败重跑；随后停止本例执行者并整体重置独占 Redis DB，不再为 fixture 逐键登记或精确 UNLINK。
 
 旧 Ticket 12 的 V1 rehearsal/backfill/verify 入口已随 strict V2 激活撤销。维护者只使用本页列出的
-User Profile maintenance、正式 API/OIDC entry、hermetic process smoke；不得把 URL credential、
+User Document maintenance、正式 API/OIDC entry、hermetic process smoke；不得把 URL credential、
 Token、Subject、完整 Redis key 或 Secret 写入验收记录。
+
+## 统一 Document 一次性跨制品验收
+
+Owner 为 `@iam/api`，对应 [Ticket #294](https://github.com/cyy1998/shgas-iam/issues/294)，2026-11-26 前复核临时资产存续必要性。
+该场景显式运行，不进入默认 Integration。仅支持 Windows x64，复用正式 managed-resource owner 和 process-smoke harness。
+先提交测试资产并固定干净候选，再在 `apps/api` 目录执行；所有参数路径使用绝对路径：
+
+```powershell
+bun --no-env-file run test-integration/document-cutover/build.fixture.ts <candidate-full-sha> <new-external-artifact-directory>
+bun --no-env-file run test-integration/document-cutover/cutover.fixture.ts <external-config.json>
+```
+
+配置字段为 `candidate`、`baselineManifest`、`candidateManifest` 和 `outputDirectory`。
+`candidate` 必须等于实际 HEAD 且工作区干净；候选构建生成 `manifest.json`，固定 exe、static 和完整正式 migration 链的哈希。
+旧 manifest 只接受来源 `95dc4871c62e36b63b26a3f71c5670ae449c79e2`、SHA-256
+`ba67791da1d687c96c27c6514e756c66fd18a98e2f7ffc8d7494eb58fb76d978` 的独立 Profile4/Organization Search1 制品。
+不能使用 #269 的旧来源或用当前代码重新序列化状态替代。
+
+场景通过旧 API 密码登录、授权和兑换创建 UserSession、ClientSession、Code、Token 和 continuation，
+在旧进程停止排空后保留原 schema/journal，应用候选正式 migration，执行两类 full backfill/repair 和全部三个 gate。
+库存包含 Enable/Pause/Disable、deleted 与原 processed 但陈旧的用户和组织。
+完整门禁通过后才用同 origin、密钥及 namespace 的候选 API 续用仍有效旧状态，核对 wire4、OIDC、角色隔离和目录搜索/详情；
+错误 Client、重放和已撤销状态仍须拒绝。关闭受控进程后再次完整核验，最后按本次 owner 清理。
+
+`outputDirectory` 保存分阶段 `report.json`、维护命令结果和受控失败信息；资源记录仍由
+`test-results/integration/<run-id>/run.json` 拥有。失败必须保留失败状态，不能将定位运行当作最终通过。
+输出目录可能含合成凭据，保持受限访问。候选、代码或制品变化后重建并重跑。
+该结果仅证明本地固定候选；最终仓库 gate、受影响正式旅程及目标环境的停流、备份和放流仍分别验收。
 
 ## 权限点退役的一次性跨制品验收
 
-Owner 为 `@iam/api`；用途是 [Spec #269 / Ticket #274](https://github.com/cyy1998/shgas-iam/issues/274)
-的旧协议凭据连续性验收，移除复核日期为 2026-11-21。入口不进入默认 Integration，不构成线上多代兼容能力。
-先在来源提交 `99b27c614a668cd66d354d4581ae5166a7275ff8` 的独立 checkout 准备旧 API/Worker、正式 migrations
-和公开 owner 测试支持制品，记录构建命令、来源及文件 SHA-256。不得把旧入口链接到当前 workspace，或用当前制品创建的凭据代替旧状态。
-本次固定制品与清理记录的证据引用保存在该 ticket；后续复现须重新核对来源及 manifest。
-
-显式配置文件使用绝对路径：
-
-```json
-{
-  "baselineManifest": "<fixed-old-artifacts>/manifest.json",
-  "outputDirectory": "<absolute-task-evidence-directory>",
-  "candidate": "<fixed-candidate-sha>"
-}
-```
-
-通过[一次性 fixture](../../apps/api/test-integration/privilege-retirement/cutover.fixture.ts)执行：
-
-```bash
-pnpm --filter @iam/api exec bun --no-env-file run test-integration/privilege-retirement/cutover.fixture.ts <config.json>
-```
-
-外层复用正式根资源 owner 创建、登记及销毁本次 PostgreSQL/Redis，内部核对完全相同的受管理 URL。
-fixture 固定旧制品来源/hash，建立真实旧 Profile 和协议状态，经正式迁移、新 Worker 全量重建和独立双 gate，
-再从同 issuer 新 API 使用旧凭据，并在 smoke 关闭后再次完整核验。退出 0 且完整 report 为 passed 才表示本次演练通过；
-阶段部分成功、资源关闭或清理失败均不算通过。证据目录独立于 Browser Integration 的可清理输出。
-本地演练不证明目标环境停流、备份、第三方旧副本处理或生产放流；正式维护按[Profile 手册](https://github.com/cyy1998/shgas-iam/blob/5feeec63992a89c4f407b5c424b6177184ba6098/docs/releases/user-profile-maintenance.md#权限点退役的协调切换)。
+[Spec #269 / Ticket #274](https://github.com/cyy1998/shgas-iam/issues/274) 的历史验收由 `@iam/api` 拥有，原移除复核日期为 2026-11-21。
+其 Profile v3→v4 fixture 依赖旧表和旧制品契约，随统一 Document 模型退役当前执行资产；原成功记录仍只证明原候选。
+需要复现时使用固定 [95dc4871 的 fixture 与来源说明](https://github.com/cyy1998/shgas-iam/tree/95dc4871c62e36b63b26a3f71c5670ae449c79e2/apps/api/test-integration/privilege-retirement)
+和 [当时的执行方法](https://github.com/cyy1998/shgas-iam/blob/95dc4871c62e36b63b26a3f71c5670ae449c79e2/docs/development/commands.md#权限点退役的一次性跨制品验收)，不能直接用于当前 schema。
+统一 Document 的跨制品验收由 [Ticket #294](https://github.com/cyy1998/shgas-iam/issues/294) 独立建立，完整结果以该票和父 Spec 的固定候选证据为准。
 
 ## OIDC 协议套件
 
@@ -590,24 +596,25 @@ Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit�
 - API Core：`pnpm --filter @iam/api-core <lint|test|test:unit|typecheck>`
 - Custom SSO：`pnpm --filter @iam/custom-sso <lint|test|test:unit|typecheck>`；完整 HTTP/Redis 在 API collection。
 - Client Subject Projection：`pnpm --filter @iam/client-subject-projection <lint|test|test:unit|typecheck>`
-- User Profile Read Model：`pnpm --filter @iam/user-profile-read-model <lint|test|test:unit|typecheck>`
-- Filter Engine：`pnpm --filter @iam/filter-engine <lint|test|test:unit|typecheck>`；JSONB 编译的真实 PostgreSQL 行为由 User Profile owner 验证。
-- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|typecheck|employment:verify|organization-search:backfill|organization-search:repair|organization-search:verify|user-profile:backfill|user-profile:repair|user-profile:verify-postgres|user-profile:verify-redis|client-snapshot:repair|client-snapshot:verify|session:clear:inventory|session:clear|session:clear:verify>`
+- User Document：`pnpm --filter @iam/user-document <lint|test|test:unit|typecheck>`
+- Filter Engine：`pnpm --filter @iam/filter-engine <lint|test|test:unit|typecheck>`；JSONB 编译的真实 PostgreSQL 行为由 User Document owner 验证。
+- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|typecheck|employment:verify|organization-document:backfill|organization-document:repair|organization-document:verify|user-document:backfill|user-document:repair|user-document:verify-postgres|user-document:verify-redis|client-snapshot:repair|client-snapshot:verify|session:clear:inventory|session:clear|session:clear:verify>`
 
 - Employment 全库只读诊断：
   `IAM_WORKER_DATABASE_URL=<target-url> pnpm --filter @iam/worker employment:verify`
 - Subject Access 恢复：
-  `pnpm --filter @iam/worker run user-profile:repair -- --subject-access-only --limit <positive-integer>`。
+  `pnpm --filter @iam/worker run user-document:repair -- --subject-access-only --limit <positive-integer>`。
   该模式依次执行 PostgreSQL stale pending transition intent 回收、Redis transition recovery 与 authority repair，
-  不执行 User Profile maintenance。它会更新 PostgreSQL transition intent，不局限于 Redis indexed backlog；所需权限、
-  stale threshold、调度与失败恢复见[Profile 维护手册](../releases/data-maintenance.md#subject-access-恢复)。
-- User Profile 全量重建与版本无关 readiness：先运行
-  `pnpm --filter @iam/worker user-profile:backfill` 派发既有 versioned rebuild jobs；批量大小通过
-  `IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE=<positive-integer>` 配置。
-  等待 Worker 收敛并按需运行 `user-profile:repair` 后，依次运行
-  `pnpm --filter @iam/worker user-profile:verify-postgres -- [--batch-size <positive-integer>]` 和
-  `pnpm --filter @iam/worker user-profile:verify-redis -- [--batch-size <positive-integer>]`。Backfill 的 `enqueued`
-  只表示已派发，不表示 readiness 已通过；窗口、两 gate 和放流见[Profile 维护手册](../releases/data-maintenance.md#profile-全量重建)。
+  不执行 User Document maintenance。它会更新 PostgreSQL transition intent，不局限于 Redis indexed backlog；所需权限、
+  stale threshold、调度与失败恢复见[Document 维护手册](../releases/data-maintenance.md#subject-access-恢复)。
+- User Document 全量重建与完整只读核验：先运行
+  `pnpm --filter @iam/worker user-document:backfill` 登记所有源用户的 Outbox（含 Pause、Disable 与 deleted）；批量大小通过
+  `IAM_WORKER_USER_DOCUMENT_BACKFILL_BATCH_SIZE=<positive-integer>` 配置。
+  等待 Worker 收敛并按需运行 `user-document:repair` 后，依次运行
+  `pnpm --filter @iam/worker user-document:verify-postgres -- [--batch-size <positive-integer>]` 和
+  `pnpm --filter @iam/worker user-document:verify-redis -- [--batch-size <positive-integer>]`。Backfill 的 `enqueued`
+  只表示已唤醒；registered、Outbox processed、Rebuild State processed 与核验通过分别判断。
+  用户 backfill/repair/verify 均支持 `--deadline-ms`，必需关闭失败或中断非零；窗口、两 gate 和放流见[Document 维护手册](../releases/data-maintenance.md#user-document-全量重建)。
 - 当前 Snapshot repair/verify 与 unified 状态维护：使用 Worker `client-snapshot:repair`、`client-snapshot:verify`、
   `session:clear:inventory`、`session:clear`、`session:clear:verify`，完整停流/资源/参数/失败重跑边界见[统一维护手册](../releases/authentication-and-session.md)。
   旧 `client-runtime:*`、Provider 维护、epoch 和扩展期 Client 升级命令已退役。

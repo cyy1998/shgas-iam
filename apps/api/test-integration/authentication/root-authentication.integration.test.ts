@@ -11,6 +11,8 @@ import {
   ClientStatus,
   OidcClientType,
   OidcScope,
+  OrganizationResponsibilityTypeCode,
+  OrganizationType,
   SubjectClaim,
 } from "@iam/contracts";
 import { CustomSsoManagedFailure } from "@iam/custom-sso";
@@ -1125,25 +1127,42 @@ test("Custom SSO exchange and existing Token deliver client-scoped role authoriz
     organization: {
       code: "org",
       name: "组织",
-      type: "department",
-      path: [{ code: "org", name: "组织", type: "department" }],
+      type: OrganizationType.Department,
+      path: [{ code: "org", name: "组织", type: OrganizationType.Department, level: 1, distanceToTarget: 0 }],
     },
     position: { code: "position", name: "岗位" },
   };
+  const responsibilities = [
+    {
+      type: { code: OrganizationResponsibilityTypeCode.Head, name: "负责人" },
+      targetOrganization: {
+        code: "org",
+        name: "组织",
+        type: OrganizationType.Department,
+        path: [{ code: "org", name: "组织", type: OrganizationType.Department, level: 1, distanceToTarget: 0 }],
+      },
+    },
+  ];
+  const secondaryEmployment = { ...employment, isPrimary: false, position: { code: "secondary", name: "副岗" } };
   const f = await businessFixture(30, undefined, 45, {
     async read(subjectIdentifier) {
       return {
         subjectIdentifier,
-        sourceDirtyVersion: "1",
+        sourceVersion: "1",
         profile: { username: "published", name: "已发布角色", phone: null },
         employments: [
           {
             ...employment,
-            responsibilities: [],
+            responsibilities,
             clientAuthorizations: [
               { clientCode: "app", roles: [{ code: "viewer" }] },
               { clientCode: "other", roles: [{ code: "operator" }] },
             ],
+          },
+          {
+            ...secondaryEmployment,
+            responsibilities: [],
+            clientAuthorizations: [{ clientCode: "other", roles: [{ code: "app:misleading" }] }],
           },
         ],
       };
@@ -1163,10 +1182,21 @@ test("Custom SSO exchange and existing Token deliver client-scoped role authoriz
     expect(response.status).toBe(200);
     const { data } = await response.json();
     const expected = {
-      version: 3,
+      version: 4,
       subjectIdentifier: f.subjectIdentifier,
-      profile: { employments: [{ ...employment, responsibilities: [] }] },
-      authorization: { employments: [{ ...employment, roles: ["viewer"] }], roles: ["viewer"] },
+      profile: {
+        employments: [
+          { ...employment, responsibilities },
+          { ...secondaryEmployment, responsibilities: [] },
+        ],
+      },
+      authorization: {
+        employments: [
+          { ...employment, roles: ["viewer"] },
+          { ...secondaryEmployment, roles: [] },
+        ],
+        roles: ["viewer"],
+      },
     };
     expect(data.subject).toEqual(expected);
     const originalToken = await f.codes.inspectToken(data.sid);
@@ -1224,7 +1254,7 @@ test("current sub-only disclosure trims UserInfo and Gateway output without read
     const reads = f.state.factsReads;
     const minimalResponse = await f.use(data.sid);
     expect((await minimalResponse.json()).data).toEqual({
-      version: 3,
+      version: 4,
       subjectIdentifier: f.subjectIdentifier,
     });
     const authz = await f.use(data.sid, "app", true);

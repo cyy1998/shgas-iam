@@ -152,7 +152,7 @@ function createService(
   const tx = {
     auditService: { recordAuditLog: mock(async () => undefined) },
     subjectAccessMutation: createSubjectAccessMutation(),
-    userProfileInvalidation: {
+    userDocumentInvalidation: {
       recordChanges: mock(async () => undefined),
     },
     userRepository: {
@@ -268,7 +268,7 @@ describe("createUserService", () => {
     expect(tx.userRepository.lockUserByUsername).toHaveBeenCalledWith("zhangsan", false);
     expect(tx.userRepository.updateUserByUsername).not.toHaveBeenCalled();
     expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("keeps generated credentials out of the created User DTO", async () => {
@@ -399,7 +399,7 @@ describe("createUserService", () => {
         targetCode: "zhangsan",
       }),
     );
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "user", userId: 1 }]);
+    expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "user", userId: 1 }]);
   });
 
   test("rejects duplicate usernames before creating", async () => {
@@ -431,7 +431,7 @@ describe("createUserService", () => {
     expect(tx.userRepository.updateUserByUsername).toHaveBeenCalledWith("zhangsan", {
       status: UserStatus.Disable,
     });
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "user", userId: 1 }]);
+    expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "user", userId: 1 }]);
     expect(tx.userRepository.countOpenEmploymentsByUsername).not.toHaveBeenCalled();
     expect(deps.sessionRevocation.revokeUserSessions).toHaveBeenCalledWith({
       userId: 1,
@@ -461,7 +461,7 @@ describe("createUserService", () => {
       mobile: "13900000000",
     });
     expect(allowedCase.tx.auditService.recordAuditLog).toHaveBeenCalledTimes(1);
-    expect(allowedCase.tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "user", userId: 1 }]);
+    expect(allowedCase.tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "user", userId: 1 }]);
 
     const deniedCase = createService();
     (deniedCase.tx.userRepository.getUserByUsernameForAdmin as any).mockResolvedValue(user());
@@ -476,7 +476,7 @@ describe("createUserService", () => {
     expect(failure).toMatchObject({ httpStatus: 403 });
     expect(deniedCase.tx.userRepository.updateUserByUsername).not.toHaveBeenCalled();
     expect(deniedCase.tx.auditService.recordAuditLog).not.toHaveBeenCalled();
-    expect(deniedCase.tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(deniedCase.tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("rechecks every Open Employment before an HR User status write", async () => {
@@ -509,7 +509,7 @@ describe("createUserService", () => {
     expect(failure).toMatchObject({ httpStatus: 403 });
     expect(deniedCase.tx.userRepository.updateUserByUsername).not.toHaveBeenCalled();
     expect(deniedCase.tx.auditService.recordAuditLog).not.toHaveBeenCalled();
-    expect(deniedCase.tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(deniedCase.tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
     expect(deniedCase.deps.subjectAccessLifecycle.run).not.toHaveBeenCalled();
     expect(deniedCase.deps.sessionRevocation.revokeUserSessions).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledWith(
@@ -610,7 +610,7 @@ describe("createUserService", () => {
 
     expect(tx.userRepository.updateUserByUsername).not.toHaveBeenCalled();
     expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
     expect(deps.sessionRevocation.revokeUserSessions).not.toHaveBeenCalled();
   });
 
@@ -703,7 +703,7 @@ describe("createUserService", () => {
     expect(deleted).toEqual({ changed: true, result: null });
 
     expect(tx.userRepository.softDeleteUserByUsername).toHaveBeenCalledWith("zhangsan");
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "user", userId: 1 }]);
+    expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "user", userId: 1 }]);
     expect(deps.sessionRevocation.revokeUserSessions).toHaveBeenCalledWith({
       userId: 1,
       subjectIdentifier: "00000000-0000-4000-8000-000000000001",
@@ -755,7 +755,7 @@ describe("createUserService", () => {
 
     expect(deps.passwordHasher.hashPassword).toHaveBeenCalledWith("Rand1234");
     expect(tx.userRepository.setPassword).toHaveBeenCalledWith(1, "hashed:Rand1234");
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
     expect(deps.sessionRevocation.revokeUserSessions).toHaveBeenCalledWith({
       userId: 1,
       subjectIdentifier: "00000000-0000-4000-8000-000000000001",
@@ -1012,7 +1012,7 @@ describe("createUserService", () => {
     const tx = {
       auditService: { recordAuditLog: mock(async () => undefined) },
       subjectAccessMutation: createSubjectAccessMutation(),
-      userProfileInvalidation: { recordChanges: mock(async () => undefined) },
+      userDocumentInvalidation: { recordChanges: mock(async () => undefined) },
       userRepository: {
         getUserByUsernameForAdmin: mock(async () => null),
         getAnyUserByUsername: mock(async () => null),
@@ -1126,7 +1126,7 @@ function createLifecycleService(options: {
   const tx = {
     auditService: { recordAuditLog: mock(async () => undefined) },
     subjectAccessMutation: createSubjectAccessMutation(),
-    userProfileInvalidation: { recordChanges: mock(async () => undefined) },
+    userDocumentInvalidation: { recordChanges: mock(async () => undefined) },
     userRepository: {
       getUserByUsernameForAdmin: mock(async () => (options.stateful ? user({ status: currentStatus }) : existingUser)),
       lockUserByUsername: mock(async () => (options.stateful ? user({ status: currentStatus }) : existingUser)),

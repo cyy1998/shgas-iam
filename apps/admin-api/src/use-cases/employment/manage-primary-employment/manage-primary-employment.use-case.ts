@@ -72,7 +72,7 @@ export function createManagePrimaryEmploymentUseCase(deps: ManagePrimaryEmployme
         ),
       );
       if (changed) {
-        await tx.userProfileInvalidation.recordChanges([{ kind: "employment", userId: employment.userId }]);
+        await tx.userDocumentInvalidation.recordChanges([{ kind: "employment", userId: employment.userId }]);
       }
       return { changed, result: null };
     }, adminAuditTransactionOptions(auditContext));

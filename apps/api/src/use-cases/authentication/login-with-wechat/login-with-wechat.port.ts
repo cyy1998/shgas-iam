@@ -1,6 +1,6 @@
 import type { SessionOrigin } from "@api/services/session/session-origin";
 import type { AuditActorType, AuditDetails, AuditOutcome } from "@iam/domain/audit";
-import type { UserDetailDto } from "@iam/domain/user";
+import type { PublishedUserLoginProfile } from "@iam/domain/user";
 import type { WechatLoginUser } from "./login-with-wechat.type";
 
 export interface WechatLoginAuditInput {
@@ -52,7 +52,7 @@ export interface LoginWithWechatDeps {
   users: {
     getActiveUserById: (userId: number) => Promise<WechatLoginUser | null>;
     getActiveUserByWxId: (wxId: string) => Promise<WechatLoginUser | null>;
-    getUserDetailById: (userId: number) => Promise<UserDetailDto>;
+    getLoginProfileById: (userId: number) => Promise<PublishedUserLoginProfile>;
   };
   wechat: {
     getWxUserId: (code: string) => Promise<string>;

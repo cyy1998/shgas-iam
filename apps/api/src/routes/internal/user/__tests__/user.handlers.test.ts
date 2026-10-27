@@ -8,14 +8,14 @@ function createHandlers() {
     registerPurveyorContact: {
       execute: mock(async () => true),
     },
-    userProfileQuery: {
+    userDocumentQuery: {
       searchDsl: mock(async () => []),
     },
-    internalUserProfileQuery: {
+    internalUserDocumentQuery: {
       getDetailByUsername: mock(async () => ({})),
       searchDsl: mock(async () => []),
     },
-    userProfileSearch: {
+    userDocumentSearch: {
       searchDsl: mock(async () => []),
     },
   };
@@ -63,7 +63,7 @@ describe("createUserHandlers", () => {
     });
   });
 
-  test("delegates canonical v3 Filter search through the shared profile search facade", async () => {
+  test("passes the authenticated Client to complete document search", async () => {
     const { deps, handlers } = createHandlers();
     const input = {
       filter: {
@@ -83,17 +83,19 @@ describe("createUserHandlers", () => {
       },
     };
     const context = {
+      get: mock((name: string) => (name === "clientDto" ? { clientCode: "internal" } : undefined)),
       req: { valid: mock(() => input) },
       json: mock((payload: unknown) => payload),
     };
 
-    await expect(handlers.usersSearchDsl(context as never, undefined as never)).resolves.toMatchObject({
+    const response = await handlers.usersSearchDsl(context as never, undefined as never);
+    expect(response).toMatchObject({
       code: 200,
       data: [],
     });
 
-    expect(deps.userProfileSearch.searchDsl).toHaveBeenCalledWith(input);
-    expect(deps.internalUserProfileQuery.searchDsl).not.toHaveBeenCalled();
+    expect(deps.userDocumentSearch.searchDsl).toHaveBeenCalledWith(input, "internal");
+    expect(deps.internalUserDocumentQuery.searchDsl).not.toHaveBeenCalled();
   });
 
   test("applies the fixed handler deadline to Internal Detail", async () => {
@@ -106,9 +108,10 @@ describe("createUserHandlers", () => {
     globalThis.clearTimeout = (() => {}) as typeof clearTimeout;
     try {
       const { deps } = createHandlers();
-      deps.internalUserProfileQuery.getDetailByUsername = mock(async () => await new Promise<never>(() => {}));
+      deps.internalUserDocumentQuery.getDetailByUsername = mock(async () => await new Promise<never>(() => {}));
       const handlers = createUserHandlers(deps as never);
       const context = {
+        get: mock((name: string) => (name === "clientDto" ? { clientCode: "internal" } : undefined)),
         req: { valid: mock(() => ({ username: "user-1" })) },
         json: mock(() => {
           throw new Error("not reached");

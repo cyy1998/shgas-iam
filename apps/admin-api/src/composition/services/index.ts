@@ -57,7 +57,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
         userRepository: tx.repositories.user,
         auditService: tx.auditService,
         subjectAccessMutation: tx.subjectAccessMutation,
-        userProfileInvalidation: tx.userProfileInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
       })),
     },
   });
@@ -94,8 +94,8 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
       organizationRepository: tx.repositories.organization,
       auditService: tx.auditService,
       responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-      userProfileInvalidation: tx.userProfileInvalidation,
-      organizationSearchInvalidation: tx.organizationSearchInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
+      organizationDocumentInvalidation: tx.organizationDocumentInvalidation,
     })),
   });
   const organizationResponsibilityService = createOrganizationResponsibilityService({
@@ -107,7 +107,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
     uow: mapUnitOfWork(unitOfWork, (tx) => ({
       positionRepository: tx.repositories.position,
       auditService: tx.auditService,
-      userProfileInvalidation: tx.userProfileInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
   });
 
@@ -116,7 +116,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
     uow: mapUnitOfWork(unitOfWork, (tx) => ({
       roleRepository: tx.repositories.role,
       auditService: tx.auditService,
-      userProfileInvalidation: tx.userProfileInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
   });
 
@@ -127,7 +127,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
     uow: mapUnitOfWork(unitOfWork, (tx) => ({
       employmentRepository: tx.repositories.employment,
       auditService: tx.auditService,
-      userProfileInvalidation: tx.userProfileInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
   });
 

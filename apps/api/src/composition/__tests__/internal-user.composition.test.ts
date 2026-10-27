@@ -12,13 +12,15 @@ import {
   INTERNAL_USER_STATEMENT_TIMEOUT_MS,
 } from "@api/composition/internal-user-query";
 import { createApiRoutes } from "@api/composition/routes";
-import { createApiUserProfileResources } from "@api/composition/user-profile-resources";
+import { createApiUserDocumentResources } from "@api/composition/user-document-resources";
 import { CLIENT_DELEGATION_RESOLUTION_HANDLER_TIMEOUT_MS } from "@api/routes/internal/delegation/delegation.handlers";
 import { INTERNAL_ORGANIZATION_HANDLER_TIMEOUT_MS } from "@api/routes/internal/organization/organization.handlers";
 import { INTERNAL_USER_HANDLER_TIMEOUT_MS } from "@api/routes/internal/user/user.handlers";
-import { createUserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search.adapter";
+import { createUserDocumentSearchAdapter } from "@api/services/user-document-search/user-document-search.adapter";
 import createApp from "@iam/api-core/core/create-app";
 import { createRouter } from "@iam/api-core/core/create-router";
+import { UserStatus, UserType } from "@iam/contracts";
+import { createMiddleware } from "hono/factory";
 import pino from "pino";
 import appConfig from "~api/app.config";
 
@@ -49,9 +51,9 @@ test("owns dedicated Internal query clients with fixed budgets and deterministic
       databaseUrl: "postgresql://delegation-resolution.invalid/iam",
     },
     {
-      applicationName: "iam-api-internal-organization-search",
+      applicationName: "iam-api-internal-organization-document",
       createResource: createInternalOrganizationQueryResource,
-      databaseUrl: "postgresql://organization-search.invalid/iam",
+      databaseUrl: "postgresql://organization-document.invalid/iam",
     },
   ];
   for (const expected of resources) {
@@ -76,10 +78,10 @@ test("owns dedicated Internal query clients with fixed budgets and deterministic
   }
 });
 
-test("closes the production user profile query and queue resources", async () => {
+test("closes the production user document query and queue resources", async () => {
   const closeQuery = mock(async () => {});
   const closeQueue = mock(async () => {});
-  const resources = createApiUserProfileResources({
+  const resources = createApiUserDocumentResources({
     databaseUrl: "postgresql://internal-user.invalid/iam",
     redis: { host: "127.0.0.1", port: 6379, db: 0 },
     createQueryResource: mock(() => ({ db: {}, close: closeQuery }) as never),
@@ -100,17 +102,17 @@ test("wires canonical Filter search to the Base query and preserves Internal det
     mobile: null,
     wxId: null,
   };
-  const detail = { ...base, employments: [], roles: [] };
-  const searchBase = mock(async (_input: unknown) => [base]);
+  const detail = { user: { ...base, status: UserStatus.Enable, userType: UserType.Formal }, employments: [] };
+  const searchDocuments = mock(async (_input: unknown) => [detail]);
   const getDetailByUsername = mock(async (_username: string) => detail);
-  const userProfileSearch = createUserProfileSearchAdapter({ searchBase });
+  const userDocumentSearch = createUserDocumentSearchAdapter({ searchDocuments });
   const activeRoutes = await createApiRoutes({
     verifyDatabase: async () => {},
     auditLogWriter: {} as never,
     runtime: {} as never,
     services: {
-      userProfileSearch,
-      internalUserProfileQuery: { getDetailByUsername },
+      userDocumentSearch,
+      internalUserDocumentQuery: { getDetailByUsername },
       authentication: authenticationRoutes(),
     } as never,
     useCases: {} as never,
@@ -119,7 +121,16 @@ test("wires canonical Filter search to the Base query and preserves Internal det
     env: { NODE_ENV: "test" },
     logger: pino({ enabled: false }),
     routes: activeRoutes,
-    middlewares: {},
+    middlewares: {
+      "./src/routes/internal/_middleware.ts": {
+        default: [
+          createMiddleware(async (c, next) => {
+            c.set("clientDto", { clientCode: "internal" });
+            await next();
+          }),
+        ],
+      },
+    },
   });
   const input = {
     filter: {
@@ -141,16 +152,16 @@ test("wires canonical Filter search to the Base query and preserves Internal det
   });
   const body = await response.json();
   expect(response.status).toBe(200);
-  expect(body).toMatchObject({ code: 200, data: [base] });
-  expect(searchBase).toHaveBeenCalledWith(input);
+  expect(body).toMatchObject({ code: 200, data: [detail] });
+  expect(searchDocuments).toHaveBeenCalledWith(input, "internal");
   expect(getDetailByUsername).not.toHaveBeenCalled();
 
   const detailResponse = await app.request("http://localhost/internal/users/alice");
   const detailBody = await detailResponse.json();
   expect(detailResponse.status).toBe(200);
   expect(detailBody).toMatchObject({ code: 200, data: detail });
-  expect(getDetailByUsername).toHaveBeenCalledWith("alice");
-  expect(searchBase).toHaveBeenCalledTimes(1);
+  expect(getDetailByUsername).toHaveBeenCalledWith("alice", "internal");
+  expect(searchDocuments).toHaveBeenCalledTimes(1);
 });
 
 test("publishes canonical Internal User search, detail and write contracts", async () => {
@@ -165,7 +176,16 @@ test("publishes canonical Internal User search, detail and write contracts", asy
     env: { NODE_ENV: "test" },
     logger: pino({ enabled: false }),
     routes: activeRoutes,
-    middlewares: {},
+    middlewares: {
+      "./src/routes/internal/_middleware.ts": {
+        default: [
+          createMiddleware(async (c, next) => {
+            c.set("clientDto", { clientCode: "internal" });
+            await next();
+          }),
+        ],
+      },
+    },
   });
   const response = await app.request("http://localhost/internal/doc");
   const document = (await response.json()) as { paths: Record<string, unknown> };

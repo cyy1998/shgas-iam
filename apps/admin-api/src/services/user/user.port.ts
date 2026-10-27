@@ -7,7 +7,7 @@ import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { z } from "zod";
 import type { User, UserCreateDto, UserPaginationQueryDto, UserUpdateDto } from "./user.type";
 
-export interface AdminUserProfileChange {
+export interface AdminUserDocumentChange {
   readonly kind: "user";
   readonly userId: number;
 }
@@ -64,8 +64,8 @@ export interface AdminUserTransactionPorts {
       resolveTarget: (result: T) => SubjectAccessTransitionTarget,
     ) => Promise<T>;
   };
-  userProfileInvalidation: {
-    recordChanges: (changes: readonly AdminUserProfileChange[]) => Promise<void>;
+  userDocumentInvalidation: {
+    recordChanges: (changes: readonly AdminUserDocumentChange[]) => Promise<void>;
   };
 }
 

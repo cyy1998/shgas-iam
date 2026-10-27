@@ -55,7 +55,7 @@ describe("SSO loading and recovery", () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it.each(["network", "unavailable", "invalid-json"])(
+  it.each(["network", "unavailable", "invalid-json", "invalid-wire"])(
     "shows a failed user info request and recovers only after retry: %s",
     async (failure) => {
       let requests = 0;
@@ -65,6 +65,8 @@ describe("SSO loading and recovery", () => {
           if (requests > 1) return HttpResponse.json({ code: 200, data: currentUserInfo });
           if (failure === "network") return HttpResponse.error();
           if (failure === "invalid-json") return new HttpResponse("invalid json", { status: 200 });
+          if (failure === "invalid-wire")
+            return HttpResponse.json({ code: 200, data: { ...currentUserInfo, version: 3 } });
           return HttpResponse.json({ code: 503, message: "暂时不可用" }, { status: 503 });
         }),
       );

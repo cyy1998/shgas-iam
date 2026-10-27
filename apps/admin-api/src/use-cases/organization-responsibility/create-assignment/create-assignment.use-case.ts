@@ -89,7 +89,7 @@ export function createCreateOrganizationResponsibilityAssignmentUseCase(
           auditContext,
         ),
       );
-      await tx.userProfileInvalidation.recordChanges([
+      await tx.userDocumentInvalidation.recordChanges([
         {
           kind: "organization-responsibility-assignment",
           userId: employment.userId,

@@ -60,7 +60,7 @@ export interface ManageOrganizationResponsibilityAssignmentLifecycleTransactionP
   auditLogWriter: {
     recordAuditLog: (input: AuditLogInput) => Promise<void>;
   };
-  userProfileInvalidation: {
+  userDocumentInvalidation: {
     recordChanges: (
       changes: readonly {
         readonly kind: "organization-responsibility-assignment";

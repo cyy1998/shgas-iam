@@ -57,10 +57,10 @@ export interface AdminOrganizationProfileChange {
   readonly organizationId: number;
 }
 
-export type AdminOrganizationSearchChangedField = "code" | "name" | "type" | "status";
-export type AdminOrganizationSearchChange =
+export type AdminOrganizationDocumentChangedField = "code" | "name" | "type" | "status";
+export type AdminOrganizationDocumentChange =
   | { kind: "created" | "deleted"; organizationId: number }
-  | { kind: "updated"; organizationId: number; changedFields: readonly AdminOrganizationSearchChangedField[] };
+  | { kind: "updated"; organizationId: number; changedFields: readonly AdminOrganizationDocumentChangedField[] };
 
 export interface AdminOrganizationTransactionPorts {
   organizationRepository: AdminOrganizationTransactionStorePort;
@@ -68,11 +68,11 @@ export interface AdminOrganizationTransactionPorts {
   responsibilityParentLifecycle: {
     assertNoOpenAssignmentsTargetingOrganizationSubtree: (input: { organizationId: number }) => Promise<void>;
   };
-  userProfileInvalidation: {
+  userDocumentInvalidation: {
     recordChanges: (changes: readonly AdminOrganizationProfileChange[]) => Promise<void>;
   };
-  organizationSearchInvalidation: {
-    recordChanges: (changes: readonly AdminOrganizationSearchChange[]) => Promise<void>;
+  organizationDocumentInvalidation: {
+    recordChanges: (changes: readonly AdminOrganizationDocumentChange[]) => Promise<void>;
   };
 }
 

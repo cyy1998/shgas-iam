@@ -1,0 +1,228 @@
+import { describe, expect, mock, test } from "bun:test";
+import { createUserDocumentPostgresGate, createUserDocumentRedisAccessGate } from "@iam/user-document/worker";
+import { publication } from "../../__tests__/document-fixture";
+import { createDocumentFactsCacheRecord } from "../../document";
+
+const observedAt = new Date("2026-08-22T04:00:00.000Z");
+
+describe("version-independent User Document readiness gates", () => {
+  for (const kind of ["postgres", "redis"] as const) {
+    test(`${kind} rejects invalid batch sizes and malformed inventory pages`, async () => {
+      for (const batchSize of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+        const error = await inventoryGate(kind, [])
+          .verify({ batchSize })
+          .catch((error) => error);
+        expect(error).toBeInstanceOf(RangeError);
+      }
+      for (const ids of [[2, 1], [1, 1], [0], [1.5], [Number.MAX_SAFE_INTEGER + 1], [1, 2, 3]]) {
+        const error = await inventoryGate(kind, ids)
+          .verify({ batchSize: 2 })
+          .catch((error) => error);
+        expect(error).toBeInstanceOf(Error);
+      }
+    });
+
+    test(`${kind} detects an incomplete scan and accepts a complete multipage inventory`, async () => {
+      const incomplete = await inventoryGate(kind, [1], 2).verify({ batchSize: 2 });
+      expect(incomplete.failures).toEqual([{ code: "verified-user-count-mismatch", count: 1, samples: [] }]);
+      const complete = await inventoryGate(kind, [1, 2, 3], 3, true).verify({ batchSize: 2 });
+      expect(complete.status).toBe("passed");
+      expect(complete.counts.verifiedUsers).toBe(3);
+    });
+
+    test(`${kind} rejects a page that repeats an earlier cursor`, async () => {
+      const error = await inventoryGate(kind, [1, 2], 4)
+        .verify({ batchSize: 2 })
+        .catch((error) => error);
+      expect(error).toBeInstanceOf(Error);
+    });
+  }
+
+  test("pins the PostgreSQL gate version in composition and rebuilds every profile", async () => {
+    const stored = publishedProfile(1, "3");
+    const expected = {
+      ...stored,
+      document: { ...stored.document, user: { ...stored.document.user, name: "Current name" } },
+    };
+    const rebuildExpected = mock(async () => [expected]);
+    const gate = createUserDocumentPostgresGate({
+      schemaVersion: 1,
+      repository: {
+        readVerificationSummary: mock(async () => summary(1)),
+        scanPage: mock(async ({ afterUserId }: { afterUserId: number }) =>
+          afterUserId === 0 ? [pageRow(stored)] : [],
+        ),
+        rebuildExpected,
+      },
+      clock: { nowDate: () => observedAt },
+    });
+
+    const report = await gate.verify({ batchSize: 100 });
+
+    expect(rebuildExpected).toHaveBeenCalledWith([stored], observedAt);
+    expect(report).toEqual({
+      version: 1,
+      gate: "postgres",
+      verifiedAt: observedAt.toISOString(),
+      status: "failed",
+      counts: { users: 1, documents: 1, verifiedUsers: 1 },
+      failures: [
+        {
+          code: "document-authoritative-mismatch",
+          count: 1,
+          samples: ["user:1"],
+        },
+      ],
+    });
+  });
+
+  test("pins the Redis gate version and compares Facts plus Subject Access for all users", async () => {
+    const stored = publishedProfile(1, "3");
+    const expectedFacts = factsRecord(stored);
+    const staleFacts = {
+      ...expectedFacts,
+      facts: { ...expectedFacts.facts, profile: { ...expectedFacts.facts.profile, name: "Older name" } },
+    };
+    const gate = createUserDocumentRedisAccessGate({
+      schemaVersion: 1,
+      inventory: {
+        readVerificationSummary: mock(async () => summary(1)),
+        scanPage: mock(async ({ afterUserId }: { afterUserId: number }) =>
+          afterUserId === 0 ? [pageRow(stored)] : [],
+        ),
+      },
+      subjectFacts: {
+        createRecord: factsRecord,
+        inspectMany: mock(async () => [{ status: "valid" as const, record: staleFacts }]),
+      },
+      subjectAccess: {
+        inspectMany: mock(async () => [
+          {
+            status: "valid" as const,
+            record: barrierRecord(stored, "disabled"),
+          },
+        ]),
+      },
+      clock: { nowDate: () => observedAt },
+    });
+
+    await expect(gate.verify({ batchSize: 100 })).resolves.toEqual({
+      version: 1,
+      gate: "redis-access",
+      verifiedAt: observedAt.toISOString(),
+      status: "failed",
+      counts: { users: 1, documents: 1, verifiedUsers: 1 },
+      failures: [
+        { code: "facts-mismatch", count: 1, samples: ["user:1"] },
+        { code: "barrier-state-mismatch", count: 1, samples: ["user:1"] },
+      ],
+    });
+  });
+
+  test("fails the complete inventory when profile counts or orphan rows disagree", async () => {
+    const stored = publishedProfile(1, "3");
+    const gate = createUserDocumentPostgresGate({
+      schemaVersion: 1,
+      repository: {
+        readVerificationSummary: mock(async () => ({
+          userCount: 1,
+          documentCount: 2,
+          documentSubjectCount: 2,
+          distinctDocumentSubjectCount: 2,
+          orphanDocumentCount: 1,
+        })),
+        scanPage: mock(async ({ afterUserId }: { afterUserId: number }) =>
+          afterUserId === 0 ? [pageRow(stored)] : [],
+        ),
+        rebuildExpected: mock(async () => [stored]),
+      },
+      clock: { nowDate: () => observedAt },
+    });
+
+    const report = await gate.verify({ batchSize: 100 });
+
+    expect(report.failures).toEqual([
+      { code: "document-count-mismatch", count: 1, samples: [] },
+      { code: "document-subject-count-mismatch", count: 1, samples: [] },
+      { code: "document-subject-not-unique", count: 1, samples: [] },
+      { code: "orphan-document", count: 1, samples: [] },
+    ]);
+  });
+});
+
+function inventoryGate(kind: "postgres" | "redis", ids: number[], count = ids.length, paginate = false) {
+  const profiles = ids.map((id) => publishedProfile(id, "3"));
+  const inventory = {
+    readVerificationSummary: async () => summary(count),
+    scanPage: async ({ afterUserId, limit }: { afterUserId: number; limit: number }) =>
+      (paginate ? profiles.filter((profile) => profile.userId > afterUserId).slice(0, limit) : profiles).map(pageRow),
+  };
+  if (kind === "postgres") {
+    return createUserDocumentPostgresGate({
+      schemaVersion: 1,
+      repository: { ...inventory, rebuildExpected: async (profiles) => profiles },
+      clock: { nowDate: () => observedAt },
+    });
+  }
+  return createUserDocumentRedisAccessGate({
+    schemaVersion: 1,
+    inventory,
+    subjectFacts: {
+      createRecord: factsRecord,
+      inspectMany: async (subjects) =>
+        subjects.map((subject) => ({
+          status: "valid" as const,
+          record: factsRecord(profiles.find((profile) => profile.subjectIdentifier === subject)!),
+        })),
+    },
+    subjectAccess: {
+      inspectMany: async (subjects) =>
+        subjects.map((subject) => ({
+          status: "valid" as const,
+          record: barrierRecord(profiles.find((profile) => profile.subjectIdentifier === subject)!, "enabled"),
+        })),
+    },
+    clock: { nowDate: () => observedAt },
+  });
+}
+
+function summary(count: number) {
+  return {
+    userCount: count,
+    documentCount: count,
+    documentSubjectCount: count,
+    distinctDocumentSubjectCount: count,
+    orphanDocumentCount: 0,
+  };
+}
+
+function pageRow(currentDocument: ReturnType<typeof publishedProfile>) {
+  return {
+    userId: currentDocument.userId,
+    subjectIdentifier: currentDocument.subjectIdentifier,
+    accountAvailable: true,
+    currentDocument,
+    backfillCompleted: true,
+    documentIssue: null,
+  };
+}
+
+function factsRecord(source: ReturnType<typeof publishedProfile>) {
+  const record = createDocumentFactsCacheRecord(source);
+  if (record.kind !== "document") throw new Error("Fixture requires document");
+  return record;
+}
+
+function barrierRecord(source: ReturnType<typeof publishedProfile>, state: "disabled" | "enabled") {
+  return {
+    version: 1 as const,
+    subjectIdentifier: source.subjectIdentifier,
+    state,
+    transitionId: "10000000-0000-4000-8000-000000000001",
+    updatedAt: observedAt.toISOString(),
+  };
+}
+
+function publishedProfile(userId: number, sourceVersion: string) {
+  return publication(userId, sourceVersion);
+}

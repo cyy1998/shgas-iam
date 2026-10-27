@@ -11,10 +11,7 @@ export interface CreatePublicHandlersDeps {
   subjectDeliveryRequests: {
     resolveUserInfoForRequest: (request: object) => Promise<CustomSsoSubjectProjectionDto>;
   };
-  userService: Pick<
-    UserService,
-    "getActiveUserBySubjectIdentifier" | "getUserDetailById" | "setMobile" | "setPassword"
-  >;
+  userService: Pick<UserService, "getActiveUserBySubjectIdentifier" | "setMobile" | "setPassword">;
   config: {
     projectionRetryAfterSeconds: number;
   };

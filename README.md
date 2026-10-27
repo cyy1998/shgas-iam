@@ -8,7 +8,7 @@
 
 - **Monorepo 一体化开发**：pnpm workspace 管理依赖，Turborepo 编排开发、构建和检查任务
 - **服务分层**：`apps/api` 承载 public/open/internal/sso/auth 等公共能力，`apps/admin-api` 承载 admin REST 与管理端 tRPC，API 同时承载标准 OIDC 协议面，`apps/worker` 承载后台队列消费和运维面板
-- **共享包拆分**：`packages/db` 提供 Drizzle schema/relations/client/migrations，`packages/api-core` 提供 Hono/OpenAPI/tRPC/Redis/Session Kernel/日志/中间件等基础设施，`packages/contracts` 提供跨端共享枚举和稳定契约，`packages/domain` 提供共享 DTO、审计 helper 和业务错误，`packages/jobs` 与 `packages/user-profile-read-model` 提供 BullMQ 队列与用户档案读模型能力
+- **共享包拆分**：`packages/db` 提供 Drizzle schema/relations/client/migrations，`packages/api-core` 提供 Hono/OpenAPI/tRPC/Redis/Session Kernel/日志/中间件等基础设施，`packages/contracts` 提供跨端共享枚举和稳定契约，`packages/domain` 提供共享 DTO、审计 helper 和业务错误，`packages/jobs` 与 `packages/user-document` 提供 BullMQ 队列与用户档案读模型能力
 - **类型安全调用**：管理后台通过 `@trpc/client` 消费 `@iam/admin-api/trpc` 暴露的 `AppRouter` 类型
 - **声明式后端装配**：API 后端的 `app.config.ts` 声明 API tier，app-local composition root materialize 路由和 tier 中间件，再交给 `@iam/api-core` 挂载
 - **Drizzle + PostgreSQL**：数据库层集中在 `packages/db`，使用 Drizzle ORM v1 relations 和 PostgreSQL
@@ -52,7 +52,7 @@ iam-service/
 │   │   └── .env.example
 │   ├── worker/                      # 后台任务 runtime（@iam/worker）
 │   │   ├── src/
-│   │   │   ├── commands/            # user-profile backfill/repair 命令
+│   │   │   ├── commands/            # user-document backfill/repair 命令
 │   │   │   ├── composition/         # runtime、模块、HTTP/Bull Board 装配
 │   │   │   ├── http/                # health 与 Bull Board
 │   │   │   ├── modules/             # worker module registry
@@ -74,7 +74,7 @@ iam-service/
 │   ├── db/                          # Drizzle schema、relations、migrations、db client（@iam/db）
 │   ├── domain/                      # 共享 DTO schema/type、审计 helper、业务错误（@iam/domain）
 │   ├── jobs/                        # BullMQ queue/worker 基础设施（@iam/jobs）
-│   └── user-profile-read-model/     # 用户档案读模型 producer/query/worker（@iam/user-profile-read-model）
+│   └── user-document/     # 用户档案读模型 producer/query/worker（@iam/user-document）
 ├── docker/                          # 本地依赖栈、开发和生产 compose 文件
 ├── docs/                            # Current 架构/功能/runbook、Agent 工作流、ADR 与历史记录
 ├── scripts/                         # 仓库级辅助脚本
@@ -117,7 +117,7 @@ OIDC 由 API composition 装配 `@iam/oidc`，HTTP adapter 保持外部 `/oidc` 
 - `@iam/contracts`：提供前后端共享枚举与稳定契约，避免在多个应用里重复定义状态码和业务枚举
 - `@iam/domain`：提供共享 DTO schema/type、审计 helper、脱敏规则和可复用业务错误
 - `@iam/jobs`：提供 BullMQ 连接、队列、worker 和默认 job options
-- `@iam/user-profile-read-model`：提供用户档案读模型 producer、query service、dirty marker 和 worker module
+- `@iam/user-document`：提供用户档案读模型 producer、query service、Outbox producer 和 worker module
 
 ## 🛠️ 技术栈
 
@@ -305,8 +305,8 @@ pnpm --filter @iam/worker lint
 pnpm --filter @iam/worker lint:fix
 pnpm --filter @iam/worker test
 pnpm --filter @iam/worker typecheck
-pnpm --filter @iam/worker user-profile:backfill
-pnpm --filter @iam/worker user-profile:repair
+pnpm --filter @iam/worker user-document:backfill
+pnpm --filter @iam/worker user-document:repair
 ```
 
 ### 数据库包
@@ -335,9 +335,9 @@ pnpm --filter @iam/domain typecheck
 pnpm --filter @iam/jobs lint
 pnpm --filter @iam/jobs test
 pnpm --filter @iam/jobs typecheck
-pnpm --filter @iam/user-profile-read-model lint
-pnpm --filter @iam/user-profile-read-model test
-pnpm --filter @iam/user-profile-read-model typecheck
+pnpm --filter @iam/user-document lint
+pnpm --filter @iam/user-document test
+pnpm --filter @iam/user-document typecheck
 ```
 
 ### 前端
@@ -394,7 +394,7 @@ Playwright Chromium 系统依赖时，preflight 会提示运行 `pnpm e2e:instal
 ### 添加后台任务模块
 
 1. 队列契约优先放在 `packages/contracts/src/jobs/`，BullMQ 基础设施放在 `packages/jobs`
-2. 业务读模型或 worker 逻辑可放在拥有该能力的共享包，例如 `packages/user-profile-read-model`
+2. 业务读模型或 worker 逻辑可放在拥有该能力的共享包，例如 `packages/user-document`
 3. 在 `apps/worker/src/modules/registry.ts` 兼容 `WorkerModule` 接口，并在 `apps/worker/src/composition/index.ts` 装配
 4. 新模块应支持 `IAM_WORKER_ENABLED_MODULES=<module-key>`、`all` 和 `none`
 
@@ -411,7 +411,7 @@ Playwright Chromium 系统依赖时，preflight 会提示运行 `pnpm e2e:instal
 5. 迁移式变更：`pnpm --filter @iam/db db:generate && pnpm --filter @iam/db db:migrate`
 
 核心表覆盖 `user`、`organization`、`organization_closure`、`position`、`employment`、`role`、`privilege`、
-`client`、`user_profile`、`user_profile_dirty`、`audit_log` 以及多类角色、组织、职位和委托关联表；登录会话主要存储在 Redis。
+`client`、`user_document`、`user_document_outbox`、`user_document_rebuild_state`、`audit_log` 以及多类角色、组织、职位和委托关联表；登录会话主要存储在 Redis。
 
 ## ⚙️ 环境变量
 
@@ -461,7 +461,6 @@ Playwright Chromium 系统依赖时，preflight 会提示运行 `pnpm e2e:instal
 | `IAM_API_CAP_ENABLED` / `IAM_API_CAP_SITE_KEY` / `IAM_API_CAP_SECRET`                                                                              | Cap 人机校验开关、站点 key 与 secret                             | `false` / `iam-sso` / 必填 |
 | `IAM_API_CAP_CHALLENGE_TTL_MS` / `IAM_API_CAP_TOKEN_TTL_SECONDS`                                                                                   | Cap challenge 与 token 有效期                                    | `600000` / `600`           |
 | `IAM_API_HUMAN_VERIFICATION_WINDOW_SECONDS` / `IAM_API_HUMAN_VERIFICATION_LOGIN_FAILURE_THRESHOLD` / `IAM_API_HUMAN_VERIFICATION_LOOKUP_THRESHOLD` | 人机校验风险窗口和触发阈值                                       | `600` / `3` / `20`         |
-| `IAM_API_USER_PROFILE_DSL_MAX_LIMIT`                                                                                                               | 用户档案 DSL 查询最大 limit                                      | `100`                      |
 
 ### 管理端 API（`apps/admin-api/.env`）
 
@@ -496,17 +495,17 @@ API/Admin 共用 Kernel namespace 和固定根期限；旧 idle/absolute/tombsto
 
 以 `apps/worker/.env.example` 和 `apps/worker/src/env.ts` 为准。关键变量包括：
 
-| 变量名                                                                                                     | 说明                                                                  | 默认值/示例                              |
-| ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ---------------------------------------- |
-| `IAM_WORKER_DATABASE_URL`                                                                                  | PostgreSQL 连接字符串                                                 | `postgresql://...`                       |
-| `IAM_WORKER_REDIS_HOST` / `IAM_WORKER_REDIS_PORT` / `IAM_WORKER_REDIS_DB`                                  | Redis 连接配置                                                        | `localhost` / `6379` / `0`               |
-| `IAM_WORKER_ENABLED_MODULES`                                                                               | 启用模块：`all`、`none` 或逗号分隔模块 key；当前模块为 `user-profile` | `all`                                    |
-| `IAM_WORKER_HTTP_ENABLED` / `IAM_WORKER_HTTP_PORT` / `IAM_WORKER_HEALTH_PATH`                              | health/Bull Board HTTP server 配置                                    | `true` / `30003` / `/healthz`            |
-| `IAM_WORKER_BULL_BOARD_ENABLED` / `IAM_WORKER_BULL_BOARD_PATH`                                             | 是否启用 Bull Board 与挂载路径                                        | `false` / `/admin/queues`                |
-| `IAM_WORKER_BULL_BOARD_AUTH_ENABLED` / `IAM_WORKER_BULL_BOARD_USERNAME` / `IAM_WORKER_BULL_BOARD_PASSWORD` | Bull Board Basic Auth 配置；生产启用 dashboard 时必须配置             | `true` / `iam-worker` / `iam-worker-dev` |
-| `IAM_WORKER_USER_PROFILE_CONCURRENCY`                                                                      | user-profile worker 并发数                                            | `2`                                      |
-| `IAM_WORKER_USER_PROFILE_REBUILD_BATCH_SIZE` / `IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE`               | rebuild/backfill 批大小                                               | `100` / `500`                            |
-| `IAM_WORKER_USER_PROFILE_REPAIR_STALE_SECONDS`                                                             | repair 命令默认修复 stale pending/processing 的秒数                   | `300`                                    |
+| 变量名                                                                                                     | 说明                                                                                            | 默认值/示例                              |
+| ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `IAM_WORKER_DATABASE_URL`                                                                                  | PostgreSQL 连接字符串                                                                           | `postgresql://...`                       |
+| `IAM_WORKER_REDIS_HOST` / `IAM_WORKER_REDIS_PORT` / `IAM_WORKER_REDIS_DB`                                  | Redis 连接配置                                                                                  | `localhost` / `6379` / `0`               |
+| `IAM_WORKER_ENABLED_MODULES`                                                                               | 启用模块：`all`、`none` 或逗号分隔模块 key；当前模块为 `user-document`、`organization-document` | `all`                                    |
+| `IAM_WORKER_HTTP_ENABLED` / `IAM_WORKER_HTTP_PORT` / `IAM_WORKER_HEALTH_PATH`                              | health/Bull Board HTTP server 配置                                                              | `true` / `30003` / `/healthz`            |
+| `IAM_WORKER_BULL_BOARD_ENABLED` / `IAM_WORKER_BULL_BOARD_PATH`                                             | 是否启用 Bull Board 与挂载路径                                                                  | `false` / `/admin/queues`                |
+| `IAM_WORKER_BULL_BOARD_AUTH_ENABLED` / `IAM_WORKER_BULL_BOARD_USERNAME` / `IAM_WORKER_BULL_BOARD_PASSWORD` | Bull Board Basic Auth 配置；生产启用 dashboard 时必须配置                                       | `true` / `iam-worker` / `iam-worker-dev` |
+| `IAM_WORKER_USER_DOCUMENT_CONCURRENCY`                                                                     | User Document worker 并发数                                                                     | `2`                                      |
+| `IAM_WORKER_USER_DOCUMENT_REBUILD_BATCH_SIZE` / `IAM_WORKER_USER_DOCUMENT_BACKFILL_BATCH_SIZE`             | rebuild/backfill 批大小                                                                         | `100` / `500`                            |
+| `IAM_WORKER_USER_DOCUMENT_REPAIR_STALE_SECONDS`                                                            | repair 命令默认修复 stale pending/processing 的秒数                                             | `300`                                    |
 
 ### 管理后台（`apps/admin/.env.local`）
 
@@ -575,7 +574,7 @@ pnpm --filter @iam/db db:migrate
 - [部署与发布](docs/releases/deployment.md)：首次部署、生产 Compose、常规更新与兼容回退。
 - [网关管理](docs/releases/apisix-gateway-release.md)：配置 API 准备、路由发布与失败恢复。
 - [登录与会话](docs/releases/authentication-and-session.md)：密码配置、OIDC 密钥、会话与 Snapshot 维护。
-- [数据维护](docs/releases/data-maintenance.md)：Profile、Subject Access 与组织搜索修复和重建。
+- [数据维护](docs/releases/data-maintenance.md)：User Document、Subject Access 与组织搜索修复和重建。
 - [日志与排障](docs/releases/observability-system-logs.md)：日志栈、Grafana、Trace 与采集故障。
 
 ## 🔧 调试与排障

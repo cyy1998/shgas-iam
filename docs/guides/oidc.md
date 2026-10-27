@@ -105,7 +105,9 @@ Portal 对发现的完整端点先验证属于当前入口，再构造相对导�
 | iam:employments   | 仅 UserInfo 的有效任职与 responsibility；不进入 ID Token。                                       |
 | iam:authorization | 仅 UserInfo 中当前 Client 的已发布角色，不含其他 Client 授权或 responsibility；不进入 ID Token。 |
 
-任职响应包含 isPrimary、orgCode/orgName/orgType/fullOrgPath、posCode/posName，角色去重并稳定排序。
+自定义任职响应包含 `isPrimary`、`organization` 和 `position`。组织与责任目标共用 `code/name/type/path`，
+路径节点含 `level` 和 `distanceToTarget`，从根的层级 1 到目标自身的距离 0；岗位使用 `code/name`。
+角色去重并稳定排序，无当前 Client 角色的有效任职保留空角色数组。
 `iam:authorization` 的顶层和各任职仅含角色；不再返回权限点字段或空数组占位。Scope 名称和 allowedScopes 保持不变，无角色时返回空数组。接入应用须适配新响应，并清理或停用旧权限副本。
 不返回数据库 ID、密码、状态、软删除字段或时间戳，也不混入 Custom wire。
 UserInfo 按 Client 当前 allowedScopes 返回字段，范围变化也适用于旧 Token；原请求 scope 和调用方传入的 scope 均不改变该范围。ID Token 内容在签名后固定：显式映射 iss/aud/sub/iat/exp/auth_time、可选 nonce 及

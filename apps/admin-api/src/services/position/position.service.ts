@@ -106,7 +106,7 @@ export function createPositionService(deps: AdminPositionServiceDeps) {
           ),
         );
         if (changed) {
-          await tx.userProfileInvalidation.recordChanges([{ kind: "position", positionId: existing.id }]);
+          await tx.userDocumentInvalidation.recordChanges([{ kind: "position", positionId: existing.id }]);
         }
         return { changed, result: null };
       },
@@ -140,7 +140,7 @@ export function createPositionService(deps: AdminPositionServiceDeps) {
             auditContext,
           ),
         );
-        await tx.userProfileInvalidation.recordChanges([{ kind: "position", positionId: existing.id }]);
+        await tx.userDocumentInvalidation.recordChanges([{ kind: "position", positionId: existing.id }]);
         return { changed: true, result: null };
       },
       adminAuditTransactionOptions(auditContext),

@@ -123,8 +123,8 @@ test("HR Admin manages cross-root responsibilities without widening either endpo
 async function expectContextPanels(page: Page, scenario: Scenario, assignmentId: number) {
   const targetName = `E2E HR Responsibility Target ${scenario.runId}`;
   await page.goto("/iam-admin/organizations");
-  const organizationSearch = page.getByPlaceholder("搜索组织名称或编码");
-  await organizationSearch.fill(scenario.hrResponsibilityTargetOrganizationCode);
+  const organizationDocument = page.getByPlaceholder("搜索组织名称或编码");
+  await organizationDocument.fill(scenario.hrResponsibilityTargetOrganizationCode);
   await page
     .getByText(new RegExp(escapeRegExp(scenario.hrResponsibilityTargetOrganizationCode), "u"))
     .last()

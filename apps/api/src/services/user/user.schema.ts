@@ -1,7 +1,1 @@
-export {
-  UserCreateDtoSchema,
-  UserDetailDtoSchema,
-  UserDtoSchema,
-  UserProfileBaseSchema,
-  UserSchema,
-} from "@iam/domain/user";
+export { UserCreateDtoSchema, UserDtoSchema, UserSchema } from "@iam/domain/user";

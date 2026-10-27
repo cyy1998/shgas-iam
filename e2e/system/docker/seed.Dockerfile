@@ -20,11 +20,12 @@ COPY packages/session-kernel/package.json ./packages/session-kernel/package.json
 COPY packages/client-subject-projection/package.json ./packages/client-subject-projection/package.json
 COPY packages/contracts/package.json ./packages/contracts/package.json
 COPY packages/db/package.json ./packages/db/package.json
+COPY packages/document-update/package.json ./packages/document-update/package.json
 COPY packages/domain/package.json ./packages/domain/package.json
 COPY packages/jobs/package.json ./packages/jobs/package.json
 COPY packages/organization-responsibility-resolution/package.json ./packages/organization-responsibility-resolution/package.json
 COPY packages/role-assignment-resolution/package.json ./packages/role-assignment-resolution/package.json
-COPY packages/user-profile-read-model/package.json ./packages/user-profile-read-model/package.json
+COPY packages/user-document/package.json ./packages/user-document/package.json
 COPY packages/filter-engine/package.json ./packages/filter-engine/package.json
 RUN --mount=type=cache,id=iam-e2e-pnpm-v12,target=/pnpm/store \
     pnpm install --filter @iam/e2e-system... --frozen-lockfile --prod --ignore-scripts
@@ -36,11 +37,12 @@ COPY packages/session-kernel ./packages/session-kernel
 COPY packages/client-subject-projection ./packages/client-subject-projection
 COPY packages/contracts ./packages/contracts
 COPY packages/db ./packages/db
+COPY packages/document-update ./packages/document-update
 COPY packages/domain ./packages/domain
 COPY packages/jobs ./packages/jobs
 COPY packages/organization-responsibility-resolution ./packages/organization-responsibility-resolution
 COPY packages/role-assignment-resolution ./packages/role-assignment-resolution
-COPY packages/user-profile-read-model ./packages/user-profile-read-model
+COPY packages/user-document ./packages/user-document
 COPY packages/filter-engine ./packages/filter-engine
 RUN --mount=type=cache,id=iam-e2e-pnpm-v12,target=/pnpm/store \
     pnpm --config.inject-workspace-packages=true --filter @iam/e2e-system deploy --prod /deploy/e2e-system

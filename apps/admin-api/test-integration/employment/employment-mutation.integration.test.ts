@@ -41,17 +41,22 @@ import {
   organizations,
   positions,
   subjectAccessTransitions,
-  userProfileDirty,
+  userDocumentOutboxEntries,
+  userDocumentRebuildStates,
   users,
 } from "@iam/db/schema";
 import { EmploymentAlreadyExistsError, EmploymentNotEditableError } from "@iam/domain/employment";
-import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
+import { createSubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { withTestFullOrganizationResponsibilityAuthorization } from "../../src/testing/admin-authorization";
 import type { AdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";
+import {
+  createUserDocumentSourceConsumer,
+  expectCompletedUserDocumentSources,
+} from "../support/user-document-workflow";
 
 let harness: AdminApiPostgresTestHarness;
 const now = new Date("2026-09-07T00:00:00Z");
@@ -78,12 +83,12 @@ function commands(
       db: harness.db,
       clock,
       logger: { error: mock(() => undefined), warn: mock(() => undefined) },
-      organizationSearchJobProducer: {
-        async enqueueSourceChanges() {
+      organizationDocumentJobProducer: {
+        async enqueueOutboxEntries() {
           return { enqueued: 0 };
         },
       },
-      userProfileJobProducer: { enqueueRebuildJobs },
+      userDocumentJobProducer: createUserDocumentSourceConsumer(harness.db, enqueueRebuildJobs, clock),
     }),
     decorate,
   );
@@ -92,7 +97,7 @@ function commands(
     organizationReader: tx.repositories.organization,
     auditLogWriter: tx.auditService,
     responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-    userProfileInvalidation: tx.userProfileInvalidation,
+    userDocumentInvalidation: tx.userDocumentInvalidation,
   }));
   const repositories = createAdminApiRepositories(harness.db);
   const store = createInMemorySubjectAccessStore(
@@ -138,7 +143,7 @@ function commands(
         subjectAccessMutation: tx.subjectAccessMutation,
         auditLogWriter: tx.auditService,
         responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-        userProfileInvalidation: tx.userProfileInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
       })),
     }),
     enqueueRebuildJobs,
@@ -146,7 +151,7 @@ function commands(
       uow: mapUnitOfWork(uow, (tx) => ({
         employmentStore: tx.repositories.employment,
         auditLogWriter: tx.auditService,
-        userProfileInvalidation: tx.userProfileInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
       })),
     }),
     transfer: createTransferEmploymentUseCase({
@@ -158,7 +163,7 @@ function commands(
         userReader: tx.repositories.user,
         auditLogWriter: tx.auditService,
         responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-        userProfileInvalidation: tx.userProfileInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
       })),
     }),
     availability: createChangeEmploymentAvailabilityUseCase({ uow: lifecycle }),
@@ -171,7 +176,7 @@ function commands(
         positionReader: tx.repositories.position,
         userReader: tx.repositories.user,
         auditLogWriter: tx.auditService,
-        userProfileInvalidation: tx.userProfileInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
       })),
     }),
     profile: createEmploymentService({
@@ -182,7 +187,7 @@ function commands(
       uow: mapUnitOfWork(uow, (tx) => ({
         employmentRepository: tx.repositories.employment,
         auditService: tx.auditService,
-        userProfileInvalidation: tx.userProfileInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
       })),
     }),
     assignment: withTestFullOrganizationResponsibilityAuthorization(
@@ -191,7 +196,7 @@ function commands(
         uow: mapUnitOfWork(uow, (tx) => ({
           assignmentStore: tx.repositories.organizationResponsibility,
           auditLogWriter: tx.auditService,
-          userProfileInvalidation: tx.userProfileInvalidation,
+          userDocumentInvalidation: tx.userDocumentInvalidation,
         })),
       }),
     ),
@@ -268,7 +273,8 @@ async function facts() {
     employments: await harness.db.select().from(employments).orderBy(employments.id),
     assignments: await harness.db.select().from(assignments).orderBy(assignments.id),
     audits: await harness.db.select().from(auditLogs).orderBy(auditLogs.id),
-    dirty: await harness.db.select().from(userProfileDirty),
+    dirty: await harness.db.select().from(userDocumentRebuildStates),
+    outbox: await harness.db.select().from(userDocumentOutboxEntries).orderBy(userDocumentOutboxEntries.id),
   };
 }
 async function failure(operation: () => Promise<unknown>) {
@@ -728,7 +734,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
       "admin.employment.transfer",
     ]);
     expect(after.audits.map((row) => row.details)).toMatchObject([{ changed: true }, { changed: true }]);
-    expect(after.dirty[0]!.dirtyVersion).toBe("2");
+    await expectCompletedUserDocumentSources(harness.db, after.dirty[0]!.userId);
     expect(subject.enqueueRebuildJobs).toHaveBeenCalledTimes(2);
   });
 
@@ -784,9 +790,9 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
           : {}),
         ...(stage === "dirty"
           ? {
-              userProfileInvalidation: {
+              userDocumentInvalidation: {
                 recordChanges: async (changes) => {
-                  await tx.userProfileInvalidation.recordChanges(changes);
+                  await tx.userDocumentInvalidation.recordChanges(changes);
                   throw sentinel;
                 },
               },
@@ -861,7 +867,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
     });
     expect(after.assignments.map((row) => row.endTime)).toEqual([historicalEnd, now]);
     expect(after.audits).toHaveLength(2);
-    expect(after.dirty[0]!.dirtyVersion).toBe("1");
+    await expectCompletedUserDocumentSources(harness.db, after.dirty[0]!.userId);
     const retry = await failure(() => subject.transfer.execute(input));
     expect(retry).toBeInstanceOf(EmploymentNotEditableError);
     const afterRetry = await facts();
@@ -916,7 +922,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
       });
       expect(after.audits).toHaveLength(2);
       expect(after.audits[1]!.details).toMatchObject({ changed: secondCommand !== "pause" });
-      expect(after.dirty[0]!.dirtyVersion).toBe(secondCommand === "pause" ? "1" : "2");
+      await expectCompletedUserDocumentSources(harness.db, after.dirty[0]!.userId);
     });
   }
 
@@ -977,9 +983,9 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
               },
             }
           : {
-              userProfileInvalidation: {
+              userDocumentInvalidation: {
                 recordChanges: async (changes) => {
-                  await tx.userProfileInvalidation.recordChanges(changes);
+                  await tx.userDocumentInvalidation.recordChanges(changes);
                   throw sentinel;
                 },
               },
@@ -1107,7 +1113,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
           .sort(),
       ).toEqual(children.map((row) => row.id));
       expect(after.audits).toHaveLength(3);
-      expect(after.dirty[0]!.dirtyVersion).toBe("2");
+      await expectCompletedUserDocumentSources(harness.db, after.dirty[0]!.userId);
     });
   }
 
@@ -1136,6 +1142,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
         endTime: now,
         isPrimary: false,
       });
+      const enqueuedBeforeRetry = subject.enqueueRebuildJobs.mock.calls.length;
       const retry = await subject.resign.execute({ username: "holder" }, { authorization });
       expect(retry).toEqual({ changed: false, result: null });
       const repeated = await facts();
@@ -1145,7 +1152,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
         details: { changed: false },
       });
       expect(subject.revokeUserSessions).toHaveBeenCalledTimes(2);
-      expect(subject.enqueueRebuildJobs).toHaveBeenCalledTimes(1);
+      expect(subject.enqueueRebuildJobs).toHaveBeenCalledTimes(enqueuedBeforeRetry);
     });
   }
 
@@ -1167,9 +1174,9 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
               },
             }
           : {
-              userProfileInvalidation: {
+              userDocumentInvalidation: {
                 recordChanges: async (changes) => {
-                  await tx.userProfileInvalidation.recordChanges(changes);
+                  await tx.userDocumentInvalidation.recordChanges(changes);
                   throw sentinel;
                 },
               },
@@ -1199,7 +1206,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
     expect(after.users[0]!.status).toBe(UserStatus.Disable);
     expect(after.employments[0]!.endTime).toEqual(now);
     expect(after.audits).toMatchObject([{ action: "admin.employment.resign_user", details: { changed: true } }]);
-    expect(after.dirty[0]!.dirtyVersion).toBe("1");
+    await expectCompletedUserDocumentSources(harness.db, after.dirty[0]!.userId);
   });
 
   test("Resignation reports confirmed lifecycle failure after committing", async () => {
@@ -1210,7 +1217,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
     const after = await facts();
     expect(after.users[0]!.status).toBe(UserStatus.Disable);
     expect(after.audits).toMatchObject([{ action: "admin.employment.resign_user", details: { changed: true } }]);
-    expect(after.dirty[0]!.dirtyVersion).toBe("1");
+    await expectCompletedUserDocumentSources(harness.db, after.dirty[0]!.userId);
   });
 
   test("Resignation waits for User lock before locking its durable transition intent or Employments", async () => {
@@ -1314,7 +1321,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
     const after = await facts();
     expect(after.employments).toHaveLength(1);
     expect(after.audits).toMatchObject([{ details: { changed: true } }]);
-    expect(after.dirty[0]!.dirtyVersion).toBe("1");
+    await expectCompletedUserDocumentSources(harness.db, after.dirty[0]!.userId);
     const raw = await failure(() => harness.db.insert(employments).values(fixture.value));
     expect(raw).toHaveProperty("cause");
     expect(extractPostgresError(raw)).toEqual({

@@ -111,7 +111,7 @@ export function createResignUserUseCase(deps: ResignUserUseCaseDeps) {
                 const changed = userChanged || employmentChanged || assignmentChanged;
                 await tx.auditLogWriter.recordAuditLog(buildEmploymentResignUserAudit(current, auditContext, changed));
                 if (changed) {
-                  await tx.userProfileInvalidation.recordChanges([
+                  await tx.userDocumentInvalidation.recordChanges([
                     ...(userChanged ? [{ kind: "user" as const, userId: current.id }] : []),
                     ...(employmentChanged ? [{ kind: "employment" as const, userId: current.id }] : []),
                     ...(assignmentChanged

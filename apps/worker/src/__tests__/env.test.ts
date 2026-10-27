@@ -1,9 +1,9 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 
 type ParseWorkerEnv = typeof import("../env").parseWorkerEnv;
-type ParsePostgresReadinessEnv = typeof import("../env").parseUserProfilePostgresReadinessCommandEnv;
+type ParsePostgresReadinessEnv = typeof import("../env").parseUserDocumentPostgresReadinessCommandEnv;
 type ParseAuditActionMaintenanceEnv = typeof import("../env").parseAuditActionMaintenanceCommandEnv;
-type ParseOrganizationCommandEnv = typeof import("../env").parseOrganizationSearchBackfillCommandEnv;
+type ParseOrganizationCommandEnv = typeof import("../env").parseOrganizationDocumentBackfillCommandEnv;
 
 let parseWorkerEnv: ParseWorkerEnv;
 let parsePostgresReadinessEnv: ParsePostgresReadinessEnv;
@@ -24,9 +24,9 @@ describe("worker environment", () => {
     Object.assign(process.env, validEnv());
     ({
       parseAuditActionMaintenanceCommandEnv: parseAuditActionMaintenanceEnv,
-      parseUserProfilePostgresReadinessCommandEnv: parsePostgresReadinessEnv,
+      parseUserDocumentPostgresReadinessCommandEnv: parsePostgresReadinessEnv,
       parseWorkerEnv,
-      parseOrganizationSearchBackfillCommandEnv: parseOrganizationCommandEnv,
+      parseOrganizationDocumentBackfillCommandEnv: parseOrganizationCommandEnv,
     } = await import("../env"));
   });
 
@@ -37,7 +37,7 @@ describe("worker environment", () => {
         parse({
           ...validEnv(),
           IAM_WORKER_DATABASE_URL: "postgresql://iam:password@different-host/iam",
-          IAM_WORKER_ORGANIZATION_SEARCH_QUEUE_PREFIX: "isolated-but-unconsumed",
+          IAM_WORKER_ORGANIZATION_DOCUMENT_QUEUE_PREFIX: "isolated-but-unconsumed",
         }),
       ).toThrow("Organization Search queue prefix is fixed to iam");
     }
@@ -73,38 +73,38 @@ describe("worker environment", () => {
     expect(
       parsePostgresReadinessEnv({
         IAM_WORKER_DATABASE_URL: "postgresql://iam:password@localhost/iam",
-        IAM_WORKER_USER_PROFILE_REBUILD_BATCH_SIZE: "25",
-        IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE: "200",
+        IAM_WORKER_USER_DOCUMENT_REBUILD_BATCH_SIZE: "25",
+        IAM_WORKER_USER_DOCUMENT_BACKFILL_BATCH_SIZE: "200",
       }),
     ).toEqual({
       databaseUrl: "postgresql://iam:password@localhost/iam",
       nodeEnv: "development",
       log: { level: "info", format: "auto" },
-      userProfile: { rebuildBatchSize: 25, backfillBatchSize: 200 },
+      userDocument: { rebuildBatchSize: 25, backfillBatchSize: 200 },
     });
   });
 
   test("exports grouped runtime config from IAM_WORKER raw env", () => {
     const env = parseWorkerEnv({
       ...validEnv(),
-      IAM_WORKER_ENABLED_MODULES: "user-profile",
+      IAM_WORKER_ENABLED_MODULES: "user-document",
       IAM_WORKER_HTTP_PORT: "30003",
       IAM_WORKER_BULL_BOARD_ENABLED: "true",
       IAM_WORKER_BULL_BOARD_USERNAME: "ops",
       IAM_WORKER_BULL_BOARD_PASSWORD: "secret",
       IAM_WORKER_BULL_BOARD_READ_ONLY: "false",
-      IAM_WORKER_USER_PROFILE_CONCURRENCY: "4",
-      IAM_WORKER_USER_PROFILE_REBUILD_BATCH_SIZE: "25",
-      IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE: "200",
-      IAM_WORKER_USER_PROFILE_REPAIR_STALE_SECONDS: "600",
+      IAM_WORKER_USER_DOCUMENT_CONCURRENCY: "4",
+      IAM_WORKER_USER_DOCUMENT_REBUILD_BATCH_SIZE: "25",
+      IAM_WORKER_USER_DOCUMENT_BACKFILL_BATCH_SIZE: "200",
+      IAM_WORKER_USER_DOCUMENT_REPAIR_STALE_SECONDS: "600",
     });
 
     expect(env.databaseUrl).toBe("postgresql://iam:password@localhost/iam");
     expect(env.redis.host).toBe("localhost");
-    expect(env.modules.enabled).toEqual({ mode: "list", keys: ["user-profile"] });
+    expect(env.modules.enabled).toEqual({ mode: "list", keys: ["user-document"] });
     expect(env.dashboard.enabled).toBe(true);
     expect(env.dashboard.readOnly).toBe(false);
-    expect(env.userProfile).toEqual({
+    expect(env.userDocument).toEqual({
       concurrency: 4,
       rebuildBatchSize: 25,
       backfillBatchSize: 200,

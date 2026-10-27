@@ -47,7 +47,7 @@ describe("Custom SSO retryable HTTP error adapter", () => {
     } as Parameters<typeof createErrorHandler>[0];
     const internal = Object.assign(new SubjectProjectionNotReadyError(), {
       dirtyStatus: "processing",
-      dirtyVersion: "73",
+      version: "73",
       subjectFacts: {
         profile: {
           username: "must-not-leak",

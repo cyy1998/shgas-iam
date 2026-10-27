@@ -10,17 +10,17 @@ import {
 
 describe("job id helpers", () => {
   test("builds a deterministic user-level job id", () => {
-    expect(buildUserJobId("rebuild-user-profile", 123)).toBe("rebuild-user-profile|123");
+    expect(buildUserJobId("rebuild-user-document", 123)).toBe("rebuild-user-document|123");
   });
 
   test("builds a deterministic user-version job id", () => {
-    expect(buildUserVersionJobId("rebuild-user-profile", 123, "42")).toBe("rebuild-user-profile|123|42");
-    expect(buildUserVersionJobId("rebuild-user-profile", 123, "43")).toBe("rebuild-user-profile|123|43");
+    expect(buildUserVersionJobId("rebuild-user-document", 123, "42")).toBe("rebuild-user-document|123|42");
+    expect(buildUserVersionJobId("rebuild-user-document", 123, "43")).toBe("rebuild-user-document|123|43");
   });
 
   test("rejects empty job id parts", () => {
     expect(() => buildDeterministicJobId([])).toThrow("jobId parts must not be empty");
-    expect(() => buildDeterministicJobId(["rebuild-user-profile", ""])).toThrow("jobId parts must be non-empty");
+    expect(() => buildDeterministicJobId(["rebuild-user-document", ""])).toThrow("jobId parts must be non-empty");
   });
 });
 

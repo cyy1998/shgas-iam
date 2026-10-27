@@ -5,7 +5,7 @@ import {
   ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_AUDIT_ACTIONS,
   OrganizationResponsibilityAssignmentStatus,
 } from "@iam/contracts";
-import { OrganizationHasOpenResponsibilityAssignmentError } from "@iam/domain/organization";
+import { createOrganizationResponsibilityParentLifecycleGuard } from "@iam/organization-responsibility-resolution/parent-lifecycle";
 import type {
   OrganizationResponsibilityAssignmentLifecycleChange,
   OrganizationResponsibilityAssignmentWriteTarget,
@@ -34,6 +34,7 @@ export interface CreateOrganizationResponsibilityParentLifecycleParticipantDeps 
 export function createOrganizationResponsibilityParentLifecycleParticipant(
   deps: CreateOrganizationResponsibilityParentLifecycleParticipantDeps,
 ) {
+  const organizationGuard = createOrganizationResponsibilityParentLifecycleGuard(deps.assignmentStore);
   async function pauseEnabledAssignmentsForEmployment(input: {
     employmentId: number;
     selectedAssignments: readonly OrganizationResponsibilityAssignmentWriteTarget[];
@@ -65,12 +66,6 @@ export function createOrganizationResponsibilityParentLifecycleParticipant(
       );
     }
     return changes.length > 0;
-  }
-
-  async function assertNoOpenAssignmentsTargetingOrganizationSubtree(input: { organizationId: number }) {
-    if (await deps.assignmentStore.hasOpenAssignmentTargetingOrganizationSubtree(input.organizationId)) {
-      throw new OrganizationHasOpenResponsibilityAssignmentError();
-    }
   }
 
   async function endOpenAssignmentsForEmployment(input: {
@@ -178,7 +173,8 @@ export function createOrganizationResponsibilityParentLifecycleParticipant(
   return {
     lockAssignmentsForEmployment: deps.assignmentStore.lockAssignmentsForEmployment,
     lockAssignmentsForEmployments: deps.assignmentStore.lockAssignmentsForEmployments,
-    assertNoOpenAssignmentsTargetingOrganizationSubtree,
+    assertNoOpenAssignmentsTargetingOrganizationSubtree:
+      organizationGuard.assertNoOpenAssignmentsTargetingOrganizationSubtree,
     endOpenAssignmentsForEmployment,
     endOpenAssignmentsForUserResignation,
     pauseEnabledAssignmentsForEmployment,

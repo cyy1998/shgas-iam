@@ -48,13 +48,15 @@ export async function createAdminApiPostgresTestHarness(): Promise<AdminApiPostg
       async reset() {
         await scopedSql!.unsafe(`
           TRUNCATE TABLE
-            organization_search_change,
-            organization_search_dirty,
-            organization_search_document,
+            organization_document_outbox,
+            organization_document_rebuild_state,
+            organization_document,
             organization_responsibility_assignment,
             client_delegation,
             audit_log,
-            user_profile_dirty,
+            user_document_outbox,
+            user_document_rebuild_state,
+            user_document,
             subject_access_transition,
             employment,
             organization_closure,

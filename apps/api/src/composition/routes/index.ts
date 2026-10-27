@@ -37,7 +37,7 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
   const organizationHandlers = createOrganizationHandlers({
     auditLogWriter,
     organizationService: services.organization,
-    organizationSearch: services.organizationSearch,
+    organizationDocument: services.organizationDocument,
   });
 
   const delegationHandlers = createDelegationHandlers({
@@ -47,8 +47,8 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
 
   const userHandlers = createUserHandlers({
     registerPurveyorContact: useCases.registerPurveyorContact,
-    internalUserProfileQuery: services.internalUserProfileQuery,
-    userProfileSearch: services.userProfileSearch,
+    internalUserDocumentQuery: services.internalUserDocumentQuery,
+    userDocumentSearch: services.userDocumentSearch,
   });
 
   const health = createRouter();

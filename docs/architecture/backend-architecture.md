@@ -75,15 +75,15 @@ Client Snapshot 失效也遵守这一规则。提交成功后按注册顺序尝�
 
 ### Admin 同对象写入规范
 
-Admin PostgreSQL 写入统一在同一 UnitOfWork 内锁定目标，再校验、比较变化、写入并登记审计与 dirty，持锁至事务结束。
+Admin PostgreSQL 写入统一在同一 UnitOfWork 内锁定目标，再校验、比较变化、写入并登记审计与文档 Outbox，持锁至事务结束。
 公共 mutation 模块负责流程，repository 负责锁定和写入，领域负责转换规则、变化比较及审计内容。
 
 - 锁定拟修改的现存行和级联选中的完整集合，再重验状态。只读父对象普通预检；创建竞争由数据库唯一约束裁决。
 - 多行按固定顺序取锁。任职及责任级联先 Employment、后 Assignment，各表按 ID 升序；直接责任命令只锁 Assignment，
   不反向锁父 Employment。Set/Clear Primary 与 Transfer 在首次取锁前合并全部目标任职，Transfer 随后锁齐选中责任。
-- 账号生命周期写入先锁 User、后锁精确 transition intent；离职随后锁选中 Employment 和 Assignment，锁齐后重验 HR 资格，原子提交事实、审计与 dirty。
+- 账号生命周期写入先锁 User、后锁精确 transition intent；离职随后锁选中 Employment 和 Assignment，锁齐后重验 HR 资格，原子提交事实、审计与文档 Outbox。
 - 锁后写入零行属于不变量失败；已结束的级联对象不重写历史时间。新插入或未被选中的记录不属于本次集合。
-- 资料编辑只提交修改字段，关联状态取锁定后的事实。普通同值资料不写审计或 dirty；合法的显式状态、安全和授权意图保留 no-op 审计。
+- 资料编辑只提交修改字段，关联状态取锁定后的事实。普通同值资料不写审计或文档 Outbox；合法的显式状态、安全和授权意图保留 no-op 审计。
 - 已知唯一约束按领域映射冲突；未知数据库错误原样进入异常处理。事务失败后不能继续查询来推断冲突，也不为此自动重试或扩大锁范围。
 
 这些行锁不保护空槽或 phantom，也不把父对象完整性、Primary 唯一性和请求时 HR 范围提升为跨对象串行保证。
@@ -139,11 +139,11 @@ Kernel 检查会话存在、期限、归属和撤销，不解释账号状态；C
 捕获失败退回 callback 前代，未知更早代留待重试；捕获不是全局快照，晚到旧会话由后续重试或访问校验处理。
 
 Worker 恢复先用 PostgreSQL 服务端时间回收 stale pending intent，并跳过活跃行锁；失败则停止，随后才处理 Redis transition 与账号修复。
-修复按数据库账号状态决定；启用前须证明当前 Profile 与 processed dirty 一致、Facts 合法且成功发布。
+修复按源账号状态决定；启用前须证明当前 Document 与已完成重建一致，完整 Facts 合法且成功发布，直接用户 Outbox 和独立后续义务已满足。
 Redis 领取和 lease、确认与新 transition 原子协调，旧 worker 不能删除或推迟新工作。repair 不从缺失屏障直接创建 enabled。
 旧调度记录补齐年龄时保留可恢复的最早观察，后续 lease/backoff 不重置年龄。
 
-专用 Subject Access repair 仍需数据库写权限；dirty 的 stale 参数不改变 intent 的服务端时间阈值。
+专用 Subject Access repair 仍需数据库写权限；文档工作的 stale 参数不改变 intent 的服务端时间阈值。
 部署方负责外部周期调度和告警，把 stale 阈值、等待下一轮及有界排空计入恢复时限。
 步骤见[数据维护](../releases/data-maintenance.md)，关键行为见
 [操作许可测试](../../packages/api-core/test-integration/subject-access/subject-access-operation-kernel.integration.test.ts)。
@@ -191,7 +191,7 @@ Token 记录保存协议校验所需事实、有效期限与原会话绑定；�
 `@iam/role-assignment-resolution` 统一有效角色与受影响用户的反向解析，调用方不复制 assignment 或组织闭包规则。
 Composition 用当前连接创建并复用 resolver，失效模块自行创建事务绑定实例。
 
-正向解析检查任职、分配目标和角色有效性；岗位与直属组织完整性由 Profile builder 在发布前校验。
+正向解析检查任职、分配目标和角色有效性；岗位与直属组织完整性由 Document builder 在发布前校验。
 反向解析更保守，不能因角色、岗位或组织已失效而漏掉需重建的用户。管理端 CRUD 可以直接维护 assignment，协议消费已发布 Facts。
 理由见 [ADR-0002](../adr/0002-centralize-role-assignment-resolution.md)。
 
@@ -200,6 +200,11 @@ Composition 用当前连接创建并复用 resolver，失效模块自行创建�
 独立 resolver 负责有效责任和跨树 holder 反向解析，调用方显式提供观察时间。
 引用、父生命周期、期间或开放名额异常时整批拒绝；resolver 不拥有缓存、授权、管理历史或协议输出。
 组织变更的失效集合同时包含子树任职用户和责任反向 holder；Type 的披露字段或排序变化也须使 holder 失效。
+
+`@iam/organization-responsibility-resolution/parent-lifecycle` 独立提供开放责任目标子树的读取与父生命周期拒绝。
+API 与 Admin API composition 绑定当前事务；Admin 责任 repository 和父生命周期 participant 复用该能力。
+其他模块通过注入的业务 port 消费，不直接导入此写入侧出口。组织暂停或停用按实际修改对象在源事务内检查，
+拒绝时源事实、审计与两类文档 Outbox 一起回滚；该预检不增加锁，也不保护随后插入的 phantom。
 
 Admin 通过同一授权能力区分 full 与 scoped。HR 在分页前同时约束 holder 任职组织和目标组织，写入事务内复查双端条件。
 越界详情与操作隐藏存在性，拒绝日志不泄漏记录、路径或范围集合。完整管理员和混合角色走 full 分支。
@@ -212,7 +217,7 @@ Admin 通过同一授权能力区分 full 与 scoped。HR 在分页前同时约�
 不直接依赖数据库、读模型实现、app、会话运行时或协议包。一次交付用同一份合法 Facts，
 仅交付 Subject Identifier 时不读取 Facts。调用方提交主体、Client、披露选择和本操作许可；投影不重新认证或读取 Client 配置。
 
-普通资料和授权都消费已发布 Facts，不在请求时检查 dirty 新鲜度或联查源角色表。角色变更可能在重建前继续交付旧事实，
+普通资料和授权都消费已发布 Facts，不在请求时检查重建新鲜度或联查源角色表。角色变更可能在重建前继续交付旧事实，
 不承诺固定撤权传播期限；账号访问屏障另行生效。Facts 缺失或主体错配时整份投影失败。
 
 Custom SSO 的浏览器出口 `/wire` 拥有 schema、mapper 和预览，只通过 Projection 根接口取得中性能力，不能访问
@@ -226,62 +231,63 @@ OIDC UserInfo 与 Custom SSO 实际交付时使用当前披露；Code 保留原�
 ### Client 委托
 
 `@iam/delegation` 统一创建、生命周期、冲突、范围查询与安全选择器。API 与 Admin API 消费公开接口，分别传入
-Client、本人或全局管理范围；app 不互相导入私有实现。解析由 API 在同一观察时刻和数据库快照完成，不进入 Profile 或 Subject Facts。
+Client、本人或全局管理范围；app 不互相导入私有实现。解析由 API 在同一观察时刻和数据库快照完成，不进入 Document 或 Subject Facts。
 
 写入按委托人协调：创建先锁 User；更新只预读不可变委托人 ID，取 User 锁后重读记录和范围，再校验并写入事实及审计。
-同一委托人的写入共用该锁，冲突校验与写入在锁内完成；这些写入不登记 Profile dirty。
+同一委托人的写入共用该锁，冲突校验与写入在锁内完成；这些写入不登记 Document Outbox。
 委托引用的删除门禁由 User、Client、Organization 各自的写入口执行。
 状态、冲突及删除限制见[应用委托](../features/delegation/client-delegation.md)，设计理由见
 [ADR-0020](../adr/0020-provide-fail-closed-privilege-delegation-resolution.md)。
 
 ## 读模型与异步处理
 
-User Profile 的包外装配按出口分工：producer 由 API/Admin API composition 接入，worker 由 Worker composition 接入，
-query repository 由 API composition 接入。业务模块消费装配后注入的能力，不自行跨出口创建实现。
+`@iam/document-update` 由 User Document 与 Organization Document 共同消费，负责事务绑定登记、领取、完成凭据重放、重建版本与处理所有权仲裁、原子发布和两阶段 repair。文档模块拥有来源解释、关联展开与构建，用户模块另拥有 Facts 缓存和 Subject Access 后续责任。
 
-### User Profile 失效
+`@iam/user-document` / `@iam/organization-document` 的 producer 由 API/Admin API composition 接入，worker 由 Worker composition 接入；query repository 由查询 composition 接入。业务模块只消费注入能力，不自行跨出口创建实现。
 
-业务写入只提交源变化，事务绑定的 invalidation 模块负责解析受影响用户、登记 dirty 和提交后唤醒。
-调用方不选择 dirty reason、不持有投影 repository，也不自行入队。源事实与 dirty 在同一事务提交。
-登记成功不代表入队或发布完成，提交后的入队失败由 repair 恢复。
+### User Document 失效
 
-### User Profile Subject Facts publication
+源事实与 Outbox 消息同事务提交，调用方提交实际源变化，不预先固化最终关联用户集合。消息保存来源、必要的原关联及直接用户身份；删除角色分配、结束任职和责任仍保留原受影响对象。提交后才以一致观察展开依赖，原子登记目标 Rebuild State 版本和消息完成凭据。
+Outbox processed 表示全部目标重建要求已经持久登记，不表示入队或文档已发布。重复完成消息复用凭据而不推进新版本；队列只唤醒，丢失唤醒由两阶段 repair 恢复。登记覆盖组织子树任职者与跨树责任持有人、岗位、角色和分配，不依赖角色 code 前缀。
 
-Worker 在构建前固定候选版本，读取全部开放任职并校验岗位和直属组织完整性，再投影当前有效任职。
-角色、Client 和组织路径按稳定顺序输出，合法的无角色任职保留空授权集合。
+### User Document Subject Facts publication
 
-发布事务锁定 dirty 行，重验 user、版本与 processing 状态，单调写入 Profile 并同时标记 processed。
-过期候选不能覆盖新版本。PostgreSQL 提交后才向 Redis 发布，版本比较须保持 bigint 精度；缓存失败不回滚数据库。
-失败诊断只记录安全字段，原始 Redis 错误、命令或 Facts 不进入日志。
+每次构建固定源快照和观察时点，读取开放任职并校验岗位、组织与完整路径，再投影有效任职及角色的明确 Client 归属。
+PostgreSQL 每个用户只保存一份业务 document 及身份、schema、sourceVersion、发布时间等技术元数据；不再保存 detail、searchDoc、subjectFacts 或独立基础资料副本。Admin 和源账号查询保留管理专属模型。
 
-Facts reader 在合法缓存命中时直接返回；缺失、损坏或主体错配时按主体合并回源，读取一行已发布 Facts 并尽力回填。
-回填失败仍可使用合法数据库结果，Redis 读取故障不回源；不读取 Detail、搜索文档、dirty 或源业务表。
-读取观测只含操作、结果和耗时，观测失败不改变认证结果。
+发布事务锁定 Rebuild State，重验版本和领取 token，原子写入文档或墓碑、processed 与所需 post-publication 义务。重领更换 owner，同版本旧 owner 也不能完成新工作。PG 提交后才单调发布 Redis 并执行必要的 Subject Access 恢复；失败不回滚文档，也不因主 processed 而遗失恢复责任。
+只有已删除用户发布 document=null，未删除的 Pause/Disable 仍有完整文档；源行缺失不是墓碑。Redis 使用持久带版本墓碑，阻止旧 publisher 或回填复活；比较版本保持 bigint 精度。缓存失败保留持久 post-publication 工作供 repair。
 
-同一 Profile 行承载 Detail、Search 与 Facts。Internal 查询只消费当前 schema 的已发布数据，不能混写、双读或回退旧格式。
-数据库约束与应用严格解析分别承担其检查范围；恢复放流前由完整 PG/Redis 核验确认覆盖与版本一致。
-数据库回退须匹配旧制品和备份，不删除 migration journal 重放迁移。
+Facts reader 合法缓存命中直接返回；缺失、损坏或主体错配时按主体合并回源，从已发布 document 派生同版本 Facts 或墓碑并尽力回填。回填失败仍可使用合法 PG 结果；Redis 读取故障不回源，不查询源业务表或旧副本。读取诊断只含操作、结果和耗时，观测失败不改变认证。
+重新 Enable 仍要求当前源账号允许、全部直接用户 Outbox 完成、当前完整 Facts 与已完成重建匹配、PG/Redis 与 post-publication 满足恢复条件；retained-newer 缓存尤其墓碑不能被忽略，删除屏障保持 disabled。
 
-Employment verifier 使用一致只读快照核对任职及父对象，报告完整 blocker 集合；不推断历史结束时间或生成修复 SQL。
-维护与关键恢复验证见[数据维护](../releases/data-maintenance.md)及
-[Profile 维护测试](../../apps/worker/test-integration/user-profile/user-profile-maintenance.integration.test.ts)。
+Internal 搜索与精确详情直接读取当前 schema 已发布目录，返回同版本、同 Client 上下文的完整公开文档；角色条件和输出都先绑定认证 Client。无本 Client 角色的有效任职仍保留空 roles，内部 Client 归属、数据库 ID 和管理历史不公开。无可读条目的详情返回 404，损坏或查询失败返回 503，不回源拼装。
+
+正式用户 PG gate 在一个 REPEATABLE READ READ ONLY 事务完整核对全部源用户、文档/墓碑、Outbox、Rebuild State、主及后续处理凭据、源事实与孤立记录；Redis gate 用一致 PG 库存检查完整 Facts/墓碑与屏障。两者只读、不入队、不修复，Backfill 原因码不是就绪条件。不能跳过删除用户或仅核对数量。
+数据库回退需匹配旧制品与备份，不删除 migration journal 重放迁移。维护见[数据维护](../releases/data-maintenance.md)，接线验证见[Worker 维护测试](../../apps/worker/test-integration/user-document/user-document-maintenance.integration.test.ts)。
+
+Employment verifier 独立以一致只读快照检查任职及父对象，报告 blocker；不推断历史结束时间或生成修复 SQL。
 
 ### Organization Search 发布与核验
 
-组织读模型独立拥有源变化、dirty、文档和恢复流程。源事务用实际修改结果登记变化：创建、状态和删除登记自身，
+`@iam/organization-document` 独立拥有 `organization_document_outbox`、`organization_document_rebuild_state` 和
+`organization_document`，通过共享核心处理来源消息、重建要求与发布。源事务用实际修改结果登记变化：创建、状态和删除登记自身，
 code/name/type 变化登记子树；零行修改不登记。提交后按当前闭包展开，后续创建的后代由自己的变化登记覆盖。
 
-展开事务锁定并重验领取 token，原子登记目标版本和事件完成凭据。已完成事件重复投递只唤醒原版本，不推进新版本。
+展开在一致快照中锁定并重验领取 token，原子登记目标版本和 Outbox 完成凭据。完成消息重复投递只唤醒原版本，不推进新版本。
+并发展的确定回滚可重试一次，仍失败则保留消息供后续恢复，不重放源业务写入。
 repair 在源事件和重建两阶段回收失败或过期工作，跳过活跃事务；重领更换 token，旧 owner 即使持有同版本也不能发布或完成新工作。
 
-构建使用一致源快照并校验完整路径。发布锁定 dirty、重验版本和 owner，将文档或删除墓碑与 processed 同事务提交。
-墓碑保留版本仲裁事实。在线查询只读当前 schema 的可见已发布文档，允许延迟，不联查源表或执行全量覆盖检查。
+构建使用一致源快照并校验完整路径。发布锁定 Rebuild State、重验版本和 owner，将文档或删除墓碑与 processed 同事务提交。
+只有已删除源对象发布墓碑，源行缺失属于完整性错误。墓碑保留版本仲裁事实。
+搜索和 Internal 精确详情只读当前 schema 的可见已发布文档，允许延迟，不联查源表或执行全量覆盖检查。
+详情没有可读条目返回 404，损坏或查询失败返回 503；404 不证明源对象不存在。
 
-独立 verifier 在同一 `REPEATABLE READ READ ONLY` 事务读取源组织、闭包、文档/墓碑、dirty 和变化凭据，
+独立 verifier 在同一 `REPEATABLE READ READ ONLY` 事务读取源组织、闭包、文档/墓碑、Rebuild State 和 Outbox 凭据，
 完整检查覆盖、结构、源事实、处理版本及孤立记录，不写数据或派发任务。历史完成事件可以指向较早版本，不能指向未完成的更高版本。
 核验失败须修复后重新全量检查，不能抽样放流。
-关键验证见[恢复测试](../../packages/organization-search-read-model/test-integration/recovery/recovery.integration.test.ts)与
-[核验测试](../../packages/organization-search-read-model/test-integration/verification/verification.integration.test.ts)，操作见
+关键验证见[恢复测试](../../packages/organization-document/test-integration/recovery/recovery.integration.test.ts)与
+[核验测试](../../packages/organization-document/test-integration/verification/verification.integration.test.ts)，操作见
 [组织搜索维护](../releases/data-maintenance.md#组织搜索全量重建)。
 
 ### Filter 引擎

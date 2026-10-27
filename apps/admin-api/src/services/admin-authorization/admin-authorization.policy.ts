@@ -64,7 +64,7 @@ export interface CreateAdminAuthorizationPolicyDeps {
 }
 
 const FULL_ADMIN_ROLE_CODE = "iam:admin";
-const HR_USER_PROFILE_UPDATE_FIELDS = new Set(["name", "mobile", "wxId", "userType"]);
+const HR_USER_DOCUMENT_UPDATE_FIELDS = new Set(["name", "mobile", "wxId", "userType"]);
 const HR_ADMIN_OPERATION_IDS = new Set<string>([
   "admin.authorization.capabilitySummary",
   "admin.employment.search",
@@ -114,12 +114,12 @@ const actionNotGrantedDecision = {
   reason: "ACTION_NOT_GRANTED",
 } as const satisfies AdminAuthorizationDecision;
 
-function hasForbiddenHrUserProfileField(operationInput: unknown) {
+function hasForbiddenHrUserDocumentField(operationInput: unknown) {
   if (operationInput === null || typeof operationInput !== "object" || Array.isArray(operationInput)) return false;
   const input = operationInput as Record<string, unknown>;
   const patch = Object.hasOwn(input, "data") ? input.data : Object.hasOwn(input, "body") ? input.body : undefined;
   if (patch === null || typeof patch !== "object" || Array.isArray(patch)) return false;
-  return Object.keys(patch).some((key) => !HR_USER_PROFILE_UPDATE_FIELDS.has(key));
+  return Object.keys(patch).some((key) => !HR_USER_DOCUMENT_UPDATE_FIELDS.has(key));
 }
 
 function userAllowedActions(decision: AdminAuthorizationDecision): AdminUserAllowedActions {
@@ -541,7 +541,7 @@ export function createAdminAuthorizationPolicy(deps: CreateAdminAuthorizationPol
     if (
       hasFullAdminCapability(input.actor) ||
       input.operationId !== "admin.user.update" ||
-      !hasForbiddenHrUserProfileField(input.operationInput)
+      !hasForbiddenHrUserDocumentField(input.operationInput)
     ) {
       return;
     }

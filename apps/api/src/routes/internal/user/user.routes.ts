@@ -1,4 +1,3 @@
-import { UserProfileBaseSchema } from "@api/services/user/user.schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
@@ -9,11 +8,12 @@ import {
   StandardErrorResponseSchema,
   ValidationFailureResponseSchema,
 } from "@iam/api-core/core/openapi/schemas/error-response-schema";
+import { UserDocumentSchema } from "@iam/contracts";
 import { UserNameWriteSchema, UsernameWriteSchema } from "@iam/domain/user";
-import { UserProfileDetailDocumentSchema } from "@iam/user-profile-read-model";
-import { UserProfileSearchTransportRequestSchema } from "@iam/user-profile-read-model/query";
+import { UserDocumentSearchTransportRequestSchema } from "@iam/user-document/document/query";
 
 const tags = ["Internal/User"];
+const PublicUserDocumentSchema = z.object(UserDocumentSchema.shape).openapi("UserDocument");
 
 export const userInfo = createRoute({
   method: "get",
@@ -27,7 +27,7 @@ export const userInfo = createRoute({
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(StandardErrorResponseSchema, "用户详情暂时不可用"),
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(UserProfileDetailDocumentSchema), "用户详细信息"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(PublicUserDocumentSchema), "已发布用户文档"),
   },
 });
 
@@ -36,7 +36,7 @@ export const usersSearchDsl = createRoute({
   path: "/search-dsl",
   tags,
   request: {
-    body: jsonContentRequired(UserProfileSearchTransportRequestSchema, "User Profile v4 Filter DSL 搜索条件"),
+    body: jsonContentRequired(UserDocumentSearchTransportRequestSchema, "User Document Filter DSL 搜索条件"),
   },
   responses: {
     ...commonErrorResponses,
@@ -46,8 +46,8 @@ export const usersSearchDsl = createRoute({
     ),
     [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(StandardErrorResponseSchema, "用户搜索暂时不可用"),
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(z.array(UserProfileBaseSchema)),
-      "User Profile v4 Filter DSL 搜索结果",
+      createSuccessResponseSchema(z.array(PublicUserDocumentSchema)),
+      "完整用户文档搜索结果",
     ),
   },
 });

@@ -11,7 +11,6 @@ const getActiveUserBySubjectIdentifier = mock(async () => ({
   ...userDetail,
   subjectIdentifier,
 }));
-const getUserDetailById = mock(async () => userDetail);
 const resolveUserInfoForRequest = mock(async () => ({
   version: 1 as const,
   subjectIdentifier,
@@ -31,7 +30,6 @@ function createHandlers() {
     },
     userService: {
       getActiveUserBySubjectIdentifier,
-      getUserDetailById,
     },
   } as never);
 }
@@ -49,7 +47,6 @@ function makeContext() {
 
 beforeEach(() => {
   getActiveUserBySubjectIdentifier.mockClear();
-  getUserDetailById.mockClear();
   resolveUserInfoForRequest.mockClear();
   resolveUserInfoForRequest.mockImplementation(async () => ({
     version: 1 as const,
@@ -81,7 +78,6 @@ describe("createPublicHandlers", () => {
     expect(resolveUserInfoForRequest).toHaveBeenCalledWith(context);
     expect(context.get).not.toHaveBeenCalled();
     expect(getActiveUserBySubjectIdentifier).not.toHaveBeenCalled();
-    expect(getUserDetailById).not.toHaveBeenCalled();
   });
 
   test("userInfo maps Projection Not Ready to a sanitized retryable error", async () => {
@@ -95,6 +91,5 @@ describe("createPublicHandlers", () => {
       retryAfterSeconds: 3,
     });
     expect(getActiveUserBySubjectIdentifier).not.toHaveBeenCalled();
-    expect(getUserDetailById).not.toHaveBeenCalled();
   });
 });

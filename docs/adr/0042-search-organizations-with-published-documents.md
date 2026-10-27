@@ -4,10 +4,10 @@ status: accepted
 
 # 使用异步发布的组织文档执行筛选并返回结果
 
-Organization Search 保留组织关系表作为唯一源事实，以 PostgreSQL JSONB 保存可重建的搜索文档。
-文档由后台任务异步构建，承载组织自身属性和完整路径；新 Internal DSL 返回用于匹配的同一份完整文档。
-这是当前实现采用的已接受决定，调用规则见 [搜索接入](../guides/search.md)，维护流程见[组织搜索维护](../releases/data-maintenance.md#组织搜索全量重建)。
-实施与验收由 [Spec #221](https://github.com/cyy1998/shgas-iam/issues/221) 跟踪，不以本决定推定实现或部署已完成。
+[ADR-0046](0046-unify-user-and-organization-read-documents.md) 统一为 Organization Document，使 Internal 详情与搜索单项共用已发布目录，并与 User Document 共用更新核心。本页按组织异步发布与独立恢复的取舍继续适用。
+
+Organization Search 保留组织关系表为源事实，以 PostgreSQL JSONB 保存可重建的 Organization Document；文档承载组织属性和完整路径，搜索返回参与匹配的同一完整文档。
+调用见[搜索接入](../guides/search.md)，维护见[数据维护](../releases/data-maintenance.md#组织搜索全量重建)，最初实施来源为 [Spec #221](https://github.com/cyy1998/shgas-iam/issues/221)。代码机制不表示目标环境已部署。
 
 ## 理由与取舍
 
@@ -26,18 +26,19 @@ Organization Search 保留组织关系表作为唯一源事实，以 PostgreSQL 
 
 固定返回匹配文档，既保留路径及层级供调用方解释结果，也避免从当前源表或另一份摘要拼装出与筛选事实不同的响应。
 代价是完整路径增加存储和响应体积，因此保留有界过滤与 500 条结果上限。
-这与 [ADR-0015](0015-adopt-schema-driven-user-profile-filter-dsl.md) 的 User Profile Base 响应属于不同结果根的决定，
-不改变用户 DSL 的摘要与一致性边界。
+用户原固定摘要的不同取舍已由 ADR-0046 修订，两类目录均返回匹配的完整公开文档。
 
 ## 范围
 
 首版只搜索组织自身属性与完整路径，不收录成员、岗位、角色或责任持有人条件。
 新增组织 DSL 时保留了既有组织搜索与详情。后续按
 [ADR-0043](0043-retire-public-and-legacy-internal-directory-search.md) 直接退役 Public 和 Internal 非 DSL 组织搜索，
-组织详情继续保留原契约和读取方式；这不改变本页的异步文档与完整响应决定。
+随后 ADR-0046 将 Internal 详情改为同版本已发布文档；Admin 管理模型保留。
 
 组织读模型独立管理文档版本、待处理记录和数据核验，首次完整构建并核验后开放新接口，
-不与 User Profile 绑定发布或恢复。组织文档直接从 PostgreSQL 查询，首版不增加 Redis 文档缓存。
+不与 User Document 绑定发布或恢复。组织文档直接从 PostgreSQL 查询，首版不增加 Redis 文档缓存。
 
 文档采用独立单代 schema；首次构建或不兼容升级在组织搜索维护窗口内重建并完整核验，不提供调用方版本选择、
 跨 schema 混读或回退。恢复沿用维护命令与外部周期调度模式，不新增仓库调度系统，不在搜索请求中修复数据。
+
+原组织搜索与实时详情并存的决定保存在[固定历史版本](https://github.com/cyy1998/shgas-iam/blob/95dc4871c62e36b63b26a3f71c5670ae449c79e2/docs/adr/0042-search-organizations-with-published-documents.md)。

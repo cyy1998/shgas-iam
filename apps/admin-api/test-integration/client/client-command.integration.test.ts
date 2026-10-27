@@ -12,7 +12,7 @@ import { createErrorHandler } from "@iam/api-core/middlewares";
 import { mapUnitOfWork } from "@iam/api-core/uow";
 import { ApiErrorCode, ClientStatus, RoleAssignmentTargetType, RoleStatus } from "@iam/contracts";
 import { extractPostgresError } from "@iam/db/postgres-error";
-import { auditLogs, clients, positions, roles, userProfileDirty } from "@iam/db/schema";
+import { auditLogs, clients, positions, roles, userDocumentRebuildStates } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { ClientCodeExistsError, ClientCodeImmutableError, ClientNotFoundError } from "@iam/domain/client";
 import { RoleHasAssignmentError } from "@iam/domain/role";
@@ -21,6 +21,7 @@ import { Hono } from "hono";
 import { addTestAdminAuthorizationMiddleware } from "../../src/testing/admin-authorization";
 import type { AdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";
+import { createUserDocumentSourceConsumer } from "../support/user-document-workflow";
 
 let harness: AdminApiPostgresTestHarness;
 beforeAll(async () => {
@@ -49,12 +50,14 @@ function createCommand(decorate: (tx: AdminClientTransactionPorts) => AdminClien
     db: harness.db,
     logger: { error: mock(() => undefined), warn },
     clock: { nowDate: () => new Date("2026-09-07T00:00:00Z") },
-    organizationSearchJobProducer: {
-      async enqueueSourceChanges() {
+    organizationDocumentJobProducer: {
+      async enqueueOutboxEntries() {
         return { enqueued: 0 };
       },
     },
-    userProfileJobProducer: { enqueueRebuildJobs },
+    userDocumentJobProducer: createUserDocumentSourceConsumer(harness.db, enqueueRebuildJobs, {
+      nowDate: () => new Date("2026-09-07T00:00:00Z"),
+    }),
   });
   const management = createClientSsoManagement({
     db: harness.db,
@@ -67,7 +70,7 @@ function createCommand(decorate: (tx: AdminClientTransactionPorts) => AdminClien
     uow: mapUnitOfWork(uow, (tx) => ({
       roleRepository: tx.repositories.role,
       auditService: tx.auditService,
-      userProfileInvalidation: tx.userProfileInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
   });
   const service = createClientService({
@@ -108,7 +111,7 @@ async function facts() {
   return {
     clients: await harness.db.select().from(clients).orderBy(clients.id),
     audits: await harness.db.select().from(auditLogs).orderBy(auditLogs.id),
-    dirty: await harness.db.select().from(userProfileDirty),
+    dirty: await harness.db.select().from(userDocumentRebuildStates),
   };
 }
 

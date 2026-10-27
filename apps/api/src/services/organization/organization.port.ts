@@ -18,17 +18,20 @@ export interface ApiOrganizationProfileChange {
   readonly organizationId: number;
 }
 
-export type ApiOrganizationSearchChangedField = "code" | "name" | "type" | "status";
-export type ApiOrganizationSearchChange =
+export type ApiOrganizationDocumentChangedField = "code" | "name" | "type" | "status";
+export type ApiOrganizationDocumentChange =
   | { kind: "created"; organizationId: number }
-  | { kind: "updated"; organizationId: number; changedFields: readonly ApiOrganizationSearchChangedField[] };
+  | { kind: "updated"; organizationId: number; changedFields: readonly ApiOrganizationDocumentChangedField[] };
 
 export interface OrganizationTransactionPorts {
   organizationRepository: OrganizationTransactionStorePort;
-  organizationSearchInvalidation: {
-    recordChanges: (changes: readonly ApiOrganizationSearchChange[]) => Promise<void>;
+  responsibilityParentLifecycle: {
+    assertNoOpenAssignmentsTargetingOrganizationSubtree: (input: { organizationId: number }) => Promise<void>;
   };
-  userProfileInvalidation: {
+  organizationDocumentInvalidation: {
+    recordChanges: (changes: readonly ApiOrganizationDocumentChange[]) => Promise<void>;
+  };
+  userDocumentInvalidation: {
     recordChanges: (changes: readonly ApiOrganizationProfileChange[]) => Promise<void>;
   };
 }

@@ -20,6 +20,7 @@ import {
   OrganizationResponsibilityAssignmentDuplicateOpenError,
   OrganizationResponsibilityAssignmentUnmanageableConflictError,
 } from "@iam/domain/organization-responsibility";
+import { createOrganizationResponsibilityParentLifecycleReader } from "@iam/organization-responsibility-resolution/parent-lifecycle";
 import { and, asc, desc, eq, inArray, isNull, lt, ne, notInArray, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type {
@@ -39,6 +40,7 @@ const OPEN_ASSIGNMENT_STATUSES = [
 ] as const;
 
 export function createOrganizationResponsibilityRepository(db: DbClient) {
+  const { hasOpenAssignmentTargetingOrganizationSubtree } = createOrganizationResponsibilityParentLifecycleReader(db);
   async function lockAssignmentsByIds(
     ids: readonly number[],
   ): Promise<OrganizationResponsibilityAssignmentWriteTarget[]> {
@@ -123,26 +125,6 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
       (input.readScope.organizationIds.includes(input.holderOrganizationId) &&
         input.readScope.organizationIds.includes(input.targetOrganizationId))
     );
-  }
-
-  async function hasOpenAssignmentTargetingOrganizationSubtree(organizationId: number) {
-    const row = firstRow(
-      await db
-        .select({ id: organizationResponsibilityAssignments.id })
-        .from(organizationResponsibilityAssignments)
-        .innerJoin(
-          organizationClosures,
-          eq(organizationResponsibilityAssignments.targetOrganizationId, organizationClosures.descendantId),
-        )
-        .where(
-          and(
-            eq(organizationClosures.ancestorId, organizationId),
-            inArray(organizationResponsibilityAssignments.status, [...OPEN_ASSIGNMENT_STATUSES]),
-          ),
-        )
-        .limit(1),
-    );
-    return row !== null;
   }
 
   async function hasOpenAssignmentTargetingOrganizationSubtreeOutsideScope(

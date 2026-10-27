@@ -10,7 +10,7 @@ import type { AuditActorType, AuditDetails, AuditOutcome } from "@iam/domain/aud
 import type { Employment } from "@iam/domain/employment";
 import type { ResignUserOptions } from "./resign-user.type";
 
-export type ResignUserProfileChange =
+export type ResignUserDocumentChange =
   | {
       readonly kind: "user";
       readonly userId: number;
@@ -99,8 +99,8 @@ export interface ResignUserTransactionPorts {
       resolveTarget: (result: T) => SubjectAccessTransitionTarget,
     ) => Promise<T>;
   };
-  userProfileInvalidation: {
-    recordChanges: (changes: readonly ResignUserProfileChange[]) => Promise<void>;
+  userDocumentInvalidation: {
+    recordChanges: (changes: readonly ResignUserDocumentChange[]) => Promise<void>;
   };
   userStore: ResignUserEligibilityReaderPort & {
     lockUserByUsername: (username: string, includeDeleted?: boolean) => Promise<ResignUserTarget | null>;

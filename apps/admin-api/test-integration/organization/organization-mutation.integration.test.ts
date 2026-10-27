@@ -21,13 +21,13 @@ import {
   clientDelegations,
   employments,
   organizationClosures,
+  organizationDocumentOutboxEntries,
+  organizationDocumentRebuildStates,
+  organizationDocuments,
   organizationResponsibilityAssignments,
-  organizationSearchChanges,
-  organizationSearchDirty,
-  organizationSearchDocuments,
   organizations,
   positions,
-  userProfileDirty,
+  userDocumentRebuildStates,
   users,
 } from "@iam/db/schema";
 import {
@@ -40,16 +40,17 @@ import {
   OrganizationUpdateDtoSchema,
 } from "@iam/domain/organization";
 import {
-  createOrganizationSearchQueryRepository,
-  createOrganizationSearchQueryService,
-} from "@iam/organization-search-read-model";
+  createOrganizationDocumentQueryRepository,
+  createOrganizationDocumentQueryService,
+} from "@iam/organization-document";
 import {
-  createOrganizationSearchProcessor,
+  createOrganizationDocumentProcessor,
   type OrganizationRebuildJobPayload,
-} from "@iam/organization-search-read-model/worker";
+} from "@iam/organization-document/worker";
 import { eq } from "drizzle-orm";
 import type { AdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";
+import { createUserDocumentSourceConsumer } from "../support/user-document-workflow";
 
 let harness: AdminApiPostgresTestHarness;
 beforeAll(async () => {
@@ -71,9 +72,11 @@ function createCommand(
     db: harness.db,
     logger: { error: mock(() => undefined), warn },
     clock: { nowDate: () => new Date("2026-09-07T00:00:00Z") },
-    userProfileJobProducer: { enqueueRebuildJobs },
-    organizationSearchJobProducer: {
-      async enqueueSourceChanges() {
+    userDocumentJobProducer: createUserDocumentSourceConsumer(harness.db, enqueueRebuildJobs, {
+      nowDate: () => new Date("2026-09-07T00:00:00Z"),
+    }),
+    organizationDocumentJobProducer: {
+      async enqueueOutboxEntries() {
         return { enqueued: 0 };
       },
     },
@@ -89,8 +92,8 @@ function createCommand(
           organizationRepository: tx.repositories.organization,
           auditService: tx.auditService,
           responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-          userProfileInvalidation: tx.userProfileInvalidation,
-          organizationSearchInvalidation: tx.organizationSearchInvalidation,
+          userDocumentInvalidation: tx.userDocumentInvalidation,
+          organizationDocumentInvalidation: tx.organizationDocumentInvalidation,
         }),
       ),
     }),
@@ -178,19 +181,19 @@ async function facts() {
       .from(organizationClosures)
       .orderBy(organizationClosures.ancestorId, organizationClosures.descendantId),
     audits: await harness.db.select().from(auditLogs).orderBy(auditLogs.id),
-    dirty: await harness.db.select().from(userProfileDirty),
-    searchChanges: await harness.db.select().from(organizationSearchChanges),
-    searchDirty: await harness.db.select().from(organizationSearchDirty),
-    searchDocuments: await harness.db.select().from(organizationSearchDocuments),
+    dirty: await harness.db.select().from(userDocumentRebuildStates),
+    searchChanges: await harness.db.select().from(organizationDocumentOutboxEntries),
+    searchDirty: await harness.db.select().from(organizationDocumentRebuildStates),
+    searchDocuments: await harness.db.select().from(organizationDocuments),
   };
 }
 
 async function publishOrganizationChanges() {
   const rebuilds: OrganizationRebuildJobPayload[] = [];
-  const processor = createOrganizationSearchProcessor({
+  const processor = createOrganizationDocumentProcessor({
     db: harness.db,
     jobProducer: {
-      async enqueueSourceChanges() {
+      async enqueueOutboxEntries() {
         return { enqueued: 0 };
       },
       async enqueueRebuilds(payloads) {
@@ -201,15 +204,15 @@ async function publishOrganizationChanges() {
   });
   const changes = await harness.db
     .select()
-    .from(organizationSearchChanges)
-    .where(eq(organizationSearchChanges.status, "pending"));
-  for (const change of changes) await processor.processSourceChange({ changeId: change.id });
+    .from(organizationDocumentOutboxEntries)
+    .where(eq(organizationDocumentOutboxEntries.status, "pending"));
+  for (const change of changes) await processor.processOutbox({ outboxId: change.id });
   for (const payload of rebuilds) await processor.processRebuild(payload);
 }
 
 async function searchOrganizations(codes: string[]) {
-  return await createOrganizationSearchQueryService({
-    repository: createOrganizationSearchQueryRepository(harness.db),
+  return await createOrganizationDocumentQueryService({
+    repository: createOrganizationDocumentQueryRepository(harness.db),
   }).search({
     filter: { field: "organization.code", op: "in", value: codes },
   });
@@ -871,17 +874,17 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
             }
           : stage === "dirty"
             ? {
-                userProfileInvalidation: {
+                userDocumentInvalidation: {
                   recordChanges: async (changes) => {
-                    await tx.userProfileInvalidation.recordChanges(changes);
+                    await tx.userDocumentInvalidation.recordChanges(changes);
                     throw sentinel;
                   },
                 },
               }
             : {
-                organizationSearchInvalidation: {
+                organizationDocumentInvalidation: {
                   recordChanges: async (changes) => {
-                    await tx.organizationSearchInvalidation.recordChanges(changes);
+                    await tx.organizationDocumentInvalidation.recordChanges(changes);
                     throw sentinel;
                   },
                 },
@@ -903,9 +906,9 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
       const sentinel = new Error("injected durable registration failure");
       const { service } = createCommand((tx) => ({
         ...tx,
-        organizationSearchInvalidation: {
+        organizationDocumentInvalidation: {
           async recordChanges(changes) {
-            await tx.organizationSearchInvalidation.recordChanges(changes);
+            await tx.organizationDocumentInvalidation.recordChanges(changes);
             throw sentinel;
           },
         },

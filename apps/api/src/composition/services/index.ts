@@ -12,7 +12,7 @@ import { createOrganizationService } from "@api/services/organization/organizati
 import { createUserService } from "@api/services/user/user.service";
 import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.helper";
 import { createUserPasswordHelper } from "@api/services/user/user-password.helper";
-import { createUserProfileSearchAdapter } from "@api/services/user-profile-search/user-profile-search.adapter";
+import { createUserDocumentSearchAdapter } from "@api/services/user-document-search/user-document-search.adapter";
 import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
 import { createClientSecretAuthenticator } from "@iam/api-core/client-snapshot/credentials";
 import { createLoginRestriction, createRedisLoginRestrictionStore } from "@iam/api-core/login-restriction";
@@ -32,23 +32,23 @@ import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
 import { createDelegationService } from "@iam/delegation";
 import { createOidcClientAuthRateLimiter } from "@iam/oidc";
 import {
-  createOrganizationSearchQueryRepository,
-  createOrganizationSearchQueryService,
-} from "@iam/organization-search-read-model";
+  createOrganizationDocumentQueryRepository,
+  createOrganizationDocumentQueryService,
+} from "@iam/organization-document";
 import { createUnifiedSessionKernel } from "@iam/session-kernel";
 import {
-  createInternalUserProfileQueryRepository,
-  createInternalUserProfileQueryService,
+  createInternalUserDocumentQueryRepository,
+  createInternalUserDocumentQueryService,
   createSubjectFactsReader,
   createSubjectFactsRedisCache,
-} from "@iam/user-profile-read-model";
+} from "@iam/user-document";
 import {
-  createUserProfileQueryService,
-  createUserProfileSearchRepository,
-  createUserProfileSearchService,
-} from "@iam/user-profile-read-model/query";
-import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
-import { createSubjectFactsLoggerObservability } from "@iam/user-profile-read-model/subject-facts";
+  createUserDocumentQueryService,
+  createUserDocumentSearchRepository,
+  createUserDocumentSearchService,
+} from "@iam/user-document/query";
+import { createSubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
+import { createSubjectFactsLoggerObservability } from "@iam/user-document/subject-facts";
 import { createPublicDelegationDependencies } from "../public-delegation";
 import type { ApiRepositories } from "../repositories";
 import { createRootAuthenticationComposition } from "../root-authentication";
@@ -62,7 +62,7 @@ export interface CreateApiServicesOptions {
   repositories: ApiRepositories;
   auditLogWriter: ApiAuditLogWriter;
   unitOfWork: ApiUnitOfWork;
-  userProfileQueryDb: DbClient;
+  userDocumentQueryDb: DbClient;
   organizationQueryDb: DbClient;
 }
 
@@ -150,15 +150,15 @@ export function createApiServices(options: CreateApiServicesOptions) {
     },
   });
 
-  const userProfileQuery = createUserProfileQueryService({
-    profileRepository: repositories.userProfile,
+  const userDocumentQuery = createUserDocumentQueryService({
+    documentRepository: repositories.userDocument,
   });
-  const internalUserProfileQuery = createInternalUserProfileQueryService({
-    profileRepository: createInternalUserProfileQueryRepository(options.userProfileQueryDb),
+  const internalUserDocumentQuery = createInternalUserDocumentQueryService({
+    documentRepository: createInternalUserDocumentQueryRepository(options.userDocumentQueryDb),
   });
-  const userProfileSearch = createUserProfileSearchAdapter(
-    createUserProfileSearchService({
-      profileRepository: createUserProfileSearchRepository(options.userProfileQueryDb),
+  const userDocumentSearch = createUserDocumentSearchAdapter(
+    createUserDocumentSearchService({
+      documentRepository: createUserDocumentSearchRepository(options.userDocumentQueryDb),
     }),
   );
   const userMobileBinding = createUserMobileBinding({
@@ -173,7 +173,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
   const userService = createUserService({
     userRepository: repositories.user,
     mobileService,
-    profileQuery: userProfileQuery,
+    documentQuery: userDocumentQuery,
     mobileBinding: userMobileBinding,
     passwordHelper: userPasswordHelper,
     sessionRevocation: {
@@ -191,7 +191,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
       userRepository: tx.repositories.user,
       auditLogWriter: tx.auditLogWriter,
       subjectAccessMutation: tx.subjectAccessMutation,
-      userProfileInvalidation: tx.userProfileInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
   });
 
@@ -203,13 +203,14 @@ export function createApiServices(options: CreateApiServicesOptions) {
     organizationRepository: repositories.organization,
     uow: mapUnitOfWork(unitOfWork, (tx) => ({
       organizationRepository: tx.repositories.organization,
-      userProfileInvalidation: tx.userProfileInvalidation,
-      organizationSearchInvalidation: tx.organizationSearchInvalidation,
+      responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
+      organizationDocumentInvalidation: tx.organizationDocumentInvalidation,
     })),
   });
 
-  const organizationSearch = createOrganizationSearchQueryService({
-    repository: createOrganizationSearchQueryRepository(options.organizationQueryDb),
+  const organizationDocument = createOrganizationDocumentQueryService({
+    repository: createOrganizationDocumentQueryRepository(options.organizationQueryDb),
   });
 
   const delegationService = createDelegationService({
@@ -246,15 +247,15 @@ export function createApiServices(options: CreateApiServicesOptions) {
     loginRestriction,
     mobile: mobileService,
     organization: organizationService,
-    organizationSearch,
+    organizationDocument,
     delegation: delegationService,
     subjectAccess,
     subjectAccessLifecycle,
     user: userService,
     userPassword: userPasswordHelper,
-    userProfileQuery,
-    userProfileSearch,
-    internalUserProfileQuery,
+    userDocumentQuery,
+    userDocumentSearch,
+    internalUserDocumentQuery,
   };
   const authentication = createRootAuthenticationComposition({
     kernel: sessionKernel,

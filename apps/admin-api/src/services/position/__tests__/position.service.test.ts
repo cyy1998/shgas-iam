@@ -23,7 +23,7 @@ function position(overrides: Record<string, unknown> = {}) {
 function createService(overrides: Record<string, unknown> = {}) {
   const tx = {
     auditService: { recordAuditLog: mock(async () => undefined) },
-    userProfileInvalidation: {
+    userDocumentInvalidation: {
       recordChanges: mock(async () => undefined),
     },
     positionRepository: {
@@ -76,7 +76,7 @@ describe("createPositionService", () => {
         targetCode: "DEV",
       }),
     );
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "position", positionId: 1 }]);
+    expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "position", positionId: 1 }]);
   });
 
   test("preserves a rename conflict without recording success facts", async () => {
@@ -87,7 +87,7 @@ describe("createPositionService", () => {
     await expect(service.updatePosition("DEV", { posCode: "OPS" })).rejects.toBe(conflict);
 
     expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
-    expect(tx.userProfileInvalidation.recordChanges).not.toHaveBeenCalled();
+    expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test.each([
@@ -148,7 +148,7 @@ describe("createPositionService", () => {
     expect(tx.positionRepository.updatePositionByCode).toHaveBeenCalledWith("DEV", {
       status: PositionStatus.Disable,
     });
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "position", positionId: 1 }]);
+    expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "position", positionId: 1 }]);
   });
 
   test.each([
@@ -162,6 +162,6 @@ describe("createPositionService", () => {
 
     expect(tx.positionRepository.countOpenEmploymentsByPosCode).toHaveBeenCalledWith("DEV");
     expect(tx.positionRepository.softDeletePositionByCode).toHaveBeenCalledWith("DEV");
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "position", positionId: 1 }]);
+    expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "position", positionId: 1 }]);
   });
 });

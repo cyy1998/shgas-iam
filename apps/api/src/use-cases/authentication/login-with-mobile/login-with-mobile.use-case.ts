@@ -73,8 +73,8 @@ export function createLoginWithMobileUseCase(deps: LoginWithMobileDeps) {
       throw new UserNotFoundError("用户不存在");
     }
 
-    const userDetail = await deps.users.getUserDetailById(activeUser.id);
-    await runLoginProtection(activeUser, () => deps.loginRestriction.clearLoginState(userDetail.id));
+    const loginProfile = await deps.users.getLoginProfileById(activeUser.id);
+    await runLoginProtection(activeUser, () => deps.loginRestriction.clearLoginState(activeUser.id));
     const { token, remainingSeconds } = await deps.principalSessions.createPrincipalSession(
       activeUser.subjectIdentifier,
       {
@@ -84,12 +84,12 @@ export function createLoginWithMobileUseCase(deps: LoginWithMobileDeps) {
     );
     await deps.auditLogWriter.recordAuditLog({
       ...requestContext,
-      ...buildMobileLoginSuccessAudit(userDetail),
+      ...buildMobileLoginSuccessAudit({ ...loginProfile, id: activeUser.id }),
     });
     return {
       token,
       ...(remainingSeconds === undefined ? {} : { remainingSeconds }),
-      isMobileSet: userDetail.mobile !== null,
+      isMobileSet: loginProfile.mobile !== null,
     };
   }
 

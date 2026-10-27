@@ -68,9 +68,12 @@ export async function createApiPostgresTestHarness(
       async reset() {
         await scopedSql!.unsafe(
           `TRUNCATE TABLE
-            organization_search_change,
-            organization_search_dirty,
-            organization_search_document,
+            organization_document_outbox,
+            organization_document_rebuild_state,
+            organization_document,
+            user_document_outbox,
+            user_document_rebuild_state,
+            user_document,
             audit_log,
             client_delegation,
             client,

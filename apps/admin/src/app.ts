@@ -1,12 +1,12 @@
 // 运行时配置
 import shanghaiGasLogo from "@admin/assets/logo.png";
 import AvatarDropdown from "@admin/components/RightContent/AvatarDropdown";
-import { API_PREFIX, SSO_CLIENT_CODE } from "@admin/constants/config";
-import { type CurrentAdminUser, mapCurrentAdminUser } from "@admin/lib/current-admin-user";
+import { SSO_CLIENT_CODE } from "@admin/constants/config";
+import type { CurrentAdminUser } from "@admin/lib/current-admin-user";
 import { getAdminCapabilitySummary } from "@admin/services/authorization";
+import { loadCurrentAdminUser } from "@admin/services/current-user";
 import { redirectToLogin, restoreLoginRedirectState } from "@admin/utils/auth";
 import type { AdminCapabilitySummary } from "@iam/contracts";
-import type { CustomSsoSubjectProjection } from "@iam/custom-sso/wire";
 import { history } from "@umijs/max";
 import { ConfigProvider } from "antd";
 import { createElement, type ReactElement } from "react";
@@ -31,23 +31,14 @@ if (typeof window !== "undefined") {
 // 更多信息见文档：https://umijs.org/docs/api/runtime-config#getinitialstate
 export async function getInitialState(): Promise<InitialState> {
   try {
-    const res = await fetch(`${API_PREFIX}/public/user-info`, {
-      credentials: "include",
-      headers: {
-        Client: SSO_CLIENT_CODE,
-      },
-    });
-
-    if (res.status === 401) {
+    const result = await loadCurrentAdminUser();
+    if (result.kind === "unauthenticated") {
       redirectToLogin();
       return new Promise(() => {});
     }
 
-    if (res.ok) {
-      const body = (await res.json()) as {
-        data: CustomSsoSubjectProjection;
-      };
-      const currentUser = mapCurrentAdminUser(body.data);
+    if (result.kind === "available") {
+      const currentUser = result.user;
 
       let capabilities: AdminCapabilitySummary;
       try {
@@ -63,7 +54,7 @@ export async function getInitialState(): Promise<InitialState> {
       return { capabilities, currentUser };
     }
   } catch {
-    // Network error — don't redirect
+    // 保留当前入口；读取或响应校验失败不触发认证重定向。
   }
   return {};
 }

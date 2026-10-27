@@ -8,6 +8,7 @@ import {
   ClientStatus,
   OidcClientType,
   OidcScope,
+  OrganizationResponsibilityTypeCode,
   OrganizationType,
 } from "@iam/contracts";
 import { resetApiRedisTestDatabase } from "../support/fixture-lifecycle";
@@ -279,7 +280,7 @@ test("UserInfo preserves an observed in-flight request and rejects next request 
       await gate;
       return {
         subjectIdentifier: subject,
-        sourceDirtyVersion: "1",
+        sourceVersion: "1",
         profile: { username: "old", name: "已发布", phone: null },
         employments: [],
       };
@@ -308,7 +309,7 @@ test("UserInfo maps published employment wire and isolates two Clients authoriza
     async read(subject): Promise<SubjectFactsSnapshot> {
       return {
         subjectIdentifier: subject,
-        sourceDirtyVersion: "1",
+        sourceVersion: "1",
         profile: { username: "old", name: "已发布角色", phone: null },
         employments: [
           {
@@ -317,10 +318,22 @@ test("UserInfo maps published employment wire and isolates two Clients authoriza
               code: "org",
               name: "组织",
               type: OrganizationType.Department,
-              path: [{ code: "org", name: "组织", type: OrganizationType.Department }],
+              path: [{ code: "org", name: "组织", type: OrganizationType.Department, level: 1, distanceToTarget: 0 }],
             },
             position: { code: "position", name: "岗位" },
-            responsibilities: [],
+            responsibilities: [
+              {
+                type: { code: OrganizationResponsibilityTypeCode.Head, name: "负责人" },
+                targetOrganization: {
+                  code: "org",
+                  name: "组织",
+                  type: OrganizationType.Department,
+                  path: [
+                    { code: "org", name: "组织", type: OrganizationType.Department, level: 1, distanceToTarget: 0 },
+                  ],
+                },
+              },
+            ],
             clientAuthorizations: [
               { clientCode: first, roles: [{ code: "a" }] },
               { clientCode: other, roles: [{ code: "b" }] },
@@ -344,12 +357,12 @@ test("UserInfo maps published employment wire and isolates two Clients authoriza
           {
             isPrimary: true,
             organization: {
-              orgCode: "org",
-              orgName: "组织",
-              orgType: OrganizationType.Department,
-              fullOrgPath: [{ orgCode: "org", orgName: "组织", orgType: OrganizationType.Department }],
+              code: "org",
+              name: "组织",
+              type: OrganizationType.Department,
+              path: [{ code: "org", name: "组织", type: OrganizationType.Department, level: 1, distanceToTarget: 0 }],
             },
-            position: { posCode: "position", posName: "岗位" },
+            position: { code: "position", name: "岗位" },
             roles: [role],
           },
         ],
@@ -359,13 +372,23 @@ test("UserInfo maps published employment wire and isolates two Clients authoriza
         {
           isPrimary: true,
           organization: {
-            orgCode: "org",
-            orgName: "组织",
-            orgType: OrganizationType.Department,
-            fullOrgPath: [{ orgCode: "org", orgName: "组织", orgType: OrganizationType.Department }],
+            code: "org",
+            name: "组织",
+            type: OrganizationType.Department,
+            path: [{ code: "org", name: "组织", type: OrganizationType.Department, level: 1, distanceToTarget: 0 }],
           },
-          position: { posCode: "position", posName: "岗位" },
-          responsibilities: [],
+          position: { code: "position", name: "岗位" },
+          responsibilities: [
+            {
+              type: { code: OrganizationResponsibilityTypeCode.Head, name: "负责人" },
+              targetOrganization: {
+                code: "org",
+                name: "组织",
+                type: OrganizationType.Department,
+                path: [{ code: "org", name: "组织", type: OrganizationType.Department, level: 1, distanceToTarget: 0 }],
+              },
+            },
+          ],
         },
       ]);
     }

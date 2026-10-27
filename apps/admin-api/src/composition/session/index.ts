@@ -10,7 +10,7 @@ import {
 } from "@iam/api-core/subject-access";
 import db from "@iam/db";
 import { createUnifiedSessionKernel } from "@iam/session-kernel";
-import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
+import { createSubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
 import type { AdminApiRuntimePorts } from "../runtime";
 import { createUnifiedAdminLifecycleRevocation } from "./unified-lifecycle";
 

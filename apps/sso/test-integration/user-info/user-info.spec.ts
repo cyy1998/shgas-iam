@@ -1,8 +1,59 @@
 // Browser Integration uses a mocked backend; this is not a full-system journey.
-import { ApiErrorCode } from "@iam/contracts";
+import { ApiErrorCode, OrganizationType } from "@iam/contracts";
 import { expect, test } from "@playwright/test";
 import { currentUserInfo } from "../../test/mocks/fixtures";
 import { mockSsoApi } from "../fixtures";
+
+test("a malformed shared organization path stays unavailable until a valid projection is retried", async ({ page }) => {
+  await mockSsoApi(page);
+  let requests = 0;
+  await page.route("**/public/user-info", (route) => {
+    requests += 1;
+    return route.fulfill({
+      json: {
+        code: 200,
+        message: "OK",
+        data: {
+          ...currentUserInfo,
+          profile: {
+            ...currentUserInfo.profile,
+            employments: [
+              {
+                isPrimary: true,
+                organization: {
+                  code: "FIN",
+                  name: "财务部",
+                  type: OrganizationType.Department,
+                  path: [
+                    { code: "ROOT", name: "总部", type: OrganizationType.Company, level: 1, distanceToTarget: 1 },
+                    {
+                      code: "FIN",
+                      name: "财务部",
+                      type: OrganizationType.Department,
+                      level: requests === 1 ? 1 : 2,
+                      distanceToTarget: 0,
+                    },
+                  ],
+                },
+                position: { code: "FIN-1", name: "会计" },
+                responsibilities: [],
+              },
+            ],
+          },
+        },
+      },
+    });
+  });
+
+  await page.goto("/portal/userInfo");
+  await expect(page.getByRole("alert")).toContainText("个人信息加载失败");
+  await expect(page.getByRole("button", { name: /保存设置/ })).toHaveCount(0);
+  expect(requests).toBe(1);
+  await page.getByRole("button", { name: /重\s*试/ }).click();
+  await expect(page.getByRole("button", { name: /保存设置/ })).toBeVisible();
+  await expect(page.getByText("总部 / 财务部", { exact: true })).toBeVisible();
+  expect(requests).toBe(2);
+});
 
 test("portal logout uses the current entry and preserves the configured business destination", async ({ page }) => {
   await mockSsoApi(page);

@@ -69,8 +69,8 @@ export function createLoginWithPasswordUseCase(deps: LoginWithPasswordDeps) {
       throw new LoginFailedError(formatLoginFailureMessage("密码错误", failureResult));
     }
 
-    const userDetail = await deps.users.getUserDetailById(activeUser.id);
-    await runLoginProtection(() => deps.loginRestriction.clearLoginState(userDetail.id));
+    const loginProfile = await deps.users.getLoginProfileById(activeUser.id);
+    await runLoginProtection(() => deps.loginRestriction.clearLoginState(activeUser.id));
     const { token, remainingSeconds } = await deps.principalSessions.createPrincipalSession(
       activeUser.subjectIdentifier,
       {
@@ -80,12 +80,12 @@ export function createLoginWithPasswordUseCase(deps: LoginWithPasswordDeps) {
     );
     await deps.auditLogWriter.recordAuditLog({
       ...requestContext,
-      ...buildPasswordLoginSuccessAudit(userDetail),
+      ...buildPasswordLoginSuccessAudit({ ...loginProfile, id: activeUser.id }),
     });
     return {
       token,
       ...(remainingSeconds === undefined ? {} : { remainingSeconds }),
-      isMobileSet: userDetail.mobile !== null,
+      isMobileSet: loginProfile.mobile !== null,
     };
   }
 

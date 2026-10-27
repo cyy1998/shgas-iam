@@ -49,7 +49,7 @@ export interface AdminEmploymentEffectiveRoleResolverPort {
 export interface AdminEmploymentTransactionPorts {
   employmentRepository: AdminEmploymentStorePort;
   auditService: AuditLogWriterPort;
-  userProfileInvalidation: {
+  userDocumentInvalidation: {
     recordChanges: (changes: readonly AdminEmploymentProfileChange[]) => Promise<void>;
   };
 }

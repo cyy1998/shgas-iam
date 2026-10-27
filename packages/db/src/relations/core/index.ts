@@ -8,8 +8,8 @@ import { organizationsRelations } from "./organizations";
 import { positionsRelations } from "./positions";
 import { roleAssignmentsRelations } from "./role-assignments";
 import { rolesRelations } from "./roles";
-import { userProfileDirtyRelations } from "./user-profile-dirty";
-import { userProfilesRelations } from "./user-profiles";
+import { userDocumentRebuildStatesRelations } from "./user-document-rebuild-state";
+import { userDocumentsRelations } from "./user-documents";
 import { usersRelations } from "./users";
 
 export function coreRelations(r: RelationsHelper) {
@@ -23,8 +23,8 @@ export function coreRelations(r: RelationsHelper) {
     ...clientDelegationsRelations(r),
     ...roleAssignmentsRelations(r),
     ...rolesRelations(r),
-    ...userProfileDirtyRelations(r),
-    ...userProfilesRelations(r),
+    ...userDocumentRebuildStatesRelations(r),
+    ...userDocumentsRelations(r),
     ...usersRelations(r),
   } satisfies RelationsConfig;
 }

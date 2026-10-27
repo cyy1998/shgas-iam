@@ -28,13 +28,14 @@ import {
   organizationResponsibilityAssignments,
   organizations,
   positions,
-  userProfileDirty,
+  userDocumentRebuildStates,
   users,
 } from "@iam/db/schema";
 import { EmploymentAlreadyExistsError, EmploymentNotFoundError } from "@iam/domain/employment";
 import { asc, eq } from "drizzle-orm";
 import { createTestHrEmploymentAuthorization } from "../../src/testing/hr-employment-authorization";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";
+import { createUserDocumentSourceConsumer } from "../support/user-document-workflow";
 
 let harness: Awaited<ReturnType<typeof createAdminApiPostgresTestHarness>>;
 let seeded: Awaited<ReturnType<typeof seedEmploymentGraph>>;
@@ -308,14 +309,16 @@ describe("HR Employment administration scope", () => {
         { action: "admin.employment.end" },
       ]),
     );
-    expect(await harness.db.select({ userId: userProfileDirty.userId }).from(userProfileDirty)).toEqual(
+    expect(
+      await harness.db.select({ userId: userDocumentRebuildStates.userId }).from(userDocumentRebuildStates),
+    ).toEqual(
       expect.arrayContaining([{ userId: seeded.inScopeEnabledUserId }, { userId: seeded.inScopePausedUserId }]),
     );
     expect(
       await harness.db
-        .select({ userId: userProfileDirty.userId })
-        .from(userProfileDirty)
-        .where(eq(userProfileDirty.userId, seeded.outOfScopeUserId)),
+        .select({ userId: userDocumentRebuildStates.userId })
+        .from(userDocumentRebuildStates)
+        .where(eq(userDocumentRebuildStates.userId, seeded.outOfScopeUserId)),
     ).toEqual([]);
   });
 
@@ -391,7 +394,9 @@ describe("HR Employment administration scope", () => {
       .orderBy(asc(employments.id));
     expect(employmentFactsAfterDenials).toEqual(employmentFactsBeforeDenials);
     expect(await harness.db.select({ action: auditLogs.action }).from(auditLogs)).toEqual([]);
-    expect(await harness.db.select({ userId: userProfileDirty.userId }).from(userProfileDirty)).toEqual([]);
+    expect(
+      await harness.db.select({ userId: userDocumentRebuildStates.userId }).from(userDocumentRebuildStates),
+    ).toEqual([]);
     expect(
       await harness.db
         .select({ status: organizationResponsibilityAssignments.status })
@@ -494,9 +499,9 @@ describe("HR Employment administration scope", () => {
     );
     expect(
       await harness.db
-        .select({ userId: userProfileDirty.userId })
-        .from(userProfileDirty)
-        .where(eq(userProfileDirty.userId, seeded.inScopeEnabledUserId)),
+        .select({ userId: userDocumentRebuildStates.userId })
+        .from(userDocumentRebuildStates)
+        .where(eq(userDocumentRebuildStates.userId, seeded.inScopeEnabledUserId)),
     ).toEqual([{ userId: seeded.inScopeEnabledUserId }]);
   });
 
@@ -582,14 +587,16 @@ function createSubject() {
   const unitOfWork = createAdminApiUnitOfWork({
     db: harness.db,
     logger: { error: mock(() => undefined), warn: mock(() => undefined) },
-    organizationSearchJobProducer: {
-      async enqueueSourceChanges() {
+    organizationDocumentJobProducer: {
+      async enqueueOutboxEntries() {
         return { enqueued: 0 };
       },
     },
-    userProfileJobProducer: {
-      enqueueRebuildJobs: mock(async () => ({ enqueued: 0, jobIds: [] })),
-    } as never,
+    userDocumentJobProducer: createUserDocumentSourceConsumer(
+      harness.db,
+      async () => ({ enqueued: 0, jobIds: [] }),
+      clock,
+    ),
     clock,
   });
   const service = createEmploymentService({
@@ -602,7 +609,7 @@ function createSubject() {
     uow: mapUnitOfWork(unitOfWork, (tx) => ({
       employmentRepository: tx.repositories.employment,
       auditService: tx.auditService,
-      userProfileInvalidation: tx.userProfileInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
   });
   const createEmployment = createCreateEmploymentUseCase({
@@ -613,7 +620,7 @@ function createSubject() {
       positionReader: tx.repositories.position,
       userReader: tx.repositories.user,
       auditLogWriter: tx.auditService,
-      userProfileInvalidation: tx.userProfileInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
   });
   const changeEmploymentAvailability = createChangeEmploymentAvailabilityUseCase({
@@ -622,7 +629,7 @@ function createSubject() {
       organizationReader: tx.repositories.organization,
       auditLogWriter: tx.auditService,
       responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-      userProfileInvalidation: tx.userProfileInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
   });
   const endEmployment = createEndEmploymentUseCase({
@@ -631,7 +638,7 @@ function createSubject() {
       employmentStore: tx.repositories.employment,
       auditLogWriter: tx.auditService,
       responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-      userProfileInvalidation: tx.userProfileInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
   });
   const transferEmployment = createTransferEmploymentUseCase({
@@ -643,14 +650,14 @@ function createSubject() {
       userReader: tx.repositories.user,
       auditLogWriter: tx.auditService,
       responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-      userProfileInvalidation: tx.userProfileInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
   });
   const managePrimaryEmployment = createManagePrimaryEmploymentUseCase({
     uow: mapUnitOfWork(unitOfWork, (tx) => ({
       employmentStore: tx.repositories.employment,
       auditLogWriter: tx.auditService,
-      userProfileInvalidation: tx.userProfileInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
   });
   return {

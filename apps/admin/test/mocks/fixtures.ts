@@ -63,7 +63,7 @@ export const hrAdminCapabilitySummary = {
 } satisfies AdminCapabilitySummary;
 
 export const currentAdminUser = {
-  version: 1,
+  version: 4,
   subjectIdentifier: "00000000-0000-4000-8000-000000000001",
   profile: {
     username: "admin",
@@ -76,7 +76,7 @@ export const currentAdminUser = {
 };
 
 export const currentHrAdminUser = {
-  version: 1,
+  version: 4,
   subjectIdentifier: "00000000-0000-4000-8000-000000000002",
   profile: {
     username: "hradmin",

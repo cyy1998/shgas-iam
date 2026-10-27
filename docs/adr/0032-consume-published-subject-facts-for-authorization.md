@@ -4,8 +4,11 @@ status: accepted
 
 # 共享主体投影并消费已发布 Facts
 
+[ADR-0046](0046-unify-user-and-organization-read-documents.md) 将 Facts 的持久化来源收敛为同版本 User Document，
+Redis 保留派生缓存，删除对象使用带版本墓碑。本页协议中性投影、已发布事实与 Client 披露规则继续适用。
+
 Custom SSO 与 OIDC 共享协议中性的 Subject Facts 与裁剪能力，各自保留配置、wire 和协议产物。
-普通资料与 `iam:authorization` 都消费取得的合法已发布事实，不在交付时检查 Dirty 新鲜度或重新聚合源业务表。
+普通资料与 `iam:authorization` 都消费取得的合法已发布事实，不在交付时检查 重建进度或重新聚合源业务表。
 本页合并共享投影、服务端 Catalog 与已发布授权事实的决定，并纳入当前披露规则的后续修订。
 
 ## 理由与代价
@@ -14,8 +17,8 @@ Custom SSO 与 OIDC 共享协议中性的 Subject Facts 与裁剪能力，各自
 发布事实与在线交付解耦，避免重建是否完成成为每次资料读取的前置屏障；这是一致性取舍，不是已经证明的性能收益。
 
 接受事实落后于源业务状态，包括旧角色持续交付和重建长期失败；不承诺固定期限内撤权传播。
-合法缓存命中不查 PostgreSQL，缺失或无效才读取已发布 Profile；事实不可得时明确暂态失败，
-不能删除必要授权声明伪装成功。第三方复制后的刷新由第三方负责。
+合法缓存命中不查 PostgreSQL，缺失或无效才读取已发布 User Document；事实不可得时明确暂态失败，
+删除墓碑表示完整 Facts 不可得，不能删除必要授权声明伪装成功。第三方复制后的刷新由第三方负责。
 
 账号可访问性由 Subject Access 独立保护，不把账号 Disable/Delete 混进允许陈旧的 claims。
 每次操作许可也不表示其交付的是最新角色事实，二者不能互相替代。
@@ -34,7 +37,7 @@ Catalog 变更不恢复旧配置 epoch 撤销方案。
 
 事实读取与交付失败见[Published Facts 契约](../features/sso/subject-delivery.md)，
 独立操作许可见 [ADR-0029](0029-check-subject-access-once-per-business-operation.md)，
-发布原子性见[后端架构](../architecture/backend-architecture.md#user-profile-subject-facts-publication)。
+发布原子性见[后端架构](../architecture/backend-architecture.md#user-document-subject-facts-publication)。
 协议输出分别见[Custom SSO](../guides/custom-sso.md)和[OIDC](../guides/oidc.md)。
 
 历史来源：[ADR-0008 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0008-adopt-client-subject-projection.md)、[ADR-0016 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0016-own-subject-claim-catalog-version-server-side.md)、[ADR-0032 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0032-consume-published-subject-facts-for-authorization.md)、[ADR-0035 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0035-unify-user-and-client-session-lifecycles.md)。原始决定与后续修订按各版本追溯。

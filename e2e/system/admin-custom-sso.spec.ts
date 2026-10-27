@@ -17,9 +17,9 @@ import {
   waitForInternalResponsibility,
 } from "./src/responsibility-journey.ts";
 import {
-  expectInternalUserProfileSearchMatrix,
+  expectInternalUserDocumentSearchMatrix,
   expectUserSearchDelegationResolution,
-} from "./src/user-profile-search-journey.ts";
+} from "./src/user-document-search-journey.ts";
 
 test("Admin prepares Custom SSO in Maintenance and existing access resumes after recovery", async ({
   context,
@@ -72,7 +72,7 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
     request: context.request,
     targetOrganizationCode: responsibilityTargetOrganizationCode,
   });
-  await expectInternalUserProfileSearchMatrix({
+  await expectInternalUserDocumentSearchMatrix({
     adminRoleCode,
     adminUsername,
     delegateeUsername,
@@ -156,7 +156,7 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   const initialUserInfoBody = await initialUserInfo.json();
   expect(initialUserInfoBody).toMatchObject({
     data: {
-      version: 3,
+      version: 4,
       profile: {
         username: adminUsername,
       },

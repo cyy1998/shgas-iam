@@ -63,7 +63,7 @@ function createSubjectAccessDeps(existingUserId: number | null = 7) {
 describe("RegisterPurveyorContactUseCase", () => {
   test("adds employment for an existing supplier contact and marks the profile dirty", async () => {
     const userLookupOrder: string[] = [];
-    const userProfileInvalidation = {
+    const userDocumentInvalidation = {
       recordChanges: mock(async () => undefined),
     };
     const setEmployment = mock(async () => ({}));
@@ -93,7 +93,7 @@ describe("RegisterPurveyorContactUseCase", () => {
               positionRepository: {
                 getPositionByCode: mock(async () => ({ id: 3 })),
               },
-              userProfileInvalidation,
+              userDocumentInvalidation,
               userRepository: {
                 getUserByMobile: mock(async () => {
                   userLookupOrder.push("lookup");
@@ -114,14 +114,14 @@ describe("RegisterPurveyorContactUseCase", () => {
     await expect(useCase.execute(input, options)).resolves.toBe(true);
 
     expect(setEmployment).toHaveBeenCalledWith(7, 3, 2);
-    expect(userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "employment", userId: 7 }]);
+    expect(userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "employment", userId: 7 }]);
     expect(subjectAccess.subjectAccessLifecycle.run).not.toHaveBeenCalled();
     expect(userLookupOrder).toEqual(["lock", "lookup"]);
   });
 
   test("creates a new external supplier contact and marks user and employment facts dirty", async () => {
     const userLookupOrder: string[] = [];
-    const userProfileInvalidation = {
+    const userDocumentInvalidation = {
       recordChanges: mock(async () => undefined),
     };
     const setUser = mock(async () => ({ id: 9 }));
@@ -152,7 +152,7 @@ describe("RegisterPurveyorContactUseCase", () => {
               positionRepository: {
                 getPositionByCode: mock(async () => ({ id: 3 })),
               },
-              userProfileInvalidation,
+              userDocumentInvalidation,
               userRepository: {
                 getUserByMobile: mock(async () => {
                   userLookupOrder.push("lookup");
@@ -179,7 +179,7 @@ describe("RegisterPurveyorContactUseCase", () => {
       subjectIdentifier: NEW_SUBJECT_IDENTIFIER,
     });
     expect(setEmployment).toHaveBeenCalledWith(9, 3, 2);
-    expect(userProfileInvalidation.recordChanges).toHaveBeenCalledWith([
+    expect(userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([
       { kind: "user", userId: 9 },
       { kind: "employment", userId: 9 },
     ]);
@@ -231,7 +231,7 @@ describe("RegisterPurveyorContactUseCase", () => {
           positionRepository: {
             getPositionByCode: mock(async () => ({ id: 3 })),
           },
-          userProfileInvalidation: {
+          userDocumentInvalidation: {
             recordChanges: mock(async () => undefined),
           },
           userRepository: {
@@ -289,7 +289,7 @@ describe("RegisterPurveyorContactUseCase", () => {
               positionRepository: {
                 getPositionByCode: mock(async () => ({ id: 3 })),
               },
-              userProfileInvalidation: {
+              userDocumentInvalidation: {
                 recordChanges: mock(async () => undefined),
               },
               userRepository: {
@@ -336,7 +336,7 @@ describe("RegisterPurveyorContactUseCase", () => {
               positionRepository: {
                 getPositionByCode: mock(async () => ({ id: 3 })),
               },
-              userProfileInvalidation: {
+              userDocumentInvalidation: {
                 recordChanges: mock(async () => undefined),
               },
               userRepository: {
@@ -411,7 +411,7 @@ describe("RegisterPurveyorContactUseCase", () => {
             positionRepository: {
               getPositionByCode: mock(async () => ({ id: 3 })),
             },
-            userProfileInvalidation: {
+            userDocumentInvalidation: {
               recordChanges: mock(async () => undefined),
             },
             userRepository: {
@@ -456,7 +456,7 @@ describe("RegisterPurveyorContactUseCase", () => {
               positionRepository: {
                 getPositionByCode: mock(async () => ({ id: 3 })),
               },
-              userProfileInvalidation: {
+              userDocumentInvalidation: {
                 recordChanges: mock(async () => undefined),
               },
               userRepository: {
@@ -496,7 +496,7 @@ describe("RegisterPurveyorContactUseCase", () => {
               positionRepository: {
                 getPositionByCode: mock(async () => null),
               },
-              userProfileInvalidation: {
+              userDocumentInvalidation: {
                 recordChanges: mock(async () => undefined),
               },
               userRepository: {
@@ -538,7 +538,7 @@ describe("RegisterPurveyorContactUseCase", () => {
               positionRepository: {
                 getPositionByCode: mock(async () => ({ id: 3 })),
               },
-              userProfileInvalidation: { recordChanges },
+              userDocumentInvalidation: { recordChanges },
               userRepository: {
                 getUserByMobile: mock(async () => ({ id: 7 })),
                 lockPurveyorContactMobile: mock(async () => undefined),
@@ -580,7 +580,7 @@ describe("RegisterPurveyorContactUseCase", () => {
               positionRepository: {
                 getPositionByCode: mock(async () => ({ id: 3 })),
               },
-              userProfileInvalidation: {
+              userDocumentInvalidation: {
                 recordChanges: mock(async () => undefined),
               },
               userRepository: {
@@ -628,7 +628,7 @@ describe("RegisterPurveyorContactUseCase", () => {
               positionRepository: {
                 getPositionByCode: mock(async () => ({ id: 3 })),
               },
-              userProfileInvalidation: {
+              userDocumentInvalidation: {
                 recordChanges: mock(async () => undefined),
               },
               userRepository: {
@@ -674,7 +674,7 @@ describe("RegisterPurveyorContactUseCase", () => {
               positionRepository: {
                 getPositionByCode: mock(async () => ({ id: 3 })),
               },
-              userProfileInvalidation: {
+              userDocumentInvalidation: {
                 recordChanges: mock(async () => undefined),
               },
               userRepository: {

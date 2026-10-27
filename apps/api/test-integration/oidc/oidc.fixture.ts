@@ -31,7 +31,7 @@ import { relations } from "@iam/db/relations";
 import { createOidcClientAuthRateLimiter, createOidcSigningKeys } from "@iam/oidc";
 import { createOidcRedisTestScope } from "@iam/oidc/testing";
 import { createUnifiedSessionRedisTestScope } from "@iam/session-kernel/testing";
-import { createSubjectFactsReader, createSubjectFactsRedisCache } from "@iam/user-profile-read-model/subject-facts";
+import { createSubjectFactsReader, createSubjectFactsRedisCache } from "@iam/user-document/subject-facts";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { Hono } from "hono";
 import postgres from "postgres";
@@ -144,12 +144,13 @@ export async function fixture(
         random: { uuid: () => generation },
       }).seedMany([{ subjectIdentifier, state: "enabled" }], new Date());
       await factsCache.publish({
-        schemaVersion: 4,
-        sourceDirtyVersion: "1",
+        kind: "document",
+        userId: 1,
+        schemaVersion: 1,
+        sourceVersion: "1",
         publishedAt: new Date().toISOString(),
         subjectIdentifier,
-        profile: { username: "test", name: "测试", phone: "17721462865" },
-        facts: { employments: [] },
+        facts: { profile: { username: "test", name: "测试", phone: "17721462865" }, employments: [] },
       });
     }
     let client: ClientSnapshotValue = {
@@ -310,7 +311,7 @@ export async function fixture(
             if (!withTokens || state.factFailure) throw new Error("Subject Facts unavailable");
             return {
               subjectIdentifier,
-              sourceDirtyVersion: "1",
+              sourceVersion: "1",
               profile: { username: "test", name: "测试", phone: "17721462865" },
               employments: [],
             };
@@ -378,7 +379,7 @@ export async function fixture(
             getActiveUserByMobile: async () => user,
             getActiveUserByWxId: async () => user,
             getActiveUserById: async () => user,
-            getUserDetailById: async () => user,
+            getLoginProfileById: async () => user,
           },
         },
       },

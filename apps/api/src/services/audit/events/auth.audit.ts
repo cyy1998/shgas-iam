@@ -1,5 +1,4 @@
 import type { AuditLogInput } from "@api/services/audit/audit.context";
-import type { UserDetailDto } from "@api/services/user/user.type";
 import { AuditActions } from "@iam/contracts";
 import { maskMobileForAudit } from "@iam/domain/audit";
 
@@ -49,28 +48,28 @@ export function buildMobileLoginFailureAudit(
   };
 }
 
-export function buildPasswordLoginSuccessAudit(user: UserDetailDto) {
+export function buildPasswordLoginSuccessAudit(user: UserAuditTarget) {
   return buildUserLoginSuccessAudit(AuditActions["auth.login.password"], user, {
     clientCode: "global",
     loginType: "password",
   });
 }
 
-export function buildMobileLoginSuccessAudit(user: UserDetailDto) {
+export function buildMobileLoginSuccessAudit(user: UserAuditTarget) {
   return buildUserLoginSuccessAudit(AuditActions["auth.login.mobile"], user, {
     clientCode: "global",
     loginType: "mobile",
   });
 }
 
-export function buildOaLoginSuccessAudit(user: UserDetailDto, clientCode: string) {
+export function buildOaLoginSuccessAudit(user: UserAuditTarget, clientCode: string) {
   return buildUserLoginSuccessAudit(AuditActions["auth.login.oa"], user, {
     clientCode,
     loginType: "oa",
   });
 }
 
-export function buildWechatLoginSuccessAudit(user: UserDetailDto) {
+export function buildWechatLoginSuccessAudit(user: UserAuditTarget) {
   return buildUserLoginSuccessAudit(AuditActions["auth.login.wechat"], user, {
     loginType: "wechat",
   });
@@ -113,7 +112,7 @@ export function buildSmsCodeVerifyAudit(input: {
 
 function buildUserLoginSuccessAudit(
   action: string,
-  user: UserDetailDto,
+  user: UserAuditTarget,
   details: AuditLogInput["details"],
 ): AuditLogInput {
   return {

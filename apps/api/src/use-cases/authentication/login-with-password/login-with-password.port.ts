@@ -1,7 +1,7 @@
 import type { HumanVerificationAction } from "@api/enums/humanVerification.action";
 import type { SessionOrigin } from "@api/services/session/session-origin";
 import type { AuditActorType, AuditDetails, AuditOutcome } from "@iam/domain/audit";
-import type { UserDetailDto } from "@iam/domain/user";
+import type { PublishedUserLoginProfile } from "@iam/domain/user";
 import type { AuthenticationLoginFailureStatus, AuthenticationLoginRestrictionStatus } from "../login-restriction.type";
 import type { PasswordLoginUser } from "./login-with-password.type";
 
@@ -79,6 +79,6 @@ export interface LoginWithPasswordDeps {
   users: {
     checkPassword: (username: string, password: string) => Promise<boolean>;
     getActiveUserByUsername: (username: string) => Promise<PasswordLoginUser | null>;
-    getUserDetailById: (userId: number) => Promise<UserDetailDto>;
+    getLoginProfileById: (userId: number) => Promise<PublishedUserLoginProfile>;
   };
 }

@@ -93,7 +93,7 @@ describe("E2E scenario seed", () => {
           subjectFacts: {
             ready: false,
             subjectIdentifier: "",
-            sourceDirtyVersion: "",
+            sourceVersion: "",
             profileUsername: "",
             organizationCodes: [],
             positionCodes: [],
@@ -126,7 +126,7 @@ describe("E2E scenario seed", () => {
           ...readBack,
           subjectFacts: {
             ...readBack.subjectFacts,
-            sourceDirtyVersion: "2",
+            sourceVersion: "2",
           },
         };
       },
@@ -326,7 +326,7 @@ function completeReadBack(references: E2EScenarioReferences) {
     hrSubjectFacts: {
       ready: true,
       subjectIdentifier: references.hrAdminSubjectIdentifier,
-      sourceDirtyVersion: "1",
+      sourceVersion: "1",
       profileUsername: references.hrAdminUsername,
       organizationCodes: [
         references.responsibilityHolderOrganizationCode,
@@ -337,25 +337,25 @@ function completeReadBack(references: E2EScenarioReferences) {
       clientCodes: [references.adminClientCode],
       roleCodes: [references.hrAdminRoleCode],
     },
-    hrSubjectProfileReady: true,
-    hrSubjectProfileVersion: "1",
-    hrSubjectProfileSchemaVersion: 4,
+    hrSubjectDocumentReady: true,
+    hrSubjectDocumentVersion: "1",
+    hrSubjectDocumentSchemaVersion: 1,
     subjectAccess: "enabled" as const,
     subjectFacts: {
       ready: true,
       subjectIdentifier: references.adminSubjectIdentifier,
-      sourceDirtyVersion: "1",
+      sourceVersion: "1",
       profileUsername: references.adminUsername,
       organizationCodes: [references.organizationCode, references.responsibilityHolderOrganizationCode],
       positionCodes: [references.positionCode, "e2e-resp-pos-123000000-a1b2c3d4"],
-      clientCodes: [references.adminClientCode],
-      roleCodes: [references.adminRoleCode, references.hrAdminRoleCode],
+      clientCodes: [references.adminClientCode, references.internalClientCode],
+      roleCodes: [references.adminRoleCode, references.hrAdminRoleCode, `${references.adminRoleCode}-internal`],
       responsibilityTypeCodes: [],
       responsibilityTargetOrganizationCodes: [],
     },
-    subjectProfileReady: true,
-    subjectProfileVersion: "1",
-    subjectProfileSchemaVersion: 4,
+    subjectDocumentReady: true,
+    subjectDocumentVersion: "1",
+    subjectDocumentSchemaVersion: 1,
   };
 }
 

@@ -4,7 +4,7 @@ import { createWorkerHttpApp } from "@worker/http/server";
 
 function fakeBullMqQueue() {
   return {
-    name: "user-profile",
+    name: "user-document",
     metaValues: {
       version: "bullmq-test",
     },
@@ -17,7 +17,7 @@ function env(overrides: Partial<WorkerEnv> = {}): WorkerEnv {
     redis: { host: "localhost", port: 6379, db: 0 },
     nodeEnv: "test",
     log: { level: "info", format: "json" },
-    modules: { enabled: { mode: "list", keys: ["user-profile"] } },
+    modules: { enabled: { mode: "list", keys: ["user-document"] } },
     http: { enabled: true, port: 30003, healthPath: "/healthz" },
     dashboard: {
       enabled: false,
@@ -28,8 +28,8 @@ function env(overrides: Partial<WorkerEnv> = {}): WorkerEnv {
       password: "secret",
       readOnly: true,
     },
-    userProfile: { concurrency: 2, rebuildBatchSize: 100, backfillBatchSize: 500, repairStaleSeconds: 300 },
-    organizationSearch: { concurrency: 2, backfillBatchSize: 500 },
+    userDocument: { concurrency: 2, rebuildBatchSize: 100, backfillBatchSize: 500, repairStaleSeconds: 300 },
+    organizationDocument: { concurrency: 2, backfillBatchSize: 500 },
     ...overrides,
   };
 }
@@ -42,7 +42,7 @@ function createDashboardHttpApp() {
       dashboardOnly: true,
       modulesStarted: true,
     },
-    dashboardQueues: [{ moduleKey: "user-profile", queueName: "user-profile", queue: fakeBullMqQueue() }],
+    dashboardQueues: [{ moduleKey: "user-document", queueName: "user-document", queue: fakeBullMqQueue() }],
     checkHealth: async () => ({
       ready: true,
       dependencies: { db: "skipped" as const, redis: "ok" as const },
@@ -55,7 +55,7 @@ describe("worker HTTP app", () => {
     const app = createWorkerHttpApp({
       env: env(),
       healthState: {
-        enabledModules: ["user-profile"],
+        enabledModules: ["user-document"],
         dashboardOnly: false,
         modulesStarted: true,
       },
@@ -71,7 +71,7 @@ describe("worker HTTP app", () => {
     expect(response.status).toBe(200);
     expect(body).toMatchObject({
       ok: true,
-      enabledModules: ["user-profile"],
+      enabledModules: ["user-document"],
       dashboardOnly: false,
       dependencies: { redis: "ok" },
     });

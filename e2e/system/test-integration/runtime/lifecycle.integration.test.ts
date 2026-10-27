@@ -57,7 +57,7 @@ function createRuntimeLifecycle(overrides: Partial<ExactProjectRuntimeLifecycle>
     seedE2EScenario: async () => undefined,
     startHealthyInfrastructure: async () => undefined,
     startRepoRuntimes: async () => undefined,
-    verifyUserProfileReadiness: async () => undefined,
+    verifyUserDocumentReadiness: async () => undefined,
     verifyCanonicalOriginConfiguration: async () => undefined,
     ...overrides,
   };
@@ -238,7 +238,7 @@ describe("exact-project runtime lifecycle", () => {
             await persistRunDescriptor(value);
             await operations.registerManagedRun(value);
           },
-          verifyUserProfileReadiness: async () => undefined,
+          verifyUserDocumentReadiness: async () => undefined,
           verifyCanonicalOriginConfiguration: async () => undefined,
           seedE2EScenario: async () => undefined,
         },
@@ -308,7 +308,7 @@ describe("exact-project runtime lifecycle", () => {
           ...createRuntimeLifecycle({
             createDescriptor: async () => ({ ...descriptor, artifactDirectory }),
             seedE2EScenario: operations.seedE2EScenario,
-            verifyUserProfileReadiness: async () => events.push("readiness"),
+            verifyUserDocumentReadiness: async () => events.push("readiness"),
             collectDiagnostics: async () => events.push("diagnostics"),
             cleanup: async () => events.push("cleanup"),
           }),

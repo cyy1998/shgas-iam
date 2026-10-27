@@ -66,7 +66,7 @@ function createLifecycle() {
   };
   const tx = {
     auditLogWriter: { recordAuditLog: mock(async () => undefined) },
-    userProfileInvalidation: { recordChanges: mock(async () => undefined) },
+    userDocumentInvalidation: { recordChanges: mock(async () => undefined) },
     employmentStore: {
       createEmploymentRecord: mock(async (input: AdminEmploymentRecordCreate) => ({
         id: 10,
@@ -132,7 +132,7 @@ describe("Employment Lifecycle", () => {
         details: expect.objectContaining({ startTime: now }),
       }),
     );
-    expect(tx.userProfileInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "employment", userId: 1 }]);
+    expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "employment", userId: 1 }]);
   });
 
   test("defaults Primary to false without inferring or replacing another Primary", async () => {
@@ -313,7 +313,7 @@ describe("Employment Lifecycle", () => {
                 throw failure;
               },
             },
-            userProfileInvalidation: {
+            userDocumentInvalidation: {
               async recordChanges(changes: readonly { userId: number }[]) {
                 staged.dirtyUserIds.push(...changes.map((change) => change.userId));
               },

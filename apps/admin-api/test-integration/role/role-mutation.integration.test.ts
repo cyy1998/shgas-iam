@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { randomUUID } from "node:crypto";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import type { AdminRoleTransactionPorts } from "@admin-api/services/role/role.port";
@@ -11,7 +12,8 @@ import {
   OrganizationType,
   RoleAssignmentTargetType,
   RoleStatus,
-  UserProfileDirtyStatus,
+  UserDocumentRebuildReason,
+  UserDocumentWorkStatus,
   UserType,
 } from "@iam/contracts";
 import { extractPostgresError } from "@iam/db/postgres-error";
@@ -23,8 +25,8 @@ import {
   organizations,
   positions,
   roles,
-  userProfileDirty,
-  userProfiles,
+  userDocumentRebuildStates,
+  userDocuments,
   users,
 } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
@@ -37,10 +39,15 @@ import {
   RoleNotFoundError,
 } from "@iam/domain/role";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
-import { createCurrentUserProfileProjectionBundle } from "@iam/user-profile-read-model/worker";
+import { StoredUserDocumentSchema } from "@iam/user-document/document";
+import {
+  createCurrentUserDocumentProjectionBundle,
+  createUserDocumentUpdateProcessor,
+} from "@iam/user-document/worker";
 import { eq } from "drizzle-orm";
 import type { AdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";
+import { createUserDocumentSourceConsumer } from "../support/user-document-workflow";
 
 let harness: AdminApiPostgresTestHarness;
 const now = new Date("2026-09-07T00:00:00Z");
@@ -49,7 +56,7 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   await harness.reset();
-  await harness.sql`truncate role_assignment, role, client, user_profile restart identity cascade`;
+  await harness.sql`truncate role_assignment, role, client, user_document restart identity cascade`;
 });
 afterAll(async () => {
   await harness?.close();
@@ -64,12 +71,12 @@ function createCommand(decorate: (tx: AdminRoleTransactionPorts) => AdminRoleTra
     db: harness.db,
     logger: { error: mock(() => undefined), warn: mock(() => undefined) },
     clock: { nowDate: () => now },
-    organizationSearchJobProducer: {
-      async enqueueSourceChanges() {
+    organizationDocumentJobProducer: {
+      async enqueueOutboxEntries() {
         return { enqueued: 0 };
       },
     },
-    userProfileJobProducer: { enqueueRebuildJobs },
+    userDocumentJobProducer: createUserDocumentSourceConsumer(harness.db, enqueueRebuildJobs, { nowDate: () => now }),
   });
   return {
     enqueueRebuildJobs,
@@ -79,7 +86,7 @@ function createCommand(decorate: (tx: AdminRoleTransactionPorts) => AdminRoleTra
         decorate({
           roleRepository: tx.repositories.role,
           auditService: tx.auditService,
-          userProfileInvalidation: tx.userProfileInvalidation,
+          userDocumentInvalidation: tx.userDocumentInvalidation,
         }),
       ),
     }),
@@ -180,7 +187,7 @@ async function facts() {
     roles: await harness.db.select().from(roles).orderBy(roles.id),
     assignments: await harness.db.select().from(roleAssignments).orderBy(roleAssignments.id),
     audits: await harness.db.select().from(auditLogs).orderBy(auditLogs.id),
-    dirty: await harness.db.select().from(userProfileDirty),
+    dirty: await harness.db.select().from(userDocumentRebuildStates),
   };
 }
 
@@ -207,27 +214,30 @@ async function waitForBlocked(table: "role" | "role_assignment", count = 1) {
 }
 
 async function publish(userId: number, version: string) {
-  const bundle = createCurrentUserProfileProjectionBundle();
-  await harness.db
-    .update(userProfileDirty)
-    .set({ status: UserProfileDirtyStatus.Processing })
-    .where(eq(userProfileDirty.userId, userId));
-  const profile = await bundle
-    .createBuilder({
-      db: harness.db,
-      clock: { nowDate: () => now },
-      batchSize: 10,
-    })
-    .buildOne({ userId, sourceDirtyVersion: version });
-  expect(profile).not.toBeNull();
-  const result = await bundle.createPublicationRepository(harness.db).publishCandidate({
-    userId,
-    dirtyVersion: version,
-    profile: profile!,
-    processedAt: now,
+  const processor = createUserDocumentUpdateProcessor({
+    db: harness.db,
+    projection: createCurrentUserDocumentProjectionBundle(),
+    clock: { nowDate: () => now },
+    batchSize: 10,
+    logger: { warn() {} },
+    jobProducer: {
+      enqueueOutboxEntries: async () => ({ enqueued: 0, jobIds: [] }),
+      enqueueRebuildJobs: async () => ({ enqueued: 0, jobIds: [] }),
+    },
+    subjectFactsPublisher: { publish: async () => ({ status: "published" }) },
+    subjectAccessRepair: { repairSubject: async () => ({ status: "stable" }) },
   });
-  expect(result).toEqual({ status: "published" });
-  return profile!;
+  const result = await processor.process({
+    userId,
+    version: version,
+    reason: UserDocumentRebuildReason.ManualRebuild,
+  });
+  expect(result.status).toBe("rebuilt");
+  const [row] = await harness.db
+    .select({ document: userDocuments.document })
+    .from(userDocuments)
+    .where(eq(userDocuments.userId, userId));
+  return { document: StoredUserDocumentSchema.parse(row?.document) };
 }
 
 describe("Role mutations through production PostgreSQL UnitOfWork", () => {
@@ -273,7 +283,7 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
         { details: { changed: true } },
         { details: { changed: entry === "profile" } },
       ]);
-      expect(after.dirty).toMatchObject([{ userId: user.id, dirtyVersion: "1" }]);
+      expect(after.dirty).toMatchObject([{ userId: user.id, version: "1" }]);
     });
   }
 
@@ -307,10 +317,10 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
     test(`${entry} after a concurrent Pause registers the actual Enable change and invalidates published authorization`, async () => {
       const role = await seedRole();
       const { user, employment } = await seedHolder(role.id);
-      await harness.db.insert(userProfileDirty).values({
+      await harness.db.insert(userDocumentRebuildStates).values({
         userId: user.id,
-        dirtyVersion: "1",
-        status: UserProfileDirtyStatus.Processing,
+        version: "1",
+        status: UserDocumentWorkStatus.Pending,
       });
       await publish(user.id, "1");
       const firstWritten = Promise.withResolvers<void>();
@@ -353,7 +363,7 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
         expect(firstResult).toEqual({ changed: true, result: null });
         await Promise.race([secondReady.promise, secondPending]);
         const paused = await publish(user.id, "2");
-        expect(paused.subjectFacts.employments[0]!.clientAuthorizations).toEqual([]);
+        expect(paused.document.employments[0]!.clientAuthorizations).toEqual([]);
       } finally {
         releaseFirst.resolve();
         releaseSecond.resolve();
@@ -370,12 +380,12 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
       expect(after.dirty).toMatchObject([
         {
           userId: user.id,
-          dirtyVersion: "3",
-          status: UserProfileDirtyStatus.Pending,
+          version: "3",
+          status: UserDocumentWorkStatus.Pending,
         },
       ]);
-      const [stalePublished] = await harness.db.select().from(userProfiles);
-      expect(stalePublished!.sourceDirtyVersion).toBe("2");
+      const [stalePublished] = await harness.db.select().from(userDocuments);
+      expect(stalePublished!.sourceVersion).toBe("2");
       const resolver = createRoleAssignmentResolver(harness.db);
       const effective = await resolver.resolveEffectiveRoles({
         employmentIds: [employment.id],
@@ -388,7 +398,7 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
       });
       expect(otherClient.get(employment.id)).toEqual([]);
       const rebuilt = await publish(user.id, "3");
-      expect(rebuilt.subjectFacts.employments[0]!.clientAuthorizations).toMatchObject([
+      expect(rebuilt.document.employments[0]!.clientAuthorizations).toMatchObject([
         { clientCode: "test-client", roles: [{ code: "ROLE" }] },
       ]);
     });
@@ -462,7 +472,7 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
     });
     const after = await facts();
     expect(after.assignments).toEqual([]);
-    expect(after.dirty).toMatchObject([{ userId: user.id, dirtyVersion: "2" }]);
+    expect(after.dirty).toMatchObject([{ userId: user.id, version: "2" }]);
     expect(after.audits).toMatchObject([
       { details: { changed: false } },
       { details: { changed: true } },
@@ -490,9 +500,9 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
                 },
               }
             : {
-                userProfileInvalidation: {
+                userDocumentInvalidation: {
                   recordChanges: async (changes) => {
-                    await tx.userProfileInvalidation.recordChanges(changes);
+                    await tx.userDocumentInvalidation.recordChanges(changes);
                     throw sentinel;
                   },
                 },
@@ -688,7 +698,7 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
     const after = await facts();
     expect(after.assignments).toHaveLength(1);
     expect(after.audits).toHaveLength(1);
-    expect(after.dirty).toMatchObject([{ userId: user.id, dirtyVersion: "1" }]);
+    expect(after.dirty).toMatchObject([{ userId: user.id, version: "1" }]);
   });
 
   test("assignment creation waits for uncommitted deletion; a repeated delete cannot delete its replacement", async () => {
@@ -750,6 +760,6 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
     expect(after.assignments).toHaveLength(1);
     expect(after.assignments[0]!.id).toBe(created.result.id);
     expect(after.audits).toHaveLength(2);
-    expect(after.dirty).toMatchObject([{ userId: user.id, dirtyVersion: "2" }]);
+    expect(after.dirty).toMatchObject([{ userId: user.id, version: "2" }]);
   });
 });

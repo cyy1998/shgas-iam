@@ -18,7 +18,7 @@ import {
   waitForInternalResponsibility,
 } from "./src/responsibility-journey.ts";
 import { exerciseUnifiedSession } from "./src/unified-session-journey.ts";
-import { waitForEmploymentSearchVisibility } from "./src/user-profile-search-journey.ts";
+import { waitForEmploymentSearchVisibility } from "./src/user-document-search-journey.ts";
 
 test("public RP observes reversible Maintenance and permanent logout through real Admin control", async ({
   browser,

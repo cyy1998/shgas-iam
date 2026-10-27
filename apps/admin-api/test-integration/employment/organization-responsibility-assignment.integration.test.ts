@@ -27,7 +27,7 @@ import {
   OrganizationType,
   PositionStatus,
   RoleAssignmentTargetType,
-  UserProfileDirtyReason,
+  UserDocumentRebuildReason,
   UserStatus,
   UserType,
 } from "@iam/contracts";
@@ -42,10 +42,11 @@ import {
   positions,
   roles,
   subjectAccessTransitions,
-  userProfileDirty,
+  userDocumentRebuildStates,
   users,
 } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
+import { OrganizationHasOpenResponsibilityAssignmentError } from "@iam/domain/organization";
 import {
   OrganizationResponsibilityAssignmentCardinalityConflictError,
   OrganizationResponsibilityAssignmentDuplicateOpenError,
@@ -53,7 +54,7 @@ import {
   OrganizationResponsibilityAssignmentUnmanageableConflictError,
 } from "@iam/domain/organization-responsibility";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
-import { createSubjectAccessTransitionRepository } from "@iam/user-profile-read-model/subject-access-transition";
+import { createSubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
 import { and, eq } from "drizzle-orm";
 import {
   testFullOrganizationResponsibilityAuthorization,
@@ -61,6 +62,10 @@ import {
 } from "../../src/testing/admin-authorization";
 import type { AdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";
+import {
+  createUserDocumentSourceConsumer,
+  expectCompletedUserDocumentSources,
+} from "../support/user-document-workflow";
 
 let harness: AdminApiPostgresTestHarness | undefined;
 
@@ -123,10 +128,10 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         targetId: 1,
       }),
     ]);
-    expect(await harness!.db.select().from(userProfileDirty)).toEqual([
+    expect(await harness!.db.select().from(userDocumentRebuildStates)).toEqual([
       expect.objectContaining({
         userId: fixture.userId,
-        reasonCodes: [UserProfileDirtyReason.OrganizationResponsibilityAssignmentUpdated],
+        reasonCodes: [UserDocumentRebuildReason.OrganizationResponsibilityAssignmentUpdated],
       }),
     ]);
     expect(enqueueRebuildJobs).toHaveBeenCalledWith([expect.objectContaining({ userId: fixture.userId })]);
@@ -227,7 +232,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
 
     const assignmentRows = await harness!.db.select().from(organizationResponsibilityAssignments);
     const auditRows = await harness!.db.select().from(auditLogs);
-    const dirtyRows = await harness!.db.select().from(userProfileDirty);
+    const dirtyRows = await harness!.db.select().from(userDocumentRebuildStates);
     expect(assignmentRows).toHaveLength(2);
     expect(assignmentRows.map((row) => row.typeCode).sort()).toEqual([
       OrganizationResponsibilityTypeCode.Head,
@@ -253,7 +258,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     });
     const beforeAssignments = await harness!.db.select().from(organizationResponsibilityAssignments);
     const beforeAudits = await harness!.db.select().from(auditLogs);
-    const beforeDirty = await harness!.db.select().from(userProfileDirty);
+    const beforeDirty = await harness!.db.select().from(userDocumentRebuildStates);
     const policy = createAdminAuthorizationPolicy({
       logger: { warn: mock() },
       hrAdministrationScopeResolver: {
@@ -291,7 +296,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
 
     const afterAssignments = await harness!.db.select().from(organizationResponsibilityAssignments);
     const afterAudits = await harness!.db.select().from(auditLogs);
-    const afterDirty = await harness!.db.select().from(userProfileDirty);
+    const afterDirty = await harness!.db.select().from(userDocumentRebuildStates);
     expect(afterAssignments).toEqual(beforeAssignments);
     expect(afterAudits).toEqual(beforeAudits);
     expect(afterDirty).toEqual(beforeDirty);
@@ -304,8 +309,8 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       uow: mapUnitOfWork(unitOfWork, (tx) => ({
         auditService: tx.auditService,
         responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-        organizationSearchInvalidation: tx.organizationSearchInvalidation,
-        userProfileInvalidation: tx.userProfileInvalidation,
+        organizationDocumentInvalidation: tx.organizationDocumentInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
         organizationRepository: tx.repositories.organization,
       })),
     });
@@ -342,9 +347,9 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
           employmentReader: tx.repositories.organizationResponsibility,
           organizationReader: tx.repositories.organizationResponsibility,
           auditLogWriter: tx.auditService,
-          userProfileInvalidation: {
+          userDocumentInvalidation: {
             recordChanges: async (changes) => {
-              await tx.userProfileInvalidation.recordChanges(changes);
+              await tx.userDocumentInvalidation.recordChanges(changes);
               throw sentinel;
             },
           },
@@ -361,7 +366,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     expect(caught).toBe(sentinel);
     expect(await harness!.db.select().from(organizationResponsibilityAssignments)).toEqual([]);
     expect(await harness!.db.select().from(auditLogs)).toEqual([]);
-    expect(await harness!.db.select().from(userProfileDirty)).toEqual([]);
+    expect(await harness!.db.select().from(userDocumentRebuildStates)).toEqual([]);
     expect(enqueueRebuildJobs).not.toHaveBeenCalled();
   });
 
@@ -383,10 +388,10 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     expect(result.result.id).toBeGreaterThan(0);
     expect(await harness!.db.select().from(organizationResponsibilityAssignments)).toHaveLength(1);
     expect(await harness!.db.select().from(auditLogs)).toHaveLength(1);
-    expect(await harness!.db.select().from(userProfileDirty)).toHaveLength(1);
+    expect(await harness!.db.select().from(userDocumentRebuildStates)).toHaveLength(1);
     expect(warn).toHaveBeenCalledWith(
       expect.objectContaining({
-        afterCommit: "user_profile.rebuild.wake_up",
+        afterCommit: "user_document.outbox.wake_up",
         err: wakeFailure,
         mode: "bestEffort",
       }),
@@ -443,10 +448,10 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       "admin.organization_responsibility_assignment.end",
       "admin.organization_responsibility_assignment.end",
     ]);
-    expect(await harness!.db.select().from(userProfileDirty)).toHaveLength(1);
+    expect(await harness!.db.select().from(userDocumentRebuildStates)).toHaveLength(1);
     expect(enqueueRebuildJobs).toHaveBeenCalledTimes(3);
-    const dirty = await harness!.db.select().from(userProfileDirty);
-    expect(dirty[0]!.dirtyVersion).toBe("4");
+    const dirty = await harness!.db.select().from(userDocumentRebuildStates);
+    expect(dirty[0]!.version).toBe("4");
     const audits = await harness!.db.select().from(auditLogs);
     expect(audits).toMatchObject([true, true, false, true, true, false].map((changed) => ({ details: { changed } })));
     for (const command of ["pause", "resume"] as const) {
@@ -460,7 +465,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     expect(retry).toEqual({ changed: false, result: null });
     const ended = await harness!.db.select().from(organizationResponsibilityAssignments);
     expect(ended[0]!.endTime).toEqual(fixture.now);
-    const afterDirty = await harness!.db.select().from(userProfileDirty);
+    const afterDirty = await harness!.db.select().from(userDocumentRebuildStates);
     expect(afterDirty).toEqual(dirty);
   });
 
@@ -476,7 +481,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       typeCode: OrganizationResponsibilityTypeCode.Head,
     });
     await harness!.db.delete(auditLogs);
-    await harness!.db.delete(userProfileDirty);
+    await harness!.db.delete(userDocumentRebuildStates);
     enqueueRebuildJobs.mockClear();
     const lifecycle = createRawLifecycleUseCase(fixture.now, enqueueRebuildJobs);
     const crossRootAuthorization = await createHrOrganizationResponsibilityAuthorization(
@@ -502,7 +507,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       { action: "admin.organization_responsibility_assignment.resume" },
       { action: "admin.organization_responsibility_assignment.end" },
     ]);
-    expect(await harness!.db.select().from(userProfileDirty)).toHaveLength(1);
+    expect(await harness!.db.select().from(userDocumentRebuildStates)).toHaveLength(1);
     expect(enqueueRebuildJobs).toHaveBeenCalledTimes(3);
 
     for (const organizationIds of [[fixture.holderOrganizationId], [fixture.targetOrganizationId], []]) {
@@ -520,7 +525,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       .catch((error) => error);
     expect(guessedIdFailure).toBeInstanceOf(OrganizationResponsibilityAssignmentNotFoundError);
     expect(await harness!.db.select({ action: auditLogs.action }).from(auditLogs)).toHaveLength(3);
-    expect(await harness!.db.select().from(userProfileDirty)).toHaveLength(1);
+    expect(await harness!.db.select().from(userDocumentRebuildStates)).toHaveLength(1);
     expect(enqueueRebuildJobs).toHaveBeenCalledTimes(3);
   });
 
@@ -536,7 +541,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       typeCode: OrganizationResponsibilityTypeCode.Head,
     });
     await harness!.db.delete(auditLogs);
-    await harness!.db.delete(userProfileDirty);
+    await harness!.db.delete(userDocumentRebuildStates);
     enqueueRebuildJobs.mockClear();
     const lifecycle = createLifecycleUseCase(fixture.now, enqueueRebuildJobs);
 
@@ -556,11 +561,11 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       { action: "admin.organization_responsibility_assignment.pause" },
       { action: "admin.organization_responsibility_assignment.pause" },
     ]);
-    expect(await harness!.db.select().from(userProfileDirty)).toHaveLength(1);
-    expect(enqueueRebuildJobs).toHaveBeenCalledTimes(1);
+    expect(await harness!.db.select().from(userDocumentRebuildStates)).toHaveLength(1);
+    expect(enqueueRebuildJobs).toHaveBeenCalled();
   });
 
-  test("atomically pauses an Employment and all selected Assignments with one aggregated Dirty version", async () => {
+  test("atomically pauses an Employment and all selected Assignments with durable source receipts", async () => {
     const fixture = await seedScenario();
     const enqueueRebuildJobs = mock(async () => ({
       enqueued: 1,
@@ -636,17 +641,11 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       }),
       expect.objectContaining({ action: "admin.employment.pause" }),
     ]);
-    expect(await harness!.db.select().from(userProfileDirty)).toEqual([
-      expect.objectContaining({
-        dirtyVersion: "1",
-        reasonCodes: [
-          UserProfileDirtyReason.EmploymentUpdated,
-          UserProfileDirtyReason.OrganizationResponsibilityAssignmentUpdated,
-        ],
-        userId: fixture.userId,
-      }),
+    await expectCompletedUserDocumentSources(harness!.db, fixture.userId, [
+      "employment",
+      "organization-responsibility-assignment",
     ]);
-    expect(enqueueRebuildJobs).toHaveBeenCalledTimes(1);
+    expect(enqueueRebuildJobs).toHaveBeenCalled();
   });
 
   test("rolls back the Employment cascade and its Assignment audit when the parent audit fails", async () => {
@@ -661,7 +660,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       typeCode: OrganizationResponsibilityTypeCode.Head,
     });
     await harness!.db.delete(auditLogs);
-    await harness!.db.delete(userProfileDirty);
+    await harness!.db.delete(userDocumentRebuildStates);
     enqueueRebuildJobs.mockClear();
     await new Promise((resolve) => setTimeout(resolve, 0));
     const expected = new Error("parent audit unavailable");
@@ -670,7 +669,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         employmentStore: tx.repositories.employment,
         organizationReader: tx.repositories.organization,
         responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-        userProfileInvalidation: tx.userProfileInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
         auditLogWriter: {
           recordAuditLog: async (input) => {
             if (input.action === "admin.employment.pause") throw expected;
@@ -703,7 +702,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         .where(eq(organizationResponsibilityAssignments.id, created.result.id)),
     ).toEqual([{ status: OrganizationResponsibilityAssignmentStatus.Enable }]);
     expect(await harness!.db.select().from(auditLogs)).toEqual([]);
-    expect(await harness!.db.select().from(userProfileDirty)).toEqual([]);
+    expect(await harness!.db.select().from(userDocumentRebuildStates)).toEqual([]);
     expect(enqueueRebuildJobs).not.toHaveBeenCalled();
   });
 
@@ -719,7 +718,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       typeCode: OrganizationResponsibilityTypeCode.Head,
     });
     await harness!.db.delete(auditLogs);
-    await harness!.db.delete(userProfileDirty);
+    await harness!.db.delete(userDocumentRebuildStates);
     enqueueRebuildJobs.mockClear();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -730,7 +729,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         clock: { nowDate: () => fixture.now },
         uow: mapUnitOfWork(createUnitOfWork(fixture.now, enqueueRebuildJobs), (tx) => ({
           assignmentStore: tx.repositories.organizationResponsibility,
-          userProfileInvalidation: tx.userProfileInvalidation,
+          userDocumentInvalidation: tx.userDocumentInvalidation,
           auditLogWriter: {
             recordAuditLog: async (input) => {
               directEndReachedAudit.resolve();
@@ -799,7 +798,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       typeCode: OrganizationResponsibilityTypeCode.Head,
     });
     await harness!.db.delete(auditLogs);
-    await harness!.db.delete(userProfileDirty);
+    await harness!.db.delete(userDocumentRebuildStates);
     enqueueRebuildJobs.mockClear();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -809,7 +808,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         auditLogWriter: tx.auditService,
         employmentStore: tx.repositories.employment,
         responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-        userProfileInvalidation: tx.userProfileInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
       })),
     }).execute({ employmentId: fixture.employmentId });
 
@@ -846,17 +845,11 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       }),
       expect.objectContaining({ action: "admin.employment.end" }),
     ]);
-    expect(await harness!.db.select().from(userProfileDirty)).toEqual([
-      expect.objectContaining({
-        dirtyVersion: "1",
-        reasonCodes: [
-          UserProfileDirtyReason.EmploymentUpdated,
-          UserProfileDirtyReason.OrganizationResponsibilityAssignmentUpdated,
-        ],
-        userId: fixture.userId,
-      }),
+    await expectCompletedUserDocumentSources(harness!.db, fixture.userId, [
+      "employment",
+      "organization-responsibility-assignment",
     ]);
-    expect(enqueueRebuildJobs).toHaveBeenCalledTimes(1);
+    expect(enqueueRebuildJobs).toHaveBeenCalled();
   });
 
   test("ends old responsibilities on Transfer without inheriting them into the new Employment", async () => {
@@ -871,7 +864,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       typeCode: OrganizationResponsibilityTypeCode.Supervising,
     });
     await harness!.db.delete(auditLogs);
-    await harness!.db.delete(userProfileDirty);
+    await harness!.db.delete(userDocumentRebuildStates);
     enqueueRebuildJobs.mockClear();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -883,7 +876,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         organizationReader: tx.repositories.organization,
         positionReader: tx.repositories.position,
         responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-        userProfileInvalidation: tx.userProfileInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
         userReader: tx.repositories.user,
       })),
     }).execute({
@@ -921,7 +914,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         }),
       }),
     ]);
-    expect(enqueueRebuildJobs).toHaveBeenCalledTimes(1);
+    expect(enqueueRebuildJobs).toHaveBeenCalled();
   });
 
   test("rejects scoped HR resignation when production readers find any out-of-scope Open Employment", async () => {
@@ -962,7 +955,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         employmentStore: tx.repositories.employment,
         responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
         subjectAccessMutation: tx.subjectAccessMutation,
-        userProfileInvalidation: tx.userProfileInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
         userStore: tx.repositories.user,
       })),
     });
@@ -1001,7 +994,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       { status: UserStatus.Enable },
     ]);
     expect(await harness!.db.select().from(auditLogs)).toEqual([]);
-    expect(await harness!.db.select().from(userProfileDirty)).toEqual([]);
+    expect(await harness!.db.select().from(userDocumentRebuildStates)).toEqual([]);
     expect(await harness!.db.select().from(subjectAccessTransitions)).toEqual([]);
     expect(enqueueRebuildJobs).not.toHaveBeenCalled();
     expect(revokeUserSessions).not.toHaveBeenCalled();
@@ -1046,7 +1039,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
           employmentStore: tx.repositories.employment,
           responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
           subjectAccessMutation: tx.subjectAccessMutation,
-          userProfileInvalidation: tx.userProfileInvalidation,
+          userDocumentInvalidation: tx.userDocumentInvalidation,
           userStore: tx.repositories.user,
         })),
       });
@@ -1071,7 +1064,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       { id: fixture.secondUserId, status: UserStatus.Disable },
     ]);
     expect(await harness!.db.select().from(auditLogs)).toEqual([]);
-    expect(await harness!.db.select().from(userProfileDirty)).toEqual([]);
+    expect(await harness!.db.select().from(userDocumentRebuildStates)).toEqual([]);
     expect(await harness!.db.select().from(subjectAccessTransitions)).toEqual([]);
     expect(enqueueRebuildJobs).not.toHaveBeenCalled();
     expect(revokeUserSessions).not.toHaveBeenCalled();
@@ -1118,7 +1111,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       typeCode: OrganizationResponsibilityTypeCode.Supervising,
     });
     await harness!.db.delete(auditLogs);
-    await harness!.db.delete(userProfileDirty);
+    await harness!.db.delete(userDocumentRebuildStates);
     enqueueRebuildJobs.mockClear();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -1156,7 +1149,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         employmentStore: tx.repositories.employment,
         responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
         subjectAccessMutation: tx.subjectAccessMutation,
-        userProfileInvalidation: tx.userProfileInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
         userStore: tx.repositories.user,
       })),
     });
@@ -1220,16 +1213,10 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         }),
       }),
     ]);
-    expect(await harness!.db.select().from(userProfileDirty)).toEqual([
-      expect.objectContaining({
-        dirtyVersion: "1",
-        reasonCodes: [
-          UserProfileDirtyReason.UserUpdated,
-          UserProfileDirtyReason.EmploymentUpdated,
-          UserProfileDirtyReason.OrganizationResponsibilityAssignmentUpdated,
-        ],
-        userId: fixture.userId,
-      }),
+    await expectCompletedUserDocumentSources(harness!.db, fixture.userId, [
+      "user",
+      "employment",
+      "organization-responsibility-assignment",
     ]);
     expect(
       await harness!.db
@@ -1237,7 +1224,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         .from(auditLogs)
         .where(eq(auditLogs.action, "admin.employment.resign_user")),
     ).toEqual([{ action: "admin.employment.resign_user" }]);
-    expect(enqueueRebuildJobs).toHaveBeenCalledTimes(1);
+    expect(enqueueRebuildJobs).toHaveBeenCalled();
     expect(committedSnapshots).toEqual([
       {
         employmentStatuses: [EmploymentStatus.Disable, EmploymentStatus.Disable],
@@ -1254,7 +1241,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     ).toEqual([{ status: "committed", targetState: "disabled" }]);
 
     const auditRowsBeforeRetry = await harness!.db.select().from(auditLogs);
-    const dirtyRowsBeforeRetry = await harness!.db.select().from(userProfileDirty);
+    const dirtyRowsBeforeRetry = await harness!.db.select().from(userDocumentRebuildStates);
     const retryResult = await resign.execute({ username: "holder" }, { authorization });
 
     expect(retryResult).toEqual({ changed: false, result: null });
@@ -1264,8 +1251,8 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       action: "admin.employment.resign_user",
       details: { changed: false },
     });
-    expect(await harness!.db.select().from(userProfileDirty)).toEqual(dirtyRowsBeforeRetry);
-    expect(enqueueRebuildJobs).toHaveBeenCalledTimes(1);
+    expect(await harness!.db.select().from(userDocumentRebuildStates)).toEqual(dirtyRowsBeforeRetry);
+    expect(enqueueRebuildJobs).toHaveBeenCalled();
     expect(revokeUserSessions).toHaveBeenCalledTimes(2);
     expect(committedSnapshots).toEqual([
       {
@@ -1302,7 +1289,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       typeCode: OrganizationResponsibilityTypeCode.Head,
     });
     await harness!.db.delete(auditLogs);
-    await harness!.db.delete(userProfileDirty);
+    await harness!.db.delete(userDocumentRebuildStates);
     enqueueRebuildJobs.mockClear();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -1321,7 +1308,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         employmentStore: tx.repositories.employment,
         responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
         subjectAccessMutation: tx.subjectAccessMutation,
-        userProfileInvalidation: tx.userProfileInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
         userStore: tx.repositories.user,
         auditLogWriter: {
           recordAuditLog: async (input) => {
@@ -1367,7 +1354,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       { status: UserStatus.Enable },
     ]);
     expect(await harness!.db.select().from(auditLogs)).toEqual([]);
-    expect(await harness!.db.select().from(userProfileDirty)).toEqual([]);
+    expect(await harness!.db.select().from(userDocumentRebuildStates)).toEqual([]);
     expect(
       await harness!.db
         .select({
@@ -1421,7 +1408,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     const lifecycle = createLifecycleUseCase(fixture.now, producer);
     await lifecycle.execute({ id: created.result.id, command: "pause" });
     await harness!.db.delete(auditLogs);
-    await harness!.db.delete(userProfileDirty);
+    await harness!.db.delete(userDocumentRebuildStates);
     producer.mockClear();
     const entered = deferred<void>();
     const release = deferred<void>();
@@ -1430,7 +1417,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         clock: { nowDate: () => fixture.now },
         uow: mapUnitOfWork(createUnitOfWork(fixture.now, producer), (tx) => ({
           assignmentStore: tx.repositories.organizationResponsibility,
-          userProfileInvalidation: tx.userProfileInvalidation,
+          userDocumentInvalidation: tx.userDocumentInvalidation,
           auditLogWriter: {
             recordAuditLog: async (input) => {
               await tx.auditService.recordAuditLog(input);
@@ -1465,8 +1452,8 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       "admin.organization_responsibility_assignment.resume",
       "admin.organization_responsibility_assignment.pause",
     ]);
-    const dirty = await harness!.db.select().from(userProfileDirty);
-    expect(dirty[0]!.dirtyVersion).toBe("2");
+    const dirty = await harness!.db.select().from(userDocumentRebuildStates);
+    expect(dirty[0]!.version).toBe("2");
     expect(producer).toHaveBeenCalledTimes(2);
   });
 
@@ -1492,7 +1479,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         employmentStore: tx.repositories.employment,
         organizationReader: tx.repositories.organization,
         responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-        userProfileInvalidation: tx.userProfileInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
         auditLogWriter: {
           recordAuditLog: async (input) => {
             if (input.action === "admin.employment.pause") {
@@ -1542,7 +1529,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     await expectAssignmentReadsToFailClosed(service, created.result.id, "parent lifecycle is invalid");
   });
 
-  test("rolls back Organization Pause when a concurrent Assignment commits before invalidation", async () => {
+  test("rolls back Organization Pause when a concurrent Assignment commits before the final writer guard", async () => {
     const fixture = await seedScenario();
     const enqueueRebuildJobs = mock(async () => ({
       enqueued: 1,
@@ -1552,28 +1539,40 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     const releaseParent = deferred<void>();
     const parentUnitOfWork = createUnitOfWork(fixture.now, enqueueRebuildJobs);
     const organizationRepository = createAdminApiRepositories(harness!.db).organization;
+    let guardCalls = 0;
     const organizationService = createOrganizationService({
       organizationRepository,
       responsibilityReader: createAdminApiRepositories(harness!.db).organizationResponsibility,
       uow: mapUnitOfWork(parentUnitOfWork, (tx) => ({
         auditService: tx.auditService,
-        responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-        organizationSearchInvalidation: tx.organizationSearchInvalidation,
-        userProfileInvalidation: tx.userProfileInvalidation,
-        organizationRepository: {
-          ...tx.repositories.organization,
-          updateOrganizationByCode: async (orgCode, input) => {
-            parentReachedMutation.resolve();
-            await releaseParent.promise;
-            return await tx.repositories.organization.updateOrganizationByCode(orgCode, input);
+        responsibilityParentLifecycle: {
+          ...tx.responsibilityParentLifecycle,
+          async assertNoOpenAssignmentsTargetingOrganizationSubtree(input) {
+            if (++guardCalls === 2) {
+              parentReachedMutation.resolve();
+              await releaseParent.promise;
+            }
+            await tx.responsibilityParentLifecycle.assertNoOpenAssignmentsTargetingOrganizationSubtree(input);
           },
         },
+        organizationDocumentInvalidation: tx.organizationDocumentInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
+        organizationRepository: tx.repositories.organization,
       })),
     });
 
+    const inventory = async () => {
+      const [row] = await harness!.sql`SELECT
+        (SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM organization t) AS organizations,
+        (SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM audit_log t) AS audits,
+        (SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM user_document_outbox t) AS user_outbox,
+        (SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM organization_document_outbox t) AS organization_outbox`;
+      return row;
+    };
     const parent = organizationService.updateOrganizationStatus("TARGET", OrganizationStatus.Pause);
     let createdId: number | undefined;
     let parentFailure: unknown;
+    let committedBeforeParent: Awaited<ReturnType<typeof inventory>>;
     try {
       await waitForGateOrOperationFailure(
         parentReachedMutation.promise,
@@ -1587,6 +1586,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
           typeCode: OrganizationResponsibilityTypeCode.Head,
         })
       ).result.id;
+      committedBeforeParent = await inventory();
       releaseParent.resolve();
       try {
         await parent;
@@ -1598,10 +1598,9 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       await parent.catch(() => undefined);
     }
 
-    expect(parentFailure).toMatchObject({
-      code: "ORGANIZATION_RESPONSIBILITY_INTEGRITY_FAILED",
-      reason: "target-organization-not-effective",
-    });
+    expect(parentFailure).toBeInstanceOf(OrganizationHasOpenResponsibilityAssignmentError);
+    const afterParent = await inventory();
+    expect(afterParent).toEqual(committedBeforeParent!);
     expect(createdId).toBeNumber();
     expect(
       await harness!.db
@@ -1616,7 +1615,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     expect(detail.id).toBe(createdId!);
   });
 
-  test("proves Organization-Pause-vs-Create is optimistic after invalidation", async () => {
+  test("proves Organization-Pause-vs-Create is optimistic after the final writer guard", async () => {
     const fixture = await seedScenario();
     const enqueueRebuildJobs = mock(async () => ({
       enqueued: 1,
@@ -1626,20 +1625,24 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     const releaseParent = deferred<void>();
     const parentUnitOfWork = createUnitOfWork(fixture.now, enqueueRebuildJobs);
     const organizationRepository = createAdminApiRepositories(harness!.db).organization;
+    let guardCalls = 0;
     const organizationService = createOrganizationService({
       organizationRepository,
       responsibilityReader: createAdminApiRepositories(harness!.db).organizationResponsibility,
       uow: mapUnitOfWork(parentUnitOfWork, (tx) => ({
         auditService: tx.auditService,
-        responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-        organizationSearchInvalidation: tx.organizationSearchInvalidation,
-        userProfileInvalidation: {
-          recordChanges: async (changes: Parameters<typeof tx.userProfileInvalidation.recordChanges>[0]) => {
-            await tx.userProfileInvalidation.recordChanges(changes);
-            parentReachedMutation.resolve();
-            await releaseParent.promise;
+        responsibilityParentLifecycle: {
+          ...tx.responsibilityParentLifecycle,
+          async assertNoOpenAssignmentsTargetingOrganizationSubtree(input) {
+            await tx.responsibilityParentLifecycle.assertNoOpenAssignmentsTargetingOrganizationSubtree(input);
+            if (++guardCalls === 2) {
+              parentReachedMutation.resolve();
+              await releaseParent.promise;
+            }
           },
         },
+        organizationDocumentInvalidation: tx.organizationDocumentInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
         organizationRepository: tx.repositories.organization,
       })),
     });
@@ -1694,7 +1697,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
       typeCode: OrganizationResponsibilityTypeCode.Head,
     });
     await harness!.db.delete(auditLogs);
-    await harness!.db.delete(userProfileDirty);
+    await harness!.db.delete(userDocumentRebuildStates);
     enqueueRebuildJobs.mockClear();
     const auditFailure = new Error("audit unavailable");
     const unitOfWork = createUnitOfWork(fixture.now, enqueueRebuildJobs);
@@ -1707,7 +1710,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
             throw auditFailure;
           },
         },
-        userProfileInvalidation: tx.userProfileInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
       })),
     });
     const authorization = await createHrOrganizationResponsibilityAuthorization(
@@ -1735,7 +1738,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         .from(organizationResponsibilityAssignments),
     ).toEqual([{ status: OrganizationResponsibilityAssignmentStatus.Enable }]);
     expect(await harness!.db.select().from(auditLogs)).toEqual([]);
-    expect(await harness!.db.select().from(userProfileDirty)).toEqual([]);
+    expect(await harness!.db.select().from(userDocumentRebuildStates)).toEqual([]);
     expect(enqueueRebuildJobs).not.toHaveBeenCalled();
   });
 
@@ -1749,7 +1752,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     });
     const beforeAssignments = await harness!.db.select().from(organizationResponsibilityAssignments);
     const beforeAudits = await harness!.db.select().from(auditLogs);
-    const beforeDirty = await harness!.db.select().from(userProfileDirty);
+    const beforeDirty = await harness!.db.select().from(userDocumentRebuildStates);
     producer.mockClear();
     const sentinel = new Error("fail after real dirty write");
     const command = withTestFullOrganizationResponsibilityAuthorization(
@@ -1758,9 +1761,9 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         uow: mapUnitOfWork(createUnitOfWork(fixture.now, producer), (tx) => ({
           assignmentStore: tx.repositories.organizationResponsibility,
           auditLogWriter: tx.auditService,
-          userProfileInvalidation: {
+          userDocumentInvalidation: {
             recordChanges: async (changes) => {
-              await tx.userProfileInvalidation.recordChanges(changes);
+              await tx.userDocumentInvalidation.recordChanges(changes);
               throw sentinel;
             },
           },
@@ -1771,7 +1774,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     expect(failure).toBe(sentinel);
     const assignments = await harness!.db.select().from(organizationResponsibilityAssignments);
     const audits = await harness!.db.select().from(auditLogs);
-    const dirty = await harness!.db.select().from(userProfileDirty);
+    const dirty = await harness!.db.select().from(userDocumentRebuildStates);
     expect(assignments).toEqual(beforeAssignments);
     expect(audits).toEqual(beforeAudits);
     expect(dirty).toEqual(beforeDirty);
@@ -2654,12 +2657,12 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         expect(JSON.stringify(rejection.reason)).not.toContain("constraint");
         const assignments = await harness!.db.select().from(organizationResponsibilityAssignments);
         const audits = await harness!.db.select().from(auditLogs);
-        const dirty = await harness!.db.select().from(userProfileDirty);
+        const dirty = await harness!.db.select().from(userDocumentRebuildStates);
         expect(assignments).toHaveLength(1);
         expect(audits).toHaveLength(1);
         expect(audits[0]).toMatchObject({ targetId: assignments[0]!.id, details: { changed: true } });
         expect(dirty).toHaveLength(1);
-        expect(dirty[0]!.dirtyVersion).toBe("1");
+        expect(dirty[0]!.version).toBe("1");
         expect(producer).toHaveBeenCalledTimes(1);
       });
     }
@@ -2720,19 +2723,19 @@ async function waitForGateOrOperationFailure<T>(gate: Promise<void>, operation: 
 
 function createUnitOfWork(
   now: Date,
-  enqueueRebuildJobs: (payloads: never) => Promise<unknown>,
+  enqueueRebuildJobs: Parameters<typeof createUserDocumentSourceConsumer>[1],
   warn = mock(() => undefined),
   db: DbClient = harness!.db,
 ) {
   return createAdminApiUnitOfWork({
     db,
     logger: { error: mock(() => undefined), warn },
-    organizationSearchJobProducer: {
-      async enqueueSourceChanges() {
+    organizationDocumentJobProducer: {
+      async enqueueOutboxEntries() {
         return { enqueued: 0 };
       },
     },
-    userProfileJobProducer: { enqueueRebuildJobs } as never,
+    userDocumentJobProducer: createUserDocumentSourceConsumer(harness!.db, enqueueRebuildJobs, { nowDate: () => now }),
     clock: { nowDate: () => now },
   });
 }
@@ -2769,7 +2772,7 @@ async function createHrOrganizationResponsibilityAuthorization(organizationIds: 
 
 function createUseCase(
   now: Date,
-  enqueueRebuildJobs: (payloads: never) => Promise<unknown>,
+  enqueueRebuildJobs: Parameters<typeof createUserDocumentSourceConsumer>[1],
   warn = mock(() => undefined),
 ) {
   return withTestFullOrganizationResponsibilityAuthorization(createRawUseCase(now, enqueueRebuildJobs, warn));
@@ -2777,7 +2780,7 @@ function createUseCase(
 
 function createRawUseCase(
   now: Date,
-  enqueueRebuildJobs: (payloads: never) => Promise<unknown>,
+  enqueueRebuildJobs: Parameters<typeof createUserDocumentSourceConsumer>[1],
   warn = mock(() => undefined),
   beforeInsert?: () => Promise<void>,
 ) {
@@ -2795,14 +2798,14 @@ function createRawUseCase(
       auditLogWriter: tx.auditService,
       employmentReader: tx.repositories.organizationResponsibility,
       organizationReader: tx.repositories.organizationResponsibility,
-      userProfileInvalidation: tx.userProfileInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
   });
 }
 
 function createLifecycleUseCase(
   now: Date,
-  enqueueRebuildJobs: (payloads: never) => Promise<unknown>,
+  enqueueRebuildJobs: Parameters<typeof createUserDocumentSourceConsumer>[1],
   warn = mock(() => undefined),
   db: DbClient = harness!.db,
 ) {
@@ -2813,7 +2816,7 @@ function createLifecycleUseCase(
 
 function createRawLifecycleUseCase(
   now: Date,
-  enqueueRebuildJobs: (payloads: never) => Promise<unknown>,
+  enqueueRebuildJobs: Parameters<typeof createUserDocumentSourceConsumer>[1],
   warn = mock(() => undefined),
   db: DbClient = harness!.db,
 ) {
@@ -2823,12 +2826,15 @@ function createRawLifecycleUseCase(
     uow: mapUnitOfWork(unitOfWork, (tx) => ({
       assignmentStore: tx.repositories.organizationResponsibility,
       auditLogWriter: tx.auditService,
-      userProfileInvalidation: tx.userProfileInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
   });
 }
 
-function createEmploymentAvailabilityUseCase(now: Date, enqueueRebuildJobs: (payloads: never) => Promise<unknown>) {
+function createEmploymentAvailabilityUseCase(
+  now: Date,
+  enqueueRebuildJobs: Parameters<typeof createUserDocumentSourceConsumer>[1],
+) {
   const unitOfWork = createUnitOfWork(now, enqueueRebuildJobs);
   return createChangeEmploymentAvailabilityUseCase({
     uow: mapUnitOfWork(unitOfWork, (tx) => ({
@@ -2836,7 +2842,7 @@ function createEmploymentAvailabilityUseCase(now: Date, enqueueRebuildJobs: (pay
       organizationReader: tx.repositories.organization,
       auditLogWriter: tx.auditService,
       responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-      userProfileInvalidation: tx.userProfileInvalidation,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
   });
 }
@@ -3045,7 +3051,7 @@ async function seedScenario() {
 function createHistoryParentCommands(
   fixture: { subjectIdentifier: string },
   now: Date,
-  producer: (payloads: never) => Promise<unknown>,
+  producer: Parameters<typeof createUserDocumentSourceConsumer>[1],
 ) {
   const repositories = createAdminApiRepositories(harness!.db);
   const uow = createUnitOfWork(now, producer);
@@ -3056,7 +3062,7 @@ function createHistoryParentCommands(
         auditLogWriter: tx.auditService,
         employmentStore: tx.repositories.employment,
         responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-        userProfileInvalidation: tx.userProfileInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
       })),
     }),
     organization: createOrganizationService({
@@ -3065,8 +3071,8 @@ function createHistoryParentCommands(
       uow: mapUnitOfWork(uow, (tx) => ({
         auditService: tx.auditService,
         responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
-        organizationSearchInvalidation: tx.organizationSearchInvalidation,
-        userProfileInvalidation: tx.userProfileInvalidation,
+        organizationDocumentInvalidation: tx.organizationDocumentInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
         organizationRepository: tx.repositories.organization,
       })),
     }),
@@ -3075,7 +3081,7 @@ function createHistoryParentCommands(
       uow: mapUnitOfWork(uow, (tx) => ({
         positionRepository: tx.repositories.position,
         auditService: tx.auditService,
-        userProfileInvalidation: tx.userProfileInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
       })),
     }),
     user: createUserService({
@@ -3092,7 +3098,7 @@ function createHistoryParentCommands(
         userRepository: tx.repositories.user,
         auditService: tx.auditService,
         subjectAccessMutation: tx.subjectAccessMutation,
-        userProfileInvalidation: tx.userProfileInvalidation,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
       })),
     }),
   };

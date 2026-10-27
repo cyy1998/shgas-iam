@@ -8,16 +8,16 @@ import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import * as resp from "@iam/api-core/http";
 import { OrganizationType } from "@iam/contracts";
 import {
-  type OrganizationSearchQueryService,
-  OrganizationSearchUnavailableError,
-} from "@iam/organization-search-read-model";
+  type OrganizationDocumentQueryService,
+  OrganizationDocumentUnavailableError,
+} from "@iam/organization-document";
 import type { OrganizationRouteHandler } from "./organization.type";
 
 export const INTERNAL_ORGANIZATION_HANDLER_TIMEOUT_MS = 5_000;
 
 export interface CreateOrganizationHandlersDeps {
   auditLogWriter: AuditLogWriterPort;
-  organizationSearch: Pick<OrganizationSearchQueryService, "search">;
+  organizationDocument: Pick<OrganizationDocumentQueryService, "search" | "getByCode">;
   organizationService: Pick<
     OrganizationService,
     "findOrganizationByCode" | "getOrganizationByCode" | "setOrganization" | "updateOrganization"
@@ -28,15 +28,19 @@ export function createOrganizationHandlers(deps: CreateOrganizationHandlersDeps)
   const organizationsSearchDsl: OrganizationRouteHandler<"organizationsSearchDsl"> = async (c) => {
     const input = c.req.valid("json");
     const data = await runWithinInternalHandlerBudget(
-      () => deps.organizationSearch.search(input),
+      () => deps.organizationDocument.search(input),
       INTERNAL_ORGANIZATION_HANDLER_TIMEOUT_MS,
-      () => new OrganizationSearchUnavailableError(),
+      () => new OrganizationDocumentUnavailableError(),
     );
     return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
   const organizationGetByCode: OrganizationRouteHandler<"organizationGetByCode"> = async (c) => {
     const { orgCode } = c.req.valid("param");
-    const data = await deps.organizationService.getOrganizationByCode(orgCode);
+    const data = await runWithinInternalHandlerBudget(
+      () => deps.organizationDocument.getByCode(orgCode),
+      INTERNAL_ORGANIZATION_HANDLER_TIMEOUT_MS,
+      () => new OrganizationDocumentUnavailableError(),
+    );
     return c.json(resp.ok(data), HttpStatusCodes.OK);
   };
 
