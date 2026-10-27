@@ -67,9 +67,9 @@ test("boolean role predicates retain Client visibility and the same-employment s
   const otherClientNegation = await search("beta", { not: secret });
 
   expect(sameEmployment).toEqual([]);
-  expect(independentEmployments.map((document) => document.user.username)).toEqual(["alice"]);
+  expect(independentEmployments.map((document) => document.username)).toEqual(["alice"]);
   expect(missingBothInOne).toEqual([]);
-  expect(isolatedNegation.map((document) => document.user.username)).toEqual(["alice"]);
+  expect(isolatedNegation.map((document) => document.username)).toEqual(["alice"]);
   expect(otherClientNegation).toEqual([]);
 });
 
@@ -87,7 +87,7 @@ test("organization paths and responsibility targets use the same public level an
       path: "employments",
       where: {
         and: [
-          { field: "organization", op: "withinSubtreeOf", value: "root" },
+          { exists: { path: "organization.path", where: { field: "code", op: "eq", value: "root" } } },
           {
             exists: {
               path: "organization.path",
@@ -106,7 +106,7 @@ test("organization paths and responsibility targets use the same public level an
               where: {
                 and: [
                   { field: "type.code", op: "eq", value: "head" },
-                  { field: "targetOrganization", op: "withinSubtreeOf", value: "target" },
+                  { exists: { path: "targetOrganization.path", where: { field: "code", op: "eq", value: "target" } } },
                   {
                     exists: {
                       path: "targetOrganization.path",
@@ -136,7 +136,7 @@ test("organization paths and responsibility targets use the same public level an
     },
   });
 
-  expect(byPath.map((document) => document.user.username)).toEqual(["alice"]);
+  expect(byPath.map((document) => document.username)).toEqual(["alice"]);
   expect(byPath[0]?.employments[0]?.responsibilities).toEqual([
     {
       type: { code: OrganizationResponsibilityTypeCode.Head, name: "负责人" },
@@ -148,16 +148,16 @@ test("organization paths and responsibility targets use the same public level an
 
 test("null predicates remain two-valued and Client or filter strings cannot change SQL meaning", async () => {
   await insertDocument(1, alice);
-  const equalsMissingMobile = { field: "user.mobile", op: "eq", value: "13800000000" };
+  const equalsMissingMobile = { field: "mobile", op: "eq", value: "13800000000" };
   const positive = await search("alpha", equalsMissingMobile);
   const negative = await search("alpha", { not: equalsMissingMobile });
   const injectedClient = await search("alpha' OR TRUE --", {
     exists: { path: "employments", where: { field: "roles", op: "containsAny", value: ["alpha.secret"] } },
   });
-  const injectedValue = await search("alpha", { field: "user.username", op: "eq", value: "alice' OR TRUE --" });
+  const injectedValue = await search("alpha", { field: "username", op: "eq", value: "alice' OR TRUE --" });
 
   expect(positive).toEqual([]);
-  expect(negative.map((document) => document.user.username)).toEqual(["alice"]);
+  expect(negative.map((document) => document.username)).toEqual(["alice"]);
   expect(injectedClient).toEqual([]);
   expect(injectedValue).toEqual([]);
 });
@@ -196,15 +196,13 @@ function organization(code: string) {
 }
 
 const alice: StoredUserDocument = {
-  user: {
-    subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f888",
-    username: "alice",
-    name: "Alice",
-    mobile: null,
-    wxId: null,
-    userType: UserType.Formal,
-    status: UserStatus.Pause,
-  },
+  subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f888",
+  username: "alice",
+  name: "Alice",
+  mobile: null,
+  wxId: null,
+  userType: UserType.Formal,
+  status: UserStatus.Pause,
   employments: [
     {
       isPrimary: true,

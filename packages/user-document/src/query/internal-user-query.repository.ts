@@ -13,7 +13,7 @@ export function createInternalUserDocumentQueryRepository(db: DbClient) {
           and(
             eq(userDocuments.schemaVersion, USER_DOCUMENT_SCHEMA_VERSION),
             isNotNull(userDocuments.document),
-            sql`${userDocuments.document}->'user'->>'username' = ${username}`,
+            sql`${userDocuments.document}->>'username' = ${username}`,
           ),
         )
         .orderBy(asc(userDocuments.userId))

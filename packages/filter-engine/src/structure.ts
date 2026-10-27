@@ -34,17 +34,6 @@ export interface SearchCollectionFact<Fields extends SearchFactShape = SearchFac
   readonly fields: Fields;
 }
 
-export interface SearchOrganizationFact<
-  Fields extends SearchFactShape = SearchFactShape,
-  ValueSchema extends z.ZodType<string> = z.ZodType<string>,
-> extends SearchObjectFact<Fields> {
-  readonly organization: {
-    readonly valueSchema: ValueSchema;
-    readonly pathField: string;
-    readonly codeField: string;
-  };
-}
-
 export function searchScalar<const DocumentSchema extends z.ZodType, const ValueSchema extends z.ZodType>(
   documentSchema: DocumentSchema,
   valueSchema: ValueSchema,
@@ -65,13 +54,6 @@ export function searchObject<const Fields extends SearchFactShape>(fields: Field
 
 export function searchCollection<const Fields extends SearchFactShape>(fields: Fields): SearchCollectionFact<Fields> {
   return { kind: "collection", fields };
-}
-
-export function searchOrganization<const Fields extends SearchFactShape, const ValueSchema extends z.ZodType<string>>(
-  fields: Fields,
-  organization: SearchOrganizationFact<Fields, ValueSchema>["organization"],
-): SearchOrganizationFact<Fields, ValueSchema> {
-  return { kind: "object", fields, organization };
 }
 
 type DocumentValue<Fact extends SearchFact> =

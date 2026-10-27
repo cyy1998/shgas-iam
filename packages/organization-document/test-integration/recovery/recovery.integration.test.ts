@@ -75,12 +75,12 @@ test("repair recovers a committed subtree change whose wakeup never reached the 
   const query = createOrganizationDocumentQueryService({
     repository: createOrganizationDocumentQueryRepository(harness.db),
   });
-  const result = await query.search({ filter: { field: "organization.code", op: "eq", value: "CHILD" } });
+  const result = await query.search({ filter: { field: "code", op: "eq", value: "CHILD" } });
   const versions =
     await harness.sql`SELECT version,status FROM organization_document_rebuild_state ORDER BY organization_id`;
   expect(repair.outbox).toEqual({ selected: 1, enqueued: 1, failed: 0 });
   expect(documents.rebuilds).toEqual({ selected: 2, enqueued: 2, failed: 0 });
-  expect(result[0]?.organization.path).toMatchObject([{ name: "Recovered root" }, { name: "Child" }]);
+  expect(result[0]?.path).toMatchObject([{ name: "Recovered root" }, { name: "Child" }]);
   expect([...versions]).toEqual([
     { version: "2", status: "processed" },
     { version: "2", status: "processed" },

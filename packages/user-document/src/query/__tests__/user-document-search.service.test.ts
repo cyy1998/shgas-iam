@@ -6,7 +6,7 @@ import { createUserDocumentSearchService } from "../user-document-search.service
 
 test("rejects an extremely deep filter without overflowing the public schema parser", () => {
   let filter: unknown = {
-    field: "user.status",
+    field: "status",
     op: "eq",
     value: UserStatus.Enable,
   };
@@ -20,7 +20,7 @@ test("rejects an extremely deep filter without overflowing the public schema par
 test("deduplicates membership values before applying the distinct value budget", () => {
   const scalarResult = UserDocumentSearchRequestSchema.safeParse({
     filter: {
-      field: "user.status",
+      field: "status",
       op: "in",
       value: Array.from({ length: 101 }).fill(UserStatus.Enable),
     },
@@ -39,7 +39,7 @@ test("deduplicates membership values before applying the distinct value budget",
   });
 
   expect(scalarResult.success && scalarResult.data.filter).toEqual({
-    field: "user.status",
+    field: "status",
     op: "in",
     value: [UserStatus.Enable],
   });
@@ -63,7 +63,7 @@ test("rejects every structural and value budget before accessing the database", 
     {
       filter: {
         and: Array.from({ length: 17 }, () => ({
-          field: "user.username",
+          field: "username",
           op: "eq",
           value: "alice",
         })),
@@ -71,21 +71,21 @@ test("rejects every structural and value budget before accessing the database", 
     },
     {
       filter: {
-        field: "user.username",
+        field: "username",
         op: "in",
         value: Array.from({ length: 51 }, (_, index) => `user-${index}`),
       },
     },
     {
       filter: {
-        field: "user.username",
+        field: "username",
         op: "eq",
         value: "u".repeat(129),
       },
     },
     {
       filter: {
-        field: "user.username",
+        field: "username",
         op: "in",
         value: Array.from({ length: 501 }).fill("alice"),
       },
@@ -115,7 +115,7 @@ test("maps repository failures to the stable sanitized unavailable error", async
     .searchDocuments(
       {
         filter: {
-          field: "user.status",
+          field: "status",
           op: "eq",
           value: UserStatus.Enable,
         },
@@ -137,7 +137,7 @@ test("maps repository failures to the stable sanitized unavailable error", async
 function nestedNot(depth: number): unknown {
   if (depth === 1) {
     return {
-      field: "user.username",
+      field: "username",
       op: "eq",
       value: "alice",
     };
@@ -149,7 +149,7 @@ function filterWithNodeCount65() {
   return {
     and: Array.from({ length: 4 }, () => ({
       and: Array.from({ length: 15 }, () => ({
-        field: "user.username",
+        field: "username",
         op: "eq",
         value: "alice",
       })),
@@ -164,24 +164,24 @@ test("strictly rejects legacy, empty, unknown, and wrongly typed expressions", a
     null,
     {},
     { filter: undefined },
-    { filter: { field: "user.username", op: "eq", value: "alice" }, limit: 1 },
+    { filter: { field: "username", op: "eq", value: "alice" }, limit: 1 },
     { filter: { all: [] } },
     { filter: { any: [] } },
     { filter: { nested: "user", where: { field: "username", op: "eq", value: "alice" } } },
     { filter: { and: [] } },
     { filter: { or: [] } },
-    { filter: { field: "user.id", op: "eq", value: 1 } },
-    { filter: { field: "user.username", op: "contains", value: "alice" } },
-    { filter: { field: "user.username", op: "eq", value: 123 } },
-    { filter: { field: "user.status", op: "eq", value: "1" } },
-    { filter: { field: "user.mobile", op: "eq", value: null } },
-    { filter: { field: "user.userType", op: "in", value: [] } },
-    { filter: { field: "user.name", op: "eq", value: "Alice", unexpected: true } },
+    { filter: { field: "id", op: "eq", value: 1 } },
+    { filter: { field: "username", op: "contains", value: "alice" } },
+    { filter: { field: "username", op: "eq", value: 123 } },
+    { filter: { field: "status", op: "eq", value: "1" } },
+    { filter: { field: "mobile", op: "eq", value: null } },
+    { filter: { field: "userType", op: "in", value: [] } },
+    { filter: { field: "name", op: "eq", value: "Alice", unexpected: true } },
     { filter: nestedNot(9) },
     {
       filter: {
         and: Array.from({ length: 17 }, () => ({
-          field: "user.username",
+          field: "username",
           op: "eq",
           value: "alice",
         })),
@@ -209,7 +209,7 @@ test("rejects invalid Employment, Role, Privilege and Responsibility filters bef
     { filter: { exists: { path: "employments", where: { field: "roles", op: "containsAny", value: [] } } } },
     { filter: { exists: { path: "employments", where: { field: "roles", op: "containsAll", value: [123] } } } },
     { filter: { exists: { path: "employments", where: { field: "isPrimary", op: "containsAny", value: [true] } } } },
-    { filter: { exists: { path: "employments", where: { field: "user.username", op: "eq", value: "alice" } } } },
+    { filter: { exists: { path: "employments", where: { field: "username", op: "eq", value: "alice" } } } },
     { filter: { exists: { path: "employments", where: { field: "organization.id", op: "eq", value: 20 } } } },
     {
       filter: {

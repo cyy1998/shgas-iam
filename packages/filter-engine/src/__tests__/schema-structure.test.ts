@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { z } from "zod";
 import { createFilterEngine, searchStructureFromSchema } from "../index";
 
-test("a public schema supplies scalar, collection and organization search paths", () => {
+test("a public schema supplies scalar and nested collection search paths", () => {
   const organizationSchema = z.object({
     code: z.string(),
     path: z.array(z.object({ code: z.string(), level: z.number().int().positive() })),
@@ -13,7 +13,7 @@ test("a public schema supplies scalar, collection and organization search paths"
     active: z.boolean(),
     employments: z.array(z.object({ organization: organizationSchema, roles: z.array(z.string()) })),
   });
-  const engine = createFilterEngine(searchStructureFromSchema(documentSchema, { organizations: [organizationSchema] }));
+  const engine = createFilterEngine(searchStructureFromSchema(documentSchema));
 
   expect(
     engine.filterSchema.parse({
@@ -21,7 +21,12 @@ test("a public schema supplies scalar, collection and organization search paths"
         path: "employments",
         where: {
           and: [
-            { field: "organization", op: "withinSubtreeOf", value: "root" },
+            {
+              exists: {
+                path: "organization.path",
+                where: { field: "code", op: "eq", value: "root" },
+              },
+            },
             { field: "roles", op: "containsAll", value: ["reader", "reader"] },
           ],
         },
@@ -32,7 +37,12 @@ test("a public schema supplies scalar, collection and organization search paths"
       path: "employments",
       where: {
         and: [
-          { field: "organization", op: "withinSubtreeOf", value: "root" },
+          {
+            exists: {
+              path: "organization.path",
+              where: { field: "code", op: "eq", value: "root" },
+            },
+          },
           { field: "roles", op: "containsAll", value: ["reader"] },
         ],
       },

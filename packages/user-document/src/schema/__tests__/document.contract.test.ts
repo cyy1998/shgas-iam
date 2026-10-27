@@ -15,15 +15,13 @@ const published = {
   sourceVersion: "9007199254740993",
   publishedAt: new Date("2026-10-26T00:00:00Z"),
   document: {
-    user: {
-      subjectIdentifier,
-      username: "alice",
-      name: "Alice",
-      mobile: null,
-      wxId: null,
-      userType: UserType.Formal,
-      status: UserStatus.Pause,
-    },
+    subjectIdentifier,
+    username: "alice",
+    name: "Alice",
+    mobile: null,
+    wxId: null,
+    userType: UserType.Formal,
+    status: UserStatus.Pause,
     employments: [],
   },
 };

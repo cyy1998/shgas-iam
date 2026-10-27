@@ -196,7 +196,10 @@ async function seedPublishedSubject(harness: Awaited<ReturnType<typeof createPos
     subjectIdentifier: SUBJECT_IDENTIFIER,
     publishedAt: REBUILT_AT,
     document: {
-      user: { ...base.document.user, subjectIdentifier: SUBJECT_IDENTIFIER, username: "alice", name: "Alice" },
+      ...base.document,
+      subjectIdentifier: SUBJECT_IDENTIFIER,
+      username: "alice",
+      name: "Alice",
       employments: subjectFacts.employments,
     },
   });

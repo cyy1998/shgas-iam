@@ -2,10 +2,10 @@
 
 内部应用通过以下接口搜索用户或组织。先取得有效 Internal Client 的 Internal API Secret，通过 `apikey` 请求头提交；不要使用 SSO Secret。
 
-| 目标 | POST 路径                            | 成功响应的 data                                                   |
-| ---- | ------------------------------------ | ----------------------------------------------------------------- |
-| 用户 | `/internal/users/search-dsl`         | 完整 User Document 数组，含 user 与当前 Client 可见的 employments |
-| 组织 | `/internal/organizations/search-dsl` | 完整 Organization Document 数组，含组织属性和从根到自身的路径     |
+| 目标 | POST 路径                            | 成功响应的 data                                                               |
+| ---- | ------------------------------------ | ----------------------------------------------------------------------------- |
+| 用户 | `/internal/users/search-dsl`         | 完整 User Document 数组，根字段为用户基本信息与当前 Client 可见的 employments |
+| 组织 | `/internal/organizations/search-dsl` | 完整 Organization Document 数组，含组织属性和从根到自身的路径                 |
 
 以下路径为 API 服务路径，经标准 Gateway 访问时加 `/api/iam` 前缀。
 搜索范围与更新延迟见[用户搜索](../features/search/user-search.md)和[组织搜索](../features/search/organization-search.md)。
@@ -23,17 +23,17 @@ POST /internal/users/search-dsl
 Content-Type: application/json
 apikey: <Internal API Secret>
 
-{"filter":{"field":"user.username","op":"eq","value":"alice"}}
+{"filter":{"field":"username","op":"eq","value":"alice"}}
 ```
 
 成功返回 `{ "code": 200, "message": "success", "data": [...] }`；无匹配时 `data` 为 `[]`。
 两个接口均要求非空 filter，按内部 ID 稳定排序，不能分页、指定排序或选择返回字段。
-账号及组织的暂停、禁用状态不会自动排除，需要时显式筛选 `user.status` 或 `organization.status`。
+账号及组织的暂停、禁用状态不会自动排除，需要时在对应接口显式筛选根字段 `status`。
 
 ## 组合条件
 
 用 `and`、`or`、`not` 组合条件。标量使用 `eq` 或 `in`，标量数组使用 `containsAny` 或 `containsAll`；
-组织引用可用 `withinSubtreeOf` 匹配某个组织及其后代。字符串精确比较，空格和大小写保留。
+组织子树通过完整路径中存在指定组织的 `code` 表达，匹配该组织自身及其后代。字符串精确比较，空格和大小写保留。
 
 对象集合用 `exists: { path, where }`。where 中的路径相对于当前元素，同一个 where 的条件须由同一元素满足。
 例如，要求同一条有效任职同时属于指定组织子树并担任指定岗位：
@@ -45,7 +45,12 @@ apikey: <Internal API Secret>
       "path": "employments",
       "where": {
         "and": [
-          { "field": "organization", "op": "withinSubtreeOf", "value": "ORG-A" },
+          {
+            "exists": {
+              "path": "organization.path",
+              "where": { "field": "code", "op": "eq", "value": "ORG-A" }
+            }
+          },
           { "field": "position.code", "op": "eq", "value": "MANAGER" }
         ]
       }
@@ -54,12 +59,15 @@ apikey: <Internal API Secret>
 }
 ```
 
-拆成两个 exists 会允许不同任职分别满足。组织路径同理；`organization.path` 内的 code、level 等条件须匹配同一节点。
+将任职条件拆成两个独立 exists 会允许不同任职分别满足。组织路径同理；`organization.path` 内的 code、level 等条件须匹配同一节点。
 组织路径包含自身；`level` 从根的 1 起算，`distanceToTarget` 从目标自身的 0 起算。
+
+独立组织搜索的路径位于文档根，使用 `exists.path = "path"`；任职中的组织使用 `organization.path`，
+责任元素中的目标组织使用 `targetOrganization.path`。`not` 应包裹整个 exists 才表示排除该组织子树。
 
 空字段上的原子条件为 false，not 再取反，所以“手机号不等于某值”会包含没有手机号的用户。
 `not exists(...)` 与 `exists(... where not ...)` 不等价。不能直接查询 null、空集合或缺失字段，也不支持模糊搜索。
-表达式和查询值数组须非空；旧 all/any/nested、权限点路径和任意 JSON path 均无效。
+表达式和查询值数组须非空；旧 all/any/nested、`withinSubtreeOf`、旧根路径 `user.*`、独立组织的 `organization.*`、权限点路径和任意 JSON path 均无效。
 
 ## 处理结果
 

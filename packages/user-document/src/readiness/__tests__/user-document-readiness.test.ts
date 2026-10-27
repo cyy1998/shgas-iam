@@ -42,7 +42,7 @@ describe("version-independent User Document readiness gates", () => {
     const stored = publishedProfile(1, "3");
     const expected = {
       ...stored,
-      document: { ...stored.document, user: { ...stored.document.user, name: "Current name" } },
+      document: { ...stored.document, name: "Current name" },
     };
     const rebuildExpected = mock(async () => [expected]);
     const gate = createUserDocumentPostgresGate({

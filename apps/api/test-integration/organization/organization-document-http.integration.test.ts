@@ -59,7 +59,7 @@ describe("Organization Filter DSL through authenticated Internal HTTP and Postgr
     const unpublished = await detail("ROOT");
     expect(unpublished.status).toBe(404);
     await publishAll();
-    const matches = await search({ field: "organization.code", op: "eq", value: "ROOT" });
+    const matches = await search({ field: "code", op: "eq", value: "ROOT" });
     await harness.db
       .update(organizations)
       .set({ orgName: "New source name", isDelete: true })
@@ -67,13 +67,13 @@ describe("Organization Filter DSL through authenticated Internal HTTP and Postgr
     const published = await detail("ROOT");
     expect(published.status).toBe(200);
     expect(published.body.data).toEqual(matches.body.data[0]);
-    expect(published.body.data.organization.status).toBe(OrganizationStatus.Disable);
+    expect(published.body.data.status).toBe(OrganizationStatus.Disable);
   });
 
   test("exact details distinguish absent current entries and corrupt published documents", async () => {
     await seedTree();
     await publishAll();
-    await harness.sql`UPDATE organization_document SET document='{"organization":{"code":"ROOT"}}'::jsonb WHERE organization_id=30`;
+    await harness.sql`UPDATE organization_document SET document='{"code":"ROOT"}'::jsonb WHERE organization_id=30`;
     const corrupt = await detail("ROOT");
     expect(corrupt.status).toBe(503);
     await harness.sql`UPDATE organization_document SET document=NULL,search_visible=FALSE WHERE organization_id=30`;
@@ -92,42 +92,38 @@ describe("Organization Filter DSL through authenticated Internal HTTP and Postgr
       .where(eq(organizations.id, 10));
 
     const result = await search({
-      field: "organization.status",
+      field: "status",
       op: "in",
       value: [OrganizationStatus.Enable, OrganizationStatus.Pause, OrganizationStatus.Disable],
     });
     expect(result.status).toBe(200);
-    expect(result.body.data.map((document: { organization: { code: string } }) => document.organization.code)).toEqual([
+    expect(result.body.data.map((document: { code: string }) => document.code)).toEqual([
       "DEPT",
       "COMPANY",
       "ROOT",
       "OTHER",
     ]);
     expect(result.body.data[0]).toEqual({
-      organization: {
-        code: "DEPT",
-        name: "已发布部门",
-        type: OrganizationType.Department,
-        status: OrganizationStatus.Enable,
-        level: 3,
-        isVirtual: false,
-        isEntity: true,
-        path: [
-          { code: "ROOT", name: "根组织", type: OrganizationType.Company, level: 1, distanceToTarget: 2 },
-          { code: "COMPANY", name: "公司", type: OrganizationType.Company, level: 2, distanceToTarget: 1 },
-          { code: "DEPT", name: "已发布部门", type: OrganizationType.Department, level: 3, distanceToTarget: 0 },
-        ],
-      },
+      code: "DEPT",
+      name: "已发布部门",
+      type: OrganizationType.Department,
+      status: OrganizationStatus.Enable,
+      level: 3,
+      isVirtual: false,
+      isEntity: true,
+      path: [
+        { code: "ROOT", name: "根组织", type: OrganizationType.Company, level: 1, distanceToTarget: 2 },
+        { code: "COMPANY", name: "公司", type: OrganizationType.Company, level: 2, distanceToTarget: 1 },
+        { code: "DEPT", name: "已发布部门", type: OrganizationType.Department, level: 3, distanceToTarget: 0 },
+      ],
     });
     const oldFacts = await search({
       and: [
-        { field: "organization.name", op: "eq", value: "已发布部门" },
-        { field: "organization.status", op: "eq", value: OrganizationStatus.Enable },
+        { field: "name", op: "eq", value: "已发布部门" },
+        { field: "status", op: "eq", value: OrganizationStatus.Enable },
       ],
     });
-    expect(
-      oldFacts.body.data.map((document: { organization: { code: string } }) => document.organization.code),
-    ).toEqual(["DEPT"]);
+    expect(oldFacts.body.data.map((document: { code: string }) => document.code)).toEqual(["DEPT"]);
   });
 
   test("binds composed exists conditions to one path node while independent exists can match distinct nodes", async () => {
@@ -135,7 +131,7 @@ describe("Organization Filter DSL through authenticated Internal HTTP and Postgr
     await publishAll();
     const sameNode = await search({
       exists: {
-        path: "organization.path",
+        path: "path",
         where: {
           and: [
             { field: "code", op: "eq", value: "ROOT" },
@@ -148,17 +144,15 @@ describe("Organization Filter DSL through authenticated Internal HTTP and Postgr
     expect(sameNode.body.data).toEqual([]);
     const distinctNodes = await search({
       and: [
-        { exists: { path: "organization.path", where: { field: "code", op: "eq", value: "ROOT" } } },
-        { exists: { path: "organization.path", where: { field: "level", op: "eq", value: 2 } } },
+        { exists: { path: "path", where: { field: "code", op: "eq", value: "ROOT" } } },
+        { exists: { path: "path", where: { field: "level", op: "eq", value: 2 } } },
       ],
     });
     expect(distinctNodes.status).toBe(200);
-    expect(
-      distinctNodes.body.data.map((document: { organization: { code: string } }) => document.organization.code),
-    ).toEqual(["DEPT", "COMPANY"]);
+    expect(distinctNodes.body.data.map((document: { code: string }) => document.code)).toEqual(["DEPT", "COMPANY"]);
     const immediateParent = await search({
       exists: {
-        path: "organization.path",
+        path: "path",
         where: {
           and: [
             { field: "code", op: "eq", value: "COMPANY" },
@@ -169,45 +163,39 @@ describe("Organization Filter DSL through authenticated Internal HTTP and Postgr
         },
       },
     });
-    expect(
-      immediateParent.body.data.map((document: { organization: { code: string } }) => document.organization.code),
-    ).toEqual(["DEPT"]);
+    expect(immediateParent.body.data.map((document: { code: string }) => document.code)).toEqual(["DEPT"]);
   });
 
   test("includes the subtree root itself and applies precise scalar and boolean combinations", async () => {
     await seedTree();
     await publishAll();
-    const subtree = await search({ field: "organization", op: "withinSubtreeOf", value: "COMPANY" });
+    const subtree = await search({ exists: { path: "path", where: { field: "code", op: "eq", value: "COMPANY" } } });
     expect(subtree.status).toBe(200);
-    expect(subtree.body.data.map((document: { organization: { code: string } }) => document.organization.code)).toEqual(
-      ["DEPT", "COMPANY"],
-    );
+    expect(subtree.body.data.map((document: { code: string }) => document.code)).toEqual(["DEPT", "COMPANY"]);
     const scoped = await search({
       and: [
-        { field: "organization", op: "withinSubtreeOf", value: "ROOT" },
-        { field: "organization.level", op: "in", value: [2, 3] },
-        { field: "organization.isVirtual", op: "eq", value: false },
-        { field: "organization.isEntity", op: "eq", value: true },
+        { exists: { path: "path", where: { field: "code", op: "eq", value: "ROOT" } } },
+        { field: "level", op: "in", value: [2, 3] },
+        { field: "isVirtual", op: "eq", value: false },
+        { field: "isEntity", op: "eq", value: true },
         {
           or: [
-            { field: "organization.type", op: "eq", value: OrganizationType.Department },
-            { not: { field: "organization.status", op: "eq", value: OrganizationStatus.Pause } },
+            { field: "type", op: "eq", value: OrganizationType.Department },
+            { not: { field: "status", op: "eq", value: OrganizationStatus.Pause } },
           ],
         },
       ],
     });
-    expect(scoped.body.data.map((document: { organization: { code: string } }) => document.organization.code)).toEqual([
-      "DEPT",
-    ]);
-    const whitespace = await search({ field: "organization.code", op: "eq", value: " COMPANY " });
-    const caseVariant = await search({ field: "organization.code", op: "eq", value: "company" });
+    expect(scoped.body.data.map((document: { code: string }) => document.code)).toEqual(["DEPT"]);
+    const whitespace = await search({ field: "code", op: "eq", value: " COMPANY " });
+    const caseVariant = await search({ field: "code", op: "eq", value: "company" });
     expect(whitespace.body.data).toEqual([]);
     expect(caseVariant.body.data).toEqual([]);
   });
 
   test("omits unpublished, missing and old-schema documents without applying a source-coverage gate", async () => {
     await seedTree();
-    const unpublished = await search({ field: "organization", op: "withinSubtreeOf", value: "ROOT" });
+    const unpublished = await search({ exists: { path: "path", where: { field: "code", op: "eq", value: "ROOT" } } });
     expect(unpublished.status).toBe(200);
     expect(unpublished.body.data).toEqual([]);
     await publishAll();
@@ -220,11 +208,9 @@ describe("Organization Filter DSL through authenticated Internal HTTP and Postgr
       .update(organizationDocuments)
       .set({ document: null, searchVisible: false })
       .where(eq(organizationDocuments.organizationId, 40));
-    const available = await search({ field: "organization", op: "withinSubtreeOf", value: "ROOT" });
+    const available = await search({ exists: { path: "path", where: { field: "code", op: "eq", value: "ROOT" } } });
     expect(available.status).toBe(200);
-    expect(
-      available.body.data.map((document: { organization: { code: string } }) => document.organization.code),
-    ).toEqual(["ROOT"]);
+    expect(available.body.data.map((document: { code: string }) => document.code)).toEqual(["ROOT"]);
   });
 
   test("rejects a matched malformed document as a whole without scanning unrelated corruption", async () => {
@@ -234,20 +220,18 @@ describe("Organization Filter DSL through authenticated Internal HTTP and Postgr
       .update(organizationDocuments)
       .set({ document: sql`${organizationDocuments.document} || '{"internalId": 10}'::jsonb` })
       .where(eq(organizationDocuments.organizationId, 10));
-    const unmatched = await search({ field: "organization.code", op: "eq", value: "OTHER" });
+    const unmatched = await search({ field: "code", op: "eq", value: "OTHER" });
     expect(unmatched.status).toBe(200);
-    expect(
-      unmatched.body.data.map((document: { organization: { code: string } }) => document.organization.code),
-    ).toEqual(["OTHER"]);
-    const matched = await search({ field: "organization", op: "withinSubtreeOf", value: "ROOT" });
+    expect(unmatched.body.data.map((document: { code: string }) => document.code)).toEqual(["OTHER"]);
+    const matched = await search({ exists: { path: "path", where: { field: "code", op: "eq", value: "ROOT" } } });
     expect(matched.status).toBe(503);
     expect(matched.body).toMatchObject({ code: "ORGANIZATION_DOCUMENT_UNAVAILABLE", data: null });
     await harness.db
       .update(organizationDocuments)
-      .set({ document: sql`jsonb_set(${organizationDocuments.document}, '{organization,path}', 'null'::jsonb)` })
+      .set({ document: sql`jsonb_set(${organizationDocuments.document}, '{path}', 'null'::jsonb)` })
       .where(eq(organizationDocuments.organizationId, 10));
     const queryFailure = await search({
-      exists: { path: "organization.path", where: { field: "code", op: "eq", value: "ROOT" } },
+      exists: { path: "path", where: { field: "code", op: "eq", value: "ROOT" } },
     });
     expect(queryFailure.status).toBe(503);
     expect(queryFailure.body).toMatchObject({ code: "ORGANIZATION_DOCUMENT_UNAVAILABLE", data: null });
@@ -266,7 +250,7 @@ describe("Organization Filter DSL through authenticated Internal HTTP and Postgr
     try {
       await locked.promise;
       const startedAt = performance.now();
-      const timedOut = await search({ field: "organization.code", op: "eq", value: "ROOT" });
+      const timedOut = await search({ field: "code", op: "eq", value: "ROOT" });
       const elapsedMs = performance.now() - startedAt;
       expect(timedOut.status).toBe(503);
       expect(timedOut.body).toMatchObject({ code: "ORGANIZATION_DOCUMENT_UNAVAILABLE", data: null });
@@ -276,7 +260,7 @@ describe("Organization Filter DSL through authenticated Internal HTTP and Postgr
       release.resolve();
       await holder;
     }
-    const recovered = await search({ field: "organization.code", op: "eq", value: "ROOT" });
+    const recovered = await search({ field: "code", op: "eq", value: "ROOT" });
     expect(recovered.status).toBe(200);
   }, 10_000);
 
@@ -296,15 +280,15 @@ describe("Organization Filter DSL through authenticated Internal HTTP and Postgr
       .insert(organizationClosures)
       .values(roots.map(({ id }) => ({ ancestorId: id, descendantId: id, depth: 0 })));
     await publishAll();
-    const exactly500 = await search({ field: "organization.code", op: "in", value: ["ORG-501"] });
+    const exactly500 = await search({ field: "code", op: "in", value: ["ORG-501"] });
     expect(exactly500.status).toBe(200);
     expect(exactly500.body.data).toHaveLength(1);
-    const bounded = await search({ not: { field: "organization.code", op: "eq", value: "ORG-501" } });
+    const bounded = await search({ not: { field: "code", op: "eq", value: "ORG-501" } });
     expect(bounded.status).toBe(200);
     expect(bounded.body.data).toHaveLength(500);
-    expect(bounded.body.data[0].organization.code).toBe("ORG-1");
-    expect(bounded.body.data[499].organization.code).toBe("ORG-500");
-    const excessive = await search({ field: "organization.status", op: "eq", value: OrganizationStatus.Enable });
+    expect(bounded.body.data[0].code).toBe("ORG-1");
+    expect(bounded.body.data[499].code).toBe("ORG-500");
+    const excessive = await search({ field: "status", op: "eq", value: OrganizationStatus.Enable });
     expect(excessive.status).toBe(422);
     expect(excessive.body).toMatchObject({ code: "ORGANIZATION_DOCUMENT_RESULT_TOO_LARGE", data: null });
   }, 60_000);

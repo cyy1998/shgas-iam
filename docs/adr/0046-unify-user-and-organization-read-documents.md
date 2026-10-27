@@ -8,7 +8,8 @@ status: accepted
 本决定统一为单份规范业务 Document，并同时解决可靠更新与 Client 角色隔离，减少平行事实的维护成本。
 
 本决定记录当前统一模型与取舍；代码验收与目标环境发布分别判断。
-完整实施要求与验收状态由 [Spec #283](https://github.com/cyy1998/shgas-iam/issues/283) 跟踪。
+原统一模型的实施要求与验收状态由 [Spec #283](https://github.com/cyy1998/shgas-iam/issues/283) 跟踪；
+下述文档根结构与过滤语法修订是后续已接受的调整，不代表 #283 已包含该目标。
 
 ## 已确认的方向
 
@@ -31,8 +32,9 @@ status: accepted
 - Internal 角色筛选、搜索返回和详情只能观察当前已认证 Client 的角色，所有组合与否定条件均在这个可见集合上解释。
   Client 身份由认证固定，角色归属使用明确保存的关系，不依赖 code 前缀或调用方提供的 Client 参数。
   有效 Internal Client 可以查询自己的角色，不新增 Internal 披露开关，也不要求启用 SSO 或配置 SSO 授权声明。
-- 用户公开文档沿用 `user + employments`，角色放在每条有效任职的 `roles` 中；没有本 Client 角色的任职仍保留，
-  其 `roles` 为 `[]`。Internal 不重复返回另一组 `authorization.employments`；SSO 按协议需要生成授权结构和用户级角色并集。
+- 用户文档的主体基本信息按下述根结构修订提升到根节点，与 `employments` 并列；角色放在每条有效任职的 `roles` 中。
+  没有本 Client 角色的任职仍保留，其 `roles` 为 `[]`。Internal 不重复返回另一组 `authorization.employments`；
+  SSO 按协议需要生成授权结构和用户级角色并集。
 - 用户任职、组织责任、独立组织文档和 SSO 共用组织基础结构 `code/name/type/path`，路径节点统一包含
   `code/name/type/level/distanceToTarget`。完整路径从根到目标且包含自身，根 level 为 1、自身 distanceToTarget 为 0；
   层级与距离可从路径位置派生，无需保存平行数组。独立组织根额外包含 status、isVirtual、isEntity 等自身属性，
@@ -51,6 +53,32 @@ status: accepted
 - 采用维护窗口内的单代硬切换：停止并排空受影响读写与旧 Worker，迁移结构、全量重建并完整核验，
   再由新调用方与新服务共同恢复，不增加旧详情或旧响应兼容层。全量重建同时修复已有 processed 但内容陈旧的档案。
   保留有效会话和凭据，不清会话或推进 session/protocol 代际；Custom SSO 输出协调升级为 wire 4，Catalog 3 与 OIDC 标准映射保持；回退依赖匹配旧制品与备份。
+
+## 文档根结构与过滤语法修订（2026-10-27 已接受）
+
+原候选实现的 User Document 使用 `{ user: { ... }, employments }`，Organization Document 使用
+`{ organization: { ... } }`。两类文档的结果根已经明确主体，继续包裹自身基本信息增加了返回结构和查询路径的层级。
+本次决定将 `user`、`organization` 内的全部自身字段提升到各自 Document 根节点，用户的 `employments` 仍与基本信息并列。
+
+内部持久化文档、公开 schema、Internal 搜索与详情，以及由公开结构派生的 Filter DSL 路径整体调整；
+例如 `user.username` 改为 `username`，独立组织文档的 `organization.path` 改为 `path`。
+任职内的 `organization` 和责任内的 `targetOrganization` 表达关联对象，保留其结构；Custom SSO 的 `profile`
+与 OIDC 标准映射仍由协议拥有，本次只适配 Document 到 Subject Facts 的派生输入。
+
+同时整体移除 `withinSubtreeOf`，覆盖独立组织文档、任职所属组织和责任目标组织。子树条件统一使用
+`exists` 进入相应组织的完整 `path`，再以 `code eq` 匹配目标组织；扁平化后的独立组织使用 `path`，
+任职元素内使用 `organization.path`，责任元素内使用 `targetOrganization.path`。完整路径包含自身，
+因此替代后仍匹配目标组织自身及后代。组合条件保留原任职、责任和 `not` 的作用范围。
+
+该操作符没有独有的匹配语义，移除后减少 DSL 的组织专用规则，不新增根对象专用语法或兼容别名。
+旧操作符按非法查询返回 422。沿用现有查询预算，每处替换增加一个 AST 节点并使该分支深度增加一层；
+接受部分接近预算上限的旧查询改写后须进一步简化，不因移除语法糖扩大查询预算，也不将此调整视为性能提升。
+
+带根包装的上一版候选尚未实际部署，本次直接修正未发布契约，两类 Document 与派生 Facts 的 schema 版本保持 1，
+不新增版本、数据库迁移或旧候选到新候选的升级流程。响应、过滤路径、操作符和持久化布局整体调整，
+不保留旧包装、旧路径别名、双读或逐对象回退；调用方按最终契约接入。
+首次部署仍沿用本决定原有的完整构建与核验要求，保留有效会话与凭据。
+这避免仅在响应上去层、内部长期保留另一种根结构的维护成本，也避免为未发布的中间形状维护版本切换。
 
 ## 已知约束与取舍
 
@@ -100,7 +128,7 @@ PostgreSQL 提交后才发布 Redis，并保留可恢复的缓存与访问屏障
 源事件和重建两阶段都须能恢复失败、丢失唤醒与过期处理，队列仅负责唤醒。沿用部署侧周期 repair 与告警，
 不将查询请求变为修复入口，不新增仓库内调度系统。责任类型 Catalog 仍由代码发布管理，不为统一失效新增运行时管理接口。
 
-搜索继续使用既有 DSL 操作符、同元素作用域、精确值语义、稳定排序、500 项上限、结构预算和超时保护；
+搜索的操作符按上述修订收敛，继续保持同元素作用域、精确值语义、稳定排序、500 项上限、结构预算和超时保护；
 非法或超预算查询整体返回 422，无匹配返回空数组，损坏或查询失败整体返回 503，不截断或返回部分结果。
 详情语义不替代登录、账号恢复和脱敏手机号接口各自的源账号判断与失败处理。
 

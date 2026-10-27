@@ -72,8 +72,8 @@ async function published(version: string, rootName: string) {
   return await until(async () => {
     const [row] = await harness.sql`SELECT source_version FROM organization_document WHERE organization_id=2`;
     if (row?.source_version !== version) return undefined;
-    const documents = await search.search({ filter: { field: "organization.code", op: "eq", value: "CHILD" } });
-    if (documents[0]?.organization.path[0]?.name !== rootName) return undefined;
+    const documents = await search.search({ filter: { field: "code", op: "eq", value: "CHILD" } });
+    if (documents[0]?.path[0]?.name !== rootName) return undefined;
     return documents;
   });
 }
@@ -181,10 +181,10 @@ test("ordinary BullMQ expansion retries exhaust without losing committed subtree
   const payload = OrganizationOutboxJobPayloadSchema.parse(failed.data);
   const [state] =
     await harness.sql`SELECT status,attempts,last_error FROM organization_document_outbox WHERE id=${payload.outboxId}`;
-  const old = await search.search({ filter: { field: "organization.code", op: "eq", value: "CHILD" } });
+  const old = await search.search({ filter: { field: "code", op: "eq", value: "CHILD" } });
   expect(state).toMatchObject({ status: "failed", attempts: 3 });
   expect(state?.last_error).toEqual(expect.any(String));
-  expect(old[0]?.organization.path[0]?.name).toBe("Root");
+  expect(old[0]?.path[0]?.name).toBe("Root");
   await harness.sql.unsafe("DROP TRIGGER reject_expansion ON organization_document_rebuild_state");
   await harness.sql.unsafe("DROP FUNCTION reject_expansion()");
   const repaired = await command("repair");
@@ -194,7 +194,7 @@ test("ordinary BullMQ expansion retries exhaust without losing committed subtree
   const versions =
     await harness.sql`SELECT version,status FROM organization_document_rebuild_state ORDER BY organization_id`;
   expect(repaired.output).toContain('"publication":"not-verified"');
-  expect(result[0]?.organization.path[0]?.name).toBe("Recovered root");
+  expect(result[0]?.path[0]?.name).toBe("Recovered root");
   expect(facts[0]?.org_name).toBe("Recovered root");
   expect([...versions]).toEqual([
     { version: "2", status: "processed" },
@@ -239,15 +239,15 @@ test("ordinary BullMQ rebuild retries exhaust while the legal old document stays
   });
   const [state] =
     await harness.sql`SELECT version,status,attempts,last_error FROM organization_document_rebuild_state WHERE organization_id=2`;
-  const old = await search.search({ filter: { field: "organization.code", op: "eq", value: "CHILD" } });
+  const old = await search.search({ filter: { field: "code", op: "eq", value: "CHILD" } });
   expect(failed.attemptsMade).toBe(3);
   expect(state).toMatchObject({ version: "2", status: "failed", attempts: 3 });
   expect(state?.last_error).toEqual(expect.any(String));
-  expect(old[0]?.organization.path[0]?.name).toBe("Root");
+  expect(old[0]?.path[0]?.name).toBe("Root");
   await harness.sql`INSERT INTO organization_closure (ancestor_id,descendant_id,depth) VALUES (1,2,1)`;
   await command("repair");
   const result = await published("2", "Recovered root");
-  expect(result[0]?.organization.path[0]?.name).toBe("Recovered root");
+  expect(result[0]?.path[0]?.name).toBe("Recovered root");
 }, 45_000);
 
 test("repair closes a connected Redis peer that never answers readiness and leaves pending work for another invocation", async () => {
@@ -336,7 +336,7 @@ for (const stage of ["expand", "build"] as const) {
     await command("repair");
     const work =
       await harness.sql`SELECT version,status FROM organization_document_rebuild_state ORDER BY organization_id`;
-    expect(documents[0]?.organization.code).toBe("CHILD");
+    expect(documents[0]?.code).toBe("CHILD");
     expect([...work]).toEqual([
       { version: "1", status: "processed" },
       { version: "1", status: "processed" },

@@ -31,7 +31,7 @@ describe("Internal User Document Detail", () => {
         ...profile(1, 1),
         document: {
           ...publication().document,
-          user: { ...publication().document.user, mobile: "13800000000" },
+          mobile: "13800000000",
           employments: "broken unrelated association",
         },
       },
@@ -61,7 +61,7 @@ describe("Internal User Document Detail", () => {
     });
     const mobile = await service.getMobileByUsername("user-1");
     expect(mobile).toBeNull();
-    await harness!.sql`UPDATE user_document SET document=document #- '{user,mobile}' WHERE user_id=1`;
+    await harness!.sql`UPDATE user_document SET document=document #- '{mobile}' WHERE user_id=1`;
     const loginFailure = await service.getLoginProfileByUserId(1).catch((error) => error);
     const mobileFailure = await service.getMobileByUsername("user-1").catch((error) => error);
     expect(loginFailure).toBeInstanceOf(Error);
@@ -77,7 +77,7 @@ describe("Internal User Document Detail", () => {
     const current = await service.getDetailByUsername("user-1", "internal");
     const staleError = await service.getDetailByUsername("user-2", "internal").catch((error) => error);
 
-    expect(current).toMatchObject({ user: { username: "user-1" }, employments: [] });
+    expect(current).toMatchObject({ username: "user-1", employments: [] });
     expect(staleError).toMatchObject({
       code: ApiErrorCode.UserNotFound,
       httpStatus: 404,

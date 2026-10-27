@@ -115,7 +115,9 @@ async function seedProfileAndDirty(
     subjectIdentifier: SUBJECT_IDENTIFIER,
     document: {
       ...base.document,
-      user: { ...base.document.user, subjectIdentifier: SUBJECT_IDENTIFIER, username: "alice", name: "Alice" },
+      subjectIdentifier: SUBJECT_IDENTIFIER,
+      username: "alice",
+      name: "Alice",
     },
   });
   await harness.sql`

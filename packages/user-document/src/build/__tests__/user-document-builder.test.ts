@@ -56,15 +56,13 @@ test("builds one canonical document without management or duplicated business fi
     sourceVersion: "9007199254740993",
     publishedAt: observedAt,
     document: {
-      user: {
-        subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f888",
-        username: "alice",
-        name: "Alice",
-        mobile: null,
-        wxId: null,
-        userType: UserType.Formal,
-        status: UserStatus.Pause,
-      },
+      subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f888",
+      username: "alice",
+      name: "Alice",
+      mobile: null,
+      wxId: null,
+      userType: UserType.Formal,
+      status: UserStatus.Pause,
       employments: [],
     },
   });
@@ -85,7 +83,7 @@ test("freezes effective employments at the half-open period and retains unavaila
     ],
   });
   const result = await builder(source).buildOne({ userId: 1, sourceVersion: "7" });
-  expect(result?.document?.user.status).toBe(UserStatus.Disable);
+  expect(result?.document?.status).toBe(UserStatus.Disable);
   expect(result?.document?.employments).toHaveLength(1);
   expect(result?.document?.employments[0]).toMatchObject({ isPrimary: true, clientAuthorizations: [] });
 });
@@ -196,7 +194,7 @@ test("only deleted users publish versioned tombstones", async () => {
     { userId: 3, sourceVersion: "9" },
   ]);
   expect(results[0]).toMatchObject({ userId: 1, sourceVersion: "9", document: null });
-  expect(results.slice(1).map((item) => item.document?.user.status)).toEqual([UserStatus.Pause, UserStatus.Disable]);
+  expect(results.slice(1).map((item) => item.document?.status)).toEqual([UserStatus.Pause, UserStatus.Disable]);
 });
 
 test("rejects conflicting requested versions before building", async () => {

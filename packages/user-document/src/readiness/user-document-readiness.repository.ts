@@ -86,7 +86,7 @@ export function createUserDocumentReadinessRepository<
         }
         if (
           row.userDeleted !== (currentDocument.document === null) ||
-          (currentDocument.document !== null && currentDocument.document.user.status !== row.userStatus)
+          (currentDocument.document !== null && currentDocument.document.status !== row.userStatus)
         )
           return issue("document-identity-mismatch");
         if (

@@ -449,15 +449,13 @@ function profileRow(sourceVersion: string) {
     sourceVersion,
     publishedAt: new Date("2026-07-25T10:00:00.000Z"),
     document: {
-      user: {
-        subjectIdentifier: SUBJECT_IDENTIFIER,
-        username: "alice",
-        name: "Alice",
-        mobile: "13800138000",
-        wxId: null,
-        userType: "正式员工",
-        status: 1,
-      },
+      subjectIdentifier: SUBJECT_IDENTIFIER,
+      username: "alice",
+      name: "Alice",
+      mobile: "13800138000",
+      wxId: null,
+      userType: "正式员工",
+      status: 1,
       employments: [],
     },
   };

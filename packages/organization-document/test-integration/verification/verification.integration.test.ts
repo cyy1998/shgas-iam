@@ -88,7 +88,7 @@ test("verification rejects old schema rows including tombstones while online sea
   const search = createOrganizationDocumentQueryService({
     repository: createOrganizationDocumentQueryRepository(harness.db),
   });
-  const visible = await search.search({ filter: { field: "organization.code", op: "eq", value: "ROOT" } });
+  const visible = await search.search({ filter: { field: "code", op: "eq", value: "ROOT" } });
 
   expect(report.failures).toContainEqual({ code: "schema-mismatch", count: 2, organizationIds: [1, 2], outboxIds: [] });
   expect(report.status).toBe("failed");
@@ -101,7 +101,7 @@ for (const corruption of ["extra-field", "wrong-distance"] as const) {
     if (corruption === "extra-field")
       await harness.sql`UPDATE organization_document SET document = document || '{"internalId":1}'::jsonb WHERE organization_id = 1`;
     else
-      await harness.sql`UPDATE organization_document SET document = jsonb_set(document, '{organization,path,0,distanceToTarget}', '1'::jsonb) WHERE organization_id = 1`;
+      await harness.sql`UPDATE organization_document SET document = jsonb_set(document, '{path,0,distanceToTarget}', '1'::jsonb) WHERE organization_id = 1`;
     const before = await harness.sql`SELECT * FROM organization_document ORDER BY organization_id`;
     const report = await createOrganizationDocumentVerifier({ db: harness.db }).verify();
     const after = await harness.sql`SELECT * FROM organization_document ORDER BY organization_id`;

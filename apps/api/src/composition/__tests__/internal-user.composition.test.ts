@@ -102,7 +102,7 @@ test("wires canonical Filter search to the Base query and preserves Internal det
     mobile: null,
     wxId: null,
   };
-  const detail = { user: { ...base, status: UserStatus.Enable, userType: UserType.Formal }, employments: [] };
+  const detail = { ...base, status: UserStatus.Enable, userType: UserType.Formal, employments: [] };
   const searchDocuments = mock(async (_input: unknown) => [detail]);
   const getDetailByUsername = mock(async (_username: string) => detail);
   const userDocumentSearch = createUserDocumentSearchAdapter({ searchDocuments });

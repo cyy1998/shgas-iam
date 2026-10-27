@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { OrganizationReferenceSchema, UserDocumentSchema } from "../document";
+import { OrganizationDocumentSchema, OrganizationReferenceSchema, UserDocumentSchema } from "../document";
+import { OrganizationStatus } from "../enums/organization.status";
 import { OrganizationType } from "../enums/organization.type";
 import { UserStatus } from "../enums/user.status";
 import { UserType } from "../enums/user.type";
@@ -29,30 +30,26 @@ test("published organization references retain complete path coordinates and rem
 test("public user documents expose an explicit field set, including null contact values", () => {
   const result = UserDocumentSchema.parse({
     userId: 42,
-    user: {
-      id: 42,
-      subjectIdentifier: "11111111-1111-4111-8111-111111111111",
-      username: "alice",
-      name: "Alice",
-      mobile: null,
-      wxId: null,
-      userType: UserType.Formal,
-      status: UserStatus.Disable,
-      password: "private",
-      futureStorageField: "private",
-    },
+    id: 42,
+    subjectIdentifier: "11111111-1111-4111-8111-111111111111",
+    username: "alice",
+    name: "Alice",
+    mobile: null,
+    wxId: null,
+    userType: UserType.Formal,
+    status: UserStatus.Disable,
+    password: "private",
+    futureStorageField: "private",
     employments: [],
   });
   expect(result).toEqual({
-    user: {
-      subjectIdentifier: "11111111-1111-4111-8111-111111111111",
-      username: "alice",
-      name: "Alice",
-      mobile: null,
-      wxId: null,
-      userType: UserType.Formal,
-      status: UserStatus.Disable,
-    },
+    subjectIdentifier: "11111111-1111-4111-8111-111111111111",
+    username: "alice",
+    name: "Alice",
+    mobile: null,
+    wxId: null,
+    userType: UserType.Formal,
+    status: UserStatus.Disable,
     employments: [],
   });
 });
@@ -69,6 +66,40 @@ test("organization references reject incomplete or inconsistent path coordinates
     OrganizationReferenceSchema.safeParse({
       ...reference,
       path: [{ ...reference.path[0], level: 1, distanceToTarget: 1 }],
+    }).success,
+  ).toBe(false);
+});
+
+test("organization document fields live at the root and retain level and path integrity", () => {
+  const input = {
+    code: "ROOT",
+    name: "Root",
+    type: OrganizationType.Company,
+    path: [{ code: "ROOT", name: "Root", type: OrganizationType.Company, level: 1, distanceToTarget: 0 }],
+    level: 1,
+    status: OrganizationStatus.Enable,
+    isVirtual: false,
+    isEntity: true,
+  };
+  expect(OrganizationDocumentSchema.parse(input)).toEqual(input);
+  expect(OrganizationDocumentSchema.safeParse({ ...input, level: 2 }).success).toBe(false);
+  expect(OrganizationDocumentSchema.safeParse({ ...input, path: [] }).success).toBe(false);
+  expect(OrganizationDocumentSchema.safeParse({ organization: input }).success).toBe(false);
+});
+
+test("user documents reject basic fields supplied only through the removed user wrapper", () => {
+  expect(
+    UserDocumentSchema.safeParse({
+      user: {
+        subjectIdentifier: "11111111-1111-4111-8111-111111111111",
+        username: "alice",
+        name: "Alice",
+        mobile: null,
+        wxId: null,
+        userType: UserType.Formal,
+        status: UserStatus.Enable,
+      },
+      employments: [],
     }).success,
   ).toBe(false);
 });

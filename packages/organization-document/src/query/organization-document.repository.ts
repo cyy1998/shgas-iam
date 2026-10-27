@@ -18,7 +18,7 @@ export function createOrganizationDocumentQueryRepository(db: DbClient): Organiz
           and(
             eq(organizationDocuments.schemaVersion, ORGANIZATION_DOCUMENT_SCHEMA_VERSION),
             eq(organizationDocuments.searchVisible, true),
-            sql`${organizationDocuments.document} #>> '{organization,code}' = ${code}`,
+            sql`${organizationDocuments.document} ->> 'code' = ${code}`,
           ),
         )
         .orderBy(asc(organizationDocuments.organizationId))

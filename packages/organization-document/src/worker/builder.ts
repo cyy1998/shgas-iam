@@ -47,16 +47,14 @@ export function createOrganizationDocumentSourceReader(db: DbClient) {
       if (pathIds.at(-1) !== target.id)
         throw new OrganizationDocumentSourceIntegrityError("Organization Search path does not end at target");
       return OrganizationDocumentSchema.parse({
-        organization: {
-          code: target.orgCode,
-          name: target.orgName,
-          type: target.orgType,
-          status: target.status,
-          level: target.level,
-          isVirtual: target.isVirtual,
-          isEntity: target.isEntity,
-          path,
-        },
+        code: target.orgCode,
+        name: target.orgName,
+        type: target.orgType,
+        status: target.status,
+        level: target.level,
+        isVirtual: target.isVirtual,
+        isEntity: target.isEntity,
+        path,
       });
     },
   };

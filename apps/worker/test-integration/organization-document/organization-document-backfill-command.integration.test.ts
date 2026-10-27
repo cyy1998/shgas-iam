@@ -76,7 +76,7 @@ test("organization backfill uses the normal consumer to publish complete documen
     repository: createOrganizationDocumentQueryRepository(harness.db),
   });
   const result = await runBackfillCLI(redis, prefix);
-  const beforeConsumption = await search.search({ filter: { field: "organization.code", op: "eq", value: "CHILD" } });
+  const beforeConsumption = await search.search({ filter: { field: "code", op: "eq", value: "CHILD" } });
   expect(result.output).toContain('"registered":2');
   expect(result.output).toContain('"enqueued":2');
   expect(result.output).toContain('"publication":"not-verified"');
@@ -85,19 +85,17 @@ test("organization backfill uses the normal consumer to publish complete documen
   const published = await waitForPublishedChild(search);
   expect(published).toEqual([
     {
-      organization: {
-        code: "CHILD",
-        name: "Child",
-        type: OrganizationType.Department,
-        status: OrganizationStatus.Disable,
-        level: 2,
-        isVirtual: false,
-        isEntity: false,
-        path: [
-          { code: "ROOT", name: "Root", type: OrganizationType.Department, level: 1, distanceToTarget: 1 },
-          { code: "CHILD", name: "Child", type: OrganizationType.Department, level: 2, distanceToTarget: 0 },
-        ],
-      },
+      code: "CHILD",
+      name: "Child",
+      type: OrganizationType.Department,
+      status: OrganizationStatus.Disable,
+      level: 2,
+      isVirtual: false,
+      isEntity: false,
+      path: [
+        { code: "ROOT", name: "Root", type: OrganizationType.Department, level: 1, distanceToTarget: 1 },
+        { code: "CHILD", name: "Child", type: OrganizationType.Department, level: 2, distanceToTarget: 0 },
+      ],
     },
   ]);
 }, 15_000);
@@ -156,7 +154,7 @@ test(
     const search = createOrganizationDocumentQueryService({
       repository: createOrganizationDocumentQueryRepository(harness.db),
     });
-    const published = await search.search({ filter: { field: "organization.code", op: "eq", value: "ROOT" } });
+    const published = await search.search({ filter: { field: "code", op: "eq", value: "ROOT" } });
     expect(result.output).toContain("Organization document command shutting down");
     expect(Array.from(changes)).toEqual([{ organization_id: 1, status: "pending" }]);
     expect(published).toEqual([]);
@@ -167,7 +165,7 @@ test(
 async function waitForPublishedChild(search: ReturnType<typeof createOrganizationDocumentQueryService>) {
   const deadline = Date.now() + 8_000;
   while (Date.now() < deadline) {
-    const documents = await search.search({ filter: { field: "organization.code", op: "eq", value: "CHILD" } });
+    const documents = await search.search({ filter: { field: "code", op: "eq", value: "CHILD" } });
     if (documents.length) return documents;
     await new Promise((resolve) => setTimeout(resolve, 20));
   }

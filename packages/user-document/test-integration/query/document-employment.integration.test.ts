@@ -68,15 +68,13 @@ describe("User Document v4 Employment tracer", () => {
     const candidate = await builder.buildOne({ userId: 1, sourceVersion: "1" });
 
     expect(candidate?.document).toEqual({
-      user: {
-        subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f888",
-        username: "alice",
-        name: "Alice",
-        mobile: null,
-        wxId: "wx-alice",
-        userType: UserType.Formal,
-        status: UserStatus.Enable,
-      },
+      subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f888",
+      username: "alice",
+      name: "Alice",
+      mobile: null,
+      wxId: "wx-alice",
+      userType: UserType.Formal,
+      status: UserStatus.Enable,
       employments: [
         {
           isPrimary: true,
@@ -143,7 +141,7 @@ describe("User Document v4 Employment tracer", () => {
         filter: {
           exists: {
             path: "employments",
-            where: { field: "organization", op: "withinSubtreeOf", value: "org-root" },
+            where: { exists: { path: "organization.path", where: { field: "code", op: "eq", value: "org-root" } } },
           },
         },
       },
@@ -154,22 +152,8 @@ describe("User Document v4 Employment tracer", () => {
         filter: {
           exists: {
             path: "employments",
-            where: { field: "organization", op: "withinSubtreeOf", value: "org-effective" },
-          },
-        },
-      },
-      "profile-client",
-    );
-    const byEquivalentPath = await query.searchDocuments(
-      {
-        filter: {
-          exists: {
-            path: "employments",
             where: {
-              exists: {
-                path: "organization.path",
-                where: { field: "code", op: "eq", value: "org-root" },
-              },
+              exists: { path: "organization.path", where: { field: "code", op: "eq", value: "org-effective" } },
             },
           },
         },
@@ -237,16 +221,16 @@ describe("User Document v4 Employment tracer", () => {
         filter: {
           exists: {
             path: "employments",
-            where: { field: "organization", op: "withinSubtreeOf", value: "org-other" },
+            where: { exists: { path: "organization.path", where: { field: "code", op: "eq", value: "org-other" } } },
           },
         },
       },
       "profile-client",
     );
 
-    expect(byRootSubtree.map((row) => row.user)).toMatchObject([aliceBase]);
-    expect(byTargetSubtree.map((row) => row.user)).toMatchObject([aliceBase]);
-    expect(byEquivalentPath).toEqual(byRootSubtree);
+    expect(byRootSubtree).toMatchObject([aliceBase]);
+    expect(byTargetSubtree).toMatchObject([aliceBase]);
+
     expect(byPathNodeDistance).toEqual(byRootSubtree);
     expect(byPathNodeDistanceIn).toEqual(byRootSubtree);
     expect(byPrimaryIn).toEqual(byRootSubtree);
@@ -351,9 +335,7 @@ describe("User Document v4 Employment tracer", () => {
     const targetSubtree = await query.searchDocuments(
       {
         filter: employmentResponsibilities({
-          field: "targetOrganization",
-          op: "withinSubtreeOf",
-          value: "target-root",
+          exists: { path: "targetOrganization.path", where: { field: "code", op: "eq", value: "target-root" } },
         }),
       },
       "profile-client",
@@ -384,10 +366,10 @@ describe("User Document v4 Employment tracer", () => {
     );
 
     expect(sameResponsibility).toEqual([]);
-    expect(independentResponsibilities.map((row) => row.user)).toMatchObject([aliceBase]);
-    expect(targetSubtree.map((row) => row.user)).toMatchObject([aliceBase]);
+    expect(independentResponsibilities).toMatchObject([aliceBase]);
+    expect(targetSubtree).toMatchObject([aliceBase]);
     expect(notExistsHead).toEqual([]);
-    expect(existsNotHead.map((row) => row.user)).toMatchObject([aliceBase]);
+    expect(existsNotHead).toMatchObject([aliceBase]);
   });
 
   test("keeps conditions in one Employment scope while independent scopes can match different Employments", async () => {
@@ -468,8 +450,8 @@ describe("User Document v4 Employment tracer", () => {
     );
 
     expect(crossEmploymentJoin).toEqual([]);
-    expect(independentScopes.map((row) => row.user)).toMatchObject([aliceBase]);
-    expect(oneCompleteEmployment.map((row) => row.user)).toMatchObject([aliceBase]);
+    expect(independentScopes).toMatchObject([aliceBase]);
+    expect(oneCompleteEmployment).toMatchObject([aliceBase]);
   });
 
   test("supports strict, normalized Role array conditions", async () => {
@@ -532,8 +514,8 @@ describe("User Document v4 Employment tracer", () => {
         },
       },
     });
-    expect(containsAny.map((row) => row.user)).toMatchObject([aliceBase]);
-    expect(containsAll.map((row) => row.user)).toMatchObject([aliceBase]);
+    expect(containsAny).toMatchObject([aliceBase]);
+    expect(containsAll).toMatchObject([aliceBase]);
     expect(missingAll).toEqual([]);
   });
 
@@ -549,7 +531,7 @@ describe("User Document v4 Employment tracer", () => {
         {
           filter: {
             and: [
-              { field: "user.username", op: "eq", value: "alice" },
+              { field: "username", op: "eq", value: "alice" },
               { exists: { path: "employments", where: { field: "privileges", op: "containsAny", value: ["read"] } } },
             ],
           },

@@ -3,7 +3,7 @@ import type { UserDocumentFilter } from "../../document-query";
 const organizationFilter: UserDocumentFilter = {
   exists: {
     path: "employments",
-    where: { field: "organization", op: "withinSubtreeOf", value: "root" },
+    where: { exists: { path: "organization.path", where: { field: "code", op: "eq", value: "root" } } },
   },
 };
 const roleFilter: UserDocumentFilter = {

@@ -336,7 +336,7 @@ async function verifyDirectory(api: Protocol) {
     const detail = await get(`/internal/users/${username}`);
     same(detail, UserDocumentSchema.parse(detail), "Internal User document leaked storage fields");
     same(
-      await search("users", { field: "user.username", op: "eq", value: username }),
+      await search("users", { field: "username", op: "eq", value: username }),
       [detail],
       "User detail/search diverged",
     );
@@ -345,7 +345,7 @@ async function verifyDirectory(api: Protocol) {
     const detail = await get(`/internal/organizations/${code}`);
     same(detail, OrganizationDocumentSchema.parse(detail), "Internal Organization document leaked storage fields");
     same(
-      await search("organizations", { field: "organization.code", op: "eq", value: code }),
+      await search("organizations", { field: "code", op: "eq", value: code }),
       [detail],
       "Organization detail/search diverged",
     );
@@ -368,7 +368,7 @@ async function verifyDirectory(api: Protocol) {
   same(await search("users", ownRole(clients.other)), [], "Internal filter observed another Client role");
   same(
     await search("users", {
-      and: [{ field: "user.username", op: "eq", value: "alice" }, { not: ownRole(clients.other) }],
+      and: [{ field: "username", op: "eq", value: "alice" }, { not: ownRole(clients.other) }],
     }),
     [alice],
     "Negated role filter used global roles",

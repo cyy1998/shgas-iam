@@ -1,17 +1,11 @@
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
-import type {
-  SearchFactShape,
-  SearchObjectFact,
-  SearchOrganizationFact,
-  SearchScalarArrayFact,
-  SearchScalarFact,
-} from "./structure";
+import type { SearchFactShape, SearchObjectFact, SearchScalarArrayFact, SearchScalarFact } from "./structure";
 
 export type FilterScalarValue = string | number | boolean;
 
-export const FILTER_OPERATORS = ["eq", "in", "containsAny", "containsAll", "withinSubtreeOf"] as const;
+export const FILTER_OPERATORS = ["eq", "in", "containsAny", "containsAll"] as const;
 
 type FilterOperator = (typeof FILTER_OPERATORS)[number];
 
@@ -31,35 +25,27 @@ type ParsedFilter =
 type SearchPath<Prefix extends string, Field extends string> = Prefix extends "" ? Field : `${Prefix}.${Field}`;
 
 type ConditionsForShape<Shape extends SearchFactShape, Prefix extends string = ""> = {
-  [Field in keyof Shape & string]: Shape[Field] extends SearchOrganizationFact<infer Fields, infer ValueSchema>
+  [Field in keyof Shape & string]: Shape[Field] extends SearchScalarFact<z.ZodType, infer ValueSchema>
     ?
         | {
             field: SearchPath<Prefix, Field>;
-            op: "withinSubtreeOf";
+            op: "eq";
             value: z.infer<ValueSchema>;
           }
-        | ConditionsForShape<Fields, SearchPath<Prefix, Field>>
-    : Shape[Field] extends SearchScalarFact<z.ZodType, infer ValueSchema>
-      ?
-          | {
-              field: SearchPath<Prefix, Field>;
-              op: "eq";
-              value: z.infer<ValueSchema>;
-            }
-          | {
-              field: SearchPath<Prefix, Field>;
-              op: "in";
-              value: z.infer<ValueSchema>[];
-            }
-      : Shape[Field] extends SearchScalarArrayFact<z.ZodType, infer ItemValueSchema>
-        ? {
+        | {
             field: SearchPath<Prefix, Field>;
-            op: "containsAny" | "containsAll";
-            value: z.infer<ItemValueSchema>[];
+            op: "in";
+            value: z.infer<ValueSchema>[];
           }
-        : Shape[Field] extends { kind: "object"; fields: infer Fields extends SearchFactShape }
-          ? ConditionsForShape<Fields, SearchPath<Prefix, Field>>
-          : never;
+    : Shape[Field] extends SearchScalarArrayFact<z.ZodType, infer ItemValueSchema>
+      ? {
+          field: SearchPath<Prefix, Field>;
+          op: "containsAny" | "containsAll";
+          value: z.infer<ItemValueSchema>[];
+        }
+      : Shape[Field] extends { kind: "object"; fields: infer Fields extends SearchFactShape }
+        ? ConditionsForShape<Fields, SearchPath<Prefix, Field>>
+        : never;
 }[keyof Shape & string];
 
 type ExistsForShape<Shape extends SearchFactShape, Prefix extends string = ""> = {
@@ -100,7 +86,7 @@ export class FilterValidationError extends Error {
 
 interface ComparablePath {
   readonly segments: string[];
-  readonly fact: SearchScalarFact | SearchScalarArrayFact | SearchOrganizationFact;
+  readonly fact: SearchScalarFact | SearchScalarArrayFact;
 }
 
 interface CollectionPath {
@@ -141,7 +127,6 @@ function buildSearchScope(fields: SearchFactShape): SearchScope {
         continue;
       }
       if (fact.kind === "object") {
-        if (isOrganizationFact(fact)) comparableByPath.set(segments.join("."), { segments, fact });
         visit(fact.fields, segments);
         continue;
       }
@@ -202,22 +187,6 @@ function createConditionSchema(scope: SearchScope): z.ZodType<ParsedCondition> {
     .strict()
     .transform((condition, context) => {
       const comparable = scope.comparableByPath.get(condition.field)!;
-      if (isOrganizationFact(comparable.fact)) {
-        if (condition.op !== "withinSubtreeOf") {
-          addInvalidOperatorIssue(context);
-          return z.NEVER;
-        }
-        const value = comparable.fact.organization.valueSchema.safeParse(condition.value);
-        if (!value.success) {
-          addInvalidValueIssue(context);
-          return z.NEVER;
-        }
-        return {
-          field: condition.field,
-          op: "withinSubtreeOf",
-          value: value.data,
-        };
-      }
       if (comparable.fact.kind === "scalar") {
         if (condition.op === "eq") {
           const value = comparable.fact.valueSchema.safeParse(condition.value);
@@ -313,19 +282,6 @@ function compileFilterInScope(
   }
 
   const comparable = scope.comparableByPath.get(filter.field)!;
-  if (filter.op === "withinSubtreeOf") {
-    if (!isOrganizationFact(comparable.fact))
-      throw new Error("Parsed withinSubtreeOf condition does not target an Organization reference");
-    const organization = comparable.fact.organization;
-    const alias = `filter_scope_${aliases.nextAlias++}`;
-    const candidate = sql.raw(`${alias}.value`);
-    return sql`EXISTS (
-      SELECT 1
-      FROM jsonb_array_elements(${jsonbAtPath(document, [...comparable.segments, organization.pathField])})
-        AS ${sql.raw(alias)}(value)
-      WHERE ${jsonbAtPath(candidate, [organization.codeField])} = ${JSON.stringify(filter.value)}::jsonb
-    )`;
-  }
   const fieldValue = jsonbAtPath(document, comparable.segments);
   const values = Array.isArray(filter.value) ? filter.value : [filter.value];
   if (filter.op === "containsAll") return sql`COALESCE(${fieldValue} @> ${JSON.stringify(values)}::jsonb, FALSE)`;
@@ -353,10 +309,6 @@ function jsonbAtPath(document: SQLWrapper, segments: readonly string[]) {
 
 function joinBooleanExpressions(expressions: SQL[], separator: SQL) {
   return sql`(${sql.join(expressions, separator)})`;
-}
-
-function isOrganizationFact(fact: SearchFactShape[string]): fact is SearchOrganizationFact {
-  return fact.kind === "object" && "organization" in fact;
 }
 
 function addInvalidOperatorIssue(context: z.RefinementCtx) {

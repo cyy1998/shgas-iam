@@ -296,7 +296,7 @@ test.each([UserStatus.Pause, UserStatus.Disable])(
     }).getDetailByUsername("first", "internal");
     const facts = await createDocumentFactsReader({ db: pg.db, cache: scope.firstCache }).read(subject);
     const resolved = await authority.resolve(subject);
-    expect(detail.user.status).toBe(status);
+    expect(detail.status).toBe(status);
     expect(facts).toMatchObject({ kind: "document", facts: { profile: { username: "first" }, employments: [] } });
     expect(resolved).toEqual({ accountState: "disabled", factsState: "not_current" });
   },
@@ -756,7 +756,7 @@ test("a prepared older User Document cannot publish over the next committed requ
     [state] = await pg.db.select().from(userDocumentRebuildStates);
   const cached = await scope.readPublishedUserDocumentRecord(subject);
   expect(rejected).toEqual({ status: "stale" });
-  expect(stored).toMatchObject({ sourceVersion: "2", document: { user: { name: "Newest source" } } });
+  expect(stored).toMatchObject({ sourceVersion: "2", document: { name: "Newest source" } });
   expect(state).toMatchObject({
     version: "2",
     status: "processed",
@@ -801,7 +801,7 @@ test("User Document row, processed state and pending external obligation roll ba
     [state] = await pg.db.select().from(userDocumentRebuildStates);
   const cached = await scope.readPublishedUserDocumentRecord(subject);
   expect(failure).toBeInstanceOf(Error);
-  expect(stored).toMatchObject({ sourceVersion: "1", document: { user: { name: "First" } } });
+  expect(stored).toMatchObject({ sourceVersion: "1", document: { name: "First" } });
   expect(state).toMatchObject({
     version: "2",
     status: "failed",
@@ -813,7 +813,7 @@ test("User Document row, processed state and pending external obligation roll ba
     [retried] = await pg.db.select().from(userDocuments),
     [completed] = await pg.db.select().from(userDocumentRebuildStates);
   expect(result.status).toBe("rebuilt");
-  expect(retried).toMatchObject({ sourceVersion: "2", document: { user: { name: "Retry source" } } });
+  expect(retried).toMatchObject({ sourceVersion: "2", document: { name: "Retry source" } });
   expect(completed).toMatchObject({
     status: "processed",
     postPublicationVersion: "2",

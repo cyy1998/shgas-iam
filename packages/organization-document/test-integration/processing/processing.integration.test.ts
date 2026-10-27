@@ -41,19 +41,17 @@ test("backfill publishes an independent organization and its complete ordered pa
     source_version: "1",
     search_visible: true,
     document: {
-      organization: {
-        code: "CHILD",
-        name: "Child",
-        type: OrganizationType.Department,
-        status: OrganizationStatus.Disable,
-        level: 2,
-        isVirtual: false,
-        isEntity: false,
-        path: [
-          { code: "ROOT", name: "Root", type: OrganizationType.Department, level: 1, distanceToTarget: 1 },
-          { code: "CHILD", name: "Child", type: OrganizationType.Department, level: 2, distanceToTarget: 0 },
-        ],
-      },
+      code: "CHILD",
+      name: "Child",
+      type: OrganizationType.Department,
+      status: OrganizationStatus.Disable,
+      level: 2,
+      isVirtual: false,
+      isEntity: false,
+      path: [
+        { code: "ROOT", name: "Root", type: OrganizationType.Department, level: 1, distanceToTarget: 1 },
+        { code: "CHILD", name: "Child", type: OrganizationType.Department, level: 2, distanceToTarget: 0 },
+      ],
     },
   });
   expect([...pending]).toEqual([{ status: "processed" }, { status: "processed" }]);
@@ -126,12 +124,10 @@ test("path changes expand the committed subtree and duplicate event delivery nev
   expect(row[0]).toMatchObject({
     source_version: "2",
     document: {
-      organization: {
-        path: [
-          { code: "ROOT", name: "Renamed root" },
-          { code: "CHILD", name: "Child" },
-        ],
-      },
+      path: [
+        { code: "ROOT", name: "Renamed root" },
+        { code: "CHILD", name: "Child" },
+      ],
     },
   });
   expect(dirty.map(({ version }) => version)).toEqual(["2", "2"]);
@@ -182,7 +178,7 @@ test("broken source paths fail rebuilding while retaining the last legal publish
   expect(failure).toBeInstanceOf(Error);
   expect(row[0]).toMatchObject({
     source_version: "1",
-    document: { organization: { code: "CHILD", path: [{ code: "ROOT" }, { code: "CHILD" }] } },
+    document: { code: "CHILD", path: [{ code: "ROOT" }, { code: "CHILD" }] },
   });
   expect(dirty[0]).toMatchObject({ version: "2", status: "failed", processing_token: null });
 });
@@ -211,7 +207,8 @@ test("normal build reads target and ancestors from one consistent source snapsho
     await blocker.unsafe("COMMIT");
     const prepared = await preparedPromise;
     expect(prepared?.document).toMatchObject({
-      organization: { name: "Child", path: [{ name: "Root" }, { name: "Child" }] },
+      name: "Child",
+      path: [{ name: "Root" }, { name: "Child" }],
     });
   } finally {
     await blocker.unsafe("ROLLBACK");

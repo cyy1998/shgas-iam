@@ -196,7 +196,7 @@ test("successive ancestor code and name patches keep stable work identity and re
   const oldSubtree = await work.searchSubtree("COMPANY");
   const newSubtree = await work.searchSubtree("COMPANY-V3");
   expect(oldSubtree).toEqual([]);
-  expect(newSubtree.map(({ organization }) => organization.code)).toEqual(["COMPANY-V3", "DEPARTMENT", "NEW-LEAF"]);
+  expect(newSubtree.map(({ code }) => code)).toEqual(["COMPANY-V3", "DEPARTMENT", "NEW-LEAF"]);
 });
 
 test("a failed expansion retries over newly committed descendants and repeated delivery keeps the converged version", async () => {
@@ -214,9 +214,7 @@ test("a failed expansion retries over newly committed descendants and repeated d
     const failure = await captureRejection(work.processor.processOutbox(ancestorChange));
     expect(failure).toBeInstanceOf(Error);
     const retained = await work.search("DEPARTMENT");
-    expect(retained).toMatchObject([
-      { organization: { path: [{ name: "Root" }, { name: "Company" }, { name: "Department" }] } },
-    ]);
+    expect(retained).toMatchObject([{ path: [{ name: "Root" }, { name: "Company" }, { name: "Department" }] }]);
     const retainedVersion = await readPublicationVersion(3);
     expect(retainedVersion).toEqual({ version: "1", sourceVersion: "1", status: "processed" });
   } finally {
@@ -294,10 +292,12 @@ function createWork() {
       while (rebuildJobs.length > 0) await processor.processRebuild(rebuildJobs.shift()!);
     },
     async search(code: string) {
-      return await query.search({ filter: { field: "organization.code", op: "eq", value: code } });
+      return await query.search({ filter: { field: "code", op: "eq", value: code } });
     },
     async searchSubtree(code: string) {
-      return await query.search({ filter: { field: "organization", op: "withinSubtreeOf", value: code } });
+      return await query.search({
+        filter: { exists: { path: "path", where: { field: "code", op: "eq", value: code } } },
+      });
     },
   };
 }
@@ -385,21 +385,19 @@ function newDescendantDocument(
   companyType = OrganizationType.Company,
 ): OrganizationDocument {
   return {
-    organization: {
-      code: "NEW-LEAF",
-      name: "New leaf",
-      type: OrganizationType.Department,
-      status: OrganizationStatus.Disable,
-      level: 4,
-      isVirtual: false,
-      isEntity: false,
-      path: [
-        { code: "ROOT", name: rootName, type: OrganizationType.Company, level: 1, distanceToTarget: 3 },
-        { code: companyCode, name: companyName, type: companyType, level: 2, distanceToTarget: 2 },
-        { code: "DEPARTMENT", name: "Department", type: OrganizationType.Department, level: 3, distanceToTarget: 1 },
-        { code: "NEW-LEAF", name: "New leaf", type: OrganizationType.Department, level: 4, distanceToTarget: 0 },
-      ],
-    },
+    code: "NEW-LEAF",
+    name: "New leaf",
+    type: OrganizationType.Department,
+    status: OrganizationStatus.Disable,
+    level: 4,
+    isVirtual: false,
+    isEntity: false,
+    path: [
+      { code: "ROOT", name: rootName, type: OrganizationType.Company, level: 1, distanceToTarget: 3 },
+      { code: companyCode, name: companyName, type: companyType, level: 2, distanceToTarget: 2 },
+      { code: "DEPARTMENT", name: "Department", type: OrganizationType.Department, level: 3, distanceToTarget: 1 },
+      { code: "NEW-LEAF", name: "New leaf", type: OrganizationType.Department, level: 4, distanceToTarget: 0 },
+    ],
   };
 }
 

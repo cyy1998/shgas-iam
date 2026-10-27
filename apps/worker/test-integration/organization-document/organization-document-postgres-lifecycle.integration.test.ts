@@ -51,7 +51,10 @@ beforeEach(async () => {
     ],
   ] as const) {
     const document = {
-      organization: { ...organization, status: OrganizationStatus.Enable, isVirtual: false, isEntity: false },
+      ...organization,
+      status: OrganizationStatus.Enable,
+      isVirtual: false,
+      isEntity: false,
     };
     await harness.sql`INSERT INTO organization_document
       (organization_id,document,schema_version,source_version,search_visible)

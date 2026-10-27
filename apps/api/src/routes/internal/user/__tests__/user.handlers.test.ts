@@ -139,7 +139,7 @@ describe("active usersSearchDsl route", () => {
 
     expect(
       schema.safeParse({
-        filter: { field: "user.username", op: "eq", value: "zhangsan" },
+        filter: { field: "username", op: "eq", value: "zhangsan" },
       }).success,
     ).toBe(true);
     expect(

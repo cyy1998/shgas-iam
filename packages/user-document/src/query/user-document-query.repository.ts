@@ -12,8 +12,8 @@ const metadata = {
   publishedAt: userDocuments.publishedAt,
 };
 const readable = and(eq(userDocuments.schemaVersion, USER_DOCUMENT_SCHEMA_VERSION), isNotNull(userDocuments.document));
-const mobileExists = sql<boolean>`${userDocuments.document}->'user' ? 'mobile'`;
-const mobileDocument = sql<unknown>`jsonb_build_object('user', jsonb_build_object('subjectIdentifier', ${userDocuments.document}->'user'->'subjectIdentifier', 'mobile', ${userDocuments.document}->'user'->'mobile'))`;
+const mobileExists = sql<boolean>`${userDocuments.document} ? 'mobile'`;
+const mobileDocument = sql<unknown>`jsonb_build_object('subjectIdentifier', ${userDocuments.document}->'subjectIdentifier', 'mobile', ${userDocuments.document}->'mobile')`;
 
 export function createUserDocumentQueryRepository(db: DbClient) {
   return {
@@ -22,7 +22,7 @@ export function createUserDocumentQueryRepository(db: DbClient) {
         .select({
           ...metadata,
           mobileExists,
-          document: sql<unknown>`jsonb_build_object('user', jsonb_build_object('subjectIdentifier', ${userDocuments.document}->'user'->'subjectIdentifier', 'username', ${userDocuments.document}->'user'->'username', 'name', ${userDocuments.document}->'user'->'name', 'mobile', ${userDocuments.document}->'user'->'mobile'))`,
+          document: sql<unknown>`jsonb_build_object('subjectIdentifier', ${userDocuments.document}->'subjectIdentifier', 'username', ${userDocuments.document}->'username', 'name', ${userDocuments.document}->'name', 'mobile', ${userDocuments.document}->'mobile')`,
         })
         .from(userDocuments)
         .where(and(readable, eq(userDocuments.userId, userId)))
@@ -36,7 +36,7 @@ export function createUserDocumentQueryRepository(db: DbClient) {
       const rows = await db
         .select({ ...metadata, mobileExists, document: mobileDocument })
         .from(userDocuments)
-        .where(and(readable, sql`${userDocuments.document}->'user'->>'username' = ${username}`))
+        .where(and(readable, sql`${userDocuments.document}->>'username' = ${username}`))
         .limit(2);
       if (rows.length > 1) throw new Error("Published directory contains duplicate usernames");
       const row = rows[0];

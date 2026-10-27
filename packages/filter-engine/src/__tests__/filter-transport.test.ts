@@ -19,6 +19,7 @@ test("transport accepts the common strict AST without selecting caller fields or
     { and: [] },
     { ...condition, extra: true },
     { ...condition, op: "unknown" },
+    { ...condition, op: "withinSubtreeOf" },
     { ...condition, value: null },
     { ...condition, value: "x".repeat(129) },
     { exists: { path: "caller.entries", where: condition, extra: true } },

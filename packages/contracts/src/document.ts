@@ -40,17 +40,15 @@ export const OrganizationReferenceSchema = OrganizationNodeSchema.extend({
   }
 });
 
-export const OrganizationDocumentSchema = z.object({
-  organization: OrganizationReferenceSchema.safeExtend({
-    level: z.enum(OrganizationLevel),
-    status: z.enum(OrganizationStatus),
-    isVirtual: z.boolean(),
-    isEntity: z.boolean(),
-  }).superRefine((organization, context) => {
-    if (organization.level !== organization.path.length) {
-      context.addIssue({ code: "custom", path: ["level"], message: "组织层级必须与完整路径一致" });
-    }
-  }),
+export const OrganizationDocumentSchema = OrganizationReferenceSchema.safeExtend({
+  level: z.enum(OrganizationLevel),
+  status: z.enum(OrganizationStatus),
+  isVirtual: z.boolean(),
+  isEntity: z.boolean(),
+}).superRefine((organization, context) => {
+  if (organization.level !== organization.path.length) {
+    context.addIssue({ code: "custom", path: ["level"], message: "组织层级必须与完整路径一致" });
+  }
 });
 
 export const DocumentResponsibilitySchema = z.object({
@@ -87,8 +85,7 @@ export const DocumentEmploymentSchema = z.object({
   roles: z.array(z.string().min(1)),
 });
 
-export const UserDocumentSchema = z.object({
-  user: DocumentUserSchema,
+export const UserDocumentSchema = DocumentUserSchema.extend({
   employments: z.array(DocumentEmploymentSchema),
 });
 

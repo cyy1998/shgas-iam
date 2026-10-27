@@ -62,3 +62,16 @@ test("caller-defined collections expose relative conditions within an exists sco
     }).success,
   ).toBe(false);
 });
+
+test("retired subtree conditions are rejected for objects and scalar fields", () => {
+  const engine = createFilterEngine(
+    searchObject({
+      organization: searchObject({ code: searchScalar(z.string(), z.string()) }),
+    }),
+  );
+  for (const field of ["organization", "organization.code"]) {
+    const filter = { field, op: "withinSubtreeOf", value: "ROOT" };
+    expect(engine.filterSchema.safeParse(filter).success).toBe(false);
+    expect(() => engine.compile(filter, sql`document`)).toThrow(FilterValidationError);
+  }
+});

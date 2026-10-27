@@ -121,7 +121,7 @@ test("first build and incompatible schema recovery require a fresh full verifica
   await harness.sql`UPDATE organization SET org_name='Upgraded root', is_virtual=true WHERE id=1`;
   await harness.sql`UPDATE organization SET status=${OrganizationStatus.Pause} WHERE id=2`;
   const oldSchemaResults = await search.search({
-    filter: { field: "organization", op: "withinSubtreeOf", value: "ROOT" },
+    filter: { exists: { path: "path", where: { field: "code", op: "eq", value: "ROOT" } } },
   });
   expect(oldSchemaResults).toEqual([]);
   const incompatible = await command("verify", 1);
@@ -148,10 +148,12 @@ test("first build and incompatible schema recovery require a fresh full verifica
     expect(row.source_version).toBe(row.version);
     expect(row.status).toBe("processed");
   }
-  const documents = await search.search({ filter: { field: "organization", op: "withinSubtreeOf", value: "ROOT" } });
-  expect(documents.map((document) => document.organization.code)).toEqual(["ROOT", "CHILD"]);
-  expect(documents[0]?.organization).toMatchObject({ name: "Upgraded root", isVirtual: true });
-  expect(documents[1]?.organization).toMatchObject({
+  const documents = await search.search({
+    filter: { exists: { path: "path", where: { field: "code", op: "eq", value: "ROOT" } } },
+  });
+  expect(documents.map((document) => document.code)).toEqual(["ROOT", "CHILD"]);
+  expect(documents[0]).toMatchObject({ name: "Upgraded root", isVirtual: true });
+  expect(documents[1]).toMatchObject({
     status: OrganizationStatus.Pause,
     path: [
       { code: "ROOT", name: "Upgraded root", level: 1, distanceToTarget: 1 },

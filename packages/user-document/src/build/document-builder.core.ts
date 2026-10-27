@@ -114,15 +114,13 @@ export function buildUserDocumentsFromDataset(
     return PublishedUserDocumentSchema.parse({
       ...metadata,
       document: {
-        user: {
-          subjectIdentifier: user.subjectIdentifier,
-          username: user.username,
-          name: user.name,
-          mobile: user.mobile,
-          wxId: user.wxId,
-          userType: user.userType,
-          status: user.status,
-        },
+        subjectIdentifier: user.subjectIdentifier,
+        username: user.username,
+        name: user.name,
+        mobile: user.mobile,
+        wxId: user.wxId,
+        userType: user.userType,
+        status: user.status,
         employments: items,
       },
     });

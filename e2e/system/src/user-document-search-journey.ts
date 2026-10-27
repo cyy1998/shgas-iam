@@ -35,14 +35,14 @@ export async function expectInternalUserDocumentSearchMatrix(input: InternalSear
     input.noScopeHrAdminUsername,
   ];
   const allProfiles = await searchDsl(input, {
-    field: "user.username",
+    field: "username",
     op: "in",
     value: allUsernames,
   });
   expect(readUsernames(allProfiles)).toEqual(allUsernames);
 
   const unavailableProfiles = await searchDsl(input, {
-    field: "user.status",
+    field: "status",
     op: "in",
     value: [UserStatus.Pause, UserStatus.Disable],
   });
@@ -51,12 +51,12 @@ export async function expectInternalUserDocumentSearchMatrix(input: InternalSear
   const enabledProfile = await searchDsl(input, {
     and: [
       {
-        field: "user.username",
+        field: "username",
         op: "in",
         value: allUsernames,
       },
       {
-        field: "user.status",
+        field: "status",
         op: "eq",
         value: UserStatus.Enable,
       },
@@ -117,11 +117,9 @@ export async function expectInternalUserDocumentSearchMatrix(input: InternalSear
           roles: [`${input.adminRoleCode}-internal`],
         }),
       ]),
-      user: expect.objectContaining({
-        name: expect.any(String),
-        status: UserStatus.Enable,
-        username: input.adminUsername,
-      }),
+      name: expect.any(String),
+      status: UserStatus.Enable,
+      username: input.adminUsername,
     }),
   );
 
@@ -152,9 +150,10 @@ export async function expectInternalUserDocumentSearchMatrix(input: InternalSear
       where: {
         and: [
           {
-            field: "organization",
-            op: "withinSubtreeOf",
-            value: input.organizationCode,
+            exists: {
+              path: "organization.path",
+              where: { field: "code", op: "eq", value: input.organizationCode },
+            },
           },
           {
             field: "position.code",
@@ -196,7 +195,7 @@ export async function expectUserSearchDelegationResolution(input: {
   request: APIRequestContext;
 }) {
   const profiles = await searchDsl(input, {
-    field: "user.username",
+    field: "username",
     op: "eq",
     value: input.adminUsername,
   });
@@ -259,7 +258,16 @@ function expectUserDocuments(value: unknown, usernames: string[]) {
   expect(profiles).toHaveLength(usernames.length);
   for (const profile of profiles) {
     UserDocumentSchema.parse(profile);
-    expect(Object.keys(profile).sort()).toEqual(["employments", "user"]);
+    expect(Object.keys(profile).sort()).toEqual([
+      "employments",
+      "mobile",
+      "name",
+      "status",
+      "subjectIdentifier",
+      "userType",
+      "username",
+      "wxId",
+    ]);
   }
 }
 
@@ -269,9 +277,8 @@ function readData(value: unknown) {
 
 export function readUsernames(value: unknown) {
   return readRecords(value).map((item) => {
-    const user = readRecord(item.user);
-    if (typeof user?.username !== "string") throw new Error("User Document requires a string username");
-    return user.username;
+    if (typeof item.username !== "string") throw new Error("User Document requires a string username");
+    return item.username;
   });
 }
 

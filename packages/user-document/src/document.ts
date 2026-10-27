@@ -18,12 +18,9 @@ export const StoredDocumentEmploymentSchema = DocumentEmploymentSchema.omit({ ro
   })
   .strict();
 
-export const StoredUserDocumentSchema = z
-  .object({
-    user: DocumentUserSchema.strict(),
-    employments: z.array(StoredDocumentEmploymentSchema),
-  })
-  .strict();
+export const StoredUserDocumentSchema = DocumentUserSchema.extend({
+  employments: z.array(StoredDocumentEmploymentSchema),
+}).strict();
 
 export const PublishedUserDocumentMetadataSchema = z
   .object({
@@ -38,10 +35,10 @@ export const PublishedUserDocumentMetadataSchema = z
 export const PublishedUserDocumentSchema = PublishedUserDocumentMetadataSchema.extend({
   document: StoredUserDocumentSchema.nullable(),
 }).superRefine((publication, context) => {
-  if (publication.document !== null && publication.document.user.subjectIdentifier !== publication.subjectIdentifier) {
+  if (publication.document !== null && publication.document.subjectIdentifier !== publication.subjectIdentifier) {
     context.addIssue({
       code: "custom",
-      path: ["document", "user", "subjectIdentifier"],
+      path: ["document", "subjectIdentifier"],
       message: "文档主体与发布身份不一致",
     });
   }
@@ -107,9 +104,9 @@ export function createDocumentFactsCacheRecord(input: unknown): DocumentFactsCac
     kind: "document",
     facts: {
       profile: {
-        username: publication.document.user.username,
-        name: publication.document.user.name,
-        phone: publication.document.user.mobile,
+        username: publication.document.username,
+        name: publication.document.name,
+        phone: publication.document.mobile,
       },
       employments: publication.document.employments,
     },

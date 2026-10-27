@@ -9,12 +9,10 @@ test("narrow login facts do not depend on unrelated employment integrity", () =>
     sourceVersion: "8",
     publishedAt: new Date("2026-10-26T10:00:00.000Z"),
     document: {
-      user: {
-        subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f888",
-        username: "alice",
-        name: "Alice",
-        mobile: null,
-      },
+      subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f888",
+      username: "alice",
+      name: "Alice",
+      mobile: null,
       employments: "corrupt",
     },
   };

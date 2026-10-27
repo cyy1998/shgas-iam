@@ -8,6 +8,7 @@ import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares";
 import { UserStatus, UserType } from "@iam/contracts";
 import { userDocuments } from "@iam/db/schema";
 import type { GenericClientRuntimeDto } from "@iam/domain/client";
+import { USER_DOCUMENT_SCHEMA_VERSION } from "@iam/user-document";
 import { compileUserDocumentFilter, createUserDocumentSearchService } from "@iam/user-document/query";
 import { createMiddleware } from "hono/factory";
 import pino from "pino";
@@ -25,8 +26,8 @@ test("maps the canonical v4 Filter request through the production Internal HTTP 
   const valid = await request(app, {
     filter: {
       and: [
-        { field: "user.username", op: "eq", value: "alice" },
-        { not: { field: "user.status", op: "eq", value: UserStatus.Disable } },
+        { field: "username", op: "eq", value: "alice" },
+        { not: { field: "status", op: "eq", value: UserStatus.Disable } },
       ],
     },
   });
@@ -39,13 +40,13 @@ test("maps the canonical v4 Filter request through the production Internal HTTP 
   const whitespaceBody = await requestWithRawBody(app, "   ");
   const excessiveRawValues = await request(app, {
     filter: {
-      field: "user.username",
+      field: "username",
       op: "in",
       value: Array.from({ length: 501 }).fill("alice"),
     },
   });
   const callerControlledExecution = await request(app, {
-    filter: { field: "user.username", op: "eq", value: "alice" },
+    filter: { field: "username", op: "eq", value: "alice" },
     limit: 1,
   });
 
@@ -90,17 +91,46 @@ test("returns 422 for retired authorization paths while role conditions remain s
   expect(retiredBody).toMatchObject({ code: "COMMON.VALIDATION_FAILED", data: null });
 });
 
+test("rejects retired document wrappers and subtree operators through Internal HTTP", async () => {
+  const searchCurrentDocuments = mock(async () => []);
+  const app = createProductionApp(createUserDocumentSearchService({ documentRepository: { searchCurrentDocuments } }));
+  for (const filter of [
+    { field: "user.username", op: "eq", value: "alice" },
+    {
+      exists: {
+        path: "employments",
+        where: { field: "organization", op: "withinSubtreeOf", value: "ROOT" },
+      },
+    },
+    {
+      exists: {
+        path: "employments",
+        where: {
+          exists: {
+            path: "responsibilities",
+            where: { field: "targetOrganization", op: "withinSubtreeOf", value: "ROOT" },
+          },
+        },
+      },
+    },
+  ]) {
+    const response = await request(app, { filter });
+    const body = await response.json();
+    expect(response.status).toBe(422);
+    expect(body).toMatchObject({ code: "COMMON.VALIDATION_FAILED" });
+  }
+  expect(searchCurrentDocuments).not.toHaveBeenCalled();
+});
+
 test("returns one complete canonical document without storage metadata", async () => {
   const document = {
-    user: {
-      subjectIdentifier: "87b69425-6d95-4a36-93c8-95327869318e",
-      username: "alice",
-      name: "Alice",
-      mobile: null,
-      wxId: null,
-      userType: UserType.Formal,
-      status: UserStatus.Enable,
-    },
+    subjectIdentifier: "87b69425-6d95-4a36-93c8-95327869318e",
+    username: "alice",
+    name: "Alice",
+    mobile: null,
+    wxId: null,
+    userType: UserType.Formal,
+    status: UserStatus.Enable,
     employments: [],
   };
   const query = createUserDocumentSearchService({
@@ -108,8 +138,8 @@ test("returns one complete canonical document without storage metadata", async (
       searchCurrentDocuments: mock(async () => [
         {
           userId: 1,
-          subjectIdentifier: document.user.subjectIdentifier,
-          schemaVersion: 1,
+          subjectIdentifier: document.subjectIdentifier,
+          schemaVersion: USER_DOCUMENT_SCHEMA_VERSION,
           sourceVersion: "4",
           publishedAt: new Date(),
           document,
@@ -118,7 +148,7 @@ test("returns one complete canonical document without storage metadata", async (
     },
   });
   const response = await request(createProductionApp(query), {
-    filter: { field: "user.username", op: "eq", value: "alice" },
+    filter: { field: "username", op: "eq", value: "alice" },
   });
   const body = await response.json();
   expect(response.status).toBe(200);
@@ -132,7 +162,7 @@ test("preserves Profile HTTP depth and node budgets before executing the query",
       documentRepository: { searchCurrentDocuments },
     }),
   );
-  const condition = { field: "user.username", op: "eq", value: "alice" };
+  const condition = { field: "username", op: "eq", value: "alice" };
   let atDepthLimit: unknown = condition;
   for (let depth = 1; depth < 8; depth++) atDepthLimit = { not: atDepthLimit };
   const valid = await request(app, { filter: atDepthLimit });
@@ -190,15 +220,16 @@ test("describes one generic recursive Filter AST without enumerating field and o
   expect(expressionDocument).toContain('"not"');
   expect(expressionDocument).toContain('"exists"');
   expect(expressionDocument).toContain('"field"');
-  expect(expressionDocument).not.toContain("user.username");
+  expect(expressionDocument).not.toContain("username");
   expect(expressionDocument).not.toContain("responsibility.type.code");
 
   const schema = document.components.schemas.UserDocument as {
     properties?: Record<string, unknown>;
     required?: string[];
   };
-  expect(Object.keys(schema.properties ?? {}).sort()).toEqual(["employments", "user"]);
-  expect(schema.required).toEqual(expect.arrayContaining(["employments", "user"]));
+  const fields = ["employments", "mobile", "name", "status", "subjectIdentifier", "userType", "username", "wxId"];
+  expect(Object.keys(schema.properties ?? {}).sort()).toEqual(fields);
+  expect(schema.required).toEqual(expect.arrayContaining(fields));
 });
 
 test("maps the fixed Internal handler deadline to the sanitized v4 unavailable response", async () => {
@@ -221,7 +252,7 @@ test("maps the fixed Internal handler deadline to the sanitized v4 unavailable r
     } as never);
 
     const response = await request(app, {
-      filter: { field: "user.username", op: "eq", value: "alice" },
+      filter: { field: "username", op: "eq", value: "alice" },
     });
 
     expect(response.status).toBe(503);
@@ -309,7 +340,7 @@ test("requires a valid Internal Client credential before querying user documents
     const response = await app.request("http://localhost/internal/users/search-dsl", {
       method: "POST",
       headers,
-      body: JSON.stringify({ filter: { field: "user.username", op: "eq", value: "alice" } }),
+      body: JSON.stringify({ filter: { field: "username", op: "eq", value: "alice" } }),
     });
     const body = await response.json();
     expect(response.status).toBe(401);

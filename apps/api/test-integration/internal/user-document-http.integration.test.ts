@@ -16,6 +16,7 @@ import {
   createInternalUserDocumentQueryService,
   createUserDocumentSearchRepository,
   createUserDocumentSearchService,
+  USER_DOCUMENT_SCHEMA_VERSION,
 } from "@iam/user-document";
 import { createUserDocumentInvalidation } from "@iam/user-document/producer";
 import {
@@ -114,7 +115,7 @@ test("source commit, durable Outbox, formal processor, Redis Facts and authentic
       firstFacts = await facts.read(subject);
     expect(first.status).toBe(200);
     expect(firstFacts).toMatchObject({ sourceVersion: "1", profile: { name: "First published" } });
-    expect(first.body.data.user.name).toBe(firstFacts?.profile.name);
+    expect(first.body.data.name).toBe(firstFacts?.profile.name);
     await uow.transaction(async (tx) => {
       await tx.db.update(users).set({ name: "Second published" }).where(eq(users.id, 1));
       await tx.invalidation.recordChanges([{ kind: "user", userId: 1 }]);
@@ -126,12 +127,12 @@ test("source commit, durable Outbox, formal processor, Redis Facts and authentic
     await drain();
     const current = await authority.resolve(subject),
       detail = await request("/user-1"),
-      matches = await search({ field: "user.name", op: "eq", value: "Second published" }),
+      matches = await search({ field: "name", op: "eq", value: "Second published" }),
       currentFacts = await facts.read(subject);
     expect(current).toEqual({ accountState: "enabled", factsState: "current" });
     expect(detail.body.data).toEqual(matches.body.data[0]);
     expect(currentFacts).toMatchObject({ sourceVersion: "2", profile: { name: "Second published" } });
-    expect(detail.body.data.user.name).toBe(currentFacts?.profile.name);
+    expect(detail.body.data.name).toBe(currentFacts?.profile.name);
   } finally {
     await close();
   }
@@ -194,23 +195,19 @@ test("details and search share complete published facts across account statuses 
     .insert(userDocuments)
     .values([publication(1, UserStatus.Enable), publication(2, UserStatus.Pause), publication(3, UserStatus.Disable)]);
   const result = await search({
-    field: "user.status",
+    field: "status",
     op: "in",
     value: [UserStatus.Enable, UserStatus.Pause, UserStatus.Disable],
   });
   expect(result.status).toBe(200);
-  expect(result.body.data.map((row: { user: { username: string } }) => row.user.username)).toEqual([
-    "user-1",
-    "user-2",
-    "user-3",
-  ]);
+  expect(result.body.data.map((row: { username: string }) => row.username)).toEqual(["user-1", "user-2", "user-3"]);
   for (const id of [1, 2, 3]) {
     const detail = await request(`/user-${id}`);
     expect(detail.body.data).toEqual(result.body.data[id - 1]);
-    expect(detail.body.data.user.mobile).toBeNull();
-    expect(detail.body.data.user.wxId).toBeNull();
+    expect(detail.body.data.mobile).toBeNull();
+    expect(detail.body.data.wxId).toBeNull();
   }
-  const empty = await search({ field: "user.username", op: "eq", value: "absent" });
+  const empty = await search({ field: "username", op: "eq", value: "absent" });
   expect(empty.body.data).toEqual([]);
 });
 
@@ -227,10 +224,7 @@ test("missing, tombstone and obsolete schema are absent; duplicate published use
     second = publication(4);
   await pg.db
     .insert(userDocuments)
-    .values([
-      first,
-      { ...second, document: { ...second.document, user: { ...second.document.user, username: "user-3" } } },
-    ]);
+    .values([first, { ...second, document: { ...second.document, username: "user-3" } }]);
   const duplicate = await request("/user-3");
   expect(duplicate.status).toBe(503);
   expect(duplicate.body).toMatchObject({ code: "USER_SEARCH_UNAVAILABLE", data: null });
@@ -239,7 +233,7 @@ test("missing, tombstone and obsolete schema are absent; duplicate published use
 test("a corrupt matched document fails the entire directory batch", async () => {
   await pg.db.insert(userDocuments).values([publication(1), publication(2)]);
   await pg.sql`UPDATE user_document SET document=jsonb_set(document,'{employments}','"corrupt"') WHERE user_id=2`;
-  const result = await search({ field: "user.status", op: "eq", value: UserStatus.Enable });
+  const result = await search({ field: "status", op: "eq", value: UserStatus.Enable });
   const detail = await request("/user-2");
   expect(result.status).toBe(503);
   expect(result.body.data).toBeNull();
@@ -248,15 +242,15 @@ test("a corrupt matched document fails the entire directory batch", async () => 
 
 test("returns exactly 500 complete documents in internal ID order and rejects the 501st", async () => {
   await pg.db.insert(userDocuments).values(Array.from({ length: 501 }, (_, i) => publication(501 - i)));
-  const exact = await search({ field: "user.username", op: "ne", value: "user-501" });
+  const exact = await search({ field: "username", op: "ne", value: "user-501" });
   // The language exposes binary not rather than a separate inequality operator.
   expect(exact.status).toBe(422);
-  const bounded = await search({ not: { field: "user.username", op: "eq", value: "user-501" } });
+  const bounded = await search({ not: { field: "username", op: "eq", value: "user-501" } });
   expect(bounded.status).toBe(200);
-  expect(bounded.body.data.map((row: { user: { username: string } }) => row.user.username)).toEqual(
+  expect(bounded.body.data.map((row: { username: string }) => row.username)).toEqual(
     Array.from({ length: 500 }, (_, i) => `user-${i + 1}`),
   );
-  const excess = await search({ field: "user.status", op: "eq", value: UserStatus.Enable });
+  const excess = await search({ field: "status", op: "eq", value: UserStatus.Enable });
   expect(excess.status).toBe(422);
   expect(excess.body).toMatchObject({ code: "USER_SEARCH_RESULT_TOO_LARGE", data: null });
 });
@@ -272,10 +266,7 @@ test("real PostgreSQL timeouts are sanitized for search and detail", async () =>
   });
   try {
     await locked.promise;
-    for (const result of [
-      await search({ field: "user.username", op: "eq", value: "user-1" }),
-      await request("/user-1"),
-    ]) {
+    for (const result of [await search({ field: "username", op: "eq", value: "user-1" }), await request("/user-1")]) {
       expect(result.status).toBe(503);
       expect(result.body).toMatchObject({ code: "USER_SEARCH_UNAVAILABLE", data: null });
       expect(JSON.stringify(result.body)).not.toContain("statement timeout");
@@ -298,19 +289,17 @@ function publication(id: number, status = UserStatus.Enable) {
   return {
     userId: id,
     subjectIdentifier,
-    schemaVersion: 1,
+    schemaVersion: USER_DOCUMENT_SCHEMA_VERSION,
     sourceVersion: "1",
     publishedAt: now,
     document: {
-      user: {
-        subjectIdentifier,
-        username: `user-${id}`,
-        name: `User ${id}`,
-        mobile: null,
-        wxId: null,
-        userType: UserType.Formal,
-        status,
-      },
+      subjectIdentifier,
+      username: `user-${id}`,
+      name: `User ${id}`,
+      mobile: null,
+      wxId: null,
+      userType: UserType.Formal,
+      status,
       employments: [],
     },
   };

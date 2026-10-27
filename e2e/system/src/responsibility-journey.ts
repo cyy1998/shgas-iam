@@ -70,9 +70,10 @@ export async function expectInternalResponsibilityDsl(input: ResponsibilityJourn
                     value: "head",
                   },
                   {
-                    field: "targetOrganization",
-                    op: "withinSubtreeOf",
-                    value: input.targetOrganizationCode,
+                    exists: {
+                      path: "targetOrganization.path",
+                      where: { field: "code", op: "eq", value: input.targetOrganizationCode },
+                    },
                   },
                 ],
               },
@@ -87,7 +88,7 @@ export async function expectInternalResponsibilityDsl(input: ResponsibilityJourn
   const profiles = body?.data;
   if (!Array.isArray(profiles)) throw new Error("Internal user search requires a document array");
   const documents = profiles.map((profile) => UserDocumentSchema.parse(profile));
-  expect(documents.some((document) => document.user.username === input.adminUsername)).toBe(true);
+  expect(documents.some((document) => document.username === input.adminUsername)).toBe(true);
 
   const legacyResponse = await input.request.post(`${input.origin}/api/iam/internal/users/search-dsl`, {
     headers: { apikey: input.internalApiKey },
@@ -134,7 +135,7 @@ export function parseInternalResponsibilityResponse(
 ) {
   expect(status).toBe(200);
   const profile = UserDocumentSchema.parse(readRecord(body)?.data);
-  expect(profile.user.username).toBe(input.adminUsername);
+  expect(profile.username).toBe(input.adminUsername);
   return internalDetailHasResponsibility(body, input);
 }
 

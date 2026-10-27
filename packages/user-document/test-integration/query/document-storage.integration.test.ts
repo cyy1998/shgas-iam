@@ -8,15 +8,13 @@ import { createPostgresTestHarness, type PostgresTestHarness } from "../support/
 let harness: PostgresTestHarness;
 const subject = "5ee46272-9123-4ec3-9d8d-8a7a6ac7f888";
 const document = {
-  user: {
-    subjectIdentifier: subject,
-    username: "alice",
-    name: "Published Alice",
-    mobile: null,
-    wxId: null,
-    userType: UserType.Formal,
-    status: UserStatus.Pause,
-  },
+  subjectIdentifier: subject,
+  username: "alice",
+  name: "Published Alice",
+  mobile: null,
+  wxId: null,
+  userType: UserType.Formal,
+  status: UserStatus.Pause,
   employments: [],
 };
 beforeAll(async () => {

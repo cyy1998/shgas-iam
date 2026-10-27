@@ -15,15 +15,13 @@ test("published detail, login profile and Facts derive from one precise document
   const facts = createDocumentFactsCacheRecord(published);
 
   expect(document).toEqual({
-    user: {
-      subjectIdentifier: "11111111-1111-4111-8111-111111111111",
-      username: "alice",
-      name: "Alice",
-      mobile: null,
-      wxId: null,
-      userType: UserType.Formal,
-      status: UserStatus.Disable,
-    },
+    subjectIdentifier: "11111111-1111-4111-8111-111111111111",
+    username: "alice",
+    name: "Alice",
+    mobile: null,
+    wxId: null,
+    userType: UserType.Formal,
+    status: UserStatus.Disable,
     employments: [
       {
         isPrimary: true,
@@ -56,10 +54,10 @@ test("published detail, login profile and Facts derive from one precise document
 });
 
 test("public requests cannot select a Client or query internal ownership and identity paths", () => {
-  const byUsername = { filter: { field: "user.username", op: "eq", value: "alice" } };
+  const byUsername = { filter: { field: "username", op: "eq", value: "alice" } };
   expect(UserDocumentSearchRequestSchema.safeParse(byUsername).success).toBe(true);
   expect(UserDocumentSearchRequestSchema.safeParse({ ...byUsername, clientCode: "beta" }).success).toBe(false);
-  expect(UserDocumentSearchRequestSchema.safeParse({ filter: { field: "user.id", op: "eq", value: 42 } }).success).toBe(
+  expect(UserDocumentSearchRequestSchema.safeParse({ filter: { field: "id", op: "eq", value: 42 } }).success).toBe(
     false,
   );
   expect(
@@ -104,15 +102,13 @@ const published: PublishedUserDocument = {
   sourceVersion: "9007199254740993",
   publishedAt: new Date("2026-10-26T00:00:00Z"),
   document: {
-    user: {
-      subjectIdentifier: "11111111-1111-4111-8111-111111111111",
-      username: "alice",
-      name: "Alice",
-      mobile: null,
-      wxId: null,
-      userType: UserType.Formal,
-      status: UserStatus.Disable,
-    },
+    subjectIdentifier: "11111111-1111-4111-8111-111111111111",
+    username: "alice",
+    name: "Alice",
+    mobile: null,
+    wxId: null,
+    userType: UserType.Formal,
+    status: UserStatus.Disable,
     employments: [
       {
         isPrimary: true,

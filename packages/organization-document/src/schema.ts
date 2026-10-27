@@ -5,9 +5,7 @@ import type { z } from "zod";
 
 export const ORGANIZATION_DOCUMENT_SCHEMA_VERSION = 1;
 export const OrganizationDocumentSchema = PublicOrganizationDocumentSchema;
-export const ORGANIZATION_DOCUMENT_STRUCTURE = searchStructureFromSchema(OrganizationDocumentSchema, {
-  organizations: [OrganizationDocumentSchema.shape.organization],
-});
+export const ORGANIZATION_DOCUMENT_STRUCTURE = searchStructureFromSchema(OrganizationDocumentSchema);
 export type OrganizationDocument = z.infer<typeof OrganizationDocumentSchema>;
 
 /** Stored business facts are canonical; technical metadata lives on the row. */

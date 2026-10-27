@@ -1,6 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import type { UserDocument } from "@iam/contracts";
-import { OrganizationReferenceSchema, UserDocumentSchema } from "@iam/contracts";
+import { UserDocumentSchema } from "@iam/contracts";
 import type { PublishedUserLoginProfile } from "@iam/domain";
 import { PublishedUserLoginProfileSchema } from "@iam/domain";
 import type { FilterForShape } from "@iam/filter-engine";
@@ -10,7 +10,7 @@ import { sql } from "drizzle-orm";
 import type { PublishedUserDocument, StoredUserDocument } from "./document";
 import { PublishedUserDocumentMetadataSchema, PublishedUserDocumentSchema, StoredUserDocumentSchema } from "./document";
 
-const structure = searchStructureFromSchema(UserDocumentSchema, { organizations: [OrganizationReferenceSchema] });
+const structure = searchStructureFromSchema(UserDocumentSchema);
 const engine = createFilterEngine(structure);
 const transport = createFilterTransportSchemas({
   annotateExpression: (schema) => schema.openapi("UserDocumentFilterExpression"),
@@ -33,7 +33,13 @@ export function compileUserDocumentFilter(filter: unknown, document: SQLWrapper,
 export function createClientUserDocumentSql(document: SQLWrapper, clientCode: string): SQL {
   z.string().min(1).parse(clientCode);
   return sql`jsonb_build_object(
-    'user', ${document}->'user',
+    'subjectIdentifier', ${document}->'subjectIdentifier',
+    'username', ${document}->'username',
+    'name', ${document}->'name',
+    'mobile', ${document}->'mobile',
+    'wxId', ${document}->'wxId',
+    'userType', ${document}->'userType',
+    'status', ${document}->'status',
     'employments', COALESCE((
       SELECT jsonb_agg(jsonb_build_object(
         'isPrimary', document_employment.value->'isPrimary',
@@ -59,7 +65,7 @@ export function projectUserDocument(input: StoredUserDocument, clientCode: strin
   z.string().min(1).parse(clientCode);
   const document = StoredUserDocumentSchema.parse(input);
   return UserDocumentSchema.parse({
-    user: document.user,
+    ...document,
     employments: document.employments.map((employment) => ({
       isPrimary: employment.isPrimary,
       organization: employment.organization,
@@ -78,24 +84,22 @@ export function projectPublishedUserDocument(input: PublishedUserDocument, clien
 }
 
 const LoginPublicationSchema = PublishedUserDocumentMetadataSchema.extend({
-  document: z.object({ user: PublishedUserLoginProfileSchema.extend({ subjectIdentifier: z.uuid() }) }).nullable(),
+  document: PublishedUserLoginProfileSchema.extend({ subjectIdentifier: z.uuid() }).nullable(),
 });
 const MobilePublicationSchema = PublishedUserDocumentMetadataSchema.extend({
-  document: z
-    .object({ user: z.object({ subjectIdentifier: z.uuid(), mobile: z.string().max(20).nullable() }) })
-    .nullable(),
+  document: z.object({ subjectIdentifier: z.uuid(), mobile: z.string().max(20).nullable() }).nullable(),
 });
 
 export function deriveDocumentLoginProfile(input: unknown): PublishedUserLoginProfile | null {
   const publication = LoginPublicationSchema.parse(input);
-  if (publication.document !== null && publication.document.user.subjectIdentifier !== publication.subjectIdentifier)
+  if (publication.document !== null && publication.document.subjectIdentifier !== publication.subjectIdentifier)
     throw new Error("Login document identity mismatch");
-  return publication.document === null ? null : PublishedUserLoginProfileSchema.parse(publication.document.user);
+  return publication.document === null ? null : PublishedUserLoginProfileSchema.parse(publication.document);
 }
 
 export function deriveDocumentMobile(input: unknown): { mobile: string | null } | null {
   const publication = MobilePublicationSchema.parse(input);
-  if (publication.document !== null && publication.document.user.subjectIdentifier !== publication.subjectIdentifier)
+  if (publication.document !== null && publication.document.subjectIdentifier !== publication.subjectIdentifier)
     throw new Error("Mobile document identity mismatch");
-  return publication.document === null ? null : { mobile: publication.document.user.mobile };
+  return publication.document === null ? null : { mobile: publication.document.mobile };
 }

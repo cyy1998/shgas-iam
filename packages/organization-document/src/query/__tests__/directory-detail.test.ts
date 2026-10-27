@@ -4,18 +4,14 @@ import { createOrganizationDocumentQueryService } from "../organization-document
 
 test("directory detail and search expose the same published paused organization and strip storage fields", async () => {
   const document = {
-    organization: {
-      code: "ROOT",
-      name: "Published name",
-      type: OrganizationType.Department,
-      level: 1,
-      status: OrganizationStatus.Pause,
-      isVirtual: false,
-      isEntity: true,
-      path: [
-        { code: "ROOT", name: "Published name", type: OrganizationType.Department, level: 1, distanceToTarget: 0 },
-      ],
-    },
+    code: "ROOT",
+    name: "Published name",
+    type: OrganizationType.Department,
+    level: 1,
+    status: OrganizationStatus.Pause,
+    isVirtual: false,
+    isEntity: true,
+    path: [{ code: "ROOT", name: "Published name", type: OrganizationType.Department, level: 1, distanceToTarget: 0 }],
   };
   const query = createOrganizationDocumentQueryService({
     repository: {
@@ -28,9 +24,9 @@ test("directory detail and search expose the same published paused organization 
     },
   });
   const result = await query.getByCode("ROOT");
-  const matches = await query.search({ filter: { field: "organization.code", op: "eq", value: "ROOT" } });
+  const matches = await query.search({ filter: { field: "code", op: "eq", value: "ROOT" } });
   expect(matches).toEqual([result]);
-  expect(result.organization).not.toHaveProperty("id");
-  expect(result.organization.path[0]).not.toHaveProperty("id");
-  expect(result.organization.status).toBe(OrganizationStatus.Pause);
+  expect(result).not.toHaveProperty("id");
+  expect(result.path[0]).not.toHaveProperty("id");
+  expect(result.status).toBe(OrganizationStatus.Pause);
 });

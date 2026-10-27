@@ -3,13 +3,7 @@ import process from "node:process";
 import { ApiErrorCode, UserStatus, UserType } from "@iam/contracts";
 import { relations } from "@iam/db/relations";
 import { userDocuments, users } from "@iam/db/schema";
-import {
-  createFilterEngine,
-  searchCollection,
-  searchObject,
-  searchOrganization,
-  searchScalar,
-} from "@iam/filter-engine";
+import { createFilterEngine, searchCollection, searchObject, searchScalar } from "@iam/filter-engine";
 import { createOrganizationResponsibilityResolver } from "@iam/organization-responsibility-resolution";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { eq, sql } from "drizzle-orm";
@@ -49,11 +43,7 @@ test("the shared Filter engine compiles caller-defined paths against each suppli
   };
   const engine = createFilterEngine(
     searchObject({
-      record: searchOrganization(organizationFields, {
-        valueSchema: z.string(),
-        pathField: "chain",
-        codeField: "identifier",
-      }),
+      record: searchObject(organizationFields),
       entries: searchCollection({
         code: searchScalar(z.string(), z.string()),
         active: searchScalar(z.boolean(), z.boolean()),
@@ -73,7 +63,7 @@ test("the shared Filter engine compiles caller-defined paths against each suppli
   };
   const filter = engine.filterSchema.parse({
     and: [
-      { field: "record", op: "withinSubtreeOf", value: "root" },
+      { exists: { path: "record.chain", where: { field: "identifier", op: "eq", value: "root" } } },
       {
         exists: {
           path: "entries",
@@ -113,15 +103,13 @@ describe("User Document v4 User scalar tracer", () => {
     expect(candidate).not.toBeNull();
     expect(candidate?.schemaVersion).toBe(USER_DOCUMENT_SCHEMA_VERSION);
     expect(candidate?.document).toEqual({
-      user: {
-        subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f888",
-        username: "alice",
-        name: "Alice",
-        mobile: null,
-        wxId: "wx-alice",
-        userType: UserType.Formal,
-        status: UserStatus.Pause,
-      },
+      subjectIdentifier: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f888",
+      username: "alice",
+      name: "Alice",
+      mobile: null,
+      wxId: "wx-alice",
+      userType: UserType.Formal,
+      status: UserStatus.Pause,
       employments: [],
     });
     await candidatePersistence.upsert(candidate!);
@@ -133,7 +121,7 @@ describe("User Document v4 User scalar tracer", () => {
     const bases = await query.searchDocuments(
       {
         filter: {
-          field: "user.subjectIdentifier",
+          field: "subjectIdentifier",
           op: "eq",
           value: "5ee46272-9123-4ec3-9d8d-8a7a6ac7f888",
         },
@@ -142,7 +130,7 @@ describe("User Document v4 User scalar tracer", () => {
     );
 
     expect(persisted).toEqual([{ schemaVersion: USER_DOCUMENT_SCHEMA_VERSION }]);
-    expect(bases).toEqual([{ user: candidate!.document!.user, employments: [] }]);
+    expect(bases).toEqual([{ ...candidate!.document!, employments: [] }]);
   });
 
   test("applies exact scalar eq, normalized in, and binary not semantics", async () => {
@@ -188,7 +176,7 @@ describe("User Document v4 User scalar tracer", () => {
 
     const normalized = UserDocumentSearchRequestSchema.parse({
       filter: {
-        field: "user.mobile",
+        field: "mobile",
         op: "in",
         value: ["13800000002", "13800000002"],
       },
@@ -198,14 +186,14 @@ describe("User Document v4 User scalar tracer", () => {
         filter: {
           and: [
             {
-              field: "user.status",
+              field: "status",
               op: "in",
               value: [UserStatus.Pause, UserStatus.Pause, UserStatus.Enable],
             },
-            { field: "user.userType", op: "eq", value: UserType.Formal },
+            { field: "userType", op: "eq", value: UserType.Formal },
             {
               not: {
-                field: "user.mobile",
+                field: "mobile",
                 op: "eq",
                 value: "13800000002",
               },
@@ -219,8 +207,8 @@ describe("User Document v4 User scalar tracer", () => {
       {
         filter: {
           or: [
-            { field: "user.name", op: "eq", value: "Alice" },
-            { field: "user.username", op: "eq", value: "bob" },
+            { field: "name", op: "eq", value: "Alice" },
+            { field: "username", op: "eq", value: "bob" },
           ],
         },
       },
@@ -228,21 +216,21 @@ describe("User Document v4 User scalar tracer", () => {
     );
     const wrongCase = await query.searchDocuments(
       {
-        filter: { field: "user.name", op: "eq", value: "alice" },
+        filter: { field: "name", op: "eq", value: "alice" },
       },
       "internal",
     );
     const nullableIn = await query.searchDocuments(normalized, "internal");
 
     expect(normalized.filter).toEqual({
-      field: "user.mobile",
+      field: "mobile",
       op: "in",
       value: ["13800000002"],
     });
-    expect(formalWithoutBobMobile.map((base) => base.user.username)).toEqual(["alice"]);
-    expect(aliceOrBob.map((base) => base.user.username)).toEqual(["alice", "bob"]);
+    expect(formalWithoutBobMobile.map((base) => base.username)).toEqual(["alice"]);
+    expect(aliceOrBob.map((base) => base.username)).toEqual(["alice", "bob"]);
     expect(wrongCase).toEqual([]);
-    expect(nullableIn.map((base) => base.user.username)).toEqual(["bob"]);
+    expect(nullableIn.map((base) => base.username)).toEqual(["bob"]);
   });
 
   test("preserves a legal 255-character wxId while enforcing the 128-character query budget", async () => {
@@ -262,12 +250,12 @@ describe("User Document v4 User scalar tracer", () => {
     const { builder, candidatePersistence, query } = createTracer();
 
     const candidate = await builder.buildOne({ userId: 1, sourceVersion: "1" });
-    expect(candidate?.document?.user.wxId).toBe(wxId);
+    expect(candidate?.document?.wxId).toBe(wxId);
     await candidatePersistence.upsert(candidate!);
     const error = await query
       .searchDocuments(
         {
-          filter: { field: "user.wxId", op: "eq", value: "w".repeat(129) },
+          filter: { field: "wxId", op: "eq", value: "w".repeat(129) },
         },
         "internal",
       )
@@ -287,23 +275,23 @@ describe("User Document v4 User scalar tracer", () => {
       filterWithNodeCount64(),
       {
         and: Array.from({ length: 16 }, () => ({
-          field: "user.username",
+          field: "username",
           op: "eq",
           value: "alice",
         })),
       },
       {
-        field: "user.username",
+        field: "username",
         op: "in",
         value: Array.from({ length: 50 }, (_, index) => `user-${index}`),
       },
       {
-        field: "user.name",
+        field: "name",
         op: "eq",
         value: "n".repeat(128),
       },
       {
-        field: "user.username",
+        field: "username",
         op: "in",
         value: Array.from({ length: 500 }).fill("alice"),
       },
@@ -331,12 +319,11 @@ describe("User Document v4 User scalar tracer", () => {
     const { builder, candidatePersistence, query } = createTracer();
     const candidate = await builder.buildOne({ userId: 1, sourceVersion: "1" });
     await candidatePersistence.upsert(candidate!);
+    const { employments: _employments, ...malformedDocument } = candidate!.document!;
     await harness!.db
       .update(userDocuments)
       .set({
-        document: {
-          user: candidate!.document!.user,
-        },
+        document: malformedDocument,
       })
       .where(eq(userDocuments.userId, 1));
 
@@ -344,7 +331,7 @@ describe("User Document v4 User scalar tracer", () => {
       .searchDocuments(
         {
           filter: {
-            field: "user.username",
+            field: "username",
             op: "eq",
             value: "alice",
           },
@@ -412,7 +399,7 @@ describe("User Document v4 User scalar tracer", () => {
         .searchDocuments(
           {
             filter: {
-              field: "user.username",
+              field: "username",
               op: "eq",
               value: "alice",
             },
@@ -462,11 +449,11 @@ describe("User Document v4 User scalar tracer", () => {
 
     const exactLimit = await query.searchDocuments(
       {
-        filter: { field: "user.userType", op: "eq", value: UserType.Formal },
+        filter: { field: "userType", op: "eq", value: UserType.Formal },
       },
       "internal",
     );
-    expect(exactLimit.map((base) => base.user.username)).toEqual(
+    expect(exactLimit.map((base) => base.username)).toEqual(
       Array.from({ length: 500 }, (_, index) => `user-${index + 1}`),
     );
 
@@ -474,7 +461,7 @@ describe("User Document v4 User scalar tracer", () => {
       .searchDocuments(
         {
           filter: {
-            field: "user.userType",
+            field: "userType",
             op: "in",
             value: [UserType.Formal, UserType.External],
           },
@@ -525,7 +512,7 @@ function user(input: {
 }
 
 function nestedNot(depth: number): unknown {
-  if (depth === 1) return { field: "user.username", op: "eq", value: "alice" };
+  if (depth === 1) return { field: "username", op: "eq", value: "alice" };
   return { not: nestedNot(depth - 1) };
 }
 
@@ -533,7 +520,7 @@ function filterWithNodeCount64() {
   return {
     and: [15, 15, 15, 14].map((childCount) => ({
       and: Array.from({ length: childCount }, () => ({
-        field: "user.username",
+        field: "username",
         op: "eq",
         value: "alice",
       })),

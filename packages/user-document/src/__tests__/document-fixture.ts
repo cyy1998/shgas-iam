@@ -5,15 +5,13 @@ export const DOCUMENT_FIXTURE_AT = new Date("2026-10-26T10:00:00.000Z");
 export function publication(userId = 1, sourceVersion = "1") {
   const subjectIdentifier = `00000000-0000-4000-8000-${String(userId).padStart(12, "0")}`;
   const document: StoredUserDocument = {
-    user: {
-      subjectIdentifier,
-      username: `user-${userId}`,
-      name: `User ${userId}`,
-      mobile: null,
-      wxId: null,
-      userType: UserType.Formal,
-      status: UserStatus.Enable,
-    },
+    subjectIdentifier,
+    username: `user-${userId}`,
+    name: `User ${userId}`,
+    mobile: null,
+    wxId: null,
+    userType: UserType.Formal,
+    status: UserStatus.Enable,
     employments: [],
   };
   return {

@@ -14,21 +14,19 @@ import pino from "pino";
 import appConfig from "~api/app.config";
 
 const publishedDocument = {
-  organization: {
-    code: "ROOT",
-    name: "已发布根组织",
-    type: OrganizationType.Company,
-    status: OrganizationStatus.Pause,
-    level: 1,
-    isVirtual: false,
-    isEntity: true,
-    path: [{ code: "ROOT", name: "已发布根组织", type: OrganizationType.Company, level: 1, distanceToTarget: 0 }],
-  },
+  code: "ROOT",
+  name: "已发布根组织",
+  type: OrganizationType.Company,
+  status: OrganizationStatus.Pause,
+  level: 1,
+  isVirtual: false,
+  isEntity: true,
+  path: [{ code: "ROOT", name: "已发布根组织", type: OrganizationType.Company, level: 1, distanceToTarget: 0 }],
 };
 
 test("returns the complete published organization document through the production Internal route", async () => {
   const app = createProductionApp(async () => [{ document: publishedDocument }]);
-  const response = await request(app, { filter: { field: "organization.code", op: "eq", value: "ROOT" } });
+  const response = await request(app, { filter: { field: "code", op: "eq", value: "ROOT" } });
   const body = await response.json();
   expect(response.status).toBe(200);
   expect(body).toEqual({ code: 200, message: "success", data: [publishedDocument] });
@@ -67,15 +65,12 @@ test("publishes the recursive DSL request and the common public document shape i
   expect(
     document.paths["/internal/organizations/search-dsl"].post.requestBody.content["application/json"].schema,
   ).toEqual({ $ref: "#/components/schemas/OrganizationDocumentRequest" });
-  expect(document.components.schemas.OrganizationDocument).toMatchObject({
-    required: ["organization"],
-  });
-  expect(document.components.schemas.OrganizationDocument.properties.organization.required).toEqual(
+  expect(document.components.schemas.OrganizationDocument.required).toEqual(
     expect.arrayContaining(["code", "name", "type", "status", "level", "isVirtual", "isEntity", "path"]),
   );
-  expect(
-    document.components.schemas.OrganizationDocument.properties.organization.properties.path.items.required,
-  ).toEqual(expect.arrayContaining(["code", "name", "type", "level", "distanceToTarget"]));
+  expect(document.components.schemas.OrganizationDocument.properties.path.items.required).toEqual(
+    expect.arrayContaining(["code", "name", "type", "level", "distanceToTarget"]),
+  );
 });
 
 test("rejects unknown fields, incorrect types and operators, empty expressions and caller-selected execution", async () => {
@@ -85,22 +80,25 @@ test("rejects unknown fields, incorrect types and operators, empty expressions a
     { filter: {} },
     { filter: { and: [] } },
     { filter: { or: [] } },
-    { filter: { field: "organization.orgCode", op: "eq", value: "ROOT" } },
-    { filter: { field: "organization.id", op: "eq", value: 1 } },
-    { filter: { field: "organization.level", op: "eq", value: "1" } },
-    { filter: { field: "organization.level", op: "eq", value: 0 } },
-    { filter: { field: "organization.level", op: "eq", value: 6 } },
-    { filter: { field: "organization.status", op: "eq", value: 0 } },
-    { filter: { field: "organization.isVirtual", op: "eq", value: 0 } },
-    { filter: { field: "organization.code", op: "containsAny", value: ["ROOT"] } },
-    { filter: { field: "organization.code", op: "eq", value: null } },
-    { filter: { field: "organization.code", op: "in", value: [] } },
+    { filter: { field: "organization.code", op: "eq", value: "ROOT" } },
+    { filter: { field: "organization", op: "withinSubtreeOf", value: "ROOT" } },
+    { filter: { field: "path", op: "withinSubtreeOf", value: "ROOT" } },
+    { filter: { field: "orgCode", op: "eq", value: "ROOT" } },
+    { filter: { field: "id", op: "eq", value: 1 } },
+    { filter: { field: "level", op: "eq", value: "1" } },
+    { filter: { field: "level", op: "eq", value: 0 } },
+    { filter: { field: "level", op: "eq", value: 6 } },
+    { filter: { field: "status", op: "eq", value: 0 } },
+    { filter: { field: "isVirtual", op: "eq", value: 0 } },
+    { filter: { field: "code", op: "containsAny", value: ["ROOT"] } },
+    { filter: { field: "code", op: "eq", value: null } },
+    { filter: { field: "code", op: "in", value: [] } },
     {
-      filter: { exists: { path: "organization.path", where: { field: "organization.code", op: "eq", value: "ROOT" } } },
+      filter: { exists: { path: "path", where: { field: "organization.code", op: "eq", value: "ROOT" } } },
     },
-    { filter: { field: "organization.code", op: "eq", value: "ROOT" }, limit: 1 },
-    { filter: { field: "organization.code", op: "eq", value: "ROOT" }, sort: "name" },
-    { filter: { field: "organization.code", op: "eq", value: "ROOT" }, fields: ["code"] },
+    { filter: { field: "code", op: "eq", value: "ROOT" }, limit: 1 },
+    { filter: { field: "code", op: "eq", value: "ROOT" }, sort: "name" },
+    { filter: { field: "code", op: "eq", value: "ROOT" }, fields: ["code"] },
   ]) {
     const response = await request(app, body);
     const result = await response.json();
@@ -113,7 +111,7 @@ test("enforces shared structural and condition budgets before executing a query"
   const app = createProductionApp(async () => {
     throw new Error("invalid input cannot query");
   });
-  const condition = { field: "organization.code", op: "eq", value: "ROOT" };
+  const condition = { field: "code", op: "eq", value: "ROOT" };
   let tooDeep: unknown = condition;
   for (let index = 0; index < 8; index++) tooDeep = { not: tooDeep };
   const tooManyNodes = { and: Array.from({ length: 8 }, () => ({ and: Array.from({ length: 8 }, () => condition) })) };
@@ -121,9 +119,9 @@ test("enforces shared structural and condition budgets before executing a query"
     tooDeep,
     tooManyNodes,
     { and: Array.from({ length: 17 }, () => condition) },
-    { field: "organization.code", op: "in", value: Array.from({ length: 51 }, (_, index) => `ORG-${index}`) },
-    { field: "organization.code", op: "eq", value: "x".repeat(129) },
-    { field: "organization.code", op: "in", value: Array.from({ length: 501 }, () => "ROOT") },
+    { field: "code", op: "in", value: Array.from({ length: 51 }, (_, index) => `ORG-${index}`) },
+    { field: "code", op: "eq", value: "x".repeat(129) },
+    { field: "code", op: "in", value: Array.from({ length: 501 }, () => "ROOT") },
   ]) {
     const response = await request(app, { filter });
     const result = await response.json();
@@ -135,7 +133,7 @@ test("enforces shared structural and condition budgets before executing a query"
 test("accepts duplicate in values within the distinct-value budget and preserves exact strings", async () => {
   const app = createProductionApp(async () => []);
   const response = await request(app, {
-    filter: { field: "organization.code", op: "in", value: Array.from({ length: 100 }, () => " ROOT ") },
+    filter: { field: "code", op: "in", value: Array.from({ length: 100 }, () => " ROOT ") },
   });
   const result = await response.json();
   expect(response.status).toBe(200);
@@ -143,7 +141,7 @@ test("accepts duplicate in values within the distinct-value budget and preserves
 });
 
 test("returns all 500 matches and rejects a 501st match as a whole", async () => {
-  const filter = { field: "organization.type", op: "eq", value: OrganizationType.Company };
+  const filter = { field: "type", op: "eq", value: OrganizationType.Company };
   const full = await request(
     createProductionApp(async () => Array.from({ length: 500 }, () => ({ document: publishedDocument }))),
     { filter },
@@ -163,28 +161,21 @@ test("returns all 500 matches and rejects a 501st match as a whole", async () =>
 
 test("fails the whole search when any matched document is corrupt or the database query fails", async () => {
   for (const search of [
-    async () => [
-      { document: publishedDocument },
-      { document: { organization: { ...publishedDocument.organization, internalId: 1 } } },
-    ],
-    async () => [{ document: { organization: { ...publishedDocument.organization, path: [] } } }],
+    async () => [{ document: publishedDocument }, { document: { ...publishedDocument, internalId: 1 } }],
+    async () => [{ document: { ...publishedDocument, path: [] } }],
     async () => [
       {
         document: {
-          organization: {
-            ...publishedDocument.organization,
-            path: [{ ...publishedDocument.organization.path[0], distanceToTarget: 1 }],
-          },
+          ...publishedDocument,
+          path: [{ ...publishedDocument.path[0], distanceToTarget: 1 }],
         },
       },
     ],
     async () => [
       {
         document: {
-          organization: {
-            ...publishedDocument.organization,
-            path: [{ ...publishedDocument.organization.path[0], code: "OTHER" }],
-          },
+          ...publishedDocument,
+          path: [{ ...publishedDocument.path[0], code: "OTHER" }],
         },
       },
     ],
@@ -193,7 +184,7 @@ test("fails the whole search when any matched document is corrupt or the databas
     },
   ]) {
     const response = await request(createProductionApp(search), {
-      filter: { field: "organization.code", op: "eq", value: "ROOT" },
+      filter: { field: "code", op: "eq", value: "ROOT" },
     });
     const body = await response.json();
     expect(response.status).toBe(503);
@@ -218,7 +209,7 @@ test("maps the five-second handler deadline to a sanitized unavailable response"
         await new Promise<void>((resolve) => queueMicrotask(resolve));
         throw new Error("query failure after deadline");
       }),
-      { filter: { field: "organization.code", op: "eq", value: "ROOT" } },
+      { filter: { field: "code", op: "eq", value: "ROOT" } },
     );
     const body = await response.json();
     expect(response.status).toBe(503);
@@ -290,7 +281,7 @@ test("requires a valid Internal Client credential for the DSL endpoint", async (
   const unauthorized = await app.request("http://localhost/internal/organizations/search-dsl", {
     method: "POST",
     headers: { "content-type": "application/json", apikey: "invalid-secret" },
-    body: JSON.stringify({ filter: { field: "organization.code", op: "eq", value: "ROOT" } }),
+    body: JSON.stringify({ filter: { field: "code", op: "eq", value: "ROOT" } }),
   });
   const body = await unauthorized.json();
   expect(unauthorized.status).toBe(401);
