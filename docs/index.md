@@ -33,7 +33,7 @@
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 启动项目、查找代码   | [README](../README.md)、[仓库地图](architecture/repository-map.md)                                                                                     |
 | 修改代码或开展设计   | [仓库规则路由](../AGENTS.md)、[系统架构](architecture/system-architecture.md)                                                                          |
-| 开发、测试与验证     | [命令入口](development/commands.md)、[测试编排](architecture/testing-architecture.md)、[测试规范](development/testing.md)                              |     | 2026-10-29 | 2026-11-29 | Workspace 收集、根编排、缓存、资源隔离与生命周期。 |
+| 开发、测试与验证     | [命令入口](development/commands.md)、[测试编排](architecture/testing-architecture.md)、[测试规范](development/testing.md)                              |
 | 理解业务与决策       | [领域语言](../CONTEXT.md)、[ADR 清单](#架构决策)                                                                                                       |
 | 了解或使用功能       | [功能说明](features/README.md)、[功能清单](#功能说明)                                                                                                  |
 | 接入或修改接口       | [接入指南](guides/README.md)，字段与响应沿指南查代码定义                                                                                               |
