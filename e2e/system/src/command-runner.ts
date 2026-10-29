@@ -7,8 +7,13 @@ const processCleanupTimeoutMs = 5_000;
 
 export const runCommand: CommandRunner = async (command, args, options) => {
   const child = startCommand(command, args, options);
-  child.stdout.resume();
-  child.stderr.resume();
+  if (options.inheritOutput) {
+    child.stdout.on("data", (chunk: Buffer) => process.stdout.write(chunk));
+    child.stderr.on("data", (chunk: Buffer) => process.stderr.write(chunk));
+  } else {
+    child.stdout.resume();
+    child.stderr.resume();
+  }
   await waitForCommand(child, command, options.signal);
 };
 

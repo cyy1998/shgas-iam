@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 import { randomBytes } from "node:crypto";
 import type { APIRequestContext, Page } from "@playwright/test";
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 import {
   loginToAdmin,
   openClientSection,
@@ -10,6 +10,7 @@ import {
   updateClientStatus,
 } from "./src/admin-client-journey.ts";
 import { requireEnvironment } from "./src/environment.ts";
+import { test } from "./src/gateway-test.ts";
 import { createPkceS256Pair, receiveOidcAuthorizationCallback } from "./src/oidc-rp.ts";
 import {
   createHeadResponsibility,

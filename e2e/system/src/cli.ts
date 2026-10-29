@@ -115,7 +115,7 @@ async function runAdminJourneyLifecycle() {
 }
 
 async function runOidcJourneyLifecycle() {
-  await runJourneyLifecycle(createOidcJourneyOperations, "oidc-pkce-journey-passed-and-cleaned");
+  await runJourneyLifecycle(createOidcJourneyOperations, "oidc-pkce-journey-passed-and-cleaned", true);
 }
 
 async function runHrAdminJourneyLifecycle() {
@@ -131,10 +131,6 @@ async function runFullSystemJourneyLifecycle() {
         oidc: createOidcJourneyOperations(options),
       }),
     "full-system-e2e-passed-and-cleaned",
-  );
-  await runJourneyLifecycle(
-    (options) => createOidcJourneyOperations(options),
-    "dual-entry-e2e-passed-and-cleaned",
     true,
   );
 }

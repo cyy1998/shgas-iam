@@ -515,8 +515,8 @@ b648、managed-callback 配置升级、`online-auth:state --layout source` 及�
 
 ## 工具链强制执行
 
-`pnpm test:e2e` 在同 origin 全系统基线之后，再启动独立 exact project 执行两个不同 hostname 的
-`dual-entry.spec.ts`；不需要另设环境变量选择第二阶段。workspace-local journey 仍只服务聚焦调试。
+`pnpm test:e2e` 只启动一个 exact project，使用两个不同 hostname，依次执行 Admin、HR、OIDC 主流程与
+`dual-entry.spec.ts`。workspace-local journey 仍只服务聚焦调试，`oidc:journey` 同样使用双入口环境。
 双入口协议的命令与资源见[OIDC 协议套件](#oidc-协议套件)。
 
 API Browser 的输出固定到 `test-results/browser`；suite 的 outputDirectory 应选择独立任务目录，不能依赖

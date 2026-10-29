@@ -55,6 +55,7 @@ export function createPlaywrightJourneyOperations(options: CreatePlaywrightJourn
         ],
         {
           cwd: options.repositoryRoot,
+          inheritOutput: true,
           env: {
             ...process.env,
             IAM_E2E_ADMIN_PASSWORD: syntheticAdminPassword,

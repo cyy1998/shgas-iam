@@ -36,6 +36,7 @@ const diagnosticLogServices = [
 const maxDiagnosticLogBytesPerService = 5 * 1024;
 
 export interface CommandOptions {
+  inheritOutput?: boolean;
   capture?: {
     maxBytes: number;
     mode: "line-tail" | "tail";

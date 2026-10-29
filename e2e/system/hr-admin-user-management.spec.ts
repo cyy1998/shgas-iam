@@ -1,8 +1,9 @@
 import type { APIRequestContext, Browser, Page } from "@playwright/test";
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 import { expectRpcMutationResult, isSuccessfulRpcResponse, loginToAdmin } from "./src/admin-client-journey.ts";
 import { containsScalarValue } from "./src/concealment.ts";
 import { requireEnvironment } from "./src/environment.ts";
+import { test } from "./src/gateway-test.ts";
 
 const safeBlockerMessage = "存在当前管理员不可管理的开放责任任命，请联系完整管理员处理";
 

@@ -10,7 +10,6 @@ export function createOidcJourneyOperations(options: CreateOidcJourneyOperations
     specPath: "oidc-pkce.spec.ts",
     environment: (descriptor, scenario) => ({
       IAM_E2E_JOURNEY: "oidc",
-      IAM_E2E_DUAL_ONLY: descriptor.internalOrigin ? "1" : "0",
       IAM_E2E_OIDC_CLIENT_CODE: scenario.oidcClientCode,
       IAM_E2E_CUSTOM_CLIENT_CODE: `${scenario.customSsoClientCode}-dual`,
       IAM_E2E_BUSINESS_CLIENT_CODE: `${scenario.customSsoClientCode}-business`,

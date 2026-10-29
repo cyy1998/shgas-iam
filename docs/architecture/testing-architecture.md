@@ -103,13 +103,17 @@ Receipt 只含阶段、时间、安全失败类别或本次公开引用，不保
 
 ### 旅程编排
 
-同源旅程在同一 project 中依次运行 Admin、HR、OIDC，经正式前后端观察行为，不用 `page.route` 替代仓库核心服务。
+完整 collection 只创建一个双入口 project，依次运行 Admin、HR、OIDC 主流程与双入口协议场景。
+各旅程经正式前后端观察行为，不用 `page.route` 替代仓库核心服务。
 任一失败先采集诊断再清理，cleanup 失败同样阻断通过。
 
 ### 双入口验收与产物隔离
 
-完整 collection 在同源基线后，以两个不同 hostname 启动独立 project，复用 migrations、seed、readiness 与正式 APISIX。
-双入口文件也纳入基线 selector，独立阶段只运行该文件。通过正式发布接口设置并回读受控 Host rewrite，再验证两协议、Cookie 域隔离及伪造入口拒绝。
+完整 collection 在一套环境中使用两个不同 hostname，共用 migrations、seed、readiness 与正式 APISIX。
+OIDC selector 同时收集主流程与双入口文件；同源配置的独有边界由轻量配置及协议测试保护，不重复完整旅程。
+通过正式发布接口设置并回读受控 Host rewrite，再验证两协议、Cookie 域隔离及伪造入口拒绝。
+Chromium 与 Node 请求器均只将测试专用 hostname 解析到 loopback，保留真实 URL、Host 和原生 Cookie 作用域；
+Node 映射由每个 Playwright worker 安装并在收尾时还原。
 测试不改生产 manifest，独立 RP 与固定套件的职责见[验证选择](../development/testing.md#验证选择)。
 
 ### 失败诊断与清理

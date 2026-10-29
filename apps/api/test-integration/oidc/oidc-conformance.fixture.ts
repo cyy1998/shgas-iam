@@ -66,35 +66,40 @@ export async function createOidcConformanceCandidate(options: {
     const redis = new Redis(redisUrl, { maxRetriesPerRequest: 1 });
     registerCleanup(() => closeApiRedisConnection(redis));
     const namespace = `oidc-conformance:${randomUUID()}`;
-    const subjectIdentifier = randomUUID();
-    const username = `oidc-${randomUUID()}`;
-    const clientId = `oidc-${randomUUID()}`;
-    const publicClientId = `oidc-${randomUUID()}`;
-    const secondClientId = `oidc-${randomUUID()}`;
     const password = "Conformance195!synthetic";
     const secret = "conformance195-synthetic-secret-for-local-testing";
     const passwordHash = await hashSecret(password, 4);
     await checkpoint("before-seed");
-    const sql = pg.sql;
-    const [user] =
-      await sql`INSERT INTO "user" (subject_identifier, username, name, password, mobile_phone) VALUES (${subjectIdentifier}, ${username}, 'Conformance User', ${passwordHash}, '+8613800000195') RETURNING id`;
-    if (!user) throw new Error("Synthetic user insert did not return an id");
-    await publishUserDocument(pg.db, user.id);
-    await sql`INSERT INTO user_document_rebuild_state (user_id, version, status, reason_codes, dirty_at, processed_at) VALUES (${user.id}, 1, 'processed', '["user-updated"]'::jsonb, NOW(), NOW())`;
-    for (const code of [clientId, secondClientId, publicClientId]) {
-      const config = {
-        protocol: ClientSsoProtocol.Oidc,
-        clientType: code === publicClientId ? OidcClientType.Public : OidcClientType.Confidential,
-        redirectUris: options.redirectUris,
-        postLogoutRedirectUris: options.postLogoutRedirectUris,
-        allowedScopes: [OidcScope.OpenId, OidcScope.Profile, OidcScope.Phone],
-      };
-      await sql`INSERT INTO client (client_code, client_name, client_secret, status, is_delete, ext_attributes, sso_enabled, sso_config, sso_secret, sso_credential_id, sso_secret_updated_at) VALUES (${code}, 'Conformance synthetic client', ${`internal-${code}`}, 1, FALSE, '{}'::jsonb, TRUE, ${JSON.stringify(config)}::jsonb, ${code === publicClientId ? null : secret}, ${code === publicClientId ? null : randomUUID()}, ${code === publicClientId ? null : new Date().toISOString()})`;
+    async function seedIdentity() {
+      if (stopped) throw new Error("OIDC candidate has stopped");
+      const subjectIdentifier = randomUUID();
+      const username = `oidc-${randomUUID()}`;
+      const clientId = `oidc-${randomUUID()}`;
+      const publicClientId = `oidc-${randomUUID()}`;
+      const secondClientId = `oidc-${randomUUID()}`;
+      const sql = pg.sql;
+      const [user] =
+        await sql`INSERT INTO "user" (subject_identifier, username, name, password, mobile_phone) VALUES (${subjectIdentifier}, ${username}, 'Conformance User', ${passwordHash}, '+8613800000195') RETURNING id`;
+      if (!user) throw new Error("Synthetic user insert did not return an id");
+      await publishUserDocument(pg.db, user.id);
+      await sql`INSERT INTO user_document_rebuild_state (user_id, version, status, reason_codes, dirty_at, processed_at) VALUES (${user.id}, 1, 'processed', '["user-updated"]'::jsonb, NOW(), NOW())`;
+      for (const code of [clientId, secondClientId, publicClientId]) {
+        const config = {
+          protocol: ClientSsoProtocol.Oidc,
+          clientType: code === publicClientId ? OidcClientType.Public : OidcClientType.Confidential,
+          redirectUris: options.redirectUris,
+          postLogoutRedirectUris: options.postLogoutRedirectUris,
+          allowedScopes: [OidcScope.OpenId, OidcScope.Profile, OidcScope.Phone],
+        };
+        await sql`INSERT INTO client (client_code, client_name, client_secret, status, is_delete, ext_attributes, sso_enabled, sso_config, sso_secret, sso_credential_id, sso_secret_updated_at) VALUES (${code}, 'Conformance synthetic client', ${`internal-${code}`}, 1, FALSE, '{}'::jsonb, TRUE, ${JSON.stringify(config)}::jsonb, ${code === publicClientId ? null : secret}, ${code === publicClientId ? null : randomUUID()}, ${code === publicClientId ? null : new Date().toISOString()})`;
+      }
+      await createSubjectAccessBootstrap({ redis, random: { uuid: randomUUID } }).seedMany(
+        [{ subjectIdentifier, state: "enabled" }],
+        new Date(),
+      );
+      return { subjectIdentifier, username, clientId, publicClientId, secondClientId, secret };
     }
-    await createSubjectAccessBootstrap({ redis, random: { uuid: randomUUID } }).seedMany(
-      [{ subjectIdentifier, state: "enabled" }],
-      new Date(),
-    );
+    const identity = await seedIdentity();
     await checkpoint("redis-seeded");
     const allocation = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() });
     const port = allocation.port!;
@@ -132,6 +137,22 @@ export async function createOidcConformanceCandidate(options: {
     const origin = externalOrigin;
     const context = { attemptNumber: 1, hostname: "127.0.0.1", port, temporaryDirectory };
     const loginKeys = sm2.generateKeyPairHex();
+    function credentialsFor(identity: Awaited<ReturnType<typeof seedIdentity>>) {
+      return {
+        ...identity,
+        loginCredential: { username: identity.username, password, kid: "entry-smoke", publicKey: loginKeys.publicKey },
+        credential() {
+          return createLoginCredential({
+            username: identity.username,
+            password,
+            kid: "entry-smoke",
+            publicKey: loginKeys.publicKey,
+            now: Date.now(),
+            nonce: randomUUID(),
+          });
+        },
+      };
+    }
     const resourceEnvironment = createEntryEnvironment(context, {
       IAM_API_DATABASE_URL: pg.databaseUrl,
       IAM_API_REDIS_HOST: redisConfig.host,
@@ -213,23 +234,12 @@ export async function createOidcConformanceCandidate(options: {
       internalOrigin,
       externalOrigin,
       namespace,
-      clientId,
-      publicClientId,
-      secondClientId,
-      secret,
-      subjectIdentifier,
-      username,
-      loginCredential: { username, password, kid: "entry-smoke", publicKey: loginKeys.publicKey },
+      ...credentialsFor(identity),
       close,
-      credential() {
-        return createLoginCredential({
-          username,
-          password,
-          kid: "entry-smoke",
-          publicKey: loginKeys.publicKey,
-          now: Date.now(),
-          nonce: randomUUID(),
-        });
+      async createIdentity() {
+        // Fresh identities isolate Redis sessions, replay/limit state and cached Client facts
+        // while the command-owned API, schema and signing configuration stay alive.
+        return credentialsFor(await seedIdentity());
       },
     };
   } catch (error) {

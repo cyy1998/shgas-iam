@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 import {
   expectRpcMutationResult,
   isSuccessfulRpcResponse,
@@ -10,6 +10,7 @@ import {
   updateClientStatus,
 } from "./src/admin-client-journey.ts";
 import { requireEnvironment } from "./src/environment.ts";
+import { test } from "./src/gateway-test.ts";
 import {
   createHeadResponsibility,
   customSsoProfileHasResponsibility,

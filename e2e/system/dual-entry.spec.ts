@@ -1,11 +1,12 @@
 import { Buffer } from "node:buffer";
 import type { APIRequestContext, Page } from "@playwright/test";
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 import { requireEnvironment } from "./src/environment.ts";
+import { test } from "./src/gateway-test.ts";
 import { createPkceS256Pair } from "./src/oidc-rp.ts";
 
 const externalOrigin = requireEnvironment("IAM_E2E_ORIGIN");
-const internalOrigin = process.env.IAM_E2E_INTERNAL_ORIGIN ?? externalOrigin;
+const internalOrigin = requireEnvironment("IAM_E2E_INTERNAL_ORIGIN");
 const clientId = () => `${requireEnvironment("IAM_E2E_OIDC_CLIENT_CODE")}-dual`;
 const customClient = () => requireEnvironment("IAM_E2E_CUSTOM_CLIENT_CODE");
 const redirectUri = `${externalOrigin}/e2e/oidc/callback`;
@@ -14,8 +15,11 @@ const entries = [
   { name: "external", origin: externalOrigin },
 ];
 
-// APIRequestContext does not use Chromium's resolver rules. Only the transport
-// destination changes; the actual Host and real APISIX route remain observable.
+test.beforeAll(() => {
+  expect(new URL(internalOrigin).hostname).not.toBe(new URL(externalOrigin).hostname);
+});
+
+// The worker maps only test-owned DNS names. Canonical URLs retain native Cookie/Host semantics.
 function gatewayRequest(
   request: APIRequestContext,
   origin: string,
@@ -23,9 +27,7 @@ function gatewayRequest(
   options: Parameters<APIRequestContext["fetch"]>[1] = {},
 ) {
   const target = new URL(path, origin);
-  const authority = target.host;
-  target.hostname = "127.0.0.1";
-  return request.fetch(target.href, { ...options, headers: { ...options.headers, Host: authority }, maxRedirects: 0 });
+  return request.fetch(target.href, { ...options, maxRedirects: 0 });
 }
 
 async function login(page: Page, origin: string) {
@@ -164,8 +166,6 @@ for (const entry of entries) {
     page,
     request,
   }) => {
-    if (process.env.IAM_E2E_DUAL_ONLY === "1")
-      expect(new URL(internalOrigin).hostname).not.toBe(new URL(externalOrigin).hostname);
     const destination = `${entry.origin}/e2e/custom-sso/callback?view=orders&filter=a%2Bb`;
     const state = `managed-${entry.name}`;
     const authorization = new URL("/sso/authorize", entry.origin);
