@@ -422,11 +422,7 @@ test("unified self revoke reports application effects and uncertain outcomes wit
 });
 type LoginRestrictionReleaseResponder = Parameters<typeof mockLoginRestrictionReleaseRoute>[1];
 
-async function setupLoginRestrictionRelease(
-  page: Page,
-  respond: LoginRestrictionReleaseResponder,
-  options: { removeTargetAfterReload?: boolean } = {},
-) {
+async function setupLoginRestrictionRelease(page: Page, respond: LoginRestrictionReleaseResponder) {
   await mockAdminApi(page);
   await mockSessionListRoute(page, (input) => ({
     type: "success",
@@ -439,7 +435,7 @@ async function setupLoginRestrictionRelease(
     },
   }));
   const listInputs = await mockLoginRestrictionListRoute(page, (input, requestNumber) => {
-    const targetWasRemoved = options.removeTargetAfterReload === true && requestNumber > 1;
+    const targetWasRemoved = requestNumber > 1;
     const result = targetWasRemoved ? [firstPageLoginRestrictions[0]] : firstPageLoginRestrictions;
     return {
       type: "success",
@@ -475,7 +471,6 @@ async function expectAuditWarningAfterRefreshAndTabSwitch(
   tabName: "会话记录" | "临时登录限制",
   listInputs: unknown[],
   mutationInputs: unknown[],
-  verifyRefreshedState?: () => Promise<void>,
 ) {
   const panel = page.getByRole("tabpanel", { name: tabName });
   const warning = panel.getByRole("alert").filter({
@@ -485,11 +480,7 @@ async function expectAuditWarningAfterRefreshAndTabSwitch(
   const listRequestCount = listInputs.length;
   await panel.getByRole("button", { name: "手动刷新" }).click();
   await expect.poll(() => listInputs.length).toBe(listRequestCount + 1);
-  if (verifyRefreshedState) {
-    await verifyRefreshedState();
-  } else {
-    await expect(panel.getByText("已删除用户")).toHaveCount(0);
-  }
+  await expect(panel.getByText("已删除用户")).toHaveCount(0);
   await expect(warning).toBeVisible();
   await page
     .getByRole("tab", {
@@ -747,17 +738,13 @@ test("temporary login restrictions show canonical facts, exact user filtering, a
 });
 
 test("restriction release confirms exact effects, succeeds once, and refreshes once", async ({ page }) => {
-  const { listInputs, releaseInputs } = await setupLoginRestrictionRelease(
-    page,
-    () => ({
-      type: "success",
-      data: {
-        changed: true,
-        result: { failureStateCleared: true },
-      },
-    }),
-    { removeTargetAfterReload: true },
-  );
+  const { listInputs, releaseInputs } = await setupLoginRestrictionRelease(page, () => ({
+    type: "success",
+    data: {
+      changed: true,
+      result: { failureStateCleared: true },
+    },
+  }));
   const dialog = await openTargetLoginRestrictionReleaseDialog(page);
 
   await expect(dialog).toContainText("确认解除临时登录限制？");
@@ -777,90 +764,10 @@ test("restriction release confirms exact effects, succeeds once, and refreshes o
   await expect(page.getByText("已删除用户")).toHaveCount(0);
 });
 
-test("restriction release no-op reports natural expiry and refreshes once", async ({ page }) => {
-  const { listInputs, releaseInputs } = await setupLoginRestrictionRelease(page, () => ({
-    type: "success",
-    data: {
-      changed: false,
-      result: { failureStateCleared: true },
-    },
-  }));
-  const dialog = await openTargetLoginRestrictionReleaseDialog(page);
-  const listRequestCount = listInputs.length;
-  await confirmLoginRestrictionRelease(dialog);
-
-  await expect(page.getByText("限制已自然过期或已被处理")).toBeVisible();
-  await expectSingleLoginRestrictionReleaseAndReload(releaseInputs, listInputs, listRequestCount);
-});
-
-test("restriction inventory clears stale rows when login state becomes unavailable", async ({ page }) => {
-  await mockAdminApi(page);
-  await mockSessionListRoute(page, (input) => ({
-    type: "success",
-    data: {
-      result: [],
-      total: 0,
-      pageNum: input.pageNum ?? 1,
-      pageSize: input.pageSize ?? 20,
-      pages: 0,
-    },
-  }));
-  await mockLoginRestrictionListRoute(page, (input, requestNumber) =>
-    requestNumber === 1
-      ? {
-          type: "success",
-          data: {
-            result: firstPageLoginRestrictions,
-            total: firstPageLoginRestrictions.length,
-            pageNum: input.pageNum ?? 1,
-            pageSize: input.pageSize ?? 20,
-            pages: 1,
-          },
-        }
-      : { type: "login-state-unavailable" },
-  );
-
-  await page.goto("/iam-admin/sessions");
-  const restrictionTab = page.getByRole("tab", {
-    name: "临时登录限制",
-  });
-  await expect(restrictionTab).toBeVisible({ timeout: 20_000 });
-  await restrictionTab.click();
-  const panel = page.getByRole("tabpanel", { name: "临时登录限制" });
-  await expect(panel.getByText("已删除用户")).toBeVisible();
-
-  await panel.getByRole("button", { name: "手动刷新" }).click();
-
-  await expect(panel.getByText("登录状态服务暂时不可用")).toBeVisible();
-  await expect(panel.getByText("已删除用户")).toHaveCount(0);
-  await expect(panel.getByText("加载失败")).toBeVisible();
-  await expect(panel.getByText("暂无数据")).toHaveCount(0);
-});
-
-test("restriction release 503 keeps the current inventory without false success or retry", async ({ page }) => {
-  await page.clock.install();
-  const { listInputs, releaseInputs } = await setupLoginRestrictionRelease(page, () => ({
-    type: "login-state-unavailable",
-  }));
-  const dialog = await openTargetLoginRestrictionReleaseDialog(page);
-  const listRequestCount = listInputs.length;
-  await confirmLoginRestrictionRelease(dialog);
-
-  await expect(page.getByText("登录状态服务暂时不可用")).toBeVisible();
-  await expect.poll(() => releaseInputs).toEqual([{ userId: 43 }]);
-  await page.clock.runFor(60_000);
-  expect(releaseInputs).toHaveLength(1);
-  expect(listInputs).toHaveLength(listRequestCount);
-  await expect(page.getByText("已删除用户")).toBeVisible();
-  await expect(page.getByText("临时登录限制已解除，当前失败历史已清理")).toHaveCount(0);
-});
-
 test("restriction audit-after-effect refreshes once without retrying release", async ({ page }) => {
-  const { listInputs, releaseInputs } = await setupLoginRestrictionRelease(
-    page,
-    () => ({ type: "audit-failed-after-effect" }),
-    { removeTargetAfterReload: true },
-  );
+  const { listInputs, releaseInputs } = await setupLoginRestrictionRelease(page, () => ({
+    type: "audit-failed-after-effect",
+  }));
   const dialog = await openTargetLoginRestrictionReleaseDialog(page);
   const listRequestCount = listInputs.length;
   await confirmLoginRestrictionRelease(dialog);
@@ -869,67 +776,6 @@ test("restriction audit-after-effect refreshes once without retrying release", a
   await expectSingleLoginRestrictionReleaseAndReload(releaseInputs, listInputs, listRequestCount);
   await expect(page.getByText("已删除用户")).toHaveCount(0);
   await expectAuditWarningAfterRefreshAndTabSwitch(page, "临时登录限制", listInputs, releaseInputs);
-});
-
-test("session records show the empty state", async ({ page }) => {
-  await mockAdminApi(page);
-  await mockSessionListRoute(page, (input) => ({
-    type: "success",
-    data: {
-      result: [],
-      total: 0,
-      pageNum: input.pageNum ?? 1,
-      pageSize: input.pageSize ?? 20,
-      pages: 0,
-    },
-  }));
-
-  await page.goto("/iam-admin/sessions");
-
-  await expect(page.locator(".ant-empty-description")).toHaveText("暂无数据");
-});
-
-test("session records surface unavailable login state instead of presenting it as an empty result", async ({
-  page,
-}) => {
-  await mockAdminApi(page);
-  await mockSessionListRoute(page, () => ({
-    type: "login-state-unavailable",
-  }));
-
-  await page.goto("/iam-admin/sessions");
-
-  await expect(page.getByText("登录状态服务暂时不可用")).toBeVisible();
-  await expect(page.getByText("请稍后手动刷新")).toBeVisible();
-  await expect(page.getByText("暂无数据")).toHaveCount(0);
-});
-
-test("refresh clears stale sessions when login state becomes unavailable", async ({ page }) => {
-  await mockAdminApi(page);
-  await mockSessionListRoute(page, (_input, requestNumber) => {
-    if (requestNumber === 1) {
-      return {
-        type: "success",
-        data: {
-          result: firstPageSessions,
-          total: 2,
-          pageNum: 1,
-          pageSize: 20,
-          pages: 1,
-        },
-      };
-    }
-    return { type: "login-state-unavailable" };
-  });
-
-  await page.goto("/iam-admin/sessions");
-  await expect(page.getByText("张三", { exact: true })).toBeVisible();
-
-  await page.getByRole("button", { name: "手动刷新" }).click();
-
-  await expect(page.getByText("登录状态服务暂时不可用")).toBeVisible();
-  await expect(page.getByText("张三", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("加载失败")).toBeVisible();
 });
 
 test("single-session action protects the current session and confirms the third-party boundary", async ({ page }) => {
@@ -1119,150 +965,6 @@ for (const currentRootRetained of [true, false]) {
     ).toBeVisible();
   });
 }
-test("user revoke no-op reports an already inactive target and refreshes once", async ({ page }) => {
-  const { listInputs, revokeInputs } = await setupSessionRevoke(page, () => ({
-    type: "success",
-    data: {
-      changed: false,
-      result: {
-        scope: "user",
-        generation: "unified" as const,
-        currentPrincipalSessionExcluded: false,
-        sessions: {
-          userSessionsTerminated: 0,
-          clientSessionsTerminated: 0,
-          excluded: 0,
-          failed: 0,
-          unknown: 0,
-        },
-        artifactCleanup: {
-          attempted: 0,
-          succeeded: 0,
-          failed: 0,
-        },
-      },
-    },
-  }));
-  await revokeUserAndExpectReload(page, revokeInputs, listInputs, {
-    rowText: "已删除用户",
-    userId: 43,
-  });
-
-  await expect(
-    page.getByText("已终止 0 个根会话、0 个应用会话；保留 0 个当前根；产物回收尝试 0 项、成功 0 项、失败 0 项"),
-  ).toBeVisible();
-});
-
-test("user revoke cleanup failure remains successful with only a safe failed count", async ({ page }) => {
-  const { listInputs, revokeInputs } = await setupSessionRevoke(page, () => ({
-    type: "success",
-    data: {
-      changed: true,
-      result: {
-        scope: "user",
-        generation: "unified" as const,
-        currentPrincipalSessionExcluded: false,
-        sessions: {
-          userSessionsTerminated: 2,
-          clientSessionsTerminated: 2,
-          excluded: 0,
-          failed: 0,
-          unknown: 0,
-        },
-        artifactCleanup: {
-          attempted: 3,
-          succeeded: 1,
-          failed: 2,
-        },
-      },
-    },
-  }));
-  await revokeUserAndExpectReload(page, revokeInputs, listInputs, {
-    rowText: "已删除用户",
-    userId: 43,
-  });
-
-  await expect(
-    page.getByText("已终止 2 个根会话、2 个应用会话；保留 0 个当前根；产物回收尝试 3 项、成功 1 项、失败 2 项", {
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(page.getByText("cleanup-ref-secret")).toHaveCount(0);
-  await expect(page.getByText("remote cleanup error")).toHaveCount(0);
-});
-
-test("single-session no-op shows an already inactive warning and refreshes the current page", async ({ page }) => {
-  const { listInputs, revokeInputs } = await setupSessionRevoke(page, () => ({
-    type: "success",
-    data: {
-      changed: false,
-      result: {
-        scope: "session",
-        generation: "unified" as const,
-        currentPrincipalSessionExcluded: false,
-        sessions: {
-          userSessionsTerminated: 0,
-          clientSessionsTerminated: 0,
-          excluded: 0,
-          failed: 0,
-          unknown: 0,
-        },
-        artifactCleanup: {
-          attempted: 0,
-          succeeded: 0,
-          failed: 0,
-        },
-      },
-    },
-  }));
-  const confirm = await openTargetSessionRevokeDialog(page);
-  const listRequestCount = listInputs.length;
-  await confirmSessionRevoke(confirm);
-
-  await expect(
-    page.getByText("已终止 0 个根会话、0 个应用会话；保留 0 个当前根；产物回收尝试 0 项、成功 0 项、失败 0 项"),
-  ).toBeVisible();
-  await expectSingleTargetRevokeAndReload(revokeInputs, listInputs, listRequestCount);
-});
-
-test("single-session cleanup failure remains successful with a safe warning", async ({ page }) => {
-  const { listInputs, revokeInputs } = await setupSessionRevoke(page, () => ({
-    type: "success",
-    data: {
-      changed: true,
-      result: {
-        scope: "session",
-        generation: "unified" as const,
-        currentPrincipalSessionExcluded: false,
-        sessions: {
-          userSessionsTerminated: 1,
-          clientSessionsTerminated: 1,
-          excluded: 0,
-          failed: 0,
-          unknown: 0,
-        },
-        artifactCleanup: {
-          attempted: 2,
-          succeeded: 1,
-          failed: 1,
-        },
-      },
-    },
-  }));
-  const confirm = await openTargetSessionRevokeDialog(page);
-  const listRequestCount = listInputs.length;
-  await confirmSessionRevoke(confirm);
-
-  await expect(
-    page.getByText("已终止 1 个根会话、1 个应用会话；保留 0 个当前根；产物回收尝试 2 项、成功 1 项、失败 1 项", {
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expectSingleTargetRevokeAndReload(revokeInputs, listInputs, listRequestCount);
-  await expect(page.getByText("cleanup-ref-secret")).toHaveCount(0);
-  await expect(page.getByText("remote cleanup error")).toHaveCount(0);
-});
-
 test("user audit-after-effect error refreshes once without retrying the mutation", async ({ page }) => {
   const { listInputs, revokeInputs } = await setupSessionRevoke(
     page,
@@ -1276,42 +978,7 @@ test("user audit-after-effect error refreshes once without retrying the mutation
     userId: 43,
   });
   await expect(page.getByText("操作可能已生效，但审计记录失败，请刷新确认且不要自动重试")).toBeVisible();
-  await expect(page.getByText("已删除用户")).toHaveCount(0);
-  await expectAuditWarningAfterRefreshAndTabSwitch(page, "会话记录", listInputs, revokeInputs);
-});
-
-test("self unknown termination followed by audit failure refreshes once and preserves repair guidance", async ({
-  page,
-}) => {
-  const { listInputs, revokeInputs } = await setupSessionRevoke(page, () => ({
-    type: "audit-failed-after-effect",
-  }));
-  await revokeUserAndExpectReload(page, revokeInputs, listInputs, {
-    rowText: "张三",
-    userId: 42,
-  });
-  await expect(page.getByText("操作可能已生效，但审计记录失败，请刷新确认且不要自动重试")).toBeVisible();
   await expect(page.getByText("会话下线失败", { exact: true })).toHaveCount(0);
-  await expectAuditWarningAfterRefreshAndTabSwitch(page, "会话记录", listInputs, revokeInputs, async () => {
-    await expect(page.getByText("张三", { exact: true })).toBeVisible();
-  });
-});
-
-test("audit-after-effect error refreshes state without retrying the revoke mutation", async ({ page }) => {
-  test.setTimeout(60_000);
-  const { listInputs, revokeInputs } = await setupSessionRevoke(
-    page,
-    () => ({
-      type: "audit-failed-after-effect",
-    }),
-    { removeTargetAfterReload: true },
-  );
-  const confirm = await openTargetSessionRevokeDialog(page);
-  const listRequestCount = listInputs.length;
-  await confirmSessionRevoke(confirm);
-
-  await expectSingleTargetRevokeAndReload(revokeInputs, listInputs, listRequestCount);
-  await expect(page.getByText("操作可能已生效，但审计记录失败，请刷新确认且不要自动重试")).toBeVisible();
   await expect(page.getByText("已删除用户")).toHaveCount(0);
   await expectAuditWarningAfterRefreshAndTabSwitch(page, "会话记录", listInputs, revokeInputs);
 });

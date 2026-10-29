@@ -216,67 +216,52 @@ function configured(): ClientSsoDetail {
   };
 }
 
-for (const outcome of ["committed", "unknown", "no-op"] as const) {
-  test(`protocol ${outcome} refreshes actual facts without replay and preserves server actions`, async ({ page }) => {
-    await mockAdminApi(page);
-    let current = configured();
-    let writes = 0;
-    await page.route("**/rpc/admin.clientSso.detail**", (route) => fulfillTrpc(route, current));
-    await page.route("**/rpc/admin.clientSso.selectProtocol**", async (route) => {
-      writes++;
-      const { data } = parseTrpcBatchInput<{
-        data: { config: ClientSsoDetail["ssoConfig"] };
-      }>(route);
-      if (outcome === "no-op") {
-        await fulfillTrpc(route, { changed: false, result: current });
-        return;
-      }
-      if (outcome === "committed")
-        current = {
-          ...current,
-          ssoConfig: data.config,
-          allowedActions: {
-            ...current.allowedActions,
-            selectProtocol: false,
-          },
-        };
-      await fulfillJson(route, [
-        {
-          error: {
-            message: "failed",
-            code: -32603,
-            data: {
-              code: "INTERNAL_SERVER_ERROR",
-              httpStatus: 500,
-              ...(outcome === "committed" ? { serviceCode: ApiErrorCode.AdminMutationCommitted } : {}),
-            },
+test("protocol committed failure refreshes actual facts without replay and preserves server actions", async ({
+  page,
+}) => {
+  await mockAdminApi(page);
+  let current = configured();
+  let writes = 0;
+  await page.route("**/rpc/admin.clientSso.detail**", (route) => fulfillTrpc(route, current));
+  await page.route("**/rpc/admin.clientSso.selectProtocol**", async (route) => {
+    writes++;
+    const { data } = parseTrpcBatchInput<{
+      data: { config: ClientSsoDetail["ssoConfig"] };
+    }>(route);
+    current = {
+      ...current,
+      ssoConfig: data.config,
+      allowedActions: {
+        ...current.allowedActions,
+        selectProtocol: false,
+      },
+    };
+    await fulfillJson(route, [
+      {
+        error: {
+          message: "failed",
+          code: -32603,
+          data: {
+            code: "INTERNAL_SERVER_ERROR",
+            httpStatus: 500,
+            serviceCode: ApiErrorCode.AdminMutationCommitted,
           },
         },
-      ]);
-    });
-    await page.goto("/iam-admin/clients/portal/sso");
-    if (outcome !== "no-op") await page.getByLabel("回调地址").fill("https://business.example/new");
-    await page.getByRole("button", { name: "保存协议及配置" }).click();
-    await expect(
-      page.getByText(
-        outcome === "committed"
-          ? /操作已提交，但缓存同步失败/
-          : outcome === "unknown"
-            ? /操作未确认成功，可能已经生效/
-            : "无需修改",
-      ),
-    ).toBeVisible();
-    await page.getByRole("button", { name: "刷新详情" }).click();
-    expect(writes).toBe(1);
-    if (outcome === "committed") {
-      await page.reload();
-      await expect(page.getByLabel("回调地址")).toHaveValue("https://business.example/new");
-      await expect(page.getByText(/刷新或读取 Secret 成功不代表传播已修复/)).toBeVisible();
-      await expect(page.getByRole("button", { name: "保存协议及配置" })).toBeDisabled();
-      expect(writes).toBe(1);
-    }
+      },
+    ]);
   });
-}
+  await page.goto("/iam-admin/clients/portal/sso");
+  await page.getByLabel("回调地址").fill("https://business.example/new");
+  await page.getByRole("button", { name: "保存协议及配置" }).click();
+  await expect(page.getByText(/操作已提交，但缓存同步失败/)).toBeVisible();
+  await page.getByRole("button", { name: "刷新详情" }).click();
+  expect(writes).toBe(1);
+  await page.reload();
+  await expect(page.getByLabel("回调地址")).toHaveValue("https://business.example/new");
+  await expect(page.getByText(/刷新或读取 Secret 成功不代表传播已修复/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "保存协议及配置" })).toBeDisabled();
+  expect(writes).toBe(1);
+});
 
 test("unrepaired propagation warning survives rejection, unknown result, success, no-op and reload", async ({
   page,

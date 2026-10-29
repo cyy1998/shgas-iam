@@ -62,12 +62,6 @@ const auditFailedAfterEffectFailure = {
   serviceMessage: "登录状态已变更，但审计记录失败；请刷新确认且不要自动重试",
 } satisfies TrpcFailureResponse;
 
-const requestFailedFailure = {
-  httpStatus: 500,
-  serviceCode: "COMMON.INTERNAL_ERROR",
-  serviceMessage: "internal detail must stay hidden",
-} satisfies TrpcFailureResponse;
-
 async function mockTrpcOperationRoute<TInput, TResult, TFailure extends string>(
   page: Page,
   operation: string,
@@ -158,11 +152,9 @@ export async function mockLoginRestrictionListRoute(
   return mockTrpcQueryRoute(page, "admin.sessionManagement.listLoginRestrictions", respond);
 }
 
-type LoginRestrictionReleaseFailure = "audit-failed-after-effect" | "login-state-unavailable" | "request-failed";
-
 type LoginRestrictionReleaseRouteResponse = TrpcOperationResponse<
   LoginRestrictionReleaseResult,
-  LoginRestrictionReleaseFailure
+  "audit-failed-after-effect"
 >;
 
 export async function mockLoginRestrictionReleaseRoute(
@@ -174,18 +166,10 @@ export async function mockLoginRestrictionReleaseRoute(
 ) {
   return mockTrpcMutationRoute(page, "admin.sessionManagement.releaseLoginRestriction", respond, {
     "audit-failed-after-effect": auditFailedAfterEffectFailure,
-    "login-state-unavailable": loginStateUnavailableFailure,
-    "request-failed": requestFailedFailure,
   });
 }
 
-type SessionRevokeFailure =
-  | "audit-failed-after-effect"
-  | "current-session-protected"
-  | "login-state-unavailable"
-  | "request-failed";
-
-type SessionRevokeRouteResponse = TrpcOperationResponse<SessionRevokeResult, SessionRevokeFailure>;
+type SessionRevokeRouteResponse = TrpcOperationResponse<SessionRevokeResult, "audit-failed-after-effect">;
 
 export async function mockSessionRevokeRoute(
   page: Page,
@@ -196,13 +180,6 @@ export async function mockSessionRevokeRoute(
 ) {
   return mockTrpcMutationRoute(page, "admin.sessionManagement.revokeSessions", respond, {
     "audit-failed-after-effect": auditFailedAfterEffectFailure,
-    "current-session-protected": {
-      httpStatus: 409,
-      serviceCode: ApiErrorCode.AdminSessionCurrentProtected,
-      serviceMessage: "当前管理会话不能被强制下线",
-    },
-    "login-state-unavailable": loginStateUnavailableFailure,
-    "request-failed": requestFailedFailure,
   });
 }
 
