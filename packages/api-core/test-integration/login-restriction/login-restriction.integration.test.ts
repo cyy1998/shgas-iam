@@ -1,212 +1,188 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import type { LoginRestriction } from "../../src/login-restriction";
+import { LOGIN_FAILURE_WINDOW_SECONDS, LOGIN_RESTRICTION_DURATION_SECONDS } from "../../src/login-restriction";
 import type { RedisTestHarness, RedisTestScope } from "../support/redis-test-harness";
-import { createRedisTestHarness } from "../support/redis-test-harness";
+import { createRedisTestHarness, waitForRedisCondition } from "../support/redis-test-harness";
 
-let harness: RedisTestHarness | undefined;
-let scope: RedisTestScope | undefined;
+let harness: RedisTestHarness;
+let scope: RedisTestScope;
 let writer: LoginRestriction;
 let observer: LoginRestriction;
 
 beforeAll(async () => {
   harness = await createRedisTestHarness();
 });
-
 beforeEach(async () => {
-  scope = await harness!.createScope();
+  scope = await harness.createScope();
   writer = scope.writer;
   observer = scope.observer;
 });
-
 afterEach(async () => {
   await harness?.reset();
-  scope = undefined;
 });
-
 afterAll(async () => {
   await harness?.close();
-  harness = undefined;
 });
 
+async function recordFailures(userId: number, count = 5) {
+  for (let attempt = 0; attempt < count; attempt += 1) {
+    await writer.recordFailure({ triggerMethod: "password", userId });
+  }
+}
+
+function releaseTogether<T>(operations: readonly (() => Promise<T>)[]) {
+  const gate = Promise.withResolvers<void>();
+  const pending = operations.map(async (operation) => {
+    await gate.promise;
+    return await operation();
+  });
+  // Both connected clients have reached the same start gate before either operation runs.
+  gate.resolve();
+  return Promise.all(pending);
+}
+
 describe("LoginRestriction real Redis contract", () => {
-  test("failures from independent clients are not lost and the threshold restriction is indexed atomically", async () => {
-    const attempts = Array.from({ length: 25 }, (_, index) => ({
-      client: index % 2 === 0 ? writer : observer,
-      triggerMethod: index % 2 === 0 ? ("password" as const) : ("mobile" as const),
-      userId: 1001,
-    }));
-
-    const results = await Promise.all(
-      attempts.map(async ({ client, ...input }) => ({
-        input,
-        result: await client.recordFailure(input),
-      })),
-    );
-
-    expect(results.map((item) => item.result.failureCount).sort((left, right) => left - right)).toEqual(
-      Array.from({ length: 25 }, (_, index) => index + 1),
-    );
-    expect(results.filter((item) => item.result.newlyRestricted)).toHaveLength(1);
-    const thresholdResult = results.find((item) => item.result.failureCount === 5)!;
+  test("independent clients count mixed failures once and create one indexed restriction at the threshold", async () => {
+    await recordFailures(1001, 4);
+    const inputs = [
+      { triggerMethod: "password" as const, userId: 1001 },
+      { triggerMethod: "mobile" as const, userId: 1001 },
+    ];
+    const results = await releaseTogether([
+      () => writer.recordFailure(inputs[0]!),
+      () => observer.recordFailure(inputs[1]!),
+    ]);
+    expect(results.map((result) => result.failureCount).sort()).toEqual([5, 6]);
+    expect(results.filter((result) => result.newlyRestricted)).toHaveLength(1);
+    const thresholdIndex = results.findIndex((result) => result.failureCount === 5);
+    const threshold = results[thresholdIndex]!;
+    expect(threshold).toMatchObject({ newlyRestricted: true, remainingAttempts: 0 });
     const restriction = await observer.getRestriction(1001);
-    expect(restriction).toMatchObject({
+    expect(restriction).toEqual({
       cause: "too_many_login_failures",
-      triggerMethod: thresholdResult.input.triggerMethod,
+      remainingSeconds: expect.any(Number),
+      restrictedUntil: expect.any(Number),
+      triggerMethod: inputs[thresholdIndex]!.triggerMethod,
       userId: 1001,
     });
-    const inventory = await writer.listRestrictions({
-      limit: 20,
-      offset: 0,
-    });
+    const stored = await scope.inspectLoginState(1001);
+    expect(stored.restrictionTtl).toBeGreaterThan(LOGIN_RESTRICTION_DURATION_SECONDS * 1_000 - 4_000);
+    expect(stored.restrictionTtl).toBeLessThanOrEqual(LOGIN_RESTRICTION_DURATION_SECONDS * 1_000);
+    expect(Math.abs(Number(stored.indexedUntil) - threshold.restriction!.restrictedUntil)).toBeLessThanOrEqual(5);
+    const inventory = await observer.listRestrictions({ limit: 1, offset: 0 });
     expect(inventory).toMatchObject({
-      items: [
-        {
-          cause: "too_many_login_failures",
-          triggerMethod: thresholdResult.input.triggerMethod,
-          userId: 1001,
-        },
-      ],
+      items: [{ userId: 1001, triggerMethod: inputs[thresholdIndex]!.triggerMethod }],
       total: 1,
     });
   });
 
-  test("restriction state and inventory never expose a one-sided snapshot across independent clients", async () => {
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      await writer.recordFailure({
-        triggerMethod: "password",
-        userId: 1001,
-      });
-    }
-
-    const thresholdTransition = writer.recordFailure({
-      triggerMethod: "mobile",
-      userId: 1001,
-    });
-    const creationObservations = Promise.all(
-      Array.from({ length: 40 }, async (_, index) => {
-        if (index % 2 === 0) {
-          const restriction = await observer.getRestriction(1001);
-          const inventory = await observer.listRestrictions({ limit: 20, offset: 0 });
-          if (restriction !== null) expect(inventory.items.map((item) => item.userId)).toContain(1001);
-          return;
-        }
-
-        const inventory = await observer.listRestrictions({ limit: 20, offset: 0 });
-        const restriction = await observer.getRestriction(1001);
-        if (inventory.items.some((item) => item.userId === 1001)) expect(restriction).not.toBeNull();
-      }),
-    );
-
-    const thresholdResult = await thresholdTransition;
-    expect(thresholdResult).toMatchObject({
-      failureCount: 5,
-      newlyRestricted: true,
-    });
-    await creationObservations;
-    const restrictionAfterCreation = await observer.getRestriction(1001);
-    expect(restrictionAfterCreation).not.toBeNull();
-    const inventoryAfterCreation = await observer.listRestrictions({
-      limit: 20,
-      offset: 0,
-    });
-    expect(inventoryAfterCreation).toMatchObject({ items: [{ userId: 1001 }], total: 1 });
-
-    const clearTransition = writer.clearLoginState(1001);
-    const clearObservations = Promise.all(
-      Array.from({ length: 40 }, async (_, index) => {
-        if (index % 2 === 0) {
-          const restriction = await observer.getRestriction(1001);
-          const inventory = await observer.listRestrictions({ limit: 20, offset: 0 });
-          if (restriction === null) expect(inventory.items.map((item) => item.userId)).not.toContain(1001);
-          return;
-        }
-
-        const inventory = await observer.listRestrictions({ limit: 20, offset: 0 });
-        const restriction = await observer.getRestriction(1001);
-        if (!inventory.items.some((item) => item.userId === 1001)) expect(restriction).toBeNull();
-      }),
-    );
-
-    const clearResult = await clearTransition;
-    expect(clearResult).toMatchObject({ changed: true });
-    await clearObservations;
-    const restrictionAfterClear = await observer.getRestriction(1001);
-    expect(restrictionAfterClear).toBeNull();
-    const inventoryAfterClear = await observer.listRestrictions({
-      limit: 20,
-      offset: 0,
-    });
-    expect(inventoryAfterClear).toEqual({ items: [], total: 0 });
+  test("rolling window cleanup removes old members from a still-live failure key", async () => {
+    await scope.seedFailureHistory(1001, [
+      LOGIN_FAILURE_WINDOW_SECONDS * 1_000 + 10_000,
+      LOGIN_FAILURE_WINDOW_SECONDS * 1_000 + 9_000,
+      LOGIN_FAILURE_WINDOW_SECONDS * 1_000 + 8_000,
+      LOGIN_FAILURE_WINDOW_SECONDS * 1_000 + 7_000,
+      1_000,
+    ]);
+    const result = await writer.recordFailure({ triggerMethod: "mobile", userId: 1001 });
+    expect(result).toEqual({ failureCount: 2, newlyRestricted: false, remainingAttempts: 3, restriction: null });
+    const stored = await scope.inspectLoginState(1001);
+    expect(stored.failureCount).toBe(2);
   });
 
-  test("clear and a concurrent failure are linearized across independent clients", async () => {
-    for (let round = 0; round < 20; round += 1) {
-      const userId = 2_000 + round;
-      for (let attempt = 0; attempt < 4; attempt += 1) {
-        await writer.recordFailure({
-          triggerMethod: "password",
-          userId,
-        });
-      }
+  test("clear removes restriction, history and index, allowing immediate counting from one", async () => {
+    await recordFailures(1001);
+    const cleared = await observer.clearLoginState(1001);
+    expect(cleared).toMatchObject({
+      changed: true,
+      failureStateCleared: true,
+      restriction: { cause: "too_many_login_failures", triggerMethod: "password", userId: 1001 },
+    });
+    const stored = await scope.inspectLoginState(1001);
+    expect(stored).toEqual({ failureCount: 0, restrictionTtl: -2, indexedUntil: null });
+    const repeated = await writer.clearLoginState(1001);
+    expect(repeated).toEqual({ changed: false, failureStateCleared: true, restriction: null });
+    const next = await writer.recordFailure({ triggerMethod: "mobile", userId: 1001 });
+    expect(next).toEqual({ failureCount: 1, newlyRestricted: false, remainingAttempts: 4, restriction: null });
+  });
 
-      const [cleared, recorded] = await Promise.all([
-        writer.clearLoginState(userId),
-        observer.recordFailure({ triggerMethod: "mobile", userId }),
-      ]);
+  test("a concurrent clear and failure produce a legal serial outcome", async () => {
+    await recordFailures(1001, 4);
+    const gate = Promise.withResolvers<void>();
+    const clear = (async () => {
+      await gate.promise;
+      return await writer.clearLoginState(1001);
+    })();
+    const failure = (async () => {
+      await gate.promise;
+      return await observer.recordFailure({ triggerMethod: "mobile", userId: 1001 });
+    })();
+    gate.resolve();
+    const [cleared, recorded] = await Promise.all([clear, failure]);
+    if (recorded.failureCount === 5) {
+      expect(recorded.newlyRestricted).toBe(true);
+      expect(cleared.changed).toBe(true);
+    } else {
+      expect(recorded).toEqual({ failureCount: 1, newlyRestricted: false, remainingAttempts: 4, restriction: null });
+      expect(cleared.changed).toBe(false);
+    }
+    const stored = await scope.inspectLoginState(1001);
+    expect(stored).toEqual({
+      failureCount: recorded.failureCount === 5 ? 0 : 1,
+      restrictionTtl: -2,
+      indexedUntil: null,
+    });
+  });
 
-      if (recorded.failureCount === 5) {
-        expect(recorded.newlyRestricted).toBe(true);
-        expect(cleared.changed).toBe(true);
+  test.each(["get", "list"] as const)(
+    "%s removes an expired restriction from inventory without another reader cleaning first",
+    async (operation) => {
+      await recordFailures(1001);
+      await scope.setRestrictionExpiries([{ userId: 1001, remainingMilliseconds: 100 }]);
+      // Keep a future index score so cleanup must observe the expired authoritative key.
+      await scope.seedRestrictionIndex(1001, 60_000);
+      await waitForRedisCondition(
+        async () => (await scope.inspectLoginState(1001)).restrictionTtl === -2,
+        "restriction did not expire",
+      );
+      if (operation === "get") {
+        const result = await observer.getRestriction(1001);
+        expect(result).toBeNull();
       } else {
-        expect(recorded).toEqual({
-          failureCount: 1,
-          newlyRestricted: false,
-          remainingAttempts: 4,
-          restriction: null,
-        });
-        expect(cleared.changed).toBe(false);
+        const result = await observer.listRestrictions({ limit: 1, offset: 0 });
+        expect(result).toEqual({ items: [], total: 0 });
       }
+      const stored = await scope.inspectLoginState(1001);
+      expect(stored.indexedUntil).toBeNull();
+    },
+  );
 
-      const restriction = await observer.getRestriction(userId);
-      expect(restriction).toBeNull();
-      const inventory = await observer.listRestrictions({
-        limit: 1,
-        offset: 0,
-        userId,
-      });
-      expect(inventory).toEqual({
-        items: [],
-        total: 0,
-      });
-
-      const nextFailure = await writer.recordFailure({
-        triggerMethod: "password",
-        userId,
-      });
-      expect(nextFailure.failureCount).toBe(recorded.failureCount === 5 ? 1 : 2);
+  test("a skewed observer pages valid restrictions in expiry order while repairing stale index members", async () => {
+    for (const userId of [1001, 2002, 3003]) await recordFailures(userId);
+    await scope.setRestrictionExpiries([
+      { userId: 1001, remainingMilliseconds: 60_003 },
+      { userId: 2002, remainingMilliseconds: 60_002 },
+      { userId: 3003, remainingMilliseconds: 60_001 },
+    ]);
+    // The dangling entry sorts first, so page traversal must repair it before counting offsets.
+    await scope.seedRestrictionIndex(4004, 120_000);
+    await scope.seedRestrictionIndex(5005, -1_000);
+    const pages = [];
+    for (let offset = 0; offset < 4; offset += 1) {
+      pages.push(await observer.listRestrictions({ limit: 1, offset }));
     }
+    expect(pages.map((page) => page.items.map((item) => item.userId))).toEqual([[1001], [2002], [3003], []]);
+    expect(pages.map((page) => page.total)).toEqual([3, 3, 3, 3]);
+    const dangling = await scope.inspectLoginState(4004);
+    const expired = await scope.inspectLoginState(5005);
+    expect(dangling.indexedUntil).toBeNull();
+    expect(expired.indexedUntil).toBeNull();
   });
 
-  test("a skewed observer lists every near-simultaneous expiration once in stable order", async () => {
-    for (const userId of [1001, 2002, 3003]) {
-      for (let attempt = 0; attempt < 5; attempt += 1) {
-        await writer.recordFailure({
-          triggerMethod: attempt % 2 === 0 ? "password" : "mobile",
-          userId,
-        });
-      }
-    }
-
-    const result = await observer.listRestrictions({
-      limit: 3,
-      offset: 0,
-    });
-
-    expect(result.items.map((item) => item.userId).sort((left, right) => left - right)).toEqual([1001, 2002, 3003]);
-    expect(new Set(result.items.map((item) => item.userId)).size).toBe(3);
-    expect(result.items.map((item) => item.restrictedUntil)).toEqual(
-      [...result.items].map((item) => item.restrictedUntil).sort((left, right) => right - left),
-    );
-    expect(result.total).toBe(3);
+  test("an effective restriction is readable even when its inventory index is missing", async () => {
+    await recordFailures(1001);
+    await scope.removeRestrictionIndex(1001);
+    const restriction = await observer.getRestriction(1001);
+    expect(restriction).toMatchObject({ triggerMethod: "password", userId: 1001 });
   });
 });

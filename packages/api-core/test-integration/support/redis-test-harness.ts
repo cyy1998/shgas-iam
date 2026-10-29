@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
 import Redis from "ioredis";
 import type { LoginRestriction } from "../../src/login-restriction";
-import { createLoginRestriction, createRedisLoginRestrictionStore } from "../../src/login-restriction";
+import {
+  createLoginRestriction,
+  createRedisLoginRestrictionStore,
+  LOGIN_FAILURE_WINDOW_SECONDS,
+} from "../../src/login-restriction";
 import type { SubjectAccessBarrier, SubjectAccessBootstrap } from "../../src/subject-access";
 import {
   createRedisSubjectAccessStore,
@@ -17,6 +21,17 @@ const OBSERVER_CLOCK_SKEW_MS = 24 * 60 * 60 * 1000;
 export interface RedisTestScope {
   readonly writer: LoginRestriction;
   readonly observer: LoginRestriction;
+  readonly seedFailureHistory: (userId: number, agesMilliseconds: readonly number[]) => Promise<void>;
+  readonly setRestrictionExpiries: (
+    expirations: readonly { userId: number; remainingMilliseconds: number }[],
+  ) => Promise<void>;
+  readonly seedRestrictionIndex: (userId: number, remainingMilliseconds: number) => Promise<void>;
+  readonly removeRestrictionIndex: (userId: number) => Promise<void>;
+  readonly inspectLoginState: (userId: number) => Promise<{
+    failureCount: number;
+    restrictionTtl: number;
+    indexedUntil: string | null;
+  }>;
   readonly close: () => Promise<void>;
 }
 
@@ -96,6 +111,38 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
         close,
         observer,
         writer,
+        async seedFailureHistory(userId, agesMilliseconds) {
+          const now = await redisNow(writerRedis);
+          const key = `${keyPrefix}login-failures:user:${userId}`;
+          await writerRedis.zadd(key, ...agesMilliseconds.flatMap((age, index) => [now - age, `seed-${index}`]));
+          await writerRedis.expire(key, LOGIN_FAILURE_WINDOW_SECONDS);
+        },
+        async setRestrictionExpiries(expirations) {
+          const now = await redisNow(writerRedis);
+          for (const { userId, remainingMilliseconds } of expirations) {
+            const deadline = now + remainingMilliseconds;
+            await writerRedis.pexpireat(`${keyPrefix}login-blacklist:user:${userId}`, deadline);
+            await writerRedis.zadd(`${keyPrefix}login-blacklist:idx:users`, deadline, String(userId));
+          }
+        },
+        async seedRestrictionIndex(userId, remainingMilliseconds) {
+          await writerRedis.zadd(
+            `${keyPrefix}login-blacklist:idx:users`,
+            (await redisNow(writerRedis)) + remainingMilliseconds,
+            String(userId),
+          );
+        },
+        async removeRestrictionIndex(userId) {
+          await writerRedis.zrem(`${keyPrefix}login-blacklist:idx:users`, String(userId));
+        },
+        async inspectLoginState(userId) {
+          const [failureCount, restrictionTtl, indexedUntil] = await Promise.all([
+            writerRedis.zcard(`${keyPrefix}login-failures:user:${userId}`),
+            writerRedis.pttl(`${keyPrefix}login-blacklist:user:${userId}`),
+            writerRedis.zscore(`${keyPrefix}login-blacklist:idx:users`, String(userId)),
+          ]);
+          return { failureCount, restrictionTtl, indexedUntil };
+        },
       };
     },
     async createSubjectAccessScope(input) {
@@ -182,6 +229,11 @@ export async function createRedisTestHarness(): Promise<RedisTestHarness> {
       scopeClosers.length = 0;
     },
   };
+}
+
+async function redisNow(redis: Redis) {
+  const [seconds, microseconds] = await redis.time();
+  return Number(seconds) * 1_000 + Math.floor(Number(microseconds) / 1_000);
 }
 
 export function createRedisTestScopeCloser(input: { clients: readonly Redis[] }) {
