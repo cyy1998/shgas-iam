@@ -3,7 +3,7 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 
 export const integrationExecutors = ["bun", "vitest", "playwright"];
 
-export function integrationDeclarations(manifest, rootOwner = false) {
+export function integrationDeclarations(manifest) {
   const declarations = manifest.iamTest?.integration ?? {};
   if (!declarations || typeof declarations !== "object" || Array.isArray(declarations))
     throw new Error(`Invalid Integration declaration for ${manifest.name}`);
@@ -18,7 +18,7 @@ export function integrationDeclarations(manifest, rootOwner = false) {
       if (!suffix || typeof name !== "string" || !new RegExp(`^IAM_[A-Z_]+_TEST_${suffix}_URL$`).test(name))
         throw new Error(`Invalid ${service} environment mapping for ${manifest.name}:${executor}`);
     }
-    const task = `test:integration:${executor}${rootOwner ? ":root" : ""}`;
+    const task = `test:integration:${executor}`;
     if (!manifest.scripts?.[task]) throw new Error(`Missing declared Integration task ${manifest.name}#${task}`);
     return { executor, resources, task, environmentNames: Object.values(resources) };
   });
@@ -48,7 +48,7 @@ export function parseIntegrationArguments(args) {
 }
 
 export function selectIntegrationTasks(root, options) {
-  const manifestPaths = ["package.json", "e2e/system/package.json"];
+  const manifestPaths = ["e2e/system/package.json"];
   for (const directory of ["apps", "packages"]) {
     if (!existsSync(join(root, directory))) continue;
     for (const entry of readdirSync(join(root, directory), { withFileTypes: true }))
@@ -60,7 +60,7 @@ export function selectIntegrationTasks(root, options) {
       const manifest = JSON.parse(readFileSync(join(root, path), "utf8"));
       return {
         name: manifest.name,
-        directory: path === "package.json" ? "." : path.slice(0, -"/package.json".length),
+        directory: path.slice(0, -"/package.json".length),
         manifest,
       };
     });
@@ -74,9 +74,7 @@ export function selectIntegrationTasks(root, options) {
       !options.workspaces.some((workspace) => workspace === owner.name || workspace === owner.directory)
     )
       continue;
-    const rootOwner = owner.directory === ".";
-    const directory = `${rootOwner ? "scripts/" : ""}test-integration`;
-    const candidates = globSync(`${directory}/**/*.{integration.test.ts,integration.test.tsx,spec.ts}`, {
+    const candidates = globSync("test-integration/**/*.{integration.test.ts,integration.test.tsx,spec.ts}", {
       cwd: join(root, owner.directory),
     })
       .map((file) => file.replaceAll("\\", "/"))
@@ -90,7 +88,7 @@ export function selectIntegrationTasks(root, options) {
       })
     )
       continue;
-    const declarations = integrationDeclarations(owner.manifest, rootOwner);
+    const declarations = integrationDeclarations(owner.manifest);
     for (const file of candidates)
       if (
         !declarations.some(({ executor }) =>

@@ -35,7 +35,7 @@ try {
   const cwd = process.cwd();
   const manifest = JSON.parse(readFileSync(join(cwd, "package.json"), "utf8"));
   const root = repositoryRoot(cwd);
-  const declaration = integrationDeclarations(manifest, root === cwd).find((item) => item.executor === executor);
+  const declaration = integrationDeclarations(manifest).find((item) => item.executor === executor);
   if (!declaration) throw new Error(`No Integration declaration for ${manifest.name}:${executor}`);
   const names = declaration.environmentNames;
   if (names.length > 0) {
@@ -67,8 +67,7 @@ try {
   }
   if (executor === "vitest") args.push("--maxWorkers=1", "--no-file-parallelism", "--bail=1");
   if (executor === "playwright") args.push("--workers=1", "--max-failures=1");
-  const directory = root === cwd ? "scripts/test-integration" : "test-integration";
-  const directoryIndex = args.indexOf(directory);
+  const directoryIndex = args.indexOf("test-integration");
   if (directoryIndex >= 0) args.splice(directoryIndex, 1);
   args.push(...files);
   const pnpmCli = process.env.npm_execpath;

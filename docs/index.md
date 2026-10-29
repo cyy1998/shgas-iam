@@ -33,7 +33,7 @@
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 启动项目、查找代码   | [README](../README.md)、[仓库地图](architecture/repository-map.md)                                                                                     |
 | 修改代码或开展设计   | [仓库规则路由](../AGENTS.md)、[系统架构](architecture/system-architecture.md)                                                                          |
-| 开发、测试与验证     | [命令入口](development/commands.md)、[测试编排](architecture/testing-architecture.md)、[测试规范](development/testing.md)                              |
+| 开发、测试与验证     | [命令入口](development/commands.md)、[测试编排](architecture/testing-architecture.md)、[测试规范](development/testing.md)                              |     | 2026-10-29 | 2026-11-29 | Workspace 收集、根编排、缓存、资源隔离与生命周期。 |
 | 理解业务与决策       | [领域语言](../CONTEXT.md)、[ADR 清单](#架构决策)                                                                                                       |
 | 了解或使用功能       | [功能说明](features/README.md)、[功能清单](#功能说明)                                                                                                  |
 | 接入或修改接口       | [接入指南](guides/README.md)，字段与响应沿指南查代码定义                                                                                               |
@@ -94,7 +94,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [ADR-0004](adr/0004-adopt-upstream-first-matt-skills.md)                                   | decision | Current | 2026-10-25    | 2026-11-25  | 上游优先与手动薄适配；AFK 按 Spec 动态实施、集中评审及本地 squash 交付。                                            |
 | [ADR-0005](adr/0005-keep-live-login-state-in-redis.md)                                     | decision | Current | 2026-09-21    | 2026-10-31  | Redis 实时状态与生命周期时间权威。                                                                                  |
 | [ADR-0006](adr/0006-elevate-user-subject-identifier.md)                                    | decision | Current | 2026-09-21    | 2026-10-31  | 跨协议稳定 Subject Identifier 归属 IAM 身份域。                                                                     |
-| [ADR-0009](adr/0009-adopt-canonical-test-collections.md)                                   | decision | Current | 2026-10-15    | 2026-10-31  | 按真实资源归类、workspace 运行声明与每命令临时环境的取舍。                                                          |
+| [ADR-0009](adr/0009-adopt-canonical-test-collections.md)                                   | decision | Current | 2026-10-29    | 2026-11-29  | 按真实资源归类、workspace 声明与临时环境；root 工具链改用一次性验证。                                               |
 | [ADR-0011](adr/0011-model-employment-as-an-immutable-tenure-lifecycle.md)                  | decision | Current | 2026-09-21    | 2026-10-31  | 不可重开的任职期、父完整性与全库诊断。                                                                              |
 | [ADR-0012](adr/0012-model-client-maintenance-as-reversible-protocol-traffic-suspension.md) | decision | Current | 2026-09-21    | 2026-10-31  | Client 通行状态与永久撤销分离。                                                                                     |
 | [ADR-0013](adr/0013-guard-login-page-reentry-with-authentication-continuation.md)          | decision | Current | 2026-09-21    | 2026-10-31  | 认证续接、已有根复用与新鲜认证边界。                                                                                |
@@ -150,7 +150,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [前端架构](architecture/frontend-architecture.md)          | architecture | Current | 2026-10-25    | 2026-11-25  | 页面、请求、权限、状态与失败恢复的职责。           |
 | [仓库地图](architecture/repository-map.md)                 | architecture | Current | 2026-10-26    | 2026-11-26  | 代码、基础设施、工具与生成目录定位。               |
 | [系统架构视图](architecture/system-architecture.md)        | architecture | Current | 2026-10-26    | 2026-11-26  | 拓扑、信任边界、数据权威与恢复分工。               |
-| [测试编排架构](architecture/testing-architecture.md)       | architecture | Current | 2026-10-25    | 2026-11-25  | 收集、编排、缓存、资源隔离与生命周期。             |
+| [测试编排架构](architecture/testing-architecture.md)       | architecture | Current | 2026-10-29    | 2026-11-29  | Workspace 收集、根编排、缓存、资源隔离与生命周期。 |
 
 </details>
 
@@ -159,13 +159,13 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 <details>
 <summary>展开开发约定</summary>
 
-| Document                                              | Type        | Status  | Last verified | Next review | Notes                                                  |
-| ----------------------------------------------------- | ----------- | ------- | ------------- | ----------- | ------------------------------------------------------ |
-| [架构守卫规范](development/architecture-guard.md)     | development | Current | 2026-10-25    | 2026-11-25  | 静态守卫的观察范围、规则准入与测试要求。               |
-| [后端实现约定](development/backend-implementation.md) | development | Current | 2026-10-25    | 2026-11-25  | 响应、审计、日志、编排命名、factory 与数据库文件约定。 |
-| [编码风格与命名约定](development/coding-style.md)     | development | Current | 2026-10-25    | 2026-11-25  | TypeScript、formatter、文件命名与 import 风格。        |
-| [构建、测试与开发命令](development/commands.md)       | development | Current | 2026-10-26    | 2026-11-26  | 开发、构建、验证、AFK 与维护的命令和资源入口。         |
-| [测试规范](development/testing.md)                    | development | Current | 2026-10-25    | 2026-11-25  | 验证选择、测试分类、命名、断言与清理规则。             |
+| Document                                              | Type        | Status  | Last verified | Next review | Notes                                                     |
+| ----------------------------------------------------- | ----------- | ------- | ------------- | ----------- | --------------------------------------------------------- |
+| [架构守卫规范](development/architecture-guard.md)     | development | Current | 2026-10-29    | 2026-11-29  | 静态守卫的观察范围、规则准入与一次性验证要求。            |
+| [后端实现约定](development/backend-implementation.md) | development | Current | 2026-10-25    | 2026-11-25  | 响应、审计、日志、编排命名、factory 与数据库文件约定。    |
+| [编码风格与命名约定](development/coding-style.md)     | development | Current | 2026-10-25    | 2026-11-25  | TypeScript、formatter、文件命名与 import 风格。           |
+| [构建、测试与开发命令](development/commands.md)       | development | Current | 2026-10-29    | 2026-11-29  | 开发、构建、验证、AFK 与维护入口；root 工具链无常驻测试。 |
+| [测试规范](development/testing.md)                    | development | Current | 2026-10-29    | 2026-11-29  | 验证选择、分类、断言与清理；root 工具链一次性验证。       |
 
 </details>
 

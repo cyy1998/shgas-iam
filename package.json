@@ -14,14 +14,13 @@
     "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
     "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "test": "pnpm test:unit",
-    "test:unit": "turbo test:unit test:unit:root --concurrency=2",
-    "test:unit:root": "bun test --max-concurrency=2 scripts/sandcastle/__tests__ scripts/tooling/__tests__",
+    "test:unit": "turbo test:unit --concurrency=2",
     "test:integration": "node scripts/run-test-integration.mjs",
     "test:e2e": "turbo test:e2e --concurrency=1",
     "e2e:install": "pnpm --filter @iam/admin exec playwright install --with-deps chromium",
     "e2e:install:browsers": "pnpm --filter @iam/admin exec playwright install chromium",
     "typecheck": "turbo typecheck typecheck:root --concurrency=3",
-    "typecheck:root": "tsc --project scripts/sandcastle/tsconfig.json && tsc --project scripts/test-entry.tsconfig.json",
+    "typecheck:root": "tsc --project scripts/sandcastle/tsconfig.json && tsc --project scripts/tsconfig.json",
     "sandcastle": "tsx scripts/sandcastle/main.mts",
     "sandcastle:check": "tsx scripts/sandcastle/main.mts --check",
     "sandcastle:build": "tsx scripts/sandcastle/main.mts --build",
@@ -33,8 +32,7 @@
     "verify:static": "node scripts/verify.mjs --static",
     "verify:ci": "node scripts/run-verification-gate.mjs ci",
     "verify:release": "node scripts/run-verification-gate.mjs release",
-    "test:resources:cleanup": "node scripts/run-test-resource-cleanup.mjs",
-    "test:integration:bun:root": "node scripts/run-package-integration.mjs bun -- bun test scripts/test-integration"
+    "test:resources:cleanup": "node scripts/run-test-resource-cleanup.mjs"
   },
   "devDependencies": {
     "@ai-hero/sandcastle": "0.12.0",
@@ -53,10 +51,5 @@
     "tsx": "4.23.15",
     "turbo": "^2.10.5",
     "typescript": "npm:@typescript/typescript6@6.0.2"
-  },
-  "iamTest": {
-    "integration": {
-      "bun": {}
-    }
   }
 }

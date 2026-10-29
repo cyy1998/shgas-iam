@@ -83,7 +83,7 @@ try {
     if (selected.length === 0) continue;
     controller.signal.throwIfAborted();
     const commands = [...new Set(selected.map((task) => task.task))];
-    const filters = [...new Set(selected.map((task) => `--filter=${task.directory === "." ? "//" : task.name}`))];
+    const filters = [...new Set(selected.map((task) => `--filter=${task.name}`))];
     const result = await runOwnedCommand({
       ...pnpmCommand(pnpmCli, ["exec", "turbo", "run", ...commands, ...filters, "--concurrency=1", "--no-daemon"]),
       cwd: root,

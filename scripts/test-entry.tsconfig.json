@@ -1,7 +1,0 @@
-{
-  "extends": "./sandcastle/tsconfig.json",
-  "compilerOptions": {
-    "allowJs": true
-  },
-  "include": ["./tooling/**/*.ts", "./test-integration/**/*.ts", "./test-integration/**/*.mts"]
-}

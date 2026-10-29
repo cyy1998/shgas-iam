@@ -17,7 +17,6 @@
     "test:unit": {
       "dependsOn": ["transit"]
     },
-    "//#test:unit:root": {},
     "//#typecheck:root": {
       "inputs": [
         "$TURBO_ROOT$/scripts/**",
@@ -86,16 +85,6 @@
       "passThroughEnv": [
         "IAM_*_TEST_DATABASE_URL",
         "IAM_*_TEST_REDIS_URL",
-        "IAM_TEST_RESOURCE_RUN_ID",
-        "IAM_TEST_RESOURCE_RECORD",
-        "IAM_TEST_INTEGRATION_SELECTION",
-        "IAM_TEST_RESOURCE_REGISTRY",
-        "PLAYWRIGHT_BROWSERS_PATH"
-      ]
-    },
-    "//#test:integration:bun:root": {
-      "cache": false,
-      "passThroughEnv": [
         "IAM_TEST_RESOURCE_RUN_ID",
         "IAM_TEST_RESOURCE_RECORD",
         "IAM_TEST_INTEGRATION_SELECTION",

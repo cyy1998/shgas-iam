@@ -19,32 +19,12 @@ git diff --check
 手动验证与修复后的结果复用见[工作流补充](../agents/workflow.md#验证节奏)，AFK 交接与 Spec 最终检查见
 [AFK 工作流](../agents/sandcastle-afk.md#验证节奏)。
 
-根工具链变化的聚焦 Bun 测试：
-
-```bash
-pnpm test:integration --workspace iam-monorepo --file scripts/test-integration/architecture/architecture-guard.integration.test.ts
-pnpm test:integration --workspace iam-monorepo --file scripts/test-integration/runner/test-orchestration.integration.test.ts
-bun test scripts/tooling/__tests__/tooling-contracts.test.ts
-bun test scripts/tooling/__tests__/quality-tooling-ownership.test.ts
-```
-
-Canonical collection 与编排变化还应运行：
-
-```bash
-pnpm test:unit
-pnpm test:integration
-```
+根工具链变化按[一次性验证约定](testing.md#root-工具链的一次性验证)执行；没有 root 自有 Unit／Integration 入口。
+测试收集或编排变化时，核对受影响 workspace 的选择结果，并通过 `pnpm test:unit`、
+`pnpm test:integration --workspace <owner> [--file <path>]` 验证实际接线，范围按改动选择。
 
 完整 root Gate 只在准备 merge、release 或用户明确要求时运行；ticket 实现内循环不重复运行。按需要选择基础
 `pnpm verify`、全资源 `pnpm verify:ci` 或包含 Full-system E2E 的 `pnpm verify:release`。
-
-统一格式与规则命令的真实 CLI 行为使用临时 Git 仓库，通过根 `pnpm test:integration --workspace iam-monorepo`
-收集，不需要数据库或 Redis。
-
-该 root Integration collection 还通过真实 Docker CLI 验证 `.dockerignore` 的构建上下文排除与 Custom SSO Compose
-环境传值，需要可用的 Docker CLI、Compose、Buildx 和运行中的 Docker server。构建只使用合成临时上下文，
-从 `scratch` 导出本地文件；配置检查显式提供合成 env-file。这些测试不启动 runtime 容器，不加载本地 `.env`，
-不进入默认 `pnpm verify`；环境缺失时直接失败。
 
 ## Sandcastle AFK
 
@@ -284,7 +264,6 @@ pnpm test:integration
 pnpm test:integration --workspace @iam/worker
 pnpm test:integration --workspace @iam/worker --file test-integration/session-clear/session-clear-command.integration.test.ts
 pnpm test:integration --workspace apps/admin --workspace apps/sso
-pnpm test:integration --workspace iam-monorepo --file scripts/test-integration/resources/managed-resources.integration.test.ts
 ```
 
 每个 owner 在自己的 `package.json` 声明执行器与服务映射，例如 API：
@@ -309,7 +288,7 @@ pnpm test:integration --workspace iam-monorepo --file scripts/test-integration/r
 根入口与内部 runner 使用同一解析器，保留既有内部连接变量名。单文件也使用所属 workspace＋执行器声明的完整资源集合，
 接受多启动部分服务，不引入逐文件资源标签。浏览器、HTTP server、子进程和临时目录继续由所属 harness 管理。
 
-内部脚本为 `test:integration:bun|vitest|playwright`，root 为 `test:integration:bun:root`；脚本通过
+workspace 内部脚本为 `test:integration:bun|vitest|playwright`；脚本通过
 `scripts/run-package-integration.mjs <executor> [--preflight <path>] -- <executor> ...` 消费本次选择和环境。
 这些脚本不作为 package-local 资源测试入口；手动和 AFK 均通过根命令选择 owner/file。Unit 支持 package-local 执行：
 
@@ -330,8 +309,7 @@ pnpm --filter @iam/admin test:unit
 pnpm test:resources:cleanup --record test-results/integration/<run-id>/run.json
 ```
 
-Root 的资源 owner 测试调用受控独立根命令验证创建、故障、keep 与恢复，外层不另建无用资源；其他 root Integration
-按 architecture、docker、quality、runner、sandcastle 等功能组织。
+Root 仅提供聚合编排，`iam-monorepo` 不是可选择的 Integration workspace。
 Admin/SSO Playwright 保留 API mocks、package-local `webServer`、base URL 与单 Chromium project，属于 Integration。
 完整 OIDC 协议由 OIDC package 与 API 的真实资源集合验证；正式固定套件仍使用下方独立入口。
 
@@ -578,7 +556,8 @@ lint-staged 会尝试还原原始状态。若自动恢复失败，保留其输�
 不要用全仓 `git add` 或清理 stash 掩盖冲突。
 
 Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit；最终候选仍由 verify 的全仓只读检查覆盖。
-真实提交、部分暂存和失败恢复测试通过 `pnpm test:integration --workspace iam-monorepo --file scripts/test-integration/quality/pre-commit.integration.test.ts` 执行。
+提交工具链变化时，在独立临时 Git 仓库中按[一次性验证约定](testing.md#root-工具链的一次性验证)
+检查涉及的真实提交、部分暂存和失败恢复行为。
 
 ## Workspace 入口
 

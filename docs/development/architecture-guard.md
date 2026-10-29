@@ -64,7 +64,7 @@ Architecture Guard 只覆盖仓库规范的静态写法。对同一依赖边采�
 3. 它防止真实的跨 module 所有权或依赖方向回退；
 4. typecheck、package exports、behavior/contract test、process smoke 或专用外部资源通道不能更直接地覆盖它；
 5. 合法 owner 例外只需按少量路径或 module 表达，不需要枚举 implementation 细节；
-6. 通过公开 interface `analyzeRepositoryArchitecture(repoRoot)` 至少提供一个允许和一个违规的 canonical fixture；
+6. 通过公开 interface `analyzeRepositoryArchitecture(repoRoot)`，用至少一个允许和一个违规的临时 canonical fixture 完成一次性验证；
 7. violation 具有稳定的 rule ID、文件、行号和维护者可理解的诊断。
 
 只要规则需要新增索引事实，或需要允许观察模型之外的 symbol/member/literal/callback/dataflow/provenance、实现方法枚举，
@@ -72,8 +72,8 @@ Architecture Guard 只覆盖仓库规范的静态写法。对同一依赖边采�
 
 ## 测试纪律
 
-- Architecture Guard 只通过 `analyzeRepositoryArchitecture(repoRoot)` 测试。
-- 每条语义事实至少有一个允许 fixture 和一个违规 fixture。
+- Architecture Guard 按[Root 工具链的一次性验证](testing.md#root-工具链的一次性验证)执行，不维护常驻测试集合。
+- 通过 `analyzeRepositoryArchitecture(repoRoot)` 验证改动；每条受影响的语义事实至少有一个允许和一个违规的临时 fixture。
 - 共享静态 dependency extraction/normalization 可以通过该外部 interface 的少量 canonical fixtures 覆盖静态
   import、side-effect import、re-export、type/value 分类和受支持 alias class；这是共享观察模型的契约，不按业务规则
   重复。

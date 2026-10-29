@@ -17,7 +17,7 @@ status: accepted
 真实资源由正式测试命令创建和销毁，不回退到开发或运行资源。代价是基础通过不能代替真实数据库、进程、浏览器和
 完整系统证据，执行这些通道仍需满足其 Docker、工具链和浏览器前提。
 
-测试由 owner-local 窄目录自动收集；root Unit 使用 `scripts/<module>/__tests__/`，保留 Turbo task 与并发预算。
+测试由 workspace owner-local 窄目录自动收集，root 只提供聚合编排；工具链自身适用下文的一次性验证修订。
 不再维护独立 Collection Guard：其 runner list 与 Turbo dry-run 子进程增加检查耗时，专属 adapter、fixtures 和文档增加
 维护成本，而检查通过仍不能证明测试断言实际执行或通过。
 
@@ -58,7 +58,8 @@ Docker 管理权限和宿主网络访问范围，以减少另一套 daemon、地
 
 - 取消 `component`、`process`、`redis`、`postgres`、`composition`、`browser` 六个强制分类作为目录和公开命令的组织依据。
   资源集合由 workspace 与执行器共同声明，保留原有内部连接变量名。
-- 全仓现有测试的重新归类属于同一次重构，覆盖 Unit、Integration、E2E，以及 root tooling 和测试 harness 自身的测试。
+- 当时全仓测试的重新归类覆盖 Unit、Integration、E2E，以及 root tooling 和测试 harness 自身的测试；
+  root tooling 的常驻集合现已由下文的一次性验证修订替代。
   调查中已发现的 Integration 迁移候选只是起点，不是最终迁移范围。
 
 ### 分类与执行取舍
@@ -86,10 +87,9 @@ Unit 可缓存并采用受控并行；Integration 与 E2E 不缓存、默认串�
 
 ### 目录、配置与迁移边界
 
-Unit 统一放在被测模块对应层级的 `__tests__/` 目录，保留普通 `*.test.ts[x]` 与 DOM Unit 的
-`*.dom.test.ts[x]` 后缀；不再将 Unit 文件直接散放在生产模块旁。Root tooling 使用对应的
-`scripts/<module>/__tests__/`。Integration 放在所属 owner 的 `test-integration/`，内部按功能组织，Root tooling
-使用 `scripts/test-integration/`；不再要求六类 profile 子目录。E2E 放在仓库 `e2e/` 下，现有完整系统 workspace
+Unit 统一放在 workspace 被测模块对应层级的 `__tests__/` 目录，保留普通 `*.test.ts[x]` 与 DOM Unit 的
+`*.dom.test.ts[x]` 后缀；不再将 Unit 文件直接散放在生产模块旁。Integration 放在所属 workspace 的
+`test-integration/`，内部按功能组织；不再要求六类 profile 子目录。E2E 放在仓库 `e2e/` 下，现有完整系统 workspace
 仍由 `e2e/system/` 承担。该 workspace 的工具测试也按实际资源分别进入对应的 `__tests__/` 或 `test-integration/`。
 执行器所需的文件后缀继续保留；使用 Playwright 本身不使测试成为 E2E。
 
@@ -126,6 +126,17 @@ Bun、Vitest、Playwright 保留各自必要的原生配置；root 与 package r
 
 最终执行完整 `verify:release`，覆盖 Unit、Integration 和完整系统 E2E，记录实际运行结果及未执行范围。
 全量验证通过才满足完成标准；文件位置、测试数量变化、静态扫描或历史通过记录本身不能替代行为验证。
+
+## Root 工具链改用一次性验证
+
+2026-10-29 接受修订：删除 root 自有的 Unit、Integration 及专属收集接线，保留 root 聚合命令、生产工具和静态检查。
+Root 工具链改动时按影响范围执行一次性验证，具体边界和流程由[测试规范](../development/testing.md#root-工具链的一次性验证)维护。
+App/package 和 `e2e/system` 的测试集合不受此修订影响。
+
+Root 工具链变更频率较低，其常驻测试的 Git、子进程与临时环境成本占用了大量日常验证时间。
+本次选择删除常驻集合，而非继续优化其 fixture 或增加并发，以减少执行与维护成本。
+代价是工具链回归不再被这些常驻行为测试自动发现，依靠修改时的一次性验证、静态检查与受影响 workspace 的实际接线验证。
+此前 root tooling 纳入常驻 collection 的约定由本节取代。
 
 ## 当前契约与历史
 

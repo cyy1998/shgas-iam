@@ -22,9 +22,27 @@
 Windows 用例通过进程内事件进入 signal listener 时，只证明监听后的处理，不证明 POSIX 信号投递。
 固定 OIDC 协议套件独立执行，普通组合测试不能替代它，见[协议套件入口](commands.md#oidc-协议套件)。
 
-共享资源管理模块集中验证故障与恢复，消费方验证真实接线及自身差异，不复制完整故障矩阵。
+共享资源管理模块变更时集中验证故障与恢复，消费方验证真实接线及自身差异，不复制完整故障矩阵；
+root 工具链适用下文的一次性验证约定。
 生产连接关闭、只读作用、非目标数据保护在 fixture 重置前断言；环境销毁不能充当业务验证。
 新增跨模块行为时，明确观察时点、失败作用和恢复责任，再选择相应测试；普通内部用例增删不维护文档覆盖清单。
+
+## Root 工具链的一次性验证
+
+Root 工具链包括仓库级测试编排与资源管理、Sandcastle、质量命令与提交 hook、架构／文档／环境变量守卫、
+Docker 配置检查等开发维护工具。它们不保留常驻 Unit 或 Integration 集合，也不迁移到其他 workspace 继续收集。
+各 app/package 及 `e2e/system` 自有测试仍按原有通道维护；根聚合命令继续运行这些 workspace 的测试。
+
+修改 root 工具链时，按本次改动进行一次性验证：
+
+1. 选择能观察受影响行为的真实命令、临时脚本或 fixture，验证正常结果及涉及的失败、退出码和清理行为。
+   只读规则检查器用临时允许／违规输入验证；进程、Git、Docker 等行为使用独立临时资源。
+2. 涉及 app/package 接线或完整系统行为时，通过正式根入口运行受影响的现有 Integration 或 E2E。
+3. 在交付摘要记录实际命令、结果和未验证范围；完成后删除临时测试脚本与 fixture，所需日志可留在忽略的
+   `test-results/` 中，不加入常驻测试集合或新增自动测试门禁。
+
+Root 的类型检查、格式与 lint、架构／文档等静态检查，以及显式调用的诊断命令继续保留。
+该取舍减少日常测试耗时与维护成本，接受 root 工具链不再由常驻行为测试持续检测回归；后续工具链改动均执行上述验证。
 
 ## 测试分类
 
@@ -41,12 +59,12 @@ Windows 用例通过进程内事件进入 signal listener 时，只证明监听�
 
 ## 路径与命名
 
-| Collection               | 位置                                                                                                     |
-| ------------------------ | -------------------------------------------------------------------------------------------------------- |
-| Unit                     | 模块对应层级的 `__tests__/*.test.ts[x]`；root 工具同样按模块放置                                         |
-| Bun / Vitest Integration | owner 的 `test-integration/<feature>/**/*.integration.test.ts[x]`；root 位于 `scripts/test-integration/` |
-| Playwright Integration   | owner 的 `test-integration/<feature>/**/*.spec.ts`                                                       |
-| Full-system E2E          | `e2e/system/**/*.spec.ts`                                                                                |
+| Collection               | 位置                                                                  |
+| ------------------------ | --------------------------------------------------------------------- |
+| Unit                     | workspace 模块对应层级的 `__tests__/*.test.ts[x]`                     |
+| Bun / Vitest Integration | workspace 的 `test-integration/<feature>/**/*.integration.test.ts[x]` |
+| Playwright Integration   | owner 的 `test-integration/<feature>/**/*.spec.ts`                    |
+| Full-system E2E          | `e2e/system/**/*.spec.ts`                                             |
 
 Admin/SSO 普通 Unit 使用 Node，确需浏览器全局或 React DOM 的用例使用 `*.dom.test.ts[x]` 并进入 jsdom。
 Node/DOM 是同一 Unit runner 内的环境，不增加公开层级或命令；只有 DOM 加载浏览器兼容 setup。

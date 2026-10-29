@@ -1,7 +1,8 @@
 # 测试编排架构
 
 本文说明测试收集、执行、缓存与资源生命周期。测试分类和编写规则见[测试规范](../development/testing.md)，
-命令与参数见[开发命令](../development/commands.md)。Collection 是一个 runner 拥有的测试集合，owner 是维护它的 app、package 或 root 工具。
+命令与参数见[开发命令](../development/commands.md)。Collection 是一个 runner 拥有的测试集合，owner 是维护它的 app、package 或 `e2e/system` workspace。
+Root 工具链按[一次性验证约定](../development/testing.md#root-工具链的一次性验证)维护，不拥有常驻测试集合。
 
 ## 收集与编排
 
@@ -15,7 +16,7 @@ Admin/SSO 的 Node 与 DOM Unit 在各自单个 Vitest 进程中运行，规则�
 ### Root 与 package commands
 
 Turbo 是唯一跨 package 编排器。Root 聚合 Unit，统一准备 Integration 资源，并把完整 E2E 交给 `e2e/system`。
-Root Integration 与 package runner 共用 manifest 的 `iamTest.integration` 声明，以 workspace 和执行器选择资源。
+根 Integration 编排器与 package runner 共用 workspace manifest 的 `iamTest.integration` 声明，以 workspace 和执行器选择资源。
 单文件筛选仍使用该资源集合，空声明不启动 PG/Redis。内部 runner 只消费本次环境，校验 run ID、记录和完整内部 URL。
 
 资源测试只从正式根入口运行，不接入任意外部 URL 或另建第二套环境。每条命令独立创建环境，可与其他命令并行，
@@ -35,7 +36,7 @@ Integration 与 E2E 禁用缓存。仓库配置、runner 和资源工具的变�
 Gateway Unit 使用包内合成 manifest 样例，由默认 workspace inputs 跟踪，不读取调用方部署配置。
 
 Strict env 仅透传 owner 所需的内部地址、run ID、记录、筛选及工具路径；进程归属 marker 只透传、不计入 hash。
-Root typecheck 包含工具测试和相关源码。任务定义见[turbo.json](../../turbo.json)。
+Root typecheck 检查工具源码。任务定义见[turbo.json](../../turbo.json)。
 
 ## 并发、timeout 与清理
 
@@ -56,8 +57,8 @@ Root 资源管理模块用 Compose 创建可销毁环境，按声明只启动需
 默认清理容器、网络及数据卷，保留日志和记录；显式 keep 或异常残留按记录恢复，不按前缀猜测目标或全局 prune。
 
 辅助诊断采集失败只告警并继续清理；初始化、readiness、必需输入、断言证据、进程关闭、数据重置或环境清理失败均使命令非零。
-资源生命周期的完整故障验证集中在
-[根资源测试](../../scripts/test-integration/resources/managed-resources.integration.test.ts)，消费方另证真实接线。
+资源生命周期变更按[一次性验证约定](../development/testing.md#root-工具链的一次性验证)检查涉及的故障与恢复，
+消费方另证真实接线。
 
 AFK 使用同一根入口和每命令生命周期。外层须确认 sandbox 已停止，再按 registry 清理，尊重 keep；无法确认时保留恢复记录。
 宿主访问与恢复操作见[AFK 工作流](../agents/sandcastle-afk.md)。
