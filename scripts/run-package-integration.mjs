@@ -2,6 +2,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 import { integrationDeclarations, selectIntegrationTasks } from "./test-resources/integration-selection.mjs";
 import { formatResourceFailure, readManagedResourceRun } from "./test-resources/managed-resources.mjs";
 import { pnpmCommand, runOwnedCommand } from "./test-resources/owned-command.mjs";
@@ -20,14 +21,18 @@ const controller = new AbortController();
 const interrupt = () => controller.abort(new Error("Package Integration interrupted"));
 process.on("SIGINT", interrupt);
 process.on("SIGTERM", interrupt);
+let resources;
 try {
   const parameters = process.argv.slice(2);
   const executor = parameters.shift();
   let preflight;
-  if (parameters[0] === "--preflight") {
-    parameters.shift();
-    preflight = parameters.shift();
-    if (!preflight) throw new Error("--preflight requires a script path");
+  let resourceProvider;
+  while (["--preflight", "--resources"].includes(parameters[0])) {
+    const option = parameters.shift();
+    const path = parameters.shift();
+    if (!path) throw new Error(`${option} requires a script path`);
+    if (option === "--preflight") preflight = path;
+    else resourceProvider = path;
   }
   const [separator, executable, ...arguments_] = parameters;
   if (separator !== "--" || executable !== executor)
@@ -82,9 +87,14 @@ try {
     });
     if (result.exitCode !== 0) throw new Error(`Browser preflight failed with exit ${result.exitCode}`);
   }
+  if (resourceProvider) {
+    const provider = await import(pathToFileURL(resolve(cwd, resourceProvider)).href);
+    resources = await provider.prepare({ root, signal: controller.signal });
+  }
   const result = await runOwnedCommand({
     ...pnpmCommand(pnpmCli, ["exec", executable, ...args]),
     cwd,
+    env: { ...process.env, ...resources?.environment },
     signal: controller.signal,
     inheritOutput: true,
   });
@@ -93,6 +103,12 @@ try {
   console.error(formatResourceFailure(error));
   process.exitCode = 1;
 } finally {
+  try {
+    await resources?.close();
+  } catch (error) {
+    console.error(formatResourceFailure(error));
+    process.exitCode = 1;
+  }
   process.off("SIGINT", interrupt);
   process.off("SIGTERM", interrupt);
 }

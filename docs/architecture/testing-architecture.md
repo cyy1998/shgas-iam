@@ -72,6 +72,11 @@ Redis 完成业务观察后先停止本例全部 consumer、子进程和连接�
 非目标数据保护、只读行为和生产关闭必须在 reset 前观察，普通 fixture 无需逐键登记清理或等锁自然过期。
 Worker 保留生产连接防误用检查，不另设 cleanup URL 或跨环境推断 Redis 身份。共享连接的取消只能作用于本次 owner，不能影响并行任务。
 
+Gateway Integration 由 package runner 的资源 provider 持有本次 APISIX/etcd，首次租用才启动，跨文件串行复用。
+每例先结束 Gateway 进程、调用连接、故障代理及在途转发，再直连 Admin 按依赖顺序删除七类完整资源并回读空基线。
+用例或收尾失败后停止 collection，不重建环境继续；父 runner 结束后清理准确 project，root 在所属命令的子资源登记中兜底恢复。
+测试只使用一套固定配置，不承担调用方 dev/prod 部署配置验收。
+
 ### 浏览器 harness 与产物
 
 API 协议浏览器测试使用真实候选 API、动态 RP 和专用资源，不 mock IAM 协议请求。

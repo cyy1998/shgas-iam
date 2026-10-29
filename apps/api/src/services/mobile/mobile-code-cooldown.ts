@@ -22,10 +22,10 @@ function seconds(value: unknown): number {
   return Math.ceil(value / 1000);
 }
 
-export function createMobileCodeCooldown(redis: Pick<RedisPort, "eval">) {
+export function createMobileCodeCooldown(redis: Pick<RedisPort, "eval">, cooldownMilliseconds = COOLDOWN_MILLISECONDS) {
   return {
     async acquire(phone: string): Promise<number> {
-      return seconds(await redis.eval(acquireScript, 1, key(phone), String(COOLDOWN_MILLISECONDS)));
+      return seconds(await redis.eval(acquireScript, 1, key(phone), String(cooldownMilliseconds)));
     },
     async remainingSeconds(phone: string): Promise<number> {
       const remaining = await redis.eval('return redis.call("PTTL", KEYS[1])', 1, key(phone));

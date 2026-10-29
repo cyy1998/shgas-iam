@@ -11,7 +11,7 @@ import { closeApiRedisConnection, ownApiTestExecutor, resetApiRedisTestDatabase 
 
 afterEach(resetApiRedisTestDatabase);
 
-async function fixture() {
+async function fixture(cooldownMilliseconds?: number) {
   const url = process.env.IAM_API_TEST_REDIS_URL;
   if (!url) throw new Error("IAM_API_TEST_REDIS_URL is required");
   const keyPrefix = `sms-cooldown-test:${randomUUID()}:`;
@@ -28,7 +28,7 @@ async function fixture() {
   const services = clients.map((redis) =>
     createMobileService({
       redis,
-      cooldown: createMobileCodeCooldown(redis),
+      cooldown: createMobileCodeCooldown(redis, cooldownMilliseconds),
       smsSender: { sendVerificationCode: sender, sendMessage: async () => true },
       userRepository: { getUserByMobile: async () => ({ id: 1 }) },
       config: { verificationCodeTtlSeconds: 180 },
@@ -114,22 +114,22 @@ test("disconnected Redis refuses sending before the provider is called", async (
   }
 });
 
-test("a rejected retry does not slide the real 60 second expiry", async () => {
-  const f = await fixture();
+test("a rejected retry does not slide the configured expiry", async () => {
+  // Two real Redis seconds exercise Retry-After rounding and expiry without waiting for the production minute.
+  const f = await fixture(2_000);
   try {
     await f.services[0]!.sendCode("13800000000", "login");
     await Bun.sleep(1100);
     const result = await Promise.allSettled([f.services[1]!.sendCode("13800000000", "login")]);
-    expect(result[0]).toMatchObject({ status: "rejected", reason: { code: ApiErrorCode.SmsCooldown } });
-    if (result[0]?.status === "rejected") {
-      expect(result[0].reason.retryAfterSeconds).toBeGreaterThan(0);
-      expect(result[0].reason.retryAfterSeconds).toBeLessThanOrEqual(59);
-    }
-    await Bun.sleep(59_000);
+    expect(result[0]).toMatchObject({
+      status: "rejected",
+      reason: { code: ApiErrorCode.SmsCooldown, retryAfterSeconds: 1 },
+    });
+    await Bun.sleep(1100);
     const sent = await f.services[1]!.sendCode("13800000000", "login");
     expect(sent).toBe(true);
     expect(f.sender).toHaveBeenCalledTimes(2);
   } finally {
     await f.close();
   }
-}, 65_000);
+});

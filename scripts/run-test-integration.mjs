@@ -12,6 +12,8 @@ import {
   finishManagedResourceRun,
   formatResourceFailure,
   managedServicePort,
+  readManagedResourceRegistry,
+  readManagedResourceRun,
   saveManagedResourceRun,
   startManagedResources,
 } from "./test-resources/managed-resources.mjs";
@@ -105,6 +107,29 @@ try {
   clearTimeout(timer);
   if (run) {
     if (executionStart !== undefined) run.record.durations.executeMs = Math.round(performance.now() - executionStart);
+    // Package providers register children before starting them. The root owns recovery
+    // after the owned command tree is joined, including interrupted package parents.
+    try {
+      const children = await readManagedResourceRegistry(run.root, `${run.record.artifactDirectory}/children.jsonl`);
+      for (const path of children.reverse()) {
+        try {
+          const child = await readManagedResourceRun(run.root, path);
+          if (child.record.status === "cleaned" || child.record.status === "kept") continue;
+          if (child.record.status === "created") {
+            child.record.status = "cleaned";
+            await saveManagedResourceRun(child);
+          } else {
+            await finishManagedResourceRun(child, {
+              cleanupTimeoutMs: parseIntegrationArguments(process.argv.slice(2)).cleanupTimeoutMs,
+            });
+          }
+        } catch (error) {
+          failures.push(error);
+        }
+      }
+    } catch (error) {
+      failures.push(error);
+    }
     try {
       await finishManagedResourceRun(run, {
         cleanupTimeoutMs: parseIntegrationArguments(process.argv.slice(2)).cleanupTimeoutMs,

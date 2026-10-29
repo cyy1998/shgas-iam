@@ -20,3 +20,16 @@ deployment:
 apisix:
   node_listen: 9080
   enable_admin: true
+
+plugins:
+  - request-id
+  - opentelemetry
+  - key-auth
+  - proxy-rewrite
+
+plugin_attr:
+  opentelemetry:
+    set_ngx_var: true
+    collector:
+      address: 127.0.0.1:9
+      request_timeout: 3

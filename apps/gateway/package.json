@@ -13,7 +13,7 @@
     "typecheck": "pnpm exec tsc --noEmit",
     "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
     "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check",
-    "test:integration:bun": "node ../../scripts/run-package-integration.mjs bun -- bun test test-integration"
+    "test:integration:bun": "node ../../scripts/run-package-integration.mjs bun --resources test-integration/support/apisix-provider.mjs -- bun test test-integration"
   },
   "dependencies": {
     "@iam/api-core": "workspace:*",
