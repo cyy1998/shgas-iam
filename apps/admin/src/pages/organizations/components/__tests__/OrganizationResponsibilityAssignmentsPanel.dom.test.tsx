@@ -110,7 +110,7 @@ describe("OrganizationResponsibilityAssignmentsPanel", () => {
     ConfigProvider.config({ holderRender: undefined });
   });
 
-  it("loads the default Open page and opens detail by stable numeric id", async () => {
+  it("loads and refreshes assignment detail within the host Organization after a lifecycle command", async () => {
     responsibilityService.detailAssignment.mockResolvedValue(assignment);
 
     const { user } = render(<OrganizationResponsibilityAssignmentsPanel orgCode="FIN" />);
@@ -136,6 +136,34 @@ describe("OrganizationResponsibilityAssignmentsPanel", () => {
     expect(within(dialog).getByText("任命 #101")).toBeInTheDocument();
     expect(within(dialog).getByText("财务部（FIN）")).toBeInTheDocument();
     expect(within(dialog).getByText("集团 / 财务部")).toBeInTheDocument();
+
+    const paused = {
+      ...assignment,
+      status: OrganizationResponsibilityAssignmentStatus.Pause,
+      allowedActions: {
+        pause: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
+        resume: { allowed: true, reason: null },
+        end: { allowed: true, reason: null },
+      },
+    };
+    responsibilityService.detailAssignment.mockResolvedValue(paused);
+    responsibilityService.listAssignments.mockResolvedValue({ items: [paused], total: 1, nextCursor: null });
+    await user.click(within(dialog).getByRole("button", { name: "暂停任命" }));
+
+    expect(await within(dialog).findByRole("button", { name: "恢复任命" })).toBeVisible();
+    expect(within(dialog).queryByRole("button", { name: "暂停任命" })).not.toBeInTheDocument();
+    expect(responsibilityService.pauseAssignment).toHaveBeenCalledExactlyOnceWith({ id: 101 });
+    expect(responsibilityService.detailAssignment).toHaveBeenNthCalledWith(2, { orgCode: "FIN", id: 101 });
+    await waitFor(() => expect(responsibilityService.listAssignments).toHaveBeenCalledTimes(2));
+    expect(responsibilityService.listAssignments).toHaveBeenLastCalledWith({
+      targetOrganizationCode: "FIN",
+      lifecycle: "open",
+      pageNum: 1,
+      pageSize: 20,
+    });
+    const row = screen.getByRole("button", { name: "详情" }).closest("tr");
+    if (!row) throw new Error("Assignment row is missing");
+    expect(within(row).getByText("暂停")).toBeVisible();
   });
 
   it("creates an assignment with only the fixed organization, type and holder employment", async () => {

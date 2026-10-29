@@ -8,7 +8,7 @@ import {
   OrganizationStatus,
   OrganizationType,
 } from "@iam/contracts";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { fulfillJson, fulfillTrpc, mockAdminApi, parseTrpcBatchInput } from "../fixtures";
 
 function allowedActionsForStatus(status: OrganizationResponsibilityAssignmentStatus) {
@@ -158,7 +158,7 @@ test("creates a responsibility assignment from the global toolbar without exposi
   await expect(dialog).toBeHidden();
 });
 
-async function manageLifecycle(page: Page, changed: boolean) {
+test("hydrates global filters and manages the complete lifecycle with audit refresh", async ({ page }) => {
   await mockAdminApi(page);
   const searchInputs: unknown[] = [];
   const pauseInputs: unknown[] = [];
@@ -213,18 +213,18 @@ async function manageLifecycle(page: Page, changed: boolean) {
   await page.route("**/rpc/admin.organizationResponsibility.pauseAssignment**", (route) => {
     pauseInputs.push(parseTrpcBatchInput(route));
     currentStatus = OrganizationResponsibilityAssignmentStatus.Pause;
-    return fulfillTrpc(route, { changed, result: null });
+    return fulfillTrpc(route, { changed: true, result: null });
   });
   await page.route("**/rpc/admin.organizationResponsibility.resumeAssignment**", (route) => {
     resumeInputs.push(parseTrpcBatchInput(route));
     currentStatus = OrganizationResponsibilityAssignmentStatus.Enable;
-    return fulfillTrpc(route, { changed, result: null });
+    return fulfillTrpc(route, { changed: true, result: null });
   });
   await page.route("**/rpc/admin.organizationResponsibility.endAssignment**", (route) => {
     endInputs.push(parseTrpcBatchInput(route));
     currentStatus = OrganizationResponsibilityAssignmentStatus.Disable;
     currentEndTime = "2026-08-20T01:00:00.000Z";
-    return fulfillTrpc(route, { changed, result: null });
+    return fulfillTrpc(route, { changed: true, result: null });
   });
   await page.route("**/rpc/admin.audit.search**", (route) => {
     auditSearchCount += 1;
@@ -308,17 +308,17 @@ async function manageLifecycle(page: Page, changed: boolean) {
 
   await page.getByRole("dialog").getByRole("button", { name: "暂停任命" }).click();
   await expect.poll(() => pauseInputs).toEqual([{ id: 101 }]);
-  await expect(page.getByText(changed ? "责任任命已暂停" : "无需修改").last()).toBeVisible();
+  await expect(page.getByText("责任任命已暂停").last()).toBeVisible();
   await expect(page.getByRole("dialog").getByRole("button", { name: "恢复任命" })).toBeVisible();
   await page.getByRole("dialog").getByRole("button", { name: "恢复任命" }).click();
   await expect.poll(() => resumeInputs).toEqual([{ id: 101 }]);
-  await expect(page.getByText(changed ? "责任任命已恢复" : "无需修改").last()).toBeVisible();
+  await expect(page.getByText("责任任命已恢复").last()).toBeVisible();
   await expect(page.getByRole("dialog").getByRole("button", { name: "暂停任命" })).toBeVisible();
   await page.getByRole("dialog").getByRole("button", { name: "结束任命" }).click();
   await expect(page.getByText("结束后不可恢复；如需重新任命，必须创建新的责任任命。")).toBeVisible();
   await page.getByRole("button", { name: "确认结束" }).click();
   await expect.poll(() => endInputs).toEqual([{ id: 101 }]);
-  await expect(page.getByText(changed ? "责任任命已结束" : "无需修改").last()).toBeVisible();
+  await expect(page.getByText("责任任命已结束").last()).toBeVisible();
   await expect(page.getByRole("dialog").getByRole("button", { name: "暂停任命" })).toHaveCount(0);
   await expect(page.getByRole("dialog").getByRole("button", { name: "恢复任命" })).toHaveCount(0);
   await expect(page.getByRole("dialog").getByRole("button", { name: "结束任命" })).toHaveCount(0);
@@ -338,15 +338,7 @@ async function manageLifecycle(page: Page, changed: boolean) {
       pageNum: 2,
       pageSize: 20,
     });
-}
-
-for (const changed of [true, false]) {
-  test(`hydrates global filters and manages the complete lifecycle with changed=${changed} and audit refresh`, async ({
-    page,
-  }) => {
-    await manageLifecycle(page, changed);
-  });
-}
+});
 
 test("preserves authority context after internal and forbidden lifecycle failures without replay", async ({ page }) => {
   await mockAdminApi(page);

@@ -1,20 +1,10 @@
 // Browser Integration uses a mocked backend; this is not a full-system journey.
-import {
-  ApiErrorCode,
-  EmploymentStatus,
-  OrganizationLevel,
-  OrganizationStatus,
-  OrganizationType,
-  UserStatus,
-} from "@iam/contracts";
+import { EmploymentStatus, OrganizationLevel, OrganizationStatus, OrganizationType, UserStatus } from "@iam/contracts";
 import { expect, type Page, test } from "@playwright/test";
 import {
-  adminCapabilitySummary,
   adminEmploymentSearchResult,
   adminPositionSearchResult,
-  adminUserDetail,
   createHrEmploymentAllowedActions,
-  currentAdminUser,
   currentHrAdminUser,
   hrAdminCapabilitySummary,
   hrAdminEmploymentDetail,
@@ -494,112 +484,6 @@ test("HR admin completes resignation and can retry the server-confirmed complete
   }
 
   expect(resignations).toEqual([{ username: "zhangsan" }, { username: "zhangsan" }]);
-});
-
-for (const role of ["Full Admin", "HR"] as const) {
-  test(`${role} refreshes committed resignation and retains its repair warning without replay`, async ({ page }) => {
-    const isHr = role === "HR";
-    const sourceDetail = isHr ? hrAdminUserDetail : adminUserDetail;
-    let currentDetail = {
-      ...sourceDetail,
-      allowedActions: {
-        ...sourceDetail.allowedActions,
-        resign: { allowed: true, reason: null },
-      },
-    };
-    let mutations = 0;
-    let reads = 0;
-    await mockAdminApi(page, {
-      capabilitySummary: isHr ? hrAdminCapabilitySummary : adminCapabilitySummary,
-      currentUser: isHr ? currentHrAdminUser : currentAdminUser,
-      userDetail: currentDetail,
-    });
-    await page.route("**/rpc/admin.user.detail**", (route) => {
-      reads += 1;
-      return fulfillTrpc(route, currentDetail);
-    });
-    await page.route("**/rpc/admin.employment.resignUser**", (route) => {
-      mutations += 1;
-      currentDetail = {
-        ...currentDetail,
-        name: "已刷新离职用户",
-        status: UserStatus.Disable,
-      };
-      return fulfillJson(route, [
-        {
-          error: {
-            message: "required cleanup failed",
-            code: -32603,
-            data: {
-              code: "INTERNAL_SERVER_ERROR",
-              httpStatus: 500,
-              serviceCode: ApiErrorCode.AdminMutationCommitted,
-            },
-          },
-        },
-      ]);
-    });
-    await page.goto("/iam-admin/users");
-    await page.locator("td").getByRole("button", { name: "查看", exact: true }).first().click();
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: /离\s*职/ })
-      .click();
-    const confirmation = page.getByRole("dialog").filter({ hasText: /办理用户 .* 离职？/ });
-    await confirmation.getByRole("button", { name: /确\s*定/ }).click();
-    await expect(
-      page.getByRole("tabpanel", { name: "基本信息" }).getByText("已刷新离职用户", { exact: true }),
-    ).toBeVisible();
-    await expect(page.getByRole("alert").filter({ hasText: "操作已生效，但后续处理失败" })).toContainText(
-      "联系管理员修复",
-    );
-    await expect(page.getByText("离职已完成", { exact: true })).toHaveCount(0);
-    expect(mutations).toBe(1);
-    expect(reads).toBe(2);
-  });
-}
-
-test("HR admin does not report resignation success when the mutation is rejected", async ({ page }) => {
-  const mutationRequests = collectMutationRequests(page);
-  await mockAdminApi(page, {
-    capabilitySummary: hrAdminCapabilitySummary,
-    currentUser: currentHrAdminUser,
-    userDetail: {
-      ...hrAdminUserDetail,
-      allowedActions: {
-        ...hrAdminUserDetail.allowedActions,
-        resign: { allowed: true, reason: null },
-      },
-    },
-  });
-  await page.route("**/rpc/admin.employment.resignUser**", (route) =>
-    fulfillJson(route, [
-      {
-        error: {
-          message: "离职资格已变化，请刷新后重试",
-          code: -32603,
-          data: {
-            code: "FORBIDDEN",
-            httpStatus: 403,
-            path: "admin.employment.resignUser",
-            serviceCode: "AUTHZ.FORBIDDEN",
-            serviceMessage: "离职资格已变化，请刷新后重试",
-          },
-        },
-      },
-    ]),
-  );
-
-  await page.goto("/iam-admin/users");
-  await page.locator("td").getByRole("button", { name: "查看", exact: true }).first().click();
-  const drawer = page.getByRole("dialog");
-  await drawer.getByRole("button", { name: /离\s*职/ }).click();
-  const confirmation = page.getByRole("dialog").filter({ hasText: "办理用户 张三 离职？" });
-  await confirmation.getByRole("button", { name: /确\s*定/ }).click();
-
-  await expect(page.getByText("离职资格已变化，请刷新后重试")).toBeVisible();
-  await expect(page.getByText("离职已完成")).toHaveCount(0);
-  expect(mutationRequests.filter((url) => url.includes("admin.employment.resignUser"))).toHaveLength(1);
 });
 
 test("HR admin sees the server reason when a User is not HR-managed for status changes", async ({ page }) => {

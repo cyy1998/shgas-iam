@@ -1,8 +1,9 @@
 import UsersPage from "@admin/pages/users";
+import UserFormModal from "@admin/pages/users/components/UserFormModal";
 import { ApiErrorCode } from "@iam/contracts";
 import { ConfigProvider, Modal, message } from "antd";
 import { HttpResponse, http } from "msw";
-import type { ComponentProps } from "react";
+import { type ComponentProps, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { adminUserDetail, adminUserSearchResult } from "~admin/test/mocks/fixtures";
 import { server } from "~admin/test/mocks/server";
@@ -63,6 +64,29 @@ function mutation(procedure: string, data: unknown, committed = false) {
   );
   return requests;
 }
+function renderPage() {
+  const details = vi.fn((_info: { request: Request }) => HttpResponse.json([{ result: { data: adminUserDetail } }]));
+  const searches = vi.fn(() => HttpResponse.json([{ result: { data: adminUserSearchResult } }]));
+  server.use(http.get("*/rpc/admin.user.detail", details), http.get("*/rpc/admin.user.search", searches));
+  const view = render(
+    <ConfigProvider theme={{ token: { motion: false } }}>
+      <UsersPage />
+    </ConfigProvider>,
+  );
+  return { ...view, details, searches };
+}
+async function openEdit(user: ReturnType<typeof render>["user"]) {
+  await user.click((await screen.findAllByText("查看"))[0]);
+  await user.click(await screen.findByRole("button", { name: "编 辑" }));
+  return within(await screen.findByRole("dialog", { name: "编辑用户" }));
+}
+afterEach(async () => {
+  cleanup();
+  message.destroy();
+  Modal.destroyAll();
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+});
+
 function mutationFailure(procedure: string, messageText: string) {
   const requests: unknown[] = [];
   server.use(
@@ -84,141 +108,46 @@ function mutationFailure(procedure: string, messageText: string) {
   );
   return requests;
 }
-function renderPage() {
-  const details = vi.fn((_info: { request: Request }) => HttpResponse.json([{ result: { data: adminUserDetail } }]));
-  server.use(http.get("*/rpc/admin.user.detail", details));
-  const view = render(
-    <ConfigProvider theme={{ token: { motion: false } }}>
-      <UsersPage />
-    </ConfigProvider>,
-  );
-  return { ...view, details };
+function renderForm(mode: "create" | "edit" = "create") {
+  const onSuccess = vi.fn();
+  const onCommitted = vi.fn();
+  function Form() {
+    const [open, setOpen] = useState(true);
+    return (
+      <UserFormModal
+        open={open}
+        mode={mode}
+        initialValues={mode === "edit" ? { ...adminUserDetail, statusText: "正常", employments: [] } : null}
+        onOpenChange={setOpen}
+        onSuccess={onSuccess}
+        onCommitted={onCommitted}
+      />
+    );
+  }
+  return {
+    ...render(
+      <ConfigProvider theme={{ token: { motion: false } }}>
+        <Form />
+      </ConfigProvider>,
+    ),
+    onSuccess,
+    onCommitted,
+  };
 }
-async function openEdit(user: ReturnType<typeof render>["user"]) {
-  await user.click((await screen.findAllByText("查看"))[0]);
-  await user.click(await screen.findByRole("button", { name: "编 辑" }));
-  return within(await screen.findByRole("dialog", { name: "编辑用户" }));
-}
-afterEach(async () => {
-  cleanup();
-  message.destroy();
-  Modal.destroyAll();
-  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-});
 
 describe("UsersPage mutation outcomes", () => {
-  it("blocks an empty profile submission without sending stale fields", async () => {
-    const requests = mutation("update", { changed: false, result: null });
-    const { user } = renderPage();
+  it("saves only edited fields, closes the form and refreshes the list", async () => {
+    const requests = mutation("update", { changed: true, result: null });
+    const { user, searches } = renderPage();
     const form = await openEdit(user);
-    await user.click(form.getByRole("button", { name: "确 定" }));
-    expect(await screen.findByText("请先编辑需要保存的字段")).toBeInTheDocument();
-    expect(requests).toHaveLength(0);
-    expect(screen.getByRole("dialog", { name: "编辑用户" })).toBeInTheDocument();
-  });
-  it.each([true, false])("saves only edited fields and reports changed=%s", async (changed) => {
-    const requests = mutation("update", { changed, result: null });
-    const { user } = renderPage();
-    const form = await openEdit(user);
+    const searchesBeforeSubmit = searches.mock.calls.length;
     await user.clear(form.getByRole("textbox", { name: "姓名" }));
-    await user.type(
-      form.getByRole("textbox", { name: "姓名" }),
-      changed ? "  新姓名  " : `  ${adminUserDetail.name}  `,
-    );
+    await user.type(form.getByRole("textbox", { name: "姓名" }), "  新姓名  ");
     await user.click(form.getByRole("button", { name: "确 定" }));
-    expect(await screen.findByText(changed ? "更新成功" : "无需修改")).toBeInTheDocument();
-    expect(requests).toEqual([
-      {
-        "0": {
-          username: adminUserDetail.username,
-          data: { name: changed ? "新姓名" : adminUserDetail.name },
-        },
-      },
-    ]);
+    expect(await screen.findByText("更新成功")).toBeInTheDocument();
+    expect(requests).toEqual([{ "0": { username: adminUserDetail.username, data: { name: "新姓名" } } }]);
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "编辑用户" })).not.toBeInTheDocument());
-  });
-  it("submits normalized User identity fields while preserving the password exactly", async () => {
-    const requests = mutation("create", {
-      changed: true,
-      result: {
-        username: "Mixed-Case",
-        user: { username: "Mixed-Case" },
-        generatedPassword: null,
-      },
-    });
-    const { user } = renderPage();
-    await user.click(screen.getByRole("button", { name: "+ 新建用户" }));
-    const form = within(await screen.findByRole("dialog", { name: "新建用户" }));
-    await user.type(form.getByRole("textbox", { name: "用户名" }), "  Mixed-Case  ");
-    await user.type(form.getByRole("textbox", { name: "姓名" }), "  新用户  ");
-    await user.type(form.getByLabelText("初始密码"), "  Secret123  ");
-    await user.click(form.getAllByRole("combobox")[0]);
-    await user.click(
-      await screen.findByText("正式员工", {
-        selector: ".ant-select-item-option-content",
-      }),
-    );
-    await user.click(form.getByRole("button", { name: "确 定" }));
-
-    expect(await screen.findByText("创建成功")).toBeInTheDocument();
-    expect(requests).toEqual([
-      {
-        "0": {
-          mobile: null,
-          name: "新用户",
-          password: "  Secret123  ",
-          status: 1,
-          userType: "正式员工",
-          username: "Mixed-Case",
-          wxId: null,
-        },
-      },
-    ]);
-  });
-
-  it.each([
-    ["blank", "   ", "   ", "请输入用户名", "请输入姓名"],
-    ["overlong", "U".repeat(65), "N".repeat(65), "用户名最多64个字符", "姓名最多64个字符"],
-  ])(
-    "keeps %s normalized User identities in the form without sending a request",
-    async (_, usernameInput, nameInput, usernameError, nameError) => {
-      const requests = mutation("create", null);
-      const { user } = renderPage();
-      await user.click(screen.getByRole("button", { name: "+ 新建用户" }));
-      const form = within(await screen.findByRole("dialog", { name: "新建用户" }));
-      const username = form.getByRole("textbox", { name: "用户名" });
-      const name = form.getByRole("textbox", { name: "姓名" });
-      await user.click(username);
-      await user.paste(usernameInput);
-      await user.click(name);
-      await user.paste(nameInput);
-      await user.click(form.getByRole("button", { name: "确 定" }));
-      expect(await form.findByText(usernameError)).toBeInTheDocument();
-      expect(await form.findByText(nameError)).toBeInTheDocument();
-      expect(requests).toHaveLength(0);
-      expect(screen.getByRole("dialog", { name: "新建用户" })).toBeInTheDocument();
-    },
-  );
-
-  it("keeps a backend conflict in the form without reporting success or replaying", async () => {
-    const requests = mutationFailure("create", "用户名已存在");
-    const { user } = renderPage();
-    await user.click(screen.getByRole("button", { name: "+ 新建用户" }));
-    const form = within(await screen.findByRole("dialog", { name: "新建用户" }));
-    await user.type(form.getByRole("textbox", { name: "用户名" }), "occupied");
-    await user.type(form.getByRole("textbox", { name: "姓名" }), "新用户");
-    await user.click(form.getAllByRole("combobox")[0]);
-    await user.click(
-      await screen.findByText("正式员工", {
-        selector: ".ant-select-item-option-content",
-      }),
-    );
-    await user.click(form.getByRole("button", { name: "确 定" }));
-
-    expect(await screen.findByText("用户名已存在")).toBeInTheDocument();
-    expect(screen.queryByText("创建成功")).not.toBeInTheDocument();
-    expect(screen.getByRole("dialog", { name: "新建用户" })).toBeInTheDocument();
-    await waitFor(() => expect(requests).toHaveLength(1));
+    await waitFor(() => expect(searches.mock.calls.length).toBeGreaterThan(searchesBeforeSubmit));
   });
 
   it("reads the created resource and displays the returned initial password", async () => {
@@ -320,5 +249,115 @@ describe("UsersPage mutation outcomes", () => {
     expect(await screen.findByText("Reset123!")).toBeInTheDocument();
     await waitFor(() => expect(details).toHaveBeenCalledTimes(2));
     expect(requests).toHaveLength(1);
+  });
+});
+
+describe("UserFormModal through the user service", () => {
+  it("blocks an empty profile submission without sending stale fields", async () => {
+    const requests = mutation("update", { changed: false, result: null });
+    const { user, onSuccess } = renderForm("edit");
+    const form = within(await screen.findByRole("dialog", { name: "编辑用户" }));
+    await user.click(form.getByRole("button", { name: "确 定" }));
+    expect(await screen.findByText("请先编辑需要保存的字段")).toBeInTheDocument();
+    expect(requests).toHaveLength(0);
+    expect(onSuccess).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: "编辑用户" })).toBeInTheDocument();
+  });
+  it("completes a no-op edit and submits only the normalized edited field", async () => {
+    const requests = mutation("update", { changed: false, result: null });
+    const { user, onSuccess } = renderForm("edit");
+    const form = within(await screen.findByRole("dialog", { name: "编辑用户" }));
+    await user.clear(form.getByRole("textbox", { name: "姓名" }));
+    await user.type(form.getByRole("textbox", { name: "姓名" }), `  ${adminUserDetail.name}  `);
+    await user.click(form.getByRole("button", { name: "确 定" }));
+    expect(await screen.findByText("无需修改")).toBeInTheDocument();
+    expect(requests).toEqual([{ "0": { username: adminUserDetail.username, data: { name: adminUserDetail.name } } }]);
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(onSuccess).toHaveBeenCalledWith();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("submits normalized User identity fields while preserving the password exactly", async () => {
+    const requests = mutation("create", {
+      changed: true,
+      result: {
+        username: "Mixed-Case",
+        user: { username: "Mixed-Case" },
+        generatedPassword: null,
+      },
+    });
+    const { user, onSuccess } = renderForm();
+    const form = within(await screen.findByRole("dialog", { name: "新建用户" }));
+    await user.type(form.getByRole("textbox", { name: "用户名" }), "  Mixed-Case  ");
+    await user.type(form.getByRole("textbox", { name: "姓名" }), "  新用户  ");
+    await user.type(form.getByLabelText("初始密码"), "  Secret123  ");
+    await user.click(form.getAllByRole("combobox")[0]);
+    await user.click(
+      await screen.findByText("正式员工", {
+        selector: ".ant-select-item-option-content",
+      }),
+    );
+    await user.click(form.getByRole("button", { name: "确 定" }));
+
+    expect(await screen.findByText("创建成功")).toBeInTheDocument();
+    expect(onSuccess).toHaveBeenCalledWith("Mixed-Case");
+    expect(requests).toEqual([
+      {
+        "0": {
+          mobile: null,
+          name: "新用户",
+          password: "  Secret123  ",
+          status: 1,
+          userType: "正式员工",
+          username: "Mixed-Case",
+          wxId: null,
+        },
+      },
+    ]);
+  });
+
+  it.each([
+    ["blank", "   ", "   ", "请输入用户名", "请输入姓名"],
+    ["overlong", "U".repeat(65), "N".repeat(65), "用户名最多64个字符", "姓名最多64个字符"],
+  ])(
+    "keeps %s normalized User identities in the form without sending a request",
+    async (_, usernameInput, nameInput, usernameError, nameError) => {
+      const requests = mutation("create", null);
+      const { user, onSuccess } = renderForm();
+      const form = within(await screen.findByRole("dialog", { name: "新建用户" }));
+      const username = form.getByRole("textbox", { name: "用户名" });
+      const name = form.getByRole("textbox", { name: "姓名" });
+      await user.click(username);
+      await user.paste(usernameInput);
+      await user.click(name);
+      await user.paste(nameInput);
+      await user.click(form.getByRole("button", { name: "确 定" }));
+      expect(await form.findByText(usernameError)).toBeInTheDocument();
+      expect(await form.findByText(nameError)).toBeInTheDocument();
+      expect(requests).toHaveLength(0);
+      expect(onSuccess).not.toHaveBeenCalled();
+      expect(screen.getByRole("dialog", { name: "新建用户" })).toBeInTheDocument();
+    },
+  );
+
+  it("keeps a backend conflict in the form without reporting success or replaying", async () => {
+    const requests = mutationFailure("create", "用户名已存在");
+    const { user, onSuccess } = renderForm();
+    const form = within(await screen.findByRole("dialog", { name: "新建用户" }));
+    await user.type(form.getByRole("textbox", { name: "用户名" }), "occupied");
+    await user.type(form.getByRole("textbox", { name: "姓名" }), "新用户");
+    await user.click(form.getAllByRole("combobox")[0]);
+    await user.click(
+      await screen.findByText("正式员工", {
+        selector: ".ant-select-item-option-content",
+      }),
+    );
+    await user.click(form.getByRole("button", { name: "确 定" }));
+
+    expect(await screen.findByText("用户名已存在")).toBeInTheDocument();
+    expect(screen.queryByText("创建成功")).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "新建用户" })).toBeInTheDocument();
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(onSuccess).not.toHaveBeenCalled();
   });
 });

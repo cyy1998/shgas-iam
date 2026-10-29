@@ -1,8 +1,9 @@
 import RolesPage from "@admin/pages/roles";
-import { ApiErrorCode } from "@iam/contracts";
+import RoleFormModal from "@admin/pages/roles/components/RoleFormModal";
+import { ApiErrorCode, ClientStatus } from "@iam/contracts";
 import { ConfigProvider, Modal, message } from "antd";
 import { HttpResponse, http } from "msw";
-import type { ComponentProps } from "react";
+import { type ComponentProps, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { server } from "~admin/test/mocks/server";
 import { cleanup, render, screen, waitFor, within } from "~admin/test/render";
@@ -40,14 +41,16 @@ ConfigProvider.config({
   holderRender: (children) => <ConfigProvider theme={{ token: { motion: false } }}>{children}</ConfigProvider>,
 });
 
-const role = {
+const role: NonNullable<ComponentProps<typeof RoleFormModal>["initialValues"]> = {
   id: 1,
   roleCode: "reader",
   roleName: "阅读角色",
   description: null,
   status: 1,
+  statusText: "正常",
   clientId: 1,
-  client: { clientCode: "iam-admin", clientName: "管理端" },
+  isDelete: false,
+  client: { id: 1, clientCode: "iam-admin", clientName: "管理端", status: ClientStatus.Enable },
   assignmentCount: 1,
   createTime: "2026-01-01T00:00:00Z",
   updateTime: "2026-01-01T00:00:00Z",
@@ -154,22 +157,31 @@ async function assignments() {
   await screen.findByText("总部");
   return view;
 }
-describe("RolesPage mutation results through the role service", () => {
-  it("includes an explicitly edited status", async () => {
-    const requests = mutation("update");
-    const { user } = await page();
-    await user.click(screen.getByRole("button", { name: "编辑" }));
-    const dialog = within(await screen.findByRole("dialog"));
-    await user.click(dialog.getByRole("combobox", { name: "状态" }));
-    await user.click(
-      await screen.findByText("暂停", {
-        selector: ".ant-select-item-option-content",
-      }),
+function renderForm() {
+  const onSuccess = vi.fn();
+  function Form() {
+    const [open, setOpen] = useState(true);
+    return (
+      <RoleFormModal
+        open={open}
+        initialValues={role}
+        onOpenChange={setOpen}
+        onSuccess={onSuccess}
+        onCommitted={vi.fn()}
+      />
     );
-    await user.click(dialog.getByRole("button", { name: "确 定" }));
-    expect(await screen.findByText("角色已更新")).toBeInTheDocument();
-    expect(requests).toMatchObject([{ "0": { data: { status: 2 } } }]);
-  });
+  }
+  return {
+    ...render(
+      <ConfigProvider theme={{ token: { motion: false } }}>
+        <Form />
+      </ConfigProvider>,
+    ),
+    onSuccess,
+  };
+}
+
+describe("RolesPage mutation results through the role service", () => {
   it("closes a committed assignment creation and retains the repair warning", async () => {
     const requests = mutation("assignments.create", false, 500, true);
     const { user } = await assignments();
@@ -222,22 +234,19 @@ describe("RolesPage mutation results through the role service", () => {
     await waitFor(() => expect(reads.detail.mock.calls.length).toBeGreaterThan(1));
   });
 
-  it.each([true, false])("reports edit changed=%s and omits untouched status", async (changed) => {
-    const requests = mutation("update", changed);
+  it("completes an edit without stale status and refreshes the list", async () => {
+    const requests = mutation("update");
     const { user } = await page();
     await user.click(screen.getByRole("button", { name: "编辑" }));
     const dialog = within(await screen.findByRole("dialog"));
+    const searchesBeforeSubmit = reads.search.mock.calls.length;
     await user.click(dialog.getByRole("button", { name: "确 定" }));
-    expect(await screen.findByText(changed ? "角色已更新" : "无需修改")).toBeInTheDocument();
-    expect(requests).toEqual([
-      {
-        "0": {
-          roleCode: "reader",
-          data: { roleName: role.roleName, description: null },
-        },
-      },
-    ]);
+    expect(await screen.findByText("角色已更新")).toBeInTheDocument();
+    expect(requests).toEqual([{ "0": { roleCode: "reader", data: { roleName: role.roleName, description: null } } }]);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(reads.search.mock.calls.length).toBeGreaterThan(searchesBeforeSubmit));
   });
+
   it.each([true, false])("reports status changed=%s", async (changed) => {
     const requests = mutation("updateStatus", changed);
     const { user } = await page();
@@ -256,19 +265,6 @@ describe("RolesPage mutation results through the role service", () => {
       }),
     );
     expect(await screen.findByText("角色已删除")).toBeInTheDocument();
-    expect(requests).toHaveLength(1);
-  });
-  it.each([404, 409])("keeps an ordinary rejected edit open (%s)", async (status) => {
-    const requests = mutation("update", false, status);
-    const { user } = await page();
-    await user.click(screen.getByRole("button", { name: "编辑" }));
-    await user.click(
-      within(await screen.findByRole("dialog")).getByRole("button", {
-        name: "确 定",
-      }),
-    );
-    expect(await screen.findByText("角色写入失败")).toBeInTheDocument();
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(requests).toHaveLength(1);
   });
   it("rereads committed role details without replay and retains the warning", async () => {
@@ -315,5 +311,47 @@ describe("RolesPage mutation results through the role service", () => {
     await user.click(within((await screen.findAllByRole("dialog")).at(-1)!).getByRole("button", { name: "确 定" }));
     expect(await screen.findByText("分配已删除")).toBeInTheDocument();
     expect(requests).toHaveLength(1);
+  });
+});
+
+describe("RoleFormModal through the role service", () => {
+  it("includes an explicitly edited status", async () => {
+    const requests = mutation("update");
+    const { user, onSuccess } = renderForm();
+    const dialog = within(await screen.findByRole("dialog"));
+    await user.click(dialog.getByRole("combobox", { name: "状态" }));
+    await user.click(
+      await screen.findByText("暂停", {
+        selector: ".ant-select-item-option-content",
+      }),
+    );
+    await user.click(dialog.getByRole("button", { name: "确 定" }));
+    expect(await screen.findByText("角色已更新")).toBeInTheDocument();
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(requests).toMatchObject([{ "0": { data: { status: 2 } } }]);
+  });
+  it("completes a no-op edit and omits untouched status", async () => {
+    const requests = mutation("update", false);
+    const { user, onSuccess } = renderForm();
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "确 定" }));
+    expect(await screen.findByText("无需修改")).toBeInTheDocument();
+    expect(requests).toEqual([{ "0": { roleCode: "reader", data: { roleName: role.roleName, description: null } } }]);
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(onSuccess).toHaveBeenCalledWith();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it.each([404, 409])("keeps an ordinary rejected edit open (%s)", async (status) => {
+    const requests = mutation("update", false, status);
+    const { user, onSuccess } = renderForm();
+    await user.click(
+      within(await screen.findByRole("dialog")).getByRole("button", {
+        name: "确 定",
+      }),
+    );
+    expect(await screen.findByText("角色写入失败")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(requests).toHaveLength(1);
+    expect(onSuccess).not.toHaveBeenCalled();
   });
 });

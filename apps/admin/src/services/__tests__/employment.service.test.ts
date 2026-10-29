@@ -120,4 +120,28 @@ describe("employment service mutation protocol", () => {
     expect(error).not.toBeInstanceOf(AdminMutationCommittedError);
     expect(error).toMatchObject({ message: "请求失败" });
   });
+
+  it("preserves a forbidden resignation as a rejection without replaying it", async () => {
+    const handler = vi.fn(() =>
+      HttpResponse.json([
+        {
+          error: {
+            message: "离职资格已变化，请刷新后重试",
+            code: -32603,
+            data: {
+              code: "FORBIDDEN",
+              httpStatus: 403,
+              serviceCode: ApiErrorCode.Forbidden,
+              serviceMessage: "离职资格已变化，请刷新后重试",
+            },
+          },
+        },
+      ]),
+    );
+    server.use(http.post("*/rpc/admin.employment.resignUser", handler));
+    const error = await resignUser("zhangsan").catch((cause: unknown) => cause);
+    expect(error).not.toBeInstanceOf(AdminMutationCommittedError);
+    expect(error).toMatchObject({ message: "离职资格已变化，请刷新后重试" });
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
 });

@@ -8,11 +8,11 @@ import {
   OrganizationResponsibilityTypeCode,
   OrganizationStatus,
 } from "@iam/contracts";
-import { Modal, message } from "antd";
+import { ConfigProvider, Modal, message } from "antd";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __setAccess } from "~admin/test/mocks/umijs-max";
-import { render, screen, waitFor, within } from "~admin/test/render";
+import { act, render, screen, waitFor, within } from "~admin/test/render";
 
 const responsibilityService = vi.hoisted(() => ({
   createAssignment: vi.fn(),
@@ -125,6 +125,9 @@ const assignment = {
 
 describe("OrganizationResponsibilityAssignmentModule", () => {
   beforeEach(() => {
+    ConfigProvider.config({
+      holderRender: (children) => <ConfigProvider theme={{ token: { motion: false } }}>{children}</ConfigProvider>,
+    });
     // Most scenarios exercise existing assignments and do not need the creation form mounted.
     __setAccess({
       canAccessOrganizationResponsibility: true,
@@ -173,9 +176,12 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
     });
   });
 
-  afterEach(() => {
-    Modal.destroyAll();
-    message.destroy();
+  afterEach(async () => {
+    await act(async () => {
+      Modal.destroyAll();
+      message.destroy();
+    });
+    ConfigProvider.config({ holderRender: undefined });
   });
 
   it("hydrates global filters and stable detail through the shared Module interface", async () => {
@@ -400,7 +406,8 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
     });
   });
 
-  describe.each(["global", "organization"] as const)("%s lifecycle results", (kind) => {
+  // Both hosts use the same lifecycle handler; the Panel suite covers scoped refresh wiring.
+  describe("global lifecycle results", () => {
     for (const changed of [true, false]) {
       it.each([
         ["pauseAssignment", "暂停任命", "责任任命已暂停", enabledAllowedActions],
@@ -439,22 +446,17 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
           });
           const { user } = render(
             <OrganizationResponsibilityAssignmentModule
-              host={
-                kind === "organization"
-                  ? { kind, targetOrganizationCode: "FIN" }
-                  : {
-                      kind,
-                      state: { lifecycle: "all", assignmentId: 101 },
-                      onStateChange: vi.fn(),
-                    }
-              }
+              host={{
+                kind: "global",
+                state: { lifecycle: "all", assignmentId: 101 },
+                onStateChange: vi.fn(),
+              }}
             />,
           );
           const detailButton = await screen.findByRole("button", { name: "详情" });
           const row = detailButton.closest("tr");
           if (!(row instanceof HTMLElement)) throw new Error("Assignment table row is missing");
           expect(within(row).getByText(method === "pauseAssignment" ? "启用" : "暂停")).toBeVisible();
-          if (kind === "organization") await user.click(detailButton);
           await user.click(await screen.findByRole("button", { name: label }));
           expect((await screen.findAllByText(changed ? successMessage : "无需修改")).at(-1)).toBeInTheDocument();
           await waitFor(() => {
@@ -500,69 +502,6 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
     expect(within(dialog).getByRole("button", { name: "恢复任命" })).toBeVisible();
     expect(within(dialog).queryByRole("button", { name: "暂停任命" })).toBeNull();
     expect(within(dialog).queryByRole("button", { name: "结束任命" })).toBeNull();
-  });
-
-  it("offers Resume for Pause and keeps Ended detail read-only", async () => {
-    responsibilityService.searchAssignments.mockResolvedValueOnce({
-      items: [
-        {
-          ...assignment,
-          status: OrganizationResponsibilityAssignmentStatus.Pause,
-          allowedActions: pausedAllowedActions,
-        },
-      ],
-      total: 1,
-      nextCursor: null,
-    });
-    responsibilityService.detailAssignment.mockResolvedValueOnce({
-      ...assignment,
-      status: OrganizationResponsibilityAssignmentStatus.Pause,
-      allowedActions: pausedAllowedActions,
-    });
-    const paused = render(
-      <OrganizationResponsibilityAssignmentModule
-        host={{
-          kind: "global",
-          state: { lifecycle: "open", assignmentId: 101 },
-          onStateChange: vi.fn(),
-        }}
-      />,
-    );
-    const pausedDialog = await screen.findByRole("dialog");
-    expect(within(pausedDialog).getByRole("button", { name: "恢复任命" })).toBeVisible();
-    expect(within(pausedDialog).queryByRole("button", { name: "暂停任命" })).toBeNull();
-    paused.unmount();
-
-    responsibilityService.searchAssignments.mockResolvedValueOnce({
-      items: [
-        {
-          ...assignment,
-          status: OrganizationResponsibilityAssignmentStatus.Disable,
-          allowedActions: endedAllowedActions,
-        },
-      ],
-      total: 1,
-      nextCursor: null,
-    });
-    responsibilityService.detailAssignment.mockResolvedValueOnce({
-      ...assignment,
-      status: OrganizationResponsibilityAssignmentStatus.Disable,
-      endTime: "2026-08-20T08:00:00.000Z",
-      allowedActions: endedAllowedActions,
-    });
-    render(
-      <OrganizationResponsibilityAssignmentModule
-        host={{
-          kind: "global",
-          state: { lifecycle: "all", assignmentId: 101 },
-          onStateChange: vi.fn(),
-        }}
-      />,
-    );
-    const endedDialog = await screen.findByRole("dialog");
-    expect(within(endedDialog).queryByRole("button", { name: "暂停任命" })).toBeNull();
-    expect(within(endedDialog).queryByRole("button", { name: "恢复任命" })).toBeNull();
-    expect(within(endedDialog).queryByRole("button", { name: "结束任命" })).toBeNull();
   });
 
   it.each(["none", "user", "position", "organization", "target"] as const)(
@@ -650,7 +589,7 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
     },
   );
 
-  it("requires irreversible End confirmation before issuing one mutation", async () => {
+  it.each([true, false])("confirms End once and refreshes ended facts with changed=%s", async (changed) => {
     const { user } = render(
       <OrganizationResponsibilityAssignmentModule
         host={{
@@ -661,6 +600,7 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
       />,
     );
     const detailDialog = await screen.findByRole("dialog");
+    const initialAudit = screen.getByTestId("assignment-audit");
 
     await user.click(within(detailDialog).getByRole("button", { name: "结束任命" }));
     expect(responsibilityService.endAssignment).not.toHaveBeenCalled();
@@ -671,10 +611,32 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
     if (!(confirmation instanceof HTMLElement)) throw new Error("End confirmation dialog is missing");
     expect(within(confirmation).getByText(/结束后不可恢复/)).toBeInTheDocument();
 
-    await user.click(confirmButton);
-    await waitFor(() => {
-      expect(responsibilityService.endAssignment).toHaveBeenCalledTimes(1);
+    responsibilityService.endAssignment.mockResolvedValueOnce({ changed, result: null });
+    responsibilityService.searchAssignments.mockResolvedValue({ items: [], total: 0, nextCursor: null });
+    responsibilityService.detailAssignment.mockResolvedValue({
+      ...assignment,
+      status: OrganizationResponsibilityAssignmentStatus.Disable,
+      endTime: "2026-08-20T08:00:00.000Z",
+      allowedActions: endedAllowedActions,
     });
+    await user.click(confirmButton);
+    await waitFor(() => expect(screen.getByText(changed ? "责任任命已结束" : "无需修改")).toBeVisible());
+    await waitFor(() => {
+      expect(responsibilityService.endAssignment).toHaveBeenCalledExactlyOnceWith({ id: 101 });
+      expect(responsibilityService.searchAssignments).toHaveBeenCalledTimes(2);
+      expect(responsibilityService.detailAssignment).toHaveBeenCalledTimes(2);
+      expect(screen.queryByRole("button", { name: "详情" })).not.toBeInTheDocument();
+      for (const name of ["暂停任命", "恢复任命", "结束任命"]) {
+        expect(within(detailDialog).queryByRole("button", { name })).not.toBeInTheDocument();
+      }
+      expect(confirmation).not.toBeInTheDocument();
+    });
+    expect(within(detailDialog).getByText("张三（zhangsan）")).toBeVisible();
+    // AuditLogTable loads on mount; both changed and no-op commands must refresh it.
+    expect(initialAudit).not.toBeInTheDocument();
+    expect(screen.getByTestId("assignment-audit")).toHaveTextContent(
+      '{"targetType":"organization_responsibility_assignment","targetId":101}',
+    );
   });
 
   it("preserves Drawer context and refreshes authority without replay after failure", async () => {

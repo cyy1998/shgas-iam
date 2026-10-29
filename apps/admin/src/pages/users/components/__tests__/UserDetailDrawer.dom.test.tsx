@@ -286,19 +286,16 @@ describe("UserDetailDrawer Employment lifecycle actions", () => {
     ConfigProvider.config({ holderRender: undefined });
   });
 
-  describe.each(["Full Admin", "HR"])("%s resignation", (role) => {
-    const actions =
-      role === "Full Admin"
-        ? fullAdminActions
-        : {
-            editProfile: denied,
-            resetPassword: denied,
-            changeStatus: denied,
-            delete: denied,
-            resign: allowed,
-          };
+  describe("resignation outcomes", () => {
+    const hrActions = {
+      editProfile: denied,
+      resetPassword: denied,
+      changeStatus: denied,
+      delete: denied,
+      resign: allowed,
+    };
 
-    async function submitResignation() {
+    async function submitResignation(role: "Full Admin" | "HR" = "Full Admin") {
       __setAccess({
         canAccessUser: true,
         canAccessEmployment: true,
@@ -320,7 +317,7 @@ describe("UserDetailDrawer Employment lifecycle actions", () => {
     }
 
     it.each([true, false])("reports changed=%s and refreshes facts", async (changed) => {
-      lifecycle.getUser.mockResolvedValue(detail(EmploymentStatus.Enable, true, actions));
+      lifecycle.getUser.mockResolvedValue(detail(EmploymentStatus.Enable, true, fullAdminActions));
       lifecycle.resignUser.mockResolvedValue({ changed, result: null });
       const onChanged = await submitResignation();
       expect(await screen.findByText(changed ? "离职已完成" : "已处于离职状态，无需修改")).toBeInTheDocument();
@@ -330,7 +327,7 @@ describe("UserDetailDrawer Employment lifecycle actions", () => {
     });
 
     it("does not classify an ordinary rejection as a committed result", async () => {
-      lifecycle.getUser.mockResolvedValue(detail(EmploymentStatus.Enable, true, actions));
+      lifecycle.getUser.mockResolvedValue(detail(EmploymentStatus.Enable, true, fullAdminActions));
       lifecycle.resignUser.mockRejectedValue(new Error("离职资格已变化"));
       const onChanged = await submitResignation();
       expect(await screen.findByText("离职资格已变化")).toBeInTheDocument();
@@ -341,9 +338,15 @@ describe("UserDetailDrawer Employment lifecycle actions", () => {
       expect(lifecycle.resignUser).toHaveBeenCalledTimes(1);
     });
 
-    it.each([false, true])(
-      "retains the committed warning when refresh fails=%s without replay",
-      async (refreshFails) => {
+    // The handler is shared; retain one HR case with only resignation granted to verify access wiring.
+    it.each([
+      { role: "Full Admin", refreshFails: false },
+      { role: "Full Admin", refreshFails: true },
+      { role: "HR", refreshFails: false },
+    ] as const)(
+      "$role retains the committed warning when refresh fails=$refreshFails without replay",
+      async ({ role, refreshFails }) => {
+        const actions = role === "HR" ? hrActions : fullAdminActions;
         lifecycle.getUser.mockResolvedValueOnce(detail(EmploymentStatus.Enable, true, actions));
         if (refreshFails) lifecycle.getUser.mockRejectedValue(new Error("详情暂不可用"));
         else
@@ -353,14 +356,15 @@ describe("UserDetailDrawer Employment lifecycle actions", () => {
             status: UserStatus.Disable,
           });
         lifecycle.resignUser.mockRejectedValue(new AdminMutationCommittedError(null));
-        await submitResignation();
+        const onChanged = await submitResignation(role);
         expect(await screen.findByText(refreshFails ? "详情暂不可用" : "已刷新用户")).toBeInTheDocument();
         expect(screen.getByText(/操作已生效，但后续处理失败/).closest("[role=alert]")).toHaveTextContent(
           "联系管理员修复",
         );
         expect(screen.queryByText("离职已完成")).not.toBeInTheDocument();
         expect(lifecycle.getUser).toHaveBeenCalledTimes(2);
-        expect(lifecycle.resignUser).toHaveBeenCalledTimes(1);
+        expect(lifecycle.resignUser).toHaveBeenCalledExactlyOnceWith("zhangsan");
+        expect(onChanged).toHaveBeenCalledTimes(refreshFails ? 0 : 1);
       },
     );
   });
