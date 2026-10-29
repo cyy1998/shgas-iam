@@ -125,6 +125,12 @@ const assignment = {
 
 describe("OrganizationResponsibilityAssignmentModule", () => {
   beforeEach(() => {
+    // Most scenarios exercise existing assignments and do not need the creation form mounted.
+    __setAccess({
+      canAccessOrganizationResponsibility: true,
+      canCreateOrganizationResponsibility: false,
+      canAccessAudit: true,
+    });
     Object.values(responsibilityService).forEach((mock) => {
       mock.mockReset();
     });
@@ -310,6 +316,11 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
   });
 
   it("creates a global assignment from the table toolbar without exposing Employment IDs", async () => {
+    __setAccess({
+      canAccessOrganizationResponsibility: true,
+      canCreateOrganizationResponsibility: true,
+      canAccessAudit: true,
+    });
     const { user } = render(
       <OrganizationResponsibilityAssignmentModule
         host={{
@@ -399,7 +410,7 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
         async (method, label, successMessage, allowedActions) => {
           __setAccess({
             canAccessOrganizationResponsibility: true,
-            canCreateOrganizationResponsibility: true,
+            canCreateOrganizationResponsibility: false,
             canAccessAudit: false,
           });
           const initial = {
@@ -695,7 +706,7 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
   it("removes stale detail and actions when HR scope is lost before a lifecycle retry", async () => {
     __setAccess({
       canAccessOrganizationResponsibility: true,
-      canCreateOrganizationResponsibility: true,
+      canCreateOrganizationResponsibility: false,
       canAccessAudit: false,
     });
     const { user } = render(

@@ -9,6 +9,7 @@ import {
 } from "@iam/contracts";
 import { ConfigProvider, Modal, message } from "antd";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { __setAccess } from "~admin/test/mocks/umijs-max";
 import { act, render, screen, waitFor, within } from "~admin/test/render";
 
 const responsibilityService = vi.hoisted(() => ({
@@ -73,6 +74,11 @@ const assignment = {
 
 describe("OrganizationResponsibilityAssignmentsPanel", () => {
   beforeEach(() => {
+    __setAccess({
+      canAccessOrganizationResponsibility: true,
+      canCreateOrganizationResponsibility: false,
+      canAccessAudit: true,
+    });
     ConfigProvider.config({
       holderRender: (children) => <ConfigProvider theme={{ token: { motion: false } }}>{children}</ConfigProvider>,
     });
@@ -133,6 +139,11 @@ describe("OrganizationResponsibilityAssignmentsPanel", () => {
   });
 
   it("creates an assignment with only the fixed organization, type and holder employment", async () => {
+    __setAccess({
+      canAccessOrganizationResponsibility: true,
+      canCreateOrganizationResponsibility: true,
+      canAccessAudit: true,
+    });
     responsibilityService.createAssignment.mockResolvedValue({
       changed: true,
       result: { id: 102 },
@@ -182,6 +193,11 @@ describe("OrganizationResponsibilityAssignmentsPanel", () => {
   });
 
   it("refreshes the current authority scope after an uncertain Create failure without replaying it", async () => {
+    __setAccess({
+      canAccessOrganizationResponsibility: true,
+      canCreateOrganizationResponsibility: true,
+      canAccessAudit: true,
+    });
     responsibilityService.createAssignment.mockRejectedValueOnce(
       new Error("网络异常，未自动重试；当前状态已刷新，请确认后再操作"),
     );
@@ -387,6 +403,11 @@ describe("OrganizationResponsibilityAssignmentsPanel", () => {
   });
 
   it("hosts responsibility assignments in the selected Organization detail", async () => {
+    __setAccess({
+      canAccessOrganizationResponsibility: true,
+      canCreateOrganizationResponsibility: true,
+      canAccessAudit: true,
+    });
     const { user } = render(
       <OrgDetailPanel
         loading={false}

@@ -188,8 +188,10 @@ describe("UsersPage mutation outcomes", () => {
       const form = within(await screen.findByRole("dialog", { name: "新建用户" }));
       const username = form.getByRole("textbox", { name: "用户名" });
       const name = form.getByRole("textbox", { name: "姓名" });
-      await user.type(username, usernameInput);
-      await user.type(name, nameInput);
+      await user.click(username);
+      await user.paste(usernameInput);
+      await user.click(name);
+      await user.paste(nameInput);
       await user.click(form.getByRole("button", { name: "确 定" }));
       expect(await form.findByText(usernameError)).toBeInTheDocument();
       expect(await form.findByText(nameError)).toBeInTheDocument();

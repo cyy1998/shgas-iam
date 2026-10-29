@@ -92,8 +92,11 @@ describe("PositionsPage mutation results through the position service", () => {
     );
     await user.click(await screen.findByRole("button", { name: "+ 新建岗位" }));
     const dialog = within(await screen.findByRole("dialog"));
-    await user.type(dialog.getAllByRole("textbox")[0], `  ${"C".repeat(64)}  `);
-    await user.type(dialog.getAllByRole("textbox")[1], `  ${"N".repeat(128)}  `);
+    // Validate the submitted boundaries without simulating each character's keyboard events.
+    await user.click(dialog.getAllByRole("textbox")[0]);
+    await user.paste(`  ${"C".repeat(64)}  `);
+    await user.click(dialog.getAllByRole("textbox")[1]);
+    await user.paste(`  ${"N".repeat(128)}  `);
     await user.click(dialog.getByRole("button", { name: "确 定" }));
 
     expect(await screen.findByText("创建成功")).toBeInTheDocument();
@@ -132,8 +135,10 @@ describe("PositionsPage mutation results through the position service", () => {
     );
     await user.click(await screen.findByRole("button", { name: "+ 新建岗位" }));
     const dialog = within(await screen.findByRole("dialog"));
-    await user.type(dialog.getAllByRole("textbox")[0], posCode);
-    await user.type(dialog.getAllByRole("textbox")[1], posName);
+    await user.click(dialog.getAllByRole("textbox")[0]);
+    await user.paste(posCode);
+    await user.click(dialog.getAllByRole("textbox")[1]);
+    await user.paste(posName);
     await user.click(dialog.getByRole("button", { name: "确 定" }));
     expect(await dialog.findByText(codeError)).toBeInTheDocument();
     expect(await dialog.findByText(nameError)).toBeInTheDocument();
