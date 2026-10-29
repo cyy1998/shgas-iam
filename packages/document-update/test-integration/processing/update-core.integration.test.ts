@@ -63,10 +63,10 @@ function createProcessor(
     },
     expand: async () => options.targets ?? [1],
     async registered(tx, _source, requests) {
-      for (const request of requests)
-        await tx.execute(
-          sql`INSERT INTO source_metadata (target_id,version) VALUES (${request.targetId},${request.version}::bigint) ON CONFLICT (target_id) DO UPDATE SET version=EXCLUDED.version`,
-        );
+      await tx.execute(sql`INSERT INTO source_metadata (target_id,version)
+        SELECT "targetId", version::bigint FROM jsonb_to_recordset(${JSON.stringify(requests)}::jsonb)
+          AS requests("targetId" integer, version text)
+        ON CONFLICT (target_id) DO UPDATE SET version=EXCLUDED.version`);
       if (options.failRegistered) throw new Error("domain metadata rejected");
     },
     build: async (_targetId, version) => ({ name: "Published", sourceVersion: version }),
@@ -149,11 +149,46 @@ test("completed outbox replay keeps the original requirements and never incremen
   expect([...work]).toEqual([{ version: "1", status: "pending" }]);
 });
 
-test("an expansion failure rolls back every requirement and its receipt, then safely retries", async () => {
-  const { processor } = createProcessor({ targets: [1, 2] });
+test.each([21_844, 21_845, 66_000])(
+  "expansion registers all %i targets and replays their original versions",
+  async (count) => {
+    const targets = Array.from({ length: count }, (_, index) => count - index);
+    const { processor, rebuildJobs } = createProcessor({ targets: [...targets, 1, count] });
+    await harness.sql`INSERT INTO organization_document_rebuild_state (organization_id,version,status)
+    VALUES (1,7,'processed')`;
+    const [entry] = await register();
+    const expanded = await processor.processOutbox(entry!);
+    const [receipt] = await harness.sql`SELECT status,rebuild_requests FROM organization_document_outbox`;
+    const metadata = await harness.sql`SELECT count(*)::integer AS count FROM source_metadata`;
+    const requirements = await harness.sql`SELECT organization_id,version,status
+    FROM organization_document_rebuild_state ORDER BY organization_id`;
+    expect(expanded).toEqual({ status: "expanded", registered: count });
+    expect(receipt!.status).toBe("processed");
+    expect(receipt!.rebuild_requests).toEqual(
+      Array.from({ length: count }, (_, index) => ({ targetId: index + 1, version: index === 0 ? "8" : "1" })),
+    );
+    expect(rebuildJobs).toEqual(receipt!.rebuild_requests);
+    expect(metadata[0]!.count).toBe(count);
+    expect(requirements).toHaveLength(count);
+    expect(
+      requirements.every((row) => row.status === "pending" && row.version === (row.organization_id === 1 ? "8" : "1")),
+    ).toBe(true);
+    const replayed = await processor.processOutbox(entry!);
+    const [unchanged] = await harness.sql`SELECT count(*)::integer AS count FROM organization_document_rebuild_state
+    WHERE version <> CASE WHEN organization_id=1 THEN 8 ELSE 1 END`;
+    expect(replayed).toEqual({ status: "replayed" });
+    expect(unchanged!.count).toBe(0);
+    expect(rebuildJobs.slice(count)).toEqual(receipt!.rebuild_requests);
+  },
+);
+
+test("a later expansion batch failure rolls back new and existing requirements before retry", async () => {
+  const { processor } = createProcessor({ targets: Array.from({ length: 1_002 }, (_, index) => index + 1) });
+  await harness.sql`INSERT INTO organization_document_rebuild_state (organization_id,version,status)
+    VALUES (1,7,'processed')`;
   const [entry] = await register();
   await harness.sql.unsafe(`CREATE FUNCTION reject_second() RETURNS trigger LANGUAGE plpgsql AS $$
-    BEGIN IF NEW.organization_id=2 THEN RAISE EXCEPTION 'controlled expansion failure'; END IF; RETURN NEW; END $$`);
+    BEGIN IF NEW.organization_id=1001 THEN RAISE EXCEPTION 'controlled expansion failure'; END IF; RETURN NEW; END $$`);
   await harness.sql.unsafe(
     "CREATE TRIGGER reject_second BEFORE INSERT ON organization_document_rebuild_state FOR EACH ROW EXECUTE FUNCTION reject_second()",
   );
@@ -163,15 +198,20 @@ test("an expansion failure rolls back every requirement and its receipt, then sa
   } catch (error) {
     failure = error;
   }
-  const work = await harness.sql`SELECT version FROM organization_document_rebuild_state`;
+  const work = await harness.sql`SELECT organization_id,version,status FROM organization_document_rebuild_state`;
   const receipts = await harness.sql`SELECT status,rebuild_requests FROM organization_document_outbox`;
   await harness.sql.unsafe("DROP TRIGGER reject_second ON organization_document_rebuild_state");
   await harness.sql.unsafe("DROP FUNCTION reject_second()");
   const retry = await processor.processOutbox(entry!);
+  const retried =
+    await harness.sql`SELECT organization_id,version FROM organization_document_rebuild_state ORDER BY organization_id`;
   expect(failure).toBeInstanceOf(Error);
-  expect([...work]).toEqual([]);
+  expect([...work]).toEqual([{ organization_id: 1, version: "7", status: "processed" }]);
   expect([...receipts]).toEqual([{ status: "failed", rebuild_requests: [] }]);
-  expect(retry).toEqual({ status: "expanded", registered: 2 });
+  expect(retry).toEqual({ status: "expanded", registered: 1_002 });
+  expect([...retried]).toEqual(
+    Array.from({ length: 1_002 }, (_, index) => ({ organization_id: index + 1, version: index === 0 ? "8" : "1" })),
+  );
 });
 
 test("domain registration failure rolls back requirements, metadata and receipt together before retry", async () => {
@@ -298,6 +338,33 @@ test("failed wakeups retain diagnostics and requirements in both durable stages"
   });
   expect(outbox[0]).toMatchObject({ status: "pending", last_error: "expansion failed", attempts: 3 });
   expect(rebuilds[0]).toMatchObject({ version: "7", status: "pending", last_error: "build failed", attempts: 3 });
+});
+
+test("repair resets and wakes both durable stages beyond the SQL parameter limit", async () => {
+  const count = 65_534;
+  const entries = await harness.sql`INSERT INTO organization_document_outbox
+    (id,organization_id,scope,status,last_error,attempts)
+    SELECT gen_random_uuid(), id, 'self', 'failed', 'expansion failed', 3
+    FROM generate_series(1, ${count}::integer) AS id RETURNING id`;
+  await harness.sql`INSERT INTO organization_document_rebuild_state
+    (organization_id,version,status,last_error,attempts)
+    SELECT id, 7, 'failed', 'build failed', 3 FROM generate_series(1, ${count}::integer) AS id`;
+  const { processor, outboxJobs, rebuildJobs } = createProcessor();
+  const report = await processor.repairFailedOrStale({ staleBefore: new Date(), limit: count });
+  const [outbox] = await harness.sql`SELECT count(*)::integer AS count FROM organization_document_outbox
+    WHERE status='pending' AND attempts=3 AND last_error='expansion failed'`;
+  const [rebuilds] = await harness.sql`SELECT count(*)::integer AS count FROM organization_document_rebuild_state
+    WHERE status='pending' AND version=7 AND attempts=3 AND last_error='build failed'`;
+  expect(report).toEqual({
+    outbox: { selected: count, enqueued: count, failed: 0 },
+    rebuilds: { selected: count, enqueued: count, failed: 0 },
+    enqueued: count * 2,
+    failed: 0,
+  });
+  expect(outboxJobs.map(({ outboxId }) => outboxId).sort()).toEqual(entries.map(({ id }) => id).sort());
+  expect(rebuildJobs).toEqual(Array.from({ length: count }, (_, index) => ({ targetId: index + 1, version: "7" })));
+  expect(outbox!.count).toBe(count);
+  expect(rebuilds!.count).toBe(count);
 });
 
 test("repair skips active transactions even when their claims are old", async () => {

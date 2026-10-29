@@ -111,6 +111,87 @@ describe("OrganizationResponsibilityResolver", () => {
     });
   });
 
+  test("resolves holders across a subtree larger than the SQL parameter limit", async () => {
+    await seedOrganizationTree(harness!.db);
+    await harness!.db
+      .insert(employments)
+      .values([employment({ id: 100, userId: 900, orgId: 12 }), employment({ id: 101, userId: 901, orgId: 12 })]);
+    await harness!.db.execute(sql`
+      INSERT INTO organization (id, org_code, org_name, parent_id, path, level, org_type)
+      SELECT id, 'broad-target-' || id, 'Broad target ' || id, 20, '20/' || id, 2, ${OrganizationType.Department}
+      FROM generate_series(1000, 66533) AS id
+    `);
+    await harness!.db.insert(organizationResponsibilityAssignments).values(
+      assignment({
+        employmentId: 101,
+        typeCode: OrganizationResponsibilityTypeCode.Head,
+        targetOrganizationId: 66533,
+      }),
+    );
+    await harness!.db.execute(sql`
+      INSERT INTO organization_closure (ancestor_id, descendant_id, depth)
+      SELECT 20, id, 1 FROM generate_series(1000, 66533) AS id
+    `);
+    await harness!.db.execute(sql`
+      INSERT INTO organization_responsibility_assignment
+        (employment_id, type_code, target_organization_id, status, start_time)
+      SELECT 100, ${OrganizationResponsibilityTypeCode.Head}, id,
+        ${OrganizationResponsibilityAssignmentStatus.Enable}, '2026-08-01T00:00:00Z'::timestamptz
+      FROM generate_series(1000, 2999) AS id
+    `);
+
+    const holders = await createOrganizationResponsibilityResolver(harness!.db).resolveHolderEmploymentIds({
+      targetOrganizationIds: [20],
+      at,
+    });
+
+    expect(holders).toEqual([100, 101]);
+  });
+
+  test("resolves large employment inputs and preserves empty entries and deduplication", async () => {
+    await seedOrganizationTree(harness!.db);
+    await harness!.db.insert(employments).values(employment({ id: 100, userId: 900, orgId: 12 }));
+    await harness!.db.insert(organizationResponsibilityAssignments).values(
+      assignment({
+        employmentId: 100,
+        typeCode: OrganizationResponsibilityTypeCode.Head,
+        targetOrganizationId: 20,
+      }),
+    );
+
+    const responsibilities = await createOrganizationResponsibilityResolver(
+      harness!.db,
+    ).resolveEffectiveResponsibilities({
+      employmentIds: [100, ...Array.from({ length: 65534 }, (_, index) => index + 100), 65633],
+      at,
+    });
+
+    expect(responsibilities.size).toBe(65534);
+    expect(responsibilities.get(100)).toEqual([
+      { typeCode: OrganizationResponsibilityTypeCode.Head, targetOrganizationId: 20 },
+    ]);
+    expect(responsibilities.get(65633)).toEqual([]);
+  });
+
+  test("resolves large overlapping target inputs without duplicating holders", async () => {
+    await seedOrganizationTree(harness!.db);
+    await harness!.db.insert(employments).values(employment({ id: 100, userId: 900, orgId: 12 }));
+    await harness!.db.insert(organizationResponsibilityAssignments).values(
+      assignment({
+        employmentId: 100,
+        typeCode: OrganizationResponsibilityTypeCode.Head,
+        targetOrganizationId: 21,
+      }),
+    );
+
+    const holders = await createOrganizationResponsibilityResolver(harness!.db).resolveHolderEmploymentIds({
+      targetOrganizationIds: [20, 21, ...Array.from({ length: 65534 }, (_, index) => index + 1000), 20],
+      at,
+    });
+
+    expect(holders).toEqual([100]);
+  });
+
   test("fails the whole batch when an open assignment is scheduled after observation time", async () => {
     await seedOrganizationTree(harness!.db);
     await harness!.db.insert(employments).values(employment({ id: 100, userId: 900, orgId: 12 }));
@@ -291,7 +372,7 @@ describe("OrganizationResponsibilityResolver", () => {
     }
   });
 
-  test("fails the whole batch when target-wide head cardinality is corrupted", async () => {
+  test("fails the whole batch on target-wide head corruption even across input batches", async () => {
     await seedOrganizationTree(harness!.db);
     await harness!.db
       .insert(employments)
@@ -313,12 +394,14 @@ describe("OrganizationResponsibilityResolver", () => {
       ]);
 
       const resolver = createOrganizationResponsibilityResolver(harness!.db);
-      const failure = await captureFailure(resolver.resolveEffectiveResponsibilities({ employmentIds: [100], at }));
+      for (const employmentIds of [[100], [100, ...Array.from({ length: 2000 }, (_, index) => index + 1000), 101]]) {
+        const failure = await captureFailure(resolver.resolveEffectiveResponsibilities({ employmentIds, at }));
 
-      expect(failure).toMatchObject({
-        name: "OrganizationResponsibilityIntegrityError",
-        reason: "head-cardinality-violated",
-      });
+        expect(failure).toMatchObject({
+          name: "OrganizationResponsibilityIntegrityError",
+          reason: "head-cardinality-violated",
+        });
+      }
     } finally {
       await harness!.db.delete(organizationResponsibilityAssignments);
       await harness!.db.execute(sql`

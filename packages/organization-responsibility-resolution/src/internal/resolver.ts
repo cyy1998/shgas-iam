@@ -19,6 +19,8 @@ import { eq, inArray } from "drizzle-orm";
 import type { EffectiveOrganizationResponsibility, OrganizationResponsibilityResolver } from "../index.ts";
 import { OrganizationResponsibilityIntegrityError } from "../index.ts";
 
+const QUERY_ID_BATCH_SIZE = 1000;
+
 const KNOWN_EMPLOYMENT_STATUSES = new Set<EmploymentStatus>([
   EmploymentStatus.Enable,
   EmploymentStatus.Pause,
@@ -79,14 +81,17 @@ export function createResolver(db: DbClient): OrganizationResponsibilityResolver
       const typeCodes = input.typeCodes === undefined ? undefined : unique(input.typeCodes);
       if (targetOrganizationIds.length === 0 || typeCodes?.length === 0) return [];
 
-      const targetRows = await db
-        .select({ targetOrganizationId: organizationClosures.descendantId })
-        .from(organizationClosures)
-        .where(inArray(organizationClosures.ancestorId, targetOrganizationIds));
-      const affectedTargetIds = unique(targetRows.map((row) => row.targetOrganizationId));
-      if (affectedTargetIds.length === 0) return [];
+      const affectedTargetIds = new Set<number>();
+      for (const batch of queryIdBatches(targetOrganizationIds)) {
+        const targetRows = await db
+          .select({ targetOrganizationId: organizationClosures.descendantId })
+          .from(organizationClosures)
+          .where(inArray(organizationClosures.ancestorId, batch));
+        for (const row of targetRows) affectedTargetIds.add(row.targetOrganizationId);
+      }
+      if (affectedTargetIds.size === 0) return [];
 
-      const rows = await loadAssignmentsByTargetIds(db, affectedTargetIds);
+      const rows = await loadAssignmentsByTargetIds(db, [...affectedTargetIds]);
       await assertBatchIntegrity(db, rows, input.at);
       return unique(
         rows
@@ -109,13 +114,30 @@ export function createResolver(db: DbClient): OrganizationResponsibilityResolver
 }
 
 async function loadAssignmentsByEmploymentIds(db: DbClient, employmentIds: number[]) {
-  return await assignmentQuery(db).where(inArray(organizationResponsibilityAssignments.employmentId, employmentIds));
+  const rows: AssignmentRow[] = [];
+  for (const batch of queryIdBatches(employmentIds)) {
+    const batchRows = await assignmentQuery(db).where(
+      inArray(organizationResponsibilityAssignments.employmentId, batch),
+    );
+    for (const row of batchRows) rows.push(row);
+  }
+  return rows;
 }
 
 async function loadAssignmentsByTargetIds(db: DbClient, targetOrganizationIds: number[]) {
-  return await assignmentQuery(db).where(
-    inArray(organizationResponsibilityAssignments.targetOrganizationId, targetOrganizationIds),
-  );
+  const rows: AssignmentRow[] = [];
+  for (const batch of queryIdBatches(targetOrganizationIds)) {
+    const batchRows = await assignmentQuery(db).where(
+      inArray(organizationResponsibilityAssignments.targetOrganizationId, batch),
+    );
+    for (const row of batchRows) rows.push(row);
+  }
+  return rows;
+}
+
+function* queryIdBatches(ids: readonly number[]) {
+  for (let offset = 0; offset < ids.length; offset += QUERY_ID_BATCH_SIZE)
+    yield ids.slice(offset, offset + QUERY_ID_BATCH_SIZE);
 }
 
 function assignmentQuery(db: DbClient) {

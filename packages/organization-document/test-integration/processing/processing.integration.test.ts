@@ -133,6 +133,52 @@ test("path changes expand the committed subtree and duplicate event delivery nev
   expect(dirty.map(({ version }) => version)).toEqual(["2", "2"]);
 });
 
+test("a large committed subtree registers every target once and replays its complete original receipt", async () => {
+  const targetCount = 21_846;
+  await harness.sql`INSERT INTO organization (id, org_code, org_name, parent_id, path, level, org_type)
+    SELECT id, 'ORG-' || id, 'Organization ' || id, CASE WHEN id=1 THEN -1 ELSE 1 END,
+      CASE WHEN id=1 THEN '/1' ELSE '/1/' || id END, CASE WHEN id=1 THEN 1 ELSE 2 END,
+      ${OrganizationType.Department}
+    FROM generate_series(1, ${targetCount}) AS target(id)`;
+  await harness.sql`INSERT INTO organization_closure (ancestor_id, descendant_id, depth)
+    SELECT id, id, 0 FROM generate_series(1, ${targetCount}) AS target(id)
+    UNION ALL SELECT 1, id, 1 FROM generate_series(2, ${targetCount}) AS target(id)`;
+  await harness.sql`INSERT INTO organization_document_rebuild_state (organization_id, version)
+    VALUES (1,7), (1001,7), (${targetCount},7)`;
+  const { processor, sourceJobs, rebuildJobs } = createProcessor();
+  await recordChange([{ kind: "updated", organizationId: 1, changedFields: ["name"] }], sourceJobs, async (tx) => {
+    await tx.execute(sql`UPDATE organization SET org_name='Renamed root' WHERE id=1`);
+  });
+  const payload = sourceJobs[0]!;
+
+  const expanded = await processor.processOutbox(payload);
+  const replayed = await processor.processOutbox(payload);
+  const states = await harness.sql`SELECT organization_id, version, status
+    FROM organization_document_rebuild_state ORDER BY organization_id`;
+  const [receipt] = await harness.sql`SELECT status, rebuild_requests FROM organization_document_outbox
+    WHERE id=${payload.outboxId}`;
+  const expectedJobs = Array.from({ length: targetCount }, (_, index) => {
+    const organizationId = index + 1;
+    return { organizationId, version: [1, 1001, targetCount].includes(organizationId) ? "8" : "1" };
+  });
+
+  expect(expanded).toEqual({ status: "expanded", registered: targetCount });
+  expect(replayed).toEqual({ status: "replayed" });
+  expect([...states]).toEqual(
+    expectedJobs.map(({ organizationId, version }) => ({
+      organization_id: organizationId,
+      version,
+      status: "pending",
+    })),
+  );
+  expect(receipt).toEqual({
+    status: "processed",
+    rebuild_requests: expectedJobs.map(({ organizationId, version }) => ({ targetId: organizationId, version })),
+  });
+  expect(rebuildJobs.slice(0, targetCount)).toEqual(expectedJobs);
+  expect(rebuildJobs.slice(targetCount)).toEqual(expectedJobs);
+});
+
 test("newer deletion publication retains its version and rejects a late visible candidate", async () => {
   await seedTree();
   const { processor, sourceJobs, rebuildJobs } = createProcessor();

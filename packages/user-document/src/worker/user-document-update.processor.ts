@@ -17,6 +17,9 @@ import { createUserDocumentMaintenanceRepository } from "./user-document-mainten
 import type { UserDocumentProjectionBundle } from "./user-document-projection";
 import type { SubjectAccessRepairPort, UserDocumentRebuildLoggerPort } from "./user-document-rebuild.processor";
 
+// Bound target parameters independently of the document builder's batch size.
+const SQL_TARGET_BATCH_SIZE = 1_000;
+
 export interface UserDocumentUpdateInput<
   TDocument extends PublishedUserDocument,
   TFacts extends { subjectIdentifier: string; sourceVersion: string },
@@ -37,16 +40,19 @@ export function createUserDocumentUpdateProcessor<
 >(input: UserDocumentUpdateInput<TDocument, TFacts>) {
   async function enqueueRebuilds(requests: Array<{ targetId: number; version: string }>) {
     if (!requests.length) return { enqueued: 0 };
-    const metadata = await input.db
-      .select()
-      .from(userDocumentRebuildStates)
-      .where(
-        inArray(
-          userDocumentRebuildStates.userId,
-          requests.map(({ targetId }) => targetId),
-        ),
-      );
-    const rows = new Map(metadata.map((row) => [row.userId, row]));
+    const rows = new Map<number, typeof userDocumentRebuildStates.$inferSelect>();
+    for (let offset = 0; offset < requests.length; offset += SQL_TARGET_BATCH_SIZE) {
+      const metadata = await input.db
+        .select()
+        .from(userDocumentRebuildStates)
+        .where(
+          inArray(
+            userDocumentRebuildStates.userId,
+            requests.slice(offset, offset + SQL_TARGET_BATCH_SIZE).map(({ targetId }) => targetId),
+          ),
+        );
+      for (const row of metadata) rows.set(row.userId, row);
+    }
     return await input.jobProducer.enqueueRebuildJobs(
       requests.map(({ targetId, version }) => {
         const row = rows.get(targetId);
@@ -145,20 +151,21 @@ export function createUserDocumentUpdateProcessor<
     parseSource: (source) => UserDocumentOutboxSourceSchema.parse(source),
     expand: async (tx, source, observedAt) => await expandUserDocumentSource(tx, source.change, observedAt),
     async registered(tx, source, requests) {
-      if (!requests.length) return;
-      await tx
-        .update(userDocumentRebuildStates)
-        .set({
-          reasonCodes: [source.reason ?? userDocumentSourceReason(source.change.kind)],
-          requestId: source.requestId ?? null,
-          traceId: source.traceId ?? null,
-        })
-        .where(
-          inArray(
-            userDocumentRebuildStates.userId,
-            requests.map(({ targetId }) => targetId),
-          ),
-        );
+      for (let offset = 0; offset < requests.length; offset += SQL_TARGET_BATCH_SIZE) {
+        await tx
+          .update(userDocumentRebuildStates)
+          .set({
+            reasonCodes: [source.reason ?? userDocumentSourceReason(source.change.kind)],
+            requestId: source.requestId ?? null,
+            traceId: source.traceId ?? null,
+          })
+          .where(
+            inArray(
+              userDocumentRebuildStates.userId,
+              requests.slice(offset, offset + SQL_TARGET_BATCH_SIZE).map(({ targetId }) => targetId),
+            ),
+          );
+      }
     },
     async build(userId, version) {
       const observedAt = input.clock.nowDate();
@@ -261,16 +268,17 @@ export function createUserDocumentUpdateProcessor<
           .orderBy(asc(userDocumentRebuildStates.userId))
           .limit(options.limit)
           .for("update", { skipLocked: true });
-        if (rows.length)
+        for (let offset = 0; offset < rows.length; offset += SQL_TARGET_BATCH_SIZE) {
           await tx
             .update(userDocumentRebuildStates)
             .set({ postPublicationStatus: "pending", postPublicationToken: null, postPublicationStartedAt: null })
             .where(
               inArray(
                 userDocumentRebuildStates.userId,
-                rows.map(({ userId }) => userId),
+                rows.slice(offset, offset + SQL_TARGET_BATCH_SIZE).map(({ userId }) => userId),
               ),
             );
+        }
         return rows;
       });
       let completed = 0;

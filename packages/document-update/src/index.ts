@@ -4,6 +4,10 @@ import { extractPostgresError } from "@iam/db/postgres-error";
 import { type SQL, sql } from "drizzle-orm";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 
+// The largest statement binds three parameters per target. Keep every statement
+// well below the driver limit without splitting the transaction or its receipt.
+const SQL_TARGET_BATCH_SIZE = 1_000;
+
 export interface DocumentRebuildRequest {
   readonly targetId: number;
   readonly version: string;
@@ -135,20 +139,23 @@ export function createDocumentUpdateProcessor<Source, Document>(input: {
             const source = input.parseSource(current.source);
             const ids = [...new Set(await input.expand(tx, source, observedAt))].sort((a, b) => a - b);
             for (const id of ids) assertDocumentRebuildRequest({ targetId: id, version: "1" });
-            const registered = ids.length
-              ? await tx.execute<{ targetId: number; version: string }>(sql`INSERT INTO ${rebuildState}
+            const registered: DocumentRebuildRequest[] = [];
+            for (let offset = 0; offset < ids.length; offset += SQL_TARGET_BATCH_SIZE) {
+              const batch = ids.slice(offset, offset + SQL_TARGET_BATCH_SIZE);
+              const rows = await tx.execute<{ targetId: number; version: string }>(sql`INSERT INTO ${rebuildState}
                 (${targetName}, ${requestedAtName}, updated_at) VALUES
                 ${sql.join(
-                  ids.map((id) => sql`(${id}, ${observedAt.toISOString()}, ${observedAt.toISOString()})`),
+                  batch.map((id) => sql`(${id}, ${observedAt.toISOString()}, ${observedAt.toISOString()})`),
                   sql`, `,
                 )}
                 ON CONFLICT (${targetName}) DO UPDATE SET
                   version=${rebuildState}.version+1, status='pending', processing_token=NULL,
                   processing_started_at=NULL, attempts=0, last_error=NULL,
                   ${requestedAtName}=EXCLUDED.${requestedAtName}, processed_at=NULL, updated_at=EXCLUDED.updated_at
-                RETURNING ${targetName} AS "targetId", version::text AS version`)
-              : [];
-            const result = [...registered].sort((a, b) => a.targetId - b.targetId).map(assertDocumentRebuildRequest);
+                RETURNING ${targetName} AS "targetId", version::text AS version`);
+              registered.push(...rows);
+            }
+            const result = registered.sort((a, b) => a.targetId - b.targetId).map(assertDocumentRebuildRequest);
             await input.registered?.(tx, source, result);
             await tx.execute(sql`UPDATE ${outbox} SET status='processed',
             rebuild_requests=${JSON.stringify(result)}::jsonb, processing_token=NULL, processing_started_at=NULL,
@@ -244,20 +251,24 @@ export function createDocumentUpdateProcessor<Source, Document>(input: {
         ORDER BY ${requestedAt}, ${targetId} LIMIT ${options.limit} FOR UPDATE SKIP LOCKED`);
       options.signal?.throwIfAborted();
       const now = clock.nowDate();
-      if (entries.length)
+      for (let offset = 0; offset < entries.length; offset += SQL_TARGET_BATCH_SIZE) {
+        const batch = entries.slice(offset, offset + SQL_TARGET_BATCH_SIZE);
         await tx.execute(sql`UPDATE ${outbox} SET status='pending', processing_token=NULL,
           processing_started_at=NULL, updated_at=${now.toISOString()}
           WHERE id IN (${sql.join(
-            entries.map(({ outboxId }) => sql`${outboxId}`),
+            batch.map(({ outboxId }) => sql`${outboxId}`),
             sql`, `,
           )})`);
-      if (rebuilds.length)
+      }
+      for (let offset = 0; offset < rebuilds.length; offset += SQL_TARGET_BATCH_SIZE) {
+        const batch = rebuilds.slice(offset, offset + SQL_TARGET_BATCH_SIZE);
         await tx.execute(sql`UPDATE ${rebuildState} SET status='pending', processing_token=NULL,
           processing_started_at=NULL, updated_at=${now.toISOString()}
           WHERE ${targetId} IN (${sql.join(
-            rebuilds.map(({ targetId: id }) => sql`${id}`),
+            batch.map(({ targetId: id }) => sql`${id}`),
             sql`, `,
           )})`);
+      }
       return { entries: [...entries], rebuilds: [...rebuilds].map(assertDocumentRebuildRequest) };
     });
     async function wake(
