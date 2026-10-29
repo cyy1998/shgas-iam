@@ -27,6 +27,17 @@ import {
   createSubjectAccessAuthorityRepository,
   createUserDocumentWorkerModule,
 } from "@iam/user-document/worker";
+import { runDocumentCommandWithLifecycle } from "@worker/commands/document-command-lifecycle";
+import { runUserDocumentBackfillCommand } from "@worker/commands/user-document/user-document-backfill";
+import {
+  runUserDocumentPostgresGateCommand,
+  runUserDocumentRedisGateCommand,
+  userDocumentGateExitCode,
+} from "@worker/commands/user-document/user-document-readiness";
+import { runUserDocumentRepairCommand } from "@worker/commands/user-document/user-document-repair";
+import { createUserDocumentCommandComposition } from "@worker/composition/user-document-command";
+import { createUserDocumentReadinessCommandComposition } from "@worker/composition/user-document-readiness-command";
+import { parseUserDocumentCommandEnv } from "@worker/env";
 import Redis from "ioredis";
 import { createWorkerPostgresTestHarness } from "../support/postgres-test-harness";
 import { resetWorkerRedisTestDatabase, resolveWorkerRedisTestUrl } from "../support/redis-test-harness";
@@ -58,7 +69,7 @@ test("full Profile maintenance rebuilds every account before verification and re
   const backfill = await fixture.command("backfill", 0);
   expect(backfill.output).toContain('"enqueued":5');
   expect(backfill.output).toContain('"publication":"not-verified"');
-  const beforeConsumption = await fixture.command("verify-postgres", 1);
+  const beforeConsumption = await fixture.run("verify-postgres", 1);
   expect(beforeConsumption.output).toContain('"status":"failed"');
   // The durable backfill sources can be replayed, while the old incompatible rebuild metadata still fails explicitly.
   const recovery = await fixture.command("repair", 1, [
@@ -93,17 +104,17 @@ test("full Profile maintenance rebuilds every account before verification and re
   // The controlled source smoke changes the last inventory batch after the first complete acceptance.
   await sql`UPDATE "user" SET name='Smoke changed last user' WHERE id=5`;
   const sourceAfterSmoke = await fixture.sourceInventory();
-  const stalePostgres = await fixture.command("verify-postgres", 1);
+  const stalePostgres = await fixture.run("verify-postgres", 1);
   expect(stalePostgres.output).toContain('"code":"document-authoritative-mismatch"');
   expect(stalePostgres.output).toContain('"samples":["user:5"]');
   // A valid old cache alone cannot prove that the PostgreSQL source smoke has converged.
-  await fixture.command("verify-redis", 0);
+  await fixture.run("verify-redis", 0);
 
-  await fixture.command("backfill", 0);
+  await fixture.run("backfill", 0);
   await fixture.command("repair", 0, ["--limit", "10"]);
   await fixture.startConsumer();
   await fixture.converged();
-  await fixture.assertReadOnlyCompleteGates();
+  await fixture.assertReadOnlyCompleteGates(true);
   const versionsAfterSmoke = await sql<
     { user_id: number; source_version: string }[]
   >`SELECT user_id,source_version FROM user_document ORDER BY user_id`;
@@ -124,7 +135,7 @@ test("full Profile maintenance rebuilds every account before verification and re
 
 test("complete maintenance gates reject corrupt, missing and inconsistent rows beyond the first batch without repairing them", async () => {
   const fixture = await createMaintenanceFixture();
-  await fixture.command("backfill", 0);
+  await fixture.run("backfill", 0);
   await fixture.startConsumer();
   await fixture.converged();
   await fixture.completeGates();
@@ -146,12 +157,12 @@ test("complete maintenance gates reject corrupt, missing and inconsistent rows b
   const damagedBefore = await fixture.publicationInventory();
   const cacheBefore = await Promise.all(fixture.subjects.map((subject) => cache.read(subject)));
 
-  const postgres = await fixture.command("verify-postgres", 1);
+  const postgres = await fixture.run("verify-postgres", 1);
   for (const code of ["document-version-mismatch", "document-invalid", "document-missing", "document-not-current"]) {
     expect(postgres.output).toContain(`"code":"${code}"`);
   }
   expect(postgres.output).toContain('"verifiedUsers":5');
-  const redis = await fixture.command("verify-redis", 1);
+  const redis = await fixture.run("verify-redis", 1);
   expect(redis.output).toContain('"code":"facts-mismatch"');
   expect(redis.output).toContain('"code":"facts-without-current-document"');
   expect(redis.output).toContain('"verifiedUsers":5');
@@ -160,8 +171,8 @@ test("complete maintenance gates reject corrupt, missing and inconsistent rows b
   const cacheAfter = await Promise.all(fixture.subjects.map((subject) => cache.read(subject)));
   expect(cacheAfter).toEqual(cacheBefore);
 
-  await fixture.command("backfill", 0);
-  await fixture.command("repair", 0, ["--limit", "10"]);
+  await fixture.run("backfill", 0);
+  await fixture.run("repair", 0);
   await fixture.startConsumer();
   await fixture.converged();
   await fixture.assertReadOnlyCompleteGates();
@@ -273,22 +284,52 @@ async function createMaintenanceFixture() {
     }
     throw new Error("Profile maintenance did not converge through both full gates");
   }
-  async function command(
-    operation: "backfill" | "repair" | "verify-postgres" | "verify-redis",
-    expectedExitCode: number,
-    args: string[] = [],
-  ) {
-    const readiness = operation.startsWith("verify-");
+  function commandEnvironment(readiness: boolean) {
     const databaseUrl = new URL(pg.commandDatabaseUrl);
     if (readiness)
       databaseUrl.searchParams.set(
         "options",
         `${databaseUrl.searchParams.get("options")} -cdefault_transaction_read_only=on`,
       );
+    return {
+      ...process.env,
+      NODE_ENV: "test",
+      IAM_WORKER_DATABASE_URL: databaseUrl.toString(),
+      IAM_WORKER_REDIS_HOST: redisConfig.host,
+      IAM_WORKER_REDIS_PORT: String(redisConfig.port),
+      IAM_WORKER_REDIS_DB: String(redisConfig.db),
+      IAM_WORKER_REDIS_PASSWORD: redisConfig.password,
+      IAM_WORKER_ENABLED_MODULES: "user-document",
+      IAM_WORKER_HTTP_ENABLED: "false",
+      IAM_WORKER_BULL_BOARD_ENABLED: "false",
+      IAM_WORKER_USER_DOCUMENT_BACKFILL_BATCH_SIZE: "1",
+      IAM_WORKER_LOG_LEVEL: "info",
+      IAM_WORKER_LOG_FORMAT: "json",
+      FORCE_COLOR: "0",
+      NO_COLOR: "1",
+    };
+  }
+  function commandConfiguration(readiness: boolean) {
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    try {
+      return parseUserDocumentCommandEnv(commandEnvironment(readiness));
+    } finally {
+      // The CLI parser exposes its URL for @iam/db. In-process compositions use
+      // their explicit URL, so do not leak that process-local bridge to other fixtures.
+      if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = previousDatabaseUrl;
+    }
+  }
+  async function command(
+    operation: "backfill" | "repair" | "verify-postgres" | "verify-redis",
+    expectedExitCode: number,
+    args: string[] = [],
+  ) {
+    const readiness = operation.startsWith("verify-");
     const pending = runProcessCommandSmoke({
       label: `User Document maintenance ${operation}`,
-      start: () =>
-        spawnOwnedProcessTree({
+      start: () => {
+        return spawnOwnedProcessTree({
           executable: process.execPath,
           args: [
             "--no-env-file",
@@ -298,24 +339,9 @@ async function createMaintenanceFixture() {
             ...args,
           ],
           cwd: workerRoot,
-          env: {
-            ...process.env,
-            NODE_ENV: "test",
-            IAM_WORKER_DATABASE_URL: databaseUrl.toString(),
-            IAM_WORKER_REDIS_HOST: redisConfig.host,
-            IAM_WORKER_REDIS_PORT: String(redisConfig.port),
-            IAM_WORKER_REDIS_DB: String(redisConfig.db),
-            IAM_WORKER_REDIS_PASSWORD: redisConfig.password,
-            IAM_WORKER_ENABLED_MODULES: "user-document",
-            IAM_WORKER_HTTP_ENABLED: "false",
-            IAM_WORKER_BULL_BOARD_ENABLED: "false",
-            IAM_WORKER_USER_DOCUMENT_BACKFILL_BATCH_SIZE: "1",
-            IAM_WORKER_LOG_LEVEL: "info",
-            IAM_WORKER_LOG_FORMAT: "json",
-            FORCE_COLOR: "0",
-            NO_COLOR: "1",
-          },
-        }),
+          env: commandEnvironment(readiness),
+        });
+      },
       completionTimeoutMs: 15_000,
       cleanupTimeoutMs: 5_000,
       expectedExitCode,
@@ -327,9 +353,84 @@ async function createMaintenanceFixture() {
     void pending.catch(() => {});
     return await pending;
   }
-  async function completeGates() {
+  // Business variants use the same production composition and command operations,
+  // while representative argv/output/exit and read-only checks still run a real CLI.
+  async function run(operation: "backfill" | "repair" | "verify-postgres" | "verify-redis", expectedExitCode: number) {
+    const messages: string[] = [];
+    const commandLogger = {
+      debug: logger.debug.bind(logger),
+      info(data: unknown) {
+        messages.push(JSON.stringify(data));
+      },
+      warn: logger.warn.bind(logger),
+      error: logger.error.bind(logger),
+      child: logger.child.bind(logger),
+    };
+    const env = commandConfiguration(operation.startsWith("verify-"));
+    const deadlineMs = 15_000;
+    let exitCode = 0;
+    if (operation === "verify-postgres" || operation === "verify-redis") {
+      const composition = createUserDocumentReadinessCommandComposition({
+        databaseUrl: env.databaseUrl,
+        buildBatchSize: env.userDocument.rebuildBatchSize,
+        logger: commandLogger,
+        deadlineMs,
+        ...(operation === "verify-redis" ? { redis: env.redis } : {}),
+      });
+      stopExecutors.push(() => composition.shutdown("test-cleanup"));
+      const report = await runDocumentCommandWithLifecycle({
+        deadlineMs,
+        shutdown: composition.shutdown,
+        run: (signal) =>
+          (operation === "verify-postgres" ? runUserDocumentPostgresGateCommand : runUserDocumentRedisGateCommand)(
+            { verifier: composition, logger: commandLogger },
+            { batchSize: 1, signal },
+          ),
+      });
+      exitCode = userDocumentGateExitCode(report);
+    } else {
+      const composition = createUserDocumentCommandComposition({ env, logger: commandLogger, deadlineMs });
+      stopExecutors.push(() => composition.shutdown("test-cleanup"));
+      await runDocumentCommandWithLifecycle({
+        deadlineMs,
+        shutdown: composition.shutdown,
+        async run(signal) {
+          if (!composition.maintenance) throw new Error("User Document maintenance is required");
+          if (operation === "backfill") {
+            return await runUserDocumentBackfillCommand(
+              { maintenance: composition.maintenance, logger: commandLogger, config: { batchSize: 1 } },
+              signal,
+            );
+          }
+          await composition.connect();
+          const result = await runUserDocumentRepairCommand(
+            {
+              maintenance: composition.maintenance,
+              subjectAccessRepair: composition.subjectAccess.repair,
+              subjectAccessRepairBacklog: composition.subjectAccess.repairBacklog,
+              subjectAccessTransitionReaper: composition.subjectAccess.transitionReaper,
+              subjectAccessTransitionRecovery: composition.subjectAccess.transitionRecovery,
+              clock: composition.clock,
+              logger: commandLogger,
+              config: {
+                limit: 10,
+                repairStaleSeconds: env.userDocument.repairStaleSeconds,
+                transitionStaleSeconds: env.userDocument.repairStaleSeconds,
+              },
+            },
+            { signal },
+          );
+          if (result.subjectAccess.failed || result.transitionRecovery.failed) exitCode = 1;
+          return result;
+        },
+      });
+    }
+    expect(exitCode).toBe(expectedExitCode);
+    return { output: messages.join("\n") };
+  }
+  async function completeGates(useCli = false) {
     for (const operation of ["verify-postgres", "verify-redis"] as const) {
-      const result = await command(operation, 0);
+      const result = await (useCli ? command : run)(operation, 0);
       expect(result.output).toContain('"status":"passed"');
       expect(result.output).toContain('"counts":{"users":5,"documents":5,"verifiedUsers":5');
     }
@@ -341,14 +442,14 @@ async function createMaintenanceFixture() {
       (SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM user_document_outbox t) AS outbox`;
     return row;
   }
-  async function assertReadOnlyCompleteGates() {
+  async function assertReadOnlyCompleteGates(useCli = false) {
     if (!module) throw new Error("Complete verification requires the controlled consumer to have converged");
     const before = await publicationInventory();
     const jobsBefore = await module.queue.getJobs();
     const cache = createSubjectFactsRedisCache(redis);
     const factsBefore = await Promise.all(subjects.map((subject) => cache.read(subject)));
     const barriersBefore = await bootstrap.inspectMany(subjects);
-    await completeGates();
+    await completeGates(useCli);
     const after = await publicationInventory();
     expect(after).toEqual(before);
     const jobsAfter = await module.queue.getJobs();
@@ -377,6 +478,7 @@ async function createMaintenanceFixture() {
     redis,
     subjects,
     command,
+    run,
     startConsumer,
     stopConsumer,
     converged,

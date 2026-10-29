@@ -6,7 +6,7 @@ import {
   terminateProcessTree,
 } from "@iam/api-core/testing/process-smoke-harness";
 import { createUnitOfWork } from "@iam/api-core/uow";
-import { DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
+import { createJobQueue, DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
 import { createOrganizationDocumentInvalidation } from "@iam/organization-document/producer";
 import {
   createOrganizationDocumentQueryRepository,
@@ -14,7 +14,11 @@ import {
 } from "@iam/organization-document/query";
 import {
   createOrganizationDocumentWorkerModule,
+  type ORGANIZATION_OUTBOX_JOB_NAME,
+  type ORGANIZATION_REBUILD_JOB_NAME,
+  type OrganizationOutboxJobPayload,
   OrganizationOutboxJobPayloadSchema,
+  type OrganizationRebuildJobPayload,
   OrganizationRebuildJobPayloadSchema,
 } from "@iam/organization-document/worker";
 import { createHangingRedisServer } from "../support/hanging-redis-server";
@@ -81,6 +85,28 @@ async function initialPublication() {
   await module.processor.backfillAllOrganizations();
   await module.startConsumers();
   await published("1", "Root");
+}
+async function useShortRetryBackoff() {
+  await module.close();
+  module = createOrganizationDocumentWorkerModule({
+    db: harness.db,
+    redis,
+    config: { concurrency: 2 },
+    logger: { info() {}, error() {} },
+    factories: {
+      createQueue: (input) =>
+        createJobQueue<
+          OrganizationOutboxJobPayload | OrganizationRebuildJobPayload,
+          unknown,
+          typeof ORGANIZATION_OUTBOX_JOB_NAME | typeof ORGANIZATION_REBUILD_JOB_NAME
+        >({
+          ...input,
+          // Keep the ordinary three attempts, without production's 1s + 2s delay.
+          defaultJobOptions: { backoff: { type: "exponential", delay: 25 } },
+        }),
+    },
+  });
+  stopExecutors.push(module.close);
 }
 async function renameRoot() {
   const uow = createUnitOfWork({
@@ -158,6 +184,7 @@ async function command(
 }
 
 test("ordinary BullMQ expansion retries exhaust without losing committed subtree work, and repeated CLI repair recovers it", async () => {
+  await useShortRetryBackoff();
   await initialPublication();
   await renameRoot();
   await harness.sql.unsafe(`CREATE FUNCTION reject_expansion() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -203,6 +230,7 @@ test("ordinary BullMQ expansion retries exhaust without losing committed subtree
 }, 45_000);
 
 test("ordinary BullMQ rebuild retries exhaust while the legal old document stays searchable, then CLI repair publishes the same pending version", async () => {
+  await useShortRetryBackoff();
   await initialPublication();
   await harness.sql`DELETE FROM organization_closure WHERE ancestor_id=1 AND descendant_id=2`;
   await renameRoot();

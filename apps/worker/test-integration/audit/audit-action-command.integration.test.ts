@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/api-core/testing/process-smoke-harness";
+import { runAuditActionMaintenance } from "../../src/commands/audit-action-maintenance";
 import { createWorkerPostgresTestHarness } from "../support/postgres-test-harness";
 
 const workerRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -31,7 +32,7 @@ describe("historical audit action maintenance command", () => {
     return Array.from(await harness.sql`SELECT * FROM audit_log ORDER BY id`);
   }
   async function run(args: string[], expectedExitCode = 0, url = harness.commandDatabaseUrl) {
-    return await runProcessCommandSmoke({
+    const result = await runProcessCommandSmoke({
       label: "audit action command",
       start: () =>
         spawnOwnedProcessTree({
@@ -45,6 +46,10 @@ describe("historical audit action maintenance command", () => {
       maxOutputBytes: 64 * 1024,
       expectedExitCode,
     });
+    const active = await harness.sql`SELECT count(*)::int AS count FROM pg_stat_activity
+      WHERE application_name = 'iam-audit-action-maintenance' AND datname = current_database()`;
+    expect(active[0]?.count).toBe(0);
+    return result;
   }
 
   test("inventory preserves rows and apply canonicalizes eight actions without changing other facts", async () => {
@@ -71,8 +76,8 @@ describe("historical audit action maintenance command", () => {
     expect(applied.output).toContain('"updatedRows":"8"');
     const after = await rows();
     expect(after).toEqual(before.map((row, index) => ({ ...row, action: fixtures[index]![2] })));
-    const again = await run(["apply", "--writers-stopped"]);
-    expect(again.output).toContain('"updatedRows":"0"');
+    const again = await runAuditActionMaintenance(harness.sql, "apply");
+    expect(again).toMatchObject({ status: "completed", updatedRows: "0" });
     await run(["verify"]);
     const verified = await rows();
     expect(verified).toEqual(after);
@@ -82,12 +87,12 @@ describe("historical audit action maintenance command", () => {
     await seed("auth.login.success");
     for (let index = 0; index < 25; index++) await seed("auth.login.mobile.failure", "private-invalid");
     const before = await rows();
-    const inventory = await run(["inventory"], 1);
-    expect(inventory.output).toContain('"conflictRows":"25"');
-    const failed = await run(["apply", "--writers-stopped"], 1);
-    expect(failed.output).toContain('"updatedRows":"0"');
-    expect(failed.output).toContain('"conflictIds":[2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]');
-    expect(failed.output).not.toContain("private-invalid");
+    const inventory = await runAuditActionMaintenance(harness.sql, "inventory");
+    expect(inventory).toMatchObject({ status: "failed", conflictRows: "25" });
+    const failed = await runAuditActionMaintenance(harness.sql, "apply");
+    expect(failed).toMatchObject({ status: "failed", updatedRows: "0" });
+    expect(failed.conflictIds).toEqual(Array.from({ length: 20 }, (_, index) => index + 2));
+    expect(JSON.stringify(failed)).not.toContain("private-invalid");
     const after = await rows();
     expect(after).toEqual(before);
   }, 30_000);
@@ -111,8 +116,10 @@ describe("historical audit action maintenance command", () => {
       await harness.sql.unsafe("DROP TRIGGER reject_audit_update ON audit_log");
       await harness.sql.unsafe("DROP FUNCTION reject_audit_update()");
     }
-    await run(["apply", "--writers-stopped"]);
-    await run(["verify"]);
+    const retried = await runAuditActionMaintenance(harness.sql, "apply");
+    expect(retried).toMatchObject({ status: "completed", updatedRows: "2" });
+    const verified = await runAuditActionMaintenance(harness.sql, "verify");
+    expect(verified).toMatchObject({ status: "completed", legacyRows: "0" });
   }, 30_000);
 
   test("apply waits for an existing writer and includes its committed conflict in the zero-write preflight", async () => {
@@ -147,34 +154,30 @@ describe("historical audit action maintenance command", () => {
   }, 30_000);
 
   test("arguments fail before connecting and connection or incomplete verify failures remain safe", async () => {
-    for (const args of [
-      [],
-      ["apply"],
-      ["verify", "--writers-stopped"],
-      ["inventory", "extra"],
-      ["apply", "--writers-stopped", "extra"],
-    ]) {
-      const invalid = await run(args, 2, "not-a-url-private");
-      expect(invalid.output).toContain('"reason":"invalid-arguments"');
-      expect(invalid.output).not.toContain("not-a-url-private");
-    }
+    // The full argument/configuration matrices live in Unit; retain real process failure contracts here.
+    const invalid = await run(["apply"], 2, "not-a-url-private");
+    expect(invalid.output).toContain('"reason":"invalid-arguments"');
+    expect(invalid.output).not.toContain("not-a-url-private");
     const unavailable = new URL(harness.commandDatabaseUrl);
-    for (const invalidUrl of ["", "private-invalid-url", "https://private-invalid-host/iam"]) {
-      const invalid = await run(["verify"], 1, invalidUrl);
-      expect(invalid.output).toContain('"reason":"operation-failed"');
-      expect(invalid.output).not.toContain("private-invalid");
-    }
     unavailable.password = "wrong-private-password";
     const failed = await run(["verify"], 1, unavailable.toString());
     expect(failed.output).toContain('"reason":"operation-failed"');
     expect(failed.output).not.toContain("wrong-private-password");
     await harness.sql`ALTER TABLE audit_log RENAME TO unavailable_audit_log`;
     try {
-      await run(["verify"], 1);
+      let failure: unknown;
+      try {
+        await runAuditActionMaintenance(harness.sql, "verify");
+      } catch (error) {
+        failure = error;
+      }
+      expect(failure).toBeInstanceOf(Error);
     } finally {
       await harness.sql`ALTER TABLE unavailable_audit_log RENAME TO audit_log`;
     }
-    await run(["verify"]);
-    await run(["apply", "--writers-stopped"]);
+    const verified = await runAuditActionMaintenance(harness.sql, "verify");
+    expect(verified).toMatchObject({ status: "completed", legacyRows: "0" });
+    const applied = await runAuditActionMaintenance(harness.sql, "apply");
+    expect(applied).toMatchObject({ status: "completed", updatedRows: "0" });
   }, 60_000);
 });

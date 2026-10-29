@@ -3,7 +3,12 @@ import { randomUUID } from "node:crypto";
 import type { Socket } from "node:net";
 import { createConnection, createServer } from "node:net";
 import { fileURLToPath } from "node:url";
+import { ClientSnapshotInvalidationError } from "@iam/api-core/client-snapshot";
 import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
+import {
+  createClientSnapshotMaintenance,
+  createClientSnapshotVerifier,
+} from "@iam/api-core/client-snapshot/maintenance";
 import { createClientSnapshotMaintenanceTestFixture } from "@iam/api-core/client-snapshot/testing";
 import {
   runProcessCommandSmoke,
@@ -14,6 +19,9 @@ import { ClientStatus } from "@iam/contracts";
 import { createCustomSsoMaintenanceTestFixture } from "@iam/custom-sso/testing";
 import { createOidcMaintenanceTestFixture } from "@iam/oidc/testing";
 import { createSessionMaintenanceTestFixture } from "@iam/session-kernel/testing";
+import { parseSessionClearArgs } from "@worker/commands/session-clear/arguments";
+import { createSessionClearMaintenance } from "@worker/composition/session-clear-maintenance";
+import Redis from "ioredis";
 import {
   createWorkerRedisTestHarness,
   resetWorkerRedisTestDatabase,
@@ -75,6 +83,52 @@ async function command(script: string, args: string[], expectedExitCode = 0, ove
   return { ...result, report };
 }
 const stopped = ["--writers-stopped", "--drained"];
+
+async function maintainSessions(mode: "inventory" | "apply" | "verify", args: string[], redis = harness.writer) {
+  const input = parseSessionClearArgs([mode, ...args]);
+  const owners = createSessionClearMaintenance(redis, input, new AbortController().signal);
+  const reports = [];
+  for (const owner of owners) {
+    const report = await owner.run();
+    expect(report.unknown).toBe(0);
+    reports.push(report);
+  }
+  return reports;
+}
+
+async function verifySessions(args: string[], expectedMatching = 0, redis = harness.writer) {
+  const reports = await maintainSessions("verify", args, redis);
+  expect(reports.reduce((total, report) => total + report.matching, 0)).toBe(expectedMatching);
+}
+
+async function restrictedRedis(username: string) {
+  const redis = new Redis(resolveWorkerRedisTestUrl(process.env), {
+    username,
+    password: "scan-password",
+    lazyConnect: true,
+    enableReadyCheck: false,
+    enableOfflineQueue: false,
+    maxRetriesPerRequest: 0,
+  });
+  cleanups.push(async () => {
+    try {
+      if (redis.status === "ready") await redis.quit();
+    } finally {
+      redis.disconnect();
+    }
+  });
+  await redis.connect();
+  return redis;
+}
+
+async function verifySnapshots(expectedMatching = 0, redis = harness.writer) {
+  const verifier = createClientSnapshotVerifier({
+    scan: async (cursor, match, pattern, count, limit) => await redis.scan(cursor, match, pattern, count, limit),
+  });
+  const result = await verifier.verifyAllAfterRedisRestore({ protocolTrafficStopped: true });
+  expect(result.matchingKeys).toBe(expectedMatching);
+}
+
 function target(ns: string) {
   return [
     "--layout",
@@ -154,12 +208,13 @@ test("session clear ignores payload versions, malformed records, unknown key fam
     ...(await owners.oidc.seedVersionedKeys()),
   ];
   const before = await observation(keys);
-  await command("session:clear:inventory", target(ns));
-  await command("session:clear:verify", target(ns), 1);
+  const inventory = await maintainSessions("inventory", target(ns));
+  expect(inventory.reduce((total, report) => total + report.matching, 0)).toBe(keys.length);
+  await verifySessions(target(ns), keys.length);
   const afterRead = await observation(keys);
   expect(afterRead).toEqual(before);
-  await command("session:clear", target(ns));
-  await command("session:clear:verify", target(ns));
+  await maintainSessions("apply", target(ns));
+  await verifySessions(target(ns));
   const remaining = await harness.observer.exists(...keys);
   expect(remaining).toBe(0);
 }, 45_000);
@@ -179,8 +234,8 @@ test("single owner clears every Client and preserves other owners and exact name
   ];
   const before = await observation(retained);
   const scope = ["--layout", "unified", "--owner", "custom-sso", "--custom-namespace", ns, ...stopped];
-  await command("session:clear", scope);
-  await command("session:clear:verify", scope);
+  await maintainSessions("apply", scope);
+  await verifySessions(scope);
   const remaining = await harness.observer.exists(...own);
   const after = await observation(retained);
   expect(remaining).toBe(0);
@@ -194,9 +249,10 @@ test("session clear paginates whole keys and removes large indexes without inspe
   const keys = await Promise.all(Array.from({ length: 250 }, () => owners.custom.seedUnknownUnifiedFamily()));
   const before = await index.count();
   expect(before).toBe(1001);
-  await command("session:clear:inventory", target(ns));
-  await command("session:clear", target(ns));
-  await command("session:clear:verify", target(ns));
+  const inventory = await maintainSessions("inventory", target(ns));
+  expect(inventory.reduce((total, report) => total + report.matching, 0)).toBe(keys.length + 1);
+  await maintainSessions("apply", target(ns));
+  await verifySessions(target(ns));
   const remaining = await harness.observer.exists(...keys);
   const members = await index.count();
   expect(remaining).toBe(0);
@@ -224,15 +280,17 @@ test("inventory and verify need only SCAN; clear needs only SCAN and UNLINK", as
   });
   const env = { IAM_WORKER_REDIS_USERNAME: user, IAM_WORKER_REDIS_PASSWORD: "scan-password" };
   await command("session:clear:verify", target(ns), 0, env);
+  const reader = await restrictedRedis(user);
   const dirty = await fixtures(ns).oidc.seedMalformedToken();
-  await command("session:clear:inventory", target(ns), 0, env);
-  await command("session:clear:verify", target(ns), 1, env);
+  const inventory = await maintainSessions("inventory", target(ns), reader);
+  expect(inventory.reduce((total, report) => total + report.matching, 0)).toBe(1);
+  await verifySessions(target(ns), 1, reader);
   await command("session:clear", target(ns), 1, env);
   const preserved = await harness.observer.get(dirty);
   expect(preserved).toBe("sensitive-fixture");
   await harness.writer.call("ACL", "SETUSER", user, "+unlink");
-  await command("session:clear", target(ns), 0, env);
-  await command("session:clear:verify", target(ns), 0, env);
+  await maintainSessions("apply", target(ns), reader);
+  await verifySessions(target(ns), 0, reader);
 }, 30_000);
 
 test("Snapshot verify can use a read-only ACL while repair requires write permission", async () => {
@@ -253,17 +311,23 @@ test("Snapshot verify can use a read-only ACL while repair requires write permis
   cleanups.push(async () => {
     await harness.writer.call("ACL", "DELUSER", user);
   });
-  const env = { IAM_WORKER_REDIS_USERNAME: user, IAM_WORKER_REDIS_PASSWORD: "scan-password" };
-  await command("client-snapshot:verify", ["--all", ...stopped], 0, env);
+  const reader = await restrictedRedis(user);
+  await verifySnapshots(0, reader);
   const cache = await createClientSnapshotMaintenanceTestFixture(harness.writer).seedInvalidClientPayload(
     `session-clear-${randomUUID()}`,
   );
-  await command("client-snapshot:verify", ["--all", ...stopped], 1, env);
-  await command("client-snapshot:repair", ["--all", ...stopped], 1, env);
+  await verifySnapshots(1, reader);
+  let failure: unknown;
+  try {
+    await createClientSnapshotMaintenance(reader).repairAllAfterRedisRestore({ protocolTrafficStopped: true });
+  } catch (error) {
+    failure = error;
+  }
+  expect(failure).toBeInstanceOf(ClientSnapshotInvalidationError);
   const cached = await harness.observer.get(cache);
   expect(cached).toBe("sensitive-fixture");
-  await command("client-snapshot:repair", ["--all", ...stopped]);
-  await command("client-snapshot:verify", ["--all", ...stopped], 0, env);
+  await createClientSnapshotMaintenance(harness.writer).repairAllAfterRedisRestore({ protocolTrafficStopped: true });
+  await verifySnapshots(0, reader);
 }, 30_000);
 
 test("Snapshot CLI shares control across ordinary and sensitive readers without changing Secret or sessions", async () => {
@@ -317,7 +381,7 @@ test("Snapshot full repair clears invalid payloads without changing sessions", a
   const badCache = await createClientSnapshotMaintenanceTestFixture(harness.writer).seedInvalidClientPayload(
     `session-clear-${randomUUID()}`,
   );
-  await command("client-snapshot:verify", ["--all", ...stopped], 1);
+  await verifySnapshots(1);
   await command("client-snapshot:repair", ["--all", ...stopped]);
   await command("client-snapshot:verify", ["--all", ...stopped]);
   const remaining = await harness.observer.exists(badCache);
@@ -326,25 +390,10 @@ test("Snapshot full repair clears invalid payloads without changing sessions", a
   expect(finalSessions).toEqual(sessionBefore);
 }, 30_000);
 
-const invalidScopes: [string, (ns: string) => string[]][] = [
-  ["incomplete scope", () => ["--layout", "unified"]],
-  ["unsupported layout", (ns) => ["--layout", "source", "--kernel-namespace", ns, ...stopped]],
-  ["retired Client filter", (ns) => [...target(ns), "--client-code", "alpha"]],
-  ["retired artifact filter", (ns) => [...target(ns), "--artifacts", "authorization"]],
-  ["duplicate owner", (ns) => [...target(ns), "--owner", "all", "--owner", "kernel"]],
-  ["wildcard namespace", () => target("*")],
-  ["excessive deadline", (ns) => [...target(ns), "--deadline-ms", "300001"]],
-  ["unexpected positional mode", (ns) => [...target(ns), "apply"]],
-];
-test.each(invalidScopes)(
-  "cleanup rejects invalid input before connecting (%s)",
-  async (_name, args) => {
-    const ns = `session-clear:${randomUUID()}`;
-    const rejected = await command("session:clear", args(ns), 2, { IAM_WORKER_REDIS_HOST: "" });
-    expect(rejected.report.reason).toBe("invalid-input");
-  },
-  15_000,
-);
+test("cleanup rejects invalid input before connecting", async () => {
+  const rejected = await command("session:clear", ["--layout", "unified"], 2, { IAM_WORKER_REDIS_HOST: "" });
+  expect(rejected.report.reason).toBe("invalid-input");
+}, 15_000);
 
 test("cleanup reports invalid Redis configuration as an operation failure", async () => {
   const ns = `session-clear:${randomUUID()}`;
@@ -419,7 +468,7 @@ test("clear reports failure when the UNLINK reply is lost and safely reruns afte
   const remaining = await harness.observer.exists(...keys);
   expect(remaining).toBeGreaterThan(0);
   expect(remaining).toBeLessThan(keys.length);
-  await command("session:clear:verify", target(ns), 1);
+  await verifySessions(target(ns), remaining);
   await command("session:clear", target(ns));
   await command("session:clear:verify", target(ns));
 }, 45_000);
