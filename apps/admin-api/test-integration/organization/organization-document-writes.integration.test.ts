@@ -235,11 +235,8 @@ test("a stalled real Redis wake preserves committed source work and the same que
     for (const rebuild of rebuilds) await processor.processRebuild(rebuild);
     const documents = await createOrganizationDocumentQueryService({
       repository: createOrganizationDocumentQueryRepository(pg.db),
-    }).search({ filter: { field: "organization.code", op: "in", value: ["OUTAGE", "RESTORED"] } });
-    expect(documents).toMatchObject([
-      { organization: { code: "OUTAGE" } },
-      { organization: { code: "RESTORED", name: "Recovered" } },
-    ]);
+    }).search({ filter: { field: "code", op: "in", value: ["OUTAGE", "RESTORED"] } });
+    expect(documents).toMatchObject([{ code: "OUTAGE" }, { code: "RESTORED", name: "Recovered" }]);
   });
 }, 15_000);
 

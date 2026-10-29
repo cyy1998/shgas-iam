@@ -214,7 +214,7 @@ async function searchOrganizations(codes: string[]) {
   return await createOrganizationDocumentQueryService({
     repository: createOrganizationDocumentQueryRepository(harness.db),
   }).search({
-    filter: { field: "organization.code", op: "in", value: codes },
+    filter: { field: "code", op: "in", value: codes },
   });
 }
 
@@ -244,14 +244,12 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
     const published = await searchOrganizations(["NEW"]);
     expect(published).toMatchObject([
       {
-        organization: {
-          code: "NEW",
-          name: "New",
-          type: OrganizationType.Company,
-          status: OrganizationStatus.Enable,
-          level: 1,
-          path: [{ code: "NEW", name: "New", type: OrganizationType.Company, level: 1, distanceToTarget: 0 }],
-        },
+        code: "NEW",
+        name: "New",
+        type: OrganizationType.Company,
+        status: OrganizationStatus.Enable,
+        level: 1,
+        path: [{ code: "NEW", name: "New", type: OrganizationType.Company, level: 1, distanceToTarget: 0 }],
       },
     ]);
   });
@@ -267,12 +265,12 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
       expect(result).toEqual({ changed: true, result: null });
       await publishOrganizationChanges();
       const published = await searchOrganizations(["NEW"]);
-      expect(published).toMatchObject([{ organization: { code: "NEW", status } }]);
+      expect(published).toMatchObject([{ code: "NEW", status }]);
     }
     const deleted = await service.deleteOrganization("NEW");
     expect(deleted).toEqual({ changed: true, result: null });
     const beforePublication = await searchOrganizations(["NEW"]);
-    expect(beforePublication).toMatchObject([{ organization: { code: "NEW", status: OrganizationStatus.Disable } }]);
+    expect(beforePublication).toMatchObject([{ code: "NEW", status: OrganizationStatus.Disable }]);
     await publishOrganizationChanges();
     const removed = await searchOrganizations(["NEW"]);
     expect(removed).toEqual([]);
@@ -306,21 +304,17 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
     const propagated = await searchOrganizations(["RENAMED", "CHILD"]);
     expect(propagated).toMatchObject([
       {
-        organization: {
-          code: "RENAMED",
-          name: "Renamed root",
-          type: OrganizationType.Department,
-          status: OrganizationStatus.Pause,
-        },
+        code: "RENAMED",
+        name: "Renamed root",
+        type: OrganizationType.Department,
+        status: OrganizationStatus.Pause,
       },
       {
-        organization: {
-          code: "CHILD",
-          path: [
-            { code: "RENAMED", name: "Renamed root", type: OrganizationType.Department, level: 1, distanceToTarget: 1 },
-            { code: "CHILD", level: 2, distanceToTarget: 0 },
-          ],
-        },
+        code: "CHILD",
+        path: [
+          { code: "RENAMED", name: "Renamed root", type: OrganizationType.Department, level: 1, distanceToTarget: 1 },
+          { code: "CHILD", level: 2, distanceToTarget: 0 },
+        ],
       },
     ]);
     const before = await facts();
@@ -336,7 +330,7 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
       before.searchDocuments.find((row) => row.organizationId === 2),
     );
     const current = await searchOrganizations(["RENAMED"]);
-    expect(current).toMatchObject([{ organization: { status: OrganizationStatus.Disable } }]);
+    expect(current).toMatchObject([{ status: OrganizationStatus.Disable }]);
   });
   for (const actor of ["scoped-outside", "full-outside", "scoped-inside"] as const) {
     test(`${actor} classifies a real code race after rollback without leaking an outside organization`, async () => {

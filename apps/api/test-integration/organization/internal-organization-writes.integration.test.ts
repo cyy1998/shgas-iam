@@ -415,13 +415,13 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
         await reassignCodeWithAdmin("replace");
         await publishOrganizationChanges();
         const publishedBefore = await request("POST", "/search-dsl", {
-          filter: { field: "organization.code", op: "in", value: ["A", "A-CHILD"] },
+          filter: { field: "code", op: "in", value: ["A", "A-CHILD"] },
         });
         expect(publishedBefore).toMatchObject({
           body: {
             data: [
-              { organization: { code: "A", name: "Replacement" } },
-              { organization: { code: "A-CHILD", path: [{ code: "A", name: "Replacement" }, { code: "A-CHILD" }] } },
+              { code: "A", name: "Replacement" },
+              { code: "A-CHILD", path: [{ code: "A", name: "Replacement" }, { code: "A-CHILD" }] },
             ],
           },
         });
@@ -444,18 +444,16 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
       const completedRepair = await publishOrganizationChanges(mode);
       if (mode === "repair") expect(completedRepair).toMatchObject({ enqueued: 0, failed: 0 });
       const publishedAfter = await request("POST", "/search-dsl", {
-        filter: { field: "organization.code", op: "in", value: ["A", "A-CHILD"] },
+        filter: { field: "code", op: "in", value: ["A", "A-CHILD"] },
       });
       expect(publishedAfter).toMatchObject({
         status: 200,
         body: {
           data: [
-            { organization: { code: "A", name: "Actual updated name" } },
+            { code: "A", name: "Actual updated name" },
             {
-              organization: {
-                code: "A-CHILD",
-                path: [{ code: "A", name: "Actual updated name" }, { code: "A-CHILD" }],
-              },
+              code: "A-CHILD",
+              path: [{ code: "A", name: "Actual updated name" }, { code: "A-CHILD" }],
             },
           ],
         },
@@ -526,11 +524,11 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
     const completedRepair = await publishOrganizationChanges("repair");
     expect(completedRepair).toMatchObject({ enqueued: 0, failed: 0 });
     const retained = await request("POST", "/search-dsl", {
-      filter: { field: "organization.code", op: "eq", value: "B" },
+      filter: { field: "code", op: "eq", value: "B" },
     });
     expect(retained).toMatchObject({
       status: 200,
-      body: { data: [{ organization: { code: "B", name: "Original" } }] },
+      body: { data: [{ code: "B", name: "Original" }] },
     });
   }, 20_000);
 
@@ -538,31 +536,29 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
     const created = await request("POST", "/purveyors", { orgCode: "SUPPLIER", orgName: "Supplier" });
     expect(created).toMatchObject({ status: 200, body: { data: true } });
     const beforePublication = await request("POST", "/search-dsl", {
-      filter: { field: "organization.code", op: "eq", value: "SUPPLIER" },
+      filter: { field: "code", op: "eq", value: "SUPPLIER" },
     });
     expect(beforePublication).toMatchObject({ status: 200, body: { data: [] } });
     await publishOrganizationChanges();
     const published = await request("POST", "/search-dsl", {
-      filter: { field: "organization.code", op: "eq", value: "SUPPLIER" },
+      filter: { field: "code", op: "eq", value: "SUPPLIER" },
     });
     expect(published).toMatchObject({
       status: 200,
       body: {
         data: [
           {
-            organization: {
-              code: "SUPPLIER",
-              name: "Supplier",
-              type: OrganizationType.External,
-              status: OrganizationStatus.Enable,
-              level: 2,
-              isVirtual: true,
-              isEntity: false,
-              path: [
-                { code: "GY", name: "供应商根组织", type: OrganizationType.Company, level: 1, distanceToTarget: 1 },
-                { code: "SUPPLIER", name: "Supplier", type: OrganizationType.External, level: 2, distanceToTarget: 0 },
-              ],
-            },
+            code: "SUPPLIER",
+            name: "Supplier",
+            type: OrganizationType.External,
+            status: OrganizationStatus.Enable,
+            level: 2,
+            isVirtual: true,
+            isEntity: false,
+            path: [
+              { code: "GY", name: "供应商根组织", type: OrganizationType.Company, level: 1, distanceToTarget: 1 },
+              { code: "SUPPLIER", name: "Supplier", type: OrganizationType.External, level: 2, distanceToTarget: 0 },
+            ],
           },
         ],
       },
@@ -595,7 +591,7 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
         level: OrganizationLevel.One,
       },
     ]);
-    const dsl = await request("POST", "/search-dsl", { filter: { field: "organization.code", op: "eq", value: "GY" } });
+    const dsl = await request("POST", "/search-dsl", { filter: { field: "code", op: "eq", value: "GY" } });
     expect(dsl).toMatchObject({ status: 200, body: { data: [] } });
     for (const orgCode of ["GY", "PAUSED", "DISABLED", "DELETED"]) {
       const response = await createOrganizationApp().request(`http://localhost/internal/organizations/${orgCode}`, {
@@ -610,11 +606,11 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
     });
     const published = await detail.json();
     const search = await request("POST", "/search-dsl", {
-      filter: { field: "organization.code", op: "eq", value: "GY" },
+      filter: { field: "code", op: "eq", value: "GY" },
     });
     expect(detail.status).toBe(200);
     expect(published.data).toEqual(search.body.data[0]);
-    expect(published.data).toMatchObject({ organization: { code: "GY", name: "Published root" } });
+    expect(published.data).toMatchObject({ code: "GY", name: "Published root" });
     await request("PUT", "/GY", { orgName: "Unpublished root" });
     const retained = await createOrganizationApp().request("http://localhost/internal/organizations/GY", {
       headers: { apikey: internalClient.clientSecret, Client: internalClient.clientCode },
@@ -652,43 +648,39 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
     });
     expect(changed).toMatchObject({ status: 200, body: { data: true } });
     const stale = await request("POST", "/search-dsl", {
-      filter: { field: "organization.code", op: "eq", value: "CHILD" },
+      filter: { field: "code", op: "eq", value: "CHILD" },
     });
     expect(stale).toMatchObject({
       status: 200,
-      body: { data: [{ organization: { status: OrganizationStatus.Enable } }] },
+      body: { data: [{ status: OrganizationStatus.Enable }] },
     });
     await publishOrganizationChanges();
     const published = await request("POST", "/search-dsl", {
-      filter: { field: "organization.code", op: "in", value: ["RENAMED", "CHILD"] },
+      filter: { field: "code", op: "in", value: ["RENAMED", "CHILD"] },
     });
     expect(published).toMatchObject({
       status: 200,
       body: {
         data: [
           {
-            organization: {
-              code: "RENAMED",
-              name: "Renamed supplier",
-              type: OrganizationType.Department,
-              status: OrganizationStatus.Pause,
-            },
+            code: "RENAMED",
+            name: "Renamed supplier",
+            type: OrganizationType.Department,
+            status: OrganizationStatus.Pause,
           },
           {
-            organization: {
-              code: "CHILD",
-              level: 2,
-              path: [
-                {
-                  code: "RENAMED",
-                  name: "Renamed supplier",
-                  type: OrganizationType.Department,
-                  level: 1,
-                  distanceToTarget: 1,
-                },
-                { code: "CHILD", level: 2, distanceToTarget: 0 },
-              ],
-            },
+            code: "CHILD",
+            level: 2,
+            path: [
+              {
+                code: "RENAMED",
+                name: "Renamed supplier",
+                type: OrganizationType.Department,
+                level: 1,
+                distanceToTarget: 1,
+              },
+              { code: "CHILD", level: 2, distanceToTarget: 0 },
+            ],
           },
         ],
       },
@@ -724,9 +716,9 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
       expect(changed.status).toBe(200);
       await publishOrganizationChanges();
       const intermediate = await request("POST", "/search-dsl", {
-        filter: { field: "organization.code", op: "eq", value: "SUPPLIER" },
+        filter: { field: "code", op: "eq", value: "SUPPLIER" },
       });
-      expect(intermediate).toMatchObject({ body: { data: [{ organization: { name: "Concurrent" } }] } });
+      expect(intermediate).toMatchObject({ body: { data: [{ name: "Concurrent" }] } });
     } finally {
       release.resolve();
       await pending;
@@ -735,9 +727,9 @@ describe("Internal Organization HTTP writes with production PostgreSQL", () => {
     expect(result).toMatchObject({ status: 200, body: { data: true } });
     await publishOrganizationChanges();
     const final = await request("POST", "/search-dsl", {
-      filter: { field: "organization.code", op: "eq", value: "SUPPLIER" },
+      filter: { field: "code", op: "eq", value: "SUPPLIER" },
     });
-    expect(final).toMatchObject({ body: { data: [{ organization: { name: "Original" } }] } });
+    expect(final).toMatchObject({ body: { data: [{ name: "Original" }] } });
   });
 
   test.each(["create", "update"] as const)(

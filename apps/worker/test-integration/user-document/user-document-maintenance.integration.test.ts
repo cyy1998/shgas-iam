@@ -74,7 +74,7 @@ test("full Profile maintenance rebuilds every account before verification and re
   await fixture.completeGates();
 
   const profiles = await sql<{ user_id: number; status: number | null; is_delete: boolean }[]>`
-    SELECT user_id,(document->'user'->>'status')::int AS status,document IS NULL AS is_delete FROM user_document ORDER BY user_id`;
+    SELECT user_id,(document->>'status')::int AS status,document IS NULL AS is_delete FROM user_document ORDER BY user_id`;
   expect([...profiles]).toEqual([
     { user_id: 1, status: UserStatus.Enable, is_delete: false },
     { user_id: 2, status: UserStatus.Disable, is_delete: false },
@@ -117,7 +117,7 @@ test("full Profile maintenance rebuilds every account before verification and re
   expect(sourceAfterFinalGates).toEqual(sourceAfterSmoke);
   const publishedName = await sql<
     { name: string }[]
-  >`SELECT document->'user'->>'name' AS name FROM user_document WHERE user_id=5`;
+  >`SELECT document->>'name' AS name FROM user_document WHERE user_id=5`;
   expect([...publishedName]).toEqual([{ name: "Smoke changed last user" }]);
   await fixture.assertUnrelatedRedis();
 }, 120_000);
