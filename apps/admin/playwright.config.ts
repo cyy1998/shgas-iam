@@ -7,6 +7,8 @@ export default defineConfig({
   testDir: "./test-integration",
   testMatch: "**/*.spec.ts",
   timeout: 180_000,
+  fullyParallel: false,
+  retries: 0,
   expect: {
     timeout: 120_000,
   },
@@ -22,7 +24,7 @@ export default defineConfig({
     timeout: 240_000,
     url: `${baseURL}/iam-admin/users`,
   },
-  workers: 1,
+  workers: 2,
   projects: [
     {
       name: "chromium",

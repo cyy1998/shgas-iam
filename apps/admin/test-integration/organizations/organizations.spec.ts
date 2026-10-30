@@ -11,6 +11,7 @@ import {
 import { expect, test } from "@playwright/test";
 import { adminEmploymentAllowedActions } from "../../test/mocks/fixtures";
 import { fulfillJson, fulfillTrpc, mockAdminApi, parseTrpcBatchInput } from "../fixtures";
+import { collectMutationRequests, mockScopedManagementApi } from "../scoped-management.fixture";
 
 const detail = {
   id: 4,
@@ -295,4 +296,26 @@ test("shows the Employment Pause cascade before executing the parent lifecycle c
   await confirmation.getByRole("button", { name: "暂停任职" }).click();
 
   await expect.poll(() => pauseInputs).toEqual([{ id: 42 }]);
+});
+
+test("Organization scope and actions follow the server grants without granting status changes", async ({ page }) => {
+  const mutations = collectMutationRequests(page);
+  await mockScopedManagementApi(page);
+  await page.goto("/iam-admin/organizations");
+  await expect(page.getByRole("button", { name: /新建根组织/ })).toHaveCount(0);
+  await expect(page.getByText("授权根 A")).toBeVisible();
+  await expect(page.getByText("授权根 B")).toBeVisible();
+  await expect(page.getByText("范围外根")).toHaveCount(0);
+  await page.getByText("授权根 A").click();
+  await expect(page.getByRole("button", { name: "+ 下级组织" })).toBeEnabled();
+  const editOrganization = page.getByRole("button", { name: /编\s*辑/ });
+  await expect(editOrganization).toBeEnabled();
+  await expect(page.getByRole("button", { name: /状\s*态/ })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /删\s*除/ })).toBeDisabled();
+  await expect(page.getByRole("tab", { name: "责任任命" })).toBeVisible();
+  await editOrganization.click();
+  const editOrganizationDialog = page.getByRole("dialog", { name: "编辑组织" });
+  await expect(editOrganizationDialog.getByRole("combobox", { name: "状态" })).toBeDisabled();
+  await editOrganizationDialog.getByRole("button", { name: /取\s*消/ }).click();
+  expect(mutations).toEqual([]);
 });

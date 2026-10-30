@@ -40,8 +40,11 @@ Root typecheck 检查工具源码。任务定义见[turbo.json](../../turbo.json
 
 ## 并发、timeout 与清理
 
-预算由根入口与 runner 统一执行，不在各 manifest 重复填写。Unit 允许有界并发；同一 Integration 环境的套件和用例串行、首错停止；
-浏览器与 E2E 使用单 Chromium、单 worker、零 retry。用例内部为验证竞态而建立的并发保留。当前数值以 runner 配置为准。
+预算由根入口与 runner 统一执行，不在各 manifest 重复填写。Unit 允许有界并发；同一真实资源 Integration 环境的套件和用例串行、首错停止。
+Admin 的 mock API 浏览器 Integration 使用两个 Chromium worker，按文件并行、文件内串行，共用本次开发服务器；每例独立的 browser context、路由 mock 和浏览器存储隔离状态。
+其 package script 显式选择内部 runner 的 `--browser-workers 2`；该选项仅允许无 PostgreSQL/Redis 声明、无资源 provider 的 Playwright collection，最多两个 worker。
+其余浏览器 Integration 与 E2E 使用单 worker。浏览器均零 retry，首个失败后停止调度后续用例并结束在途执行，所属进程树与 web server 按原生命周期收尾。
+用例内部为验证竞态而建立的并发保留。当前数值以 runner 配置为准。
 
 Timeout 防止挂起，不作为性能 SLA。进程使用真实 readiness，并同时观察退出与错误；输出有界，在成功、失败、超时和中断时清理所属进程树、端口和临时目录。
 不能以放宽全局 timeout、重试或吞掉 cleanup 错误换取通过。

@@ -55,6 +55,29 @@ const session = {
   },
 } satisfies SessionListItem;
 
+const currentSession = {
+  ...session,
+  principalSessionId: "ps-current",
+  user: {
+    id: 42,
+    subjectId: "00000000-0000-4000-8000-000000000042",
+    username: "zhangsan",
+    name: "张三",
+    accountStatus: "normal",
+  },
+  isCurrentSession: true,
+  isCurrentUser: true,
+  record: {
+    kind: "userSession",
+    identity: {
+      ...session.record.identity,
+      id: "ps-current",
+      userSessionId: "ps-current",
+      subjectIdentifier: "00000000-0000-4000-8000-000000000042",
+    },
+  },
+} satisfies SessionListItem;
+
 const restriction = {
   user: {
     id: 43,
@@ -155,6 +178,42 @@ afterEach(async () => {
 });
 
 describe("LoginRestrictionsTab through the session management service", () => {
+  it("confirms the exact release effects before submitting once and removing the refreshed restriction", async () => {
+    const listInputs = restrictionList((requestNumber) => (requestNumber === 1 ? [restriction] : []));
+    const releaseInputs: LoginRestrictionReleaseInput[] = [];
+    server.use(
+      http.post("*/rpc/admin.sessionManagement.releaseLoginRestriction", async ({ request }) => {
+        const batch: Record<string, LoginRestrictionReleaseInput> = JSON.parse(await request.text());
+        releaseInputs.push(batch["0"]);
+        return success({ changed: true, result: { failureStateCleared: true } });
+      }),
+    );
+    const { user } = render(<LoginRestrictionsTab />);
+    await screen.findByText("已删除用户", { exact: true });
+    expect(listInputs).toEqual([{ conditions: {}, pageNum: 1, pageSize: 20 }]);
+    await user.click(screen.getByRole("button", { name: "解除限制" }));
+    const confirmation = await screen.findByRole("dialog");
+
+    expect(confirmation).toHaveTextContent("确认解除临时登录限制？");
+    expect(confirmation).toHaveTextContent("同时清除临时登录限制和当前失败历史");
+    expect(confirmation).toHaveTextContent("不会创建白名单或宽限期");
+    expect(confirmation).toHaveTextContent("新失败会立即重新计数");
+    expect(confirmation).toHaveTextContent("不会撤销、创建、续期或恢复任何已有 Principal Session");
+    expect(within(confirmation).queryByRole("textbox")).not.toBeInTheDocument();
+    expect(releaseInputs).toHaveLength(0);
+    expect(listInputs).toHaveLength(1);
+    await user.click(within(confirmation).getByRole("button", { name: "确认解除" }));
+
+    expect(await screen.findByText("临时登录限制已解除，当前失败历史已清理")).toBeVisible();
+    await waitFor(() => {
+      expect(confirmation).not.toBeInTheDocument();
+      expect(screen.queryByText("已删除用户", { exact: true })).not.toBeInTheDocument();
+      expect(listInputs).toHaveLength(2);
+    });
+    expect(listInputs[1]).toEqual(listInputs[0]);
+    expect(releaseInputs).toEqual([{ userId: 43 }]);
+  });
+
   it("reports an expired release as a no-op and refreshes once without replaying", async () => {
     const listInputs = restrictionList(() => [restriction]);
     const releaseInputs: LoginRestrictionReleaseInput[] = [];
@@ -266,10 +325,39 @@ describe("SessionsPage through the session management service", () => {
   });
 
   it.each([
-    { scenario: "no-op", changed: false, roots: 0, clients: 0, attempted: 0, succeeded: 0, failed: 0 },
-    { scenario: "cleanup failure", changed: true, roots: 2, clients: 2, attempted: 3, succeeded: 1, failed: 2 },
+    {
+      scenario: "no-op",
+      changed: false,
+      currentRootRetained: false,
+      roots: 0,
+      clients: 0,
+      attempted: 0,
+      succeeded: 0,
+      failed: 0,
+    },
+    {
+      scenario: "cleanup failure",
+      changed: true,
+      currentRootRetained: false,
+      roots: 2,
+      clients: 2,
+      attempted: 3,
+      succeeded: 1,
+      failed: 2,
+    },
+    ...[true, false].map((currentRootRetained) => ({
+      scenario: `only child effects (current root retained: ${currentRootRetained})`,
+      changed: true,
+      currentRootRetained,
+      roots: 0,
+      clients: 1,
+      attempted: 0,
+      succeeded: 0,
+      failed: 0,
+    })),
   ])("reports $scenario as a completed revoke and refreshes once without replaying", async (outcome) => {
-    const listInputs = sessionList(() => [session]);
+    const targetSession = outcome.currentRootRetained ? currentSession : session;
+    const listInputs = sessionList(() => [currentSession, session]);
     const revokeInputs: SessionRevokeInput[] = [];
     server.use(
       http.post("*/rpc/admin.sessionManagement.revokeSessions", async ({ request }) => {
@@ -280,11 +368,11 @@ describe("SessionsPage through the session management service", () => {
           result: {
             scope: "user",
             generation: "unified",
-            currentPrincipalSessionExcluded: false,
+            currentPrincipalSessionExcluded: outcome.currentRootRetained,
             sessions: {
               userSessionsTerminated: outcome.roots,
               clientSessionsTerminated: outcome.clients,
-              excluded: 0,
+              excluded: outcome.currentRootRetained ? 1 : 0,
               failed: 0,
               unknown: 0,
             },
@@ -300,20 +388,31 @@ describe("SessionsPage through the session management service", () => {
       }),
     );
     const { user } = render(<SessionsPage />);
-    await user.click(await screen.findByRole("button", { name: "下线该用户全部" }));
+    const targetName = await screen.findByText(targetSession.user.name, { exact: true });
+    const targetRow = targetName.closest("tr");
+    if (!targetRow) throw new Error("The target session must be rendered in its own row");
+    await user.click(within(targetRow).getByRole("button", { name: "下线该用户全部" }));
     const confirmation = await screen.findByRole("dialog");
+    expect(confirmation).toHaveTextContent("确认下线该用户全部会话？");
+    expect(confirmation).toHaveTextContent("操作开始时已索引");
+    expect(confirmation).toHaveTextContent("操作期间或之后建立的新会话仍可能存在");
+    expect(confirmation).toHaveTextContent("不能保证第三方自行建立的本地会话退出");
+    expect(confirmation).toHaveTextContent("不会阻止未来重新登录");
+    if (outcome.currentRootRetained) expect(confirmation).toHaveTextContent("保留当前管理端根会话");
+    expect(within(confirmation).queryByRole("textbox")).not.toBeInTheDocument();
     expect(revokeInputs).toHaveLength(0);
+    expect(listInputs).toHaveLength(1);
     await user.click(within(confirmation).getByRole("button", { name: "确认下线" }));
 
     expect(
       await screen.findByText(
-        `已终止 ${outcome.roots} 个根会话、${outcome.clients} 个应用会话；保留 0 个当前根；产物回收尝试 ${outcome.attempted} 项、成功 ${outcome.succeeded} 项、失败 ${outcome.failed} 项`,
+        `已终止 ${outcome.roots} 个根会话、${outcome.clients} 个应用会话；保留 ${outcome.currentRootRetained ? 1 : 0} 个当前根；产物回收尝试 ${outcome.attempted} 项、成功 ${outcome.succeeded} 项、失败 ${outcome.failed} 项`,
         { exact: true },
       ),
     ).toBeVisible();
     await waitFor(() => expect(listInputs).toHaveLength(2));
     expect(listInputs[1]).toEqual(listInputs[0]);
-    expect(revokeInputs).toEqual([{ target: { type: "user", userId: 43 } }]);
+    expect(revokeInputs).toEqual([{ target: { type: "user", userId: targetSession.user.id } }]);
     expect(screen.queryByText(/cleanup-ref-secret/)).not.toBeInTheDocument();
     expect(screen.queryByText(/remote cleanup error/)).not.toBeInTheDocument();
     expect(screen.queryByText("会话下线失败", { exact: true })).not.toBeInTheDocument();

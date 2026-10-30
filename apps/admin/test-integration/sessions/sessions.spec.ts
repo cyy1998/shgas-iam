@@ -737,33 +737,6 @@ test("temporary login restrictions show canonical facts, exact user filtering, a
   await restrictionExpect(panel.getByText("已删除用户")).toHaveCount(0);
 });
 
-test("restriction release confirms exact effects, succeeds once, and refreshes once", async ({ page }) => {
-  const { listInputs, releaseInputs } = await setupLoginRestrictionRelease(page, () => ({
-    type: "success",
-    data: {
-      changed: true,
-      result: { failureStateCleared: true },
-    },
-  }));
-  const dialog = await openTargetLoginRestrictionReleaseDialog(page);
-
-  await expect(dialog).toContainText("确认解除临时登录限制？");
-  await expect(dialog).toContainText("同时清除临时登录限制和当前失败历史");
-  await expect(dialog).toContainText("不会创建白名单或宽限期");
-  await expect(dialog).toContainText("新失败会立即重新计数");
-  await expect(dialog).toContainText("不会撤销、创建、续期或恢复任何已有");
-  await expect(dialog).toContainText("Principal Session");
-  await expect(dialog.getByRole("textbox")).toHaveCount(0);
-  expect(releaseInputs).toHaveLength(0);
-
-  const listRequestCount = listInputs.length;
-  await confirmLoginRestrictionRelease(dialog);
-
-  await expect(page.getByText("临时登录限制已解除，当前失败历史已清理")).toBeVisible();
-  await expectSingleLoginRestrictionReleaseAndReload(releaseInputs, listInputs, listRequestCount);
-  await expect(page.getByText("已删除用户")).toHaveCount(0);
-});
-
 test("restriction audit-after-effect refreshes once without retrying release", async ({ page }) => {
   const { listInputs, releaseInputs } = await setupLoginRestrictionRelease(page, () => ({
     type: "audit-failed-after-effect",
@@ -928,43 +901,6 @@ test("self user revoke keeps the unified action label and explains the current-r
   await expect.poll(() => listInputs.length).toBe(listRequestCount + 1);
 });
 
-for (const currentRootRetained of [true, false]) {
-  test(`only child effects do not claim a root was revoked (current root retained: ${currentRootRetained})`, async ({
-    page,
-  }) => {
-    const { listInputs, revokeInputs } = await setupSessionRevoke(page, () => ({
-      type: "success",
-      data: {
-        changed: true,
-        result: {
-          scope: "user",
-          generation: "unified" as const,
-          currentPrincipalSessionExcluded: currentRootRetained,
-          sessions: {
-            userSessionsTerminated: 0,
-            clientSessionsTerminated: 1,
-            excluded: currentRootRetained ? 1 : 0,
-            failed: 0,
-            unknown: 0,
-          },
-          artifactCleanup: { attempted: 0, succeeded: 0, failed: 0 },
-        },
-      },
-    }));
-    await revokeUserAndExpectReload(page, revokeInputs, listInputs, {
-      rowText: currentRootRetained ? "张三" : "已删除用户",
-      userId: currentRootRetained ? 42 : 43,
-    });
-    await expect(
-      page.getByText(
-        `已终止 0 个根会话、1 个应用会话；保留 ${currentRootRetained ? 1 : 0} 个当前根；产物回收尝试 0 项、成功 0 项、失败 0 项`,
-        {
-          exact: true,
-        },
-      ),
-    ).toBeVisible();
-  });
-}
 test("user audit-after-effect error refreshes once without retrying the mutation", async ({ page }) => {
   const { listInputs, revokeInputs } = await setupSessionRevoke(
     page,

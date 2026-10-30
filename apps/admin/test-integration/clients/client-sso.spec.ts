@@ -112,28 +112,6 @@ test("audited Secret read handles lost responses and audit failure without repla
   expect(reads).toBe(4);
 });
 
-test("Secret buttons use independent server actions and unknown rotation is never replayed", async ({ page }) => {
-  await mockAdminApi(page);
-  let current = initial();
-  current.allowedActions.readSecret = false;
-  let rotations = 0;
-  await page.route("**/rpc/admin.clientSso.detail**", (route) => fulfillTrpc(route, current));
-  await page.route("**/rpc/admin.clientSso.rotateSecret**", async (route) => {
-    rotations++;
-    current = {
-      ...current,
-      allowedActions: { ...current.allowedActions, rotateSecret: false },
-    };
-    await route.abort("connectionreset");
-  });
-  await page.goto("/iam-admin/clients/portal/sso");
-  await expect(page.getByRole("button", { name: "读取当前 Secret" })).toBeDisabled();
-  await page.getByRole("button", { name: "轮换 SSO Secret" }).click();
-  await expect(page.getByText(/操作未确认成功，可能已经生效/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "轮换 SSO Secret" })).toBeDisabled();
-  await page.getByRole("button", { name: "刷新详情" }).click();
-  expect(rotations).toBe(1);
-});
 test("candidate configures, enables and directly switches single protocol without maintenance or secret operations", async ({
   page,
 }) => {

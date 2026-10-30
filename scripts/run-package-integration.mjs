@@ -27,12 +27,19 @@ try {
   const executor = parameters.shift();
   let preflight;
   let resourceProvider;
-  while (["--preflight", "--resources"].includes(parameters[0])) {
+  let browserWorkers;
+  while (["--preflight", "--resources", "--browser-workers"].includes(parameters[0])) {
     const option = parameters.shift();
-    const path = parameters.shift();
-    if (!path) throw new Error(`${option} requires a script path`);
-    if (option === "--preflight") preflight = path;
-    else resourceProvider = path;
+    const value = parameters.shift();
+    if (option === "--browser-workers") {
+      if (browserWorkers !== undefined || !["1", "2"].includes(value))
+        throw new Error("--browser-workers requires 1 or 2 and may be supplied once");
+      browserWorkers = Number(value);
+    } else {
+      if (!value) throw new Error(`${option} requires a script path`);
+      if (option === "--preflight") preflight = value;
+      else resourceProvider = value;
+    }
   }
   const [separator, executable, ...arguments_] = parameters;
   if (separator !== "--" || executable !== executor)
@@ -43,6 +50,8 @@ try {
   const declaration = integrationDeclarations(manifest).find((item) => item.executor === executor);
   if (!declaration) throw new Error(`No Integration declaration for ${manifest.name}:${executor}`);
   const names = declaration.environmentNames;
+  if (browserWorkers !== undefined && (executor !== "playwright" || names.length > 0 || resourceProvider))
+    throw new Error("--browser-workers requires a resource-free Playwright collection without a resource provider");
   if (names.length > 0) {
     const recordPath = process.env.IAM_TEST_RESOURCE_RECORD;
     const runId = process.env.IAM_TEST_RESOURCE_RUN_ID;
@@ -71,7 +80,7 @@ try {
     args.splice(1, 0, "--max-concurrency=1", "--bail");
   }
   if (executor === "vitest") args.push("--maxWorkers=1", "--no-file-parallelism", "--bail=1");
-  if (executor === "playwright") args.push("--workers=1", "--max-failures=1");
+  if (executor === "playwright") args.push(`--workers=${browserWorkers ?? 1}`, "--max-failures=1", "--retries=0");
   const directoryIndex = args.indexOf("test-integration");
   if (directoryIndex >= 0) args.splice(directoryIndex, 1);
   args.push(...files);

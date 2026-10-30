@@ -10,6 +10,7 @@ import {
 } from "@iam/contracts";
 import { expect, test } from "@playwright/test";
 import { fulfillJson, fulfillTrpc, mockAdminApi, parseTrpcBatchInput } from "../fixtures";
+import { collectMutationRequests, mockScopedManagementApi } from "../scoped-management.fixture";
 
 function allowedActionsForStatus(status: OrganizationResponsibilityAssignmentStatus) {
   const allowed = { allowed: true, reason: null } as const;
@@ -417,4 +418,33 @@ test("rejects invalid responsibility deep-link parameters without widening scope
 
   await expect(page.getByText("责任任命链接参数无效")).toBeVisible();
   await expect.poll(() => searchCount).toBe(0);
+});
+
+test("Organization Responsibility directories remain readable while unrelated management routes are denied", async ({
+  page,
+}) => {
+  const mutationRequests = collectMutationRequests(page);
+  const hiddenManagementRequests: string[] = [];
+  await mockScopedManagementApi(page);
+  page.on("request", (request) => {
+    const url = decodeURIComponent(request.url());
+    if (/\/rpc\/admin\.(?:client|role|sessionManagement|audit|systemLog)\./.test(url)) {
+      hiddenManagementRequests.push(url);
+    }
+  });
+
+  await page.goto("/iam-admin/organization-responsibilities/types");
+  await expect(page.getByText("责任类型目录").first()).toBeVisible();
+  await expect(page.getByRole("cell", { name: "head" })).toBeVisible();
+
+  await page.goto("/iam-admin/organization-responsibilities/assignments");
+  await expect(page.getByText("责任任命列表")).toBeVisible();
+  await expect(page.getByRole("button", { name: /新建责任任命/ })).toHaveCount(0);
+
+  await page.goto("/iam-admin/clients");
+  await expect(page).toHaveURL(/\/iam-admin\/clients$/);
+  await expect(page.getByText("抱歉，你无权访问该页面")).toBeVisible();
+
+  expect(hiddenManagementRequests).toEqual([]);
+  expect(mutationRequests).toEqual([]);
 });

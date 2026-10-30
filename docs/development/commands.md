@@ -289,7 +289,8 @@ pnpm test:integration --workspace apps/admin --workspace apps/sso
 接受多启动部分服务，不引入逐文件资源标签。浏览器、HTTP server、子进程和临时目录继续由所属 harness 管理。
 
 workspace 内部脚本为 `test:integration:bun|vitest|playwright`；脚本通过
-`scripts/run-package-integration.mjs <executor> [--preflight <path>] -- <executor> ...` 消费本次选择和环境。
+`scripts/run-package-integration.mjs <executor> [--preflight <path>] [--resources <path>] [--browser-workers <1|2>] -- <executor> ...`
+消费本次选择和环境。`--browser-workers` 仅供无 PostgreSQL/Redis 声明且无资源 provider 的 Playwright collection 显式选择，默认一个 worker；Admin 选择两个，按文件并行且文件内串行。
 这些脚本不作为 package-local 资源测试入口；手动和 AFK 均通过根命令选择 owner/file。Unit 支持 package-local 执行：
 
 ```bash
