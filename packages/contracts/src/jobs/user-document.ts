@@ -1,10 +1,12 @@
 import { z } from "zod";
 
 export const USER_DOCUMENT_QUEUE_NAME = "user-document";
+export const MAX_USER_DOCUMENT_REBUILD_BATCH_SIZE = 100;
 
 export enum UserDocumentJobName {
   ExpandUserDocumentOutbox = "expand-user-document-outbox",
   RebuildUserDocument = "rebuild-user-document",
+  RebuildUserDocumentsBatch = "rebuild-user-documents-batch",
 }
 
 export enum UserDocumentRebuildReason {
@@ -44,6 +46,14 @@ export const RebuildUserDocumentJobPayloadSchema = UserDocumentJobMetaSchema.ext
 
 export type RebuildUserDocumentJobPayload = z.infer<typeof RebuildUserDocumentJobPayloadSchema>;
 
+export const RebuildUserDocumentsBatchJobPayloadSchema = z.strictObject({
+  requests: RebuildUserDocumentJobPayloadSchema.array().min(1).max(MAX_USER_DOCUMENT_REBUILD_BATCH_SIZE),
+});
+export type RebuildUserDocumentsBatchJobPayload = z.infer<typeof RebuildUserDocumentsBatchJobPayloadSchema>;
+
 export const UserDocumentOutboxJobPayloadSchema = z.strictObject({ outboxId: z.uuid() });
 export type UserDocumentOutboxJobPayload = z.infer<typeof UserDocumentOutboxJobPayloadSchema>;
-export type UserDocumentJobPayload = RebuildUserDocumentJobPayload | UserDocumentOutboxJobPayload;
+export type UserDocumentJobPayload =
+  | RebuildUserDocumentJobPayload
+  | RebuildUserDocumentsBatchJobPayload
+  | UserDocumentOutboxJobPayload;

@@ -62,21 +62,24 @@ export function createUserDocumentCommandComposition(options: {
     ? createUserDocumentUpdateProcessor({
         db: postgres.db,
         projection: createCurrentUserDocumentProjectionBundle(),
-        jobProducer: createUserDocumentJobProducer({
-          async addBulk(jobs) {
-            let timer: ReturnType<typeof setTimeout> | undefined;
-            try {
-              return await Promise.race([
-                queue.addBulk(jobs),
-                new Promise<never>((_resolve, reject) => {
-                  timer = setTimeout(() => reject(new Error("User Document queue wake-up timed out")), 2_000);
-                }),
-              ]);
-            } finally {
-              clearTimeout(timer);
-            }
+        jobProducer: createUserDocumentJobProducer(
+          {
+            async addBulk(jobs) {
+              let timer: ReturnType<typeof setTimeout> | undefined;
+              try {
+                return await Promise.race([
+                  queue.addBulk(jobs),
+                  new Promise<never>((_resolve, reject) => {
+                    timer = setTimeout(() => reject(new Error("User Document queue wake-up timed out")), 2_000);
+                  }),
+                ]);
+              } finally {
+                clearTimeout(timer);
+              }
+            },
           },
-        }),
+          { batchSize: options.env.userDocument.rebuildBatchSize },
+        ),
         subjectFactsPublisher: createSubjectFactsRedisPublisher(redis.redis),
         subjectAccessRepair: repair,
         clock,

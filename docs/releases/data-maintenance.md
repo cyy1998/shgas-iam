@@ -2,8 +2,8 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-10-26
-Next review: 2026-11-26
+Last verified: 2026-11-02
+Next review: 2026-12-02
 
 本页维护 User Document / Organization Document schema 1 与 Subject Access。命令名称以当前候选代码为准；
 完整 Spec 的目标环境硬切换、备份和受控开放仍由部署侧执行，本地测试不表示目标环境已经迁移。
@@ -62,7 +62,21 @@ failed、stale 或发布失败持续存在时，先检查 PostgreSQL、Redis、�
 默认保持 `IAM_WORKER_BULL_BOARD_READ_ONLY=true`；面板 retry/promote/remove/clean 是独立运维动作。
 dashboard-only 的 `IAM_WORKER_ENABLED_MODULES=none` 不消费重建任务。
 开发面板为 `http://localhost:30016/admin/queues`，health 为 `/healthz`，其他环境以实际配置为准。
-当前任务为 `expand-user-document-outbox` 与 `rebuild-user-document`，每次唤醒使用独立 UUID job ID；持久 Outbox 完成凭据与 Rebuild State 版本负责幂等和发布仲裁。
+普通任务为 `expand-user-document-outbox` 与 `rebuild-user-documents-batch`，consumer 仍接受积压的单条
+`rebuild-user-document`。每次唤醒使用独立 UUID job ID；持久 Outbox 完成凭据与 Rebuild State 版本负责幂等和发布仲裁。
+同次展开或 repair 的重建请求按 `IAM_WORKER_USER_DOCUMENT_REBUILD_BATCH_SIZE` 切块，实际每批最多 100 个用户；
+并发配置限制活跃批次数。PG 发布另按约 1 MiB 候选文档数据切小组，超过该大小的单个文档独立处理；
+后处理在模块实例内共享最多 4 个主体的默认并发额度，多个任务不会各自再放大这份额度。
+repair 的 rebuilds.enqueued 仍按目标用户数报告，不能与 Bull Board 的 batch job 数直接比较。
+发布小组遇目标局部错误时可先整体回滚，再有限拆分定位；健康子组继续提交。连接、配置或提交结果未知时停止扩散，保留持久义务供核对与 repair。
+任务可以部分发布成功；重试会跳过已完成或旧版本目标，Facts 失败仍由独立后续义务恢复。
+批次日志的 rebuilt 表示已确认 PG 发布，postPublication 另报告后续完成、失败和失去所有权的数量。
+批量发布事务与隔离重试使用 30 秒处理预算，PG 锁等待和语句超时不放宽连接上已有的更严格限制；预算耗尽也不能把已确认提交的文档撤销。
+调整批大小前核对最早领取到最后发布的耗时、内存和数据库负载，stale-before 必须覆盖合理的整批处理时长。
+
+首次升级批量任务时，先停止并排空全部旧 User Document consumer 与旧 repair 命令，统一替换 Worker 和命令制品后再启动。
+新 consumer 可以处理旧单条库存，旧 consumer 不能处理批量任务；回退前须由新制品排空批量任务和在途工作。
+正常关闭等待在途整批结束，强制终止留下的 processing 由正式 repair 恢复，不删除持久义务。
 
 用户 backfill、repair 与两类 verify 支持 `--deadline-ms <1..300000>`，默认 30000。参数非法时不创建资源；
 deadline、SIGINT/SIGTERM、查询/投递失败或必需资源关闭失败均非零退出。命令独立拥有带完整 UUID 的 PG 连接，

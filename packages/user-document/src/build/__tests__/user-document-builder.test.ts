@@ -8,6 +8,7 @@ import {
   UserStatus,
   UserType,
 } from "@iam/contracts";
+import { OrganizationResponsibilityIntegrityError } from "@iam/organization-responsibility-resolution";
 import { organization } from "../../__tests__/document-fixture";
 import { UserDocumentEmploymentIntegrityError } from "../document-builder.core";
 import { createDocumentBuilder } from "../document-builder.service";
@@ -225,4 +226,170 @@ test("orders publication results independently of source physical row order", as
     { userId: 2, sourceVersion: "1" },
   ]);
   expect(result.map((row) => row.userId)).toEqual([1, 2]);
+});
+
+test("shares a source read while returning independently built documents and tombstones", async () => {
+  const reads: Array<{ userIds: number[]; at: Date }> = [];
+  const source = dataset({ users: [user(2, { isDelete: true }), user(1)] });
+  const subject = createDocumentBuilder({
+    buildRepository: {
+      async loadByUserIds(userIds, at) {
+        reads.push({ userIds, at });
+        return source;
+      },
+    },
+    clock: { nowDate: () => observedAt },
+    config: { batchSize: 10 },
+  });
+
+  const results = await subject.buildManyResults([
+    { userId: 1, sourceVersion: "9007199254740993" },
+    { userId: 2, sourceVersion: "8" },
+  ]);
+
+  expect(reads).toEqual([{ userIds: [1, 2], at: observedAt }]);
+  expect(results).toMatchObject([
+    {
+      userId: 1,
+      sourceVersion: "9007199254740993",
+      status: "built",
+      document: { publishedAt: observedAt, document: { username: "user-1" } },
+    },
+    { userId: 2, sourceVersion: "8", status: "built", document: { document: null } },
+  ]);
+});
+
+test("isolates a broken employment from healthy users in the same source read", async () => {
+  const results = await builder(
+    dataset({
+      users: [user(1), user(2)],
+      employments: [employment(1), employment(2, { userId: 2, posId: 2 })],
+      positions: [position(1)],
+      orgPathRows: [org()],
+    }),
+  ).buildManyResults([
+    { userId: 1, sourceVersion: "8" },
+    { userId: 2, sourceVersion: "9" },
+  ]);
+
+  expect(results[0]).toMatchObject({ userId: 1, status: "built" });
+  expect(results[1]).toMatchObject({ userId: 2, status: "failed" });
+  if (results[1]?.status !== "failed") throw new Error("Expected failed user");
+  expect(results[1].error).toBeInstanceOf(UserDocumentEmploymentIntegrityError);
+});
+
+test("reports missing source users explicitly without inventing a tombstone", async () => {
+  const results = await builder(dataset()).buildManyResults([
+    { userId: 1, sourceVersion: "8" },
+    { userId: 2, sourceVersion: "9" },
+  ]);
+  expect(results).toMatchObject([
+    { userId: 1, sourceVersion: "8", status: "built" },
+    { userId: 2, sourceVersion: "9", status: "failed" },
+  ]);
+  expect("document" in results[1]!).toBe(false);
+  // The strict reader's established missing-source behavior is retained.
+  expect(await builder(dataset({ users: [] })).buildOne({ userId: 2, sourceVersion: "9" })).toBeNull();
+});
+
+test.each([
+  { users: [user(1), user(1)], reason: "duplicate" },
+  { users: [user(1), user(3)], reason: "unexpected" },
+])("rejects $reason source users rather than accepting ambiguous coverage", async ({ users }) => {
+  let failure: unknown;
+  try {
+    await builder(dataset({ users: [...users] })).buildManyResults([{ userId: 1, sourceVersion: "8" }]);
+  } catch (error) {
+    failure = error;
+  }
+  expect(failure).toBeInstanceOf(Error);
+});
+
+test("splits only deterministic source integrity failures and preserves the observation time", async () => {
+  const observations: Date[] = [];
+  const integrityError = new OrganizationResponsibilityIntegrityError("target-organization-missing");
+  const subject = createDocumentBuilder({
+    buildRepository: {
+      async loadByUserIds(userIds, at) {
+        observations.push(at);
+        if (userIds.includes(2)) throw integrityError;
+        return dataset({ users: userIds.map((id) => user(id)) });
+      },
+    },
+    clock: { nowDate: () => observedAt },
+    config: { batchSize: 10 },
+  });
+  const results = await subject.buildManyResults([
+    { userId: 1, sourceVersion: "8" },
+    { userId: 2, sourceVersion: "9" },
+    { userId: 3, sourceVersion: "10" },
+  ]);
+  expect(results).toMatchObject([
+    { userId: 1, status: "built" },
+    { userId: 2, status: "failed", error: integrityError },
+    { userId: 3, status: "built" },
+  ]);
+  expect(observations.length).toBeGreaterThan(1);
+  expect(observations.every((at) => at === observedAt)).toBe(true);
+});
+
+test("propagates shared source read failures without issuing more queries", async () => {
+  const databaseFailure = new Error("ConnectionUnavailable");
+  let reads = 0;
+  const subject = createDocumentBuilder({
+    buildRepository: {
+      async loadByUserIds() {
+        reads += 1;
+        throw databaseFailure;
+      },
+    },
+    clock: { nowDate: () => observedAt },
+    config: { batchSize: 10 },
+  });
+  let failure: unknown;
+  try {
+    await subject.buildManyResults([
+      { userId: 1, sourceVersion: "8" },
+      { userId: 2, sourceVersion: "9" },
+    ]);
+  } catch (error) {
+    failure = error;
+  }
+  expect(failure).toBe(databaseFailure);
+  expect(reads).toBe(1);
+});
+
+test.each([
+  {
+    targets: [
+      { userId: 1, sourceVersion: "8" },
+      { userId: 1, sourceVersion: "8" },
+    ],
+  },
+  {
+    targets: [
+      { userId: 1, sourceVersion: "8" },
+      { userId: 1, sourceVersion: "9" },
+    ],
+  },
+])("rejects duplicate targets before reading source rows", async ({ targets }) => {
+  let reads = 0;
+  const subject = createDocumentBuilder({
+    buildRepository: {
+      async loadByUserIds() {
+        reads += 1;
+        return dataset();
+      },
+    },
+    clock: { nowDate: () => observedAt },
+    config: { batchSize: 10 },
+  });
+  let failure: unknown;
+  try {
+    await subject.buildManyResults([...targets]);
+  } catch (error) {
+    failure = error;
+  }
+  expect(failure).toBeInstanceOf(Error);
+  expect(reads).toBe(0);
 });

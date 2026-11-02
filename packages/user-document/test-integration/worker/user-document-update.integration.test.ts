@@ -77,6 +77,7 @@ function runtime(
     logger?: { warn(data: unknown, message: string): void };
     publish?: (record: DocumentFactsCacheRecord) => ReturnType<RedisTestScope["firstFactsPublisher"]["publish"]>;
     repair?: { repairSubject(subjectIdentifier: string): Promise<unknown> };
+    projection?: ReturnType<typeof createCurrentUserDocumentProjectionBundle>;
   } = {},
 ) {
   const jobs: Array<
@@ -110,7 +111,7 @@ function runtime(
     clock,
     logger: options.logger ?? logger,
     batchSize: 10,
-    projection: createCurrentUserDocumentProjectionBundle(),
+    projection: options.projection ?? createCurrentUserDocumentProjectionBundle(),
     subjectFactsPublisher: { publish: options.publish ?? scope.firstFactsPublisher.publish },
     subjectAccessRepair: options.repair ?? {
       async repairSubject() {
@@ -138,6 +139,318 @@ function runtime(
     },
   };
 }
+
+async function batchRequests(context: ReturnType<typeof runtime>) {
+  const requests: RebuildUserDocumentJobPayload[] = [];
+  for (let job = context.jobs.shift(); job; job = context.jobs.shift()) {
+    if (job.kind === "outbox") await context.processor.processOutbox(job.payload);
+    else requests.push(job.payload);
+  }
+  return requests;
+}
+
+async function withRedisScope(work: (scope: RedisTestScope) => Promise<void>) {
+  const scope = await redis.createScope();
+  try {
+    await work(scope);
+  } finally {
+    await scope.close();
+  }
+}
+
+async function createSecondUser() {
+  await pg.db.insert(users).values({
+    id: 2,
+    subjectIdentifier: "10000000-0000-4000-8000-000000000002",
+    username: "second",
+    name: "Second",
+  });
+}
+
+test("batch rebuilding publishes healthy users when another user's source is invalid", async () => {
+  await withRedisScope(async (scope) => {
+    await createSecondUser();
+    await pg.db.update(users).set({ name: "" }).where(eq(users.id, 1));
+    const context = runtime(scope);
+    await context.record([
+      { kind: "user", userId: 1 },
+      { kind: "user", userId: 2 },
+    ]);
+    const requests = await batchRequests(context);
+    let failure: unknown;
+    try {
+      await context.processor.processBatch(requests);
+    } catch (error) {
+      failure = error;
+    }
+    const documents = await pg.sql`SELECT user_id,source_version FROM user_document ORDER BY user_id`;
+    const work = await pg.sql`SELECT user_id,status,processing_token FROM user_document_rebuild_state ORDER BY user_id`;
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect([...documents]).toEqual([{ user_id: 2, source_version: "1" }]);
+    expect([...work]).toEqual([
+      { user_id: 1, status: "failed", processing_token: null },
+      { user_id: 2, status: "processed", processing_token: null },
+    ]);
+    await pg.db.update(users).set({ name: "First" }).where(eq(users.id, 1));
+    const retry = await context.processor.processBatch(requests);
+    expect(retry).toMatchObject({ status: "rebuilt", requested: 2, rebuilt: 1, skipped: 1, stale: 0 });
+  });
+});
+
+test("a shared batch source failure releases every current claim for repair", async () => {
+  await withRedisScope(async (scope) => {
+    await createSecondUser();
+    const projection = createCurrentUserDocumentProjectionBundle();
+    const context = runtime(scope, {
+      projection: {
+        ...projection,
+        createBuilder(input) {
+          return {
+            ...projection.createBuilder(input),
+            async buildManyResults() {
+              throw new Error("SourceSnapshotUnavailable");
+            },
+          };
+        },
+      },
+    });
+    await context.record([
+      { kind: "user", userId: 1 },
+      { kind: "user", userId: 2 },
+    ]);
+    const requests = await batchRequests(context);
+    let failure: unknown;
+    try {
+      await context.processor.processBatch(requests);
+    } catch (error) {
+      failure = error;
+    }
+    const work = await pg.sql`SELECT user_id,status,processing_token FROM user_document_rebuild_state ORDER BY user_id`;
+    const documents = await pg.sql`SELECT user_id FROM user_document`;
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect([...work]).toEqual([
+      { user_id: 1, status: "failed", processing_token: null },
+      { user_id: 2, status: "failed", processing_token: null },
+    ]);
+    expect([...documents]).toEqual([]);
+    const repaired = await runtime(scope).processor.processBatch(requests);
+    expect(repaired).toMatchObject({ rebuilt: 2, skipped: 0 });
+  });
+});
+
+test("a batch builder that omits a claimed target cannot complete any unverified result", async () => {
+  await withRedisScope(async (scope) => {
+    await createSecondUser();
+    const projection = createCurrentUserDocumentProjectionBundle();
+    const context = runtime(scope, {
+      projection: {
+        ...projection,
+        createBuilder(input) {
+          const builder = projection.createBuilder(input);
+          return {
+            ...builder,
+            async buildManyResults(targets) {
+              return (await builder.buildManyResults(targets)).filter(({ userId }) => userId !== 2);
+            },
+          };
+        },
+      },
+    });
+    await context.record([
+      { kind: "user", userId: 1 },
+      { kind: "user", userId: 2 },
+    ]);
+    const requests = await batchRequests(context);
+    let failure: unknown;
+    try {
+      await context.processor.processBatch(requests);
+    } catch (error) {
+      failure = error;
+    }
+    const documents = await pg.sql`SELECT user_id FROM user_document`;
+    const work = await pg.sql`SELECT status,processing_token FROM user_document_rebuild_state`;
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect([...documents]).toEqual([]);
+    expect(work.every((row) => row.status === "failed" && row.processing_token === null)).toBe(true);
+  });
+});
+
+test("a publication batch commits every healthy document before any cache side effect starts", async () => {
+  await withRedisScope(async (scope) => {
+    await createSecondUser();
+    const observed: number[] = [];
+    const context = runtime(scope, {
+      async publish(record) {
+        const [coverage] = await pg.sql`SELECT count(*)::int AS count FROM user_document
+          WHERE source_version=1 AND document IS NOT NULL`;
+        observed.push(coverage!.count);
+        return await scope.firstFactsPublisher.publish(record);
+      },
+    });
+    await context.record([
+      { kind: "user", userId: 1 },
+      { kind: "user", userId: 2 },
+    ]);
+    const result = await context.processor.processBatch(await batchRequests(context));
+    expect(result).toMatchObject({ rebuilt: 2 });
+    expect(observed).toEqual([2, 2]);
+    const work = await pg.sql`SELECT status,post_publication_status FROM user_document_rebuild_state`;
+    expect(work.every((row) => row.status === "processed" && row.post_publication_status === "processed")).toBe(true);
+  });
+});
+
+test("batch cache failures retain committed documents and do not block other users", async () => {
+  await withRedisScope(async (scope) => {
+    await createSecondUser();
+    const context = runtime(scope, {
+      async publish(record) {
+        if (record.subjectIdentifier === subject) throw new Error("FactsUnavailable");
+        return await scope.firstFactsPublisher.publish(record);
+      },
+    });
+    await context.record([
+      { kind: "user", userId: 1 },
+      { kind: "user", userId: 2 },
+    ]);
+    const requests = await batchRequests(context);
+    const result = await context.processor.processBatch(requests);
+    const work =
+      await pg.sql`SELECT user_id,status,post_publication_status FROM user_document_rebuild_state ORDER BY user_id`;
+    expect(result).toMatchObject({ rebuilt: 2 });
+    expect([...work]).toEqual([
+      { user_id: 1, status: "processed", post_publication_status: "failed" },
+      { user_id: 2, status: "processed", post_publication_status: "processed" },
+    ]);
+    const repair = await runtime(scope).processor.repairFailedOrStale({ staleBefore: new Date(), limit: 10 });
+    expect(repair.postPublication).toMatchObject({ selected: 1, completed: 1, failed: 0 });
+  });
+});
+
+test("a newer request fences only its stale member of an in-flight batch", async () => {
+  await withRedisScope(async (scope) => {
+    await createSecondUser();
+    const projection = createCurrentUserDocumentProjectionBundle();
+    const entered = Promise.withResolvers<void>();
+    const resume = Promise.withResolvers<void>();
+    const context = runtime(scope, {
+      projection: {
+        ...projection,
+        createBuilder(input) {
+          const builder = projection.createBuilder(input);
+          return {
+            ...builder,
+            async buildManyResults(targets) {
+              const results = await builder.buildManyResults(targets);
+              entered.resolve();
+              await resume.promise;
+              return results;
+            },
+          };
+        },
+      },
+    });
+    await context.record([
+      { kind: "user", userId: 1 },
+      { kind: "user", userId: 2 },
+    ]);
+    const requests = await batchRequests(context);
+    const oldBatch = context.processor.processBatch(requests);
+    void oldBatch.catch((error) => entered.reject(error));
+    let oldResult: Awaited<typeof oldBatch> | undefined;
+    try {
+      await entered.promise;
+      const replacement = runtime(scope);
+      await replacement.uow.transaction(async (tx) => {
+        await tx.db.update(users).set({ name: "First updated" }).where(eq(users.id, 1));
+        await tx.invalidation.recordChanges([{ kind: "user", userId: 1 }]);
+      });
+      const current = await replacement.processor.processBatch(await batchRequests(replacement));
+      expect(current).toMatchObject({ rebuilt: 1 });
+    } finally {
+      resume.resolve();
+      oldResult = await oldBatch;
+    }
+    const documents =
+      await pg.sql`SELECT user_id,source_version,document->>'name' AS name FROM user_document ORDER BY user_id`;
+    expect(oldResult).toMatchObject({ rebuilt: 1, stale: 1 });
+    expect([...documents]).toEqual([
+      { user_id: 1, source_version: "2", name: "First updated" },
+      { user_id: 2, source_version: "1", name: "Second" },
+    ]);
+  });
+});
+
+test("a missing post-publication registration cannot acknowledge the corresponding document", async () => {
+  await withRedisScope(async (scope) => {
+    await createSecondUser();
+    const context = runtime(scope);
+    await context.record([
+      { kind: "user", userId: 1 },
+      { kind: "user", userId: 2 },
+    ]);
+    const requests = await batchRequests(context);
+    await pg.sql.unsafe(`CREATE FUNCTION suppress_post_registration() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN IF NEW.user_id=1 AND NEW.post_publication_status='pending' THEN RETURN NULL; END IF; RETURN NEW; END $$`);
+    await pg.sql.unsafe(
+      "CREATE TRIGGER suppress_post_registration BEFORE UPDATE ON user_document_rebuild_state FOR EACH ROW EXECUTE FUNCTION suppress_post_registration()",
+    );
+    let failure: unknown;
+    try {
+      await context.processor.processBatch(requests);
+    } catch (error) {
+      failure = error;
+    } finally {
+      await pg.sql.unsafe("DROP TRIGGER suppress_post_registration ON user_document_rebuild_state");
+      await pg.sql.unsafe("DROP FUNCTION suppress_post_registration()");
+    }
+    const documents = await pg.sql`SELECT user_id FROM user_document ORDER BY user_id`;
+    const work =
+      await pg.sql`SELECT user_id,status,post_publication_status FROM user_document_rebuild_state ORDER BY user_id`;
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect([...documents]).toEqual([{ user_id: 2 }]);
+    expect([...work]).toEqual([
+      { user_id: 1, status: "failed", post_publication_status: null },
+      { user_id: 2, status: "processed", post_publication_status: "processed" },
+    ]);
+  });
+});
+
+test("one target's publication rollback does not stop healthy batch members", async () => {
+  await withRedisScope(async (scope) => {
+    await createSecondUser();
+    const context = runtime(scope);
+    await context.record([
+      { kind: "user", userId: 1 },
+      { kind: "user", userId: 2 },
+    ]);
+    const requests = await batchRequests(context);
+    await pg.sql.unsafe(`CREATE FUNCTION reject_batch_publication() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN IF NEW.user_id=1 THEN RAISE EXCEPTION 'controlled publication failure'; END IF; RETURN NEW; END $$`);
+    await pg.sql.unsafe(
+      "CREATE TRIGGER reject_batch_publication BEFORE INSERT ON user_document FOR EACH ROW EXECUTE FUNCTION reject_batch_publication()",
+    );
+    let failure: unknown;
+    try {
+      await context.processor.processBatch(requests);
+    } catch (error) {
+      failure = error;
+    } finally {
+      await pg.sql.unsafe("DROP TRIGGER reject_batch_publication ON user_document");
+      await pg.sql.unsafe("DROP FUNCTION reject_batch_publication()");
+    }
+    const documents = await pg.sql`SELECT user_id FROM user_document ORDER BY user_id`;
+    const work =
+      await pg.sql`SELECT user_id,status,post_publication_status FROM user_document_rebuild_state ORDER BY user_id`;
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect([...documents]).toEqual([{ user_id: 2 }]);
+    expect([...work]).toEqual([
+      { user_id: 1, status: "failed", post_publication_status: null },
+      { user_id: 2, status: "processed", post_publication_status: "processed" },
+    ]);
+    const retry = await context.processor.processBatch(requests);
+    expect(retry).toMatchObject({ rebuilt: 1, skipped: 1 });
+  });
+});
 
 function accessRuntime(scope: RedisTestScope, publish?: NonNullable<Parameters<typeof runtime>[1]>["publish"]) {
   const authority = createSubjectAccessAuthorityRepository({

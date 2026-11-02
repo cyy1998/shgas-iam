@@ -1,4 +1,5 @@
 import type { DbClient } from "@iam/db";
+import type { DocumentBuildResult } from "../build/document-builder.service";
 import type { PublishedUserDocument } from "../document";
 import { createUserDocumentRowRepository } from "../publication/user-document-row.repository";
 import type {
@@ -23,6 +24,9 @@ export interface UserDocumentProjectionBundle<
   readonly createBuilder: (input: { db: DbClient; clock: { nowDate: () => Date }; batchSize: number }) => {
     buildOne: (target: { userId: number; sourceVersion: string }) => Promise<TDocument | null>;
     buildMany: (targets: Array<{ userId: number; sourceVersion: string }>) => Promise<TDocument[]>;
+    buildManyResults: (
+      targets: Array<{ userId: number; sourceVersion: string }>,
+    ) => Promise<DocumentBuildResult<TDocument>[]>;
   };
   readonly createRowRepository: typeof createUserDocumentRowRepository;
   readonly subjectFacts: {

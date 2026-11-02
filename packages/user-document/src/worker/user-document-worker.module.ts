@@ -6,6 +6,7 @@ import type {
 } from "@iam/contracts";
 import {
   RebuildUserDocumentJobPayloadSchema,
+  RebuildUserDocumentsBatchJobPayloadSchema,
   USER_DOCUMENT_QUEUE_NAME,
   UserDocumentJobName as UserDocumentJobNameValue,
   UserDocumentOutboxJobPayloadSchema,
@@ -44,6 +45,13 @@ export interface UserDocumentJobProcessorInput {
 }
 
 export interface UserDocumentJobProcessorRebuildPort {
+  processBatch: (payloads: RebuildUserDocumentJobPayload[]) => Promise<{
+    status: string;
+    requested: number;
+    rebuilt: number;
+    skipped: number;
+    stale: number;
+  }>;
   process: (
     payload: RebuildUserDocumentJobPayload,
     options?: { jobId?: string },
@@ -64,6 +72,30 @@ export function createUserDocumentJobProcessor(deps: CreateUserDocumentJobProces
     if (job.name === UserDocumentJobNameValue.ExpandUserDocumentOutbox) {
       if (!deps.outboxProcessor) throw new Error("User Document Outbox processor is required");
       return await deps.outboxProcessor.processOutbox(UserDocumentOutboxJobPayloadSchema.parse(job.data));
+    }
+    if (job.name === UserDocumentJobNameValue.RebuildUserDocumentsBatch) {
+      const { requests } = RebuildUserDocumentsBatchJobPayloadSchema.parse(job.data);
+      const startedAt = performance.now();
+      try {
+        const result = await deps.rebuildProcessor.processBatch(requests);
+        deps.logger.info(
+          { ...result, jobId: job.id, jobName: job.name, durationMs: performance.now() - startedAt },
+          "user document rebuild batch processed",
+        );
+        return result;
+      } catch (error) {
+        deps.logger.error(
+          {
+            ...batchFailureLogFields(error),
+            requested: requests.length,
+            jobId: job.id,
+            jobName: job.name,
+            durationMs: performance.now() - startedAt,
+          },
+          "user document rebuild batch failed",
+        );
+        throw error;
+      }
     }
     if (job.name !== UserDocumentJobNameValue.RebuildUserDocument)
       throw new Error(`Unsupported user document job name: ${job.name}`);
@@ -194,7 +226,7 @@ function createUserDocumentWorkerModuleWithProjection<
     name: USER_DOCUMENT_QUEUE_NAME,
     redis: input.redis,
   });
-  const jobProducer = createUserDocumentJobProducer(queue);
+  const jobProducer = createUserDocumentJobProducer(queue, { batchSize: input.config.rebuildBatchSize });
   const rebuildProcessor = createUserDocumentUpdateProcessor({
     db: input.db,
     projection,
@@ -250,7 +282,9 @@ function createUserDocumentWorkerModuleWithProjection<
     worker.on("failed", (job, error) => {
       input.logger.error(
         {
-          err: error,
+          ...(job?.name === UserDocumentJobNameValue.RebuildUserDocumentsBatch
+            ? batchFailureLogFields(error)
+            : { err: error }),
           jobId: job?.id,
           jobName: job?.name,
           status: "failed",
@@ -285,7 +319,15 @@ function createUserDocumentWorkerModuleWithProjection<
   };
 }
 
+function batchFailureLogFields(error: unknown) {
+  return { errorType: error instanceof AggregateError ? "AggregateError" : "BatchRebuildError" };
+}
+
 function extractRebuildJobLogFields(job: { name?: string; data?: unknown } | undefined) {
+  if (job?.name === UserDocumentJobNameValue.RebuildUserDocumentsBatch) {
+    const payload = RebuildUserDocumentsBatchJobPayloadSchema.safeParse(job.data);
+    return payload.success ? { requested: payload.data.requests.length } : {};
+  }
   if (job?.name !== UserDocumentJobNameValue.RebuildUserDocument) return {};
 
   const payload = RebuildUserDocumentJobPayloadSchema.safeParse(job.data);

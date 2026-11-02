@@ -145,7 +145,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 
 | Document                                                   | Type         | Status  | Last verified | Next review | Notes                                              |
 | ---------------------------------------------------------- | ------------ | ------- | ------------- | ----------- | -------------------------------------------------- |
-| [后端架构](architecture/backend-architecture.md)           | architecture | Current | 2026-10-26    | 2026-11-26  | 分层、事务、关键模块协作与一致性约束。             |
+| [后端架构](architecture/backend-architecture.md)           | architecture | Current | 2026-11-02    | 2026-12-02  | 分层、事务、关键模块协作与一致性约束。             |
 | [共享契约与数据库](architecture/contracts-and-database.md) | architecture | Current | 2026-10-26    | 2026-11-26  | 代码选址、包出口、运行环境、DTO 演进与持久化边界。 |
 | [前端架构](architecture/frontend-architecture.md)          | architecture | Current | 2026-10-25    | 2026-11-25  | 页面、请求、权限、状态与失败恢复的职责。           |
 | [仓库地图](architecture/repository-map.md)                 | architecture | Current | 2026-10-26    | 2026-11-26  | 代码、基础设施、工具与生成目录定位。               |
@@ -222,7 +222,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [运维操作入口](releases/README.md)                   | runbook | Current | 2026-10-26    | 2026-11-26  | 任务导航、简短通用约定、独立迁移与历史版本入口。            |
 | [网关管理](releases/apisix-gateway-release.md)       | runbook | Current | 2026-10-25    | 2026-11-25  | 首次配置、HTTP 发布、数据面检查和失败恢复。                 |
 | [登录与会话](releases/authentication-and-session.md) | runbook | Current | 2026-10-25    | 2026-11-25  | 密码配置、OIDC 双入口与密钥、会话清理和 Snapshot 恢复。     |
-| [数据维护](releases/data-maintenance.md)             | runbook | Current | 2026-10-26    | 2026-11-26  | Document、Subject Access 的两阶段修复、全量重建及完整核验。 |
+| [数据维护](releases/data-maintenance.md)             | runbook | Current | 2026-11-02    | 2026-12-02  | Document、Subject Access 的两阶段修复、全量重建及完整核验。 |
 | [部署与发布](releases/deployment.md)                 | runbook | Current | 2026-10-26    | 2026-11-26  | 首次部署、常规更新、正式迁移、兼容回退与定向停止。          |
 | [日志与排障](releases/observability-system-logs.md)  | runbook | Current | 2026-10-25    | 2026-11-25  | 日志栈、Grafana、Trace 关联、告警与采集恢复。               |
 

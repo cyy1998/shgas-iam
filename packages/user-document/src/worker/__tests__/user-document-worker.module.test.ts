@@ -8,10 +8,143 @@ import {
 } from "../user-document-worker.module";
 
 describe("createUserDocumentJobProcessor", () => {
+  test("awaits a bounded batch once and leaves individual target recovery to the processor", async () => {
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const result = { status: "rebuilt", requested: 2, rebuilt: 1, skipped: 1, stale: 0 };
+    const processBatch = mock(async () => {
+      await gate;
+      return result;
+    });
+    const process = mock(async () => ({ status: "rebuilt" }));
+    const processor = createUserDocumentJobProcessor({
+      rebuildProcessor: { process, processBatch },
+      logger: { info: mock(() => {}), warn: mock(() => {}), error: mock(() => {}) },
+    });
+    const requests = [1, 2].map((userId) => ({ userId, version: "9007199254740993", reason: "user-updated" }));
+    let completed = false;
+    const pending = processor({ id: "batch-1", name: "rebuild-user-documents-batch", data: { requests } }).then(
+      (value) => {
+        completed = true;
+        return value;
+      },
+    );
+    await Promise.resolve();
+    expect(completed).toBe(false);
+    finish();
+    const actual = await pending;
+    expect(actual).toEqual(result);
+    expect(processBatch).toHaveBeenCalledWith(requests);
+    expect(process).not.toHaveBeenCalled();
+  });
+
+  test("rejects malformed batches before processing and propagates batch failure", async () => {
+    const failure = new Error("BatchBuildFailed");
+    const processBatch = mock(async () => {
+      throw failure;
+    });
+    const processor = createUserDocumentJobProcessor({
+      rebuildProcessor: { process: mock(async () => ({ status: "rebuilt" })), processBatch },
+      logger: { info: mock(() => {}), warn: mock(() => {}), error: mock(() => {}) },
+    });
+    for (const data of [{ requests: [] }, { requests: [{ userId: 1, version: "invalid", reason: "user-updated" }] }]) {
+      let error: unknown;
+      try {
+        await processor({ name: "rebuild-user-documents-batch", data });
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toBeInstanceOf(ZodError);
+    }
+    expect(processBatch).not.toHaveBeenCalled();
+    let error: unknown;
+    try {
+      await processor({
+        name: "rebuild-user-documents-batch",
+        data: { requests: [{ userId: 1, version: "1", reason: "user-updated" }] },
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBe(failure);
+  });
+
+  test("batch failure logs exclude exception payloads at both processor and worker boundaries", async () => {
+    const canary = "BATCH_DOCUMENT_CONTENT_MUST_NOT_REACH_LOGS";
+    const failure = Object.assign(new AggregateError([new Error(canary)], "Batch failed"), {
+      command: { args: [canary] },
+    });
+    const logs: Record<string, unknown>[] = [];
+    const logger = {
+      info() {},
+      warn() {},
+      error(fields: Record<string, unknown>) {
+        logs.push(fields);
+      },
+    };
+    const job = {
+      id: "batch-failure",
+      name: "rebuild-user-documents-batch",
+      data: { requests: [{ userId: 1, version: "1", reason: "user-updated" }] },
+    };
+    const processor = createUserDocumentJobProcessor({
+      rebuildProcessor: {
+        process: mock(async () => ({ status: "rebuilt" })),
+        processBatch: mock(async () => {
+          throw failure;
+        }),
+      },
+      logger,
+    });
+    let rejected: unknown;
+    try {
+      await processor(job);
+    } catch (error) {
+      rejected = error;
+    }
+    expect(rejected).toBe(failure);
+    let onFailed!: (job: unknown, error: Error) => void;
+    const module = createUserDocumentWorkerModule({
+      db: {} as never,
+      redis: { host: "localhost", port: 6379, db: 0 },
+      subjectFactsRedis: { eval: mock(async () => 1) },
+      subjectAccessRepair: { repairSubject: mock(async () => ({ status: "stable" as const })) },
+      logger,
+      clock: { nowDate: () => new Date("2026-11-02T00:00:00Z") },
+      config: { concurrency: 1, rebuildBatchSize: 100, backfillBatchSize: 100 },
+      factories: {
+        createQueue: (() => ({ name: USER_DOCUMENT_QUEUE_NAME, close: mock(async () => {}) })) as never,
+        createWorker: (() => ({
+          close: mock(async () => {}),
+          on(event: string, listener: typeof onFailed) {
+            if (event === "failed") onFailed = listener;
+          },
+        })) as never,
+      },
+    });
+    try {
+      await module.startConsumers();
+      onFailed(job, failure);
+      expect(logs).toHaveLength(2);
+      for (const fields of logs) {
+        expect(fields).toMatchObject({ errorType: "AggregateError", jobId: job.id, requested: 1 });
+        expect(fields).not.toHaveProperty("err");
+      }
+      expect(JSON.stringify(logs)).not.toContain(canary);
+    } finally {
+      await module.close();
+    }
+  });
+
   test("parses and delegates the current versioned rebuild job", async () => {
     const process = mock(async () => ({ status: "rebuilt" }));
     const processor = createUserDocumentJobProcessor({
-      rebuildProcessor: { process },
+      rebuildProcessor: {
+        process,
+        processBatch: mock(async () => ({ status: "rebuilt", requested: 0, rebuilt: 0, skipped: 0, stale: 0 })),
+      },
       logger: {
         info: mock(() => {}),
         warn: mock(() => {}),
@@ -48,7 +181,10 @@ describe("createUserDocumentJobProcessor", () => {
   test("rejects unknown jobs and malformed rebuild payloads before delegation", async () => {
     const process = mock(async () => ({ status: "rebuilt" }));
     const processor = createUserDocumentJobProcessor({
-      rebuildProcessor: { process },
+      rebuildProcessor: {
+        process,
+        processBatch: mock(async () => ({ status: "rebuilt", requested: 0, rebuilt: 0, skipped: 0, stale: 0 })),
+      },
       logger: {
         info: mock(() => {}),
         warn: mock(() => {}),
@@ -87,6 +223,7 @@ describe("createUserDocumentJobProcessor", () => {
     const info = mock(() => {});
     const processor = createUserDocumentJobProcessor({
       rebuildProcessor: {
+        processBatch: mock(async () => ({ status: "rebuilt", requested: 0, rebuilt: 0, skipped: 0, stale: 0 })),
         process: mock(async () => ({
           status: "rebuilt",
           cacheStatus: "failed" as const,

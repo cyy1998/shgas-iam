@@ -8,6 +8,7 @@ import type {
 } from "@iam/organization-responsibility-resolution";
 import { eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { UserDocumentSourceIntegrityError } from "./document-build.error";
 import { compareCodes, groupItemsBy } from "./user-document-build.helpers";
 import type { UserDocumentBuildDataset, UserDocumentEffectiveRoleResolverPort } from "./user-document-build.repository";
 import { createUserDocumentBuildRepository } from "./user-document-build.repository";
@@ -60,7 +61,7 @@ export function createDocumentBuildRepository(
             target === undefined ||
             target.id !== identity.targetOrganizationId
           ) {
-            throw new Error("Organization Responsibility Snapshot reference is incomplete");
+            throw new UserDocumentSourceIntegrityError("Organization Responsibility Snapshot reference is incomplete");
           }
           return {
             employmentId: identity.employmentId,
@@ -108,7 +109,7 @@ async function loadTargetOrganizationPaths(db: DbClient, targetOrganizationIds: 
             level !== index + 1 ||
             (index === 0 ? parentId !== -1 : parentId !== path[index - 1]?.id)
           ) {
-            throw new Error("Organization Responsibility Snapshot path is incomplete");
+            throw new UserDocumentSourceIntegrityError("Organization Responsibility Snapshot path is incomplete");
           }
           return {
             ...node,

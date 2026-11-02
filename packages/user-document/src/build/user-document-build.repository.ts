@@ -5,6 +5,7 @@ import { OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
 import type { EffectiveRole } from "@iam/role-assignment-resolution";
 import { and, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { UserDocumentSourceIntegrityError } from "./document-build.error";
 
 export type UserDocumentBuildOrgPathRow = Pick<
   Organization,
@@ -82,7 +83,8 @@ export function createUserDocumentBuildRepository(
         orgPathRows,
         roleRows: roleRows.map((row) => {
           const clientCode = clientCodeByRoleId.get(row.roleId);
-          if (clientCode === undefined) throw new Error(`Effective Role ${row.roleId} has no client code`);
+          if (clientCode === undefined)
+            throw new UserDocumentSourceIntegrityError(`Effective Role ${row.roleId} has no client code`);
           return { ...row, clientCode };
         }),
       };

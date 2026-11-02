@@ -197,14 +197,15 @@ test("large responsibility employment lists retain every distinct affected user"
   expect(ids).not.toContain(65_534);
 });
 
-test("large post-publication repair rolls back all ownership resets when a later target rejects the reset", async () => {
+test("large post-publication repair rolls back only the rejected ownership page", async () => {
   const count = 65_534;
   await pg.sql`INSERT INTO user_document_rebuild_state
     (user_id, status, post_publication_version, post_publication_status, post_publication_token, post_publication_started_at)
     SELECT id, 'processed', 1, 'processing', gen_random_uuid(), '2000-01-01'::timestamp
     FROM generate_series(1, ${count}) AS id`;
   await pg.sql.unsafe(`CREATE FUNCTION reject_later_repair() RETURNS trigger LANGUAGE plpgsql AS $$
-    BEGIN IF NEW.user_id=1500 AND NEW.post_publication_status='pending'
+    BEGIN IF NEW.user_id=15 AND NEW.post_publication_status='processing'
+      AND NEW.post_publication_token IS DISTINCT FROM OLD.post_publication_token
       THEN RAISE EXCEPTION 'LaterRepairRejected'; END IF; RETURN NEW; END $$`);
   await pg.sql.unsafe(
     "CREATE TRIGGER reject_later_repair BEFORE UPDATE ON user_document_rebuild_state FOR EACH ROW EXECUTE FUNCTION reject_later_repair()",
@@ -219,11 +220,14 @@ test("large post-publication repair rolls back all ownership resets when a later
     await pg.sql.unsafe("DROP FUNCTION reject_later_repair()");
   }
   const [remaining] = await pg.sql`SELECT count(*)::integer AS count,
-    bool_and(post_publication_status='processing' AND post_publication_token IS NOT NULL
-      AND post_publication_started_at='2000-01-01'::timestamp) AS unchanged
+    count(*) FILTER (WHERE user_id<=10 AND post_publication_status='failed'
+      AND post_publication_token IS NULL AND post_publication_attempts=1)::integer AS recorded,
+    count(*) FILTER (WHERE user_id>10 AND post_publication_status='processing'
+      AND post_publication_token IS NOT NULL AND post_publication_attempts=0
+      AND post_publication_started_at='2000-01-01'::timestamp)::integer AS untouched
     FROM user_document_rebuild_state`;
   expect(extractPostgresError(failure)?.code).toBe("P0001");
-  expect(remaining).toEqual({ count, unchanged: true });
+  expect(remaining).toEqual({ count, recorded: 10, untouched: count - 10 });
 });
 
 async function seedEmployments(count: number) {

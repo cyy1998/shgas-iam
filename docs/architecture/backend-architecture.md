@@ -252,10 +252,24 @@ Outbox processed 表示全部目标重建要求已经持久登记，不表示入
 
 ### User Document Subject Facts publication
 
+普通重建将同次 Outbox 展开或 repair 唤醒的用户请求分成有界批次，按对象领取版本与处理 token，
+再在同一个只读源快照中共享构建读取。批次不成为新的持久业务对象，各用户仍独立保存版本与处理结果，不跨独立 Outbox 等待凑批；
+单用户资料异常独立失败，源查询失败使该批构建失败，未完成领取按原 owner 条件释放或由 stale repair 回收。
+构建与发布的批界可以不同；PG 发布按用户数和文档字节数再切成小组，单个大文档独立处理。
+接口见[更新处理器](../../packages/user-document/src/worker/user-document-update.processor.ts)。
+
 每次构建固定源快照和观察时点，读取开放任职并校验岗位、组织与完整路径，再投影有效任职及角色的明确 Client 归属。
 PostgreSQL 每个用户只保存一份业务 document 及身份、schema、sourceVersion、发布时间等技术元数据；不再保存 detail、searchDoc、subjectFacts 或独立基础资料副本。Admin 和源账号查询保留管理专属模型。
 
-发布事务锁定 Rebuild State，重验版本和领取 token，原子写入文档或墓碑、processed 与所需 post-publication 义务。重领更换 owner，同版本旧 owner 也不能完成新工作。PG 提交后才单调发布 Redis 并执行必要的 Subject Access 恢复；失败不回滚文档，也不因主 processed 而遗失恢复责任。
+用户发布采用有界小批事务，按目标 ID 固定顺序锁定 Rebuild State，逐对象重验版本和领取 token；
+仅对仍有效的子集原子写入文档或墓碑、processed 与所需 post-publication 义务。重领更换 owner，同版本旧 owner 也不能完成新工作。
+目标局部发布错误须确认事务回滚后才有界拆分隔离，健康子组可继续提交；连接、配置或未知提交结果停止扩散重试，
+未完成工作按原 owner 条件释放，活跃锁下无法释放的记录交给 repair。已确认提交的对象不会因后续子组失败而撤销。
+
+PG 提交确认后才处理外部作用。用户后处理集合领取、批量读取已发布文档，并按每个对象的版本和独立 token 写回完成或失败；
+Facts 与 Subject Access 仍逐主体执行，共享模块实例的有界并发额度。已知结果及时成批写回，不等待同页最慢成员；
+Access lease 在实际执行该主体修复时领取，不为整页提前占用。Redis 失败不回滚文档，主 processed 也不解除后续恢复责任。
+正常消费和 repair 复用[后处理器](../../packages/user-document/src/worker/user-document-post-publication.processor.ts)。
 只有已删除用户发布 document=null，未删除的 Pause/Disable 仍有完整文档；源行缺失不是墓碑。Redis 使用持久带版本墓碑，阻止旧 publisher 或回填复活；比较版本保持 bigint 精度。缓存失败保留持久 post-publication 工作供 repair。
 
 Facts reader 合法缓存命中直接返回；缺失、损坏或主体错配时按主体合并回源，从已发布 document 派生同版本 Facts 或墓碑并尽力回填。回填失败仍可使用合法 PG 结果；Redis 读取故障不回源，不查询源业务表或旧副本。读取诊断只含操作、结果和耗时，观测失败不改变认证。

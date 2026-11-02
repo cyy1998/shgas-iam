@@ -1,8 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { createUnitOfWork } from "@iam/api-core/uow";
 import type { UserDocumentJobName, UserDocumentJobPayload } from "@iam/contracts";
-import { UserDocumentWorkStatus, UserStatus } from "@iam/contracts";
+import { OrganizationLevel, OrganizationType, UserDocumentWorkStatus, UserStatus } from "@iam/contracts";
 import type { db as database } from "@iam/db";
+import { organizations, positions } from "@iam/db/schema";
+import { eq } from "drizzle-orm";
 import { USER_DOCUMENT_SCHEMA_VERSION } from "../../src/index";
+import { createUserDocumentInvalidation, createUserDocumentJobProducer } from "../../src/producer";
 import {
   createCurrentUserDocumentProjectionBundle,
   createUserDocumentPostgresGate,
@@ -22,6 +26,8 @@ describe("production User Document schema 1 Worker", () => {
 
   beforeEach(async () => {
     await harness.reset();
+    await harness.sql`TRUNCATE role_assignment, role, client, organization_responsibility_assignment,
+      employment, organization_closure, organization, position RESTART IDENTITY CASCADE`;
     await harness.sql`
       INSERT INTO "user" (
         id,
@@ -45,6 +51,104 @@ describe("production User Document schema 1 Worker", () => {
   afterAll(async () => {
     await harness?.close();
   });
+
+  test("batches organization fanout and repairs a bad target without rebuilding completed neighbors", async () => {
+    await harness.sql`INSERT INTO "user" (id, subject_identifier, username, name) VALUES
+      (2, '00000000-0000-4000-8000-000000000002', 'user-2', 'User 2'),
+      (3, '00000000-0000-4000-8000-000000000003', 'user-3', 'User 3')`;
+    await harness.db.insert(organizations).values({
+      id: 10,
+      orgCode: "ORG",
+      orgName: "Before",
+      path: "/10",
+      level: OrganizationLevel.One,
+      orgType: OrganizationType.Company,
+    });
+    await harness.sql`INSERT INTO organization_closure (ancestor_id, descendant_id, depth) VALUES (10, 10, 0)`;
+    await harness.db.insert(positions).values({ id: 10, posCode: "POSITION", posName: "Position" });
+    await harness.sql`INSERT INTO employment (id, user_id, dept_id, pos_id, start_time)
+      SELECT id, id, 10, 10, '2026-01-01'::timestamp FROM "user"`;
+    const jobs: Array<{ id: string; name: UserDocumentJobName; data: UserDocumentJobPayload }> = [];
+    let processJob!: (job: { id: string; name: string; data: unknown }) => Promise<unknown>;
+    const queue = {
+      name: "user-document",
+      async addBulk(
+        batch: Array<{ name: UserDocumentJobName; data: UserDocumentJobPayload; opts: { jobId: string } }>,
+      ) {
+        const added = batch.map(({ name, data, opts }) => ({ id: opts.jobId, name, data }));
+        jobs.push(...added);
+        return added;
+      },
+      close: mock(async () => {}),
+    };
+    const logger = { info() {}, warn() {}, error() {} };
+    const clock = { nowDate: () => OBSERVED_AT };
+    const publish = mock(async () => 1);
+    const module = createUserDocumentWorkerModule({
+      db: harness.db,
+      redis: { host: "localhost", port: 6379, db: 0 },
+      subjectFactsRedis: { eval: publish },
+      subjectAccessRepair: { repairSubject: mock(async () => ({ status: "stable" as const })) },
+      logger,
+      clock,
+      config: { concurrency: 1, rebuildBatchSize: 2, backfillBatchSize: 10 },
+      factories: {
+        createQueue: (() => queue) as never,
+        createWorker: ((input: { processor: typeof processJob }) => {
+          processJob = input.processor;
+          return { close: mock(async () => {}), on: mock(() => undefined) };
+        }) as never,
+      },
+    });
+    const jobProducer = createUserDocumentJobProducer(queue, { batchSize: 2 });
+    const uow = createUnitOfWork({
+      db: harness.db,
+      logger,
+      createTxPorts: (db, lifecycle) => ({
+        db,
+        invalidation: createUserDocumentInvalidation({ db, lifecycle, clock, jobProducer }),
+      }),
+    });
+    try {
+      await module.startConsumers();
+      await uow.transaction(async (tx) => {
+        await tx.db.update(organizations).set({ orgName: "After" }).where(eq(organizations.id, 10));
+        await tx.invalidation.recordChanges([{ kind: "organization", organizationId: 10 }]);
+      });
+      const outbox = jobs.shift()!;
+      await processJob(outbox);
+      expect(jobs.map(({ data }) => ("requests" in data ? data.requests.length : 0))).toEqual([2, 1]);
+      let failure: unknown;
+      try {
+        await processJob(jobs.shift()!);
+      } catch (error) {
+        failure = error;
+      }
+      expect(failure).toBeInstanceOf(AggregateError);
+      await processJob(jobs.shift()!);
+      const partial = await harness.sql`SELECT user_id, status FROM user_document_rebuild_state ORDER BY user_id`;
+      expect([...partial]).toEqual([
+        { user_id: 1, status: "failed" },
+        { user_id: 2, status: "processed" },
+        { user_id: 3, status: "processed" },
+      ]);
+      await harness.sql`UPDATE "user" SET name = 'User 1' WHERE id = 1`;
+      const repair = await module.maintenance.repairFailedOrStale({ staleBefore: OBSERVED_AT, limit: 10 });
+      expect(repair).toMatchObject({ enqueued: 1, failed: 0 });
+      await processJob(jobs.shift()!);
+      const documents = await harness.sql`SELECT user_id, document->'employments'->0->'organization'->>'name' AS name
+        FROM user_document ORDER BY user_id`;
+      expect([...documents]).toEqual([1, 2, 3].map((user_id) => ({ user_id, name: "After" })));
+      expect(publish).toHaveBeenCalledTimes(3);
+      await processJob(outbox);
+      while (jobs.length) await processJob(jobs.shift()!);
+      expect(publish).toHaveBeenCalledTimes(3);
+      const versions = await harness.sql`SELECT version::text AS version FROM user_document_rebuild_state`;
+      expect(versions.map(({ version }) => version)).toEqual(["1", "1", "1"]);
+    } finally {
+      await module.close();
+    }
+  }, 15_000);
 
   test("consumes the existing backfill job and converges through the existing repair retry", async () => {
     const jobs: Array<{

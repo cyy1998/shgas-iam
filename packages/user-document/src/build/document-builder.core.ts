@@ -5,7 +5,7 @@ import {
   OrganizationStatus,
   PositionStatus,
 } from "@iam/contracts";
-import type { Employment } from "@iam/db/schema";
+import type { Employment, User } from "@iam/db/schema";
 import { type PublishedUserDocument, PublishedUserDocumentSchema, USER_DOCUMENT_SCHEMA_VERSION } from "../document";
 import type { DocumentBuildDataset } from "./document-build.repository";
 import { compareCodes, groupItemsBy } from "./user-document-build.helpers";
@@ -24,12 +24,47 @@ export class UserDocumentEmploymentIntegrityError extends Error {
   }
 }
 
+export type DocumentBuildResult<TDocument extends PublishedUserDocument = PublishedUserDocument> =
+  | { userId: number; sourceVersion: string; status: "built"; document: TDocument }
+  | { userId: number; sourceVersion: string; status: "failed"; error: unknown };
+
 /** Source rows are already bound to one snapshot and one observation time by the caller. */
 export function buildUserDocumentsFromDataset(
   dataset: DocumentBuildDataset,
   observedAt: Date,
   versions: ReadonlyMap<number, string>,
 ): PublishedUserDocument[] {
+  return dataset.users.map(createDocumentAssembler(dataset, observedAt, versions));
+}
+
+export function buildUserDocumentResultsFromDataset(
+  dataset: DocumentBuildDataset,
+  observedAt: Date,
+  versions: ReadonlyMap<number, string>,
+): DocumentBuildResult[] {
+  const users = new Map<number, User>();
+  for (const user of dataset.users) {
+    if (!versions.has(user.id)) throw new Error("Document build returned an unexpected user");
+    if (users.has(user.id)) throw new Error("Document build returned a duplicate user");
+    users.set(user.id, user);
+  }
+  const assemble = createDocumentAssembler(dataset, observedAt, versions);
+  return [...versions].map(([userId, sourceVersion]) => {
+    try {
+      const user = users.get(userId);
+      if (!user) throw new Error("User Document source is missing");
+      return { userId, sourceVersion, status: "built", document: assemble(user) };
+    } catch (error) {
+      return { userId, sourceVersion, status: "failed", error };
+    }
+  });
+}
+
+function createDocumentAssembler(
+  dataset: DocumentBuildDataset,
+  observedAt: Date,
+  versions: ReadonlyMap<number, string>,
+) {
   const employmentsByUser = groupItemsBy(dataset.employments, (row) => row.userId);
   const positions = new Map(dataset.positions.map((row) => [row.id, row]));
   const paths = groupItemsBy(dataset.orgPathRows, (row) => row.descendantId);
@@ -39,7 +74,7 @@ export function buildUserDocumentsFromDataset(
   if (dataset.responsibilityRows.some((row) => !employmentIds.has(row.employmentId)))
     throw new Error("Document responsibility references an unexpected Employment");
   const catalog = new Map(ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG.map((entry) => [entry.code, entry]));
-  return dataset.users.map((user) => {
+  return (user: User) => {
     const sourceVersion = versions.get(user.id);
     if (sourceVersion === undefined) throw new Error("Document build returned an unexpected user");
     const metadata = {
@@ -124,7 +159,7 @@ export function buildUserDocumentsFromDataset(
         employments: items,
       },
     });
-  });
+  };
 }
 
 function isEffective(employment: Employment, observedAt: Date) {

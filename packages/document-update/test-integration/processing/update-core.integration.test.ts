@@ -319,6 +319,90 @@ test("large versions remain exact and a newer requirement fences an older candid
   });
 });
 
+test("batch claims keep exact versions and only acquire current pending or failed targets", async () => {
+  const { processor } = createProcessor();
+  await harness.sql`INSERT INTO organization_document_rebuild_state (organization_id,version,status,processing_token,processing_started_at)
+    VALUES (1,9007199254740993,'pending',NULL,NULL),
+      (2,1,'processing','10000000-0000-4000-8000-000000000002',now()),
+      (3,1,'processed',NULL,NULL),(4,7,'failed',NULL,NULL)`;
+  const claims = await processor.claimRebuilds([
+    { targetId: 4, version: "7" },
+    { targetId: 1, version: "9007199254740992" },
+    { targetId: 1, version: "9007199254740993" },
+    { targetId: 1, version: "9007199254740993" },
+    { targetId: 2, version: "1" },
+    { targetId: 3, version: "1" },
+  ]);
+  const work = await harness.sql`SELECT organization_id,version,status,processing_token,attempts
+    FROM organization_document_rebuild_state ORDER BY organization_id`;
+  expect(claims.map(({ targetId, version }) => ({ targetId, version }))).toEqual([
+    { targetId: 1, version: "9007199254740993" },
+    { targetId: 4, version: "7" },
+  ]);
+  expect(new Set(claims.map(({ processingToken }) => processingToken)).size).toBe(2);
+  expect(work.map(({ organization_id, status, attempts }) => ({ organization_id, status, attempts }))).toEqual([
+    { organization_id: 1, status: "processing", attempts: 1 },
+    { organization_id: 2, status: "processing", attempts: 0 },
+    { organization_id: 3, status: "processed", attempts: 0 },
+    { organization_id: 4, status: "processing", attempts: 1 },
+  ]);
+  expect(work[0]!.processing_token).toBe(claims[0]!.processingToken);
+  expect(work[3]!.processing_token).toBe(claims[1]!.processingToken);
+});
+
+test("failed batch cleanup cannot clear replacement owners or newer requirements", async () => {
+  const { processor } = createProcessor();
+  await harness.sql`INSERT INTO organization_document_rebuild_state (organization_id,version,status)
+    VALUES (1,1,'pending'),(2,1,'pending'),(3,1,'pending')`;
+  const old = await processor.claimRebuilds([1, 2, 3].map((targetId) => ({ targetId, version: "1" })));
+  await harness.sql`UPDATE organization_document_rebuild_state SET status='pending',processing_token=NULL
+    WHERE organization_id=1`;
+  const replacement = await processor.claimRebuilds([{ targetId: 1, version: "1" }]);
+  await harness.sql`UPDATE organization_document_rebuild_state SET version=2,status='pending',processing_token=NULL
+    WHERE organization_id=2`;
+  await processor.failRebuilds(old, new Error("batch source unavailable"));
+  const work = await harness.sql`SELECT organization_id,version,status,processing_token,last_error
+    FROM organization_document_rebuild_state ORDER BY organization_id`;
+  expect(work[0]).toMatchObject({
+    organization_id: 1,
+    version: "1",
+    status: "processing",
+    processing_token: replacement[0]!.processingToken,
+  });
+  expect(work[1]).toMatchObject({ organization_id: 2, version: "2", status: "pending", processing_token: null });
+  expect(work[2]).toMatchObject({
+    organization_id: 3,
+    version: "1",
+    status: "failed",
+    processing_token: null,
+    last_error: "batch source unavailable",
+  });
+});
+
+test("a later batch claim failure does not leave earlier targets owned", async () => {
+  const { processor } = createProcessor();
+  await harness.sql`INSERT INTO organization_document_rebuild_state (organization_id,version,status)
+    SELECT generate_series(1,1002),1,'pending'`;
+  await harness.sql.unsafe(`CREATE FUNCTION reject_claim() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN IF NEW.organization_id=1001 THEN RAISE EXCEPTION 'controlled claim failure'; END IF; RETURN NEW; END $$`);
+  await harness.sql.unsafe(
+    "CREATE TRIGGER reject_claim BEFORE UPDATE ON organization_document_rebuild_state FOR EACH ROW EXECUTE FUNCTION reject_claim()",
+  );
+  let failure: unknown;
+  try {
+    await processor.claimRebuilds(Array.from({ length: 1_002 }, (_, index) => ({ targetId: index + 1, version: "1" })));
+  } catch (error) {
+    failure = error;
+  } finally {
+    await harness.sql.unsafe("DROP TRIGGER reject_claim ON organization_document_rebuild_state");
+    await harness.sql.unsafe("DROP FUNCTION reject_claim()");
+  }
+  const [work] = await harness.sql`SELECT count(*)::integer AS pending FROM organization_document_rebuild_state
+    WHERE status='pending' AND processing_token IS NULL AND attempts=0`;
+  expect(failure).toBeInstanceOf(Error);
+  expect(work!.pending).toBe(1_002);
+});
+
 test("failed wakeups retain diagnostics and requirements in both durable stages", async () => {
   const [entry] = await register();
   await harness.sql`UPDATE organization_document_outbox SET status='failed',last_error='expansion failed',attempts=3 WHERE id=${entry!.outboxId}`;
