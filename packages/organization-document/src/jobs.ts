@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createJobWakeUpProducer, type JobWakeUpQueuePort } from "@iam/jobs";
 import {
   ORGANIZATION_OUTBOX_JOB_NAME,
   ORGANIZATION_REBUILD_JOB_NAME,
@@ -11,35 +11,34 @@ import {
 
 export type OrganizationDocumentJobName = typeof ORGANIZATION_OUTBOX_JOB_NAME | typeof ORGANIZATION_REBUILD_JOB_NAME;
 export type OrganizationDocumentJobPayload = OrganizationOutboxJobPayload | OrganizationRebuildJobPayload;
-
-export interface OrganizationDocumentQueueProducerPort {
-  addBulk: (
-    jobs: Array<{ name: OrganizationDocumentJobName; data: OrganizationDocumentJobPayload; opts: { jobId: string } }>,
-  ) => Promise<unknown[]>;
-}
+export type OrganizationDocumentQueueProducerPort = JobWakeUpQueuePort<
+  OrganizationDocumentJobPayload,
+  OrganizationDocumentJobName
+>;
 
 export function createOrganizationDocumentJobProducer(
   queue: OrganizationDocumentQueueProducerPort,
+  options: { wakeUpTimeoutMs?: number } = {},
 ): OrganizationDocumentJobProducerPort {
-  async function enqueue(name: OrganizationDocumentJobName, payloads: OrganizationDocumentJobPayload[]) {
-    if (payloads.length === 0) return { enqueued: 0 };
-    const jobs = payloads.map((data) => ({ name, data, opts: { jobId: randomUUID() } }));
-    const added = await queue.addBulk(jobs);
-    return { enqueued: added.length };
-  }
-
+  const transport = createJobWakeUpProducer(queue, {
+    label: "Organization Document",
+    timeoutErrorName: "OrganizationDocumentWakeUpTimeoutError",
+    wakeUpTimeoutMs: options.wakeUpTimeoutMs,
+  });
   return {
     async enqueueOutboxEntries(payloads) {
-      return await enqueue(
+      const result = await transport.enqueue(
         ORGANIZATION_OUTBOX_JOB_NAME,
         payloads.map((payload) => OrganizationOutboxJobPayloadSchema.parse(payload)),
       );
+      return { enqueued: result.enqueued };
     },
     async enqueueRebuilds(payloads) {
-      return await enqueue(
+      const result = await transport.enqueue(
         ORGANIZATION_REBUILD_JOB_NAME,
         payloads.map((payload) => OrganizationRebuildJobPayloadSchema.parse(payload)),
       );
+      return { enqueued: result.enqueued };
     },
   };
 }

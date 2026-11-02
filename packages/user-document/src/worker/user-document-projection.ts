@@ -21,7 +21,12 @@ export interface UserDocumentProjectionBundle<
 > {
   readonly schemaVersion: number;
   readonly parseDocumentRow: (input: unknown) => TDocument;
-  readonly createBuilder: (input: { db: DbClient; clock: { nowDate: () => Date }; batchSize: number }) => {
+  readonly createBuilder: (input: {
+    db: DbClient;
+    clock: { nowDate: () => Date };
+    batchSize: number;
+    signal?: AbortSignal;
+  }) => {
     buildOne: (target: { userId: number; sourceVersion: string }) => Promise<TDocument | null>;
     buildMany: (targets: Array<{ userId: number; sourceVersion: string }>) => Promise<TDocument[]>;
     buildManyResults: (

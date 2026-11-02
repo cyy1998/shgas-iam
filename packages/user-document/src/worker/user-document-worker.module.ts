@@ -202,6 +202,7 @@ export function createCurrentUserDocumentProjectionBundle() {
         responsibilityResolver: createOrganizationResponsibilityResolver(input.db),
         clock: input.clock,
         config: { batchSize: input.batchSize },
+        signal: input.signal,
       });
     },
     createFactsRecord(profile) {

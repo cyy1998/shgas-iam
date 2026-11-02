@@ -84,8 +84,9 @@ test("closes the production user document query and queue resources", async () =
   const resources = createApiUserDocumentResources({
     databaseUrl: "postgresql://internal-user.invalid/iam",
     redis: { host: "127.0.0.1", port: 6379, db: 0 },
+    logger: { error() {} },
     createQueryResource: mock(() => ({ db: {}, close: closeQuery }) as never),
-    createQueue: mock(() => ({ close: closeQueue }) as never),
+    createWriteResources: mock(() => ({ queue: {}, jobProducer: {}, close: closeQueue }) as never),
   });
 
   await resources.close();

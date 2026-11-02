@@ -11,6 +11,7 @@ export interface UserDocumentBuilderDeps {
   responsibilityResolver: Pick<OrganizationResponsibilityResolver, "resolveEffectiveResponsibilities">;
   clock: { nowDate: () => Date };
   config: { batchSize: number };
+  signal?: AbortSignal;
 }
 
 export function createUserDocumentBuilder(deps: UserDocumentBuilderDeps) {
@@ -18,6 +19,7 @@ export function createUserDocumentBuilder(deps: UserDocumentBuilderDeps) {
     buildRepository: createDocumentBuildRepository(deps.db, deps.roleAssignmentResolver, deps.responsibilityResolver),
     clock: deps.clock,
     config: deps.config,
+    signal: deps.signal,
   });
 }
 

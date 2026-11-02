@@ -3,6 +3,14 @@ import type { DbClient, DbTransaction, db as database } from "@iam/db";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import { type SQL, sql } from "drizzle-orm";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
+import { createDocumentBatchRebuilder, type DocumentBuildResult } from "./batch-rebuild";
+
+export type {
+  DocumentBatchRebuildOptions,
+  DocumentBatchRebuildResult,
+  DocumentBuildResult,
+} from "./batch-rebuild";
+export { createDocumentOutboxWakeUp } from "./outbox-wake-up";
 
 // The largest statement binds three parameters per target. Keep every statement
 // well below the driver limit without splitting the transaction or its receipt.
@@ -101,6 +109,11 @@ export function createDocumentUpdateProcessor<Source, Document>(input: {
   expand: (tx: DbTransaction, source: Source, observedAt: Date) => Promise<readonly number[]>;
   registered?: (tx: DbTransaction, source: Source, requests: readonly DocumentRebuildRequest[]) => Promise<void>;
   build: (targetId: number, version: string) => Promise<Document>;
+  buildMany?: (
+    tx: DbTransaction,
+    requests: readonly DocumentRebuildRequest[],
+    observedAt: Date,
+  ) => Promise<readonly DocumentBuildResult<Document>[]>;
   publish: (tx: DbTransaction, prepared: PreparedDocumentPublication<Document>) => Promise<void>;
   publishMany?: (
     tx: DbTransaction,
@@ -582,6 +595,17 @@ export function createDocumentUpdateProcessor<Source, Document>(input: {
     };
   }
 
+  const processRebuildBatch = createDocumentBatchRebuilder({
+    db: input.db,
+    clock,
+    maxPublicationBatchSize: SQL_TARGET_BATCH_SIZE,
+    assertRequest: assertDocumentRebuildRequest,
+    buildMany: input.buildMany,
+    claimRebuilds,
+    failRebuilds,
+    publishPreparedBatch,
+  });
+
   return {
     processOutbox,
     claimRebuilds,
@@ -589,6 +613,7 @@ export function createDocumentUpdateProcessor<Source, Document>(input: {
     prepareRebuild,
     publishPrepared,
     publishPreparedBatch,
+    processRebuildBatch,
     async processRebuild(request: DocumentRebuildRequest) {
       const prepared = await prepareRebuild(request);
       return prepared ? await publishPrepared(prepared) : { status: "skipped" as const };

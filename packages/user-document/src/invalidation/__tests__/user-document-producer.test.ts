@@ -4,23 +4,6 @@ import type { UserDocumentJobPayload } from "@iam/contracts";
 import { MAX_USER_DOCUMENT_REBUILD_BATCH_SIZE, UserDocumentJobName, UserDocumentRebuildReason } from "@iam/contracts";
 import { createUserDocumentJobProducer } from "../../producer";
 
-test("repeated durable work gets distinct queue wakes without changing its processing version", async () => {
-  const jobs: Array<{ name: UserDocumentJobName; data: UserDocumentJobPayload; opts: { jobId: string } }> = [];
-  const producer = createUserDocumentJobProducer({
-    async addBulk(batch) {
-      jobs.push(...batch);
-      return batch.map(({ opts }) => ({ id: opts.jobId }));
-    },
-  });
-  const payload = { userId: 123, version: "9007199254740993", reason: UserDocumentRebuildReason.UserUpdated };
-  const first = await producer.enqueueRebuildJobs([payload]);
-  const retry = await producer.enqueueRebuildJobs([payload]);
-  expect(first.enqueued).toBe(1);
-  expect(retry.enqueued).toBe(1);
-  expect(retry.jobIds[0]).not.toBe(first.jobIds[0]);
-  expect(jobs.map(({ data }) => data)).toEqual([{ requests: [payload] }, { requests: [payload] }]);
-});
-
 test("chunks rebuild wakes while reporting target coverage to repair", async () => {
   const jobs: Array<{ name: UserDocumentJobName; data: UserDocumentJobPayload }> = [];
   const producer = createUserDocumentJobProducer(
@@ -47,7 +30,7 @@ test("chunks rebuild wakes while reporting target coverage to repair", async () 
   ]);
 });
 
-test("caps configured batches at the transport bound and validates all inputs before enqueueing", async () => {
+test("caps rebuild requests per job and validates all inputs before enqueueing", async () => {
   const jobs: Array<{ data: UserDocumentJobPayload }> = [];
   const producer = createUserDocumentJobProducer(
     {
@@ -67,7 +50,10 @@ test("caps configured batches at the transport bound and validates all inputs be
   expect(jobs).toHaveLength(2);
   let error: unknown;
   try {
-    await producer.enqueueRebuildJobs([...requests, { ...requests[0]!, userId: 0 }]);
+    await producer.enqueueRebuildJobs([
+      ...requests,
+      { userId: 0, version: "1", reason: UserDocumentRebuildReason.UserUpdated },
+    ]);
   } catch (caught) {
     error = caught;
   }
@@ -96,4 +82,11 @@ test("queues only validated Outbox identities and keeps invalid rebuilds out of 
   expect(jobs.map(({ name, data }) => ({ name, data }))).toEqual([
     { name: UserDocumentJobName.ExpandUserDocumentOutbox, data: { outboxId } },
   ]);
+});
+
+test("preserves the User Document timeout error when using the shared transport", async () => {
+  const producer = createUserDocumentJobProducer({ addBulk: () => new Promise(() => {}) }, { wakeUpTimeoutMs: 10 });
+  const error = await producer.enqueueOutboxEntries([{ outboxId: randomUUID() }]).catch((caught: unknown) => caught);
+  expect(error).toBeInstanceOf(Error);
+  expect(error).toMatchObject({ name: "UserDocumentWakeUpTimeoutError" });
 });

@@ -4,7 +4,7 @@ import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import type { CreateAppOptions } from "@iam/api-core/core/create-app";
 import db, { closeDb } from "@iam/db";
 import { createOrganizationDocumentWriteResources } from "@iam/organization-document/producer";
-import { createUserDocumentJobProducer } from "@iam/user-document/producer";
+import type { UserDocumentJobProducer } from "@iam/user-document/producer";
 import { sql } from "drizzle-orm";
 import { createInternalDelegationQueryResource } from "./internal-delegation-query";
 import { createInternalOrganizationQueryResource } from "./internal-organization-query";
@@ -24,7 +24,7 @@ export interface ApiComposition {
   repositories: ReturnType<typeof createApiRepositories>;
   auditLogWriter: ReturnType<typeof createApiAuditLogWriter>;
   userDocumentQueue: ReturnType<typeof createApiUserDocumentResources>["queue"];
-  userDocumentJobProducer: ReturnType<typeof createUserDocumentJobProducer>;
+  userDocumentJobProducer: UserDocumentJobProducer;
   organizationDocumentWrites: ReturnType<typeof createOrganizationDocumentWriteResources>;
   unitOfWork: ReturnType<typeof createApiUnitOfWork>;
   services: ReturnType<typeof createApiServices>;
@@ -46,6 +46,7 @@ export async function createApiComposition(options: CreateApiCompositionOptions 
   const userDocumentResources = createApiUserDocumentResources({
     databaseUrl: compositionEnv.databaseUrl,
     redis: runtime.config.env.redis,
+    logger: runtime.logger,
   });
   const delegationResolutionResource = createInternalDelegationQueryResource({
     databaseUrl: compositionEnv.databaseUrl,
@@ -56,7 +57,7 @@ export async function createApiComposition(options: CreateApiCompositionOptions 
   });
   const auditLogWriter = createApiAuditLogWriter({ auditRepository: repositories.audit });
   const userDocumentQueue = userDocumentResources.queue;
-  const userDocumentJobProducer = createUserDocumentJobProducer(userDocumentQueue);
+  const userDocumentJobProducer = userDocumentResources.jobProducer;
   const organizationDocumentWrites = createOrganizationDocumentWriteResources({
     redis: runtime.config.env.redis,
     logger: runtime.logger,

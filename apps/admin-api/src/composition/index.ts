@@ -4,14 +4,11 @@ import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-author
 import { createHrAdministrationScopeResolver } from "@admin-api/services/admin-authorization/hr-administration-scope.resolver";
 import { createAdminAuditService } from "@admin-api/services/audit/audit.service";
 import type { CreateAppOptions } from "@iam/api-core/core/create-app";
-import type { UserDocumentJobName, UserDocumentJobPayload } from "@iam/contracts";
-import { USER_DOCUMENT_QUEUE_NAME } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import db from "@iam/db";
-import { createJobQueue } from "@iam/jobs";
 import { createOrganizationDocumentWriteResources } from "@iam/organization-document/producer";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
-import { createUserDocumentJobProducer } from "@iam/user-document/producer";
+import { createUserDocumentWriteResources } from "@iam/user-document/producer";
 import { createAdminApiMiddlewares } from "./middlewares";
 import { createAdminApiRepositories } from "./repositories";
 import { createAdminApiRouteComposition } from "./routes";
@@ -30,8 +27,8 @@ export interface AdminApiComposition {
   roleAssignmentResolver: ReturnType<typeof createRoleAssignmentResolver>;
   auditService: ReturnType<typeof createAdminAuditService>;
   authorizationPolicy: ReturnType<typeof createAdminAuthorizationPolicy>;
-  userDocumentQueue: ReturnType<typeof createJobQueue<UserDocumentJobPayload, unknown, UserDocumentJobName>>;
-  userDocumentJobProducer: ReturnType<typeof createUserDocumentJobProducer>;
+  userDocumentQueue: ReturnType<typeof createUserDocumentWriteResources>["queue"];
+  userDocumentJobProducer: ReturnType<typeof createUserDocumentWriteResources>["jobProducer"];
   organizationDocumentWrites: ReturnType<typeof createOrganizationDocumentWriteResources>;
   unitOfWork: ReturnType<typeof createAdminApiUnitOfWork>;
   services: ReturnType<typeof createAdminApiServices>;
@@ -65,11 +62,12 @@ export async function createAdminApiComposition(
     hrAdministrationScopeResolver,
     logger: runtime.logger,
   });
-  const userDocumentQueue = createJobQueue<UserDocumentJobPayload, unknown, UserDocumentJobName>({
-    name: USER_DOCUMENT_QUEUE_NAME,
+  const userDocumentWrites = createUserDocumentWriteResources({
     redis: runtime.config.env.redis,
+    logger: runtime.logger,
   });
-  const userDocumentJobProducer = createUserDocumentJobProducer(userDocumentQueue);
+  const userDocumentQueue = userDocumentWrites.queue;
+  const userDocumentJobProducer = userDocumentWrites.jobProducer;
   const organizationDocumentWrites = createOrganizationDocumentWriteResources({
     redis: runtime.config.env.redis,
     logger: runtime.logger,

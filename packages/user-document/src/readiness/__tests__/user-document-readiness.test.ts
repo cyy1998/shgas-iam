@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 import { createUserDocumentPostgresGate, createUserDocumentRedisAccessGate } from "@iam/user-document/worker";
 import { publication } from "../../__tests__/document-fixture";
+import type { DocumentBuildResult } from "../../build/document-builder.service";
 import { createDocumentFactsCacheRecord } from "../../document";
 
 const observedAt = new Date("2026-08-22T04:00:00.000Z");
@@ -44,7 +45,7 @@ describe("version-independent User Document readiness gates", () => {
       ...stored,
       document: { ...stored.document, name: "Current name" },
     };
-    const rebuildExpected = mock(async () => [expected]);
+    const rebuildExpected = mock(async () => [built(expected)]);
     const gate = createUserDocumentPostgresGate({
       schemaVersion: 1,
       repository: {
@@ -59,7 +60,7 @@ describe("version-independent User Document readiness gates", () => {
 
     const report = await gate.verify({ batchSize: 100 });
 
-    expect(rebuildExpected).toHaveBeenCalledWith([stored], observedAt);
+    expect(rebuildExpected).toHaveBeenCalledWith([stored], observedAt, undefined);
     expect(report).toEqual({
       version: 1,
       gate: "postgres",
@@ -106,7 +107,8 @@ describe("version-independent User Document readiness gates", () => {
       clock: { nowDate: () => observedAt },
     });
 
-    await expect(gate.verify({ batchSize: 100 })).resolves.toEqual({
+    const report = await gate.verify({ batchSize: 100 });
+    expect(report).toEqual({
       version: 1,
       gate: "redis-access",
       verifiedAt: observedAt.toISOString(),
@@ -134,7 +136,7 @@ describe("version-independent User Document readiness gates", () => {
         scanPage: mock(async ({ afterUserId }: { afterUserId: number }) =>
           afterUserId === 0 ? [pageRow(stored)] : [],
         ),
-        rebuildExpected: mock(async () => [stored]),
+        rebuildExpected: mock(async () => [built(stored)]),
       },
       clock: { nowDate: () => observedAt },
     });
@@ -148,6 +150,147 @@ describe("version-independent User Document readiness gates", () => {
       { code: "orphan-document", count: 1, samples: [] },
     ]);
   });
+
+  test.each([
+    { label: "missing result", results: [] },
+    { label: "wrong user", results: [built(publishedProfile(2, "3"))] },
+    { label: "wrong version", results: [built(publishedProfile(1, "4"))] },
+    {
+      label: "inconsistent document identity",
+      results: [{ ...built(publishedProfile(1, "3")), document: publishedProfile(2, "3") }],
+    },
+  ])("rejects an authoritative rebuild with $label", async ({ results }) => {
+    const stored = publishedProfile(1, "3");
+    const gate = postgresGateWithResults(stored, results);
+    const error = await gate.verify({ batchSize: 1 }).catch((error: unknown) => error);
+    expect(error).toBeInstanceOf(Error);
+  });
+
+  test("propagates unexpected per-user build failures without returning a data failure report", async () => {
+    const stored = publishedProfile(1, "3");
+    const failure = new Error("Unexpected assembler failure");
+    const gate = postgresGateWithResults(stored, [
+      { userId: stored.userId, sourceVersion: stored.sourceVersion, status: "failed", error: failure },
+    ]);
+    const error = await gate.verify({ batchSize: 1 }).catch((error: unknown) => error);
+    expect(error).toBe(failure);
+  });
+
+  test.each(["facts", "access"])("stops Redis verification on an %s inspection failure", async (stage) => {
+    const stored = publishedProfile(1, "3");
+    const failure = new Error("Redis unavailable");
+    let scans = 0;
+    let accessReads = 0;
+    const gate = createUserDocumentRedisAccessGate({
+      schemaVersion: 1,
+      clock: { nowDate: () => observedAt },
+      inventory: {
+        readVerificationSummary: async () => summary(2),
+        async scanPage() {
+          scans += 1;
+          return [pageRow(stored)];
+        },
+      },
+      subjectFacts: {
+        createRecord: factsRecord,
+        async inspectMany() {
+          if (stage === "facts") throw failure;
+          return [{ status: "valid" as const, record: factsRecord(stored) }];
+        },
+      },
+      subjectAccess: {
+        async inspectMany() {
+          accessReads += 1;
+          throw failure;
+        },
+      },
+    });
+    const error = await gate.verify({ batchSize: 1 }).catch((error: unknown) => error);
+    expect(error).toBe(failure);
+    expect(scans).toBe(1);
+    expect(accessReads).toBe(stage === "facts" ? 0 : 1);
+  });
+
+  for (const kind of ["postgres", "redis"] as const) {
+    for (const stage of [
+      "before-start",
+      "summary",
+      "scan",
+      ...(kind === "postgres" ? ["build"] : ["facts", "access"]),
+    ]) {
+      test(`${kind} stops after cancellation at ${stage} without starting subsequent I/O`, async () => {
+        const controller = new AbortController();
+        const reason = new Error("Verification cancelled");
+        const calls: string[] = [];
+        const profiles = [1, 2, 3].map((id) => publishedProfile(id, "3"));
+        function visit(name: string) {
+          calls.push(name);
+          if (stage === name) controller.abort(reason);
+        }
+        const inventory = {
+          async readVerificationSummary() {
+            visit("summary");
+            return summary(profiles.length);
+          },
+          async scanPage({ afterUserId, limit }: { afterUserId: number; limit: number }) {
+            visit("scan");
+            return profiles
+              .filter((profile) => profile.userId > afterUserId)
+              .slice(0, limit)
+              .map(pageRow);
+          },
+        };
+        const gate =
+          kind === "postgres"
+            ? createUserDocumentPostgresGate({
+                schemaVersion: 1,
+                clock: { nowDate: () => observedAt },
+                repository: {
+                  ...inventory,
+                  async rebuildExpected(documents) {
+                    visit("build");
+                    return documents.map(built);
+                  },
+                },
+              })
+            : createUserDocumentRedisAccessGate({
+                schemaVersion: 1,
+                clock: { nowDate: () => observedAt },
+                inventory,
+                subjectFacts: {
+                  createRecord: factsRecord,
+                  async inspectMany(subjects) {
+                    visit("facts");
+                    return subjects.map((subject) => ({
+                      status: "valid" as const,
+                      record: factsRecord(profiles.find((profile) => profile.subjectIdentifier === subject)!),
+                    }));
+                  },
+                },
+                subjectAccess: {
+                  async inspectMany(subjects) {
+                    visit("access");
+                    return subjects.map((subject) => ({
+                      status: "valid" as const,
+                      record: barrierRecord(
+                        profiles.find((profile) => profile.subjectIdentifier === subject)!,
+                        "enabled",
+                      ),
+                    }));
+                  },
+                },
+              });
+        if (stage === "before-start") controller.abort(reason);
+        const error = await gate.verify({ batchSize: 2, signal: controller.signal }).catch((error: unknown) => error);
+        expect(error).toBe(reason);
+        if (stage === "before-start") expect(calls).toEqual([]);
+        else {
+          expect(calls.at(-1)).toBe(stage);
+          expect(calls.filter((call) => call === "scan").length).toBeLessThanOrEqual(1);
+        }
+      });
+    }
+  }
 });
 
 function inventoryGate(kind: "postgres" | "redis", ids: number[], count = ids.length, paginate = false) {
@@ -160,7 +303,7 @@ function inventoryGate(kind: "postgres" | "redis", ids: number[], count = ids.le
   if (kind === "postgres") {
     return createUserDocumentPostgresGate({
       schemaVersion: 1,
-      repository: { ...inventory, rebuildExpected: async (profiles) => profiles },
+      repository: { ...inventory, rebuildExpected: async (profiles) => profiles.map(built) },
       clock: { nowDate: () => observedAt },
     });
   }
@@ -183,6 +326,25 @@ function inventoryGate(kind: "postgres" | "redis", ids: number[], count = ids.le
         })),
     },
     clock: { nowDate: () => observedAt },
+  });
+}
+
+function built(document: ReturnType<typeof publishedProfile>) {
+  return { userId: document.userId, sourceVersion: document.sourceVersion, status: "built" as const, document };
+}
+
+function postgresGateWithResults(
+  stored: ReturnType<typeof publishedProfile>,
+  results: readonly DocumentBuildResult<ReturnType<typeof publishedProfile>>[],
+) {
+  return createUserDocumentPostgresGate({
+    schemaVersion: 1,
+    clock: { nowDate: () => observedAt },
+    repository: {
+      readVerificationSummary: async () => summary(1),
+      scanPage: async () => [pageRow(stored)],
+      rebuildExpected: async () => [...results],
+    },
   });
 }
 

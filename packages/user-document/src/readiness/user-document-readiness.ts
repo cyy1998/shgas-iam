@@ -1,5 +1,9 @@
 import { isDeepStrictEqual } from "node:util";
 import type { SubjectAccessRecord } from "@iam/api-core/subject-access";
+import { OrganizationResponsibilityIntegrityError } from "@iam/organization-responsibility-resolution";
+import { ZodError } from "zod";
+import { UserDocumentSourceIntegrityError } from "../build/document-build.error";
+import type { DocumentBuildResult } from "../build/document-builder.service";
 import { assertUserDocumentInventoryPage, requirePositiveSafeInteger } from "./user-document-inventory.guards";
 
 export interface UserDocumentReadinessProjection {
@@ -32,8 +36,12 @@ export interface UserDocumentVerificationSummary {
 export interface UserDocumentReadinessInventoryPort<
   TDocument extends UserDocumentReadinessProjection = UserDocumentReadinessProjection,
 > {
-  readVerificationSummary: () => Promise<UserDocumentVerificationSummary>;
-  scanPage: (input: { afterUserId: number; limit: number }) => Promise<Array<UserDocumentReadinessPageRow<TDocument>>>;
+  readVerificationSummary: (signal?: AbortSignal) => Promise<UserDocumentVerificationSummary>;
+  scanPage: (input: {
+    afterUserId: number;
+    limit: number;
+    signal?: AbortSignal;
+  }) => Promise<Array<UserDocumentReadinessPageRow<TDocument>>>;
 }
 
 export interface UserDocumentGateFailure {
@@ -47,18 +55,23 @@ type InspectionResult<T> = { status: "invalid" | "missing" } | { status: "valid"
 export function createUserDocumentPostgresGate<TDocument extends UserDocumentReadinessProjection>(deps: {
   schemaVersion: number;
   repository: UserDocumentReadinessInventoryPort<TDocument> & {
-    rebuildExpected: (profiles: TDocument[], observedAt: Date) => Promise<TDocument[]>;
+    rebuildExpected: (
+      profiles: TDocument[],
+      observedAt: Date,
+      signal?: AbortSignal,
+    ) => Promise<DocumentBuildResult<TDocument>[]>;
   };
   clock: { nowDate: () => Date };
 }) {
   return {
-    async verify(input: { batchSize: number }) {
+    async verify(input: { batchSize: number; signal?: AbortSignal }) {
       const observedAt = deps.clock.nowDate();
       return await runUserDocumentInventoryGate({
         version: deps.schemaVersion,
         gate: "postgres",
         observedAt,
         batchSize: input.batchSize,
+        signal: input.signal,
         inventory: deps.repository,
         async checkPage(page, failures) {
           for (const row of page) {
@@ -67,15 +80,38 @@ export function createUserDocumentPostgresGate<TDocument extends UserDocumentRea
           const currentDocuments = page
             .map((row) => row.currentDocument)
             .filter((profile): profile is TDocument => profile !== null);
-          const expectedDocuments = await deps.repository.rebuildExpected(currentDocuments, observedAt);
+          input.signal?.throwIfAborted();
+          const results = await deps.repository.rebuildExpected(currentDocuments, observedAt, input.signal);
+          input.signal?.throwIfAborted();
           if (
-            expectedDocuments.length !== currentDocuments.length ||
-            expectedDocuments.some((profile, index) => profile.userId !== currentDocuments[index]!.userId)
+            results.length !== currentDocuments.length ||
+            results.some(
+              (result, index) =>
+                result.userId !== currentDocuments[index]!.userId ||
+                result.sourceVersion !== currentDocuments[index]!.sourceVersion,
+            )
           ) {
             throw new Error("User Document PostgreSQL gate authoritative rebuild was incomplete");
           }
-          currentDocuments.forEach((profile, index) => {
-            if (!isDeepStrictEqual(withoutRebuiltAt(profile), withoutRebuiltAt(expectedDocuments[index]!))) {
+          results.forEach((result, index) => {
+            const profile = currentDocuments[index]!;
+            if (result.status === "failed") {
+              if (
+                !(result.error instanceof UserDocumentSourceIntegrityError) &&
+                !(result.error instanceof OrganizationResponsibilityIntegrityError) &&
+                !(result.error instanceof ZodError)
+              )
+                throw result.error;
+              failures.add("document-source-invalid", result.userId);
+              return;
+            }
+            if (
+              result.document.userId !== profile.userId ||
+              result.document.subjectIdentifier !== profile.subjectIdentifier ||
+              result.document.sourceVersion !== profile.sourceVersion
+            )
+              throw new Error("User Document PostgreSQL gate authoritative rebuild identity was inconsistent");
+            if (!isDeepStrictEqual(withoutRebuiltAt(profile), withoutRebuiltAt(result.document))) {
               failures.add("document-authoritative-mismatch", profile.userId);
             }
           });
@@ -101,18 +137,22 @@ export function createUserDocumentRedisAccessGate<
   clock: { nowDate: () => Date };
 }) {
   return {
-    async verify(input: { batchSize: number }) {
+    async verify(input: { batchSize: number; signal?: AbortSignal }) {
       const observedAt = deps.clock.nowDate();
       return await runUserDocumentInventoryGate({
         version: deps.schemaVersion,
         gate: "redis-access",
         observedAt,
         batchSize: input.batchSize,
+        signal: input.signal,
         inventory: deps.inventory,
         async checkPage(page, failures) {
           const subjectIdentifiers = page.map((row) => row.subjectIdentifier);
+          input.signal?.throwIfAborted();
           const facts = await deps.subjectFacts.inspectMany(subjectIdentifiers);
+          input.signal?.throwIfAborted();
           const access = await deps.subjectAccess.inspectMany(subjectIdentifiers);
+          input.signal?.throwIfAborted();
           if (facts.length !== page.length || access.length !== page.length) {
             throw new Error("User Document Redis gate inspection returned an incomplete batch");
           }
@@ -147,6 +187,7 @@ async function runUserDocumentInventoryGate<TDocument extends UserDocumentReadin
   version: number;
   gate: "postgres" | "redis-access";
   batchSize: number;
+  signal?: AbortSignal;
   observedAt: Date;
   inventory: UserDocumentReadinessInventoryPort<TDocument>;
   checkPage: (
@@ -155,24 +196,31 @@ async function runUserDocumentInventoryGate<TDocument extends UserDocumentReadin
   ) => Promise<void>;
 }) {
   requirePositiveSafeInteger(input.batchSize, "batchSize");
-  const summary = await input.inventory.readVerificationSummary();
+  input.signal?.throwIfAborted();
+  const summary = await input.inventory.readVerificationSummary(input.signal);
+  input.signal?.throwIfAborted();
   const failures = createUserDocumentGateFailureCollector();
   collectUserDocumentSummaryFailures(summary, failures.add);
   for (const failure of summary.workFailures ?? []) failures.include(failure);
   let afterUserId = 0;
   let verifiedUsers = 0;
   while (true) {
+    input.signal?.throwIfAborted();
     const page = await input.inventory.scanPage({
       afterUserId,
       limit: input.batchSize,
+      signal: input.signal,
     });
+    input.signal?.throwIfAborted();
     if (page.length === 0) break;
     assertUserDocumentInventoryPage(page, afterUserId, input.batchSize);
     verifiedUsers += page.length;
     await input.checkPage(page, failures);
+    input.signal?.throwIfAborted();
     afterUserId = page.at(-1)!.userId;
     if (page.length < input.batchSize) break;
   }
+  input.signal?.throwIfAborted();
   if (verifiedUsers !== summary.userCount) {
     failures.add("verified-user-count-mismatch", undefined, Math.abs(summary.userCount - verifiedUsers));
   }

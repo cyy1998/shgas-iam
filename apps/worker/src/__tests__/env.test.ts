@@ -109,8 +109,72 @@ describe("worker environment", () => {
       rebuildBatchSize: 25,
       backfillBatchSize: 200,
       repairStaleSeconds: 600,
+      repair: { enabled: false, intervalMs: 60_000, limit: 500, deadlineMs: 30_000 },
+    });
+    expect(env.organizationDocument).toEqual({
+      concurrency: 2,
+      backfillBatchSize: 500,
+      repairStaleSeconds: 300,
+      repair: { enabled: false, intervalMs: 60_000, limit: 500, deadlineMs: 30_000 },
     });
     expect("IAM_WORKER_DATABASE_URL" in env).toBe(false);
+  });
+
+  test("parses an enabled User Document repair schedule", () => {
+    const env = parseWorkerEnv({
+      ...validEnv(),
+      IAM_WORKER_USER_DOCUMENT_REPAIR_ENABLED: "true",
+      IAM_WORKER_USER_DOCUMENT_REPAIR_INTERVAL_MS: "15000",
+      IAM_WORKER_USER_DOCUMENT_REPAIR_LIMIT: "100",
+      IAM_WORKER_USER_DOCUMENT_REPAIR_DEADLINE_MS: "10000",
+    });
+    expect(env.userDocument.repair).toEqual({ enabled: true, intervalMs: 15_000, limit: 100, deadlineMs: 10_000 });
+    expect(env.organizationDocument.repair.enabled).toBe(false);
+  });
+
+  test("configures Organization Document repair independently from User Document repair", () => {
+    const env = parseWorkerEnv({
+      ...validEnv(),
+      IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_ENABLED: "true",
+      IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_INTERVAL_MS: "45000",
+      IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_LIMIT: "50",
+      IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_DEADLINE_MS: "20000",
+      IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_STALE_SECONDS: "600",
+    });
+    expect(env.organizationDocument.repair).toEqual({
+      enabled: true,
+      intervalMs: 45_000,
+      limit: 50,
+      deadlineMs: 20_000,
+    });
+    expect(env.organizationDocument.repairStaleSeconds).toBe(600);
+    expect(env.userDocument.repair).toEqual({ enabled: false, intervalMs: 60_000, limit: 500, deadlineMs: 30_000 });
+    expect(env.userDocument.repairStaleSeconds).toBe(300);
+  });
+
+  test.each([
+    ["IAM_WORKER_USER_DOCUMENT_REPAIR_INTERVAL_MS", "0"],
+    ["IAM_WORKER_USER_DOCUMENT_REPAIR_INTERVAL_MS", "2147483648"],
+    ["IAM_WORKER_USER_DOCUMENT_REPAIR_LIMIT", "0"],
+    ["IAM_WORKER_USER_DOCUMENT_REPAIR_LIMIT", "9007199254740992"],
+    ["IAM_WORKER_USER_DOCUMENT_REPAIR_DEADLINE_MS", "0"],
+    ["IAM_WORKER_USER_DOCUMENT_REPAIR_DEADLINE_MS", "300001"],
+    ["IAM_WORKER_USER_DOCUMENT_REPAIR_INTERVAL_MS", "-1"],
+    ["IAM_WORKER_USER_DOCUMENT_REPAIR_LIMIT", "1.5"],
+    ["IAM_WORKER_USER_DOCUMENT_REPAIR_DEADLINE_MS", "invalid"],
+    ["IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_INTERVAL_MS", "0"],
+    ["IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_INTERVAL_MS", "2147483648"],
+    ["IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_LIMIT", "0"],
+    ["IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_LIMIT", "9007199254740992"],
+    ["IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_DEADLINE_MS", "0"],
+    ["IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_DEADLINE_MS", "300001"],
+    ["IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_INTERVAL_MS", "-1"],
+    ["IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_LIMIT", "1.5"],
+    ["IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_DEADLINE_MS", "invalid"],
+    ["IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_STALE_SECONDS", "0"],
+    ["IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_STALE_SECONDS", "86401"],
+  ])("rejects invalid document repair configuration %s=%s", (key, value) => {
+    expect(() => parseWorkerEnv({ ...validEnv(), [key]: value })).toThrow();
   });
 
   test("requires dashboard credentials in production", () => {

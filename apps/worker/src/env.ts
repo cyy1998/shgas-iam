@@ -116,8 +116,32 @@ const RawWorkerEnvSchema = z
     IAM_WORKER_USER_DOCUMENT_REBUILD_BATCH_SIZE: z.coerce.number().int().positive().default(100),
     IAM_WORKER_USER_DOCUMENT_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().default(500),
     IAM_WORKER_USER_DOCUMENT_REPAIR_STALE_SECONDS: z.coerce.number().int().positive().max(86_400).default(300),
+    IAM_WORKER_USER_DOCUMENT_REPAIR_ENABLED: booleanString(false),
+    IAM_WORKER_USER_DOCUMENT_REPAIR_INTERVAL_MS: z.coerce.number().int().positive().max(2_147_483_647).default(60_000),
+    IAM_WORKER_USER_DOCUMENT_REPAIR_LIMIT: z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER).default(500),
+    IAM_WORKER_USER_DOCUMENT_REPAIR_DEADLINE_MS: z.coerce.number().int().positive().max(300_000).default(30_000),
     IAM_WORKER_ORGANIZATION_DOCUMENT_CONCURRENCY: z.coerce.number().int().positive().default(2),
     IAM_WORKER_ORGANIZATION_DOCUMENT_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().default(500),
+    IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_STALE_SECONDS: z.coerce.number().int().positive().max(86_400).default(300),
+    IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_ENABLED: booleanString(false),
+    IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_INTERVAL_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(2_147_483_647)
+      .default(60_000),
+    IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_LIMIT: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(Number.MAX_SAFE_INTEGER)
+      .default(500),
+    IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_DEADLINE_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(300_000)
+      .default(30_000),
   })
   .superRefine((raw, ctx) => {
     if (!raw.IAM_WORKER_BULL_BOARD_ENABLED) return;
@@ -267,10 +291,23 @@ export interface WorkerEnv {
     rebuildBatchSize: number;
     backfillBatchSize: number;
     repairStaleSeconds: number;
+    repair: {
+      enabled: boolean;
+      intervalMs: number;
+      limit: number;
+      deadlineMs: number;
+    };
   };
   organizationDocument: {
     concurrency: number;
     backfillBatchSize: number;
+    repairStaleSeconds: number;
+    repair: {
+      enabled: boolean;
+      intervalMs: number;
+      limit: number;
+      deadlineMs: number;
+    };
   };
 }
 
@@ -332,10 +369,23 @@ function toWorkerEnv(raw: RawWorkerEnv): WorkerEnv {
       rebuildBatchSize: raw.IAM_WORKER_USER_DOCUMENT_REBUILD_BATCH_SIZE,
       backfillBatchSize: raw.IAM_WORKER_USER_DOCUMENT_BACKFILL_BATCH_SIZE,
       repairStaleSeconds: raw.IAM_WORKER_USER_DOCUMENT_REPAIR_STALE_SECONDS,
+      repair: {
+        enabled: raw.IAM_WORKER_USER_DOCUMENT_REPAIR_ENABLED,
+        intervalMs: raw.IAM_WORKER_USER_DOCUMENT_REPAIR_INTERVAL_MS,
+        limit: raw.IAM_WORKER_USER_DOCUMENT_REPAIR_LIMIT,
+        deadlineMs: raw.IAM_WORKER_USER_DOCUMENT_REPAIR_DEADLINE_MS,
+      },
     },
     organizationDocument: {
       concurrency: raw.IAM_WORKER_ORGANIZATION_DOCUMENT_CONCURRENCY,
       backfillBatchSize: raw.IAM_WORKER_ORGANIZATION_DOCUMENT_BACKFILL_BATCH_SIZE,
+      repairStaleSeconds: raw.IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_STALE_SECONDS,
+      repair: {
+        enabled: raw.IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_ENABLED,
+        intervalMs: raw.IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_INTERVAL_MS,
+        limit: raw.IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_LIMIT,
+        deadlineMs: raw.IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_DEADLINE_MS,
+      },
     },
   };
 }

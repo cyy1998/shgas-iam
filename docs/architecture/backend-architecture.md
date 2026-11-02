@@ -241,9 +241,23 @@ Client、本人或全局管理范围；app 不互相导入私有实现。解析�
 
 ## 读模型与异步处理
 
-`@iam/document-update` 由 User Document 与 Organization Document 共同消费，负责事务绑定登记、领取、完成凭据重放、重建版本与处理所有权仲裁、原子发布和两阶段 repair。文档模块拥有来源解释、关联展开与构建，用户模块另拥有 Facts 缓存和 Subject Access 后续责任。
+`@iam/document-update` 由 User Document 与 Organization Document 共同消费，负责事务绑定登记与通知合并、领取、完成凭据重放、
+重建版本与处理所有权仲裁、批量重建编排、原子发布和两阶段 repair。文档模块提供来源解释、关联展开、构建和写入适配器，
+用户模块另拥有 Facts 缓存和 Subject Access 后续责任。共用编排不合并两类文档的数据或事务。
 
 `@iam/user-document` / `@iam/organization-document` 的 producer 由 API/Admin API composition 接入，worker 由 Worker composition 接入；query repository 由查询 composition 接入。业务模块只消费注入能力，不自行跨出口创建实现。
+
+API/Admin API 在每个源事务内分别合并两类 Document 唤醒，每类提交后整次入队共用 2 秒预算，
+每个 transport 批次最多 500 个任务，超时后停止发送剩余批次。唤醒失败保留源事实、审计和 Outbox，
+由 bestEffort 返回原业务结果，Worker 周期 repair 重新投递；迟到或重复消息仍由持久凭据和版本仲裁。
+`@iam/jobs` 统一 producer 的分批、总预算、随机任务身份与确认数校验，以及专用连接和关闭。
+HTTP producer 与维护命令使用专用快速失败连接，连接无响应时释放 socket；常驻 Worker 保留长期重连。
+
+共享重建编排在领取版本与处理 token 后，用同一个只读源快照调用文档构建适配器，并核对结果身份、版本和覆盖范围。
+对象资料异常独立失败，源查询失败使该批构建失败，未完成领取按原 owner 条件释放或由 stale repair 回收。
+发布按数量和文档字节分组，锁定并重验版本和 owner，将文档或墓碑、processed 及 owner 登记的后续义务原子提交。
+确定回滚的目标局部错误可有界拆分隔离；连接、配置或未知提交结果停止扩散重试。已确认提交的对象仍交给 owner 后处理，
+不因其他对象或后续批次失败而丢失。共享实现见[重建编排](../../packages/document-update/src/batch-rebuild.ts)。
 
 ### User Document 失效
 
@@ -252,19 +266,16 @@ Outbox processed 表示全部目标重建要求已经持久登记，不表示入
 
 ### User Document Subject Facts publication
 
-普通重建将同次 Outbox 展开或 repair 唤醒的用户请求分成有界批次，按对象领取版本与处理 token，
-再在同一个只读源快照中共享构建读取。批次不成为新的持久业务对象，各用户仍独立保存版本与处理结果，不跨独立 Outbox 等待凑批；
-单用户资料异常独立失败，源查询失败使该批构建失败，未完成领取按原 owner 条件释放或由 stale repair 回收。
+普通重建将同次 Outbox 展开或 repair 唤醒的用户请求交给共享重建编排，有界批次内共享业务构建读取。
+批次不成为新的持久业务对象，各用户仍独立保存版本与处理结果，不跨独立 Outbox 等待凑批；旧单对象任务也经同一编排执行。
 构建与发布的批界可以不同；PG 发布按用户数和文档字节数再切成小组，单个大文档独立处理。
 接口见[更新处理器](../../packages/user-document/src/worker/user-document-update.processor.ts)。
 
 每次构建固定源快照和观察时点，读取开放任职并校验岗位、组织与完整路径，再投影有效任职及角色的明确 Client 归属。
 PostgreSQL 每个用户只保存一份业务 document 及身份、schema、sourceVersion、发布时间等技术元数据；不再保存 detail、searchDoc、subjectFacts 或独立基础资料副本。Admin 和源账号查询保留管理专属模型。
 
-用户发布采用有界小批事务，按目标 ID 固定顺序锁定 Rebuild State，逐对象重验版本和领取 token；
-仅对仍有效的子集原子写入文档或墓碑、processed 与所需 post-publication 义务。重领更换 owner，同版本旧 owner 也不能完成新工作。
-目标局部发布错误须确认事务回滚后才有界拆分隔离，健康子组可继续提交；连接、配置或未知提交结果停止扩散重试，
-未完成工作按原 owner 条件释放，活跃锁下无法释放的记录交给 repair。已确认提交的对象不会因后续子组失败而撤销。
+User 的写入适配器在共享发布事务内登记 post-publication 义务；重领更换 owner，同版本旧 owner 也不能完成新工作。
+活跃锁下无法释放的记录交给 repair，已确认提交的对象不会因后续子组失败而撤销。
 
 PG 提交确认后才处理外部作用。用户后处理集合领取、批量读取已发布文档，并按每个对象的版本和独立 token 写回完成或失败；
 Facts 与 Subject Access 仍逐主体执行，共享模块实例的有界并发额度。已知结果及时成批写回，不等待同页最慢成员；
@@ -283,6 +294,8 @@ Facts reader 合法缓存命中直接返回；缺失、损坏或主体错配时�
 Internal 搜索与精确详情直接读取当前 schema 已发布目录，返回同版本、同 Client 上下文的完整公开文档；角色条件和输出都先绑定认证 Client。无本 Client 角色的有效任职仍保留空 roles，内部 Client 归属、数据库 ID 和管理历史不公开。无可读条目的详情返回 404，损坏或查询失败返回 503，不回源拼装。
 
 正式用户 PG gate 在一个 REPEATABLE READ READ ONLY 事务完整核对全部源用户、文档/墓碑、Outbox、Rebuild State、主及后续处理凭据、源事实与孤立记录；Redis gate 用一致 PG 库存检查完整 Facts/墓碑与屏障。两者只读、不入队、不修复，Backfill 原因码不是就绪条件。不能跳过删除用户或仅核对数量。
+用户 PG gate 复用逐对象构建结果，将已知源完整性与 schema 问题按用户汇总并继续后续分页；数据库、Redis、未知构建异常或构建结果覆盖不完整仍中断核验。
+取消信号传入清单查询、分页、构建批次和 Redis 检查，在关键读取前后检查；取消后不再启动后续工作，也不返回完整核验报告。
 数据库回退需匹配旧制品与备份，不删除 migration journal 重放迁移。维护见[数据维护](../releases/data-maintenance.md)，接线验证见[Worker 维护测试](../../apps/worker/test-integration/user-document/user-document-maintenance.integration.test.ts)。
 
 Employment verifier 独立以一致只读快照检查任职及父对象，报告 blocker；不推断历史结束时间或生成修复 SQL。
@@ -297,7 +310,8 @@ code/name/type 变化登记子树；零行修改不登记。提交后按当前�
 并发展的确定回滚可重试一次，仍失败则保留消息供后续恢复，不重放源业务写入。
 repair 在源事件和重建两阶段回收失败或过期工作，跳过活跃事务；重领更换 token，旧 owner 即使持有同版本也不能发布或完成新工作。
 
-构建使用一致源快照并校验完整路径。发布锁定 Rebuild State、重验版本和 owner，将文档或删除墓碑与 processed 同事务提交。
+组织现有单对象任务以单元素请求接入共享重建编排，构建适配器在该只读事务内校验完整路径；不额外开启嵌套源事务。
+发布复用相同的版本/owner 仲裁、等待预算、确定回滚重试与失败回收，将文档或删除墓碑与 processed 同事务提交。
 只有已删除源对象发布墓碑，源行缺失属于完整性错误。墓碑保留版本仲裁事实。
 搜索和 Internal 精确详情只读当前 schema 的可见已发布文档，允许延迟，不联查源表或执行全量覆盖检查。
 详情没有可读条目返回 404，损坏或查询失败返回 503；404 不证明源对象不存在。
@@ -329,6 +343,13 @@ Worker 通过公开 workspace package 复用业务能力，不导入 API 私有�
 Worker composition 拥有模块选择、队列注册、consumer、health/readiness、Bull Board 和关闭顺序。
 未知模块启动失败；模块反序关闭，信号由 app 处理，业务包不持有进程生命周期。
 命令按实际需要使用窄 composition：重建复用普通发布路径，核验使用独立只读连接，Redis 维护不加载无关数据库或队列。
+
+启用 User Document 或 Organization Document consumer 的 Worker 可通过各自的环境变量开启周期 repair，
+启动时运行首轮，上一轮结束后按配置间隔运行下一轮。两类调度共用实现并独立运行，一类失败不阻塞另一类。
+每轮使用现有 repair 命令的独立进程与连接，保留限额、deadline、完整恢复顺序及后处理尝试预算；超时不重放源业务写入。
+Worker 停机先停止调度并终止、等待所属 repair 进程，再关闭常驻资源；轮次清理失败则停止后续调度并记录错误。
+对应开关关闭、未启用该 consumer 或 dashboard-only 时不启动该周期任务。多实例复用持久领取和版本仲裁，不依赖进程内计时器实现跨实例互斥。
+接线见[周期恢复](../../apps/worker/src/composition/document-repair-schedule.ts)，配置与运行检查见[数据维护](../releases/data-maintenance.md#周期任务与监控)。
 
 组织写入命令与 consumer 共用正式队列前缀，repair 只重新投递，发布仍由普通 consumer 完成。
 只读 verifier 的取消仅作用于本次连接身份、数据库和角色；deadline、中断或关闭失败均非零退出。

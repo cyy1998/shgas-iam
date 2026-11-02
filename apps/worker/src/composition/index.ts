@@ -22,6 +22,7 @@ import {
   startWorkerModules,
 } from "@worker/modules/registry";
 import { sql } from "drizzle-orm";
+import { startDocumentRepairSchedule } from "./document-repair-schedule";
 import type { WorkerLogger } from "./runtime";
 import { createWorkerRuntime } from "./runtime";
 import { createWorkerSubjectAccess } from "./subject-access";
@@ -125,15 +126,28 @@ export async function createWorkerComposition(options: CreateWorkerCompositionOp
     },
   });
   const httpServer = options.env.http.enabled ? startWorkerHttpServer(httpApp, options.env.http.port) : undefined;
+  const repairSchedules = (["user", "organization"] as const).map((document) =>
+    startDocumentRepairSchedule({ document, env: options.env, enabledModuleKeys, logger: runtime.logger }),
+  );
 
-  async function shutdown(signal: string) {
-    runtime.logger.info({ signal, enabledModules: enabledModuleKeys }, "worker shutting down");
-    await Promise.allSettled([
-      closeWorkerModules(knownModules),
-      Promise.resolve(httpServer?.stop(true)),
-      runtime.redis.quit(),
-      closeDb(),
-    ]);
+  let closing: Promise<void> | undefined;
+  function shutdown(signal: string) {
+    closing ??= (async () => {
+      runtime.logger.info({ signal, enabledModules: enabledModuleKeys }, "worker shutting down");
+      try {
+        const results = await Promise.allSettled(repairSchedules.map((schedule) => schedule.close()));
+        const failures = results.flatMap((result) => (result.status === "rejected" ? [result.reason] : []));
+        if (failures.length) throw new AggregateError(failures, "Document repair schedules failed to close");
+      } finally {
+        await Promise.allSettled([
+          closeWorkerModules(knownModules),
+          Promise.resolve(httpServer?.stop(true)),
+          runtime.redis.quit(),
+          closeDb(),
+        ]);
+      }
+    })();
+    return closing;
   }
 
   return {

@@ -1,7 +1,7 @@
 import type { DbClient } from "@iam/db";
 import type { OrganizationDocumentSourceScope } from "@iam/db/schema";
 import { organizationDocumentOutboxEntries } from "@iam/db/schema";
-import { persistDocumentOutboxEntries } from "@iam/document-update";
+import { createDocumentOutboxWakeUp, persistDocumentOutboxEntries } from "@iam/document-update";
 import { z } from "zod";
 import type { OrganizationDocumentClock, OrganizationDocumentJobProducerPort } from "../work.types";
 
@@ -21,6 +21,11 @@ export interface CreateOrganizationDocumentInvalidationInput {
 /** Bind to the source transaction. Call only after the source write; delivery runs after commit. */
 export function createOrganizationDocumentInvalidation(input: CreateOrganizationDocumentInvalidationInput) {
   const clock = input.clock ?? { nowDate: () => new Date() };
+  const wakeUp = createDocumentOutboxWakeUp({
+    afterCommit: input.lifecycle.afterCommit,
+    taskName: "organization_document.outbox.wake_up",
+    enqueue: (jobs) => input.jobProducer.enqueueOutboxEntries(jobs),
+  });
   return {
     async recordChanges(changes: readonly OrganizationDocumentSourceChange[]): Promise<void> {
       const scopes = new Map<number, OrganizationDocumentSourceScope>();
@@ -39,10 +44,7 @@ export function createOrganizationDocumentInvalidation(input: CreateOrganization
         [...scopes].sort(([a], [b]) => a - b).map(([organizationId, scope]) => ({ organizationId, scope })),
         clock.nowDate(),
       );
-      if (payloads.length === 0) return;
-      input.lifecycle.afterCommit.bestEffort("organization_document.outbox.wake_up", async () => {
-        await input.jobProducer.enqueueOutboxEntries(payloads);
-      });
+      wakeUp.register(payloads);
     },
   };
 }

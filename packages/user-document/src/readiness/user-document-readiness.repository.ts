@@ -14,7 +14,8 @@ export function createUserDocumentReadinessRepository<
   options: { projection: UserDocumentProjectionBundle<TDocument, TFactsRecord>; buildBatchSize: number },
 ) {
   return {
-    async readVerificationSummary() {
+    async readVerificationSummary(signal?: AbortSignal) {
+      signal?.throwIfAborted();
       const [summary] = await db.execute<{
         userCount: number;
         documentCount: number;
@@ -28,12 +29,15 @@ export function createUserDocumentReadinessRepository<
         (SELECT COUNT(DISTINCT ${userDocuments.subjectIdentifier})::int FROM ${userDocuments}) AS "distinctDocumentSubjectCount",
         (SELECT COUNT(*)::int FROM ${userDocuments} LEFT JOIN ${users} ON ${users.id}=${userDocuments.userId} WHERE ${users.id} IS NULL) AS "orphanDocumentCount"`);
       if (!summary) throw new Error("User Document readiness summary is incomplete");
-      return { ...summary, ...(await verifyUserDocumentWork(db)) };
+      signal?.throwIfAborted();
+      return { ...summary, ...(await verifyUserDocumentWork(db, signal)) };
     },
     async scanPage(input: {
       afterUserId: number;
       limit: number;
+      signal?: AbortSignal;
     }): Promise<Array<UserDocumentReadinessPageRow<TDocument>>> {
+      input.signal?.throwIfAborted();
       const rows = await db
         .select({
           userId: users.id,
@@ -57,6 +61,7 @@ export function createUserDocumentReadinessRepository<
         .where(gt(users.id, input.afterUserId))
         .orderBy(asc(users.id))
         .limit(input.limit);
+      input.signal?.throwIfAborted();
       return rows.map((row) => {
         const base = {
           userId: row.userId,
@@ -103,11 +108,14 @@ export function createUserDocumentReadinessRepository<
         };
       });
     },
-    async rebuildExpected(profiles: TDocument[], observedAt: Date) {
+    async rebuildExpected(profiles: TDocument[], observedAt: Date, signal?: AbortSignal) {
+      signal?.throwIfAborted();
       if (!profiles.length) return [];
       return await options.projection
-        .createBuilder({ db, clock: { nowDate: () => observedAt }, batchSize: options.buildBatchSize })
-        .buildMany(profiles.map((profile) => ({ userId: profile.userId, sourceVersion: profile.sourceVersion })));
+        .createBuilder({ db, clock: { nowDate: () => observedAt }, batchSize: options.buildBatchSize, signal })
+        .buildManyResults(
+          profiles.map((profile) => ({ userId: profile.userId, sourceVersion: profile.sourceVersion })),
+        );
     },
   };
 }

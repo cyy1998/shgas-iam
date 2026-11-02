@@ -45,7 +45,8 @@ export function createUserDocumentBuildRepository(
   roleAssignmentResolver: UserDocumentEffectiveRoleResolverPort,
 ) {
   return {
-    async loadByUserIds(userIds: number[]): Promise<UserDocumentBuildDataset> {
+    async loadByUserIds(userIds: number[], signal?: AbortSignal): Promise<UserDocumentBuildDataset> {
+      signal?.throwIfAborted();
       const uniqueUserIds = [...new Set(userIds)];
       if (uniqueUserIds.length === 0) return emptyDataset();
 
@@ -62,6 +63,7 @@ export function createUserDocumentBuildRepository(
             ),
           ),
       ]);
+      signal?.throwIfAborted();
 
       const positionIds = [...new Set(employmentRows.map((row) => row.posId))];
       const organizationIds = [...new Set(employmentRows.map((row) => row.orgId))];
@@ -72,8 +74,10 @@ export function createUserDocumentBuildRepository(
         loadOrganizationPaths(db, organizationIds),
         loadEmploymentRoles(roleAssignmentResolver, employmentIds),
       ]);
+      signal?.throwIfAborted();
       const roleIds = [...new Set(roleRows.map((row) => row.roleId))];
       const roleClientRows = await loadRoleClients(db, roleIds);
+      signal?.throwIfAborted();
       const clientCodeByRoleId = new Map(roleClientRows.map((row) => [row.roleId, row.clientCode]));
 
       return {

@@ -23,7 +23,7 @@ export type DocumentBuildDataset = UserDocumentBuildDataset & {
 };
 
 export interface DocumentBuildRepository {
-  loadByUserIds: (userIds: number[], at: Date) => Promise<DocumentBuildDataset>;
+  loadByUserIds: (userIds: number[], at: Date, signal?: AbortSignal) => Promise<DocumentBuildDataset>;
 }
 
 export function createDocumentBuildRepository(
@@ -33,13 +33,16 @@ export function createDocumentBuildRepository(
 ): DocumentBuildRepository {
   const baseRepository = createUserDocumentBuildRepository(db, roleAssignmentResolver);
   return {
-    async loadByUserIds(userIds, at) {
-      const dataset = await baseRepository.loadByUserIds(userIds);
+    async loadByUserIds(userIds, at, signal) {
+      signal?.throwIfAborted();
+      const dataset = await baseRepository.loadByUserIds(userIds, signal);
+      signal?.throwIfAborted();
       const employmentIds = dataset.employments.map((employment) => employment.id);
       const resolved = await responsibilityResolver.resolveEffectiveResponsibilities({
         employmentIds,
         at,
       });
+      signal?.throwIfAborted();
       const identities = employmentIds.flatMap((employmentId) =>
         (resolved.get(employmentId) ?? []).map((responsibility) => ({
           employmentId,
@@ -48,6 +51,7 @@ export function createDocumentBuildRepository(
       );
       const targetOrganizationIds = unique(identities.map((row) => row.targetOrganizationId));
       const targetPaths = await loadTargetOrganizationPaths(db, targetOrganizationIds);
+      signal?.throwIfAborted();
       const typeByCode = new Map(ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG.map((type) => [type.code, type]));
       return {
         ...dataset,

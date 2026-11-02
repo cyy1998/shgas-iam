@@ -55,12 +55,12 @@ Apps 表用于定位入口；依赖方向、分层职责、命名和 wiring 统�
 | `packages/contracts/src`                              | 跨端或跨 app/package 的稳定枚举、常量、schemas、类型与协议 helper。                                                   |
 | `packages/domain/src`                                 | 后端 DTO、mapper、纯业务规则、audit helper 与业务错误。                                                               |
 | `packages/db/src`                                     | Drizzle schema、relations、migrations、client 与 query helpers；领域为 `core`、`log`，列 helper 在 `schema/_shard/`。 |
-| `packages/jobs/src`                                   | BullMQ connection、queue、worker、job ID 与默认选项。                                                                 |
+| `packages/jobs/src`                                   | BullMQ connection、queue、worker、producer 资源与有界唤醒、job ID 和默认选项。                                        |
 | `packages/organization-responsibility-resolution/src` | Organization Responsibility 的正反向解析与 `/parent-lifecycle` 共享父生命周期检查。                                   |
 | `packages/role-assignment-resolution/src`             | Effective Role 正向解析与受影响用户反向解析。                                                                         |
 | `packages/user-document/src`                          | User Document、User Search / Subject Facts 的失效、构建、发布、查询与维护。                                           |
 | `packages/organization-document/src`                  | 组织搜索文档的构建、发布、查询与维护。                                                                                |
-| `packages/document-update/src`                        | 文档 Outbox、重建版本与处理所有权、原子发布和两阶段恢复的共享核心。                                                   |
+| `packages/document-update/src`                        | 文档 Outbox、事务内通知合并、批量重建编排、版本与所有权仲裁、原子发布和两阶段恢复的共享核心。                         |
 | `packages/filter-engine/src`                          | 共享 Filter 校验与 JSONB 查询编译。                                                                                   |
 
 使用或新增共享代码前，按[共享契约与数据库](contracts-and-database.md)核对运行环境、公开出口、DTO 与事务边界；

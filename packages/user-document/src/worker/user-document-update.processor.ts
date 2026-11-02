@@ -8,7 +8,7 @@ import type { db as database } from "@iam/db";
 import { userDocumentOutboxEntries, userDocumentRebuildStates } from "@iam/db/schema";
 import {
   createDocumentUpdateProcessor,
-  type DocumentRebuildClaim,
+  type DocumentBuildResult,
   type DocumentRepairOptions,
   type PreparedDocumentPublication,
 } from "@iam/document-update";
@@ -29,7 +29,6 @@ import type { SubjectAccessRepairPort, UserDocumentRebuildLoggerPort } from "./u
 
 // Bound target parameters independently of the document builder's batch size.
 const SQL_TARGET_BATCH_SIZE = 1_000;
-const PUBLICATION_BATCH_BYTES = 1_048_576;
 
 export interface UserDocumentUpdateInput<
   TDocument extends PublishedUserDocument,
@@ -134,6 +133,24 @@ export function createUserDocumentUpdateProcessor<
         { isolationLevel: "repeatable read", accessMode: "read only" },
       );
     },
+    async buildMany(tx, requests, observedAt) {
+      const results = await input.projection
+        .createBuilder({ db: tx, clock: { nowDate: () => observedAt }, batchSize })
+        .buildManyResults(requests.map(({ targetId, version }) => ({ userId: targetId, sourceVersion: version })));
+      return results.map((result): DocumentBuildResult<TDocument> => {
+        const identity = { targetId: result.userId, version: result.sourceVersion };
+        if (result.status === "failed") return { ...identity, status: "failed", error: result.error };
+        if (result.status !== "built") throw new Error("User Document batch result status is invalid");
+        try {
+          const document = input.projection.parseDocumentRow(result.document);
+          if (document.userId !== result.userId || document.sourceVersion !== result.sourceVersion)
+            throw new Error("User Document candidate identity or version mismatch");
+          return { ...identity, status: "built", document };
+        } catch (error) {
+          return { ...identity, status: "failed", error };
+        }
+      });
+    },
     async publish(tx, prepared) {
       const profile = input.projection.parseDocumentRow(prepared.document);
       if (profile.userId !== prepared.targetId || profile.sourceVersion !== prepared.version)
@@ -155,9 +172,10 @@ export function createUserDocumentUpdateProcessor<
     },
     async publishMany(tx, prepared) {
       const profiles = prepared.map((candidate) => {
-        if (candidate.document.userId !== candidate.targetId || candidate.document.sourceVersion !== candidate.version)
+        const profile = input.projection.parseDocumentRow(candidate.document);
+        if (profile.userId !== candidate.targetId || profile.sourceVersion !== candidate.version)
           throw new Error("User Document candidate identity or version mismatch");
-        return candidate.document;
+        return profile;
       });
       const written = await input.projection.createRowRepository(tx).upsertMany(profiles);
       if (written.length) {
@@ -188,110 +206,43 @@ export function createUserDocumentUpdateProcessor<
       const parsed = RebuildUserDocumentJobPayloadSchema.parse(payload);
       return { targetId: parsed.userId, version: parsed.version };
     });
-    const report = {
-      status: "rebuilt" as const,
-      requested: requests.length,
-      rebuilt: 0,
-      skipped: 0,
-      stale: 0,
-      postPublication: { completed: 0, skipped: 0, failed: 0, exhausted: 0 },
-    };
-    const failures: unknown[] = [];
-    let stopped = false;
-    async function fail(claims: readonly DocumentRebuildClaim[], error: unknown) {
-      failures.push(error);
-      try {
-        await processor.failRebuilds(claims, error, { skipLocked: true });
-      } catch (cleanupError) {
-        failures.push(cleanupError);
-      }
-    }
-    for (let offset = 0; offset < requests.length; offset += batchSize) {
-      const chunk = requests.slice(offset, offset + batchSize);
-      let claims: DocumentRebuildClaim[] = [];
-      try {
-        claims = await processor.claimRebuilds(chunk);
-        report.skipped += chunk.length - claims.length;
-        if (!claims.length) continue;
-        const observedAt = input.clock.nowDate();
-        const results = await input.db.transaction(
-          async (tx) =>
-            await input.projection
-              .createBuilder({ db: tx, clock: { nowDate: () => observedAt }, batchSize })
-              .buildManyResults(claims.map(({ targetId, version }) => ({ userId: targetId, sourceVersion: version }))),
-          { isolationLevel: "repeatable read", accessMode: "read only" },
+    const postReport = { completed: 0, skipped: 0, failed: 0, exhausted: 0 };
+    const report = await processor.processRebuildBatch(requests, {
+      batchSize,
+      async onPublished(published) {
+        const effects = await postPublication.processMany(
+          published.map(({ targetId: userId, version }) => ({ userId, version })),
         );
-        const byUser = new Map<number, (typeof results)[number]>();
-        const expected = new Map(claims.map((claim) => [claim.targetId, claim.version]));
-        for (const result of results) {
-          if (
-            expected.get(result.userId) !== result.sourceVersion ||
-            byUser.has(result.userId) ||
-            (result.status !== "built" && result.status !== "failed")
-          )
-            throw new Error("User Document batch result identity or version mismatch");
-          byUser.set(result.userId, result);
-        }
-        if (byUser.size !== claims.length) throw new Error("User Document batch result coverage mismatch");
-        const candidates: PreparedDocumentPublication<TDocument>[] = [];
-        for (const claim of claims) {
-          const result = byUser.get(claim.targetId)!;
-          if (result.status === "failed") {
-            await fail([claim], result.error);
-            continue;
-          }
-          try {
-            const document = input.projection.parseDocumentRow(result.document);
-            if (document.userId !== claim.targetId || document.sourceVersion !== claim.version)
-              throw new Error("User Document candidate identity or version mismatch");
-            candidates.push({
-              ...claim,
-              document,
-              rebuiltAt: input.clock.nowDate(),
-            });
-          } catch (error) {
-            await fail([claim], error);
-          }
-        }
-        const groups = publicationBatches(candidates);
-        const published: PreparedDocumentPublication<TDocument>[] = [];
-        for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
-          const outcome = await processor.publishPreparedBatch(groups[groupIndex]!);
-          published.push(...outcome.published);
-          report.rebuilt += outcome.published.length;
-          report.stale += outcome.stale.length;
-          failures.push(...outcome.failed.map(({ error }) => error));
-          if (outcome.stopped) {
-            stopped = true;
-            const remaining = groups.slice(groupIndex + 1).flat();
-            if (remaining.length) await fail(remaining, new Error("User Document publication stopped"));
-            break;
-          }
-        }
-        if (published.length) {
-          const effects = await postPublication.processMany(
-            published.map(({ targetId: userId, version }) => ({ userId, version })),
-          );
-          report.postPublication.completed += effects.completed;
-          report.postPublication.skipped += effects.skipped;
-          report.postPublication.failed += effects.failed;
-          report.postPublication.exhausted += effects.exhausted;
-        }
-      } catch (error) {
-        // Source/connection failures invalidate the shared snapshot. No claim
-        // may remain owned merely because its result was never returned.
-        await fail(claims, error);
-      }
-      if (stopped) break;
-    }
-    if (failures.length) throw new AggregateError(failures, "User Document batch rebuild failed");
-    return report;
+        postReport.completed += effects.completed;
+        postReport.skipped += effects.skipped;
+        postReport.failed += effects.failed;
+        postReport.exhausted += effects.exhausted;
+      },
+    });
+    if (report.failures.length) throw new AggregateError(report.failures, "User Document batch rebuild failed");
+    return {
+      status: "rebuilt" as const,
+      requested: report.requested,
+      rebuilt: report.rebuilt,
+      skipped: report.skipped,
+      stale: report.stale,
+      postPublication: postReport,
+    };
   }
 
   return {
     processOutbox: processor.processOutbox,
     prepareRebuild: processor.prepareRebuild,
-    publishPrepared: processor.publishPrepared,
+    async publishPrepared(prepared: PreparedDocumentPublication<TDocument>) {
+      const report = await processor.publishPreparedBatch([prepared]);
+      for (const published of report.published) await postPublication.process(published.targetId, published.version);
+      if (report.failed.length)
+        throw new AggregateError(
+          report.failed.map(({ error }) => error),
+          "User Document publication failed",
+        );
+      return { status: report.published.length ? ("published" as const) : ("stale" as const) };
+    },
     processBatch,
     async backfillAllUsers(options: { batchSize?: number; signal?: AbortSignal } = {}) {
       const batchSize = options.batchSize ?? input.batchSize;
@@ -322,10 +273,10 @@ export function createUserDocumentUpdateProcessor<
       return { registered, enqueued };
     },
     async process(payload: RebuildUserDocumentJobPayload) {
-      const result = await processor.processRebuild({ targetId: payload.userId, version: payload.version });
+      const result = await processBatch([payload]);
+      const status: "rebuilt" | "stale" | "skipped" = result.rebuilt ? "rebuilt" : result.stale ? "stale" : "skipped";
       return {
-        ...result,
-        status: result.status === "published" ? "rebuilt" : result.status,
+        status,
         userId: payload.userId,
         version: payload.version,
       };
@@ -347,25 +298,4 @@ export function createUserDocumentUpdateProcessor<
       return { enqueued: 0, failed: post.failed, exhausted: post.exhausted, postPublication: post };
     },
   };
-}
-
-function publicationBatches<TDocument extends PublishedUserDocument>(
-  candidates: PreparedDocumentPublication<TDocument>[],
-) {
-  const groups: PreparedDocumentPublication<TDocument>[][] = [];
-  let group: PreparedDocumentPublication<TDocument>[] = [];
-  let bytes = 0;
-  for (const candidate of candidates) {
-    const size = Buffer.byteLength(JSON.stringify(candidate.document));
-    if (group.length && bytes + size > PUBLICATION_BATCH_BYTES) {
-      groups.push(group);
-      group = [];
-      bytes = 0;
-    }
-    // A single large existing document still publishes on its own.
-    group.push(candidate);
-    bytes += size;
-  }
-  if (group.length) groups.push(group);
-  return groups;
 }

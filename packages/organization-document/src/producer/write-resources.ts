@@ -1,5 +1,5 @@
 import type { BullMqRedisConfig } from "@iam/jobs";
-import { createJobQueue } from "@iam/jobs";
+import { createJobProducerResources } from "@iam/jobs";
 import { createOrganizationDocumentJobProducer } from "../jobs";
 import { ORGANIZATION_DOCUMENT_QUEUE_NAME } from "../work.types";
 
@@ -8,38 +8,18 @@ export function createOrganizationDocumentWriteResources(options: {
   logger: { error: (context: { err: unknown }, message: string) => void };
   prefix?: string;
 }) {
-  const queue = createJobQueue({
+  const resources = createJobProducerResources({
     name: ORGANIZATION_DOCUMENT_QUEUE_NAME,
     redis: options.redis,
     prefix: options.prefix,
-    connectionOptions: { maxRetriesPerRequest: 1, connectTimeout: 2_000, enableOfflineQueue: false },
+    onError: (error) => options.logger.error({ err: error }, "organization document write queue error"),
   });
-  queue.on("error", (error) => options.logger.error({ err: error }, "organization document write queue error"));
-  const jobProducer = createOrganizationDocumentJobProducer({
-    async addBulk(jobs) {
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      try {
-        // A TCP peer can stay connected without answering Redis's readiness or
-        // commands. Bound this wake while the long-lived client keeps reconnecting.
-        return await Promise.race([
-          queue.addBulk(jobs),
-          new Promise<never>((_resolve, reject) => {
-            timer = setTimeout(() => reject(new Error("Organization document queue wake-up timed out")), 2_000);
-          }),
-        ]);
-      } finally {
-        clearTimeout(timer);
-      }
-    },
+  const jobProducer = createOrganizationDocumentJobProducer(resources.queue, {
+    wakeUpTimeoutMs: resources.wakeUpTimeoutMs,
   });
   return {
-    queue,
+    queue: resources.queue,
     jobProducer,
-    async close() {
-      // Producer shutdown has no jobs to drain. Disconnect an initialized client
-      // as well so a connected peer cannot keep QUIT waiting indefinitely.
-      await queue.getBackend().close(true);
-      await queue.close();
-    },
+    close: resources.close,
   };
 }

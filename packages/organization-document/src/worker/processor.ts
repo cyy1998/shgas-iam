@@ -1,4 +1,4 @@
-import type { db as database } from "@iam/db";
+import type { DbTransaction, db as database } from "@iam/db";
 import {
   organizationClosures,
   organizationDocumentOutboxEntries,
@@ -7,6 +7,7 @@ import {
 } from "@iam/db/schema";
 import {
   createDocumentUpdateProcessor,
+  type DocumentBuildResult,
   type DocumentRepairOptions,
   type DocumentRepairStageReport,
   type PreparedDocumentPublication,
@@ -25,7 +26,11 @@ import {
   OrganizationRebuildJobPayloadSchema,
 } from "../work.types";
 import { backfillOrganizationDocument } from "./backfill";
-import { readOrganizationDocumentSourceSnapshot } from "./builder";
+import {
+  createOrganizationDocumentSourceReader,
+  OrganizationDocumentSourceIntegrityError,
+  readOrganizationDocumentSourceSnapshot,
+} from "./builder";
 
 export interface PreparedOrganizationDocumentPublication extends OrganizationRebuildJobPayload {
   readonly processingToken: string;
@@ -45,6 +50,41 @@ export function createOrganizationDocumentProcessor(input: CreateOrganizationDoc
     organizationId: z.number().int().positive(),
     scope: z.enum(["self", "subtree"]),
   });
+  async function publishDocuments(
+    tx: DbTransaction,
+    prepared: readonly PreparedDocumentPublication<OrganizationDocument | null>[],
+  ) {
+    if (!prepared.length) return [];
+    const rows = prepared
+      .map((candidate) => {
+        const document = candidate.document === null ? null : parseStoredOrganizationDocument(candidate.document);
+        return {
+          organizationId: candidate.targetId,
+          sourceVersion: candidate.version,
+          schemaVersion: ORGANIZATION_DOCUMENT_SCHEMA_VERSION,
+          document,
+          searchVisible: document !== null,
+          rebuiltAt: candidate.rebuiltAt,
+        };
+      })
+      .sort((left, right) => left.organizationId - right.organizationId);
+    const stored = await tx
+      .insert(organizationDocuments)
+      .values(rows)
+      .onConflictDoUpdate({
+        target: organizationDocuments.organizationId,
+        set: {
+          sourceVersion: sql`excluded.source_version`,
+          schemaVersion: sql`excluded.schema_version`,
+          document: sql`excluded.document`,
+          searchVisible: sql`excluded.search_visible`,
+          rebuiltAt: sql`excluded.rebuilt_at`,
+        },
+        setWhere: sql`${organizationDocuments.sourceVersion} <= excluded.source_version`,
+      })
+      .returning({ organizationId: organizationDocuments.organizationId });
+    return stored.map(({ organizationId }) => organizationId);
+  }
   const processor = createDocumentUpdateProcessor({
     db: input.db,
     clock: input.clock,
@@ -70,27 +110,26 @@ export function createOrganizationDocumentProcessor(input: CreateOrganizationDoc
       return [source.organizationId, ...descendants.map(({ id }) => id)];
     },
     build: async (targetId) => await readOrganizationDocumentSourceSnapshot(input.db, targetId),
-    async publish(tx, prepared) {
-      const document = prepared.document === null ? null : parseStoredOrganizationDocument(prepared.document);
-      const [stored] = await tx
-        .select({ sourceVersion: organizationDocuments.sourceVersion })
-        .from(organizationDocuments)
-        .where(eq(organizationDocuments.organizationId, prepared.targetId));
-      if (stored && BigInt(stored.sourceVersion) > BigInt(prepared.version))
-        throw new Error("Organization Document publication version exceeds rebuild version");
-      const row = {
-        organizationId: prepared.targetId,
-        sourceVersion: prepared.version,
-        schemaVersion: ORGANIZATION_DOCUMENT_SCHEMA_VERSION,
-        document,
-        searchVisible: document !== null,
-        rebuiltAt: prepared.rebuiltAt,
-      };
-      await tx
-        .insert(organizationDocuments)
-        .values(row)
-        .onConflictDoUpdate({ target: organizationDocuments.organizationId, set: row });
+    async buildMany(tx, requests) {
+      const reader = createOrganizationDocumentSourceReader(tx);
+      const results: DocumentBuildResult<OrganizationDocument | null>[] = [];
+      for (const request of requests) {
+        try {
+          const document = await reader.readDocument(request.targetId);
+          results.push({ ...request, status: "built", document });
+        } catch (error) {
+          if (!(error instanceof OrganizationDocumentSourceIntegrityError) && !(error instanceof z.ZodError))
+            throw error;
+          results.push({ ...request, status: "failed", error });
+        }
+      }
+      return results;
     },
+    async publish(tx, prepared) {
+      const written = await publishDocuments(tx, [prepared]);
+      if (written.length !== 1) throw new Error("Organization Document publication is older than stored version");
+    },
+    publishMany: publishDocuments,
     jobProducer: {
       enqueueOutboxEntries: input.jobProducer.enqueueOutboxEntries,
       enqueueRebuilds: async (requests) =>
@@ -120,15 +159,30 @@ export function createOrganizationDocumentProcessor(input: CreateOrganizationDoc
       document: prepared.document,
       rebuiltAt: prepared.rebuiltAt,
     };
-    return await processor.publishPrepared(candidate);
+    const outcome = await processor.publishPreparedBatch([candidate]);
+    if (outcome.failed.length)
+      throw new AggregateError(
+        outcome.failed.map(({ error }) => error),
+        "Organization Document publication failed",
+      );
+    return { status: outcome.published.length ? ("published" as const) : ("stale" as const) };
   }
   return {
     processOutbox: processor.processOutbox,
     prepareRebuild,
     publishPrepared,
     async processRebuild(payload: OrganizationRebuildJobPayload) {
-      const prepared = await prepareRebuild(payload);
-      return prepared ? await publishPrepared(prepared) : { status: "skipped" as const };
+      const request = OrganizationRebuildJobPayloadSchema.parse(payload);
+      const outcome = await processor.processRebuildBatch(
+        [{ targetId: request.organizationId, version: request.version }],
+        {
+          batchSize: 1,
+        },
+      );
+      if (outcome.failures.length) throw new AggregateError(outcome.failures, "Organization Document rebuild failed");
+      return {
+        status: outcome.rebuilt ? ("published" as const) : outcome.stale ? ("stale" as const) : ("skipped" as const),
+      };
     },
     async backfillAllOrganizations(options: { batchSize?: number; signal?: AbortSignal } = {}) {
       return await backfillOrganizationDocument({

@@ -1,6 +1,6 @@
 import type { DbClient } from "@iam/db";
 import { userDocumentOutboxEntries } from "@iam/db/schema";
-import { type DocumentOutboxJob, persistDocumentOutboxEntries } from "@iam/document-update";
+import { createDocumentOutboxWakeUp, type DocumentOutboxJob, persistDocumentOutboxEntries } from "@iam/document-update";
 import {
   type UserDocumentOutboxSource,
   UserDocumentOutboxSourceSchema,
@@ -20,6 +20,11 @@ export interface CreateUserDocumentInvalidationDeps {
 }
 
 export function createUserDocumentInvalidation(deps: CreateUserDocumentInvalidationDeps) {
+  const wakeUp = createDocumentOutboxWakeUp({
+    afterCommit: deps.lifecycle.afterCommit,
+    taskName: "user_document.outbox.wake_up",
+    enqueue: (jobs) => deps.jobProducer.enqueueOutboxEntries(jobs),
+  });
   return {
     async recordChanges(changes: readonly UserDocumentSourceChange[]): Promise<void> {
       const sources = changes.map((change) =>
@@ -30,10 +35,7 @@ export function createUserDocumentInvalidation(deps: CreateUserDocumentInvalidat
         }),
       );
       const jobs = await persistUserDocumentSources(deps.db, sources, deps.clock.nowDate());
-      if (!jobs.length) return;
-      deps.lifecycle.afterCommit.bestEffort("user_document.outbox.wake_up", async () => {
-        await deps.jobProducer.enqueueOutboxEntries(jobs);
-      });
+      wakeUp.register(jobs);
     },
   };
 }

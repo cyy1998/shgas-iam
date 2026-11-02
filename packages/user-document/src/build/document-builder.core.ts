@@ -7,12 +7,13 @@ import {
 } from "@iam/contracts";
 import type { Employment, User } from "@iam/db/schema";
 import { type PublishedUserDocument, PublishedUserDocumentSchema, USER_DOCUMENT_SCHEMA_VERSION } from "../document";
+import { UserDocumentSourceIntegrityError } from "./document-build.error";
 import type { DocumentBuildDataset } from "./document-build.repository";
 import { compareCodes, groupItemsBy } from "./user-document-build.helpers";
 import type { UserDocumentBuildOrgPathRow } from "./user-document-build.repository";
 
 export type UserDocumentEmploymentIntegrityFailureReason = "organization-not-effective" | "position-not-effective";
-export class UserDocumentEmploymentIntegrityError extends Error {
+export class UserDocumentEmploymentIntegrityError extends UserDocumentSourceIntegrityError {
   readonly code = "USER_DOCUMENT_EMPLOYMENT_INTEGRITY_FAILED";
   constructor(
     readonly userId: number,
@@ -24,7 +25,7 @@ export class UserDocumentEmploymentIntegrityError extends Error {
   }
 }
 
-export type DocumentBuildResult<TDocument extends PublishedUserDocument = PublishedUserDocument> =
+export type DocumentBuildResult<TDocument = PublishedUserDocument> =
   | { userId: number; sourceVersion: string; status: "built"; document: TDocument }
   | { userId: number; sourceVersion: string; status: "failed"; error: unknown };
 
@@ -52,7 +53,7 @@ export function buildUserDocumentResultsFromDataset(
   return [...versions].map(([userId, sourceVersion]) => {
     try {
       const user = users.get(userId);
-      if (!user) throw new Error("User Document source is missing");
+      if (!user) throw new UserDocumentSourceIntegrityError("User Document source is missing");
       return { userId, sourceVersion, status: "built", document: assemble(user) };
     } catch (error) {
       return { userId, sourceVersion, status: "failed", error };
@@ -110,9 +111,10 @@ function createDocumentAssembler(
         const responsibilityItems = (responsibilities.get(employment.id) ?? [])
           .map((row) => {
             const type = catalog.get(row.typeCode);
-            if (!type) throw new Error("Document responsibility type is unknown");
+            if (!type) throw new UserDocumentSourceIntegrityError("Document responsibility type is unknown");
             const identity = `${type.code}\0${row.targetOrganization.code}`;
-            if (seen.has(identity)) throw new Error("Document responsibility contains a duplicate identity");
+            if (seen.has(identity))
+              throw new UserDocumentSourceIntegrityError("Document responsibility contains a duplicate identity");
             seen.add(identity);
             return {
               order: type.displayOrder,
@@ -184,7 +186,7 @@ function toOrganizationReference(rows: UserDocumentBuildOrgPathRow[], targetId: 
     ) ||
     new Set(path.map(({ id }) => id)).size !== path.length
   )
-    throw new Error("Document organization path is incomplete");
+    throw new UserDocumentSourceIntegrityError("Document organization path is incomplete");
   return OrganizationReferenceSchema.parse({
     code: target.orgCode,
     name: target.orgName,

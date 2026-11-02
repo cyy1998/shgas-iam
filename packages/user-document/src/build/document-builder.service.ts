@@ -15,6 +15,7 @@ export interface DocumentBuilderDeps {
   buildRepository: DocumentBuildRepository;
   clock: { nowDate(): Date };
   config: { batchSize: number };
+  signal?: AbortSignal;
 }
 export interface DocumentBuildTarget {
   userId: number;
@@ -37,24 +38,30 @@ export function createDocumentBuilder(deps: DocumentBuilderDeps) {
     return versions;
   }
   async function buildMany(targets: DocumentBuildTarget[]) {
+    deps.signal?.throwIfAborted();
     const versions = targetVersions(targets);
     const output: PublishedUserDocument[] = [];
     const observedAt = deps.clock.nowDate();
     for (const userIds of chunkItems([...versions.keys()], deps.config.batchSize)) {
-      const dataset = await deps.buildRepository.loadByUserIds(userIds, observedAt);
+      deps.signal?.throwIfAborted();
+      const dataset = await deps.buildRepository.loadByUserIds(userIds, observedAt, deps.signal);
+      deps.signal?.throwIfAborted();
       output.push(...buildUserDocumentsFromDataset(dataset, observedAt, versions));
     }
     return output.sort((left, right) => left.userId - right.userId);
   }
 
   async function buildManyResults(targets: DocumentBuildTarget[]): Promise<DocumentBuildResult[]> {
+    deps.signal?.throwIfAborted();
     const versions = targetVersions(targets, true);
     const observedAt = deps.clock.nowDate();
     async function buildBatch(userIds: number[]): Promise<DocumentBuildResult[]> {
+      deps.signal?.throwIfAborted();
       let dataset: Awaited<ReturnType<DocumentBuildRepository["loadByUserIds"]>>;
       try {
-        dataset = await deps.buildRepository.loadByUserIds(userIds, observedAt);
+        dataset = await deps.buildRepository.loadByUserIds(userIds, observedAt, deps.signal);
       } catch (error) {
+        deps.signal?.throwIfAborted();
         // These errors are raised by pure validation after successful reads, so
         // the caller's snapshot remains usable. SQL/connection failures escape.
         if (
@@ -67,6 +74,7 @@ export function createDocumentBuilder(deps: DocumentBuilderDeps) {
         const middle = Math.floor(userIds.length / 2);
         return [...(await buildBatch(userIds.slice(0, middle))), ...(await buildBatch(userIds.slice(middle)))];
       }
+      deps.signal?.throwIfAborted();
       return buildUserDocumentResultsFromDataset(
         dataset,
         observedAt,

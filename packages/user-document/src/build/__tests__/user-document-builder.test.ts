@@ -359,6 +359,39 @@ test("propagates shared source read failures without issuing more queries", asyn
   expect(reads).toBe(1);
 });
 
+test.each(["before-start", "after-read", "integrity-failure"])(
+  "cancels %s without continuing build batches or source-integrity isolation",
+  async (stage) => {
+    const controller = new AbortController();
+    const reason = new Error("Build cancelled");
+    let reads = 0;
+    const subject = createDocumentBuilder({
+      buildRepository: {
+        async loadByUserIds(userIds, _at, signal) {
+          expect(signal).toBe(controller.signal);
+          reads += 1;
+          controller.abort(reason);
+          if (stage === "integrity-failure")
+            throw new OrganizationResponsibilityIntegrityError("target-organization-missing");
+          return dataset({ users: userIds.map((id) => user(id)) });
+        },
+      },
+      clock: { nowDate: () => observedAt },
+      config: { batchSize: stage === "integrity-failure" ? 10 : 1 },
+      signal: controller.signal,
+    });
+    if (stage === "before-start") controller.abort(reason);
+    const error = await subject
+      .buildManyResults([
+        { userId: 1, sourceVersion: "8" },
+        { userId: 2, sourceVersion: "9" },
+      ])
+      .catch((error: unknown) => error);
+    expect(error).toBe(reason);
+    expect(reads).toBe(stage === "before-start" ? 0 : 1);
+  },
+);
+
 test.each([
   {
     targets: [

@@ -184,6 +184,8 @@ pnpm --filter @iam/worker organization-document:repair -- --limit 500
 ```
 
 命令有界恢复 outbox 与 rebuilds 两阶段的 pending、failed 或过期 processing 并重新唤醒。
+组织 consumer 仍按单组织任务处理，重建发布已接入两类 Document 共用的预算、版本/owner 检查和失败回收机制。
+锁等待或发布失败保留持久工作供 repair，文档与完成状态同事务提交，不重放源业务写入。
 分别观察 selected/enqueued/failed；`status=enqueued` 与退出 0 只表示投递完成，`publication=not-verified` 不表示发布已核验。
 依赖修复后重复 repair 并等待 consumer 收敛；失败持续时检查数据库、队列及源完整性，保留持久工作用于重试。
 不能删除工作、手写文档或重放业务写入。合法旧文档在重建期间仍可查询。
@@ -228,8 +230,32 @@ backfill/repair/verify 都支持 `--deadline-ms <1..300000>`，默认 30000；de
 
 ## 周期任务与监控
 
-仓库没有内置周期补偿调度。部署侧安排 repair 的频率、单轮限额与重复排空，并按恢复 SLO 设置告警。
+User Document 与 Organization Document 都支持 Worker 内置周期 repair，两类调度分别配置并独立运行。
+两者均按恢复 SLO 设置告警，并保持对应 consumer 运行。
 Subject Access 恢复耗时至少考虑 stale threshold、等待下一次调度和有界排空；组织搜索无固定新鲜度 SLA。
+
+提交后唤醒超时或入队失败时，源业务仍已保存，Outbox 留待下一轮 repair；只重投文档任务，不重放保存请求。
+两类 producer 均在同一事务内合并通知，分别使用一次总等待预算；大批次分段入队，超时后不继续发送剩余段。
+通过以下 Worker 环境变量配置：
+
+| 配置                             | User Document 环境变量                        | Organization Document 环境变量                        | 源码默认值 |
+| -------------------------------- | --------------------------------------------- | ----------------------------------------------------- | ---------- |
+| 自动恢复开关                     | `IAM_WORKER_USER_DOCUMENT_REPAIR_ENABLED`     | `IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_ENABLED`     | `false`    |
+| 轮次结束到下轮开始的间隔（毫秒） | `IAM_WORKER_USER_DOCUMENT_REPAIR_INTERVAL_MS` | `IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_INTERVAL_MS` | `60000`    |
+| 每轮各恢复阶段限额               | `IAM_WORKER_USER_DOCUMENT_REPAIR_LIMIT`       | `IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_LIMIT`       | `500`      |
+| 单轮命令预算（毫秒）             | `IAM_WORKER_USER_DOCUMENT_REPAIR_DEADLINE_MS` | `IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_DEADLINE_MS` | `30000`    |
+
+父进程在命令预算后另有有限清理宽限及强制终止兜底。
+dev/prod Compose 的 `worker-user-document` 与 `worker-organization-document` 分别默认开启对应任务；源码直接运行时显式设置开关。
+只有对应 consumer 已启用才会运行，dashboard-only 不启动任务；两类模块同时启用时仍各自控制开关。
+Worker 启动后运行首轮，之后串行运行；普通失败留待下一轮，清理失败则停止自动轮次并记录错误，须排查并重启服务。
+任务在 Worker 内启动现有 repair 子命令，直接使用 Bun 和本服务的连接配置，不依赖 cron、Docker CLI 或额外镜像。
+每类任务在同一实例中不重叠，两个文档模块可以各自运行；多实例仍由数据库领取和版本/token 仲裁。
+用户后处理 `exhausted` 按上方人工重试流程处理，自动轮次不使用 `--force`。
+
+更新配置并重启匹配版本的 Worker 后，确认出现 `user_document.repair.started` 或 `organization_document.repair.started` 及对应完成或失败事件；依赖恢复后检查
+Outbox、Rebuild State 和后处理积压收敛。日志与退出状态接入现有告警，不能仅依据容器健康或某次入队成功判定更新完成。
+已有外部同类定时任务应停用；需要停流、切换或排空时停止 Worker，或先关闭对应开关并重启，再等待在途修复退出。
 
 | 观察项                                                    | 需要处理的情况                                                                  |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------- |

@@ -1,6 +1,4 @@
 import { createSubjectAccessRepair, createSubjectAccessTransitionRecovery } from "@iam/api-core/subject-access";
-import { USER_DOCUMENT_QUEUE_NAME, type UserDocumentJobName, type UserDocumentJobPayload } from "@iam/contracts";
-import { createJobQueue } from "@iam/jobs";
 import { createSubjectFactsRedisPublisher } from "@iam/user-document";
 import {
   createSubjectAccessTransitionRecoveryAuthority,
@@ -9,8 +7,8 @@ import {
 import {
   createCurrentUserDocumentProjectionBundle,
   createSubjectAccessAuthorityRepository,
-  createUserDocumentJobProducer,
   createUserDocumentUpdateProcessor,
+  createUserDocumentWriteResources,
 } from "@iam/user-document/worker";
 import type { UserDocumentCommandEnv } from "@worker/env";
 import { closeWorkerCommandResources } from "./command-shutdown";
@@ -50,36 +48,18 @@ export function createUserDocumentCommandComposition(options: {
     backlog: subjectAccess.store,
     logger: options.logger,
   });
-  const queue = options.subjectAccessOnly
+  const writes = options.subjectAccessOnly
     ? undefined
-    : createJobQueue<UserDocumentJobPayload, unknown, UserDocumentJobName>({
-        name: USER_DOCUMENT_QUEUE_NAME,
+    : createUserDocumentWriteResources({
         redis: options.env.redis,
-        connectionOptions: { maxRetriesPerRequest: 1, connectTimeout: 2_000, enableOfflineQueue: false },
+        logger: options.logger,
+        batchSize: options.env.userDocument.rebuildBatchSize,
       });
-  queue?.on("error", (error) => options.logger.error({ errorType: error.name }, "User Document command queue error"));
-  const maintenance = queue
+  const maintenance = writes
     ? createUserDocumentUpdateProcessor({
         db: postgres.db,
         projection: createCurrentUserDocumentProjectionBundle(),
-        jobProducer: createUserDocumentJobProducer(
-          {
-            async addBulk(jobs) {
-              let timer: ReturnType<typeof setTimeout> | undefined;
-              try {
-                return await Promise.race([
-                  queue.addBulk(jobs),
-                  new Promise<never>((_resolve, reject) => {
-                    timer = setTimeout(() => reject(new Error("User Document queue wake-up timed out")), 2_000);
-                  }),
-                ]);
-              } finally {
-                clearTimeout(timer);
-              }
-            },
-          },
-          { batchSize: options.env.userDocument.rebuildBatchSize },
-        ),
+        jobProducer: writes.jobProducer,
         subjectFactsPublisher: createSubjectFactsRedisPublisher(redis.redis),
         subjectAccessRepair: repair,
         clock,
@@ -108,12 +88,7 @@ export function createUserDocumentCommandComposition(options: {
       closing ??= closeWorkerCommandResources([
         Promise.resolve().then(() => redis.close()),
         postgres.close(reason),
-        (async () => {
-          if (queue) {
-            await queue.getBackend().close(true);
-            await queue.close();
-          }
-        })(),
+        Promise.resolve().then(() => writes?.close()),
       ]);
       return closing;
     },

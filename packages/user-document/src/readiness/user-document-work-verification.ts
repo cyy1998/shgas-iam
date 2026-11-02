@@ -13,11 +13,16 @@ const requestsSchema = z.array(
 );
 
 /** Inspect durable obligations, independently of transport and without changing their state. */
-export async function verifyUserDocumentWork(db: DbClient) {
+export async function verifyUserDocumentWork(db: DbClient, signal?: AbortSignal) {
+  signal?.throwIfAborted();
   const source = await db.select({ id: users.id, deleted: users.isDelete }).from(users).orderBy(asc(users.id));
+  signal?.throwIfAborted();
   const documents = await db.select().from(userDocuments).orderBy(asc(userDocuments.userId));
+  signal?.throwIfAborted();
   const states = await db.select().from(userDocumentRebuildStates).orderBy(asc(userDocumentRebuildStates.userId));
+  signal?.throwIfAborted();
   const outbox = await db.select().from(userDocumentOutboxEntries).orderBy(asc(userDocumentOutboxEntries.id));
+  signal?.throwIfAborted();
   const sourceIds = new Set(source.map(({ id }) => id));
   const statesById = new Map(states.map((row) => [row.userId, row]));
   const documentsById = new Map(documents.map((row) => [row.userId, row]));

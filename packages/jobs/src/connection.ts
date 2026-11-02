@@ -17,6 +17,7 @@ export interface CreateBullMqConnectionOptions {
   maxRetriesPerRequest?: RedisOptions["maxRetriesPerRequest"];
   retryStrategy?: RedisOptions["retryStrategy"];
   connectTimeout?: RedisOptions["connectTimeout"];
+  socketTimeout?: RedisOptions["socketTimeout"];
   enableOfflineQueue?: RedisOptions["enableOfflineQueue"];
 }
 
@@ -44,6 +45,7 @@ function resolveRedisOptions(config: BullMqRedisConfig, options: CreateBullMqCon
     maxRetriesPerRequest: options.maxRetriesPerRequest ?? null,
     ...(options.retryStrategy === undefined ? {} : { retryStrategy: options.retryStrategy }),
     ...(options.connectTimeout === undefined ? {} : { connectTimeout: options.connectTimeout }),
+    ...(options.socketTimeout === undefined ? {} : { socketTimeout: options.socketTimeout }),
     ...(options.enableOfflineQueue === undefined ? {} : { enableOfflineQueue: options.enableOfflineQueue }),
   };
 }
