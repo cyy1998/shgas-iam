@@ -1,0 +1,1 @@
+CREATE INDEX "org_resp_assignment_target_organization_id_idx" ON "organization_responsibility_assignment" ("target_organization_id");

@@ -106,7 +106,7 @@ test("the fixed 95dc4871 inventory upgrades through the complete chain without c
   expect([...usersAfter]).toEqual([...users]);
   expect([...organizationsAfter]).toEqual([...organizations]);
   expect([...journalAfter].slice(0, journal.length)).toEqual([...journal]);
-  expect(journalAfter.length).toBe(journal.length + 3);
+  expect(journalAfter.length).toBe(journal.length + 4);
   expect([...states]).toEqual(
     [1, 2, 3, 4].map((userId) => ({
       user_id: userId,

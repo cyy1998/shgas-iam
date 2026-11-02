@@ -15,7 +15,7 @@ import {
   getOrganizationResponsibilityOpenCardinalityViolation,
   getOrganizationResponsibilityParentLifecycleViolation,
 } from "@iam/domain/organization-responsibility";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne, type SQL } from "drizzle-orm";
 import type { EffectiveOrganizationResponsibility, OrganizationResponsibilityResolver } from "../index.ts";
 import { OrganizationResponsibilityIntegrityError } from "../index.ts";
 
@@ -104,7 +104,7 @@ export function createResolver(db: DbClient): OrganizationResponsibilityResolver
     async resolveHolderEmploymentIdsByTypes(input) {
       const typeCodes = unique(input.typeCodes);
       if (typeCodes.length === 0) return [];
-      const rows = await assignmentQuery(db).where(inArray(organizationResponsibilityAssignments.typeCode, typeCodes));
+      const rows = await currentAssignmentQuery(db, inArray(organizationResponsibilityAssignments.typeCode, typeCodes));
       await assertBatchIntegrity(db, rows, input.at);
       return unique(rows.filter((row) => isEffective(row, input.at)).map((row) => row.employmentId)).sort(
         (left, right) => left - right,
@@ -116,7 +116,8 @@ export function createResolver(db: DbClient): OrganizationResponsibilityResolver
 async function loadAssignmentsByEmploymentIds(db: DbClient, employmentIds: number[]) {
   const rows: AssignmentRow[] = [];
   for (const batch of queryIdBatches(employmentIds)) {
-    const batchRows = await assignmentQuery(db).where(
+    const batchRows = await currentAssignmentQuery(
+      db,
       inArray(organizationResponsibilityAssignments.employmentId, batch),
     );
     for (const row of batchRows) rows.push(row);
@@ -127,7 +128,8 @@ async function loadAssignmentsByEmploymentIds(db: DbClient, employmentIds: numbe
 async function loadAssignmentsByTargetIds(db: DbClient, targetOrganizationIds: number[]) {
   const rows: AssignmentRow[] = [];
   for (const batch of queryIdBatches(targetOrganizationIds)) {
-    const batchRows = await assignmentQuery(db).where(
+    const batchRows = await currentAssignmentQuery(
+      db,
       inArray(organizationResponsibilityAssignments.targetOrganizationId, batch),
     );
     for (const row of batchRows) rows.push(row);
@@ -140,7 +142,7 @@ function* queryIdBatches(ids: readonly number[]) {
     yield ids.slice(offset, offset + QUERY_ID_BATCH_SIZE);
 }
 
-function assignmentQuery(db: DbClient) {
+function currentAssignmentQuery(db: DbClient, predicate: SQL) {
   return db
     .select({
       assignmentId: organizationResponsibilityAssignments.id,
@@ -161,7 +163,14 @@ function assignmentQuery(db: DbClient) {
     })
     .from(organizationResponsibilityAssignments)
     .leftJoin(employments, eq(employments.id, organizationResponsibilityAssignments.employmentId))
-    .leftJoin(organizations, eq(organizations.id, organizationResponsibilityAssignments.targetOrganizationId));
+    .leftJoin(organizations, eq(organizations.id, organizationResponsibilityAssignments.targetOrganizationId))
+    .where(
+      and(
+        // Unknown statuses must still reach integrity validation; only ended history is excluded.
+        ne(organizationResponsibilityAssignments.status, OrganizationResponsibilityAssignmentStatus.Disable),
+        predicate,
+      ),
+    );
 }
 
 async function assertBatchIntegrity(db: DbClient, rows: AssignmentRow[], at: Date) {
@@ -190,19 +199,6 @@ function assertAssignmentIntegrity(row: AssignmentRow, at: Date) {
   }
   if (!Number.isFinite(row.assignmentStartTime.getTime()))
     throw new OrganizationResponsibilityIntegrityError("open-assignment-period-invalid");
-  if (row.assignmentStatus === OrganizationResponsibilityAssignmentStatus.Disable) {
-    if (
-      row.assignmentEndTime === null ||
-      !Number.isFinite(row.assignmentEndTime.getTime()) ||
-      row.assignmentEndTime.getTime() < row.assignmentStartTime.getTime()
-    ) {
-      throw new OrganizationResponsibilityIntegrityError("open-assignment-period-invalid");
-    }
-    if (row.assignmentStartTime.getTime() > at.getTime() || row.assignmentEndTime.getTime() > at.getTime()) {
-      throw new OrganizationResponsibilityIntegrityError("assignment-period-outside-observation");
-    }
-    return;
-  }
   if (row.holderEmploymentIsDelete) {
     throw new OrganizationResponsibilityIntegrityError("holder-employment-not-open");
   }

@@ -40,6 +40,7 @@ export const organizationResponsibilityAssignments = snakeCase.table(
         )
       `),
     index("organization_responsibility_assignment_employment_id_idx").on(table.employmentId),
+    index("org_resp_assignment_target_organization_id_idx").on(table.targetOrganizationId),
     check(
       "organization_responsibility_assignment_type_code_check",
       sql`${table.typeCode} IN (

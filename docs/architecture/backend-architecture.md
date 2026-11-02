@@ -198,7 +198,9 @@ Composition 用当前连接创建并复用 resolver，失效模块自行创建�
 ### Organization Responsibility 解析
 
 独立 resolver 负责有效责任和跨树 holder 反向解析，调用方显式提供观察时间。
-引用、父生命周期、期间或开放名额异常时整批拒绝；resolver 不拥有缓存、授权、管理历史或协议输出。
+查询在数据库层排除 Disable 的已结束责任，关联目标的完整性重查也使用相同范围；Enable 与 Pause 的引用、父生命周期、
+期间或开放名额异常时整批拒绝，未知责任状态仍报完整性异常。已结束记录保留在管理历史中，不参与当前责任解析和校验。
+resolver 不拥有缓存、授权、管理历史或协议输出。
 组织变更的失效集合同时包含子树任职用户和责任反向 holder；Type 的披露字段或排序变化也须使 holder 失效。
 
 `@iam/organization-responsibility-resolution/parent-lifecycle` 独立提供开放责任目标子树的读取与父生命周期拒绝。
