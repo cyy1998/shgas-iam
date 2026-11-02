@@ -7,6 +7,7 @@ const RESERVED_DATABASE_NAMES = new Set(["postgres", "template0", "template1"]);
 
 export interface PostgresTestHarness {
   readonly schemaName: string;
+  readonly commandDatabaseUrl: string;
   readonly sql: ReturnType<typeof postgres>;
   readonly close: () => Promise<void>;
 }
@@ -37,8 +38,11 @@ export async function createPostgresTestHarness(): Promise<PostgresTestHarness> 
       max: 1,
     });
 
+    const commandDatabaseUrl = new URL(databaseUrl);
+    commandDatabaseUrl.searchParams.set("options", `-c search_path=${schemaName}`);
     return {
       schemaName,
+      commandDatabaseUrl: commandDatabaseUrl.toString(),
       sql: scopedSql,
       async close() {
         await scopedSql!.end();

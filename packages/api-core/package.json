@@ -32,7 +32,8 @@
     "./uow": "./src/uow/index.ts",
     "./utils": "./src/utils/index.ts",
     "./utils/*": "./src/utils/*.ts",
-    "./process": "./src/process/owned-process-tree.mjs"
+    "./process": "./src/process/owned-process-tree.mjs",
+    "./maintenance": "./src/maintenance/index.ts"
   },
   "scripts": {
     "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",

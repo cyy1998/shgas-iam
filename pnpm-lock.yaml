@@ -558,6 +558,61 @@ importers:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
 
+  apps/ops:
+    dependencies:
+      '@iam/api-core':
+        specifier: workspace:*
+        version: link:../../packages/api-core
+      '@iam/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@iam/custom-sso':
+        specifier: workspace:*
+        version: link:../../packages/custom-sso
+      '@iam/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@iam/jobs':
+        specifier: workspace:*
+        version: link:../../packages/jobs
+      '@iam/oidc':
+        specifier: workspace:*
+        version: link:../../packages/oidc
+      '@iam/organization-document':
+        specifier: workspace:*
+        version: link:../../packages/organization-document
+      '@iam/session-kernel':
+        specifier: workspace:*
+        version: link:../../packages/session-kernel
+      '@iam/user-document':
+        specifier: workspace:*
+        version: link:../../packages/user-document
+      drizzle-orm:
+        specifier: 1.0.0-rc.2
+        version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
+      ioredis:
+        specifier: ^6.0.0
+        version: 6.0.0(supports-color@10.2.2)
+      pino:
+        specifier: ^10.3.1
+        version: 10.3.1
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/bun':
+        specifier: latest
+        version: 1.4.4
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+
   apps/sso:
     dependencies:
       '@ant-design/cssinjs':
@@ -651,24 +706,15 @@ importers:
       '@iam/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@iam/custom-sso':
-        specifier: workspace:*
-        version: link:../../packages/custom-sso
       '@iam/db':
         specifier: workspace:*
         version: link:../../packages/db
       '@iam/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
-      '@iam/oidc':
-        specifier: workspace:*
-        version: link:../../packages/oidc
       '@iam/organization-document':
         specifier: workspace:*
         version: link:../../packages/organization-document
-      '@iam/session-kernel':
-        specifier: workspace:*
-        version: link:../../packages/session-kernel
       '@iam/user-document':
         specifier: workspace:*
         version: link:../../packages/user-document
@@ -684,9 +730,6 @@ importers:
       pino:
         specifier: ^10.3.1
         version: 10.3.1
-      postgres:
-        specifier: ^3.4.9
-        version: 3.4.9
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -697,6 +740,9 @@ importers:
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'

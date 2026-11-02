@@ -7,12 +7,13 @@
 
 ### 运行时职责
 
-| 运行时    | 职责                                     |
-| --------- | ---------------------------------------- |
-| API       | 登录、SSO/OIDC 与公共、开放和内部接口    |
-| Admin API | 管理端 REST 与 tRPC 接口                 |
-| Worker    | 队列消费、读模型重建、维护命令与健康检查 |
-| Gateway   | 独立的网关配置校验、预览、发布与补偿     |
+| 运行时    | 职责                                  |
+| --------- | ------------------------------------- |
+| API       | 登录、SSO/OIDC 与公共、开放和内部接口 |
+| Admin API | 管理端 REST 与 tRPC 接口              |
+| Worker    | 队列消费、周期恢复与健康检查          |
+| Ops       | 一次性人工重建、修复与核验            |
+| Gateway   | 独立的网关配置校验、预览、发布与补偿  |
 
 ### 核心依赖方向
 
@@ -25,7 +26,7 @@ composition → routes → use-cases → services / ports
 - Use case 编排跨领域流程；service 提供单个领域的应用能力；纯领域规则只计算结果，不访问基础设施。
 - Composition 创建依赖并连接各层。共享 `createApp` 只接收已创建的路由和 middleware，app 私有接线由 app 自己负责。
 - Route 的类型和值依赖均不得越过业务层访问 repository 或 UnitOfWork；service 不反向依赖 use case，纯领域规则不依赖 app。
-- API、Admin API、Worker、Gateway 各有独立 composition。Gateway 的 `src/http/` 同样遵守薄协议入口边界。
+- API、Admin API、Worker、Ops、Gateway 各有独立 composition。Gateway 的 `src/http/` 同样遵守薄协议入口边界。
 
 ### Composition 与 Port
 
@@ -144,7 +145,7 @@ Redis 领取和 lease、确认与新 transition 原子协调，旧 worker 不能
 旧调度记录补齐年龄时保留可恢复的最早观察，后续 lease/backoff 不重置年龄。
 
 专用 Subject Access repair 仍需数据库写权限；文档工作的 stale 参数不改变 intent 的服务端时间阈值。
-部署方负责外部周期调度和告警，把 stale 阈值、等待下一轮及有界排空计入恢复时限。
+部署方负责配置 Worker 内置周期 repair 和告警，把 stale 阈值、等待下一轮及有界排空计入恢复时限。
 步骤见[数据维护](../releases/data-maintenance.md)，关键行为见
 [操作许可测试](../../packages/api-core/test-integration/subject-access/subject-access-operation-kernel.integration.test.ts)。
 
@@ -298,7 +299,7 @@ Internal 搜索与精确详情直接读取当前 schema 已发布目录，返回
 正式用户 PG gate 在一个 REPEATABLE READ READ ONLY 事务完整核对全部源用户、文档/墓碑、Outbox、Rebuild State、主及后续处理凭据、源事实与孤立记录；Redis gate 用一致 PG 库存检查完整 Facts/墓碑与屏障。两者只读、不入队、不修复，Backfill 原因码不是就绪条件。不能跳过删除用户或仅核对数量。
 用户 PG gate 复用逐对象构建结果，将已知源完整性与 schema 问题按用户汇总并继续后续分页；数据库、Redis、未知构建异常或构建结果覆盖不完整仍中断核验。
 取消信号传入清单查询、分页、构建批次和 Redis 检查，在关键读取前后检查；取消后不再启动后续工作，也不返回完整核验报告。
-数据库回退需匹配旧制品与备份，不删除 migration journal 重放迁移。维护见[数据维护](../releases/data-maintenance.md)，接线验证见[Worker 维护测试](../../apps/worker/test-integration/user-document/user-document-maintenance.integration.test.ts)。
+数据库回退需匹配旧制品与备份，不删除 migration journal 重放迁移。维护见[数据维护](../releases/data-maintenance.md)，接线验证见[Ops 维护测试](../../apps/ops/test-integration/user-document/user-document-maintenance.integration.test.ts)。
 
 Employment verifier 独立以一致只读快照检查任职及父对象，报告 blocker；不推断历史结束时间或生成修复 SQL。
 
@@ -344,12 +345,23 @@ Internal 用户查询、组织搜索和委托解析分别使用专用数据库�
 Worker 通过公开 workspace package 复用业务能力，不导入 API 私有实现。
 Worker composition 拥有模块选择、队列注册、consumer、health/readiness、Bull Board 和关闭顺序。
 未知模块启动失败；模块反序关闭，信号由 app 处理，业务包不持有进程生命周期。
-命令按实际需要使用窄 composition：重建复用普通发布路径，核验使用独立只读连接，Redis 维护不加载无关数据库或队列。
+Ops 统一 `iam-ops` CLI 使用独立的 `IAM_OPS_*` 配置和 `apps/ops/.env`，按所选命令校验实际所需资源，不读取 Worker 配置或接受旧维护别名。Ops 与 Worker 不导入对方或其他 app 的私有源码。
+人工命令按实际需要使用窄 composition：重建复用普通发布路径，核验使用独立只读连接，Redis 维护不加载无关数据库或队列。
 
 启用 User Document 或 Organization Document consumer 的 Worker 可通过各自的环境变量开启周期 repair，
 启动时运行首轮，上一轮结束后按配置间隔运行下一轮。两类调度共用实现并独立运行，一类失败不阻塞另一类。
-每轮使用现有 repair 命令的独立进程与连接，保留限额、deadline、完整恢复顺序及后处理尝试预算；超时不重放源业务写入。
-Worker 停机先停止调度并终止、等待所属 repair 进程，再关闭常驻资源；轮次清理失败则停止后续调度并记录错误。
+每轮启动 Worker 自有的私有 repair 子进程，使用本轮显式输入与独立连接，保留限额、deadline、完整恢复顺序及后处理尝试预算；超时不重放源业务写入。
+Worker 停机先停止调度并终止、等待所属 repair 进程，再确认该轮 PostgreSQL invocation 已关闭，随后关闭常驻资源。
+每轮连接 UUID 由父进程持有并显式传给子进程；强制终止绕过子进程信号处理时，父进程仍通过数据库 owner 精确取消并在返回前确认清理。
+轮次清理失败则停止该类后续调度；停机时保留失败，不把进程退出或稍后的 SQL timeout 当作清理成功。
+人工入口与自动子进程通过 User Document、Organization Document 各自的 `/maintenance` 公开出口复用维护能力。
+User Document owner 统一编排 stale transition 回收、backlog 观察、transition 恢复、Document/后处理与 Subject Access 修复和结果汇总。
+app 显式装配依赖、注册信号并呈现报告；领域接口不读取 app 配置或持有进程生命周期。
+PostgreSQL invocation 的独立连接、语句超时及精确取消由 `@iam/db/maintenance` 拥有；
+离线 Redis、deadline、显式信号接入及聚合关闭由 `@iam/api-core/maintenance` 拥有，队列仍由 `@iam/jobs` 拥有。
+原始执行失败和必需关闭失败均保留；自动子进程的资源清理失败同样停止后续轮次。
+Windows standalone Worker 配套同目录的 `windows-job-launcher.exe` 与 `windows-job-supervisor.ps1`；
+源码运行继续使用既有 Bun/Node Job launcher，两个形态都通过同一 Job 所有权和关闭实现管理子进程。
 对应开关关闭、未启用该 consumer 或 dashboard-only 时不启动该周期任务。多实例复用持久领取和版本仲裁，不依赖进程内计时器实现跨实例互斥。
 接线见[周期恢复](../../apps/worker/src/composition/document-repair-schedule.ts)，配置与运行检查见[数据维护](../releases/data-maintenance.md#周期任务与监控)。
 

@@ -14,19 +14,11 @@ import {
 import type { db as database } from "@iam/db";
 import type { BullMqRedisConfig, CreateJobQueueInput, CreateJobWorkerInput, JobQueue } from "@iam/jobs";
 import { createJobQueue, createJobWorker } from "@iam/jobs";
-import { createOrganizationResponsibilityResolver } from "@iam/organization-responsibility-resolution";
-import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
-import { createUserDocumentBuilder, parseUserDocumentRow } from "../build/user-document-builder";
-import type { DocumentFactsCacheRecord, PublishedUserDocument } from "../document";
-import {
-  createDocumentFactsCacheRecord,
-  DocumentFactsCacheRecordSchema,
-  USER_DOCUMENT_SCHEMA_VERSION,
-} from "../document";
+import type { PublishedUserDocument } from "../document";
 import { createUserDocumentJobProducer } from "../invalidation/user-document-job.producer";
 import type { SubjectFactsRedisClient } from "../subject-facts/subject-facts-redis-publisher.core";
 import type { UserDocumentProjectionBundle } from "./user-document-projection";
-import { createUserDocumentProjectionBundle } from "./user-document-projection";
+import { createCurrentUserDocumentProjectionBundle } from "./user-document-projection";
 import type { SubjectAccessRepairPort } from "./user-document-rebuild.processor";
 import { createUserDocumentUpdateProcessor } from "./user-document-update.processor";
 
@@ -189,27 +181,6 @@ export interface UserDocumentWorkerModule {
   }>;
   startConsumers: () => Promise<void>;
   close: () => Promise<void>;
-}
-
-export function createCurrentUserDocumentProjectionBundle() {
-  return createUserDocumentProjectionBundle<PublishedUserDocument, DocumentFactsCacheRecord>({
-    schemaVersion: USER_DOCUMENT_SCHEMA_VERSION,
-    parseDocumentRow: parseUserDocumentRow,
-    createBuilder(input) {
-      return createUserDocumentBuilder({
-        db: input.db,
-        roleAssignmentResolver: createRoleAssignmentResolver(input.db),
-        responsibilityResolver: createOrganizationResponsibilityResolver(input.db),
-        clock: input.clock,
-        config: { batchSize: input.batchSize },
-        signal: input.signal,
-      });
-    },
-    createFactsRecord(profile) {
-      return createDocumentFactsCacheRecord(profile);
-    },
-    parseFactsRecord: (input) => DocumentFactsCacheRecordSchema.parse(input),
-  });
 }
 
 export function createUserDocumentWorkerModule(input: CreateUserDocumentWorkerModuleInput): UserDocumentWorkerModule {

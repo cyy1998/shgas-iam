@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
+import { copyFile, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { createLogger, LoggerSourceApp } from "@iam/api-core/logger";
@@ -7,12 +9,14 @@ import { createSubjectAccessBootstrap } from "@iam/api-core/subject-access";
 import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
 import {
   createBoundedProcessLogCapture,
+  runProcessCommandSmoke,
   runProcessSmoke,
   spawnOwnedProcessTree,
   withOwnedTemporaryDirectory,
 } from "@iam/api-core/testing/process-smoke-harness";
 import { createUnitOfWork } from "@iam/api-core/uow";
 import { UserStatus } from "@iam/contracts";
+import { closeMaintenancePostgresInvocation, createMaintenancePostgresResources } from "@iam/db/maintenance";
 import { users } from "@iam/db/schema";
 import { createSubjectFactsRedisCache, DocumentFactsCacheRecordSchema } from "@iam/user-document";
 import { createUserDocumentInvalidation } from "@iam/user-document/producer";
@@ -30,34 +34,40 @@ const logger = createLogger({
   logFormat: "json",
 });
 
-test("the production Worker automatically repairs a lost Outbox wake and publishes Document and Facts", async () => {
-  await withFixture(async (fixture) => {
-    const result = await runProcessSmoke({
-      label: "scheduled User Document repair production entry",
-      start: () => fixture.startEntry(),
-      childReadinessEvidence: "worker started",
-      readinessTimeoutMs: 15_000,
-      cleanupTimeoutMs: 5_000,
-      probe: async () => {
-        const document = await fixture.published();
-        return document?.document_name === "Scheduled user" && document.post_publication_status === "processed"
-          ? document
-          : undefined;
-      },
-    });
-    const storedFacts = await createSubjectFactsRedisCache(fixture.redis.observer).read(fixture.subject);
-    const facts = storedFacts === null ? null : DocumentFactsCacheRecordSchema.parse(JSON.parse(storedFacts));
-    const [outbox] = await fixture.pg.sql`SELECT status FROM user_document_outbox`;
-    expect(result.document_name).toBe("Scheduled user");
-    expect(outbox?.status).toBe("processed");
-    expect(facts).toMatchObject({
-      kind: "document",
-      subjectIdentifier: fixture.subject,
-      sourceVersion: result.source_version,
-      facts: { profile: { name: "Scheduled user" } },
-    });
-  });
-}, 30_000);
+for (const standalone of [false, true])
+  test.skipIf(standalone && process.platform !== "win32")(
+    `the production Worker automatically repairs a lost Outbox wake and publishes Document and Facts (${standalone ? "standalone" : "source"})`,
+    async () => {
+      await withFixture(async (fixture) => {
+        if (standalone) await fixture.buildStandalone();
+        const result = await runProcessSmoke({
+          label: "scheduled User Document repair production entry",
+          start: () => fixture.startEntry(),
+          childReadinessEvidence: "worker started",
+          readinessTimeoutMs: 15_000,
+          cleanupTimeoutMs: 5_000,
+          probe: async () => {
+            const document = await fixture.published();
+            return document?.document_name === "Scheduled user" && document.post_publication_status === "processed"
+              ? document
+              : undefined;
+          },
+        });
+        const storedFacts = await createSubjectFactsRedisCache(fixture.redis.observer).read(fixture.subject);
+        const facts = storedFacts === null ? null : DocumentFactsCacheRecordSchema.parse(JSON.parse(storedFacts));
+        const [outbox] = await fixture.pg.sql`SELECT status FROM user_document_outbox`;
+        expect(result.document_name).toBe("Scheduled user");
+        expect(outbox?.status).toBe("processed");
+        expect(facts).toMatchObject({
+          kind: "document",
+          subjectIdentifier: fixture.subject,
+          sourceVersion: result.source_version,
+          facts: { profile: { name: "Scheduled user" } },
+        });
+      });
+    },
+    30_000,
+  );
 
 for (const selection of [
   { name: "disabled", enabled: "false", modules: "user-document", dashboard: "false" },
@@ -105,7 +115,7 @@ for (const selection of [
 
 test("stopping a blocked repair child is bounded and preserves the active consumer's shared resources", async () => {
   await withFixture(async (fixture) => {
-    const env = fixture.parsedEnv({ IAM_WORKER_USER_DOCUMENT_REPAIR_DEADLINE_MS: "3000" });
+    const env = fixture.parsedEnv({ IAM_WORKER_USER_DOCUMENT_REPAIR_DEADLINE_MS: "60000" });
     const consumer = createUserDocumentWorkerModule({
       db: fixture.pg.db,
       redis: env.redis,
@@ -117,7 +127,7 @@ test("stopping a blocked repair child is bounded and preserves the active consum
       },
       logger,
       clock: { nowDate: () => new Date() },
-      config: env.userDocument,
+      config: { ...env.userDocument, backfillBatchSize: env.userDocument.repair.limit },
     });
     fixture.stopExecutors.push(consumer.close);
     await consumer.startConsumers();
@@ -125,6 +135,21 @@ test("stopping a blocked repair child is bounded and preserves the active consum
     fixture.stopExecutors.push(() => schedule?.close());
     await fixture.pg.sql.begin(async (tx) => {
       await tx`LOCK TABLE user_document_outbox IN ACCESS EXCLUSIVE MODE`;
+      const peer = createMaintenancePostgresResources({
+        databaseUrl: fixture.pg.commandDatabaseUrl,
+        deadlineMs: 60_000,
+        scope: "organization",
+      });
+      fixture.stopExecutors.push(() => peer.close("fixture-cleanup"));
+      const peerOutcome = (async () => await peer.db.execute("SELECT count(*) FROM user_document_outbox"))().then(
+        (result) => ({ result }),
+        (error: unknown) => ({ error }),
+      );
+      await waitUntil(async () => {
+        const rows = await fixture.pg.sql`SELECT pid FROM pg_stat_activity
+          WHERE application_name=${peer.applicationName} AND state='active' AND wait_event_type='Lock'`;
+        return rows.length === 1;
+      });
       schedule = startDocumentRepairSchedule({ document: "user", env, enabledModuleKeys: ["user-document"], logger });
       let commandOwner: string | undefined;
       await waitUntil(async () => {
@@ -140,10 +165,17 @@ test("stopping a blocked repair child is bounded and preserves the active consum
       expect(performance.now() - started).toBeLessThan(6_000);
       const owner = commandOwner;
       if (owner === undefined) throw new Error("The active repair command did not expose its PostgreSQL owner");
-      await waitUntil(async () => {
-        const sessions = await fixture.pg.sql`SELECT pid FROM pg_stat_activity WHERE application_name=${owner}`;
-        return sessions.length === 0;
-      });
+      // Both the lock and the independent same-role peer are still live here.
+      // SQL timeout is 60s, so it cannot stand in for the <6s shutdown budget.
+      const sessions = await fixture.pg.sql`SELECT pid,state,wait_event_type,query_start,application_name
+        FROM pg_stat_activity WHERE application_name=${owner} OR application_name=${`${owner}-cancel`}`;
+      const peers = await fixture.pg.sql`SELECT pid,state,wait_event_type FROM pg_stat_activity
+        WHERE application_name=${peer.applicationName}`;
+      expect([...peers]).toMatchObject([{ state: "active", wait_event_type: "Lock" }]);
+      expect([...sessions]).toEqual([]);
+      await peer.close("deadline");
+      const canceledPeer = await peerOutcome;
+      expect(canceledPeer).toHaveProperty("error");
     });
 
     const repaired = await consumer.maintenance.repairFailedOrStale({ staleBefore: new Date(), limit: 10 });
@@ -155,6 +187,134 @@ test("stopping a blocked repair child is bounded and preserves the active consum
     expect(ping).toBe("PONG");
   });
 }, 25_000);
+
+test("the production Worker's shutdown listener waits for its blocked repair database owner and preserves a peer", async () => {
+  await withFixture(async (fixture) => {
+    const peer = createMaintenancePostgresResources({
+      databaseUrl: fixture.pg.commandDatabaseUrl,
+      deadlineMs: 60_000,
+      scope: "organization",
+    });
+    fixture.stopExecutors.push(() => peer.close("fixture-cleanup"));
+    await fixture.pg.sql.begin(async (tx) => {
+      await tx`LOCK TABLE user_document_outbox IN ACCESS EXCLUSIVE MODE`;
+      const peerOutcome = (async () => await peer.db.execute("SELECT count(*) FROM user_document_outbox"))().then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      await waitUntil(async () => {
+        const rows = await fixture.pg.sql`SELECT pid FROM pg_stat_activity
+          WHERE application_name=${peer.applicationName} AND wait_event_type='Lock'`;
+        return rows.length === 1;
+      });
+      const completion = runProcessCommandSmoke({
+        label: "production Worker shutdown listener",
+        completionTimeoutMs: 15000,
+        cleanupTimeoutMs: 5000,
+        start: () => fixture.startInterruptibleEntry({ IAM_WORKER_USER_DOCUMENT_REPAIR_DEADLINE_MS: "60000" }),
+      });
+      void completion.catch(() => {});
+      let owner: string | undefined;
+      try {
+        await waitUntil(async () => {
+          const [row] = await fixture.pg.sql<
+            { application_name: string }[]
+          >`SELECT application_name FROM pg_stat_activity
+            WHERE application_name LIKE 'iam-user-%' AND wait_event_type='Lock'`;
+          owner = row?.application_name;
+          return owner !== undefined;
+        });
+        const started = performance.now();
+        await fixture.requestInterrupt();
+        const result = await completion;
+        const sessions = await fixture.pg.sql`SELECT pid FROM pg_stat_activity
+          WHERE application_name=${owner!} OR application_name=${`${owner!}-cancel`}`;
+        const peers = await fixture.pg.sql`SELECT state,wait_event_type FROM pg_stat_activity
+          WHERE application_name=${peer.applicationName}`;
+        expect(performance.now() - started).toBeLessThan(6000);
+        expect(result.output).toContain("worker shutting down");
+        expect([...sessions]).toEqual([]);
+        expect([...peers]).toMatchObject([{ state: "active", wait_event_type: "Lock" }]);
+      } finally {
+        await fixture.requestInterrupt();
+        await completion;
+      }
+      await peer.close("fixture-cleanup");
+      const peerFailure = await peerOutcome;
+      expect(peerFailure).toHaveProperty("cause");
+    });
+  });
+}, 25000);
+
+test("the production Worker exits unsuccessfully when shutdown cannot cancel its stopped child's database invocation", async () => {
+  await withFixture(async (fixture) => {
+    await runWithOwnedTestResources(async ({ registerCleanup }) => {
+      const role = `iam_shutdown_${randomUUID().replaceAll("-", "")}`;
+      const password = randomUUID();
+      const target = new URL(fixture.pg.commandDatabaseUrl);
+      target.username = role;
+      target.password = password;
+      let owner: string | undefined;
+      await fixture.pg.sql.unsafe(`CREATE ROLE "${role}" LOGIN PASSWORD '${password}'`);
+      registerCleanup(async () => {
+        await fixture.pg.sql.unsafe(`DROP ROLE "${role}"`);
+      });
+      registerCleanup(async () => {
+        await fixture.pg.sql.unsafe(`DROP OWNED BY "${role}"`);
+      });
+      registerCleanup(async () => {
+        await fixture.pg.sql`GRANT EXECUTE ON FUNCTION pg_catalog.pg_cancel_backend(integer) TO PUBLIC`;
+        if (owner)
+          await closeMaintenancePostgresInvocation({
+            databaseUrl: target.toString(),
+            scope: "user",
+            invocationId: owner.slice("iam-user-".length),
+          });
+        const remaining = await fixture.pg.sql`SELECT pid FROM pg_stat_activity WHERE usename=${role}`;
+        expect([...remaining]).toEqual([]);
+      });
+      await fixture.pg.sql.unsafe(`GRANT USAGE ON SCHEMA "${fixture.pg.schemaName}" TO "${role}"`);
+      await fixture.pg.sql.unsafe(`GRANT ALL ON ALL TABLES IN SCHEMA "${fixture.pg.schemaName}" TO "${role}"`);
+      await fixture.pg.sql.unsafe(`GRANT ALL ON ALL SEQUENCES IN SCHEMA "${fixture.pg.schemaName}" TO "${role}"`);
+      await fixture.pg.sql`REVOKE EXECUTE ON FUNCTION pg_catalog.pg_cancel_backend(integer) FROM PUBLIC`;
+      await fixture.pg.sql.begin(async (tx) => {
+        await tx`LOCK TABLE user_document_outbox IN ACCESS EXCLUSIVE MODE`;
+        const completion = runProcessCommandSmoke({
+          label: "production Worker required shutdown failure",
+          completionTimeoutMs: 15000,
+          cleanupTimeoutMs: 5000,
+          expectedExitCode: 1,
+          start: () =>
+            fixture.startInterruptibleEntry({
+              IAM_WORKER_DATABASE_URL: target.toString(),
+              IAM_WORKER_USER_DOCUMENT_REPAIR_DEADLINE_MS: "60000",
+            }),
+        });
+        void completion.catch(() => {});
+        try {
+          await waitUntil(async () => {
+            const [row] = await fixture.pg.sql<
+              { application_name: string }[]
+            >`SELECT application_name FROM pg_stat_activity
+              WHERE usename=${role} AND application_name LIKE 'iam-user-%' AND wait_event_type='Lock'`;
+            owner = row?.application_name;
+            return owner !== undefined;
+          });
+          await fixture.requestInterrupt();
+          const outcome = await completion;
+          expect(outcome.exitCode).toBe(1);
+          expect(outcome.output).toContain("worker shutting down");
+          const unconfirmed = await fixture.pg.sql`SELECT state,wait_event_type FROM pg_stat_activity
+            WHERE application_name=${owner!}`;
+          expect([...unconfirmed]).toMatchObject([{ state: "active", wait_event_type: "Lock" }]);
+        } finally {
+          await fixture.requestInterrupt();
+          await completion;
+        }
+      });
+    });
+  });
+}, 25000);
 
 async function withFixture(work: (fixture: Awaited<ReturnType<typeof createFixture>>) => Promise<void>) {
   await withOwnedTemporaryDirectory({
@@ -210,6 +370,8 @@ async function createFixture(temporaryDirectory: string, stopExecutors: Array<()
     [{ subjectIdentifier: subject, state: "enabled" }],
     new Date(),
   );
+  let standaloneExecutable: string | undefined;
+  const interruptFile = join(temporaryDirectory, "interrupt-worker");
   function environment(overrides: NodeJS.ProcessEnv = {}) {
     return {
       ...redis.commandEnvironment(temporaryDirectory),
@@ -231,13 +393,67 @@ async function createFixture(temporaryDirectory: string, stopExecutors: Array<()
     redis,
     subject,
     stopExecutors,
+    async buildStandalone() {
+      const repositoryRoot = resolve(workerRoot, "../..");
+      standaloneExecutable = join(temporaryDirectory, "worker.exe");
+      for (const [entry, output] of [
+        [join(workerRoot, "src/index.ts"), standaloneExecutable],
+        [
+          join(repositoryRoot, "packages/api-core/src/process/windows-job-launcher.mjs"),
+          join(temporaryDirectory, "windows-job-launcher.exe"),
+        ],
+      ]) {
+        if (!entry || !output) throw new Error("Missing standalone build input");
+        await runProcessCommandSmoke({
+          label: "compile Worker repair standalone fixture",
+          completionTimeoutMs: 20000,
+          cleanupTimeoutMs: 5000,
+          start: () =>
+            spawnOwnedProcessTree({
+              executable: process.execPath,
+              args: [
+                "build",
+                entry,
+                "--compile",
+                "--packages=bundle",
+                "--no-compile-autoload-dotenv",
+                "--no-compile-autoload-bunfig",
+                "--windows-hide-console",
+                `--outfile=${output}`,
+              ],
+              cwd: workerRoot,
+              env: process.env,
+            }),
+        });
+      }
+      await copyFile(
+        join(repositoryRoot, "packages/api-core/src/process/windows-job-supervisor.ps1"),
+        join(temporaryDirectory, "windows-job-supervisor.ps1"),
+      );
+    },
     startEntry(overrides: NodeJS.ProcessEnv = {}) {
       return spawnOwnedProcessTree({
-        executable: process.execPath,
-        args: ["--no-env-file", "run", "src/index.ts"],
+        executable: standaloneExecutable ?? process.execPath,
+        args: standaloneExecutable ? [] : ["--no-env-file", "run", "src/index.ts"],
         cwd: workerRoot,
         env: environment(overrides),
       });
+    },
+    startInterruptibleEntry(overrides: NodeJS.ProcessEnv = {}) {
+      return spawnOwnedProcessTree({
+        executable: process.execPath,
+        args: [
+          "--no-env-file",
+          "--preload=./test-integration/support/interrupt-worker.fixture.ts",
+          "run",
+          "src/index.ts",
+        ],
+        cwd: workerRoot,
+        env: environment({ ...overrides, IAM_WORKER_TEST_INTERRUPT_FILE: interruptFile }),
+      });
+    },
+    requestInterrupt() {
+      return writeFile(interruptFile, "stop", "utf8");
     },
     parsedEnv(overrides: NodeJS.ProcessEnv = {}) {
       const previous = process.env.DATABASE_URL;

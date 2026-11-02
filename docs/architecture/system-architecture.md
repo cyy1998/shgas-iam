@@ -15,6 +15,7 @@ flowchart LR
     api["API · Bun / Hono"]
     admin["Admin API · Bun / Hono"]
     worker["Worker · Bun"]
+    ops["Ops · 一次性 Bun CLI"]
     gatewayApi["Gateway 配置 API · Bun / Hono"]
   end
 
@@ -39,6 +40,8 @@ flowchart LR
   api --> redis
   admin --> redis
   worker --> redis
+  ops --> pg
+  ops --> redis
   api --> integrations["短信 / 企业微信"]
 ```
 
@@ -59,7 +62,8 @@ flowchart LR
 Gateway 去除 `/api/iam` 前缀后转发。IAM 自身路由不统一使用 forward-auth；接入业务是否使用它，以各自 manifest 为准。
 经过 Gateway 不代表完成认证或授权。
 
-Worker 消费队列并承担重建、修复和核验；其 HTTP 仅用于健康状态及可选 Bull Board。
+Worker 消费队列并承担周期恢复；其 HTTP 仅用于健康状态及可选 Bull Board。
+Ops 提供一次性 `iam-ops` 人工重建、修复和核验，按命令独立连接 PostgreSQL/Redis；需要重新唤醒的工作仍由匹配版本 consumer 收敛。
 Gateway 配置 API 是独立入口，首次发布可直连，通过固定 APISIX Admin API 目标发布配置；HTTP health 只表示服务就绪。
 
 ## 信任边界
@@ -77,17 +81,17 @@ Gateway 配置 API 是独立入口，首次发布可直连，通过固定 APISIX
 
 ## 数据权威来源与恢复责任
 
-| 数据或状态                           | 权威来源                                                         | 恢复责任                                         |
-| ------------------------------------ | ---------------------------------------------------------------- | ------------------------------------------------ |
-| 用户、任职、组织、角色、Client       | PostgreSQL 业务表                                                | 业务入口维护源事实                               |
-| User Document / Subject Facts        | PostgreSQL Document、Outbox 与 Rebuild State                     | 读模型与 Worker 重建发布；Facts reader 修复缓存  |
-| Organization Search                  | PostgreSQL Outbox、Rebuild State、文档与墓碑                     | 独立读模型与 Worker 恢复两阶段工作               |
-| UserSession、ClientSession、登录限制 | Redis 实时状态                                                   | Kernel / LoginRestriction；丢失后不能从审计重建  |
-| Subject Access                       | Redis 请求时屏障，恢复依据为 PostgreSQL 账号和 transition intent | 生命周期协调器与 Worker 对照当前 Facts 收敛      |
-| Client Snapshot                      | PostgreSQL Client 配置                                           | Snapshot 模块维护缓存，Worker 执行修复与独立核验 |
-| 重建队列                             | PostgreSQL 保存待处理事实                                        | 队列负责唤醒，repair 补偿丢失的唤醒              |
-| 审计与运行日志                       | PostgreSQL 审计记录、Loki 应用日志                               | 各应用写入，Alloy 采集日志                       |
-| Gateway 配置                         | 调用方保管源 YAML，APISIX/etcd 保存实际配置                      | Gateway 进程内补偿；未知或崩溃后人工恢复         |
+| 数据或状态                           | 权威来源                                                         | 恢复责任                                        |
+| ------------------------------------ | ---------------------------------------------------------------- | ----------------------------------------------- |
+| 用户、任职、组织、角色、Client       | PostgreSQL 业务表                                                | 业务入口维护源事实                              |
+| User Document / Subject Facts        | PostgreSQL Document、Outbox 与 Rebuild State                     | 读模型与 Worker 重建发布；Facts reader 修复缓存 |
+| Organization Search                  | PostgreSQL Outbox、Rebuild State、文档与墓碑                     | 独立读模型与 Worker 恢复两阶段工作              |
+| UserSession、ClientSession、登录限制 | Redis 实时状态                                                   | Kernel / LoginRestriction；丢失后不能从审计重建 |
+| Subject Access                       | Redis 请求时屏障，恢复依据为 PostgreSQL 账号和 transition intent | 生命周期协调器与 Worker 对照当前 Facts 收敛     |
+| Client Snapshot                      | PostgreSQL Client 配置                                           | Snapshot 模块维护缓存，Ops 执行修复与独立核验   |
+| 重建队列                             | PostgreSQL 保存待处理事实                                        | 队列负责唤醒，repair 补偿丢失的唤醒             |
+| 审计与运行日志                       | PostgreSQL 审计记录、Loki 应用日志                               | 各应用写入，Alloy 采集日志                      |
+| Gateway 配置                         | 调用方保管源 YAML，APISIX/etcd 保存实际配置                      | Gateway 进程内补偿；未知或崩溃后人工恢复        |
 
 读模型不能反向成为源业务事实。Redis 同时承载缓存和权威登录状态，恢复必须按 owner 区分：
 Facts 可以重建，登录态不能重造，访问屏障缺失时拒绝访问；Snapshot 从备份恢复后须停流全量修复并独立核验。

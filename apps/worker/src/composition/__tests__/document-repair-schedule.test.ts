@@ -95,6 +95,7 @@ test("a User Document cleanup failure does not stop Organization Document repair
   const thirdOrganizationRound = Promise.withResolvers<void>();
   let userCalls = 0;
   let organizationCalls = 0;
+  const cleanupError = new Error("This invocation could not be confirmed closed");
   const userSchedule = startDocumentRepairSchedule({
     document: "user",
     env,
@@ -102,7 +103,7 @@ test("a User Document cleanup failure does not stop Organization Document repair
     logger: logger(),
     async run() {
       userCalls += 1;
-      return { status: "cleanup-failed", failureKind: "cleanup" };
+      return { status: "cleanup-failed", failureKind: "cleanup", error: cleanupError };
     },
   });
   const organizationSchedule = startDocumentRepairSchedule({
@@ -124,6 +125,8 @@ test("a User Document cleanup failure does not stop Organization Document repair
     expect(userCalls).toBe(1);
     expect(organizationCalls).toBe(3);
   } finally {
-    await Promise.all([userSchedule.close(), organizationSchedule.close()]);
+    const closed = await Promise.allSettled([userSchedule.close(), organizationSchedule.close()]);
+    expect(closed[0]).toMatchObject({ status: "rejected", reason: cleanupError });
+    expect(closed[1]).toMatchObject({ status: "fulfilled" });
   }
 });

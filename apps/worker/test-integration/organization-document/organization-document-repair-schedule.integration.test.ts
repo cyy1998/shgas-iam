@@ -162,6 +162,101 @@ test("an Organization repair deadline does not block User repair and a later Org
   });
 }, 30_000);
 
+test("a real repair cleanup failure stops only that schedule and leaves the other Document recovery running", async () => {
+  await withFixture(async (fixture) => {
+    await fixture.seedUser();
+    await runWithOwnedTestResources(async ({ registerCleanup }) => {
+      const role = `iam_cleanup_${randomUUID().replaceAll("-", "")}`;
+      const password = randomUUID();
+      const databaseUrl = new URL(fixture.pg.commandDatabaseUrl);
+      databaseUrl.username = role;
+      databaseUrl.password = password;
+      await fixture.pg.sql.unsafe(`CREATE ROLE "${role}" LOGIN PASSWORD '${password}'`);
+      let lock: Promise<unknown> | undefined;
+      let release = () => {};
+      let logs: ReturnType<typeof createBoundedProcessLogCapture> | undefined;
+      registerCleanup(async () => {
+        await fixture.pg.sql.unsafe(`DROP ROLE "${role}"`);
+      });
+      registerCleanup(async () => {
+        await fixture.pg.sql.unsafe(`DROP OWNED BY "${role}"`);
+      });
+      registerCleanup(async () => {
+        await fixture.pg.sql`GRANT EXECUTE ON FUNCTION pg_catalog.pg_cancel_backend(integer) TO PUBLIC`;
+      });
+      registerCleanup(() => logs?.dispose());
+      registerCleanup(async () => {
+        release();
+        if (lock) {
+          const failure = await lock;
+          if (failure) throw failure;
+        }
+      });
+      await fixture.pg.sql.unsafe(`GRANT USAGE ON SCHEMA "${fixture.pg.schemaName}" TO "${role}"`);
+      await fixture.pg.sql.unsafe(`GRANT ALL ON ALL TABLES IN SCHEMA "${fixture.pg.schemaName}" TO "${role}"`);
+      await fixture.pg.sql.unsafe(`GRANT ALL ON ALL SEQUENCES IN SCHEMA "${fixture.pg.schemaName}" TO "${role}"`);
+      // A real control-connection permission failure, isolated to this disposable database.
+      await fixture.pg.sql`REVOKE EXECUTE ON FUNCTION pg_catalog.pg_cancel_backend(integer) FROM PUBLIC`;
+      const acquired = Promise.withResolvers<void>();
+      const releaseGate = Promise.withResolvers<void>();
+      release = () => releaseGate.resolve();
+      lock = fixture.pg.sql
+        .begin(async (tx) => {
+          await tx`LOCK TABLE organization_document_outbox IN ACCESS EXCLUSIVE MODE`;
+          acquired.resolve();
+          await releaseGate.promise;
+        })
+        .then(
+          () => undefined,
+          (error: unknown) => error,
+        );
+      await acquired.promise;
+      let cleanupObservedAt: number | undefined;
+      const result = await runProcessSmoke({
+        label: "required cleanup failure stops one production schedule",
+        start() {
+          const child = fixture.startEntry({
+            IAM_WORKER_DATABASE_URL: databaseUrl.toString(),
+            IAM_WORKER_ENABLED_MODULES: "user-document,organization-document",
+            IAM_WORKER_USER_DOCUMENT_REPAIR_ENABLED: "true",
+            IAM_WORKER_USER_DOCUMENT_REPAIR_INTERVAL_MS: "100",
+            IAM_WORKER_USER_DOCUMENT_REPAIR_LIMIT: "10",
+            IAM_WORKER_USER_DOCUMENT_REPAIR_DEADLINE_MS: "5000",
+            IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_DEADLINE_MS: "1000",
+          });
+          logs = createBoundedProcessLogCapture(child, { maxBytes: 131072 });
+          return child;
+        },
+        childReadinessEvidence: "worker started",
+        readinessTimeoutMs: 15000,
+        cleanupTimeoutMs: 5000,
+        probe: async () => {
+          const output = logs?.snapshot() ?? "";
+          if (!output.includes('"event":"organization_document.repair.cleanup-failed"')) return;
+          cleanupObservedAt ??= performance.now();
+          release();
+          const lockFailure = await lock;
+          if (lockFailure) throw lockFailure;
+          const [user] = await fixture.pg.sql`SELECT document->>'name' AS name,post_publication_status
+            FROM user_document JOIN user_document_rebuild_state USING (user_id) WHERE user_id=1`;
+          if (user?.name !== "Scheduled user" || user.post_publication_status !== "processed") return;
+          // Observe several possible Organization intervals after cleanup failed, with its lock released.
+          if (performance.now() - cleanupObservedAt < 500) return;
+          const [outbox] = await fixture.pg.sql`SELECT status FROM organization_document_outbox`;
+          const organization = await fixture.published();
+          return { outbox: outbox?.status, organization, output };
+        },
+      });
+      expect(result.outbox).toBe("pending");
+      expect(result.organization).toBeUndefined();
+      expect(result.output.match(/"event":"organization_document.repair.started"/gu)).toHaveLength(1);
+      expect(result.output).toContain('"exitCode":70');
+      const sessions = await fixture.pg.sql`SELECT pid FROM pg_stat_activity WHERE usename=${role}`;
+      expect([...sessions]).toEqual([]);
+    });
+  });
+}, 30000);
+
 async function withFixture(work: (fixture: Awaited<ReturnType<typeof createFixture>>) => Promise<void>) {
   await withOwnedTemporaryDirectory({
     prefix: "iam-organization-document-repair-schedule-",

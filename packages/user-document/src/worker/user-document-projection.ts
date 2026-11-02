@@ -1,6 +1,14 @@
 import type { DbClient } from "@iam/db";
+import { createOrganizationResponsibilityResolver } from "@iam/organization-responsibility-resolution";
+import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import type { DocumentBuildResult } from "../build/document-builder.service";
-import type { PublishedUserDocument } from "../document";
+import { createUserDocumentBuilder, parseUserDocumentRow } from "../build/user-document-builder";
+import type { DocumentFactsCacheRecord, PublishedUserDocument } from "../document";
+import {
+  createDocumentFactsCacheRecord,
+  DocumentFactsCacheRecordSchema,
+  USER_DOCUMENT_SCHEMA_VERSION,
+} from "../document";
 import { createUserDocumentRowRepository } from "../publication/user-document-row.repository";
 import type {
   CreateSubjectFactsRedisPublisherOptions,
@@ -75,4 +83,25 @@ export function createUserDocumentProjectionBundle<
       },
     },
   };
+}
+
+export function createCurrentUserDocumentProjectionBundle() {
+  return createUserDocumentProjectionBundle<PublishedUserDocument, DocumentFactsCacheRecord>({
+    schemaVersion: USER_DOCUMENT_SCHEMA_VERSION,
+    parseDocumentRow: parseUserDocumentRow,
+    createBuilder(input) {
+      return createUserDocumentBuilder({
+        db: input.db,
+        roleAssignmentResolver: createRoleAssignmentResolver(input.db),
+        responsibilityResolver: createOrganizationResponsibilityResolver(input.db),
+        clock: input.clock,
+        config: { batchSize: input.batchSize },
+        signal: input.signal,
+      });
+    },
+    createFactsRecord(profile) {
+      return createDocumentFactsCacheRecord(profile);
+    },
+    parseFactsRecord: (input) => DocumentFactsCacheRecordSchema.parse(input),
+  });
 }

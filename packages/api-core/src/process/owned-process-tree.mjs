@@ -99,13 +99,13 @@ export function spawnOwnedProcessTree(options) {
           "-ExecutionPolicy",
           "Bypass",
           "-File",
-          supervisorPath,
+          options.windowsJob?.supervisorPath ?? supervisorPath,
           "-NodeExecutable",
-          process.execPath,
+          options.windowsJob?.launcherExecutable ?? process.execPath,
           "-LauncherPath",
-          launcherPath,
+          options.windowsJob?.launcherExecutable ?? launcherPath,
           "-RuntimeKind",
-          process.versions.bun === undefined ? "node" : "bun",
+          options.windowsJob ? "executable" : process.versions.bun === undefined ? "node" : "bun",
         ]
       : options.args,
     {

@@ -66,13 +66,11 @@ function createFixture(readOnly = true) {
     userDocument: {
       concurrency: 1,
       rebuildBatchSize: 100,
-      backfillBatchSize: 500,
       repairStaleSeconds: 300,
       repair: { enabled: false, intervalMs: 60_000, limit: 500, deadlineMs: 30_000 },
     },
     organizationDocument: {
       concurrency: 2,
-      backfillBatchSize: 500,
       repairStaleSeconds: 300,
       repair: { enabled: false, intervalMs: 60_000, limit: 500, deadlineMs: 30_000 },
     },

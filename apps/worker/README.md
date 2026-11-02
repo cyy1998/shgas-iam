@@ -1,82 +1,16 @@
 # @iam/worker
 
-Background job runtime. The `user-document` and `organization-document` modules independently consume their Document BullMQ jobs. The runtime exposes a health endpoint and an optional internal Bull Board dashboard.
-
-## Commands
+Worker 常驻消费 `user-document` 与 `organization-document` 队列，提供 health/readiness 及可选内部 Bull Board，并按配置运行两类周期 repair。
 
 ```bash
+pnpm --filter @iam/worker dev
 pnpm --filter @iam/worker serve
-pnpm --filter @iam/worker employment:verify
-pnpm --filter @iam/worker user-document:backfill
-pnpm --filter @iam/worker user-document:repair
-pnpm --filter @iam/worker user-document:verify-postgres
-pnpm --filter @iam/worker user-document:verify-redis
-pnpm --filter @iam/worker organization-document:backfill
-pnpm --filter @iam/worker organization-document:repair
-pnpm --filter @iam/worker organization-document:verify
-pnpm --filter @iam/worker run user-document:repair -- --subject-access-only --limit 500
-pnpm --filter @iam/worker client-snapshot:repair -- --client-code <clientCode>
-pnpm --filter @iam/worker client-snapshot:repair -- --all --writers-stopped --drained
-pnpm --filter @iam/worker client-snapshot:verify -- --all --writers-stopped --drained
+pnpm --filter @iam/worker test:unit
+pnpm --filter @iam/worker typecheck
 ```
 
-当前 Snapshot repair/verify 使用独立 Redis composition，不创建数据库、queue、consumer 或 HTTP。
-定向 repair 同时失效普通/敏感 payload；全量恢复须停流、冻结 mutation、排空 reader/source load，
-再分别运行 repair 与 scan-only verify。资源、deadline、未知作用与放流见
-[当前维护手册](../../docs/releases/authentication-and-session.md#client-snapshot-修复)。
+配置由 [.env.example](.env.example) 和 `src/env.ts` 定义。`IAM_WORKER_ENABLED_MODULES` 支持 `all`、`none` 或模块列表；`none` 只提供 health/dashboard。Bull Board 默认只读，启用时遵守生产 Basic Auth 配置。
 
-User Document 重建、Subject Access 恢复、外部调度与告警见[Document 维护手册](../../docs/releases/data-maintenance.md)。
-旧数据升级工具及匹配版本流程见[历史命令入口](../../docs/development/commands.md#历史数据维护工具)。
+周期 repair 只在对应 consumer 和开关同时开启时运行；启动首轮，结束并确认清理后等待间隔，两类独立。每轮由 Worker 自有私有入口建立独立进程、连接和 deadline；停机先停止调度并等待 repair，再关闭常驻资源。清理失败停止后续该类轮次。配置和监控见[周期任务与监控](../../docs/releases/data-maintenance.md#周期任务与监控)。
 
-`employment:verify` 是 Employment 全库显式只读诊断。命令只要求
-`IAM_WORKER_DATABASE_URL`，不会启动 Worker consumer、HTTP server、Bull Board 或 Redis，也不会随普通 Worker 启动和请求
-自动执行。它在 PostgreSQL `READ ONLY` transaction 中读取 Employment 及其 Position、Organization，输出稳定分类和全部相关
-Employment ID；不执行 insert、update、delete，不读取或解释 `updateTime`，也不生成修复 SQL。
-
-报告为 `passed` 时命令退出 0；存在任一非墓碑阻断异常时报告为 `failed` 并退出 1。Legacy Employment Tombstone 只在
-`legacyTombstones` 中计数，不因缺少可信 `endTime` 阻断诊断。运维人员应依据真实业务事实通过正式 Admin 入口修正数据，再重跑
-同一命令；不得把 verifier 输出当作自动修复指令。
-
-`user-document:backfill` and `user-document:repair` use command-only composition: they do not start consumers, the HTTP
-server, or Bull Board. Actual document rebuilds are handled by the BullMQ worker consumer.
-
-Both repair modes run Subject Access maintenance in this order:
-
-1. A bounded, single-statement PostgreSQL write transaction reaps stale `pending` transition intents, including the
-   PG-only gap where an intent was durably created but never reached a Redis index. It uses PostgreSQL server time and
-   `IAM_WORKER_USER_DOCUMENT_REPAIR_STALE_SECONDS` (default 300 seconds) as the stale threshold, orders by `update_time`
-   and `id`, and selects at most `--limit` rows with `FOR UPDATE SKIP LOCKED`. Selected rows become
-   `rolled_back`/`rollback`; fresh rows and rows locked by an active mutation transaction are left for a later invocation.
-2. Redis transition recovery resolves indexed transition-recovery work against the exact PostgreSQL receipt under a row
-   lock. Committed receipts move Redis toward their recorded target, pending receipts are atomically rolled back before
-   Redis restores the previous record, and missing receipts are deferred rather than guessed.
-3. Subject Access authority repair claims the indexed Barrier backlog and reconciles it with PostgreSQL account,
-   Document, Rebuild State, and Subject Facts state.
-
-The default command starts User Document rebuild-state maintenance after transition recovery and runs it alongside step 3.
-`--subject-access-only` skips BullMQ queue construction and User Document maintenance, but it is not PostgreSQL read-only
-and is not limited to Redis-indexed work. Its database role needs schema access plus `SELECT` and `UPDATE` on
-`subject_access_transition`, in addition to the authority reads required by step 3. `--limit` bounds each Subject Access
-stage independently. `--stale-before` applies only to User Document rebuild states; the PG-only transition threshold always
-uses PostgreSQL server time and the seconds-based environment setting above.
-
-If the PostgreSQL reaper fails, the command exits non-zero before Redis transition recovery or authority repair. Monitor
-the structured logs `Subject Access stale transition intent reap started` (`limit`, `staleAfterSeconds`),
-`Subject Access stale transition intents reaped` (`rolledBack`, `limit`, `staleAfterSeconds`),
-`Subject Access transition recovery backlog processed` (`prepared`, `rolledBack`, `deferred`, `failed`, `limit`), and
-`Subject Access repair backlog processed` (`disabled`, `enabled`, `deferred`, `failed`, `stable`, `limit`). Alert on a
-non-zero exit, a start log without its matching completion log, or sustained non-zero `deferred`/`failed` counts.
-The repository provides no scheduler: a named deployment owner must configure periodic invocation and choose the stale
-threshold, cadence, limit, repeated drain behavior, and alerts so the threshold, wait for the next run, and bounded drain
-all fit within the documented worst-case recovery SLO.
-
-## Runtime Modes
-
-```bash
-IAM_WORKER_ENABLED_MODULES=user-document
-IAM_WORKER_ENABLED_MODULES=all
-IAM_WORKER_ENABLED_MODULES=none
-```
-
-`none` is for dashboard-only or health-only processes and does not consume jobs. Bull Board uses
-`IAM_WORKER_BULL_BOARD_*`, defaults to read-only mode, and requires Basic Auth.
+人工维护入口已迁入 [@iam/ops](../ops/README.md)，使用独立 `IAM_OPS_*`；Worker 不提供旧人工 scripts、转发入口或旧维护配置别名。人工与自动入口共用领域 `/maintenance` 能力和基础设施资源生命周期。

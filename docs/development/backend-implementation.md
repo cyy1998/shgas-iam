@@ -78,7 +78,7 @@ SSO Secret 读取必须先确认独立审计提交，再交付原文；失败不
 
 系统日志使用结构化字段：`event`、`sourceApp`、`requestId`、`traceId`，以及适用的
 `method/path/route/statusCode/durationMs`、`clientIp/userAgent` 和 `errorName/errorCode/errorMessage/source`。
-`sourceApp` 为 `iam-api`、`iam-admin-api`、`iam-worker` 或 `apisix`；网关另有 `spanId`、`traceparent`。
+`sourceApp` 为 `iam-api`、`iam-admin-api`、`iam-worker`、`iam-ops` 或 `apisix`；网关另有 `spanId`、`traceparent`。
 一般 event 使用稳定小写点分命名，不拼接请求 ID、用户标识、client code、动态业务值或原始 URL。
 OIDC 既有事件保留 `oidc_server_error`（error）和 `oidc_protocol_error`（warn），仅记录安全 code/outcome/path/status。
 
@@ -145,7 +145,7 @@ HTTP adapter 消费完整协议操作，不拼装 claims 或重建 Code/Token �
 [协议边界](../architecture/backend-architecture.md#custom-sso-与-oidc)。
 
 Bun app 的 tsconfig 包含 Bun types；app-local 非生产维护 scripts 从生产 tsconfig 排除，但仍纳入格式与 lint。
-Worker 的正式命令位于 `src/commands/`。
+人工维护命令位于 Ops 的 `src/commands/`；Worker 私有周期执行入口位于 `src/maintenance/`。
 
 ## 数据库文件约定
 

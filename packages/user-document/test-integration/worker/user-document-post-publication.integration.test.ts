@@ -7,7 +7,7 @@ import postgres from "postgres";
 import { publication } from "../../src/__tests__/document-fixture";
 import type { DocumentFactsCacheRecord } from "../../src/document";
 import { createUserDocumentPostPublicationProcessor } from "../../src/worker/user-document-post-publication.processor";
-import { createCurrentUserDocumentProjectionBundle } from "../../src/worker/user-document-worker.module";
+import { createCurrentUserDocumentProjectionBundle } from "../../src/worker/user-document-projection";
 import { createPostgresTestHarness } from "../support/postgres-test-harness";
 import { createRedisTestHarness, type RedisTestScope } from "../support/redis-test-harness";
 

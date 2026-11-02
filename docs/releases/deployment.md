@@ -2,8 +2,8 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-10-26
-Next review: 2026-11-26
+Last verified: 2026-11-03
+Next review: 2026-12-03
 
 本页覆盖当前版本首次部署、常规更新和兼容版本回退。旧 Profile/Organization Search 升级先按[统一 Document 硬切换](data-maintenance.md#统一-document-硬切换)，其他跨代来源见[独立迁移指引](README.md#一次性迁移与旧版本)。
 本地开发见[项目快速开始](../../README.md#-快速开始)；网关、登录密钥、数据重建和日志栈按[专题入口](README.md)操作。
@@ -19,11 +19,37 @@ Compose 解析时会校验所选文件的全部必填变量，即使只启动一
 | [compose.prod.apps.yaml](../../docker/compose.prod.apps.yaml)                   | API、Admin API、SSO、Admin、两个独立 Worker 和 Gateway API；dashboard 使用 `ops` profile                   |
 | [compose.prod.gateway.yaml](../../docker/compose.prod.gateway.yaml)             | APISIX、etcd 和初始化服务                                                                                  |
 | [compose.prod.observability.yaml](../../docker/compose.prod.observability.yaml) | Loki、Grafana、各主机的 Alloy，见[日志栈部署](observability-system-logs.md)                                |
+| [compose.prod.ops.yaml](../../docker/compose.prod.ops.yaml)                     | 独立一次性 Ops CLI；使用 `docker/.env.ops`，不启动应用、Worker 或数据服务                                  |
 
 核对数据库、Redis、APISIX 管理地址、DNS/TLS 和端口访问范围；跨主机使用实际可达地址。
 API/SSO 的登录公私钥和 kid 必须配对，内外网 origin、Gateway host 与 OIDC Client 配置一致。
 Gateway 需要独立数据库只读账号及 APISIX Admin 凭据；首次发布还需准备 Enable、未删除的 `iam` Client 和 Internal Secret，
 详细配置见[网关管理](apisix-gateway-release.md)。不能依赖尚未发布的 IAM 路由来访问 Gateway 配置 API。
+
+## 一次性 Ops 维护环境
+
+从 [Ops 部署模板](../../docker/.env.ops.example) 准备私有 `docker/.env.ops`。将 `IAM_OPS_IMAGE` 设为与目标应用同一发布版本的独立 Ops 镜像，
+仅提供本次命令所需的 `IAM_OPS_*` 连接、日志和命令配置。PostgreSQL-only 命令不要求 Redis，Redis-only 命令不要求 PostgreSQL；
+帮助无需连接。该文件不要求 API、Gateway 或其他应用的配置，不加入日常 apps Compose 的解析面。
+私有部署配置和源码的 `apps/ops/.env` 都不提交到 Git，也不进入 Docker 构建上下文或镜像。
+
+```bash
+docker compose --env-file docker/.env.ops -f docker/compose.prod.ops.yaml config --quiet
+docker compose --env-file docker/.env.ops -f docker/compose.prod.ops.yaml pull ops
+docker compose --env-file docker/.env.ops -f docker/compose.prod.ops.yaml run --rm --no-deps -T ops --help
+docker compose --env-file docker/.env.ops -f docker/compose.prod.ops.yaml run --rm --no-deps -T ops user-document verify-postgres
+```
+
+从匹配版本源码构建时，用同一配置的 `build ops` 代替 `pull ops`。镜像包含运行依赖，执行时无需宿主源码、pnpm 或已运行的 Worker 容器；
+服务不发布端口、不挂载数据卷、不设置依赖服务启动，命令结束后移除本次容器。各命令参数与源码 `pnpm --filter @iam/ops iam-ops` 相同，
+用法见 [Ops README](../../apps/ops/README.md)。当前维护命令与外部自动化须同次切换到 Ops 和 `IAM_OPS_*`，不保留旧 Worker 人工入口或配置别名。
+
+同一 Docker daemon 上沿用 `iam-service-prod` 的默认网络，可使用现有数据服务名；独立维护主机必须填写实际可达的 PostgreSQL、Redis 地址。
+相同 project 名不提供跨主机网络。只通过 `run --rm --no-deps` 执行一次性任务，不对这份局部 Compose 执行 `down` 或管理共享项目生命周期。
+
+执行具体维护前先读对应[数据维护](data-maintenance.md)或[会话维护](authentication-and-session.md)的停流、排空和权限要求。
+backfill、部分 repair 只登记或唤醒工作，仍须匹配版本的 consumer 收敛，再运行独立完整 gate；命令成功不能代替恢复完成或放流检查。
+失败或退出未知时保持适用的停流范围，按该能力的恢复步骤处理，再重新执行核验。
 
 ## 首次部署
 

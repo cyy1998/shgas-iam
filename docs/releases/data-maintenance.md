@@ -2,8 +2,8 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-11-02
-Next review: 2026-12-02
+Last verified: 2026-11-03
+Next review: 2026-12-03
 
 本页维护 User Document / Organization Document schema 1 与 Subject Access。命令名称以当前候选代码为准；
 完整 Spec 的目标环境硬切换、备份和受控开放仍由部署侧执行，本地测试不表示目标环境已经迁移。
@@ -11,10 +11,10 @@ Next review: 2026-12-02
 
 ## 准备资源与选择操作
 
-命令使用显式 `IAM_WORKER_DATABASE_URL`，需要 Redis 的命令还使用 `IAM_WORKER_REDIS_*`。
-脚本默认读取 `apps/worker/.env`，进程环境优先；核对实例、DB、queue 和 prefix 与生产者/consumer 一致。
+命令使用显式 `IAM_OPS_DATABASE_URL`，需要 Redis 的命令还使用 `IAM_OPS_REDIS_*`。
+脚本默认读取 `apps/ops/.env`，进程环境优先；核对实例、DB、queue 和 prefix 与生产者/consumer 一致。
 命令不启动 consumer、业务 HTTP 或 Bull Board，重建必须有启用对应模块的 Worker。
-配置见[Worker 示例](../../apps/worker/.env.example)，恢复机制见[后端架构](../architecture/backend-architecture.md#subject-access-barrier)。
+配置见[Ops 示例](../../apps/ops/.env.example)，恢复机制见[后端架构](../architecture/backend-architecture.md#subject-access-barrier)。
 
 | 问题                                               | 选择                   |
 | -------------------------------------------------- | ---------------------- |
@@ -36,7 +36,7 @@ Custom SSO 调用方同时适配 wire 4；Catalog 保持 3，OIDC 标准字段�
 2. 关闭并排空两类文档的读写、认证/SSO/OIDC/Gateway 访问、缓存回填 reader、全部相关源写入和直连/重试。停止旧 Worker、publisher、repair 与一次性命令，确认在途源事务和队列任务已结束；旧 `user-profile` 队列不交给新 consumer 解释。
 3. 在停流下用新制品运行正式 `pnpm --filter @iam/db db:migrate`，保留完整迁移链与 journal，不使用 db:push 或删 journal 重放。该链建立六张规范 Document/Outbox/Rebuild State 表，保留源事实与已有处理版本；旧用户派生副本被退役，迁移完成不表示资料已发布。
 4. 部署唯一匹配新模型的 reader/writer、`user-document` 与 `organization-document` consumer 和 wire 4 调用方，继续关闭公共流量。按本页两类全量重建流程登记全部对象，包括旧 processed 但内容陈旧、暂停、禁用和删除对象；等待两阶段工作、文档及用户后续责任收敛。
-5. 完整运行 `user-document:verify-postgres`、`user-document:verify-redis` 和 `organization-document:verify`。任一不完整或失败均保持停流；健康检查、队列为空、入队完成不替代这些门禁。
+5. 完整运行 `iam-ops user-document verify-postgres`、`iam-ops user-document verify-redis` 和 `iam-ops organization-document verify`。任一不完整或失败均保持停流；健康检查、队列为空、入队完成不替代这些门禁。
 6. 仅开放受控入口，验证详情/搜索同文档、Client 角色隔离、SSO 披露、旧有效凭据续用与必要源变化传播。关闭并排空受控入口及清理写入，等待收敛后再次完整核验三个 gate；全部通过才恢复流量。
 
 不得清空共享 Redis、清会话或借切换撤销有效凭据。失败时保留停流和持久恢复义务，按正式 repair/管理入口恢复后重新完整核验；需要回退时使用相互匹配的旧制品、配置与备份，不能混跑新旧 reader/writer 或依赖逐对象回退。
@@ -47,7 +47,7 @@ Custom SSO 调用方同时适配 wire 4；Catalog 保持 3，OIDC 标准字段�
 依赖恢复后执行：
 
 ```bash
-pnpm --filter @iam/worker user-document:repair
+pnpm --filter @iam/ops iam-ops user-document repair
 ```
 
 该命令先回收 stale intent 并处理 transition recovery，再处理 User Document 的 Outbox、Rebuild State、
@@ -68,7 +68,7 @@ failed、stale 或发布失败持续存在时，先检查 PostgreSQL、Redis、�
 确认依赖或失败原因已修复，需要批量重新触发耗尽义务时执行：
 
 ```bash
-pnpm --filter @iam/worker user-document:repair -- --force --limit 500
+pnpm --filter @iam/ops iam-ops user-document repair -- --force --limit 500
 ```
 
 `--force` 使本轮选中的超限后处理义务重新获得 5 次预算，并立即消耗第 1 次；未耗尽的义务按原计数继续。
@@ -79,7 +79,7 @@ pnpm --filter @iam/worker user-document:repair -- --force --limit 500
 确认失败原因已修复，从失败日志的 `userId`、`version` 或只读查询 `user_document_rebuild_state` 确认精确目标，再执行：
 
 ```bash
-pnpm --filter @iam/worker user-document:repair -- --retry-user-id 123 --retry-version 42
+pnpm --filter @iam/ops iam-ops user-document repair -- --retry-user-id 123 --retry-version 42
 ```
 
 两个参数必须成对提供；该模式只重试指定用户与发布版本的后处理，并继续运行 Subject Access 恢复阶段。
@@ -92,8 +92,9 @@ dashboard-only 的 `IAM_WORKER_ENABLED_MODULES=none` 不消费重建任务。
 开发面板为 `http://localhost:30016/admin/queues`，health 为 `/healthz`，其他环境以实际配置为准。
 普通任务为 `expand-user-document-outbox` 与 `rebuild-user-documents-batch`，consumer 仍接受积压的单条
 `rebuild-user-document`。每次唤醒使用独立 UUID job ID；持久 Outbox 完成凭据与 Rebuild State 版本负责幂等和发布仲裁。
-同次展开或 repair 的重建请求按 `IAM_WORKER_USER_DOCUMENT_REBUILD_BATCH_SIZE` 切块，实际每批最多 100 个用户；
-并发配置限制活跃批次数。PG 发布另按约 1 MiB 候选文档数据切小组，超过该大小的单个文档独立处理；
+consumer 展开及 Worker 周期 repair 的重建请求按 `IAM_WORKER_USER_DOCUMENT_REBUILD_BATCH_SIZE` 切块，
+人工 Ops 维护使用 `IAM_OPS_USER_DOCUMENT_REBUILD_BATCH_SIZE`。两者实际每批最多 100 个用户；
+consumer 并发配置限制活跃批次数。PG 发布另按约 1 MiB 候选文档数据切小组，超过该大小的单个文档独立处理；
 后处理在模块实例内共享最多 4 个主体的默认并发额度，多个任务不会各自再放大这份额度。
 repair 的 rebuilds.enqueued 仍按目标用户数报告，不能与 Bull Board 的 batch job 数直接比较。
 发布小组遇目标局部错误时可先整体回滚，再有限拆分定位；健康子组继续提交。连接、配置或提交结果未知时停止扩散，保留持久义务供核对与 repair。
@@ -109,7 +110,7 @@ repair 的 rebuilds.enqueued 仍按目标用户数报告，不能与 Bull Board 
 用户 backfill、repair 与两类 verify 支持 `--deadline-ms <1..300000>`，默认 30000。参数非法时不创建资源；
 deadline、SIGINT/SIGTERM、查询/投递失败或必需资源关闭失败均非零退出。命令独立拥有带完整 UUID 的 PG 连接，
 取消只作用于本次连接；超时或中断不回滚已经提交的登记，恢复依赖正式 repair/backfill 与完整核验。
-verify-postgres 只需 PG，不连接 Redis；verify-redis 还需显式 `IAM_WORKER_REDIS_*`，不创建队列或启动 consumer。
+verify-postgres 只需 PG，不连接 Redis；verify-redis 还需显式 `IAM_OPS_REDIS_*`，不创建队列或启动 consumer。
 重新启用不能绕过完整 Facts 门禁：直接用户未完成 Outbox、post-publication 未完成或 retained-newer 缓存（包括墓碑）
 均继续阻挡恢复。依赖恢复后运行 repair 并重做完整门禁，不手动启用屏障。
 
@@ -118,14 +119,14 @@ verify-postgres 只需 PG，不连接 Redis；verify-redis 还需显式 `IAM_WOR
 仅处理账号访问保护积压时运行：
 
 ```bash
-pnpm --filter @iam/worker run user-document:repair -- --subject-access-only --limit 500
+pnpm --filter @iam/ops iam-ops user-document repair -- --subject-access-only --limit 500
 ```
 
 命令依次回收 PostgreSQL stale pending intent、处理 Redis transition recovery、修复 indexed Barrier backlog；
 此模式不创建 BullMQ Queue、不重投 User Document，但会更新 PostgreSQL transition intent。
 数据库角色需要 schema access、`subject_access_transition` 的 SELECT/UPDATE、authority 查询权限，数据库须具备当前 stale scan partial index。
 
-`IAM_WORKER_USER_DOCUMENT_REPAIR_STALE_SECONDS` 默认 300 秒，按数据库时间判断；`--limit` 分别限制每个 Subject Access 阶段。
+`IAM_OPS_USER_DOCUMENT_REPAIR_STALE_SECONDS` 默认 300 秒，按数据库时间判断；`--limit` 分别限制每个 Subject Access 阶段。
 `--stale-before` 适用于文档 Outbox、Rebuild State 与 post-publication 处理；Subject Access intent 仍使用自己的 stale threshold。
 fresh intent、活跃事务锁或未到重试时间的工作留待后续轮次。
 reaper 失败时命令非零退出，不继续 Redis 恢复。
@@ -146,10 +147,10 @@ reaper 失败时命令非零退出，不继续 Redis 恢复。
 确认实际停流和排空后执行：
 
 ```bash
-pnpm --filter @iam/worker user-document:backfill
+pnpm --filter @iam/ops iam-ops user-document backfill
 ```
 
-`--batch-size` 或 `IAM_WORKER_USER_DOCUMENT_BACKFILL_BATCH_SIZE` 控制每批登记数量。报告区分 registered 与 enqueued，
+`--batch-size` 或 `IAM_OPS_USER_DOCUMENT_BACKFILL_BATCH_SIZE` 控制每批登记数量。报告区分 registered 与 enqueued，
 登记后的唤醒失败保留 Outbox，由正式 repair 重试。Backfill 扫描全部源 User，包括 Enable、Pause、Disable 和 deleted，
 也会推进已经 processed 但内容陈旧的库存；只运行 repair 或只扫 failed 不能完成这项恢复。
 等待受控 consumer 发布当前完整 Document 或删除墓碑；缺行不能代替墓碑。完成状态、版本、Outbox 凭据与用户后续责任必须全部收敛。
@@ -157,8 +158,8 @@ pnpm --filter @iam/worker user-document:backfill
 在独立命令中先 PostgreSQL、后 Redis 核验：
 
 ```bash
-pnpm --filter @iam/worker user-document:verify-postgres -- --batch-size 500
-pnpm --filter @iam/worker user-document:verify-redis -- --batch-size 500
+pnpm --filter @iam/ops iam-ops user-document verify-postgres -- --batch-size 500
+pnpm --filter @iam/ops iam-ops user-document verify-redis -- --batch-size 500
 ```
 
 PG gate 在一个 RR READ ONLY 事务中扫描完整源库存、文档/墓碑、Rebuild State、Outbox 与历史完成凭据，
@@ -177,10 +178,10 @@ Redis gate 使用一致的 PG 库存逐个核对完整 Facts 或版本化墓碑�
 ## 组织搜索日常修复
 
 组织生产者、命令、consumer 和 dashboard 统一使用固定 queue prefix `iam`，不提供独立前缀。
-遗留 `IAM_WORKER_ORGANIZATION_DOCUMENT_QUEUE_PREFIX` 仅接受 `iam`；使用 `organization-document` consumer，不能用 dashboard 代替。
+`IAM_OPS_ORGANIZATION_DOCUMENT_QUEUE_PREFIX` 若显式提供，仅接受 `iam`；使用 `organization-document` consumer，不能用 dashboard 代替。
 
 ```bash
-pnpm --filter @iam/worker organization-document:repair -- --limit 500
+pnpm --filter @iam/ops iam-ops organization-document repair -- --limit 500
 ```
 
 命令有界恢复 outbox 与 rebuilds 两阶段的 pending、failed 或过期 processing 并重新唤醒。
@@ -190,7 +191,7 @@ pnpm --filter @iam/worker organization-document:repair -- --limit 500
 依赖修复后重复 repair 并等待 consumer 收敛；失败持续时检查数据库、队列及源完整性，保留持久工作用于重试。
 不能删除工作、手写文档或重放业务写入。合法旧文档在重建期间仍可查询。
 
-processing 过期阈值 `IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_STALE_SECONDS` 默认 300 秒，应覆盖合理处理时长。
+processing 过期阈值 `IAM_OPS_ORGANIZATION_DOCUMENT_REPAIR_STALE_SECONDS` 默认 300 秒，应覆盖合理处理时长。
 仅在确认旧处理停止或过期时使用 `--stale-before <ISO timestamp>`。
 backfill/repair/verify 都支持 `--deadline-ms <1..300000>`，默认 30000；deadline、中断或资源关闭失败非零退出，
 已提交工作保留。verify 只需 PostgreSQL；backfill/repair 还需队列和工作表写权限。
@@ -204,16 +205,16 @@ backfill/repair/verify 都支持 `--deadline-ms <1..300000>`，默认 30000；de
 2. 全量登记并等待两阶段工作完成，按需 repair：
 
    ```bash
-   pnpm --filter @iam/worker organization-document:backfill -- --batch-size 500
+   pnpm --filter @iam/ops iam-ops organization-document backfill -- --batch-size 500
    ```
 
-   批量默认值由 `IAM_WORKER_ORGANIZATION_DOCUMENT_BACKFILL_BATCH_SIZE` 控制。
+   批量默认值由 `IAM_OPS_ORGANIZATION_DOCUMENT_BACKFILL_BATCH_SIZE` 控制。
    全部组织（含删除组织）必须发布当前文档或墓碑，不能只检查活跃组织。
 
 3. 在独立命令中完整核验：
 
    ```bash
-   pnpm --filter @iam/worker organization-document:verify
+   pnpm --filter @iam/ops iam-ops organization-document verify
    ```
 
    同一一致只读快照覆盖源事实、文档/墓碑、schema、路径、版本、完成凭据和持久工作；仅 `status=passed` 且退出 0 通过。
@@ -249,7 +250,8 @@ Subject Access 恢复耗时至少考虑 stale threshold、等待下一次调度�
 dev/prod Compose 的 `worker-user-document` 与 `worker-organization-document` 分别默认开启对应任务；源码直接运行时显式设置开关。
 只有对应 consumer 已启用才会运行，dashboard-only 不启动任务；两类模块同时启用时仍各自控制开关。
 Worker 启动后运行首轮，之后串行运行；普通失败留待下一轮，清理失败则停止自动轮次并记录错误，须排查并重启服务。
-任务在 Worker 内启动现有 repair 子命令，直接使用 Bun 和本服务的连接配置，不依赖 cron、Docker CLI 或额外镜像。
+任务启动 Worker 自有的私有 repair 子进程，将本服务配置转换为本轮显式输入，并通过领域维护接口复用人工 repair 的完整流程。
+源码运行使用 Bun；Windows standalone 制品同时包含 Job launcher 与 supervisor。两者均不依赖 cron、Docker CLI 或额外维护镜像。
 每类任务在同一实例中不重叠，两个文档模块可以各自运行；多实例仍由数据库领取和版本/token 仲裁。
 用户后处理 `exhausted` 按上方人工重试流程处理，自动轮次不使用 `--force`。
 

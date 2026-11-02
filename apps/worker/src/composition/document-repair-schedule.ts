@@ -1,16 +1,24 @@
+import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { spawnOwnedProcessTree, waitForOwnedProcessTree } from "@iam/api-core/process";
-import type { WorkerEnv } from "@worker/env";
+import { closeMaintenancePostgresInvocation } from "@iam/db/maintenance";
+import type { DocumentRepairInvocation, WorkerEnv } from "@worker/env";
+import { DOCUMENT_REPAIR_CLEANUP_FAILURE_EXIT_CODE } from "@worker/maintenance/document-repair-protocol";
 import type { WorkerLogger } from "./runtime";
 
 const PROCESS_CLEANUP_TIMEOUT_MS = 5_000;
+
+const workerEntry = fileURLToPath(new URL("../index.ts", import.meta.url));
 const workerRoot = fileURLToPath(new URL("../../", import.meta.url));
 
 export interface DocumentRepairRunResult {
   status: "completed" | "failed" | "cleanup-failed";
   failureKind?: string;
   exitCode?: number | null;
+  error?: unknown;
 }
 
 export function startDocumentRepairSchedule(options: {
@@ -28,6 +36,7 @@ export function startDocumentRepairSchedule(options: {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let active: Promise<void> | undefined;
   let controller: AbortController | undefined;
+  let cleanupFailure: unknown;
 
   async function repair() {
     const started = performance.now();
@@ -47,6 +56,7 @@ export function startDocumentRepairSchedule(options: {
       if (result.status === "cleanup-failed") {
         // An old process may still be alive. Never start a potentially overlapping round.
         stopped = true;
+        cleanupFailure = result.error ?? new Error(`${documentName} repair cleanup failed`);
         options.logger.error(context, `scheduled ${documentName} repair stopped after process cleanup failed`);
       } else if (result.status === "failed" && !stopped) {
         options.logger.error(
@@ -81,6 +91,7 @@ export function startDocumentRepairSchedule(options: {
       clearTimeout(timer);
       controller?.abort();
       await active;
+      if (cleanupFailure !== undefined) throw cleanupFailure;
     },
   };
 }
@@ -92,38 +103,42 @@ async function runRepairCommand(
 ): Promise<DocumentRepairRunResult> {
   signal.throwIfAborted();
   const config = (document === "user" ? env.userDocument : env.organizationDocument).repair;
-  const repairCommand = fileURLToPath(
-    new URL(`../commands/${document}-document/${document}-document-repair.ts`, import.meta.url),
-  );
+  const sourceRuntime = existsSync(workerEntry);
+  const artifactRoot = dirname(process.execPath);
+  const invocation: DocumentRepairInvocation = {
+    document,
+    postgresInvocationId: randomUUID(),
+    limit: config.limit,
+    deadlineMs: config.deadlineMs,
+    env: {
+      nodeEnv: env.nodeEnv,
+      databaseUrl: env.databaseUrl,
+      redis: env.redis,
+      log: env.log,
+      userDocument: {
+        rebuildBatchSize: env.userDocument.rebuildBatchSize,
+        repairStaleSeconds: env.userDocument.repairStaleSeconds,
+      },
+      organizationDocument: {
+        repairStaleSeconds: env.organizationDocument.repairStaleSeconds,
+      },
+    },
+  };
   const child = spawnOwnedProcessTree({
     executable: process.execPath,
-    args: [
-      "--no-env-file",
-      "run",
-      repairCommand,
-      "--limit",
-      String(config.limit),
-      "--deadline-ms",
-      String(config.deadlineMs),
-    ],
-    cwd: workerRoot,
-    env: {
-      ...process.env,
-      NODE_ENV: env.nodeEnv,
-      IAM_WORKER_DATABASE_URL: env.databaseUrl,
-      IAM_WORKER_REDIS_HOST: env.redis.host,
-      IAM_WORKER_REDIS_PORT: String(env.redis.port),
-      IAM_WORKER_REDIS_DB: String(env.redis.db),
-      IAM_WORKER_REDIS_PASSWORD: env.redis.password,
-      IAM_WORKER_REDIS_USERNAME: undefined,
-      IAM_WORKER_LOG_LEVEL: env.log.level,
-      IAM_WORKER_LOG_FORMAT: env.log.format,
-      IAM_WORKER_USER_DOCUMENT_REBUILD_BATCH_SIZE: String(env.userDocument.rebuildBatchSize),
-      IAM_WORKER_USER_DOCUMENT_BACKFILL_BATCH_SIZE: String(env.userDocument.backfillBatchSize),
-      IAM_WORKER_USER_DOCUMENT_REPAIR_STALE_SECONDS: String(env.userDocument.repairStaleSeconds),
-      IAM_WORKER_ORGANIZATION_DOCUMENT_BACKFILL_BATCH_SIZE: String(env.organizationDocument.backfillBatchSize),
-      IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_STALE_SECONDS: String(env.organizationDocument.repairStaleSeconds),
-    },
+    args: sourceRuntime
+      ? ["--no-env-file", "run", workerEntry, "--internal-document-repair"]
+      : ["--internal-document-repair"],
+    cwd: sourceRuntime ? workerRoot : artifactRoot,
+    ...(!sourceRuntime && process.platform === "win32"
+      ? {
+          windowsJob: {
+            supervisorPath: join(artifactRoot, "windows-job-supervisor.ps1"),
+            launcherExecutable: join(artifactRoot, "windows-job-launcher.exe"),
+          },
+        }
+      : {}),
+    env: { ...process.env, IAM_WORKER_DOCUMENT_REPAIR_INPUT: JSON.stringify(invocation) },
   });
   child.stdout.pipe(process.stdout, { end: false });
   child.stderr.pipe(process.stderr, { end: false });
@@ -133,8 +148,43 @@ async function runRepairCommand(
     timeoutMs: config.deadlineMs + PROCESS_CLEANUP_TIMEOUT_MS,
     cleanupTimeoutMs: PROCESS_CLEANUP_TIMEOUT_MS,
   });
-  if (result.cleanupFailure) return { status: "cleanup-failed", failureKind: "cleanup" };
+  let postgresCleanupFailure: unknown;
+  if (!result.cleanupFailure) {
+    try {
+      await closeMaintenancePostgresInvocation({
+        databaseUrl: env.databaseUrl,
+        scope: document,
+        invocationId: invocation.postgresInvocationId,
+      });
+    } catch (error) {
+      postgresCleanupFailure = error;
+    }
+  }
+  if (result.cleanupFailure || postgresCleanupFailure !== undefined)
+    return {
+      status: "cleanup-failed",
+      failureKind: "cleanup",
+      exitCode: result.outcome?.exitCode,
+      error: new AggregateError(
+        [
+          result.executionFailure?.error,
+          result.outcome?.exitCode
+            ? new Error(`Document repair child exited with code ${result.outcome.exitCode}`)
+            : undefined,
+          result.cleanupFailure,
+          postgresCleanupFailure,
+        ].filter((failure) => failure !== undefined),
+        "Document repair invocation cleanup failed",
+      ),
+    };
   if (result.executionFailure) return { status: "failed", failureKind: result.executionFailure.kind };
+  if (result.outcome?.exitCode === DOCUMENT_REPAIR_CLEANUP_FAILURE_EXIT_CODE)
+    return {
+      status: "cleanup-failed",
+      failureKind: "resources",
+      exitCode: result.outcome.exitCode,
+      error: new Error("Document repair child could not close its required resources"),
+    };
   return {
     status: result.outcome?.exitCode === 0 ? "completed" : "failed",
     failureKind: result.outcome?.exitCode === 0 ? undefined : "exit",

@@ -8,7 +8,7 @@ param(
   [string]$LauncherPath,
 
   [Parameter(Mandatory = $true)]
-  [ValidateSet("bun", "node")]
+  [ValidateSet("bun", "node", "executable")]
   [string]$RuntimeKind
 )
 
@@ -136,8 +136,11 @@ namespace IamOwnedProcess
   $startInfo.Arguments = if ($RuntimeKind -eq "bun") {
     "--no-env-file " + $launcherArgument
   }
-  else {
+  elseif ($RuntimeKind -eq "node") {
     $launcherArgument
+  }
+  else {
+    ""
   }
   $startInfo.UseShellExecute = $false
   $startInfo.CreateNoWindow = $true

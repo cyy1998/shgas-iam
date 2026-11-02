@@ -10,7 +10,8 @@
     "./relations": "./src/relations/index.ts",
     "./client-snapshot": "./src/client-snapshot.ts",
     "./query-utils": "./src/query-utils.ts",
-    "./postgres-error": "./src/postgres-error.ts"
+    "./postgres-error": "./src/postgres-error.ts",
+    "./maintenance": "./src/maintenance.ts"
   },
   "scripts": {
     "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",

@@ -6,12 +6,7 @@ import {
   createSubjectAccessTransitionRecoveryAuthority,
   createSubjectAccessTransitionRepository,
 } from "@iam/user-document/subject-access-transition";
-import {
-  createEmploymentRepository,
-  createEmploymentVerifier,
-  createSubjectAccessAuthorityRepository,
-  createUserDocumentWorkerModule,
-} from "@iam/user-document/worker";
+import { createSubjectAccessAuthorityRepository, createUserDocumentWorkerModule } from "@iam/user-document/worker";
 import type { WorkerEnv } from "@worker/env";
 import { createWorkerHttpApp, startWorkerHttpServer } from "@worker/http/server";
 import {
@@ -26,8 +21,6 @@ import { startDocumentRepairSchedule } from "./document-repair-schedule";
 import type { WorkerLogger } from "./runtime";
 import { createWorkerRuntime } from "./runtime";
 import { createWorkerSubjectAccess } from "./subject-access";
-
-const COMMAND_DB_SHUTDOWN_TIMEOUT_SECONDS = 1;
 
 export interface CreateWorkerCompositionOptions {
   env: WorkerEnv;
@@ -79,7 +72,7 @@ export async function createWorkerComposition(options: CreateWorkerCompositionOp
     subjectAccessRepair: subjectAccess.repair,
     logger: runtime.logger,
     clock: runtime.clock,
-    config: runtime.config.userDocument,
+    config: { ...runtime.config.userDocument, backfillBatchSize: options.env.userDocument.repair.limit },
   });
   const organizationDocumentModule = createOrganizationDocumentWorkerModule({
     db,
@@ -173,18 +166,3 @@ export async function createWorkerComposition(options: CreateWorkerCompositionOp
 }
 
 export type WorkerComposition = Awaited<ReturnType<typeof createWorkerComposition>>;
-
-export function createEmploymentCommandComposition(options: { logger: WorkerLogger }) {
-  return {
-    logger: options.logger,
-    employment: {
-      verifier: createEmploymentVerifier({
-        inventory: createEmploymentRepository(db),
-        clock: { nowDate: () => new Date() },
-      }),
-    },
-    async shutdown() {
-      await closeDb({ timeoutSeconds: COMMAND_DB_SHUTDOWN_TIMEOUT_SECONDS });
-    },
-  };
-}

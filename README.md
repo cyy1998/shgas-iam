@@ -51,6 +51,7 @@ iam-service/
 │   │   ├── .umirc.ts                # 路由、base、proxy 配置
 │   │   └── .env.example
 │   ├── worker/                      # 后台任务 runtime（@iam/worker）
+│   ├── ops/                         # 一次性人工维护 CLI（@iam/ops）
 │   │   ├── src/
 │   │   │   ├── commands/            # user-document backfill/repair 命令
 │   │   │   ├── composition/         # runtime、模块、HTTP/Bull Board 装配
@@ -188,6 +189,7 @@ cp packages/db/.env.example packages/db/.env
 cp apps/api/.env.example apps/api/.env
 cp apps/admin-api/.env.example apps/admin-api/.env
 cp apps/worker/.env.example apps/worker/.env
+cp apps/ops/.env.example apps/ops/.env
 cp apps/admin/.env.example apps/admin/.env.local
 cp apps/sso/.env.example apps/sso/.env.local
 cp docker/.env.dev.example docker/.env
@@ -305,8 +307,16 @@ pnpm --filter @iam/worker lint
 pnpm --filter @iam/worker lint:fix
 pnpm --filter @iam/worker test
 pnpm --filter @iam/worker typecheck
-pnpm --filter @iam/worker user-document:backfill
-pnpm --filter @iam/worker user-document:repair
+```
+
+### Ops 人工维护
+
+命令使用独立 `IAM_OPS_*` 和 `apps/ops/.env`；配置、选项及恢复前提见 [Ops README](apps/ops/README.md)。
+
+```bash
+pnpm --filter @iam/ops iam-ops --help
+pnpm --filter @iam/ops iam-ops user-document backfill
+pnpm --filter @iam/ops iam-ops user-document repair
 ```
 
 ### 数据库包
@@ -504,8 +514,8 @@ API/Admin 共用 Kernel namespace 和固定根期限；旧 idle/absolute/tombsto
 | `IAM_WORKER_BULL_BOARD_ENABLED` / `IAM_WORKER_BULL_BOARD_PATH`                                             | 是否启用 Bull Board 与挂载路径                                                                  | `false` / `/admin/queues`                |
 | `IAM_WORKER_BULL_BOARD_AUTH_ENABLED` / `IAM_WORKER_BULL_BOARD_USERNAME` / `IAM_WORKER_BULL_BOARD_PASSWORD` | Bull Board Basic Auth 配置；生产启用 dashboard 时必须配置                                       | `true` / `iam-worker` / `iam-worker-dev` |
 | `IAM_WORKER_USER_DOCUMENT_CONCURRENCY`                                                                     | User Document worker 并发数                                                                     | `2`                                      |
-| `IAM_WORKER_USER_DOCUMENT_REBUILD_BATCH_SIZE` / `IAM_WORKER_USER_DOCUMENT_BACKFILL_BATCH_SIZE`             | rebuild/backfill 批大小                                                                         | `100` / `500`                            |
-| `IAM_WORKER_USER_DOCUMENT_REPAIR_STALE_SECONDS`                                                            | repair 命令默认修复 stale pending/processing 的秒数                                             | `300`                                    |
+| `IAM_WORKER_USER_DOCUMENT_REBUILD_BATCH_SIZE`                                                              | Worker 消费时每批构建数量                                                                       | `100`                                    |
+| `IAM_WORKER_USER_DOCUMENT_REPAIR_STALE_SECONDS`                                                            | Worker 周期 repair 默认修复 stale pending/processing 的秒数                                     | `300`                                    |
 
 ### 管理后台（`apps/admin/.env.local`）
 

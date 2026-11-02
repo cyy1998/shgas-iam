@@ -157,8 +157,25 @@ async function main() {
               IAM_WORKER_LOG_LEVEL: "info",
               IAM_WORKER_USER_PROFILE_BACKFILL_BATCH_SIZE: "1",
               IAM_WORKER_USER_PROFILE_CONCURRENCY: "1",
-              IAM_WORKER_USER_DOCUMENT_BACKFILL_BATCH_SIZE: "1",
               IAM_WORKER_USER_DOCUMENT_CONCURRENCY: "1",
+              FORCE_COLOR: "0",
+              NO_COLOR: "1",
+            },
+          });
+        const opsEnvironment = () =>
+          createProcessSmokeEnvironment({
+            source: process.env,
+            temporaryDirectory,
+            overrides: {
+              NODE_ENV: "test",
+              IAM_OPS_DATABASE_URL: h.databaseUrl,
+              IAM_OPS_REDIS_HOST: redisConfig.host,
+              IAM_OPS_REDIS_PORT: String(redisConfig.port),
+              IAM_OPS_REDIS_DB: String(redisConfig.db),
+              IAM_OPS_REDIS_PASSWORD: redisConfig.password,
+              IAM_OPS_LOG_FORMAT: "json",
+              IAM_OPS_LOG_LEVEL: "info",
+              IAM_OPS_USER_DOCUMENT_BACKFILL_BATCH_SIZE: "1",
               FORCE_COLOR: "0",
               NO_COLOR: "1",
             },
@@ -174,7 +191,7 @@ async function main() {
           const family = legacy ? (kind === "user" ? "user-profile" : "organization-search") : `${kind}-document`;
           const executable = join(
             (legacy ? baseline : candidate).runtime,
-            `${family}-${kind === "user" && gate ? "readiness" : operation}.exe`,
+            legacy ? `${family}-${kind === "user" && gate ? "readiness" : operation}.exe` : "iam-ops.exe",
           );
           const args =
             kind === "user" && gate
@@ -191,9 +208,11 @@ async function main() {
             start: () =>
               spawnOwnedProcessTree({
                 executable,
-                args,
+                args: legacy
+                  ? args
+                  : [`${kind}-document`, operation, ...(kind === "user" && gate ? args.slice(1) : args)],
                 cwd: (legacy ? baseline : candidate).runtime,
-                env: workerEnvironment(legacy),
+                env: legacy ? workerEnvironment(true) : opsEnvironment(),
               }),
             expectedExitCode,
             completionTimeoutMs: 45000,

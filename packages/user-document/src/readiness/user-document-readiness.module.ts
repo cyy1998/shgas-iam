@@ -3,7 +3,7 @@ import type { DbClient, db as database } from "@iam/db";
 import type { PublishedUserDocument } from "../document";
 import type { SubjectFactsRedisInspectionClient } from "../subject-facts/subject-facts-redis-publisher.core";
 import type { UserDocumentProjectionBundle } from "../worker/user-document-projection";
-import { createCurrentUserDocumentProjectionBundle } from "../worker/user-document-worker.module";
+import { createCurrentUserDocumentProjectionBundle } from "../worker/user-document-projection";
 import { createUserDocumentPostgresGate, createUserDocumentRedisAccessGate } from "./user-document-readiness";
 import { createUserDocumentReadinessRepository } from "./user-document-readiness.repository";
 

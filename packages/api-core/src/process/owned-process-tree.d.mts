@@ -13,6 +13,8 @@ export function spawnOwnedProcessTree(options: {
   args: readonly string[];
   cwd: string;
   env: NodeJS.ProcessEnv;
+  /** Packaged Windows Job helpers for callers that are standalone executables. */
+  windowsJob?: { supervisorPath: string; launcherExecutable: string };
 }): OwnedProcessTree;
 export function waitForOwnedProcessTree(
   child: OwnedProcessTree,

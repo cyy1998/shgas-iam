@@ -2,8 +2,8 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-10-25
-Next review: 2026-11-25
+Last verified: 2026-11-02
+Next review: 2026-12-02
 
 按[通用约定](README.md#通用约定)确认环境。当前密码登录、OIDC、会话清理和 Snapshot 恢复分别操作；
 日常配置更新不自动清空会话。旧代升级先查[独立迁移指引](README.md#一次性迁移与旧版本)。
@@ -135,7 +135,7 @@ IAM 允许过期 ID Token 作退出 hint，未用 exp 限制其使用期限。�
 | `all`        | 上述三个 owner，仍只操作指定 namespace                             |
 
 不同前缀的旧布局和其他状态不在范围内；不增加任意 pattern，也不顺带清除 nonce、Subject Access、Facts、队列或 Snapshot。
-使用 Worker 的显式 `IAM_WORKER_REDIS_*`；脚本默认读取 `apps/worker/.env`，已有进程环境优先。
+使用 Ops 的显式 `IAM_OPS_REDIS_*`；脚本默认读取 `apps/ops/.env`，已有进程环境优先。
 清点和核验只需 SCAN，清理还需 UNLINK；连接按部署授权 AUTH/SELECT/CLIENT/QUIT。
 
 1. 关闭受影响登录、协议和 Admin 会话入口及直连/重试，停止相关 reader/writer、后台及 one-shot 工作并排空。
@@ -143,9 +143,9 @@ IAM 允许过期 ID Token 作退出 hint，未用 exp 限制其使用期限。�
 2. 按同一范围依次运行下列独立进程；示例为全部 owner，单 owner 时将三个命令统一改为目标 owner：
 
    ```bash
-   pnpm --filter @iam/worker session:clear:inventory -- --layout unified --owner all --kernel-namespace '<kernel>' --custom-namespace '<custom>' --oidc-namespace '<oidc>' --writers-stopped --drained
-   pnpm --filter @iam/worker session:clear -- --layout unified --owner all --kernel-namespace '<kernel>' --custom-namespace '<custom>' --oidc-namespace '<oidc>' --writers-stopped --drained
-   pnpm --filter @iam/worker session:clear:verify -- --layout unified --owner all --kernel-namespace '<kernel>' --custom-namespace '<custom>' --oidc-namespace '<oidc>' --writers-stopped --drained
+   pnpm --filter @iam/ops iam-ops session inventory -- --layout unified --owner all --kernel-namespace '<kernel>' --custom-namespace '<custom>' --oidc-namespace '<oidc>' --writers-stopped --drained
+   pnpm --filter @iam/ops iam-ops session apply -- --layout unified --owner all --kernel-namespace '<kernel>' --custom-namespace '<custom>' --oidc-namespace '<oidc>' --writers-stopped --drained
+   pnpm --filter @iam/ops iam-ops session verify -- --layout unified --owner all --kernel-namespace '<kernel>' --custom-namespace '<custom>' --oidc-namespace '<oidc>' --writers-stopped --drained
    ```
 
 3. clear 退出 0 且 `status=completed` 后，还须 verify 完整扫描、退出 0、matching 为零。
@@ -161,7 +161,7 @@ IAM 清理不保证第三方本地会话或离线 ID Token 立即失效。
 **定向修复**用于 Client 已提交但缓存传播失败，可在当前 runtime 下执行：
 
 ```bash
-pnpm --filter @iam/worker client-snapshot:repair -- --client-code alpha
+pnpm --filter @iam/ops iam-ops client-snapshot repair -- --client-code alpha
 ```
 
 成功后通过正式入口确认当前 Client 状态/配置和凭据生效。repair 同时失效普通与敏感 payload，不重放 mutation、轮换 Secret 或撤销会话。
@@ -170,8 +170,8 @@ pnpm --filter @iam/worker client-snapshot:repair -- --client-code alpha
 **全量恢复**用于 Redis restore 后：关闭使用 Snapshot 的协议和管理入口，冻结 Client mutation 及所有 acquisition，排空在途请求和任务后执行：
 
 ```bash
-pnpm --filter @iam/worker client-snapshot:repair -- --all --writers-stopped --drained
-pnpm --filter @iam/worker client-snapshot:verify -- --all --writers-stopped --drained
+pnpm --filter @iam/ops iam-ops client-snapshot repair -- --all --writers-stopped --drained
+pnpm --filter @iam/ops iam-ops client-snapshot verify -- --all --writers-stopped --drained
 ```
 
 repair 只处理 `client-snapshot:v1:{<clientCode>}` 下的 control、payload:client、payload:credential 三族，未知键族保留。

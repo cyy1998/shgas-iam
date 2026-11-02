@@ -189,6 +189,12 @@ test("stops future rounds when the previous process could not be cleaned up", as
     await delay(intervalMs * 3);
     expect(calls).toBe(1);
   } finally {
-    await schedule.close();
+    let failure: unknown;
+    try {
+      await schedule.close();
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(Error);
   }
 });

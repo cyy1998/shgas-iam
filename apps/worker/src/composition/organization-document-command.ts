@@ -1,18 +1,26 @@
+import { closeMaintenanceResources } from "@iam/api-core/maintenance";
+import { createMaintenancePostgresResources } from "@iam/db/maintenance";
+import { createOrganizationDocumentProcessor } from "@iam/organization-document/maintenance";
 import { createOrganizationDocumentWriteResources } from "@iam/organization-document/producer";
-import { createOrganizationDocumentProcessor } from "@iam/organization-document/worker";
-import type { OrganizationDocumentBackfillCommandEnv } from "@worker/env";
-import { closeWorkerCommandResources } from "./command-shutdown";
-import { createDocumentCommandPostgresResources } from "./document-postgres-resources";
+import type { DocumentRepairInvocation } from "@worker/env";
+
+type OrganizationDocumentRepairEnv = Pick<
+  DocumentRepairInvocation["env"],
+  "databaseUrl" | "redis" | "organizationDocument"
+>;
+
 import type { WorkerLogger } from "./runtime";
 
 export function createOrganizationDocumentCommandComposition(options: {
-  env: OrganizationDocumentBackfillCommandEnv;
+  env: OrganizationDocumentRepairEnv;
   logger: WorkerLogger;
   deadlineMs: number;
+  postgresInvocationId: string;
 }) {
-  const postgres = createDocumentCommandPostgresResources({
+  const postgres = createMaintenancePostgresResources({
     databaseUrl: options.env.databaseUrl,
     deadlineMs: options.deadlineMs,
+    invocationId: options.postgresInvocationId,
   });
   const resources = createOrganizationDocumentWriteResources({
     redis: options.env.redis,
@@ -27,10 +35,8 @@ export function createOrganizationDocumentCommandComposition(options: {
         { signal, applicationName: postgres.applicationName },
         "Organization document command shutting down",
       );
-      closing ??= closeWorkerCommandResources([resources.close(), postgres.close(signal)]);
+      closing ??= closeMaintenanceResources([resources.close(), postgres.close(signal)]);
       return closing;
     },
   };
 }
-
-export const createOrganizationDocumentBackfillCommandComposition = createOrganizationDocumentCommandComposition;

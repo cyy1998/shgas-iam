@@ -1,14 +1,8 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 
 type ParseWorkerEnv = typeof import("../env").parseWorkerEnv;
-type ParsePostgresReadinessEnv = typeof import("../env").parseUserDocumentPostgresReadinessCommandEnv;
-type ParseAuditActionMaintenanceEnv = typeof import("../env").parseAuditActionMaintenanceCommandEnv;
-type ParseOrganizationCommandEnv = typeof import("../env").parseOrganizationDocumentBackfillCommandEnv;
 
 let parseWorkerEnv: ParseWorkerEnv;
-let parsePostgresReadinessEnv: ParsePostgresReadinessEnv;
-let parseAuditActionMaintenanceEnv: ParseAuditActionMaintenanceEnv;
-let parseOrganizationCommandEnv: ParseOrganizationCommandEnv;
 
 function validEnv(): NodeJS.ProcessEnv {
   return {
@@ -22,17 +16,12 @@ function validEnv(): NodeJS.ProcessEnv {
 describe("worker environment", () => {
   beforeAll(async () => {
     Object.assign(process.env, validEnv());
-    ({
-      parseAuditActionMaintenanceCommandEnv: parseAuditActionMaintenanceEnv,
-      parseUserDocumentPostgresReadinessCommandEnv: parsePostgresReadinessEnv,
-      parseWorkerEnv,
-      parseOrganizationDocumentBackfillCommandEnv: parseOrganizationCommandEnv,
-    } = await import("../env"));
+    ({ parseWorkerEnv } = await import("../env"));
   });
 
-  test("runtime and organization maintenance reject a queue namespace unavailable to formal source producers", () => {
+  test("runtime rejects a queue namespace unavailable to formal source producers", () => {
     const previousDatabaseUrl = process.env.DATABASE_URL;
-    for (const parse of [parseWorkerEnv, parseOrganizationCommandEnv]) {
+    for (const parse of [parseWorkerEnv]) {
       expect(() =>
         parse({
           ...validEnv(),
@@ -42,46 +31,6 @@ describe("worker environment", () => {
       ).toThrow("Organization Search queue prefix is fixed to iam");
     }
     expect(process.env.DATABASE_URL).toBe(previousDatabaseUrl);
-  });
-
-  test("audit maintenance accepts only its PostgreSQL configuration without changing global database configuration", () => {
-    const previousDatabaseUrl = process.env.DATABASE_URL;
-    expect(
-      parseAuditActionMaintenanceEnv({
-        IAM_WORKER_DATABASE_URL: "postgresql://iam:password@localhost/iam?options=-csearch_path%3Daudit",
-        IAM_WORKER_REDIS_PORT: "invalid-unused",
-        IAM_WORKER_LOG_FORMAT: "invalid-unused",
-      }),
-    ).toEqual({ databaseUrl: "postgresql://iam:password@localhost/iam?options=-csearch_path%3Daudit" });
-    expect(process.env.DATABASE_URL).toBe(previousDatabaseUrl);
-    for (const databaseUrl of [undefined, "", "not-a-url", "https://localhost/iam"]) {
-      expect(() =>
-        parseAuditActionMaintenanceEnv({
-          IAM_WORKER_DATABASE_URL: databaseUrl,
-          DATABASE_URL: "postgresql://unused-fallback/iam",
-        }),
-      ).toThrow();
-    }
-    expect(
-      parseAuditActionMaintenanceEnv({
-        IAM_WORKER_DATABASE_URL: "postgres://iam:password@localhost/iam",
-      }),
-    ).toEqual({ databaseUrl: "postgres://iam:password@localhost/iam" });
-  });
-
-  test("parses PostgreSQL readiness without Redis or Worker runtime configuration", () => {
-    expect(
-      parsePostgresReadinessEnv({
-        IAM_WORKER_DATABASE_URL: "postgresql://iam:password@localhost/iam",
-        IAM_WORKER_USER_DOCUMENT_REBUILD_BATCH_SIZE: "25",
-        IAM_WORKER_USER_DOCUMENT_BACKFILL_BATCH_SIZE: "200",
-      }),
-    ).toEqual({
-      databaseUrl: "postgresql://iam:password@localhost/iam",
-      nodeEnv: "development",
-      log: { level: "info", format: "auto" },
-      userDocument: { rebuildBatchSize: 25, backfillBatchSize: 200 },
-    });
   });
 
   test("exports grouped runtime config from IAM_WORKER raw env", () => {
@@ -95,7 +44,6 @@ describe("worker environment", () => {
       IAM_WORKER_BULL_BOARD_READ_ONLY: "false",
       IAM_WORKER_USER_DOCUMENT_CONCURRENCY: "4",
       IAM_WORKER_USER_DOCUMENT_REBUILD_BATCH_SIZE: "25",
-      IAM_WORKER_USER_DOCUMENT_BACKFILL_BATCH_SIZE: "200",
       IAM_WORKER_USER_DOCUMENT_REPAIR_STALE_SECONDS: "600",
     });
 
@@ -107,13 +55,11 @@ describe("worker environment", () => {
     expect(env.userDocument).toEqual({
       concurrency: 4,
       rebuildBatchSize: 25,
-      backfillBatchSize: 200,
       repairStaleSeconds: 600,
       repair: { enabled: false, intervalMs: 60_000, limit: 500, deadlineMs: 30_000 },
     });
     expect(env.organizationDocument).toEqual({
       concurrency: 2,
-      backfillBatchSize: 500,
       repairStaleSeconds: 300,
       repair: { enabled: false, intervalMs: 60_000, limit: 500, deadlineMs: 30_000 },
     });

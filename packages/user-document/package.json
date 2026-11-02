@@ -12,7 +12,8 @@
     "./query/repository": "./src/query/user-document-query.repository.ts",
     "./subject-access-transition": "./src/subject-access/subject-access-transition.repository.ts",
     "./subject-facts": "./src/subject-facts.ts",
-    "./worker": "./src/worker.ts"
+    "./worker": "./src/worker.ts",
+    "./maintenance": "./src/maintenance.ts"
   },
   "scripts": {
     "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",

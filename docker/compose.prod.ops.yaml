@@ -1,0 +1,35 @@
+# 一次性维护入口；只加载维护配置，不启动其他服务。
+# docker compose --env-file docker/.env.ops -f docker/compose.prod.ops.yaml run --rm --no-deps -T ops --help
+# 同机与现有部署共享默认网络；异机必须配置实际可达的数据服务地址。
+# 不通过本文件 down 管理共享项目。
+name: iam-service-prod
+
+services:
+  ops:
+    image: ${IAM_OPS_IMAGE:?set IAM_OPS_IMAGE to the same release as the target applications}
+    build:
+      context: ..
+      dockerfile: apps/ops/Dockerfile
+      args:
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-}
+        http_proxy: ${http_proxy:-}
+        https_proxy: ${https_proxy:-}
+        no_proxy: ${no_proxy:-}
+    restart: "no"
+    environment:
+      NODE_ENV: production
+      IAM_OPS_DATABASE_URL: ${IAM_OPS_DATABASE_URL:-}
+      IAM_OPS_REDIS_HOST: ${IAM_OPS_REDIS_HOST:-}
+      IAM_OPS_REDIS_PORT: ${IAM_OPS_REDIS_PORT:-6379}
+      IAM_OPS_REDIS_DB: ${IAM_OPS_REDIS_DB:-0}
+      IAM_OPS_REDIS_USERNAME: ${IAM_OPS_REDIS_USERNAME:-}
+      IAM_OPS_REDIS_PASSWORD: ${IAM_OPS_REDIS_PASSWORD:-}
+      IAM_OPS_LOG_LEVEL: ${IAM_OPS_LOG_LEVEL:-info}
+      IAM_OPS_LOG_FORMAT: ${IAM_OPS_LOG_FORMAT:-json}
+      IAM_OPS_USER_DOCUMENT_REBUILD_BATCH_SIZE: ${IAM_OPS_USER_DOCUMENT_REBUILD_BATCH_SIZE:-100}
+      IAM_OPS_USER_DOCUMENT_BACKFILL_BATCH_SIZE: ${IAM_OPS_USER_DOCUMENT_BACKFILL_BATCH_SIZE:-500}
+      IAM_OPS_USER_DOCUMENT_REPAIR_STALE_SECONDS: ${IAM_OPS_USER_DOCUMENT_REPAIR_STALE_SECONDS:-300}
+      IAM_OPS_ORGANIZATION_DOCUMENT_BACKFILL_BATCH_SIZE: ${IAM_OPS_ORGANIZATION_DOCUMENT_BACKFILL_BATCH_SIZE:-500}
+      IAM_OPS_ORGANIZATION_DOCUMENT_REPAIR_STALE_SECONDS: ${IAM_OPS_ORGANIZATION_DOCUMENT_REPAIR_STALE_SECONDS:-300}

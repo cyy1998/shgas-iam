@@ -172,8 +172,9 @@ Gateway API：`pnpm --filter @iam/gateway-apisix start`；开发监听使用 `de
 认证 Integration 使用根 `pnpm test:integration --workspace apps/gateway` 准备的
 `IAM_GATEWAY_TEST_DATABASE_URL`，不读取开发数据库；请求和配置说明见 [Gateway README](../../apps/gateway/README.md)。
 
-当前会话和 Snapshot 维护入口为 Worker `session:clear:inventory`、`session:clear`、`session:clear:verify`、`client-snapshot:repair`、`client-snapshot:verify`。
-同名 scripts 通过 `bun run` 默认读取 `apps/worker/.env`，已有进程环境变量优先。
+当前会话和 Snapshot 维护入口为 Ops `iam-ops session inventory`、`iam-ops session apply`、`iam-ops session verify`、`iam-ops client-snapshot repair`、`iam-ops client-snapshot verify`。
+独立镜像与一次性生产 Compose 的准备、网络和执行方式见[Ops 维护环境](../releases/deployment.md#一次性-ops-维护环境)。
+统一 CLI 默认读取 `apps/ops/.env`，已有进程环境变量优先。
 资源、当前布局、namespace、停流/排空与失败处理见[统一维护手册](../releases/authentication-and-session.md)。
 User Document 重建及 Subject Access 恢复见[Document 维护手册](../releases/data-maintenance.md)；
 一次性升级工具集中在[历史数据维护工具](#历史数据维护工具)，不用于当前代日常恢复。
@@ -205,16 +206,16 @@ User Document 重建及 Subject Access 恢复见[Document 维护手册](../relea
 - 后端 Architecture Guard（唯一静态架构入口）：`pnpm check:architecture`
 - 文档索引与本地链接检查：`pnpm check:docs`
 - Env naming guard：`pnpm check:env-names`
-- 组织搜索首建：`pnpm --filter @iam/worker organization-document:backfill`。命令使用 `IAM_WORKER_DATABASE_URL` 与
-  Worker Redis 配置，只创建组织队列及数据库资源，退出时关闭；按批保存全部组织（含删除组织）的源变化记录并唤醒普通
+- 组织搜索首建：`pnpm --filter @iam/ops iam-ops organization-document backfill`。命令使用 `IAM_OPS_DATABASE_URL` 与
+  Ops Redis 配置，只创建组织队列及数据库资源，退出时关闭；按批保存全部组织（含删除组织）的源变化记录并唤醒普通
   `organization-document` consumer，报告中的 `enqueued` 不表示已经发布。消费者由 dev/prod Compose 的
   `worker-organization-document` 服务独立启动；完整维护窗口与放流要求见
   [组织搜索全量重建](../releases/data-maintenance.md#组织搜索全量重建)。
-- 组织搜索补偿：`pnpm --filter @iam/worker organization-document:repair -- --limit 500 --deadline-ms 30000`。
+- 组织搜索补偿：`pnpm --filter @iam/ops iam-ops organization-document repair -- --limit 500 --deadline-ms 30000`。
   两个持久阶段的回收、报告、重复执行和外部周期责任见
   [组织搜索维护](../releases/data-maintenance.md#组织搜索日常修复)。
-- 组织搜索全量只读核验：`pnpm --filter @iam/worker organization-document:verify -- --deadline-ms 30000`。
-  只使用 `IAM_WORKER_DATABASE_URL`，同一 `REPEATABLE READ READ ONLY` transaction 完整观察源组织、闭包、文档、
+- 组织搜索全量只读核验：`pnpm --filter @iam/ops iam-ops organization-document verify -- --deadline-ms 30000`。
+  只使用 `IAM_OPS_DATABASE_URL`，同一 `REPEATABLE READ READ ONLY` transaction 完整观察源组织、闭包、文档、
   删除墓碑和两阶段工作；`status: passed` 且退出 0 才通过数据门禁。没有 schema 选择、部分 batch 或入队副作用。
   首次、升级、失败重跑与人工放流见[组织搜索维护](../releases/data-maintenance.md#组织搜索全量重建)。
 
@@ -262,7 +263,10 @@ Stylelint 只检查 Less，不自动修复。YAML 不执行通用 lint，也不�
 ```bash
 pnpm test:integration
 pnpm test:integration --workspace @iam/worker
-pnpm test:integration --workspace @iam/worker --file test-integration/session-clear/session-clear-command.integration.test.ts
+
+# Ops 人工命令、配置、报告、取消与真实资源作用
+pnpm test:integration --workspace @iam/ops
+pnpm test:integration --workspace @iam/ops --file test-integration/session-clear/session-clear-command.integration.test.ts
 pnpm test:integration --workspace apps/admin --workspace apps/sso
 ```
 
@@ -358,7 +362,7 @@ Cleanup 失败会非零退出并保留 descriptor，可使用同一目标重试�
 diagnostics 或 cleanup。命令名不表示已经接入 CI provider，也不授予 merge、发布或部署权限。Integration 资源与 Full-system
 E2E lifecycle 的详细契约分别由本页后续专用资源说明和 [测试编排架构](../architecture/testing-architecture.md) 持有。
 
-统一 Snapshot 通过 Core Redis、Admin composition 和 Worker CLI 验证；最终 schema/数据门禁分别使用 DB/Worker PostgreSQL。
+统一 Snapshot 通过 Core Redis、Admin composition 和 Ops CLI 验证；最终 schema/数据门禁分别使用 DB/Ops PostgreSQL。
 当前维护步骤见[统一维护手册](../releases/authentication-and-session.md)，旧工具操作见[历史数据维护工具](#历史数据维护工具)；测试不提供目标环境操作授权。
 
 聚合验证的证明边界见[验证结果与交付](testing.md#验证结果与交付)。
@@ -374,8 +378,11 @@ pnpm test:integration --workspace @iam/api
 pnpm --filter @iam/db db:check
 pnpm test:integration --workspace @iam/db
 
-# Worker 命令、队列、恢复与真实资源接线
+# Worker 队列、周期恢复与真实资源接线
 pnpm test:integration --workspace @iam/worker
+
+# Ops 统一人工维护 CLI 与真实资源接线
+pnpm test:integration --workspace @iam/ops
 
 # 共享 PostgreSQL owners
 pnpm test:integration --workspace @iam/role-assignment-resolution --workspace @iam/organization-responsibility-resolution
@@ -398,8 +405,8 @@ pnpm test:integration --workspace apps/gateway
 不单独准备外部 URL 或调用另一套容器生命周期。资源隔离与停止后重置见
 [专用资源与隔离](../architecture/testing-architecture.md#专用资源与隔离)。
 
-Worker targeted/full Snapshot repair 与独立 verify 共用本次 `IAM_WORKER_TEST_REDIS_URL`，不新增 cleanup-specific env，
-也不跨其他可见环境推断 Redis identity。Core 的 full restore 使用本次 `IAM_API_CORE_TEST_REDIS_URL`，与 Worker 一样
+Ops targeted/full Snapshot repair 与独立 verify 共用本次 `IAM_OPS_TEST_REDIS_URL`，不新增 cleanup-specific env，
+也不跨其他可见环境推断 Redis identity。Core 的 full restore 使用本次 `IAM_API_CORE_TEST_REDIS_URL`，与 Ops 一样
 由受管理独占 DB 和停止后 reset 保证用例干净起点。两者在 reset 前验证 non-owner sentinel 和旧 namespace 的保留、只读 verify 与
 生产部分失败重跑；随后停止本例执行者并整体重置独占 Redis DB，不再为 fixture 逐键登记或精确 UNLINK。
 
@@ -501,10 +508,10 @@ fixture 负责候选 API、TLS 代理、随机 PG schema、Redis 和 Node 进程
 
 ## 历史数据维护工具
 
-`audit:actions` 仍用于旧审计 action 或旧备份规范化，显式提供 `IAM_WORKER_DATABASE_URL`：
+`iam-ops audit-action` 仍用于旧审计 action 或旧备份规范化，显式提供 `IAM_OPS_DATABASE_URL`：
 
 ```bash
-pnpm --filter @iam/worker audit:actions -- <inventory|apply|verify>
+pnpm --filter @iam/ops iam-ops audit-action <inventory|apply|verify>
 ```
 
 apply 要求 `--writers-stopped`；冲突拒绝、事务锁、独立 verify 与未知提交恢复按
@@ -578,25 +585,26 @@ Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit�
 - Client Subject Projection：`pnpm --filter @iam/client-subject-projection <lint|test|test:unit|typecheck>`
 - User Document：`pnpm --filter @iam/user-document <lint|test|test:unit|typecheck>`
 - Filter Engine：`pnpm --filter @iam/filter-engine <lint|test|test:unit|typecheck>`；JSONB 编译的真实 PostgreSQL 行为由 User Document owner 验证。
-- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|typecheck|employment:verify|organization-document:backfill|organization-document:repair|organization-document:verify|user-document:backfill|user-document:repair|user-document:verify-postgres|user-document:verify-redis|client-snapshot:repair|client-snapshot:verify|session:clear:inventory|session:clear|session:clear:verify>`
+- Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|typecheck>`
+- Ops：`pnpm --filter @iam/ops iam-ops <group> <operation> [options]`，全部命令与参数见[Ops README](../../apps/ops/README.md)。
 
 - Employment 全库只读诊断：
-  `IAM_WORKER_DATABASE_URL=<target-url> pnpm --filter @iam/worker employment:verify`
+  `IAM_OPS_DATABASE_URL=<target-url> pnpm --filter @iam/ops iam-ops employment verify`
 - Subject Access 恢复：
-  `pnpm --filter @iam/worker run user-document:repair -- --subject-access-only --limit <positive-integer>`。
+  `pnpm --filter @iam/ops iam-ops user-document repair -- --subject-access-only --limit <positive-integer>`。
   该模式依次执行 PostgreSQL stale pending transition intent 回收、Redis transition recovery 与 authority repair，
   不执行 User Document maintenance。它会更新 PostgreSQL transition intent，不局限于 Redis indexed backlog；所需权限、
   stale threshold、调度与失败恢复见[Document 维护手册](../releases/data-maintenance.md#subject-access-恢复)。
 - User Document 全量重建与完整只读核验：先运行
-  `pnpm --filter @iam/worker user-document:backfill` 登记所有源用户的 Outbox（含 Pause、Disable 与 deleted）；批量大小通过
-  `IAM_WORKER_USER_DOCUMENT_BACKFILL_BATCH_SIZE=<positive-integer>` 配置。
-  等待 Worker 收敛并按需运行 `user-document:repair` 后，依次运行
-  `pnpm --filter @iam/worker user-document:verify-postgres -- [--batch-size <positive-integer>]` 和
-  `pnpm --filter @iam/worker user-document:verify-redis -- [--batch-size <positive-integer>]`。Backfill 的 `enqueued`
+  `pnpm --filter @iam/ops iam-ops user-document backfill` 登记所有源用户的 Outbox（含 Pause、Disable 与 deleted）；批量大小通过
+  `IAM_OPS_USER_DOCUMENT_BACKFILL_BATCH_SIZE=<positive-integer>` 配置。
+  等待 Worker 收敛并按需运行 `iam-ops user-document repair` 后，依次运行
+  `pnpm --filter @iam/ops iam-ops user-document verify-postgres -- [--batch-size <positive-integer>]` 和
+  `pnpm --filter @iam/ops iam-ops user-document verify-redis -- [--batch-size <positive-integer>]`。Backfill 的 `enqueued`
   只表示已唤醒；registered、Outbox processed、Rebuild State processed 与核验通过分别判断。
   用户 backfill/repair/verify 均支持 `--deadline-ms`，必需关闭失败或中断非零；窗口、两 gate 和放流见[Document 维护手册](../releases/data-maintenance.md#user-document-全量重建)。
-- 当前 Snapshot repair/verify 与 unified 状态维护：使用 Worker `client-snapshot:repair`、`client-snapshot:verify`、
-  `session:clear:inventory`、`session:clear`、`session:clear:verify`，完整停流/资源/参数/失败重跑边界见[统一维护手册](../releases/authentication-and-session.md)。
+- 当前 Snapshot repair/verify 与 unified 状态维护：使用 Ops `iam-ops client-snapshot repair`、`iam-ops client-snapshot verify`、
+  `iam-ops session inventory`、`iam-ops session apply`、`iam-ops session verify`，完整停流/资源/参数/失败重跑边界见[统一维护手册](../releases/authentication-and-session.md)。
   旧 `client-runtime:*`、Provider 维护、epoch 和扩展期 Client 升级命令已退役。
 - Admin frontend：`pnpm --filter @iam/admin <dev|build|lint|test|test:unit|typecheck|format>`
 - SSO frontend：`pnpm --filter @iam/sso <dev|build|lint|test|test:unit|typecheck|format>`
@@ -605,7 +613,7 @@ Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit�
 - Organization Responsibility Resolution：`pnpm --filter @iam/organization-responsibility-resolution <lint|typecheck>`
 - Gateway：`pnpm --filter @iam/gateway-apisix <dev|start|lint|test|test:unit|typecheck>`；配置发布通过 HTTP API。
 
-`employment:verify` 只在运维人员显式调用时扫描 Employment，不属于 Worker 启动或请求路径。它在 PostgreSQL
+`iam-ops employment verify` 只在运维人员显式调用时扫描 Employment，不属于 Worker 启动或请求路径。它在 PostgreSQL
 `READ ONLY` transaction 中检查非墓碑未知状态、Open Position/Organization 完整性、Employment Period、Open `endTime`、
 Ended `endTime`、未来 Open `startTime`、重复 Open 组合和多个 Open Primary。报告 `passed` 时退出 0；存在任一阻断项时
 报告 `failed` 并退出 1，按稳定分类列出全部相关 Employment ID。Legacy Employment Tombstone 单独计数且不因缺少可信

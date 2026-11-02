@@ -29,6 +29,7 @@ type StaticModuleOwnershipRule = Readonly<{
     | "client-subject-projection-owner"
     | "session-runtime-owner"
     | "worker-ownership"
+    | "ops-ownership"
     | "organization-responsibility-parent-lifecycle-owner";
   sourceScopes: readonly string[];
   targets: readonly StaticModulePattern[];
@@ -48,6 +49,7 @@ const architectureWorkspaces: readonly (readonly [
   ["@iam/admin-api", "apps/admin-api", ["source", "canonical"]],
   ["@iam/gateway-apisix", "apps/gateway", ["source", "canonical"]],
   ["@iam/worker", "apps/worker", ["source", "canonical"]],
+  ["@iam/ops", "apps/ops", ["source", "canonical"]],
   ["@iam/session-kernel", "packages/session-kernel", ["source", "docker", "canonical"]],
   ["@iam/custom-sso", "packages/custom-sso", ["source", "docker", "canonical"]],
   ["@iam/oidc", "packages/oidc", ["source", "docker", "canonical"]],
@@ -236,10 +238,21 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
   {
     ruleId: "worker-ownership",
     sourceScopes: ["apps/worker/src"],
-    targets: [{ kind: "prefix", module: "apps/api/src" }],
+    targets: [
+      { kind: "prefix", module: "apps/api/src" },
+      { kind: "prefix", module: "apps/ops/src" },
+    ],
     message: (moduleSpecifier, declaration) =>
       `Worker production sources must not ${dependencyOperation(declaration)} ` +
-      `API-private module "${moduleSpecifier}"; depend on a public workspace package.`,
+      `API/Ops-private module "${moduleSpecifier}"; depend on a public workspace package.`,
+  },
+  {
+    ruleId: "ops-ownership",
+    sourceScopes: ["apps/ops/src"],
+    targets: [{ kind: "prefix", module: "apps" }],
+    allowedTargets: [{ kind: "prefix", module: "apps/ops/src" }],
+    message: (moduleSpecifier, declaration) =>
+      `Ops production sources must not ${dependencyOperation(declaration)} another app's private module "${moduleSpecifier}"; depend on a public workspace package.`,
   },
 ];
 
@@ -815,7 +828,7 @@ function isRoleAssignmentResolverValueOwner(file: string) {
   return (
     /^apps\/(?:api|admin-api|worker)\/src\/composition(?:\/|$)/u.test(file) ||
     file === "packages/user-document/src/invalidation/user-document-source.ts" ||
-    file === "packages/user-document/src/worker/user-document-worker.module.ts"
+    file === "packages/user-document/src/worker/user-document-projection.ts"
   );
 }
 

@@ -1,23 +1,6 @@
 import { DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
 import { z } from "zod";
 
-export function parseOfflineMaintenanceEnv(env: NodeJS.ProcessEnv) {
-  const requiredInteger = (value: string | undefined, max: number) => {
-    if (value === undefined || !/^\d+$/u.test(value)) throw new Error("Explicit maintenance resource required");
-    return z.coerce.number().int().min(0).max(max).parse(value);
-  };
-  const port = requiredInteger(env.IAM_WORKER_REDIS_PORT, 65535);
-  if (!port) throw new Error("Explicit maintenance port required");
-  return {
-    host: z.string().trim().min(1).parse(env.IAM_WORKER_REDIS_HOST),
-    port,
-    db: requiredInteger(env.IAM_WORKER_REDIS_DB, 2147483647),
-    username: env.IAM_WORKER_REDIS_USERNAME || undefined,
-    password: env.IAM_WORKER_REDIS_PASSWORD || undefined,
-  };
-}
-export type OfflineMaintenanceEnv = ReturnType<typeof parseOfflineMaintenanceEnv>;
-
 const moduleKeySchema = z.string().trim().min(1);
 
 export type WorkerModuleSelection = {
@@ -114,14 +97,12 @@ const RawWorkerEnvSchema = z
     IAM_WORKER_BULL_BOARD_READ_ONLY: booleanString(true),
     IAM_WORKER_USER_DOCUMENT_CONCURRENCY: z.coerce.number().int().positive().default(2),
     IAM_WORKER_USER_DOCUMENT_REBUILD_BATCH_SIZE: z.coerce.number().int().positive().default(100),
-    IAM_WORKER_USER_DOCUMENT_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().default(500),
     IAM_WORKER_USER_DOCUMENT_REPAIR_STALE_SECONDS: z.coerce.number().int().positive().max(86_400).default(300),
     IAM_WORKER_USER_DOCUMENT_REPAIR_ENABLED: booleanString(false),
     IAM_WORKER_USER_DOCUMENT_REPAIR_INTERVAL_MS: z.coerce.number().int().positive().max(2_147_483_647).default(60_000),
     IAM_WORKER_USER_DOCUMENT_REPAIR_LIMIT: z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER).default(500),
     IAM_WORKER_USER_DOCUMENT_REPAIR_DEADLINE_MS: z.coerce.number().int().positive().max(300_000).default(30_000),
     IAM_WORKER_ORGANIZATION_DOCUMENT_CONCURRENCY: z.coerce.number().int().positive().default(2),
-    IAM_WORKER_ORGANIZATION_DOCUMENT_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().default(500),
     IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_STALE_SECONDS: z.coerce.number().int().positive().max(86_400).default(300),
     IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_ENABLED: booleanString(false),
     IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_INTERVAL_MS: z.coerce
@@ -166,94 +147,6 @@ const RawWorkerEnvSchema = z
     }
   });
 
-const EmploymentCommandEnvSchema = z.object({
-  IAM_WORKER_DATABASE_URL: z.string().min(1),
-  NODE_ENV: z.string().default("development"),
-  IAM_WORKER_LOG_LEVEL: z.string().default("info"),
-  IAM_WORKER_LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
-});
-
-const AuditActionMaintenanceCommandEnvSchema = z.object({
-  IAM_WORKER_DATABASE_URL: z.string().min(1),
-});
-
-const UserDocumentPostgresReadinessCommandEnvSchema = z.object({
-  IAM_WORKER_DATABASE_URL: z.string().min(1),
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  IAM_WORKER_LOG_LEVEL: z.string().default("info"),
-  IAM_WORKER_LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
-  IAM_WORKER_USER_DOCUMENT_REBUILD_BATCH_SIZE: z.coerce.number().int().positive().default(100),
-  IAM_WORKER_USER_DOCUMENT_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().default(500),
-});
-
-const OrganizationDocumentBackfillCommandEnvSchema = z.object({
-  IAM_WORKER_DATABASE_URL: z.url().refine((value) => ["postgres:", "postgresql:"].includes(new URL(value).protocol)),
-  IAM_WORKER_REDIS_HOST: z.string().trim().min(1),
-  IAM_WORKER_REDIS_PORT: z.coerce.number().int().min(1).max(65535).default(6379),
-  IAM_WORKER_REDIS_DB: z.coerce.number().int().min(0).default(0),
-  IAM_WORKER_REDIS_PASSWORD: optionalNonEmptyString(),
-  IAM_WORKER_REDIS_USERNAME: optionalNonEmptyString(),
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  IAM_WORKER_LOG_LEVEL: z.string().default("info"),
-  IAM_WORKER_LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
-  IAM_WORKER_ORGANIZATION_DOCUMENT_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().default(500),
-  IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_STALE_SECONDS: z.coerce.number().int().positive().max(86_400).default(300),
-});
-
-export interface OrganizationDocumentBackfillCommandEnv {
-  databaseUrl: string;
-  redis: { host: string; port: number; db: number; password?: string; username?: string };
-  nodeEnv: "development" | "test" | "production";
-  log: { level: string; format: "auto" | "json" | "pretty" };
-  organizationDocument: { backfillBatchSize: number; repairStaleSeconds: number };
-}
-
-export function parseOrganizationDocumentBackfillCommandEnv(
-  source: NodeJS.ProcessEnv,
-): OrganizationDocumentBackfillCommandEnv {
-  requireDefaultOrganizationQueuePrefix(source);
-  const raw = OrganizationDocumentBackfillCommandEnvSchema.parse(source);
-  exposeDatabaseUrlForDbPackage(raw.IAM_WORKER_DATABASE_URL);
-  return {
-    databaseUrl: raw.IAM_WORKER_DATABASE_URL,
-    redis: {
-      host: raw.IAM_WORKER_REDIS_HOST,
-      port: raw.IAM_WORKER_REDIS_PORT,
-      db: raw.IAM_WORKER_REDIS_DB,
-      password: raw.IAM_WORKER_REDIS_PASSWORD,
-      username: raw.IAM_WORKER_REDIS_USERNAME,
-    },
-    nodeEnv: raw.NODE_ENV,
-    log: { level: raw.IAM_WORKER_LOG_LEVEL, format: raw.IAM_WORKER_LOG_FORMAT },
-    organizationDocument: {
-      backfillBatchSize: raw.IAM_WORKER_ORGANIZATION_DOCUMENT_BACKFILL_BATCH_SIZE,
-      repairStaleSeconds: raw.IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_STALE_SECONDS,
-    },
-  };
-}
-
-export type OrganizationDocumentVerifyCommandEnv = Pick<
-  OrganizationDocumentBackfillCommandEnv,
-  "databaseUrl" | "nodeEnv" | "log"
->;
-
-export function parseOrganizationDocumentVerifyCommandEnv(
-  source: NodeJS.ProcessEnv,
-): OrganizationDocumentVerifyCommandEnv {
-  const raw = OrganizationDocumentBackfillCommandEnvSchema.pick({
-    IAM_WORKER_DATABASE_URL: true,
-    NODE_ENV: true,
-    IAM_WORKER_LOG_LEVEL: true,
-    IAM_WORKER_LOG_FORMAT: true,
-  }).parse(source);
-  exposeDatabaseUrlForDbPackage(raw.IAM_WORKER_DATABASE_URL);
-  return {
-    databaseUrl: raw.IAM_WORKER_DATABASE_URL,
-    nodeEnv: raw.NODE_ENV,
-    log: { level: raw.IAM_WORKER_LOG_LEVEL, format: raw.IAM_WORKER_LOG_FORMAT },
-  };
-}
-
 type RawWorkerEnv = z.infer<typeof RawWorkerEnvSchema>;
 
 export interface WorkerEnv {
@@ -289,7 +182,6 @@ export interface WorkerEnv {
   userDocument: {
     concurrency: number;
     rebuildBatchSize: number;
-    backfillBatchSize: number;
     repairStaleSeconds: number;
     repair: {
       enabled: boolean;
@@ -300,7 +192,6 @@ export interface WorkerEnv {
   };
   organizationDocument: {
     concurrency: number;
-    backfillBatchSize: number;
     repairStaleSeconds: number;
     repair: {
       enabled: boolean;
@@ -308,28 +199,6 @@ export interface WorkerEnv {
       limit: number;
       deadlineMs: number;
     };
-  };
-}
-
-export interface EmploymentCommandEnv {
-  databaseUrl: string;
-  nodeEnv: string;
-  log: {
-    level: string;
-    format: "auto" | "json" | "pretty";
-  };
-}
-
-export interface UserDocumentPostgresReadinessCommandEnv {
-  databaseUrl: string;
-  nodeEnv: "development" | "test" | "production";
-  log: {
-    level: string;
-    format: "auto" | "json" | "pretty";
-  };
-  userDocument: {
-    rebuildBatchSize: number;
-    backfillBatchSize: number;
   };
 }
 
@@ -367,7 +236,6 @@ function toWorkerEnv(raw: RawWorkerEnv): WorkerEnv {
     userDocument: {
       concurrency: raw.IAM_WORKER_USER_DOCUMENT_CONCURRENCY,
       rebuildBatchSize: raw.IAM_WORKER_USER_DOCUMENT_REBUILD_BATCH_SIZE,
-      backfillBatchSize: raw.IAM_WORKER_USER_DOCUMENT_BACKFILL_BATCH_SIZE,
       repairStaleSeconds: raw.IAM_WORKER_USER_DOCUMENT_REPAIR_STALE_SECONDS,
       repair: {
         enabled: raw.IAM_WORKER_USER_DOCUMENT_REPAIR_ENABLED,
@@ -378,7 +246,6 @@ function toWorkerEnv(raw: RawWorkerEnv): WorkerEnv {
     },
     organizationDocument: {
       concurrency: raw.IAM_WORKER_ORGANIZATION_DOCUMENT_CONCURRENCY,
-      backfillBatchSize: raw.IAM_WORKER_ORGANIZATION_DOCUMENT_BACKFILL_BATCH_SIZE,
       repairStaleSeconds: raw.IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_STALE_SECONDS,
       repair: {
         enabled: raw.IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_ENABLED,
@@ -415,63 +282,36 @@ function requireDefaultOrganizationQueuePrefix(source: NodeJS.ProcessEnv) {
     throw new RangeError(`Organization Search queue prefix is fixed to ${DEFAULT_QUEUE_PREFIX}`);
 }
 
-export function parseEmploymentCommandEnv(source: NodeJS.ProcessEnv): EmploymentCommandEnv {
-  const raw = EmploymentCommandEnvSchema.parse(source);
-  exposeDatabaseUrlForDbPackage(raw.IAM_WORKER_DATABASE_URL);
-  return {
-    databaseUrl: raw.IAM_WORKER_DATABASE_URL,
-    nodeEnv: raw.NODE_ENV,
-    log: {
-      level: raw.IAM_WORKER_LOG_LEVEL,
-      format: raw.IAM_WORKER_LOG_FORMAT,
-    },
-  };
-}
-
-export function parseAuditActionMaintenanceCommandEnv(source: NodeJS.ProcessEnv) {
-  const raw = AuditActionMaintenanceCommandEnvSchema.parse(source);
-  const databaseUrl = raw.IAM_WORKER_DATABASE_URL;
-  if (!["postgres:", "postgresql:"].includes(new URL(databaseUrl).protocol))
-    throw new Error("invalid database configuration");
-  return { databaseUrl };
-}
-
-export function parseUserDocumentPostgresReadinessCommandEnv(
-  source: NodeJS.ProcessEnv,
-): UserDocumentPostgresReadinessCommandEnv {
-  const raw = UserDocumentPostgresReadinessCommandEnvSchema.parse(source);
-  exposeDatabaseUrlForDbPackage(raw.IAM_WORKER_DATABASE_URL);
-  return {
-    databaseUrl: raw.IAM_WORKER_DATABASE_URL,
-    nodeEnv: raw.NODE_ENV,
-    log: {
-      level: raw.IAM_WORKER_LOG_LEVEL,
-      format: raw.IAM_WORKER_LOG_FORMAT,
-    },
-    userDocument: {
-      rebuildBatchSize: raw.IAM_WORKER_USER_DOCUMENT_REBUILD_BATCH_SIZE,
-      backfillBatchSize: raw.IAM_WORKER_USER_DOCUMENT_BACKFILL_BATCH_SIZE,
-    },
-  };
-}
-
-export function parseUserDocumentCommandEnv(source: NodeJS.ProcessEnv) {
-  const env = parseUserDocumentPostgresReadinessCommandEnv(source);
-  const repairStaleSeconds = z.coerce
-    .number()
-    .int()
-    .positive()
-    .max(86_400)
-    .default(300)
-    .parse(source.IAM_WORKER_USER_DOCUMENT_REPAIR_STALE_SECONDS);
-  return {
-    ...env,
-    redis: parseOfflineMaintenanceEnv(source),
-    userDocument: { ...env.userDocument, repairStaleSeconds },
-  };
-}
-export type UserDocumentCommandEnv = ReturnType<typeof parseUserDocumentCommandEnv>;
-
 export default function loadWorkerEnv(): WorkerEnv {
   return parseWorkerEnv(process.env);
+}
+
+/** Private normalized input for one isolated repair child, created only by Worker composition. */
+const DocumentRepairInvocationSchema = z.object({
+  document: z.enum(["user", "organization"]),
+  postgresInvocationId: z.uuid(),
+  limit: z.number().int().positive(),
+  deadlineMs: z.number().int().positive().max(300_000),
+  env: z.object({
+    nodeEnv: z.enum(["development", "test", "production"]),
+    databaseUrl: z.string().min(1),
+    redis: z.object({
+      host: z.string().min(1),
+      port: z.number().int().positive().max(65535),
+      db: z.number().int().nonnegative(),
+      password: z.string().optional(),
+    }),
+    log: z.object({ level: z.string(), format: z.enum(["auto", "json", "pretty"]) }),
+    userDocument: z.object({
+      rebuildBatchSize: z.number().int().positive(),
+      repairStaleSeconds: z.number().int().positive(),
+    }),
+    organizationDocument: z.object({
+      repairStaleSeconds: z.number().int().positive(),
+    }),
+  }),
+});
+export type DocumentRepairInvocation = z.infer<typeof DocumentRepairInvocationSchema>;
+export function parseDocumentRepairInvocation(source: NodeJS.ProcessEnv): DocumentRepairInvocation {
+  return DocumentRepairInvocationSchema.parse(JSON.parse(source.IAM_WORKER_DOCUMENT_REPAIR_INPUT ?? "null"));
 }

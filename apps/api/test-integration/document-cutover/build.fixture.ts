@@ -15,16 +15,8 @@ await mkdir(join(output, "runtime"));
 const entries = [
   ["api", "apps/api", "src/index.ts"],
   ["worker", "apps/worker", "src/index.ts"],
-  ...["backfill", "repair", "readiness"].map((operation) => [
-    `user-document-${operation}`,
-    "apps/worker",
-    `src/commands/user-document/user-document-${operation}.ts`,
-  ]),
-  ...["backfill", "repair", "verify"].map((operation) => [
-    `organization-document-${operation}`,
-    "apps/worker",
-    `src/commands/organization-document/organization-document-${operation}.ts`,
-  ]),
+  ["iam-ops", "apps/ops", "src/index.ts"],
+  ["windows-job-launcher", "packages/api-core", "src/process/windows-job-launcher.mjs"],
 ];
 const receipts = [];
 for (const [name, workspace, entry] of entries) {
@@ -63,6 +55,10 @@ for (const [name, workspace, entry] of entries) {
   );
   receipts.push({ name, args, cwd: workspace });
 }
+await cp(
+  join(repositoryRoot, "packages/api-core/src/process/windows-job-supervisor.ps1"),
+  join(output, "runtime/windows-job-supervisor.ps1"),
+);
 await cp(join(repositoryRoot, "apps/api/static"), join(output, "runtime/static"), { recursive: true });
 await cp(join(repositoryRoot, "packages/db/src/migrations"), join(output, "migrations"), { recursive: true });
 async function files(directory: string): Promise<Array<{ path: string; sha256: string }>> {

@@ -73,7 +73,9 @@ Redis 完成业务观察后先停止本例全部 consumer、子进程和连接�
 任一停止失败都禁止 reset，继续尝试其他收尾并汇总失败；禁止 `FLUSHALL`。
 
 非目标数据保护、只读行为和生产关闭必须在 reset 前观察，普通 fixture 无需逐键登记清理或等锁自然过期。
-Worker 保留生产连接防误用检查，不另设 cleanup URL 或跨环境推断 Redis 身份。共享连接的取消只能作用于本次 owner，不能影响并行任务。
+Worker 与 Ops 各自保留生产连接防误用检查，不另设 cleanup URL 或跨环境推断 Redis 身份。共享连接的取消只能作用于本次 owner，不能影响并行任务。
+Ops 通过正式 CLI 子进程验证命令输入、配置、报告、退出及资源作用；Worker 通过正式进程验证周期恢复。
+共享维护生命周期和完整领域编排分别在基础设施与领域 owner 集中验证，消费方只补实际接线及自身差异。
 
 Gateway Integration 由 package runner 的资源 provider 持有本次 APISIX/etcd，首次租用才启动，跨文件串行复用。
 每例先结束 Gateway 进程、调用连接、故障代理及在途转发，再直连 Admin 按依赖顺序删除七类完整资源并回读空基线。

@@ -8,6 +8,7 @@ export * from "./readiness/user-document-readiness.module";
 export * from "./readiness/user-document-readiness.repository";
 export * from "./subject-access/subject-access-authority.repository";
 export { createSubjectFactsRedisInspector } from "./subject-facts/subject-facts-redis";
+export { createCurrentUserDocumentProjectionBundle } from "./worker/user-document-projection";
 export * from "./worker/user-document-rebuild.processor";
 export * from "./worker/user-document-update.processor";
 export * from "./worker/user-document-worker.module";

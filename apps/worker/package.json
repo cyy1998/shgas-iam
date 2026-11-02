@@ -15,21 +15,7 @@
   },
   "scripts": {
     "dev": "bun --hot src/index.ts",
-    "organization-document:backfill": "bun run src/commands/organization-document/organization-document-backfill.ts",
-    "organization-document:repair": "bun run src/commands/organization-document/organization-document-repair.ts",
-    "organization-document:verify": "bun run src/commands/organization-document/organization-document-verify.ts",
     "serve": "bun run src/index.ts",
-    "session:clear:inventory": "bun run src/commands/session-clear/session-clear.ts inventory",
-    "session:clear": "bun run src/commands/session-clear/session-clear.ts apply",
-    "session:clear:verify": "bun run src/commands/session-clear/session-clear.ts verify",
-    "client-snapshot:repair": "bun run src/commands/client-runtime/client-snapshot-maintenance.ts repair",
-    "client-snapshot:verify": "bun run src/commands/client-runtime/client-snapshot-maintenance.ts verify",
-    "employment:verify": "bun run src/commands/employment-verifier.ts",
-    "audit:actions": "bun run src/commands/audit-action-maintenance.ts",
-    "user-document:backfill": "bun run src/commands/user-document/user-document-backfill.ts",
-    "user-document:repair": "bun run src/commands/user-document/user-document-repair.ts",
-    "user-document:verify-postgres": "bun run src/commands/user-document/user-document-readiness.ts verify-postgres",
-    "user-document:verify-redis": "bun run src/commands/user-document/user-document-readiness.ts verify-redis",
     "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
     "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "test": "pnpm test:unit",
@@ -52,23 +38,20 @@
     "@bull-board/hono": "^9.10.1",
     "@iam/api-core": "workspace:*",
     "@iam/contracts": "workspace:*",
-    "@iam/custom-sso": "workspace:*",
     "@iam/db": "workspace:*",
     "@iam/jobs": "workspace:*",
-    "@iam/oidc": "workspace:*",
     "@iam/organization-document": "workspace:*",
-    "@iam/session-kernel": "workspace:*",
     "@iam/user-document": "workspace:*",
     "drizzle-orm": "1.0.0-rc.2",
     "hono": "^4.12.30",
     "ioredis": "^6.0.0",
     "pino": "^10.3.1",
-    "postgres": "^3.4.9",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/bun": "latest",
     "@typescript/native": "npm:typescript@7.0.2",
-    "typescript": "npm:@typescript/typescript6@6.0.2"
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "postgres": "^3.4.9"
   }
 }

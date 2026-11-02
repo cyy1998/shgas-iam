@@ -1,9 +1,12 @@
 import { expect, test } from "bun:test";
-import { access } from "node:fs/promises";
+import { access, copyFile } from "node:fs/promises";
+import { join } from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 import type { ProcessSmokeChild } from "@iam/api-core/testing/process-smoke-harness";
 import {
   createProcessSmokeEnvironment,
+  runProcessCommandSmoke,
   spawnOwnedProcessTree,
   terminateProcessByPid,
   terminateProcessTree,
@@ -61,100 +64,130 @@ async function waitForSupervisorClose(supervisor: ProcessSmokeChild, getDiagnost
   });
 }
 
-test.skipIf(process.platform !== "win32")(
-  "kills descendants through a real Windows Job after the leader exits",
-  async () => {
-    let ownedTemporaryDirectory = "";
+for (const packagedLauncher of [false, true])
+  test.skipIf(process.platform !== "win32")(
+    `kills descendants through a real Windows Job after the leader exits (${packagedLauncher ? "standalone launcher" : "runtime launcher"})`,
+    async () => {
+      let ownedTemporaryDirectory = "";
 
-    await withOwnedTemporaryDirectory({
-      prefix: "iam-api-core-windows-job-smoke-",
-      cleanupTimeoutMs: temporaryDirectoryCleanupTimeoutMs,
-      async run(temporaryDirectory) {
-        ownedTemporaryDirectory = temporaryDirectory;
-        const tailMarker = "WINDOWS_JOB_TAIL_MARKER";
-        const targetScript = [
-          "const { spawn } = require('node:child_process');",
-          "const child = spawn(process.execPath,",
-          "  ['-e', 'setInterval(() => {}, 1000)'],",
-          "  { detached: true, stdio: 'ignore', windowsHide: true });",
-          "child.unref();",
-          "process.stdout.write('DESCENDANT_PID=' + child.pid + '\\n');",
-          "process.stdout.write('TEMP_DIRECTORY=' + process.env.TEMP + '\\n');",
-          `process.stderr.write('x'.repeat(256 * 1024) + '${tailMarker}\\n',`,
-          "  () => process.exit(23));",
-        ].join("\n");
-        const supervisor = spawnOwnedProcessTree({
-          executable: process.execPath,
-          args: ["-e", targetScript],
-          cwd: temporaryDirectory,
-          env: createProcessSmokeEnvironment({
-            source: process.env,
-            temporaryDirectory,
-            overrides: {
-              NODE_ENV: "test",
-              FORCE_COLOR: "0",
-              NO_COLOR: "1",
-            },
-          }),
-        });
-        let output = "";
-        let observedExit = "not observed";
-        let descendantPid: number | undefined;
-        let testFailure: Error | undefined;
-        const captureOutput = (chunk: Buffer) => {
-          output = `${output}${chunk.toString()}`.slice(-(512 * 1024));
-        };
-        supervisor.stdout?.on("data", captureOutput);
-        supervisor.stderr?.on("data", captureOutput);
-        supervisor.once("exit", (code, signal) => {
-          observedExit = `code=${code ?? "null"} signal=${signal ?? "null"}`;
-        });
-
-        try {
-          const exit = await waitForSupervisorClose(supervisor, () => `exit=${observedExit}; output=${output}`);
-          descendantPid = Number(/DESCENDANT_PID=(\d+)/u.exec(output)?.[1]);
-          expect(exit).toEqual({ code: 23, signal: null });
-          expect(descendantPid).toBeGreaterThan(0);
-          expect(output).toContain(`TEMP_DIRECTORY=${temporaryDirectory}`);
-          expect(output).toContain(tailMarker);
-          const descendantExited = await waitForPidExit(descendantPid, descendantExitTimeoutMs);
-          expect(descendantExited).toBe(true);
-        } catch (error) {
-          testFailure = toError(error);
-        }
-
-        let cleanupFailure: Error | undefined;
-        try {
-          if (supervisor.exitCode === null && supervisor.signalCode === null) {
-            await terminateProcessTree(supervisor, {
-              timeoutMs: processTreeCleanupTimeoutMs,
+      await withOwnedTemporaryDirectory({
+        prefix: "iam-api-core-windows-job-smoke-",
+        cleanupTimeoutMs: temporaryDirectoryCleanupTimeoutMs,
+        async run(temporaryDirectory) {
+          ownedTemporaryDirectory = temporaryDirectory;
+          const launcherExecutable = join(temporaryDirectory, "windows-job-launcher.exe");
+          const supervisorPath = join(temporaryDirectory, "windows-job-supervisor.ps1");
+          if (packagedLauncher) {
+            await runProcessCommandSmoke({
+              label: "compile standalone Windows Job launcher",
+              completionTimeoutMs: 10000,
+              cleanupTimeoutMs: 2000,
+              start: () =>
+                spawnOwnedProcessTree({
+                  executable: process.execPath,
+                  args: [
+                    "build",
+                    fileURLToPath(new URL("../../src/process/windows-job-launcher.mjs", import.meta.url)),
+                    "--compile",
+                    "--no-compile-autoload-dotenv",
+                    "--no-compile-autoload-bunfig",
+                    "--windows-hide-console",
+                    `--outfile=${launcherExecutable}`,
+                  ],
+                  cwd: temporaryDirectory,
+                  env: process.env,
+                }),
             });
+            await copyFile(
+              fileURLToPath(new URL("../../src/process/windows-job-supervisor.ps1", import.meta.url)),
+              supervisorPath,
+            );
           }
-          if (
-            descendantPid !== undefined &&
-            !(await waitForPidExit(descendantPid, descendantCleanupConfirmationTimeoutMs))
-          ) {
-            await terminateProcessByPid(descendantPid, {
-              timeoutMs: descendantPostKillExitTimeoutMs,
-            });
+          const tailMarker = "WINDOWS_JOB_TAIL_MARKER";
+          const targetScript = [
+            "const { spawn } = require('node:child_process');",
+            "const child = spawn(process.execPath,",
+            "  ['-e', 'setInterval(() => {}, 1000)'],",
+            "  { detached: true, stdio: 'ignore', windowsHide: true });",
+            "child.unref();",
+            "process.stdout.write('DESCENDANT_PID=' + child.pid + '\\n');",
+            "process.stdout.write('TEMP_DIRECTORY=' + process.env.TEMP + '\\n');",
+            `process.stderr.write('x'.repeat(256 * 1024) + '${tailMarker}\\n',`,
+            "  () => process.exit(23));",
+          ].join("\n");
+          const supervisor = spawnOwnedProcessTree({
+            executable: process.execPath,
+            args: ["-e", targetScript],
+            ...(packagedLauncher ? { windowsJob: { supervisorPath, launcherExecutable } } : {}),
+            cwd: temporaryDirectory,
+            env: createProcessSmokeEnvironment({
+              source: process.env,
+              temporaryDirectory,
+              overrides: {
+                NODE_ENV: "test",
+                FORCE_COLOR: "0",
+                NO_COLOR: "1",
+              },
+            }),
+          });
+          let output = "";
+          let observedExit = "not observed";
+          let descendantPid: number | undefined;
+          let testFailure: Error | undefined;
+          const captureOutput = (chunk: Buffer) => {
+            output = `${output}${chunk.toString()}`.slice(-(512 * 1024));
+          };
+          supervisor.stdout?.on("data", captureOutput);
+          supervisor.stderr?.on("data", captureOutput);
+          supervisor.once("exit", (code, signal) => {
+            observedExit = `code=${code ?? "null"} signal=${signal ?? "null"}`;
+          });
+
+          try {
+            const exit = await waitForSupervisorClose(supervisor, () => `exit=${observedExit}; output=${output}`);
+            descendantPid = Number(/DESCENDANT_PID=(\d+)/u.exec(output)?.[1]);
+            expect(exit).toEqual({ code: 23, signal: null });
+            expect(descendantPid).toBeGreaterThan(0);
+            expect(output).toContain(`TEMP_DIRECTORY=${temporaryDirectory}`);
+            expect(output).toContain(tailMarker);
+            const descendantExited = await waitForPidExit(descendantPid, descendantExitTimeoutMs);
+            expect(descendantExited).toBe(true);
+          } catch (error) {
+            testFailure = toError(error);
           }
-        } catch (error) {
-          cleanupFailure = toError(error);
-        }
 
-        if (testFailure !== undefined && cleanupFailure !== undefined) {
-          throw new AggregateError([testFailure, cleanupFailure], "Windows Job assertion and cleanup both failed");
-        }
-        if (testFailure !== undefined) throw testFailure;
-        if (cleanupFailure !== undefined) throw cleanupFailure;
-      },
-    });
+          let cleanupFailure: Error | undefined;
+          try {
+            if (supervisor.exitCode === null && supervisor.signalCode === null) {
+              await terminateProcessTree(supervisor, {
+                timeoutMs: processTreeCleanupTimeoutMs,
+              });
+            }
+            if (
+              descendantPid !== undefined &&
+              !(await waitForPidExit(descendantPid, descendantCleanupConfirmationTimeoutMs))
+            ) {
+              await terminateProcessByPid(descendantPid, {
+                timeoutMs: descendantPostKillExitTimeoutMs,
+              });
+            }
+          } catch (error) {
+            cleanupFailure = toError(error);
+          }
 
-    const directoryError = await access(ownedTemporaryDirectory).then(
-      () => undefined,
-      (error) => error,
-    );
-    expect(directoryError).toMatchObject({ code: "ENOENT" });
-  },
-  windowsJobSmokeTestTimeoutMs,
-);
+          if (testFailure !== undefined && cleanupFailure !== undefined) {
+            throw new AggregateError([testFailure, cleanupFailure], "Windows Job assertion and cleanup both failed");
+          }
+          if (testFailure !== undefined) throw testFailure;
+          if (cleanupFailure !== undefined) throw cleanupFailure;
+        },
+      });
+
+      const directoryError = await access(ownedTemporaryDirectory).then(
+        () => undefined,
+        (error) => error,
+      );
+      expect(directoryError).toMatchObject({ code: "ENOENT" });
+    },
+    windowsJobSmokeTestTimeoutMs,
+  );
