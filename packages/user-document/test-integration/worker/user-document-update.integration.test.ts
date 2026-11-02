@@ -706,6 +706,27 @@ test.each(["cache", "access"])(
   },
 );
 
+test("publication of a new version resets its exhausted post-publication budget", async () => {
+  const scope = await redis.createScope();
+  const context = runtime(scope);
+  await context.record([{ kind: "user", userId: 1 }]);
+  await context.drain();
+  await pg.db.update(userDocumentRebuildStates).set({ postPublicationStatus: "failed", postPublicationAttempts: 5 });
+  const exhausted = await context.processor.repairFailedOrStale({ staleBefore: observedAt, limit: 1 });
+  expect(exhausted).toMatchObject({ exhausted: 1, postPublication: { selected: 0, exhausted: 1 } });
+  await context.record([{ kind: "user", userId: 1 }]);
+  await context.drain();
+  const [state] = await pg.db.select().from(userDocumentRebuildStates);
+  expect(state).toMatchObject({
+    version: "2",
+    postPublicationVersion: "2",
+    postPublicationStatus: "processed",
+    postPublicationAttempts: 1,
+  });
+  const record = await scope.readPublishedUserDocumentRecord(subject);
+  expect(record?.sourceVersion).toBe("2");
+});
+
 test("a late failed post-publication owner cannot erase a recovered completion of the same version", async () => {
   const scope = await redis.createScope();
   const entered = Promise.withResolvers<void>();

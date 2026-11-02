@@ -8,6 +8,8 @@ import type { PublishedUserDocument } from "../document";
 import type { UserDocumentProjectionBundle } from "./user-document-projection";
 import type { SubjectAccessRepairPort, UserDocumentRebuildLoggerPort } from "./user-document-rebuild.processor";
 
+export const USER_DOCUMENT_POST_PUBLICATION_MAX_ATTEMPTS = 5;
+
 export interface UserDocumentPostPublicationRequest {
   readonly userId: number;
   readonly version: string;
@@ -18,6 +20,7 @@ export interface UserDocumentPostPublicationReport {
   completed: number;
   skipped: number;
   failed: number;
+  exhausted: number;
 }
 
 interface PostPublicationClaim extends UserDocumentPostPublicationRequest {
@@ -99,14 +102,16 @@ export function createUserDocumentPostPublicationProcessor<
     }
   }
 
-  async function claimLocked(tx: DbTransaction, candidates: readonly PostPublicationClaim[]) {
+  async function claimLocked(tx: DbTransaction, candidates: readonly PostPublicationClaim[], resetExhausted = false) {
     if (!candidates.length) return [];
     const now = input.clock.nowDate().toISOString();
     return await tx.execute<{ userId: number; version: string; token: string }>(sql`
       UPDATE ${userDocumentRebuildStates} AS state
       SET post_publication_status='processing', post_publication_token=requested.token,
           post_publication_started_at=${now}, post_publication_completed_at=NULL,
-          post_publication_error=NULL, post_publication_attempts=state.post_publication_attempts+1,
+          post_publication_error=NULL, post_publication_attempts=CASE
+            WHEN ${resetExhausted} AND state.post_publication_attempts>=${USER_DOCUMENT_POST_PUBLICATION_MAX_ATTEMPTS}
+              THEN 1 ELSE state.post_publication_attempts+1 END,
           updated_at=${now}
       FROM (VALUES ${sql.join(
         candidates.map(
@@ -116,6 +121,7 @@ export function createUserDocumentPostPublicationProcessor<
       )})
         AS requested(user_id,version,token)
       WHERE state.user_id=requested.user_id AND state.post_publication_version=requested.version
+        AND (${resetExhausted} OR state.post_publication_attempts<${USER_DOCUMENT_POST_PUBLICATION_MAX_ATTEMPTS})
       RETURNING state.user_id AS "userId", state.post_publication_version::text AS version,
         state.post_publication_token::text AS token`);
   }
@@ -124,8 +130,9 @@ export function createUserDocumentPostPublicationProcessor<
     return await input.db.transaction(async (tx) => {
       await setMetadataBudgets(tx);
       // Lock in the same order as publication before any multi-row update.
-      const locked = await tx.execute<{ userId: number; version: string }>(sql`
-        SELECT state.user_id AS "userId", state.post_publication_version::text AS version
+      const locked = await tx.execute<{ userId: number; version: string; attempts: number }>(sql`
+        SELECT state.user_id AS "userId", state.post_publication_version::text AS version,
+          state.post_publication_attempts AS attempts
         FROM ${userDocumentRebuildStates} AS state
         JOIN (VALUES ${sql.join(
           requests.map((request) => sql`(${request.userId}::integer,${request.version}::bigint)`),
@@ -134,10 +141,17 @@ export function createUserDocumentPostPublicationProcessor<
           ON state.user_id=requested.user_id AND state.post_publication_version=requested.version
         WHERE state.post_publication_status IN ('pending','failed')
         ORDER BY state.user_id FOR UPDATE OF state`);
-      return await claimLocked(
-        tx,
-        locked.map((row) => ({ ...row, token: randomUUID() })),
-      );
+      const exhausted = locked.filter((row) => row.attempts >= USER_DOCUMENT_POST_PUBLICATION_MAX_ATTEMPTS);
+      for (const row of exhausted) warnExhausted(row);
+      return {
+        claims: await claimLocked(
+          tx,
+          locked
+            .filter((row) => row.attempts < USER_DOCUMENT_POST_PUBLICATION_MAX_ATTEMPTS)
+            .map((row) => ({ ...row, token: randomUUID() })),
+        ),
+        exhausted: exhausted.length,
+      };
     });
   }
 
@@ -161,7 +175,7 @@ export function createUserDocumentPostPublicationProcessor<
         ORDER BY state.user_id FOR UPDATE OF state`);
       if (!locked.length) return [];
       const now = input.clock.nowDate().toISOString();
-      return await tx.execute<{ userId: number; status: "processed" | "failed" }>(sql`
+      return await tx.execute<{ userId: number; status: "processed" | "failed"; attempts: number }>(sql`
         UPDATE ${userDocumentRebuildStates} AS state
         SET post_publication_status=owned.status, post_publication_token=NULL,
             post_publication_started_at=NULL, post_publication_error=owned.error_type,
@@ -174,7 +188,8 @@ export function createUserDocumentPostPublicationProcessor<
             locked.map((row) => sql`${row.userId}`),
             sql`, `,
           )})
-        RETURNING state.user_id AS "userId", state.post_publication_status AS status`);
+        RETURNING state.user_id AS "userId", state.post_publication_status AS status,
+          state.post_publication_attempts AS attempts`);
     });
     report.skipped += outcomes.length - rows.length;
     for (const row of rows) {
@@ -182,12 +197,23 @@ export function createUserDocumentPostPublicationProcessor<
       else {
         report.failed += 1;
         const outcome = outcomes.find((item) => item.userId === row.userId)!;
+        if (row.attempts >= USER_DOCUMENT_POST_PUBLICATION_MAX_ATTEMPTS) {
+          report.exhausted += 1;
+          warnExhausted(outcome);
+        }
         input.logger.warn(
           { userId: row.userId, version: outcome.version, errorType: outcome.errorType },
           "User Document post-publication remains pending",
         );
       }
     }
+  }
+
+  function warnExhausted(request: UserDocumentPostPublicationRequest) {
+    input.logger.warn(
+      { userId: request.userId, version: request.version, maxAttempts: USER_DOCUMENT_POST_PUBLICATION_MAX_ATTEMPTS },
+      "User Document post-publication attempts exhausted; explicit retry required",
+    );
   }
 
   async function runClaims(claims: readonly PostPublicationClaim[], signal?: AbortSignal) {
@@ -319,22 +345,56 @@ export function createUserDocumentPostPublicationProcessor<
     const report = emptyReport(requests.length);
     for (let offset = 0; offset < requests.length; offset += batchSize) {
       const page = requests.slice(offset, offset + batchSize);
-      const claims = await claimRequests(page);
+      const { claims, exhausted } = await claimRequests(page);
       const result = await runClaims(claims);
       report.skipped += page.length - claims.length + result.skipped;
       report.completed += result.completed;
       report.failed += result.failed;
+      report.exhausted += exhausted + result.exhausted;
     }
     return report;
   }
 
   return {
-    async process(userId: number, version: string): Promise<{ status: "processed" | "failed" | "skipped" }> {
+    async process(
+      userId: number,
+      version: string,
+    ): Promise<{ status: "processed" | "failed" | "skipped" | "exhausted" }> {
       const report = await processMany([{ userId, version }]);
-      return { status: report.completed ? "processed" : report.failed ? "failed" : "skipped" };
+      return {
+        status: report.completed ? "processed" : report.exhausted ? "exhausted" : report.failed ? "failed" : "skipped",
+      };
     },
     processMany,
-    async repairFailedOrStale(options: DocumentRepairOptions): Promise<UserDocumentPostPublicationReport> {
+    async retryExhausted(options: UserDocumentPostPublicationRequest & { staleBefore: Date; signal?: AbortSignal }) {
+      normalizeRequests([options]);
+      if (!Number.isFinite(options.staleBefore.getTime()))
+        throw new RangeError("Explicit retry requires a valid staleBefore");
+      options.signal?.throwIfAborted();
+      const claims = await input.db.transaction(async (tx) => {
+        await setMetadataBudgets(tx);
+        const selected = await tx.execute<{ userId: number; version: string }>(sql`
+          SELECT state.user_id AS "userId",state.post_publication_version::text AS version
+          FROM ${userDocumentRebuildStates} AS state
+          WHERE state.user_id=${options.userId} AND state.post_publication_version=${options.version}::bigint
+            AND state.post_publication_attempts>=${USER_DOCUMENT_POST_PUBLICATION_MAX_ATTEMPTS}
+            AND (state.post_publication_status='failed'
+              OR (state.post_publication_status='processing' AND state.post_publication_started_at<${options.staleBefore.toISOString()}))
+          FOR UPDATE OF state`);
+        if (!selected.length)
+          throw new Error("Explicit retry requires an exhausted failed or stale publication of the specified version");
+        options.signal?.throwIfAborted();
+        return await claimLocked(
+          tx,
+          selected.map((row) => ({ ...row, token: randomUUID() })),
+          true,
+        );
+      });
+      return await runClaims(claims, options.signal);
+    },
+    async repairFailedOrStale(
+      options: DocumentRepairOptions & { force?: boolean },
+    ): Promise<UserDocumentPostPublicationReport> {
       if (!Number.isSafeInteger(options.limit) || options.limit < 1 || !Number.isFinite(options.staleBefore.getTime()))
         throw new RangeError(
           "User Document post-publication repair requires a valid staleBefore and positive safe limit",
@@ -349,6 +409,7 @@ export function createUserDocumentPostPublicationProcessor<
             SELECT state.user_id AS "userId", state.post_publication_version::text AS version
             FROM ${userDocumentRebuildStates} AS state
             WHERE state.user_id>${afterUserId} AND state.post_publication_version IS NOT NULL
+              AND (${options.force ?? false} OR state.post_publication_attempts<${USER_DOCUMENT_POST_PUBLICATION_MAX_ATTEMPTS})
               AND (state.post_publication_status IN ('pending','failed')
                 OR (state.post_publication_status='processing' AND state.post_publication_started_at<${options.staleBefore.toISOString()}))
             ORDER BY state.user_id LIMIT ${Math.min(batchSize, options.limit - report.selected)}
@@ -357,6 +418,7 @@ export function createUserDocumentPostPublicationProcessor<
           const claims = await claimLocked(
             tx,
             selected.map((row) => ({ ...row, token: randomUUID() })),
+            options.force,
           );
           return { selected: selected.length, afterUserId: selected.at(-1)?.userId ?? afterUserId, claims };
         });
@@ -368,6 +430,25 @@ export function createUserDocumentPostPublicationProcessor<
         report.failed += result.failed;
         report.skipped += page.selected - page.claims.length + result.skipped;
       }
+      options.signal?.throwIfAborted();
+      report.exhausted = await input.db.transaction(
+        async (tx) => {
+          await setMetadataBudgets(tx);
+          const [row] = await tx.execute<{ count: number }>(sql`
+          SELECT count(*)::integer AS count FROM ${userDocumentRebuildStates} AS state
+          WHERE state.post_publication_version IS NOT NULL
+            AND state.post_publication_attempts>=${USER_DOCUMENT_POST_PUBLICATION_MAX_ATTEMPTS}
+            AND (state.post_publication_status IN ('pending','failed')
+              OR (state.post_publication_status='processing' AND state.post_publication_started_at<${options.staleBefore.toISOString()}))`);
+          return row?.count ?? 0;
+        },
+        { accessMode: "read only" },
+      );
+      if (report.exhausted > 0)
+        input.logger.warn(
+          { exhausted: report.exhausted, maxAttempts: USER_DOCUMENT_POST_PUBLICATION_MAX_ATTEMPTS },
+          "User Document post-publication attempts exhausted; explicit retry required",
+        );
       return report;
     },
   };
@@ -396,7 +477,7 @@ function failed(claim: PostPublicationClaim, error: unknown): PostPublicationOut
 }
 
 function emptyReport(selected: number): UserDocumentPostPublicationReport {
-  return { selected, completed: 0, skipped: 0, failed: 0 };
+  return { selected, completed: 0, skipped: 0, failed: 0, exhausted: 0 };
 }
 
 async function setMetadataBudgets(tx: DbTransaction) {

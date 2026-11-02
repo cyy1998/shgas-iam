@@ -113,7 +113,7 @@ test("batch post-publication keeps healthy work completed and repairs only a fai
   const states = await pg.db.select().from(userDocumentRebuildStates).orderBy(asc(userDocumentRebuildStates.userId));
   const healthy = await scope.readPublishedUserDocumentRecord(publication(1).subjectIdentifier);
   const failed = await scope.readPublishedUserDocumentRecord(publication(2).subjectIdentifier);
-  expect(result).toEqual({ selected: 2, completed: 1, skipped: 0, failed: 1 });
+  expect(result).toEqual({ selected: 2, completed: 1, skipped: 0, failed: 1, exhausted: 0 });
   expect(states).toMatchObject([
     { status: "processed", postPublicationStatus: "processed" },
     { status: "processed", postPublicationStatus: "failed", postPublicationError: "Error" },
@@ -125,10 +125,168 @@ test("batch post-publication keeps healthy work completed and repairs only a fai
   const repaired = await context.repairFailedOrStale({ staleBefore: at, limit: 10 });
   const recovered = await scope.readPublishedUserDocumentRecord(publication(2).subjectIdentifier);
   const duplicate = await context.processMany(requests);
-  expect(repaired).toEqual({ selected: 1, completed: 1, skipped: 0, failed: 0 });
+  expect(repaired).toEqual({ selected: 1, completed: 1, skipped: 0, failed: 0, exhausted: 0 });
   expect(recovered).toMatchObject({ sourceVersion: "1", kind: "document" });
-  expect(duplicate).toEqual({ selected: 2, completed: 0, skipped: 2, failed: 0 });
+  expect(duplicate).toEqual({ selected: 2, completed: 0, skipped: 2, failed: 0, exhausted: 0 });
 });
+
+test("exhausted low IDs release repair capacity and duplicate consumption cannot restart them", async () => {
+  const scope = await redis.createScope();
+  await seed(3);
+  const calls: number[] = [];
+  let failing = true;
+  const context = processor(scope, {
+    batchSize: 1,
+    async publish(record) {
+      calls.push(record.userId);
+      if (record.userId < 3 && failing) throw new Error("RedisUnavailable");
+      return await scope.firstFactsPublisher.publish(record);
+    },
+  });
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    const report = await context.repairFailedOrStale({ staleBefore: at, limit: 2 });
+    expect(report).toEqual({ selected: 2, completed: 0, skipped: 0, failed: 2, exhausted: attempt === 5 ? 2 : 0 });
+  }
+  const repaired = await context.repairFailedOrStale({ staleBefore: at, limit: 2 });
+  expect(repaired).toEqual({ selected: 1, completed: 1, skipped: 0, failed: 0, exhausted: 2 });
+  const duplicate = await context.process(1, "1");
+  expect(duplicate).toEqual({ status: "exhausted" });
+  expect(calls.filter((id) => id === 1)).toHaveLength(5);
+  const unchanged = await context.repairFailedOrStale({ staleBefore: at, limit: 1 });
+  expect(unchanged).toEqual({ selected: 0, completed: 0, skipped: 0, failed: 0, exhausted: 2 });
+  const states = await pg.db.select().from(userDocumentRebuildStates).orderBy(asc(userDocumentRebuildStates.userId));
+  expect(states).toMatchObject([
+    { status: "processed", postPublicationStatus: "failed", postPublicationAttempts: 5 },
+    { status: "processed", postPublicationStatus: "failed", postPublicationAttempts: 5 },
+    { status: "processed", postPublicationStatus: "processed", postPublicationAttempts: 1 },
+  ]);
+  let mismatched: unknown;
+  try {
+    await context.retryExhausted({ userId: 1, version: "2", staleBefore: at });
+  } catch (error) {
+    mismatched = error;
+  }
+  expect(mismatched).toBeInstanceOf(Error);
+  failing = false;
+  const explicit = await context.retryExhausted({ userId: 1, version: "1", staleBefore: at });
+  expect(explicit).toEqual({ selected: 1, completed: 1, skipped: 0, failed: 0, exhausted: 0 });
+  const [retried] = await pg.db.select().from(userDocumentRebuildStates).where(eq(userDocumentRebuildStates.userId, 1));
+  expect(retried).toMatchObject({ postPublicationStatus: "processed", postPublicationAttempts: 1 });
+});
+
+test("forced repair resets only selected exhausted budgets and keeps other work untouched", async () => {
+  const scope = await redis.createScope();
+  await seed(6);
+  await pg.db.update(userDocumentRebuildStates).set({ postPublicationStatus: "failed", postPublicationAttempts: 5 });
+  await pg.db
+    .update(userDocumentRebuildStates)
+    .set({ postPublicationAttempts: 8 })
+    .where(eq(userDocumentRebuildStates.userId, 3));
+  const token = "10000000-0000-4000-8000-000000000004";
+  await pg.db
+    .update(userDocumentRebuildStates)
+    .set({ postPublicationStatus: "processing", postPublicationToken: token, postPublicationStartedAt: at })
+    .where(eq(userDocumentRebuildStates.userId, 4));
+  await pg.db
+    .update(userDocumentRebuildStates)
+    .set({ postPublicationStatus: "processed", postPublicationCompletedAt: at })
+    .where(eq(userDocumentRebuildStates.userId, 5));
+  await pg.db
+    .update(userDocumentRebuildStates)
+    .set({ postPublicationStatus: "pending", postPublicationAttempts: 2 })
+    .where(eq(userDocumentRebuildStates.userId, 6));
+  const context = processor(scope, { batchSize: 1 });
+  const first = await context.repairFailedOrStale({ staleBefore: at, limit: 2, force: true });
+  expect(first).toEqual({ selected: 2, completed: 2, skipped: 0, failed: 0, exhausted: 1 });
+  const states = await pg.db.select().from(userDocumentRebuildStates).orderBy(asc(userDocumentRebuildStates.userId));
+  expect(states).toMatchObject([
+    { postPublicationStatus: "processed", postPublicationAttempts: 1 },
+    { postPublicationStatus: "processed", postPublicationAttempts: 1 },
+    { postPublicationStatus: "failed", postPublicationAttempts: 8 },
+    { postPublicationStatus: "processing", postPublicationAttempts: 5, postPublicationToken: token },
+    { postPublicationStatus: "processed", postPublicationAttempts: 5 },
+    { postPublicationStatus: "pending", postPublicationAttempts: 2 },
+  ]);
+  const second = await context.repairFailedOrStale({ staleBefore: at, limit: 10, force: true });
+  expect(second).toEqual({ selected: 2, completed: 2, skipped: 0, failed: 0, exhausted: 0 });
+  const unexhausted = await pg.db
+    .select()
+    .from(userDocumentRebuildStates)
+    .where(eq(userDocumentRebuildStates.userId, 6));
+  expect(unexhausted).toMatchObject([{ postPublicationAttempts: 3 }]);
+});
+
+test("forced failures keep their renewed budget and are attempted only once per repair call", async () => {
+  const scope = await redis.createScope();
+  await seed(2);
+  await pg.db.update(userDocumentRebuildStates).set({ postPublicationStatus: "failed", postPublicationAttempts: 5 });
+  const context = processor(scope, {
+    batchSize: 1,
+    async publish() {
+      throw new Error("RedisUnavailable");
+    },
+  });
+  const report = await context.repairFailedOrStale({ staleBefore: at, limit: 10, force: true });
+  expect(report).toEqual({ selected: 2, completed: 0, skipped: 0, failed: 2, exhausted: 0 });
+  const states = await pg.db.select().from(userDocumentRebuildStates);
+  expect(states.every((row) => row.postPublicationStatus === "failed" && row.postPublicationAttempts === 1)).toBe(true);
+});
+
+test.each(["targeted", "force"])(
+  "the active fifth attempt is protected and %s stale takeover fences its late owner",
+  async (mode) => {
+    const scope = await redis.createScope();
+    await seed(1);
+    await pg.db.update(userDocumentRebuildStates).set({ postPublicationAttempts: 4 });
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    let calls = 0;
+    const context = processor(scope, {
+      async publish(record) {
+        if (++calls === 1) {
+          entered.resolve();
+          await release.promise;
+          throw new Error("LateOwnerFailure");
+        }
+        return await scope.firstFactsPublisher.publish(record);
+      },
+    });
+    const original = context.process(1, "1");
+    try {
+      await entered.promise;
+      const active = await context.repairFailedOrStale({ staleBefore: at, limit: 1 });
+      expect(active).toEqual({ selected: 0, completed: 0, skipped: 0, failed: 0, exhausted: 0 });
+      const forcedActive = await context.repairFailedOrStale({ staleBefore: at, limit: 1, force: true });
+      expect(forcedActive).toEqual({ selected: 0, completed: 0, skipped: 0, failed: 0, exhausted: 0 });
+      let activeRetry: unknown;
+      try {
+        await context.retryExhausted({ userId: 1, version: "1", staleBefore: at });
+      } catch (error) {
+        activeRetry = error;
+      }
+      expect(activeRetry).toBeInstanceOf(Error);
+      await pg.db.update(userDocumentRebuildStates).set({ postPublicationStartedAt: new Date(at.getTime() - 1) });
+      const stale = await context.repairFailedOrStale({ staleBefore: at, limit: 1 });
+      expect(stale).toEqual({ selected: 0, completed: 0, skipped: 0, failed: 0, exhausted: 1 });
+      const takeover =
+        mode === "force"
+          ? await context.repairFailedOrStale({ staleBefore: at, limit: 1, force: true })
+          : await context.retryExhausted({ userId: 1, version: "1", staleBefore: at });
+      expect(takeover).toEqual({ selected: 1, completed: 1, skipped: 0, failed: 0, exhausted: 0 });
+    } finally {
+      release.resolve();
+      await original;
+    }
+    const [state] = await pg.db.select().from(userDocumentRebuildStates);
+    expect(state).toMatchObject({
+      postPublicationStatus: "processed",
+      postPublicationAttempts: 1,
+      postPublicationToken: null,
+      postPublicationError: null,
+    });
+    expect(calls).toBe(2);
+  },
+);
 
 test("concurrent calls share the same bounded external-effect slots", async () => {
   const scope = await redis.createScope();
@@ -206,7 +364,7 @@ test("a slow Facts publisher neither delays healthy completion nor starts its Ac
   } finally {
     release.resolve();
     const report = await work;
-    expect(report).toEqual({ selected: 4, completed: 4, skipped: 0, failed: 0 });
+    expect(report).toEqual({ selected: 4, completed: 4, skipped: 0, failed: 0, exhausted: 0 });
   }
 });
 
@@ -246,7 +404,7 @@ test("successful external effects remain repairable after a batch completion tra
   const cached = await scope.factsInspector.inspectMany([1, 2, 3].map((id) => publication(id).subjectIdentifier));
   expect(cached.every((row) => row.status === "valid")).toBe(true);
   const repaired = await context.repairFailedOrStale({ staleBefore: at, limit: 10 });
-  expect(repaired).toEqual({ selected: 3, completed: 3, skipped: 0, failed: 0 });
+  expect(repaired).toEqual({ selected: 3, completed: 3, skipped: 0, failed: 0, exhausted: 0 });
 });
 
 test("cancelling repair removes a waiting shared slot without waiting for another call's slow subject", async () => {

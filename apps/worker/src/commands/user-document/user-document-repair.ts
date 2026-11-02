@@ -3,11 +3,23 @@ import { parseDocumentCommandDeadline, runDocumentCommandWithLifecycle } from ".
 
 export interface UserDocumentRepairCommandDeps {
   maintenance: {
-    repairFailedOrStale: (input: { staleBefore: Date; limit: number; signal?: AbortSignal }) => Promise<{
+    repairFailedOrStale: (input: {
+      staleBefore: Date;
+      limit: number;
+      signal?: AbortSignal;
+      force?: boolean;
+    }) => Promise<{
       enqueued: number;
       failed?: number;
+      exhausted?: number;
       userIds?: number[];
     }>;
+    retryPostPublication?: (input: {
+      userId: number;
+      version: string;
+      staleBefore: Date;
+      signal?: AbortSignal;
+    }) => Promise<{ enqueued: number; failed: number; exhausted: number }>;
   };
   subjectAccessRepair: {
     repairPending: (input: { limit: number }) => Promise<{
@@ -52,6 +64,8 @@ export interface UserDocumentRepairCommandOptions {
   staleBefore?: Date;
   limit?: number;
   signal?: AbortSignal;
+  retryPostPublication?: { userId: number; version: string };
+  force?: boolean;
 }
 
 export interface SubjectAccessRepairCommandDeps {
@@ -113,9 +127,14 @@ export async function runUserDocumentRepairCommand(
   options: UserDocumentRepairCommandOptions = {},
 ) {
   options.signal?.throwIfAborted();
+  if (options.force && options.retryPostPublication)
+    throw new RangeError("force cannot be combined with a targeted post-publication retry");
   const staleBefore =
     options.staleBefore ?? new Date(deps.clock.nowDate().getTime() - deps.config.repairStaleSeconds * 1000);
   const limit = options.limit ?? deps.config.limit;
+  const retryPostPublication = deps.maintenance.retryPostPublication;
+  if (options.retryPostPublication && !retryPostPublication)
+    throw new Error("Explicit User Document post-publication retry is unavailable");
   deps.logger.info(
     {
       limit,
@@ -138,7 +157,18 @@ export async function runUserDocumentRepairCommand(
   await observeRepairBacklog(deps, "before-processing");
   const transitionRecovery = await deps.subjectAccessTransitionRecovery.recoverPending({ limit });
   const [result, subjectAccess] = await Promise.all([
-    deps.maintenance.repairFailedOrStale({ staleBefore, limit, ...(options.signal ? { signal: options.signal } : {}) }),
+    options.retryPostPublication && retryPostPublication
+      ? retryPostPublication({
+          ...options.retryPostPublication,
+          staleBefore,
+          ...(options.signal ? { signal: options.signal } : {}),
+        })
+      : deps.maintenance.repairFailedOrStale({
+          staleBefore,
+          limit,
+          ...(options.signal ? { signal: options.signal } : {}),
+          ...(options.force ? { force: true } : {}),
+        }),
     deps.subjectAccessRepair.repairPending({ limit }),
   ]);
   deps.logger.info(
@@ -147,6 +177,7 @@ export async function runUserDocumentRepairCommand(
       publication: "not-verified",
       staleBefore: staleBefore.toISOString(),
       limit,
+      ...(options.force ? { force: true } : {}),
     },
     "User Document repair wakeups finished; wait for publication and run verification",
   );
@@ -161,7 +192,8 @@ export async function runUserDocumentRepairCommand(
     ...subjectAccess,
     limit,
   });
-  if ((result.failed ?? 0) > 0) throw new Error("User Document repair remains incomplete");
+  if ((result.failed ?? 0) > 0 || (result.exhausted ?? 0) > 0)
+    throw new Error("User Document repair remains incomplete");
   return {
     ...result,
     subjectAccess,
@@ -206,7 +238,7 @@ interface UserDocumentRepairCliOptions extends UserDocumentRepairCommandOptions 
   subjectAccessOnly?: boolean;
 }
 
-function parseRepairArgs(argv: string[]): UserDocumentRepairCliOptions {
+export function parseUserDocumentRepairArgs(argv: string[]): UserDocumentRepairCliOptions {
   const { values } = parseArgs({
     args: argv,
     options: {
@@ -214,12 +246,28 @@ function parseRepairArgs(argv: string[]): UserDocumentRepairCliOptions {
       limit: { type: "string" },
       "subject-access-only": { type: "boolean" },
       "deadline-ms": { type: "string" },
+      "retry-user-id": { type: "string" },
+      "retry-version": { type: "string" },
+      force: { type: "boolean" },
     },
     strict: true,
   });
 
   const limit = values.limit === undefined ? undefined : Number(values.limit);
   const staleBefore = values["stale-before"] === undefined ? undefined : new Date(values["stale-before"]);
+  const retryUserId = values["retry-user-id"] === undefined ? undefined : Number(values["retry-user-id"]);
+  const retryVersion = values["retry-version"];
+  if (values.force && (retryUserId !== undefined || retryVersion !== undefined || values["subject-access-only"]))
+    throw new RangeError("force cannot be combined with targeted retry or subject-access-only");
+  if (
+    (retryUserId === undefined) !== (retryVersion === undefined) ||
+    (retryUserId !== undefined && (!Number.isSafeInteger(retryUserId) || retryUserId < 1)) ||
+    (retryVersion !== undefined && !/^[1-9]\d*$/.test(retryVersion)) ||
+    (retryUserId !== undefined && values["subject-access-only"])
+  )
+    throw new RangeError(
+      "Explicit retry requires a positive retry-user-id and canonical retry-version without subject-access-only",
+    );
   if (
     (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1)) ||
     (staleBefore !== undefined && !Number.isFinite(staleBefore.getTime()))
@@ -230,11 +278,15 @@ function parseRepairArgs(argv: string[]): UserDocumentRepairCliOptions {
     staleBefore: values["stale-before"] === undefined ? undefined : new Date(values["stale-before"]),
     limit: values.limit === undefined ? undefined : Number(values.limit),
     subjectAccessOnly: values["subject-access-only"],
+    ...(values.force ? { force: true } : {}),
+    ...(retryUserId !== undefined && retryVersion !== undefined
+      ? { retryPostPublication: { userId: retryUserId, version: retryVersion } }
+      : {}),
   };
 }
 
 async function main() {
-  const options = parseRepairArgs(process.argv.slice(2));
+  const options = parseUserDocumentRepairArgs(process.argv.slice(2));
   const { parseUserDocumentCommandEnv } = await import("@worker/env");
   const env = parseUserDocumentCommandEnv(process.env);
   const { createLogger, LoggerSourceApp } = await import("@iam/api-core/logger");

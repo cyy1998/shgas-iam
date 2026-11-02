@@ -270,6 +270,11 @@ PG 提交确认后才处理外部作用。用户后处理集合领取、批量�
 Facts 与 Subject Access 仍逐主体执行，共享模块实例的有界并发额度。已知结果及时成批写回，不等待同页最慢成员；
 Access lease 在实际执行该主体修复时领取，不为整页提前占用。Redis 失败不回滚文档，主 processed 也不解除后续恢复责任。
 正常消费和 repair 复用[后处理器](../../packages/user-document/src/worker/user-document-post-publication.processor.ts)。
+两条入口共用每个发布版本的自动尝试预算，领取与过期接管都消耗一次机会；耗尽后保留未完成义务并报告人工处理，
+不占用后续 repair 的领取额度。活跃的最后一次尝试仍可完成，新版本发布重新获得预算。
+人工重试可以指定用户与发布版本，或显式强制批量 repair；预算重置与新 owner 的领取原子完成，
+批量模式只重置本轮已锁定且满足领取条件的耗尽义务，仍受 limit 与 stale 条件约束。
+迟到 owner 继续受版本与 token 仲裁约束。操作与超限报告见[日常修复](../releases/data-maintenance.md#user-document-日常修复)。
 只有已删除用户发布 document=null，未删除的 Pause/Disable 仍有完整文档；源行缺失不是墓碑。Redis 使用持久带版本墓碑，阻止旧 publisher 或回填复活；比较版本保持 bigint 精度。缓存失败保留持久 post-publication 工作供 repair。
 
 Facts reader 合法缓存命中直接返回；缺失、损坏或主体错配时按主体合并回源，从已发布 document 派生同版本 Facts 或墓碑并尽力回填。回填失败仍可使用合法 PG 结果；Redis 读取故障不回源，不查询源业务表或旧副本。读取诊断只含操作、结果和耗时，观测失败不改变认证。

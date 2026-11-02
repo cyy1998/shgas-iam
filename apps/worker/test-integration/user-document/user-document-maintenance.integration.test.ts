@@ -133,6 +133,55 @@ test("full Profile maintenance rebuilds every account before verification and re
   await fixture.assertUnrelatedRedis();
 }, 120_000);
 
+test("repair CLI preserves exhausted work and explicitly retries only the requested version", async () => {
+  const fixture = await createMaintenanceFixture();
+  await fixture.run("backfill", 0);
+  await fixture.startConsumer();
+  await fixture.converged();
+  await fixture.stopConsumer();
+  const sourceBefore = await fixture.sourceInventory();
+  await fixture.pg.sql`UPDATE user_document_rebuild_state
+    SET post_publication_status='failed',post_publication_attempts=5,
+      post_publication_completed_at=NULL,post_publication_error='RedisUnavailable'
+    WHERE user_id IN (1,2)`;
+  const [before] = await fixture.pg.sql<{ version: string }[]>`
+    SELECT post_publication_version AS version FROM user_document_rebuild_state WHERE user_id=1`;
+  if (!before) throw new Error("Missing exhausted publication fixture");
+  const exhausted = await fixture.command("repair", 1, ["--limit", "1"]);
+  expect(exhausted.output).toContain('"exhausted":2');
+  const unchanged = await fixture.pg.sql`SELECT user_id,post_publication_status,post_publication_attempts
+    FROM user_document_rebuild_state WHERE user_id IN (1,2) ORDER BY user_id`;
+  expect([...unchanged]).toEqual([
+    { user_id: 1, post_publication_status: "failed", post_publication_attempts: 5 },
+    { user_id: 2, post_publication_status: "failed", post_publication_attempts: 5 },
+  ]);
+  await fixture.command("repair", 1, ["--retry-user-id", "1", "--retry-version", String(BigInt(before.version) + 1n)]);
+  const retry = await fixture.command("repair", 0, ["--retry-user-id", "1", "--retry-version", before.version]);
+  expect(retry.output).toContain('"completed":1');
+  const states = await fixture.pg.sql`SELECT user_id,post_publication_status,post_publication_attempts
+    FROM user_document_rebuild_state WHERE user_id IN (1,2) ORDER BY user_id`;
+  expect([...states]).toEqual([
+    { user_id: 1, post_publication_status: "processed", post_publication_attempts: 1 },
+    { user_id: 2, post_publication_status: "failed", post_publication_attempts: 5 },
+  ]);
+  await fixture.pg.sql`UPDATE user_document_rebuild_state SET post_publication_status='failed',
+    post_publication_attempts=5,post_publication_completed_at=NULL,post_publication_error='RedisUnavailable'
+    WHERE user_id=3`;
+  const forced = await fixture.command("repair", 0, ["--force", "--limit", "10"]);
+  expect(forced.output).toContain('"force":true');
+  expect(forced.output).toContain('"completed":2');
+  const bulkStates = await fixture.pg.sql`SELECT user_id,post_publication_status,post_publication_attempts
+    FROM user_document_rebuild_state WHERE user_id IN (1,2,3) ORDER BY user_id`;
+  expect([...bulkStates]).toEqual([
+    { user_id: 1, post_publication_status: "processed", post_publication_attempts: 1 },
+    { user_id: 2, post_publication_status: "processed", post_publication_attempts: 1 },
+    { user_id: 3, post_publication_status: "processed", post_publication_attempts: 1 },
+  ]);
+  const sourceAfter = await fixture.sourceInventory();
+  expect(sourceAfter).toEqual(sourceBefore);
+  await fixture.assertUnrelatedRedis();
+}, 120_000);
+
 test("complete maintenance gates reject corrupt, missing and inconsistent rows beyond the first batch without repairing them", async () => {
   const fixture = await createMaintenanceFixture();
   await fixture.run("backfill", 0);

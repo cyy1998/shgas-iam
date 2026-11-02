@@ -52,12 +52,40 @@ pnpm --filter @iam/worker user-document:repair
 
 该命令先回收 stale intent 并处理 transition recovery，再处理 User Document 的 Outbox、Rebuild State、
 持久 post-publication 与 Barrier authority repair。保持 `user-document` consumer 运行，根据报告有界重复 repair。
-Outbox 与 rebuilds 分别报告 selected/enqueued/failed；postPublication 报告 selected/completed/skipped/failed。
+Outbox 与 rebuilds 分别报告 selected/enqueued/failed；postPublication 报告 selected/completed/skipped/failed/exhausted。
 active processing 不被夺取；只有已达到 stale-before 的处理才可重新领取。重投保留版本，不凭入队成功标记发布完成。
 Outbox 的 processed 表示重建要求和完成凭据已原子登记；Rebuild State 的 processed 表示 PG 文档或墓碑已提交。
 用户的缓存与访问屏障后续责任另行持久保存，主 processed 不代表这些作用已经完成。
 命令的 `publication=not-verified`、入队成功、队列为空或 `/healthz` 成功均不能证明完整。
 failed、stale 或发布失败持续存在时，先检查 PostgreSQL、Redis、队列和源事实完整性，再重试。
+
+后处理每个发布版本最多自动尝试 5 次，包含首次与 processing 过期后的重新领取；普通消费和 repair 共用这份预算。
+超限义务保留为未完成工作，退出自动领取，后面的用户可以继续处理。`exhausted` 表示本轮结束后尚未完成且已耗尽预算、
+需人工处理的总数，不受本轮 `limit` 限制，可能与本轮 `failed` 重叠；活跃的第 5 次 processing 不计入其中。
+`failed` 或 `exhausted` 非零时命令非零退出。新版本发布重置预算，重复队列消息和普通 repair 不重置。
+依赖长时间故障可能使一批义务耗尽预算，依赖恢复后仍须显式人工重试，不能仅等待自动 repair。
+
+确认依赖或失败原因已修复，需要批量重新触发耗尽义务时执行：
+
+```bash
+pnpm --filter @iam/worker user-document:repair -- --force --limit 500
+```
+
+`--force` 使本轮选中的超限后处理义务重新获得 5 次预算，并立即消耗第 1 次；未耗尽的义务按原计数继续。
+该参数只作用于 User Document 后处理，其他 repair 阶段照常执行。单轮仍受 `--limit` 限制，每个用户最多领取一次；
+未选中记录的预算不变，已完成记录和未过期的 processing 不重新领取。积压超过限额时，根据报告继续分批执行；
+`failed` 或剩余 `exhausted` 非零仍非零退出。此模式与定向重试参数、`--subject-access-only` 互斥。
+
+确认失败原因已修复，从失败日志的 `userId`、`version` 或只读查询 `user_document_rebuild_state` 确认精确目标，再执行：
+
+```bash
+pnpm --filter @iam/worker user-document:repair -- --retry-user-id 123 --retry-version 42
+```
+
+两个参数必须成对提供；该模式只重试指定用户与发布版本的后处理，并继续运行 Subject Access 恢复阶段。
+目标必须预算已耗尽且为 failed 或已达到 stale-before 的 processing；版本不匹配、已完成或活跃 processing 均拒绝。
+重置预算与新 token 的领取原子完成，首次人工尝试计为 1，失败后仍可在剩余预算内由普通 repair 继续恢复。
+该模式与 `--subject-access-only` 互斥。保留已提交文档、墓碑和版本，不通过删除义务或手工启用 Barrier 绕过恢复门禁。
 
 默认保持 `IAM_WORKER_BULL_BOARD_READ_ONLY=true`；面板 retry/promote/remove/clean 是独立运维动作。
 dashboard-only 的 `IAM_WORKER_ENABLED_MODULES=none` 不消费重建任务。
@@ -203,14 +231,14 @@ backfill/repair/verify 都支持 `--deadline-ms <1..300000>`，默认 30000；de
 仓库没有内置周期补偿调度。部署侧安排 repair 的频率、单轮限额与重复排空，并按恢复 SLO 设置告警。
 Subject Access 恢复耗时至少考虑 stale threshold、等待下一次调度和有界排空；组织搜索无固定新鲜度 SLA。
 
-| 观察项                                                    | 需要处理的情况                                        |
-| --------------------------------------------------------- | ----------------------------------------------------- |
-| repair 调度与命令退出                                     | 调度缺失、连续非零，或 started 后没有完成事件         |
-| Subject Access reaper / transition recovery               | rolledBack 异常突增，failed/deferred 持续非零         |
-| Barrier `repairBacklogCount` / `repairBacklogOldestAgeMs` | 数量或最老年龄持续增长；空积压年龄为 null             |
-| `repairBacklogMetricsAvailable=false`                     | 观察不可用，不能解释为积压为零；先恢复监控/依赖       |
-| User Document Outbox / Rebuild State / postPublication    | pending、processing、failed、stale 或 mismatch 不收敛 |
-| Organization Document Outbox / Rebuild State              | 任一阶段 failed 或持久积压不收敛                      |
+| 观察项                                                    | 需要处理的情况                                                                  |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| repair 调度与命令退出                                     | 调度缺失、连续非零，或 started 后没有完成事件                                   |
+| Subject Access reaper / transition recovery               | rolledBack 异常突增，failed/deferred 持续非零                                   |
+| Barrier `repairBacklogCount` / `repairBacklogOldestAgeMs` | 数量或最老年龄持续增长；空积压年龄为 null                                       |
+| `repairBacklogMetricsAvailable=false`                     | 观察不可用，不能解释为积压为零；先恢复监控/依赖                                 |
+| User Document Outbox / Rebuild State / postPublication    | pending、processing、failed、stale 或 mismatch 不收敛；exhausted 非零须人工处理 |
+| Organization Document Outbox / Rebuild State              | 任一阶段 failed 或持久积压不收敛                                                |
 
 Barrier 指标只覆盖 Redis indexed backlog，不含 PG-only pending intent 或整个 transition backlog；须结合各阶段报告观察。
 遗留 age 索引补记是估计时间。观察失败不一定使 repair 非零退出，不能只依赖退出码告警。

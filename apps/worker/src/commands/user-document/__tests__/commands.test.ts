@@ -1,8 +1,88 @@
 import { describe, expect, mock, test } from "bun:test";
 import { runUserDocumentBackfillCommand } from "../user-document-backfill";
-import { runSubjectAccessRepairCommand, runUserDocumentRepairCommand } from "../user-document-repair";
+import {
+  parseUserDocumentRepairArgs,
+  runSubjectAccessRepairCommand,
+  runUserDocumentRepairCommand,
+} from "../user-document-repair";
 
 describe("user-document commands", () => {
+  test.each(
+    [
+      ["--retry-user-id", "1"],
+      ["--retry-version", "1"],
+      ["--retry-user-id", "0", "--retry-version", "1"],
+      ["--retry-user-id", "1", "--retry-version", "01"],
+      ["--retry-user-id", "1", "--retry-version", "1", "--subject-access-only"],
+      ["--force", "--subject-access-only"],
+      ["--force", "--retry-user-id", "1", "--retry-version", "1"],
+    ].map((argv) => ({ argv })),
+  )("explicit retry rejects invalid argv %j before creating resources", ({ argv }) => {
+    expect(() => parseUserDocumentRepairArgs(argv)).toThrow(RangeError);
+  });
+
+  test("explicit retry argv preserves a bigint version without rounding", () => {
+    expect(parseUserDocumentRepairArgs(["--retry-user-id", "7", "--retry-version", "9007199254740993"])).toMatchObject({
+      retryPostPublication: { userId: 7, version: "9007199254740993" },
+    });
+  });
+
+  test("force argv selects bounded bulk repair", () => {
+    expect(parseUserDocumentRepairArgs(["--force", "--limit", "20"])).toMatchObject({ force: true, limit: 20 });
+  });
+
+  test("repair reports exhausted obligations and executes only an explicitly selected retry", async () => {
+    const staleBefore = new Date("2026-11-02T10:00:00Z");
+    const stage = { enqueued: 0, failed: 0, exhausted: 2 };
+    const repairFailedOrStale = mock(async () => stage);
+    const retryPostPublication = mock(async () => ({ enqueued: 0, failed: 0, exhausted: 0 }));
+    const info = mock(() => {});
+    const deps = {
+      maintenance: { repairFailedOrStale, retryPostPublication },
+      subjectAccessRepairBacklog: { inspectRepairBacklog: async () => ({ count: 0, oldestAgeMs: null }) },
+      subjectAccessRepair: {
+        repairPending: async () => ({ disabled: 0, enabled: 0, deferred: 0, failed: 0, stable: 0 }),
+      },
+      subjectAccessTransitionReaper: { reapStalePending: async () => ({ rolledBack: 0 }) },
+      subjectAccessTransitionRecovery: {
+        recoverPending: async () => ({ deferred: 0, failed: 0, prepared: 0, rolledBack: 0 }),
+      },
+      clock: { nowDate: () => staleBefore },
+      logger: { info },
+      config: { limit: 10, repairStaleSeconds: 300, transitionStaleSeconds: 300 },
+    };
+    let failure: unknown;
+    try {
+      await runUserDocumentRepairCommand(deps, { staleBefore });
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toMatchObject({ message: "User Document repair remains incomplete" });
+    expect(info).toHaveBeenCalledWith(
+      expect.objectContaining(stage),
+      "User Document repair wakeups finished; wait for publication and run verification",
+    );
+    const report = await runUserDocumentRepairCommand(deps, {
+      staleBefore,
+      retryPostPublication: { userId: 7, version: "9" },
+    });
+    expect(report).toMatchObject({ exhausted: 0 });
+    expect(repairFailedOrStale).toHaveBeenCalledTimes(1);
+    expect(retryPostPublication).toHaveBeenCalledWith({ userId: 7, version: "9", staleBefore });
+    let forceFailure: unknown;
+    try {
+      await runUserDocumentRepairCommand(deps, { staleBefore, force: true });
+    } catch (error) {
+      forceFailure = error;
+    }
+    expect(forceFailure).toMatchObject({ message: "User Document repair remains incomplete" });
+    expect(repairFailedOrStale).toHaveBeenLastCalledWith({ staleBefore, limit: 10, force: true });
+    expect(info).toHaveBeenCalledWith(
+      expect.objectContaining({ ...stage, force: true }),
+      "User Document repair wakeups finished; wait for publication and run verification",
+    );
+  });
+
   test("backfill command delegates to worker maintenance", async () => {
     const backfillAllUsers = mock(async () => ({ registered: 3, enqueued: 3 }));
     const info = mock(() => {});

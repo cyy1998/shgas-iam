@@ -194,7 +194,7 @@ export function createUserDocumentUpdateProcessor<
       rebuilt: 0,
       skipped: 0,
       stale: 0,
-      postPublication: { completed: 0, skipped: 0, failed: 0 },
+      postPublication: { completed: 0, skipped: 0, failed: 0, exhausted: 0 },
     };
     const failures: unknown[] = [];
     let stopped = false;
@@ -275,6 +275,7 @@ export function createUserDocumentUpdateProcessor<
           report.postPublication.completed += effects.completed;
           report.postPublication.skipped += effects.skipped;
           report.postPublication.failed += effects.failed;
+          report.postPublication.exhausted += effects.exhausted;
         }
       } catch (error) {
         // Source/connection failures invalidate the shared snapshot. No claim
@@ -329,15 +330,21 @@ export function createUserDocumentUpdateProcessor<
         version: payload.version,
       };
     },
-    async repairFailedOrStale(options: DocumentRepairOptions) {
-      const stages = await processor.repairFailedOrStale(options);
+    async repairFailedOrStale(options: DocumentRepairOptions & { force?: boolean }) {
+      const { force: _force, ...workOptions } = options;
+      const stages = await processor.repairFailedOrStale(workOptions);
       options.signal?.throwIfAborted();
       const post = await postPublication.repairFailedOrStale(options);
       return {
         ...stages,
         postPublication: post,
         failed: stages.failed + post.failed,
+        exhausted: post.exhausted,
       };
+    },
+    async retryPostPublication(options: { userId: number; version: string; staleBefore: Date; signal?: AbortSignal }) {
+      const post = await postPublication.retryExhausted(options);
+      return { enqueued: 0, failed: post.failed, exhausted: post.exhausted, postPublication: post };
     },
   };
 }

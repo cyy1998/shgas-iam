@@ -176,7 +176,11 @@ export interface UserDocumentWorkerModule {
       batchSize?: number;
       signal?: AbortSignal;
     }): Promise<{ registered: number; enqueued: number }>;
-    repairFailedOrStale(input: { staleBefore: Date; limit?: number }): Promise<{ enqueued: number; failed: number }>;
+    repairFailedOrStale(input: {
+      staleBefore: Date;
+      limit?: number;
+      force?: boolean;
+    }): Promise<{ enqueued: number; failed: number; exhausted: number }>;
   };
   queueRegistrations: Array<{
     moduleKey: typeof USER_DOCUMENT_WORKER_MODULE_KEY;
@@ -248,7 +252,7 @@ function createUserDocumentWorkerModuleWithProjection<
         signal: options.signal,
         batchSize: options.batchSize ?? input.config.backfillBatchSize,
       }),
-    repairFailedOrStale(options: { staleBefore: Date; limit?: number }) {
+    repairFailedOrStale(options: { staleBefore: Date; limit?: number; force?: boolean }) {
       return rebuildProcessor.repairFailedOrStale({
         ...options,
         limit: options.limit ?? input.config.backfillBatchSize,
