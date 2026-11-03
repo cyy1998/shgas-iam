@@ -3,14 +3,7 @@ import RoleDetailDrawer from "@admin/pages/roles/components/RoleDetailDrawer";
 import RoleFormModal from "@admin/pages/roles/components/RoleFormModal";
 import { requestClientOptions } from "@admin/pages/roles/role-selectors";
 import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
-import {
-  deleteRole,
-  getRole,
-  type RoleDetailVo,
-  type RoleVo,
-  searchRoles,
-  updateRoleStatus,
-} from "@admin/services/role";
+import { deleteRole, type RoleVo, searchRoles, updateRoleStatus } from "@admin/services/role";
 import { PlusOutlined } from "@ant-design/icons";
 import { type ActionType, PageContainer, type ProColumns, ProTable } from "@ant-design/pro-components";
 import { getRoleStatusOptions, type RoleStatus } from "@iam/contracts";
@@ -20,8 +13,8 @@ import { useRef, useState } from "react";
 export default function RolesPage() {
   const actionRef = useRef<ActionType>(undefined);
   const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing] = useState<RoleDetailVo | null>(null);
   const [drawerRoleCode, setDrawerRoleCode] = useState<string | null>(null);
+  const [drawerEditing, setDrawerEditing] = useState(false);
 
   const [committedWarning, setCommittedWarning] = useState<string>();
   const [detailReloadSeq, setDetailReloadSeq] = useState(0);
@@ -29,6 +22,7 @@ export default function RolesPage() {
   const onCommitted = (error: AdminMutationCommittedError, roleCode?: string) => {
     setCommittedWarning(error.message);
     setFormOpen(false);
+    setDrawerEditing(false);
     if (roleCode) setDrawerRoleCode(roleCode);
     setDetailReloadSeq((value) => value + 1);
     void actionRef.current?.reload();
@@ -39,17 +33,12 @@ export default function RolesPage() {
   const reload = () => actionRef.current?.reload();
 
   const onCreate = () => {
-    setEditing(null);
     setFormOpen(true);
   };
 
-  const onEdit = async (row: RoleVo) => {
-    try {
-      setEditing(await getRole(row.roleCode));
-      setFormOpen(true);
-    } catch (err) {
-      handleError(err);
-    }
+  const onEdit = (row: RoleVo) => {
+    setDrawerEditing(true);
+    setDrawerRoleCode(row.roleCode);
   };
 
   const onDelete = (row: RoleVo) => {
@@ -141,7 +130,10 @@ export default function RolesPage() {
           type="link"
           size="small"
           style={{ paddingInline: 0 }}
-          onClick={() => setDrawerRoleCode(row.roleCode)}
+          onClick={() => {
+            setDrawerEditing(false);
+            setDrawerRoleCode(row.roleCode);
+          }}
         >
           详情
         </Button>,
@@ -173,7 +165,7 @@ export default function RolesPage() {
 
   return (
     <PageContainer title="角色管理">
-      {committedWarning && <Alert type="warning" showIcon message={committedWarning} />}
+      {committedWarning && drawerRoleCode === null && <Alert type="warning" showIcon title={committedWarning} />}
       <ProTable<RoleVo>
         actionRef={actionRef}
         rowKey="roleCode"
@@ -225,11 +217,11 @@ export default function RolesPage() {
       />
       <RoleFormModal
         open={formOpen}
-        initialValues={editing}
         onOpenChange={setFormOpen}
         onCommitted={onCommitted}
         onSuccess={(roleCode) => {
-          if (roleCode) setDrawerRoleCode(roleCode);
+          setDrawerEditing(false);
+          setDrawerRoleCode(roleCode);
           setFormOpen(false);
           reload();
         }}
@@ -237,6 +229,8 @@ export default function RolesPage() {
       <RoleDetailDrawer
         open={drawerRoleCode !== null}
         roleCode={drawerRoleCode}
+        initialEditing={drawerEditing}
+        committedWarning={committedWarning}
         onOpenChange={(open) => {
           if (!open) setDrawerRoleCode(null);
         }}

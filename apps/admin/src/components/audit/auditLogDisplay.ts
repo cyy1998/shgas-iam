@@ -21,6 +21,7 @@ export const targetTypeLabels: Record<string, string> = {
   delegation: "权限委派",
   mobile: "手机号",
   principal_session: "Principal Session",
+  organization_responsibility_assignment: "组织责任任命",
 };
 
 export const outcomeLabels: Record<string, string> = {

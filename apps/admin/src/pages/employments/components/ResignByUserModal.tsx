@@ -2,7 +2,7 @@ import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
 import { resignUser } from "@admin/services/employment";
 import { searchUsers } from "@admin/services/user";
 import { Modal, message, Select } from "antd";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type UserOption = { label: string; value: string; name: string };
 
@@ -16,24 +16,44 @@ type Props = {
 export default function ResignByUserDialog({ open, onClose, onSuccess, onCommitted }: Props) {
   const [selected, setSelected] = useState<UserOption | null>(null);
   const [options, setOptions] = useState<UserOption[]>([]);
+  const [searchText, setSearchText] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const searchRequestRef = useRef(0);
+
+  useEffect(() => {
+    if (!open) {
+      setSelected(null);
+      setOptions([]);
+      setSearchText("");
+      setLoading(false);
+    }
+    return () => {
+      searchRequestRef.current += 1;
+    };
+  }, [open]);
 
   const onSearch = async (text: string) => {
-    if (!text) {
+    const request = ++searchRequestRef.current;
+    setSearchText(text);
+    const keyword = text.trim();
+    if (!keyword) {
       setOptions([]);
+      setLoading(false);
       return;
     }
     setLoading(true);
+    setOptions([]);
     try {
       const res = await searchUsers({
         pageNum: 1,
         pageSize: 20,
         conditions: {
-          fuzzyConditions: { text },
+          fuzzyConditions: { text: keyword },
           exactConditions: {},
         },
       });
+      if (request !== searchRequestRef.current) return;
       setOptions(
         res.result.map((u) => ({
           label: `${u.name} (${u.username})`,
@@ -42,9 +62,9 @@ export default function ResignByUserDialog({ open, onClose, onSuccess, onCommitt
         })),
       );
     } catch (err) {
-      message.error(err instanceof Error ? err.message : "搜索失败");
+      if (request === searchRequestRef.current) message.error(err instanceof Error ? err.message : "搜索失败");
     } finally {
-      setLoading(false);
+      if (request === searchRequestRef.current) setLoading(false);
     }
   };
 
@@ -97,6 +117,7 @@ export default function ResignByUserDialog({ open, onClose, onSuccess, onCommitt
       </p>
       <Select
         showSearch
+        searchValue={searchText}
         placeholder="输入工号/姓名搜索"
         style={{ width: "100%" }}
         filterOption={false}
@@ -106,6 +127,7 @@ export default function ResignByUserDialog({ open, onClose, onSuccess, onCommitt
         onChange={(v) => {
           const found = options.find((o) => o.value === v);
           setSelected(found ?? null);
+          setSearchText("");
         }}
         value={selected?.value}
       />

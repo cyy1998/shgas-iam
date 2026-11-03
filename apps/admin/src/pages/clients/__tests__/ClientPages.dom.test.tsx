@@ -3,7 +3,7 @@ import ClientSsoPage from "@admin/pages/clients/ClientSsoPage";
 import ClientEditPage from "@admin/pages/clients/edit";
 import type { ClientSearchParams } from "@admin/services/client";
 import type { ClientSsoDetail } from "@admin/services/client-sso";
-import { ApiErrorCode, ClientSsoProtocol } from "@iam/contracts";
+import { ApiErrorCode, ClientSsoProtocol, ClientStatus } from "@iam/contracts";
 import { history } from "@umijs/max";
 import { ConfigProvider, Modal, message } from "antd";
 import { HttpResponse, http } from "msw";
@@ -89,6 +89,8 @@ describe("Client pages through the real services", () => {
     await waitFor(() => expect(inputs).toHaveLength(1));
     expect(screen.queryByText("IAM 管理后台")).not.toBeInTheDocument();
     await user.click(screen.getByText("展开", { exact: true }));
+    await user.click(screen.getByLabelText("全局状态", { exact: true }));
+    await user.click(await screen.findByTitle("维护中"));
     await user.click(screen.getByLabelText("SSO 协议", { exact: true }));
     await user.click(await screen.findByTitle("Custom SSO"));
     await user.click(screen.getByLabelText("SSO 启用", { exact: true }));
@@ -96,11 +98,19 @@ describe("Client pages through the real services", () => {
     await user.click(screen.getByRole("button", { name: /查\s*询/ }));
     await waitFor(() =>
       expect(inputs.at(-1)).toMatchObject({
-        conditions: { exactConditions: { ssoProtocols: [ClientSsoProtocol.CustomSso], ssoEnabled: false } },
+        conditions: {
+          exactConditions: {
+            statuses: [ClientStatus.Maintenance],
+            ssoProtocols: [ClientSsoProtocol.CustomSso],
+            ssoEnabled: false,
+          },
+        },
       }),
     );
     expect(await screen.findByText("IAM 管理后台")).toBeVisible();
     expect(within(screen.getByRole("table")).getByText("已停用")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /重\s*置/ }));
+    await waitFor(() => expect(inputs.at(-1)?.conditions.exactConditions).toEqual({}));
   });
 
   it("keeps the loading state until the actual detail request completes", async () => {

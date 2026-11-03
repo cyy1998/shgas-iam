@@ -1,0 +1,141 @@
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.section {
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid;
+  border-radius: 10px;
+}
+
+.section-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+
+.section h5.section-title {
+  margin: 0;
+  font-size: 14px;
+}
+
+.basic-section {
+  padding: 20px 24px;
+
+  .section-header {
+    margin-bottom: 18px;
+  }
+
+  h5.section-title {
+    font-size: 15px;
+  }
+}
+
+.field-label {
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+.role-row {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.role-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.role-tag {
+  font-size: 13px;
+  max-width: 100%;
+  margin-inline-end: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.metadata {
+  width: 100%;
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid;
+
+  span {
+    font-size: 12px;
+  }
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  margin-bottom: 18px;
+}
+
+.description {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.descriptions table {
+  table-layout: fixed;
+}
+
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.header-danger-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-inline-start: 12px;
+  border-inline-start: 1px solid;
+}
+
+.header-danger-actions:empty {
+  display: none;
+}
+
+@media (max-width: 575px) {
+  .drawer-header {
+    flex-direction: column;
+    gap: 10px;
+
+    > div {
+      width: 100%;
+    }
+  }
+
+  .drawer-actions {
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+  }
+
+  .header-actions {
+    justify-content: flex-end;
+    column-gap: 8px;
+  }
+
+  .section {
+    padding-inline: 12px;
+  }
+
+  .basic-section {
+    padding-inline: 18px;
+  }
+}

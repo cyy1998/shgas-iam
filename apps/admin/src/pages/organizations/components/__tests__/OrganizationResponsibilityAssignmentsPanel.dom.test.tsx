@@ -133,7 +133,7 @@ describe("OrganizationResponsibilityAssignmentsPanel", () => {
       id: 101,
     });
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText("任命 #101")).toBeInTheDocument();
+    expect(dialog).not.toHaveTextContent(/#101/);
     expect(within(dialog).getByText("财务部（FIN）")).toBeInTheDocument();
     expect(within(dialog).getByText("集团 / 财务部")).toBeInTheDocument();
 
@@ -418,10 +418,10 @@ describe("OrganizationResponsibilityAssignmentsPanel", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
-    resolveDetail(assignment);
-    await waitFor(() => {
-      expect(screen.queryByText("任命 #101")).not.toBeInTheDocument();
+    await act(async () => {
+      resolveDetail(assignment);
     });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(responsibilityService.listAssignments).toHaveBeenLastCalledWith({
       targetOrganizationCode: "OPS",
       lifecycle: "open",

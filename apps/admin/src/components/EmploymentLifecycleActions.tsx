@@ -11,6 +11,7 @@ type EmploymentLifecycle = Pick<EmploymentVo, "id" | "organization" | "status">;
 type Props = {
   buttonStyle?: ButtonProps["style"];
   buttonType?: ButtonProps["type"];
+  endButtonProps?: Pick<ButtonProps, "color" | "variant" | "icon" | "style">;
   decisions: Pick<AdminEmploymentAllowedActions, "end" | "pause" | "resume">;
   employment: EmploymentLifecycle;
   onSuccess: () => Promise<void> | void;
@@ -20,6 +21,7 @@ type Props = {
 export default function EmploymentLifecycleActions({
   buttonStyle,
   buttonType,
+  endButtonProps,
   decisions,
   employment,
   onSuccess,
@@ -106,10 +108,11 @@ export default function EmploymentLifecycleActions({
     <Space size="small">
       {availabilityAction}
       <AuthorizationActionButton
+        {...endButtonProps}
         danger
         decision={decisions.end}
         onClick={confirmEnd}
-        style={buttonStyle}
+        style={endButtonProps?.style ?? buttonStyle}
         type={buttonType}
       >
         结束

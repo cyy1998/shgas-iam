@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { createAuditRepository } from "@admin-api/services/audit/audit.repository";
@@ -12,6 +12,9 @@ describe("Admin audit queries after historical action normalization", () => {
   beforeAll(async () => {
     harness = await createAdminApiPostgresTestHarness();
   });
+  beforeEach(async () => {
+    await harness.reset();
+  });
   afterAll(async () => {
     if (harness) await harness.close();
   });
@@ -22,9 +25,9 @@ describe("Admin audit queries after historical action normalization", () => {
       start: () =>
         spawnOwnedProcessTree({
           executable: process.execPath,
-          args: ["--no-env-file", "run", "audit:actions", ...args],
-          cwd: fileURLToPath(new URL("../../../worker/", import.meta.url)),
-          env: { ...process.env, IAM_WORKER_DATABASE_URL: harness.commandDatabaseUrl, NO_COLOR: "1" },
+          args: ["--no-env-file", "run", "iam-ops", "audit-action", ...args],
+          cwd: fileURLToPath(new URL("../../../ops/", import.meta.url)),
+          env: { ...process.env, IAM_OPS_DATABASE_URL: harness.commandDatabaseUrl, NO_COLOR: "1" },
         }),
       completionTimeoutMs: 15_000,
       cleanupTimeoutMs: 5_000,
@@ -38,6 +41,52 @@ describe("Admin audit queries after historical action normalization", () => {
     if (!report) throw new Error("audit command did not emit its versioned report");
     return JSON.parse(report);
   }
+
+  test("searches targets by exact numeric ID or fuzzy code before counting and pagination", async () => {
+    const service = createAdminAuditService({ auditRepository: createAuditRepository(harness.db) });
+    await harness.sql`INSERT INTO audit_log (action, outcome, actor_type, target_type, target_id, target_code,
+      source_app, event_time, details) VALUES
+      ('admin.employment.pause', 'success', 'admin', 'employment', 9870, NULL, 'iam-admin', '2026-01-01', '{}'),
+      ('admin.employment.resume', 'success', 'admin', 'employment', 9870, NULL, 'iam-admin', '2026-01-02', '{}'),
+      ('admin.employment.pause', 'success', 'admin', 'employment', 19870, NULL, 'iam-admin', '2026-01-03', '{}'),
+      ('admin.organization.update', 'success', 'admin', 'organization', 9870, NULL, 'iam-admin', '2026-01-04', '{}'),
+      ('admin.user.update', 'success', 'admin', 'user', 2222, 'ACCOUNT-9870', 'iam-admin', '2026-01-05', '{}'),
+      ('admin.user.update', 'success', 'admin', 'user', 3333, 'employee-alpha', 'iam-admin', '2026-01-06', '{}'),
+      ('admin.user.update', 'success', 'admin', 'user', 4444, '999999999999999999999999999999',
+        'iam-admin', '2026-01-07', '{}')`;
+    async function search(conditions: Record<string, unknown>, pageNum = 1, pageSize = 20) {
+      return await service.searchAuditLogsForAdmin(
+        AuditLogPaginationQueryDtoSchema.parse({ conditions, pageNum, pageSize }),
+      );
+    }
+
+    const employment = await search({ targetKeyword: "9870", targetType: "employment" }, 2, 1);
+    expect(employment).toMatchObject({ total: 2, pages: 2, pageNum: 2, pageSize: 1 });
+    expect(employment.result).toHaveLength(1);
+    expect(employment.result[0]).toMatchObject({ targetType: "employment", targetId: 9870, targetCode: null });
+
+    const combined = await search({ targetKeyword: "9870" });
+    expect(combined.total).toBe(4);
+    expect(combined.result.map((row) => [row.targetType, row.targetId, row.targetCode])).toEqual([
+      ["user", 2222, "ACCOUNT-9870"],
+      ["organization", 9870, null],
+      ["employment", 9870, null],
+      ["employment", 9870, null],
+    ]);
+    const fixedId = await search({ targetKeyword: "9870", targetType: "employment", targetId: 19870 });
+    expect(fixedId).toMatchObject({ total: 0, result: [] });
+    const fixedCode = await search({ targetKeyword: "9870", targetCode: "ACCOUNT-9870" });
+    expect(fixedCode).toMatchObject({ total: 1, result: [{ targetCode: "ACCOUNT-9870" }] });
+
+    const code = await search({ targetKeyword: "ALPHA" });
+    expect(code).toMatchObject({ total: 1, result: [{ targetCode: "employee-alpha" }] });
+    for (const targetKeyword of ["987", "9870.0", "9.87e3", "-9870", "2147483648", "9007199254740993"]) {
+      const result = await search({ targetKeyword, targetType: "employment" });
+      expect(result).toMatchObject({ total: 0, result: [] });
+    }
+    const largeCode = await search({ targetKeyword: "999999999999999999999999999999" });
+    expect(largeCode).toMatchObject({ total: 1, result: [{ targetId: 4444 }] });
+  });
 
   test("migrates mixed actions then preserves exact filters, outcomes, counts, pagination and facts", async () => {
     const service = createAdminAuditService({ auditRepository: createAuditRepository(harness.db) });

@@ -96,7 +96,16 @@ function upsertTreeNode(nodes: TreeNode[], nextNode: TreeNode): TreeNode[] {
   return result.replaced ? result.nodes : [nextNode, ...nodes];
 }
 
-export default function OrganizationTreeSelector({
+export default function OrganizationTreeSelector(props: Props) {
+  const scopeKey = JSON.stringify([
+    props.visibleStatuses ?? DEFAULT_SELECTABLE_STATUSES,
+    props.selectableOrgTypes ?? null,
+    props.selectableStatuses ?? DEFAULT_SELECTABLE_STATUSES,
+  ]);
+  return <OrganizationTreeSelectorContent key={scopeKey} {...props} />;
+}
+
+function OrganizationTreeSelectorContent({
   value,
   onChange,
   placeholder = "请选择组织",
@@ -108,7 +117,10 @@ export default function OrganizationTreeSelector({
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
   const [searchData, setSearchData] = useState<TreeNode[] | null>(null);
   const [loadedBaseQuery, setLoadedBaseQuery] = useState<object | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
   const valueRef = useRef(value);
+  const activeRef = useRef(true);
+  const searchRequestRef = useRef(0);
 
   const visibleStatusesKey = (visibleStatuses ?? DEFAULT_SELECTABLE_STATUSES).join("|");
   const selectableOrgTypesKey = selectableOrgTypes?.join("|") ?? null;
@@ -123,6 +135,14 @@ export default function OrganizationTreeSelector({
     [selectableOrgTypesKey, selectableStatusesKey, visibleStatusesKey],
   );
   const loading = loadedBaseQuery !== baseQuery;
+
+  useEffect(() => {
+    activeRef.current = true;
+    return () => {
+      activeRef.current = false;
+      searchRequestRef.current += 1;
+    };
+  }, []);
 
   useEffect(() => {
     valueRef.current = value;
@@ -191,21 +211,35 @@ export default function OrganizationTreeSelector({
       parentOrgCode: String(node.value),
       pageSize: 200,
     });
-    setTreeData((prev) => mergeChildren(prev, String(node.value), children.map(toTreeNode)));
+    if (activeRef.current) {
+      setTreeData((prev) => mergeChildren(prev, String(node.value), children.map(toTreeNode)));
+    }
   };
 
   const onSearch = async (text: string) => {
+    const request = ++searchRequestRef.current;
     const keyword = text.trim();
     if (!keyword) {
       setSearchData(null);
+      setSearchLoading(false);
       return;
     }
-    const nodes = await getOrganizationSelectorNodes({
-      ...baseQuery,
-      text: keyword,
-      pageSize: 80,
-    });
-    setSearchData(nodes.map(toTreeNode));
+    setSearchLoading(true);
+    setSearchData([]);
+    try {
+      const nodes = await getOrganizationSelectorNodes({
+        ...baseQuery,
+        text: keyword,
+        pageSize: 80,
+      });
+      if (activeRef.current && request === searchRequestRef.current) setSearchData(nodes.map(toTreeNode));
+    } catch (error) {
+      if (activeRef.current && request === searchRequestRef.current) {
+        message.error(error instanceof Error ? error.message : "搜索组织失败");
+      }
+    } finally {
+      if (activeRef.current && request === searchRequestRef.current) setSearchLoading(false);
+    }
   };
 
   return (
@@ -213,7 +247,7 @@ export default function OrganizationTreeSelector({
       value={value}
       onChange={onChange}
       disabled={disabled}
-      loading={loading}
+      loading={loading || searchLoading}
       allowClear
       showSearch
       treeLine

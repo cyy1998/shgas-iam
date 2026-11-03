@@ -1,8 +1,10 @@
 // Browser Integration uses a mocked backend; this is not a full-system journey.
-import { UserStatus } from "@iam/contracts";
+
+import type { AuditLogSearchParams } from "@admin/services/audit";
+import { EmploymentStatus, UserStatus } from "@iam/contracts";
 import { expect, test } from "@playwright/test";
-import { hrAdminUserDetail } from "../../test/mocks/fixtures";
-import { fulfillTrpc, parseTrpcBatchInput } from "../fixtures";
+import { adminUserDetail, createHrEmploymentAllowedActions, hrAdminUserDetail } from "../../test/mocks/fixtures";
+import { fulfillTrpc, mockAdminApi, parseTrpcBatchInput } from "../fixtures";
 import { collectMutationRequests, mockScopedManagementApi } from "../scoped-management.fixture";
 
 test("scoped User detail navigates to the selected Employment without exposing authorization internals", async ({
@@ -21,6 +23,7 @@ test("scoped User detail navigates to the selected Employment without exposing a
   await expect(page.getByRole("button", { name: /新建用户/ })).toHaveCount(0);
   await viewActions.first().click();
   const drawer = page.getByRole("dialog");
+  await expect(drawer.getByRole("region", { name: "基本信息" })).toBeVisible();
   for (const action of [/状\s*态/, /离\s*职/]) {
     const button = drawer.getByRole("button", { name: action });
     await expect(button).toBeDisabled();
@@ -31,8 +34,7 @@ test("scoped User detail navigates to the selected Employment without exposing a
   await expect(remove).toHaveAttribute("title", "当前管理员角色未授予此操作");
   await expect(drawer.getByRole("button", { name: /编\s*辑/ })).toBeEnabled();
   await expect(drawer.getByRole("button", { name: /重\s*置\s*密\s*码/ })).toBeEnabled();
-  await drawer.getByRole("tab", { name: /雇佣/ }).click();
-  const panel = drawer.getByRole("tabpanel", { name: /雇佣/ });
+  const panel = drawer.getByRole("region", { name: "雇佣信息" });
   await expect(panel.getByText("财务部")).toBeVisible();
   await expect(panel.getByRole("columnheader", { name: "角色" })).toHaveCount(0);
   await expect(panel.getByRole("columnheader", { name: "权限" })).toHaveCount(0);
@@ -44,7 +46,8 @@ test("scoped User detail navigates to the selected Employment without exposing a
   await expect(panel.getByRole("button", { name: /新增雇佣/ })).toBeVisible();
   await expect(panel.locator("a").filter({ hasText: "转岗" })).toHaveCount(0);
   await expect(drawer.getByRole("tab", { name: "操作日志" })).toHaveCount(0);
-  await panel.getByRole("link", { name: "查看任职" }).click();
+  const position = hrAdminUserDetail.employments[0].position;
+  await panel.getByRole("link", { name: `${position.posName} (${position.posCode})` }).click();
   await expect(page).toHaveURL(/\/iam-admin\/employments\?employmentId=42$/);
   const employmentDrawer = page.getByRole("dialog").filter({ hasText: "张三" });
   await expect(employmentDrawer).toBeVisible();
@@ -59,6 +62,120 @@ test("scoped User detail navigates to the selected Employment without exposing a
   await Promise.all([page.waitForURL(/\/sso\/logout\?/), page.getByText("退出登录", { exact: true }).click()]);
   expect(logoutUrl?.pathname).toBe("/sso/logout");
   expect(logoutUrl?.searchParams.get("redirectUrl")).toBe("http://127.0.0.1:8001/iam-admin");
+});
+
+test("User Employment history is hidden by default and can be revealed without mutations", async ({ page }) => {
+  const mutations = collectMutationRequests(page);
+  await mockScopedManagementApi(page);
+  const currentEmployment = hrAdminUserDetail.employments[0];
+  await page.route("**/rpc/admin.user.detail**", (route) =>
+    fulfillTrpc(route, {
+      ...hrAdminUserDetail,
+      employments: [
+        currentEmployment,
+        {
+          ...currentEmployment,
+          id: 43,
+          status: EmploymentStatus.Disable,
+          isPrimary: false,
+          startTime: "2025-01-05T08:00:00.000Z",
+          endTime: "2025-12-31T08:00:00.000Z",
+          managementPath: null,
+          allowedActions: createHrEmploymentAllowedActions(EmploymentStatus.Disable, false),
+        },
+      ],
+    }),
+  );
+  await page.goto("/iam-admin/users");
+  await page.locator("td").getByRole("button", { name: "查看", exact: true }).first().click();
+  const drawer = page.getByRole("dialog");
+  const panel = drawer.getByRole("region", { name: "雇佣信息" });
+  const historyFilter = panel.getByRole("checkbox", { name: "显示已结束任职" });
+  await expect(historyFilter).not.toBeChecked();
+  await expect(panel.getByRole("row")).toHaveCount(2);
+  const position = currentEmployment.position;
+  await expect(panel.getByRole("link", { name: `${position.posName} (${position.posCode})` })).toBeVisible();
+  await historyFilter.check();
+  await expect(panel.getByRole("row")).toHaveCount(3);
+  await historyFilter.uncheck();
+  await expect(panel.getByRole("row")).toHaveCount(2);
+  expect(mutations).toEqual([]);
+});
+
+test("User basic information is edited and saved in the existing detail", async ({ page }) => {
+  await mockScopedManagementApi(page);
+  let name = hrAdminUserDetail.name;
+  const updates: unknown[] = [];
+  await page.route("**/rpc/admin.user.detail**", (route) => fulfillTrpc(route, { ...hrAdminUserDetail, name }));
+  await page.route("**/rpc/admin.user.update**", (route) => {
+    const input = parseTrpcBatchInput<{ username: string; data: { name: string } }>(route);
+    updates.push(input);
+    name = input.data.name;
+    return fulfillTrpc(route, { changed: true, result: null });
+  });
+  await page.goto("/iam-admin/users");
+  await page.locator("td").getByRole("button", { name: "查看", exact: true }).first().click();
+  const drawer = page.getByRole("dialog");
+  await drawer.getByRole("button", { name: /编\s*辑/ }).click();
+  const panel = drawer.getByRole("region", { name: "基本信息" });
+  const nameField = panel.getByRole("textbox", { name: "姓名" });
+  await expect(drawer.getByRole("region", { name: "雇佣信息" })).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(1);
+  await expect(nameField).toHaveValue(hrAdminUserDetail.name);
+  await nameField.fill("未保存姓名");
+  await panel.getByRole("button", { name: /取\s*消/ }).click();
+  await drawer.getByRole("button", { name: /编\s*辑/ }).click();
+  await expect(nameField).toHaveValue(hrAdminUserDetail.name);
+  expect(updates).toEqual([]);
+  await nameField.fill("  更新后的姓名  ");
+  await panel.getByRole("button", { name: /保\s*存/ }).click();
+  await expect(nameField).toHaveCount(0);
+  await expect(drawer.getByText("更新后的姓名", { exact: true })).toHaveCount(2);
+  await expect(drawer.getByRole("button", { name: /编\s*辑/ })).toBeEnabled();
+  expect(updates).toEqual([{ username: hrAdminUserDetail.username, data: { name: "更新后的姓名" } }]);
+  await expect(page).toHaveURL(/\/iam-admin\/users$/);
+});
+
+test("User operation logs load when selected and preserve the profile draft on return", async ({ page }) => {
+  const mutations = collectMutationRequests(page);
+  await mockAdminApi(page);
+  await page.route("**/rpc/admin.organizationResponsibility.searchAssignments**", (route) =>
+    fulfillTrpc(route, { items: [], total: 0, nextCursor: null }),
+  );
+  const auditSearches: AuditLogSearchParams[] = [];
+  await page.route("**/rpc/admin.audit.search**", (route) => {
+    auditSearches.push(parseTrpcBatchInput<AuditLogSearchParams>(route));
+    return fulfillTrpc(route, { result: [], total: 0 });
+  });
+  await page.goto("/iam-admin/users");
+  await page.locator("td").getByRole("button", { name: "查看", exact: true }).first().click();
+  const drawer = page.getByRole("dialog");
+  const logs = drawer.getByRole("tab", { name: "操作日志" });
+  await expect(logs).toBeVisible();
+  expect(auditSearches).toEqual([]);
+  await drawer.getByRole("button", { name: /编\s*辑/ }).click();
+  const nameField = drawer.getByRole("textbox", { name: "姓名" });
+  await nameField.fill("待保存的姓名");
+  await logs.click();
+  await expect(logs).toHaveAttribute("aria-selected", "true");
+  await expect(drawer.getByText("暂无审计日志")).toBeVisible();
+  await expect
+    .poll(() => auditSearches)
+    .toEqual([
+      {
+        pageNum: 1,
+        pageSize: 10,
+        conditions: { targetType: "user", targetCode: adminUserDetail.username },
+      },
+    ]);
+  await drawer.getByRole("tab", { name: "用户信息" }).click();
+  await expect(nameField).toHaveValue("待保存的姓名");
+  await expect(drawer.getByRole("region", { name: "雇佣信息" })).toBeVisible();
+  await drawer
+    .getByRole("region", { name: "基本信息" })
+    .getByRole("button", { name: /取\s*消/ })
+    .click();
+  expect(mutations).toEqual([]);
 });
 
 test("an ended-only disabled User can be rehired only after a refreshed Pause response", async ({ page }) => {
@@ -84,14 +201,12 @@ test("an ended-only disabled User can be rehired only after a refreshed Pause re
   await page.locator("td").getByRole("button", { name: "查看", exact: true }).first().click();
   let drawer = page.getByRole("dialog");
   await expect(drawer.getByRole("button", { name: /状\s*态/ })).toBeDisabled();
-  await drawer.getByRole("tab", { name: /雇佣/ }).click();
   await expect(drawer.getByRole("button", { name: /新增雇佣/ })).toBeDisabled();
   // The actual Full Admin -> HR state transition is proved by the PostgreSQL command sequence.
   status = UserStatus.Pause;
   await drawer.getByRole("button", { name: "关闭" }).click();
   await page.locator("td").getByRole("button", { name: "查看", exact: true }).first().click();
   drawer = page.getByRole("dialog");
-  await drawer.getByRole("tab", { name: /雇佣/ }).click();
   await drawer.getByRole("button", { name: /新增雇佣/ }).click();
   const form = page.getByRole("dialog", { name: /新增雇佣/ });
   await form.getByRole("combobox").nth(1).click();

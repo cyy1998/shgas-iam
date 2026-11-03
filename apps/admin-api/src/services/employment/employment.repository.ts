@@ -423,6 +423,7 @@ function buildEmploymentAdminWhere(
   scope?: AdminEmploymentReadScope,
 ) {
   const text = dto.conditions.fuzzyConditions.text;
+  const userText = dto.conditions.fuzzyConditions.userText?.replace(/[\\%_]/g, "\\$&");
   const organizationCondition =
     buildOrganizationFilterCondition(dto.conditions.exactConditions.organization, tx) ??
     buildLegacyOrganizationFilterCondition(dto, tx);
@@ -442,6 +443,9 @@ function buildEmploymentAdminWhere(
             eq(users.id, employments.userId),
             eq(users.isDelete, false),
             inArrayIf(users.username, dto.conditions.exactConditions.usernames),
+            userText === undefined
+              ? undefined
+              : or(ilikeContainsIf(users.username, userText), ilikeContainsIf(users.name, userText)),
           ),
         ),
     ),

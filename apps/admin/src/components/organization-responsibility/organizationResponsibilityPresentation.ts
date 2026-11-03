@@ -11,8 +11,12 @@ const statusNames: Record<OrganizationResponsibilityAssignmentStatus, string> = 
   [OrganizationResponsibilityAssignmentStatus.Disable]: "已结束",
 };
 
-export function formatOrganizationResponsibilityType(typeCode: OrganizationResponsibilityTypeCode) {
-  return `${typeNames.get(typeCode) ?? typeCode}（${typeCode}）`;
+export function formatOrganizationResponsibilityType(
+  typeCode: OrganizationResponsibilityTypeCode,
+  { includeCode = true }: { includeCode?: boolean } = {},
+) {
+  const name = typeNames.get(typeCode) ?? typeCode;
+  return includeCode ? `${name}（${typeCode}）` : name;
 }
 
 export function formatOrganizationResponsibilityStatus(status: OrganizationResponsibilityAssignmentStatus) {

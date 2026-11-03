@@ -1,6 +1,8 @@
 import AuthorizationActionButton from "@admin/components/AuthorizationActionButton";
 import AuthorizationActionDropdown from "@admin/components/AuthorizationActionDropdown";
 import AuditLogTable from "@admin/components/audit/AuditLogTable";
+import styles from "@admin/components/detail/DetailDrawer.module.less";
+import DetailHeaderActions from "@admin/components/detail/DetailHeaderActions";
 import EmploymentLifecycleActions from "@admin/components/EmploymentLifecycleActions";
 import EmploymentPrimaryActions from "@admin/components/EmploymentPrimaryActions";
 import EmploymentResponsibilitySummary from "@admin/components/organization-responsibility/EmploymentResponsibilitySummary";
@@ -9,36 +11,40 @@ import EmploymentFormModal from "@admin/pages/employments/components/EmploymentF
 import TransferModal from "@admin/pages/employments/components/TransferModal";
 import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
 import { resignUser } from "@admin/services/employment";
-import { deleteUser, getUser, type UserDetailVo, updateUserStatus } from "@admin/services/user";
-import { ProDescriptions } from "@ant-design/pro-components";
-import { getUserStatusOptions, UserStatus } from "@iam/contracts";
+import { deleteUser, getUser, type UserDetailVo, updateUser, updateUserStatus } from "@admin/services/user";
+import { DeleteOutlined, DownOutlined, KeyOutlined, LogoutOutlined } from "@ant-design/icons";
+import { EmploymentStatus, getUserStatusOptions, UserStatus } from "@iam/contracts";
 import { Link, useAccess } from "@umijs/max";
-import { Alert, Button, Drawer, Empty, Modal, message, Skeleton, Space, Table, Tabs, Tag } from "antd";
+import {
+  Alert,
+  Button,
+  Checkbox,
+  ConfigProvider,
+  Drawer,
+  Empty,
+  Modal,
+  message,
+  Skeleton,
+  Space,
+  Table,
+  Tabs,
+  Tag,
+  Typography,
+  theme,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
 import { confirmResetPassword } from "./ResetPasswordModal";
+import UserBasicInformation from "./UserBasicInformation";
 
 type EmploymentRow = UserDetailVo["employments"][number];
 
-const roleListStyle: CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: 6,
-  maxWidth: "100%",
-  minWidth: 0,
-};
-
-const roleTagStyle: CSSProperties = {
-  marginInlineEnd: 0,
-  maxWidth: "100%",
-  whiteSpace: "normal",
-  wordBreak: "break-all",
-};
-
 const employmentTableActionStyle: CSSProperties = {
   fontWeight: "inherit",
+  fontSize: 13,
   paddingInline: 0,
+  height: 24,
 };
 
 const formatDate = (value: Date | string | null | undefined) => (value ? new Date(value).toLocaleDateString() : "—");
@@ -52,30 +58,42 @@ type Props = {
   open: boolean;
   username: string | null;
   onClose: () => void;
-  onEdit: (detail: UserDetailVo) => void;
   onChanged: () => void;
 };
 
-export default function UserDetailDrawer({ open, username, onClose, onEdit, onChanged }: Props) {
+export default function UserDetailDrawer({ open, username, onClose, onChanged }: Props) {
   return (
     <UserDetailDrawerContent
       key={open ? username : "closed"}
       open={open}
       username={username}
       onClose={onClose}
-      onEdit={onEdit}
       onChanged={onChanged}
     />
   );
 }
 
-function UserDetailDrawerContent({ open, username, onClose, onEdit, onChanged }: Props) {
+function UserDetailDrawerContent({ open, username, onClose, onChanged }: Props) {
   const access = useAccess();
+  const { token } = theme.useToken();
+  const headerDangerButtonStyle: CSSProperties = {
+    borderColor: token.colorErrorBorder,
+    color: token.colorErrorTextActive,
+    fontWeight: 500,
+  };
   const [committedWarning, setCommittedWarning] = useState<string>();
   const [detail, setDetail] = useState<UserDetailVo | null>(null);
   const [loading, setLoading] = useState(open && username !== null);
   const [employmentFormOpen, setEmploymentFormOpen] = useState(false);
   const [transferEmployment, setTransferEmployment] = useState<EmploymentRow | null>(null);
+  const [showEndedEmployments, setShowEndedEmployments] = useState(false);
+  const [activeTab, setActiveTab] = useState("details");
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const employments = detail?.employments ?? [];
+  const visibleEmployments = employments.filter(
+    (row) => showEndedEmployments || row.status !== EmploymentStatus.Disable,
+  );
 
   useEffect(() => {
     if (!open || !username) return;
@@ -107,10 +125,39 @@ function UserDetailDrawerContent({ open, username, onClose, onEdit, onChanged }:
     try {
       const d = await getUser(username);
       setDetail(d);
+      if (!d.allowedActions.editProfile.allowed) setEditingProfile(false);
     } finally {
       setLoading(false);
     }
     onChanged();
+  };
+
+  const saveProfile = async (data: Parameters<typeof updateUser>[1]) => {
+    if (!detail?.allowedActions.editProfile.allowed || savingProfile) return false;
+    setSavingProfile(true);
+    try {
+      try {
+        const outcome = await updateUser(detail.username, data);
+        if (outcome.changed) message.success("更新成功");
+        else message.info("无需修改");
+      } catch (error) {
+        if (!(error instanceof AdminMutationCommittedError)) {
+          handleError(error);
+          return false;
+        }
+        setCommittedWarning(error.message);
+      }
+      setEditingProfile(false);
+      try {
+        await refresh();
+      } catch (error) {
+        onChanged();
+        message.error(`基本信息已保存，但详情刷新失败：${error instanceof Error ? error.message : "请稍后重试"}`);
+      }
+      return true;
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const onEmploymentCommitted = async (error: AdminMutationCommittedError) => {
@@ -202,38 +249,53 @@ function UserDetailDrawerContent({ open, username, onClose, onEdit, onChanged }:
 
   const employmentColumns: ColumnsType<EmploymentRow> = [
     {
-      title: "组织路径",
-      dataIndex: ["organization", "assignedOrg", "orgName"],
-      render: (_val: string | undefined, row) => formatEmploymentOrgPath(row),
+      title: "任职信息",
+      key: "employment",
+      render: (_: unknown, row) => (
+        <Space orientation="vertical" size={4} style={{ width: "100%", minWidth: 0 }}>
+          <Typography.Text strong style={{ fontSize: 13, overflowWrap: "anywhere" }}>
+            {formatEmploymentOrgPath(row)}
+          </Typography.Text>
+          <Space size={6} wrap>
+            {access.canAccessEmployment && row.managementPath ? (
+              <Link to={row.managementPath} style={{ fontSize: 12, overflowWrap: "anywhere" }}>
+                {formatEmploymentPosition(row)}
+              </Link>
+            ) : (
+              <Typography.Text type="secondary" style={{ fontSize: 12, overflowWrap: "anywhere" }}>
+                {formatEmploymentPosition(row)}
+              </Typography.Text>
+            )}
+            <StatusTag domain="employment" status={row.status} />
+            {row.isPrimary ? (
+              <Tag color="blue" style={{ marginInlineEnd: 0 }}>
+                主岗
+              </Tag>
+            ) : null}
+          </Space>
+        </Space>
+      ),
     },
     {
-      title: "岗位",
-      dataIndex: ["position", "posName"],
-      render: (_val: string | undefined, row) => formatEmploymentPosition(row),
-    },
-    {
-      title: "主岗",
-      dataIndex: "isPrimary",
-      render: (val: boolean) => (val ? <Tag color="blue">主岗</Tag> : null),
-      width: 70,
-    },
-    {
-      title: "状态",
-      dataIndex: "status",
-      render: (_: unknown, row: EmploymentRow) => <StatusTag domain="employment" status={row.status} />,
-      width: 90,
-    },
-    {
-      title: "开始",
-      dataIndex: "startTime",
-      render: (val: EmploymentRow["startTime"]) => formatDate(val),
-      width: 110,
-    },
-    {
-      title: "结束",
-      dataIndex: "endTime",
-      render: (val: EmploymentRow["endTime"]) => formatDate(val),
-      width: 110,
+      title: "任职期间",
+      key: "period",
+      width: 120,
+      render: (_: unknown, row) => (
+        <div style={{ fontSize: 12, lineHeight: "24px" }}>
+          <div>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              开始{" "}
+            </Typography.Text>
+            {formatDate(row.startTime)}
+          </div>
+          <div>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              结束{" "}
+            </Typography.Text>
+            {formatDate(row.endTime)}
+          </div>
+        </div>
+      ),
     },
   ];
 
@@ -241,7 +303,7 @@ function UserDetailDrawerContent({ open, username, onClose, onEdit, onChanged }:
     employmentColumns.push({
       title: "组织责任",
       key: "responsibilities",
-      width: 280,
+      width: 210,
       render: (_: unknown, row: EmploymentRow) => <EmploymentResponsibilitySummary employmentId={row.id} compact />,
     });
   }
@@ -249,40 +311,40 @@ function UserDetailDrawerContent({ open, username, onClose, onEdit, onChanged }:
   if (access.canAccessEmployment) {
     employmentColumns.push({
       title: "操作",
-      fixed: "right",
       key: "action",
-      width: 280,
+      width: 150,
       render: (_: unknown, row: EmploymentRow) => {
         const hasAllowedAction = Object.values(row.allowedActions).some((decision) => decision.allowed);
         if (!row.managementPath && !hasAllowedAction) return null;
         return (
-          <Space size="small">
-            {row.managementPath ? <Link to={row.managementPath}>查看任职</Link> : null}
-            <AuthorizationActionButton
-              decision={row.allowedActions.transfer}
-              onClick={() => setTransferEmployment(row)}
-              style={employmentTableActionStyle}
-              type="link"
-            >
-              转岗
-            </AuthorizationActionButton>
-            <EmploymentPrimaryActions
-              onCommitted={onEmploymentCommitted}
-              decision={row.isPrimary ? row.allowedActions.clearPrimary : row.allowedActions.setPrimary}
-              buttonStyle={employmentTableActionStyle}
-              buttonType="link"
-              employment={row}
-              onSuccess={refresh}
-            />
-            <EmploymentLifecycleActions
-              onCommitted={onEmploymentCommitted}
-              buttonStyle={employmentTableActionStyle}
-              buttonType="link"
-              decisions={row.allowedActions}
-              employment={row}
-              onSuccess={refresh}
-            />
-          </Space>
+          <ConfigProvider componentSize="small">
+            <Space size={[12, 0]} wrap>
+              <AuthorizationActionButton
+                decision={row.allowedActions.transfer}
+                onClick={() => setTransferEmployment(row)}
+                style={employmentTableActionStyle}
+                type="link"
+              >
+                转岗
+              </AuthorizationActionButton>
+              <EmploymentPrimaryActions
+                onCommitted={onEmploymentCommitted}
+                decision={row.isPrimary ? row.allowedActions.clearPrimary : row.allowedActions.setPrimary}
+                buttonStyle={employmentTableActionStyle}
+                buttonType="link"
+                employment={row}
+                onSuccess={refresh}
+              />
+              <EmploymentLifecycleActions
+                onCommitted={onEmploymentCommitted}
+                buttonStyle={employmentTableActionStyle}
+                buttonType="link"
+                decisions={row.allowedActions}
+                employment={row}
+                onSuccess={refresh}
+              />
+            </Space>
+          </ConfigProvider>
         );
       },
     });
@@ -319,15 +381,27 @@ function UserDetailDrawerContent({ open, username, onClose, onEdit, onChanged }:
         </>
       )}
       <Drawer
-        size={640}
+        size={840}
         open={open}
-        onClose={onClose}
+        onClose={() => {
+          if (!savingProfile) onClose();
+        }}
+        closable={!savingProfile}
+        keyboard={!savingProfile}
+        mask={{ closable: !savingProfile }}
         destroyOnHidden
+        classNames={{ header: styles["drawer-header"], extra: styles["drawer-actions"] }}
+        styles={{
+          header: { padding: "14px 20px" },
+          body: { padding: "16px 20px", background: token.colorBgLayout },
+        }}
         title={
           detail ? (
-            <Space>
+            <Space size={6} wrap>
               <span>{detail.name}</span>
-              <span style={{ color: "#999", fontSize: 12 }}>{detail.username}</span>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {detail.username}
+              </Typography.Text>
               <StatusTag domain="user" status={detail.status} />
             </Space>
           ) : (
@@ -335,54 +409,75 @@ function UserDetailDrawerContent({ open, username, onClose, onEdit, onChanged }:
           )
         }
         extra={
-          detail && (
-            <Space>
-              <AuthorizationActionButton decision={detail.allowedActions.editProfile} onClick={() => onEdit(detail)}>
-                编辑
-              </AuthorizationActionButton>
-              <AuthorizationActionDropdown
-                decision={detail.allowedActions.changeStatus}
-                menu={{
-                  items: getUserStatusOptions()
-                    .filter((o) => o.value !== detail.status)
-                    .map((o) => ({
-                      key: String(o.value),
-                      label: `切为「${o.label}」`,
-                      onClick: () => onStatusChange(o.value as UserStatus),
-                    })),
-                }}
-              >
-                状态
-              </AuthorizationActionDropdown>
-              <AuthorizationActionButton
-                decision={detail.allowedActions.resetPassword}
-                onClick={() =>
-                  confirmResetPassword({
-                    username: detail.username,
-                    name: detail.name,
-                    onSuccess: refresh,
-                    onCommitted: async (error) => {
-                      setCommittedWarning(
-                        `密码重置已生效，但新密码未能交付。${error.message}；请先修复，再主动重置密码。`,
-                      );
-                      try {
-                        await refresh();
-                      } catch (refreshError) {
-                        handleError(refreshError);
-                      }
-                    },
-                  })
-                }
-              >
-                重置密码
-              </AuthorizationActionButton>
-              <AuthorizationActionButton danger decision={detail.allowedActions.delete} onClick={onDelete}>
-                删除
-              </AuthorizationActionButton>
-              <AuthorizationActionButton danger decision={detail.allowedActions.resign} onClick={onResign}>
-                离职
-              </AuthorizationActionButton>
-            </Space>
+          detail &&
+          !editingProfile &&
+          !savingProfile && (
+            <DetailHeaderActions>
+              <Space size={8}>
+                <AuthorizationActionDropdown
+                  decision={detail.allowedActions.changeStatus}
+                  menu={{
+                    items: getUserStatusOptions()
+                      .filter((o) => o.value !== detail.status)
+                      .map((o) => ({
+                        key: String(o.value),
+                        label: `切为「${o.label}」`,
+                        onClick: () => onStatusChange(o.value as UserStatus),
+                      })),
+                  }}
+                >
+                  <Space size={6}>
+                    状态
+                    <DownOutlined aria-hidden style={{ fontSize: 10 }} />
+                  </Space>
+                </AuthorizationActionDropdown>
+                <AuthorizationActionButton
+                  decision={detail.allowedActions.resetPassword}
+                  icon={<KeyOutlined aria-hidden />}
+                  onClick={() =>
+                    confirmResetPassword({
+                      username: detail.username,
+                      name: detail.name,
+                      onSuccess: refresh,
+                      onCommitted: async (error) => {
+                        setCommittedWarning(
+                          `密码重置已生效，但新密码未能交付。${error.message}；请先修复，再主动重置密码。`,
+                        );
+                        try {
+                          await refresh();
+                        } catch (refreshError) {
+                          handleError(refreshError);
+                        }
+                      },
+                    })
+                  }
+                >
+                  重置密码
+                </AuthorizationActionButton>
+              </Space>
+              <div className={styles["header-danger-actions"]} style={{ borderColor: token.colorBorderSecondary }}>
+                <AuthorizationActionButton
+                  variant="filled"
+                  color="danger"
+                  decision={detail.allowedActions.delete}
+                  onClick={onDelete}
+                  icon={<DeleteOutlined aria-hidden />}
+                  style={detail.allowedActions.delete.allowed ? headerDangerButtonStyle : undefined}
+                >
+                  删除
+                </AuthorizationActionButton>
+                <AuthorizationActionButton
+                  variant="filled"
+                  color="danger"
+                  decision={detail.allowedActions.resign}
+                  onClick={onResign}
+                  icon={<LogoutOutlined aria-hidden />}
+                  style={detail.allowedActions.resign.allowed ? headerDangerButtonStyle : undefined}
+                >
+                  离职
+                </AuthorizationActionButton>
+              </div>
+            </DetailHeaderActions>
           )
         }
       >
@@ -391,104 +486,90 @@ function UserDetailDrawerContent({ open, username, onClose, onEdit, onChanged }:
         {!loading && !detail ? <Empty /> : null}
         {detail && (
           <Tabs
+            activeKey={activeTab}
+            onChange={(key) => {
+              if (!savingProfile) setActiveTab(key);
+            }}
             items={[
               {
-                key: "basic",
-                label: "基本信息",
+                key: "details",
+                label: "用户信息",
                 children: (
-                  <ProDescriptions<UserDetailVo>
-                    column={2}
-                    dataSource={detail}
-                    columns={[
-                      { title: "用户名", dataIndex: "username" },
-                      { title: "姓名", dataIndex: "name" },
-                      {
-                        title: "手机",
-                        dataIndex: "mobile",
-                        render: (_, r) => r.mobile ?? "—",
-                      },
-                      {
-                        title: "微信 ID",
-                        dataIndex: "wxId",
-                        render: (_, r) => r.wxId ?? "—",
-                      },
-                      {
-                        title: "用户类型",
-                        dataIndex: "userType",
-                        render: (_, r) => r.userType ?? "—",
-                      },
-                      {
-                        title: "状态",
-                        dataIndex: "status",
-                        render: (_, r) => <StatusTag domain="user" status={r.status} />,
-                      },
-                      {
-                        title: "角色",
-                        dataIndex: "roles",
-                        span: 2,
-                        contentStyle: { minWidth: 0 },
-                        render: (_, r) =>
-                          r.roles.length === 0 ? (
-                            "—"
-                          ) : (
-                            <div style={roleListStyle}>
-                              {r.roles.map((code: string) => (
-                                <Tag key={code} style={roleTagStyle}>
-                                  {r.roleNames[code] || "未命名角色"}
-                                </Tag>
-                              ))}
-                            </div>
-                          ),
-                      },
-                      {
-                        title: "雇佣数",
-                        dataIndex: "employments",
-                        render: (_, r) => r.employments.length,
-                      },
-                      {
-                        title: "创建时间",
-                        dataIndex: "createTime",
-                        render: (_, r) => new Date(r.createTime).toLocaleString(),
-                      },
-                      {
-                        title: "更新时间",
-                        dataIndex: "updateTime",
-                        render: (_, r) => new Date(r.updateTime).toLocaleString(),
-                      },
-                    ]}
-                  />
-                ),
-              },
-              {
-                key: "employments",
-                label: `雇佣（${detail.employments.length}）`,
-                children: (
-                  <div>
-                    {access.canCreateEmployment && (
-                      <div style={{ marginBottom: 12, textAlign: "right" }}>
-                        <Button
-                          type="primary"
-                          disabled={detail.status === UserStatus.Disable}
-                          title={
-                            detail.status === UserStatus.Disable
-                              ? "用户已停用，请由有权限的管理员恢复账号后再新增任职"
-                              : undefined
-                          }
-                          onClick={() => setEmploymentFormOpen(true)}
-                        >
-                          + 新增雇佣
-                        </Button>
-                      </div>
-                    )}
-                    <Table<EmploymentRow>
-                      rowKey="id"
-                      size="small"
-                      columns={employmentColumns}
-                      dataSource={detail.employments}
-                      pagination={false}
-                      scroll={{ x: 1320 }}
-                      locale={{ emptyText: "暂无雇佣" }}
+                  <div className={styles.content}>
+                    <UserBasicInformation
+                      detail={detail}
+                      editing={editingProfile}
+                      saving={savingProfile}
+                      onEdit={() => setEditingProfile(true)}
+                      onCancel={() => setEditingProfile(false)}
+                      onSave={saveProfile}
                     />
+                    <section
+                      aria-label="雇佣信息"
+                      className={styles.section}
+                      inert={savingProfile}
+                      style={{ background: token.colorBgContainer, borderColor: token.colorBorderSecondary }}
+                    >
+                      <div className={styles["section-header"]}>
+                        <Space size={8}>
+                          <Typography.Title level={5} className={styles["section-title"]}>
+                            雇佣信息
+                          </Typography.Title>
+                          <Tag style={{ marginInlineEnd: 0 }}>{employments.length}</Tag>
+                        </Space>
+                        <Space size={[12, 8]} wrap>
+                          <Checkbox
+                            checked={showEndedEmployments}
+                            onChange={(event) => setShowEndedEmployments(event.target.checked)}
+                            style={{ fontSize: 12 }}
+                          >
+                            显示已结束任职
+                          </Checkbox>
+                          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                            {visibleEmployments.length} / {employments.length} 条
+                          </Typography.Text>
+                          {access.canCreateEmployment && (
+                            <Button
+                              size="small"
+                              type="primary"
+                              disabled={detail.status === UserStatus.Disable}
+                              title={
+                                detail.status === UserStatus.Disable
+                                  ? "用户已停用，请由有权限的管理员恢复账号后再新增任职"
+                                  : undefined
+                              }
+                              onClick={() => setEmploymentFormOpen(true)}
+                            >
+                              + 新增雇佣
+                            </Button>
+                          )}
+                        </Space>
+                      </div>
+                      <ConfigProvider
+                        theme={{
+                          token: { fontSize: 13 },
+                          components: { Table: { headerBg: token.colorFillAlter, cellPaddingBlockSM: 10 } },
+                        }}
+                      >
+                        <Table<EmploymentRow>
+                          rowKey="id"
+                          size="small"
+                          tableLayout="fixed"
+                          columns={employmentColumns}
+                          dataSource={visibleEmployments}
+                          pagination={false}
+                          scroll={{
+                            x:
+                              360 +
+                              (access.canAccessOrganizationResponsibility ? 210 : 0) +
+                              (access.canAccessEmployment ? 150 : 0),
+                          }}
+                          locale={{
+                            emptyText: showEndedEmployments || employments.length === 0 ? "暂无雇佣" : "暂无未结束任职",
+                          }}
+                        />
+                      </ConfigProvider>
+                    </section>
                   </div>
                 ),
               },
@@ -497,16 +578,20 @@ function UserDetailDrawerContent({ open, username, onClose, onEdit, onChanged }:
                     {
                       key: "logs",
                       label: "操作日志",
+                      disabled: savingProfile,
                       children: (
-                        <AuditLogTable
-                          fixedConditions={{
-                            targetType: "user",
-                            targetCode: detail.username,
-                          }}
-                          pageSize={10}
-                          search={false}
-                          size="small"
-                        />
+                        <section
+                          aria-label="操作日志"
+                          className={styles.section}
+                          style={{ background: token.colorBgContainer, borderColor: token.colorBorderSecondary }}
+                        >
+                          <AuditLogTable
+                            fixedConditions={{ targetType: "user", targetCode: detail.username }}
+                            pageSize={10}
+                            search={false}
+                            size="small"
+                          />
+                        </section>
                       ),
                     },
                   ]

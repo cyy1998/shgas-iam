@@ -332,6 +332,8 @@ function targetTextWhere(text: string | undefined, tx: DbClient): SQLWrapper | u
         .select({ value: sql`1` })
         .from(employments)
         .innerJoin(users, eq(users.id, employments.userId))
+        .innerJoin(organizations, eq(organizations.id, employments.orgId))
+        .innerJoin(positions, eq(positions.id, employments.posId))
         .where(
           and(
             eq(roleAssignments.targetType, RoleAssignmentTargetType.Employment),
@@ -340,6 +342,10 @@ function targetTextWhere(text: string | undefined, tx: DbClient): SQLWrapper | u
               sql`${roleAssignments.targetId}::text ILIKE ${pattern}`,
               ilikeContainsIf(users.username, text),
               ilikeContainsIf(users.name, text),
+              ilikeContainsIf(organizations.orgCode, text),
+              ilikeContainsIf(organizations.orgName, text),
+              ilikeContainsIf(positions.posCode, text),
+              ilikeContainsIf(positions.posName, text),
             ),
           ),
         ),

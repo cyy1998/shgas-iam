@@ -1,0 +1,84 @@
+.filters {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid;
+  border-radius: 8px;
+
+  /* stylelint-disable selector-pseudo-class-no-unknown -- CSS Modules scopes the generated ProTable query form. */
+  > :global(.ant-pro-table-search) {
+    margin: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  :global(.ant-pro-query-filter) > :global(.ant-row) {
+    display: grid;
+    grid-template-columns: 116px minmax(160px, 1fr) 144px auto;
+    align-items: end;
+    gap: 12px;
+
+    > :global(.ant-col) {
+      min-width: 0;
+      max-width: none;
+    }
+  }
+
+  :global(.ant-form-item) {
+    margin-bottom: 0;
+  }
+
+  :global(.ant-form-item-label) {
+    padding-bottom: 6px;
+
+    > label {
+      font-weight: 400;
+    }
+  }
+
+  :global(.ant-btn) {
+    font-size: 13px;
+    font-weight: 400;
+    box-shadow: none;
+  }
+  /* stylelint-enable selector-pseudo-class-no-unknown */
+}
+
+@media (max-width: 767px) {
+  .filters {
+    padding: 12px;
+
+    /* stylelint-disable selector-pseudo-class-no-unknown -- CSS Modules scopes the generated filter grid. */
+    :global(.ant-pro-query-filter) > :global(.ant-row) {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-areas:
+        "type scope"
+        "object object"
+        "actions actions";
+
+      > :global(.ant-col):nth-child(1) {
+        grid-area: type;
+      }
+
+      > :global(.ant-col):nth-child(2) {
+        grid-area: object;
+      }
+
+      > :global(.ant-col):nth-child(3) {
+        grid-area: scope;
+      }
+
+      > :global(.ant-col):last-child {
+        grid-area: actions;
+        justify-self: end;
+
+        :global(.ant-form-item-label) {
+          display: none;
+        }
+      }
+    }
+    /* stylelint-enable selector-pseudo-class-no-unknown */
+  }
+}

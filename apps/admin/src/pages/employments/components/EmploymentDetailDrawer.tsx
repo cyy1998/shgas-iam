@@ -1,15 +1,18 @@
 import AuthorizationActionButton from "@admin/components/AuthorizationActionButton";
 import AuditLogTable from "@admin/components/audit/AuditLogTable";
+import styles from "@admin/components/detail/DetailDrawer.module.less";
+import DetailHeaderActions from "@admin/components/detail/DetailHeaderActions";
 import EmploymentLifecycleActions from "@admin/components/EmploymentLifecycleActions";
 import EmploymentPrimaryActions from "@admin/components/EmploymentPrimaryActions";
 import EmploymentResponsibilitySummary from "@admin/components/organization-responsibility/EmploymentResponsibilitySummary";
 import StatusTag from "@admin/components/StatusTag";
 import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
 import { type EmploymentDetailVo, getEmployment, updateEmployment } from "@admin/services/employment";
-import { ProDescriptions } from "@ant-design/pro-components";
+import { StopOutlined, SwapOutlined } from "@ant-design/icons";
 import { useAccess } from "@umijs/max";
-import { Alert, Drawer, Empty, Input, Modal, message, Skeleton, Space, Tabs, Tag } from "antd";
+import { Alert, Descriptions, Drawer, Empty, message, Skeleton, Space, Tabs, Tag, Typography, theme } from "antd";
 import { useEffect, useState } from "react";
+import EmploymentDescriptionForm from "./EmploymentDescriptionForm";
 import TransferModal from "./TransferModal";
 
 type Props = {
@@ -53,17 +56,20 @@ export default function EmploymentDetailDrawer({ open, employmentId, onClose, on
 
 function EmploymentDetailDrawerContent({ open, employmentId, onClose, onChanged }: Props) {
   const access = useAccess();
+  const { token } = theme.useToken();
   const [committedWarning, setCommittedWarning] = useState<string>();
   const [detail, setDetail] = useState<EmploymentDetailVo | null>(null);
   const [loading, setLoading] = useState(open && employmentId !== null);
-  const [description, setDescription] = useState("");
   const [editOpen, setEditOpen] = useState(false);
+  const [savingDescription, setSavingDescription] = useState(false);
+  const [activeTab, setActiveTab] = useState("details");
   const [transferOpen, setTransferOpen] = useState(false);
 
   const loadDetail = async () => {
     if (employmentId === null) return;
     const nextDetail = await getEmployment(employmentId);
     setDetail(nextDetail);
+    if (!nextDetail.allowedActions.editDescription.allowed) setEditOpen(false);
   };
 
   useEffect(() => {
@@ -104,22 +110,109 @@ function EmploymentDetailDrawerContent({ open, employmentId, onClose, onChanged 
     }
   };
 
+  const saveDescription = async (description: string) => {
+    if (!detail?.allowedActions.editDescription.allowed || savingDescription) return;
+    setSavingDescription(true);
+    try {
+      try {
+        const outcome = await updateEmployment(detail.id, { description: description || null });
+        if (outcome.changed) message.success("备注已更新");
+        else message.info("无需修改");
+      } catch (error) {
+        if (!(error instanceof AdminMutationCommittedError)) {
+          message.error(error instanceof Error ? error.message : "操作失败");
+          return;
+        }
+        setCommittedWarning(error.message);
+        setTransferOpen(false);
+      }
+      setEditOpen(false);
+      try {
+        await loadDetail();
+      } catch (error) {
+        message.error(`备注已保存，但详情刷新失败：${error instanceof Error ? error.message : "请稍后重试"}`);
+      }
+      try {
+        await onChanged?.();
+      } catch (error) {
+        message.error(`备注已保存，但列表刷新失败：${error instanceof Error ? error.message : "请稍后重试"}`);
+      }
+    } finally {
+      setSavingDescription(false);
+    }
+  };
+
   return (
     <Drawer
-      size={640}
+      size={840}
       open={open}
-      onClose={onClose}
+      onClose={() => {
+        if (!savingDescription) onClose();
+      }}
+      closable={!savingDescription}
+      keyboard={!savingDescription}
+      mask={{ closable: !savingDescription }}
       destroyOnHidden
+      classNames={{ header: styles["drawer-header"], extra: styles["drawer-actions"] }}
+      styles={{
+        header: { padding: "14px 20px" },
+        body: { padding: "16px 20px", background: token.colorBgLayout },
+      }}
       title={
         detail ? (
-          <Space>
+          <Space size={6} wrap>
             <span>{detail.user.name}</span>
-            <span style={{ color: "#999", fontSize: 12 }}>{detail.user.username}</span>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              {detail.user.username}
+            </Typography.Text>
             {detail.isPrimary ? <Tag color="blue">主岗</Tag> : null}
             <StatusTag domain="employment" status={detail.status} />
           </Space>
         ) : (
           "雇佣详情"
+        )
+      }
+      extra={
+        detail &&
+        !editOpen &&
+        !savingDescription && (
+          <DetailHeaderActions>
+            <Space size={8}>
+              <AuthorizationActionButton
+                decision={detail.allowedActions.transfer}
+                onClick={() => setTransferOpen(true)}
+                icon={<SwapOutlined aria-hidden />}
+              >
+                转岗
+              </AuthorizationActionButton>
+              <EmploymentPrimaryActions
+                onCommitted={onCommitted}
+                decision={detail.isPrimary ? detail.allowedActions.clearPrimary : detail.allowedActions.setPrimary}
+                employment={detail}
+                onSuccess={refresh}
+              />
+            </Space>
+            <div className={styles["header-danger-actions"]} style={{ borderColor: token.colorBorderSecondary }}>
+              <EmploymentLifecycleActions
+                onCommitted={onCommitted}
+                decisions={detail.allowedActions}
+                employment={detail}
+                onSuccess={refresh}
+                endButtonProps={{
+                  color: "danger",
+                  variant: "filled",
+                  icon: <StopOutlined aria-hidden />,
+                  style: detail.allowedActions.end.allowed
+                    ? {
+                        borderColor: token.colorErrorBorder,
+                        color: token.colorErrorTextActive,
+                        fontWeight: 500,
+                      }
+                    : undefined,
+                }}
+              />
+            </div>
+          </DetailHeaderActions>
         )
       }
     >
@@ -128,169 +221,150 @@ function EmploymentDetailDrawerContent({ open, employmentId, onClose, onChanged 
       {!loading && !detail ? <Empty /> : null}
       {detail && (
         <>
-          <Space wrap style={{ marginBottom: 16 }}>
-            <AuthorizationActionButton
-              decision={detail.allowedActions.editDescription}
-              onClick={() => {
-                setDescription(detail.description ?? "");
-                setEditOpen(true);
-              }}
-            >
-              编辑备注
-            </AuthorizationActionButton>
-            <AuthorizationActionButton decision={detail.allowedActions.transfer} onClick={() => setTransferOpen(true)}>
-              转岗
-            </AuthorizationActionButton>
-            <EmploymentPrimaryActions
-              onCommitted={onCommitted}
-              decision={detail.isPrimary ? detail.allowedActions.clearPrimary : detail.allowedActions.setPrimary}
-              employment={detail}
-              onSuccess={refresh}
-            />
-            <EmploymentLifecycleActions
-              onCommitted={onCommitted}
-              decisions={detail.allowedActions}
-              employment={detail}
-              onSuccess={refresh}
-            />
-          </Space>
           <Tabs
+            activeKey={activeTab}
+            onChange={(key) => {
+              if (!savingDescription) setActiveTab(key);
+            }}
             items={[
               {
-                key: "basic",
-                label: "基本信息",
+                key: "details",
+                label: "任职信息",
                 children: (
-                  <ProDescriptions<EmploymentDetailVo>
-                    column={2}
-                    dataSource={detail}
-                    columns={[
-                      {
-                        title: "用户",
-                        dataIndex: ["user", "name"],
-                        render: (_, r) => formatUser(r),
-                      },
-                      {
-                        title: "状态",
-                        dataIndex: "status",
-                        render: (_, r) => <StatusTag domain="employment" status={r.status} />,
-                      },
-                      {
-                        title: "公司",
-                        dataIndex: ["organization", "companyNodes"],
-                        render: (_, r) => formatCompany(r),
-                      },
-                      {
-                        title: "组织路径",
-                        dataIndex: ["organization", "assignedOrg", "orgName"],
-                        span: 2,
-                        render: (_, r) => formatOrgPath(r),
-                      },
-                      {
-                        title: "岗位",
-                        dataIndex: ["position", "posName"],
-                        render: (_, r) => formatPosition(r),
-                      },
-                      {
-                        title: "主岗",
-                        dataIndex: "isPrimary",
-                        render: (_, r) => (r.isPrimary ? "是" : "否"),
-                      },
-                      {
-                        title: "开始",
-                        dataIndex: "startTime",
-                        render: (_, r) => new Date(r.startTime).toLocaleString(),
-                      },
-                      {
-                        title: "结束",
-                        dataIndex: "endTime",
-                        render: (_, r) => (r.endTime ? new Date(r.endTime).toLocaleString() : "—"),
-                      },
-                      {
-                        title: "备注",
-                        dataIndex: "description",
-                        span: 2,
-                        render: (_, r) => r.description ?? "—",
-                      },
-                    ]}
-                  />
-                ),
-              },
-              {
-                key: "roles",
-                label: `角色 (${detail.roles.length})`,
-                children: (
-                  <div>
-                    {detail.roles.length === 0 ? (
-                      <span style={{ color: "#999" }}>无</span>
-                    ) : (
-                      detail.roles.map((r: string) => <Tag key={r}>{detail.roleNames[r] || "未命名角色"}</Tag>)
+                  <div className={styles.content}>
+                    <section
+                      aria-label="基本信息"
+                      className={`${styles.section} ${styles["basic-section"]}`}
+                      style={{ background: token.colorBgContainer, borderColor: token.colorBorderSecondary }}
+                    >
+                      <div className={styles["section-header"]}>
+                        <Typography.Title level={5} className={styles["section-title"]}>
+                          基本信息
+                        </Typography.Title>
+                        {!editOpen && !savingDescription && (
+                          <AuthorizationActionButton
+                            decision={detail.allowedActions.editDescription}
+                            onClick={() => setEditOpen(true)}
+                            type="link"
+                            size="small"
+                          >
+                            编辑备注
+                          </AuthorizationActionButton>
+                        )}
+                      </div>
+                      <Descriptions
+                        className={styles.descriptions}
+                        size="middle"
+                        column={{ xs: 1, sm: 2 }}
+                        styles={{
+                          label: { fontSize: 13 },
+                          content: { fontSize: 14, lineHeight: "24px", overflowWrap: "anywhere" },
+                        }}
+                        items={[
+                          { key: "user", label: "用户", style: { width: "50%" }, children: formatUser(detail) },
+                          { key: "company", label: "公司", style: { width: "50%" }, children: formatCompany(detail) },
+                          { key: "organization", label: "组织路径", span: "filled", children: formatOrgPath(detail) },
+                          { key: "position", label: "岗位", children: formatPosition(detail) },
+                          { key: "primary", label: "主岗", children: detail.isPrimary ? "是" : "否" },
+                          { key: "start", label: "开始", children: new Date(detail.startTime).toLocaleString() },
+                          {
+                            key: "end",
+                            label: "结束",
+                            children: detail.endTime ? new Date(detail.endTime).toLocaleString() : "—",
+                          },
+                          ...(!editOpen
+                            ? [
+                                {
+                                  key: "description",
+                                  label: "备注",
+                                  span: "filled" as const,
+                                  children: <span className={styles.description}>{detail.description || "—"}</span>,
+                                },
+                              ]
+                            : []),
+                        ]}
+                      />
+                      {editOpen && detail.allowedActions.editDescription.allowed && (
+                        <EmploymentDescriptionForm
+                          description={detail.description}
+                          saving={savingDescription}
+                          onSave={saveDescription}
+                          onCancel={() => setEditOpen(false)}
+                        />
+                      )}
+                      <div className={styles["role-row"]}>
+                        <Typography.Text type="secondary" className={styles["field-label"]}>
+                          角色（{detail.roles.length}）
+                        </Typography.Text>
+                        <div className={styles["role-list"]}>
+                          {detail.roles.length === 0 ? (
+                            <Typography.Text type="secondary">—</Typography.Text>
+                          ) : (
+                            detail.roles.map((role) => (
+                              <Tag key={role} className={styles["role-tag"]}>
+                                {detail.roleNames[role] || "未命名角色"}
+                              </Tag>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                      <Space
+                        className={styles.metadata}
+                        size={[20, 4]}
+                        wrap
+                        style={{ borderColor: token.colorBorderSecondary }}
+                      >
+                        <Typography.Text type="secondary">
+                          创建于 {new Date(detail.createTime).toLocaleString()}
+                        </Typography.Text>
+                        <Typography.Text type="secondary">
+                          更新于 {new Date(detail.updateTime).toLocaleString()}
+                        </Typography.Text>
+                      </Space>
+                    </section>
+                    {access.canAccessOrganizationResponsibility && (
+                      <section
+                        aria-label="组织责任"
+                        className={styles.section}
+                        inert={savingDescription}
+                        style={{ background: token.colorBgContainer, borderColor: token.colorBorderSecondary }}
+                      >
+                        <div className={styles["section-header"]}>
+                          <Typography.Title level={5} className={styles["section-title"]}>
+                            组织责任
+                          </Typography.Title>
+                        </div>
+                        <EmploymentResponsibilitySummary employmentId={detail.id} />
+                      </section>
                     )}
                   </div>
                 ),
               },
-              ...(access.canAccessOrganizationResponsibility
-                ? [
-                    {
-                      key: "responsibilities",
-                      label: "组织责任",
-                      children: <EmploymentResponsibilitySummary employmentId={detail.id} />,
-                    },
-                  ]
-                : []),
               ...(access.canAccessAudit
                 ? [
                     {
                       key: "logs",
                       label: "操作日志",
+                      disabled: savingDescription,
                       children: (
-                        <AuditLogTable
-                          fixedConditions={{
-                            targetType: "employment",
-                            targetId: detail.id,
-                          }}
-                          pageSize={10}
-                          search={false}
-                          size="small"
-                        />
+                        <section
+                          aria-label="操作日志"
+                          className={styles.section}
+                          style={{ background: token.colorBgContainer, borderColor: token.colorBorderSecondary }}
+                        >
+                          <AuditLogTable
+                            fixedConditions={{ targetType: "employment", targetId: detail.id }}
+                            pageSize={10}
+                            search={false}
+                            size="small"
+                          />
+                        </section>
                       ),
                     },
                   ]
                 : []),
             ]}
           />
-          <Modal
-            title="编辑任职备注"
-            open={editOpen}
-            okText="保存"
-            onCancel={() => setEditOpen(false)}
-            onOk={async () => {
-              try {
-                const outcome = await updateEmployment(detail.id, {
-                  description: description || null,
-                });
-                if (outcome.changed) message.success("备注已更新");
-                else message.info("无需修改");
-                setEditOpen(false);
-                await refresh();
-              } catch (error) {
-                if (error instanceof AdminMutationCommittedError) {
-                  await onCommitted(error);
-                  return;
-                }
-                message.error(error instanceof Error ? error.message : "操作失败");
-              }
-            }}
-          >
-            <div>
-              <span>备注</span>
-              <Input.TextArea
-                aria-label="备注"
-                value={description}
-                maxLength={500}
-                onChange={(event) => setDescription(event.target.value)}
-              />
-            </div>
-          </Modal>
           <TransferModal
             onCommitted={onCommitted}
             open={transferOpen}

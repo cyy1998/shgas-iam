@@ -3,7 +3,7 @@ import ClientFormModal from "@admin/pages/clients/components/ClientFormModal";
 import { type ClientSearchParams, type ClientVo, searchClients } from "@admin/services/client";
 import { PlusOutlined } from "@ant-design/icons";
 import { PageContainer, type ProColumns, ProTable } from "@ant-design/pro-components";
-import { ClientSsoProtocol, type ClientStatus } from "@iam/contracts";
+import { ClientSsoProtocol, type ClientStatus, getClientStatusOptions } from "@iam/contracts";
 import { history, Link } from "@umijs/max";
 import { Button, message, Tag } from "antd";
 import { useState } from "react";
@@ -32,6 +32,7 @@ export default function ClientsPage() {
       dataIndex: "status",
       width: 110,
       valueType: "select",
+      valueEnum: Object.fromEntries(getClientStatusOptions().map((option) => [option.value, { text: option.label }])),
       render: (_, row) => <StatusTag domain="client" status={row.status} />,
     },
     {

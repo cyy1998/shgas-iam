@@ -36,16 +36,9 @@ const outcomeValueEnum: Record<string, { status: string; text: string }> = {
   failure: { text: outcomeLabels.failure, status: "Error" },
 };
 
-const targetTypeValueEnum: Record<string, { text: string }> = {
-  user: { text: targetTypeLabels.user },
-  employment: { text: targetTypeLabels.employment },
-  organization: { text: targetTypeLabels.organization },
-  position: { text: targetTypeLabels.position },
-  client: { text: targetTypeLabels.client },
-  role: { text: targetTypeLabels.role },
-  delegation: { text: targetTypeLabels.delegation },
-  mobile: { text: targetTypeLabels.mobile },
-};
+const targetTypeValueEnum = Object.fromEntries(
+  Object.entries(targetTypeLabels).map(([value, text]) => [value, { text }]),
+);
 
 function formatDate(value: AuditLogVo["eventTime"]) {
   return value ? new Date(value).toLocaleString() : "—";

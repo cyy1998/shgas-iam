@@ -14,6 +14,12 @@ export const OrganizationResponsibilityAssignmentListQuerySchema = z.strictObjec
   cursor: z.string().regex(/^\d+$/u).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   employmentId: z.coerce.number().int().positive().optional(),
+  userText: z
+    .string()
+    .trim()
+    .max(128)
+    .transform((value) => value || undefined)
+    .optional(),
   typeCode: z.enum(OrganizationResponsibilityTypeCode).optional(),
   lifecycle: z.enum(["open", "ended", "all"]).default("open"),
 });

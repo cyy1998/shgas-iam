@@ -184,6 +184,40 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
     ConfigProvider.config({ holderRender: undefined });
   });
 
+  it("forwards the User filter keyword to the paginated assignment search", async () => {
+    const onStateChange = vi.fn();
+    const { user } = render(
+      <OrganizationResponsibilityAssignmentModule
+        host={{ kind: "global", state: { lifecycle: "open", assignmentId: null }, onStateChange }}
+      />,
+    );
+    await screen.findByRole("button", { name: "详情" });
+    await user.click(screen.getByText("展开", { exact: true }));
+    expect(screen.queryByText("操作", { selector: "label" })).toBeNull();
+    const userField = screen.getByText("用户", { selector: "label" }).closest(".ant-form-item");
+    const input = userField?.querySelector("input");
+    if (!input) throw new Error("User search input is missing");
+    await user.type(input, " 李四 ");
+    await user.click(screen.getByRole("button", { name: /查\s*询/ }));
+    await waitFor(() =>
+      expect(responsibilityService.searchAssignments).toHaveBeenLastCalledWith({
+        lifecycle: "open",
+        pageSize: 20,
+        pageNum: 1,
+        userText: "李四",
+      }),
+    );
+    expect(onStateChange).toHaveBeenLastCalledWith({ lifecycle: "open", assignmentId: null, userText: "李四" });
+    await user.click(screen.getByRole("button", { name: /重\s*置/ }));
+    await waitFor(() =>
+      expect(responsibilityService.searchAssignments).toHaveBeenLastCalledWith({
+        lifecycle: "open",
+        pageSize: 20,
+        pageNum: 1,
+      }),
+    );
+  });
+
   it("hydrates global filters and stable detail through the shared Module interface", async () => {
     render(
       <OrganizationResponsibilityAssignmentModule
@@ -227,8 +261,9 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
     );
 
     const dialog = await screen.findByRole("dialog");
-    expect(within(dialog).getByText("任命 #101")).toBeInTheDocument();
-    expect(within(dialog).getByText("#42")).toBeInTheDocument();
+    expect(within(dialog).getByText("财务部（FIN）")).toBeVisible();
+    expect(within(dialog).getByText("张三（zhangsan）")).toBeVisible();
+    expect(within(dialog).queryByText(/#101|#42|任职 ID/)).not.toBeInTheDocument();
     await within(dialog).findByRole("tab", { name: "操作日志" });
     await screen.findByText('{"targetType":"organization_responsibility_assignment","targetId":101}');
   });

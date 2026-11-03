@@ -344,7 +344,7 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
 
     const response = await app.request(
       "http://localhost/admin/organization-responsibilities/assignments" +
-        "?targetOrganizationCode=TARGET&employmentId=7&typeCode=head" +
+        "?targetOrganizationCode=TARGET&employmentId=7&typeCode=head&userText=%20Holder%20" +
         "&lifecycle=all&cursor=41&limit=10",
     );
 
@@ -357,6 +357,7 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
       {
         targetOrganizationCode: "TARGET",
         employmentId: 7,
+        userText: "Holder",
         typeCode: OrganizationResponsibilityTypeCode.Head,
         lifecycle: "all",
         cursor: "41",
@@ -386,10 +387,15 @@ describe("Organization Responsibility Type Catalog admin adapter", () => {
     });
     const cursorResult = await caller.searchAssignments({
       employmentId: 7,
+      userText: "  holder  ",
       lifecycle: "ended",
       limit: 20,
     });
     expect(cursorResult).toEqual({ items: [], nextCursor: "40" });
+    expect(searchAssignments).toHaveBeenLastCalledWith(
+      expect.objectContaining({ userText: "holder" }),
+      expect.objectContaining({ kind: "full" }),
+    );
 
     searchAssignments.mockResolvedValueOnce({ items: [], nextCursor: null, total: 42 });
     const pageResponse = await app.request(

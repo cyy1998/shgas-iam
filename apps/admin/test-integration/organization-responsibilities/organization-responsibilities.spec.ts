@@ -74,6 +74,54 @@ const targetOrganization = {
   selectable: true,
 };
 
+test("filters assignments by user and restores the keyword after reloading", async ({ page }) => {
+  await mockAdminApi(page);
+  const second = {
+    ...assignment,
+    id: 102,
+    typeCode: OrganizationResponsibilityTypeCode.Supervising,
+    holder: { ...assignment.holder, employmentId: 43, user: { id: 8, name: "李四", username: "lisi" } },
+  };
+  const searches: Array<{ userText?: string }> = [];
+  await page.route("**/rpc/admin.organization*", (route) => {
+    const url = new URL(route.request().url());
+    const procedures = url.pathname.split("/rpc/")[1]?.split(",") ?? [];
+    const inputs = JSON.parse(url.searchParams.get("input") ?? "{}") as Record<string, { userText?: string }>;
+    return fulfillJson(
+      route,
+      procedures.map((procedure, index) => {
+        if (procedure === "admin.organization.selector") return { result: { data: [] } };
+        if (procedure !== "admin.organizationResponsibility.searchAssignments")
+          throw new Error(`Unexpected query: ${procedure}`);
+        const input = inputs[String(index)];
+        searches.push(input);
+        const items = input.userText === "李四" ? [second] : input.userText ? [] : [assignment, second];
+        return { result: { data: { items, total: items.length, nextCursor: null } } };
+      }),
+    );
+  });
+  await page.goto("/iam-admin/organization-responsibilities/assignments");
+  await expect(page.getByRole("row").filter({ hasText: "张三（zhangsan）" })).toBeVisible();
+  await page.getByText("展开", { exact: true }).click();
+  await page.getByRole("textbox", { name: /用户/ }).fill(" 李四 ");
+  await page.getByRole("button", { name: /查\s*询/ }).click();
+  await expect(page.getByRole("row").filter({ hasText: "张三（zhangsan）" })).toHaveCount(0);
+  await expect(page.getByRole("row").filter({ hasText: "李四（lisi）" })).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("user")).toBe("李四");
+  await page.reload();
+  await page.getByText("展开", { exact: true }).click();
+  const userInput = page.getByRole("textbox", { name: /用户/ });
+  await expect(userInput).toHaveValue("李四");
+  await userInput.fill(" no-match ");
+  await page.getByRole("button", { name: /查\s*询/ }).click();
+  await expect(page.getByRole("button", { name: "详情" })).toHaveCount(0);
+  await expect(page.getByText("无符合条件的责任任命")).toBeVisible();
+  await page.getByRole("button", { name: /重\s*置/ }).click();
+  await expect(page.getByRole("button", { name: "详情" })).toHaveCount(2);
+  expect(new URL(page.url()).searchParams.has("user")).toBe(false);
+  expect(searches.at(-1)?.userText).toBeUndefined();
+});
+
 test("creates a responsibility assignment from the global toolbar without exposing internal ids", async ({ page }) => {
   await mockAdminApi(page);
   const createInputs: unknown[] = [];
@@ -295,7 +343,9 @@ test("hydrates global filters and manages the complete lifecycle with audit refr
 
   await expect(page.getByRole("button", { name: "详情" })).toBeVisible();
   await expect(page.getByText("已按指定任职筛选")).toBeVisible();
-  await expect(page.getByRole("dialog").getByText("任命 #101")).toBeVisible();
+  const drawer = page.getByRole("dialog");
+  await expect(drawer.getByText("张三（zhangsan）")).toBeVisible();
+  await expect(drawer.getByText(/#101|#42|任职 ID/)).toHaveCount(0);
   await expect
     .poll(() => searchInputs[0])
     .toEqual({

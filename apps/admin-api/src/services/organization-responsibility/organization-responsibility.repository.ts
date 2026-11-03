@@ -3,7 +3,7 @@ import type { EmploymentStatus, OrganizationStatus } from "@iam/contracts";
 import { OrganizationResponsibilityAssignmentStatus, OrganizationResponsibilityTypeCode } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import { extractPostgresError } from "@iam/db/postgres-error";
-import { firstRow } from "@iam/db/query-utils";
+import { firstRow, ilikeContainsIf } from "@iam/db/query-utils";
 import {
   employments,
   organizationClosures,
@@ -213,6 +213,7 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
     readScope: OrganizationResponsibilityReadScope;
     targetOrganizationCode?: string;
     employmentId?: number;
+    userText?: string;
     typeCode?: OrganizationResponsibilityTypeCode;
     lifecycle: OrganizationResponsibilityAssignmentLifecycle;
     id?: number;
@@ -223,6 +224,7 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
     const holderOrganization = alias(organizations, "responsibility_holder_organization");
     const targetOrganization = alias(organizations, "responsibility_target_organization");
     const orphanTargetOrganization = alias(organizations, "responsibility_orphan_target_organization");
+    const userText = input.userText?.replace(/[\\%_]/g, "\\$&");
     if (input.readScope.kind === "full" && input.targetOrganizationCode !== undefined) {
       const orphanTarget = firstRow(
         await db
@@ -329,6 +331,7 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
           input.employmentId === undefined
             ? undefined
             : eq(organizationResponsibilityAssignments.employmentId, input.employmentId),
+          or(ilikeContainsIf(users.name, userText), ilikeContainsIf(users.username, userText)),
           input.typeCode === undefined ? undefined : eq(organizationResponsibilityAssignments.typeCode, input.typeCode),
           input.cursorId === undefined ? undefined : lt(organizationResponsibilityAssignments.id, input.cursorId),
           input.id === undefined && input.lifecycle === "open"
@@ -609,6 +612,7 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
       input: {
         targetOrganizationCode?: string;
         employmentId?: number;
+        userText?: string;
         typeCode?: OrganizationResponsibilityTypeCode;
         lifecycle: OrganizationResponsibilityAssignmentLifecycle;
         cursorId?: number;
@@ -625,6 +629,7 @@ export function createOrganizationResponsibilityRepository(db: DbClient) {
       input: {
         targetOrganizationCode?: string;
         employmentId?: number;
+        userText?: string;
         typeCode?: OrganizationResponsibilityTypeCode;
         lifecycle: OrganizationResponsibilityAssignmentLifecycle;
         pageNum: number;

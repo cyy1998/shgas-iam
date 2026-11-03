@@ -1,9 +1,11 @@
+import styles from "@admin/components/detail/DetailDrawer.module.less";
+import { StopOutlined } from "@ant-design/icons";
 import {
   type AdminOrganizationResponsibilityAllowedActions,
   ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS,
   type OrganizationResponsibilityAssignmentLifecycleCommand as OrganizationResponsibilityAssignmentLifecycleCommandType,
 } from "@iam/contracts";
-import { Button, Modal, Space } from "antd";
+import { Button, Modal, theme } from "antd";
 
 export default function OrganizationResponsibilityAssignmentLifecycleActions({
   loading,
@@ -14,6 +16,7 @@ export default function OrganizationResponsibilityAssignmentLifecycleActions({
   allowedActions: AdminOrganizationResponsibilityAllowedActions;
   onCommand: (command: OrganizationResponsibilityAssignmentLifecycleCommandType) => Promise<void>;
 }) {
+  const { token } = theme.useToken();
   if (!allowedActions.pause.allowed && !allowedActions.resume.allowed && !allowedActions.end.allowed) return null;
 
   const confirmEnd = () => {
@@ -28,7 +31,7 @@ export default function OrganizationResponsibilityAssignmentLifecycleActions({
   };
 
   return (
-    <Space wrap style={{ marginBottom: 16 }}>
+    <>
       {allowedActions.pause.allowed && (
         <Button
           loading={loading}
@@ -47,10 +50,23 @@ export default function OrganizationResponsibilityAssignmentLifecycleActions({
         </Button>
       )}
       {allowedActions.end.allowed && (
-        <Button danger disabled={loading} onClick={confirmEnd}>
-          结束任命
-        </Button>
+        <div className={styles["header-danger-actions"]} style={{ borderColor: token.colorBorderSecondary }}>
+          <Button
+            color="danger"
+            variant="filled"
+            icon={<StopOutlined aria-hidden />}
+            style={
+              !loading
+                ? { borderColor: token.colorErrorBorder, color: token.colorErrorTextActive, fontWeight: 500 }
+                : undefined
+            }
+            disabled={loading}
+            onClick={confirmEnd}
+          >
+            结束任命
+          </Button>
+        </div>
       )}
-    </Space>
+    </>
   );
 }

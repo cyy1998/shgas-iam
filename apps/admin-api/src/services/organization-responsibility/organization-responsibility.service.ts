@@ -41,6 +41,7 @@ export function createOrganizationResponsibilityService(deps: CreateOrganization
         {
           targetOrganizationCode: input.targetOrganizationCode,
           employmentId: input.employmentId,
+          userText: input.userText,
           typeCode: input.typeCode,
           lifecycle: input.lifecycle ?? "open",
           pageNum: input.pageNum ?? 1,

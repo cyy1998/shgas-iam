@@ -7,10 +7,10 @@ import {
   OrganizationResponsibilityTypeCode,
   OrganizationType,
 } from "@iam/contracts";
-import { Modal, message } from "antd";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { ConfigProvider, Modal, message } from "antd";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHrEmploymentAllowedActions } from "~admin/test/mocks/fixtures";
-import { render, screen, waitFor } from "~admin/test/render";
+import { act, cleanup, render, screen, waitFor, within } from "~admin/test/render";
 
 const services = vi.hoisted(() => ({
   setPrimaryEmployment: vi.fn(),
@@ -22,6 +22,23 @@ const services = vi.hoisted(() => ({
   searchAssignments: vi.fn(),
   updateEmployment: vi.fn(),
 }));
+
+beforeEach(() => {
+  ConfigProvider.config({
+    holderRender: (children) => <ConfigProvider theme={{ token: { motion: false } }}>{children}</ConfigProvider>,
+  });
+  services.searchAssignments.mockResolvedValue({ items: [], total: 0, nextCursor: null });
+});
+
+afterEach(async () => {
+  cleanup();
+  await act(async () => {
+    Modal.destroyAll();
+    message.destroy();
+  });
+  ConfigProvider.config({ holderRender: undefined });
+  await waitFor(() => expect(screen.queryAllByRole("dialog")).toHaveLength(0));
+});
 
 vi.mock("@admin/services/employment", () => ({
   setPrimaryEmployment: services.setPrimaryEmployment,
@@ -41,14 +58,6 @@ vi.mock("@admin/components/audit/AuditLogTable", () => ({
 vi.mock("@admin/pages/employments/components/TransferModal", () => ({
   default: () => null,
 }));
-vi.mock("@ant-design/pro-components", () => {
-  const ProDescriptions = () => null;
-  return {
-    default: { ProDescriptions },
-    ProDescriptions,
-  };
-});
-
 const now = new Date("2026-08-20T00:00:00.000Z");
 const employment = {
   id: 42,
@@ -125,8 +134,8 @@ describe("EmploymentDetailDrawer responsibility wayfinding", () => {
 
       roleNames: { "app:admin": "管理员", "other:admin": "管理员" },
     });
-    const { user } = render(<EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} />);
-    await user.click(await screen.findByRole("tab", { name: /^角色/ }));
+    render(<EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} />);
+    await screen.findByRole("region", { name: "基本信息" });
     expect(screen.getAllByText("管理员")).toHaveLength(2);
     expect(screen.queryByText("app:admin")).not.toBeInTheDocument();
   });
@@ -148,12 +157,12 @@ describe("EmploymentDetailDrawer responsibility wayfinding", () => {
     const props = { open: true, onClose: vi.fn() };
     const view = render(<EmploymentDetailDrawer {...props} employmentId={42} />);
 
-    await view.user.click(await screen.findByRole("tab", { name: /^角色/ }));
+    await screen.findByRole("region", { name: "基本信息" });
     expect(screen.getByText("读取角色")).toBeInTheDocument();
     expect(screen.getByText("编辑角色")).toBeInTheDocument();
 
     view.rerender(<EmploymentDetailDrawer {...props} employmentId={43} />);
-    await view.user.click(await screen.findByRole("tab", { name: /^角色/ }));
+    await screen.findByRole("region", { name: "基本信息" });
     expect(screen.queryByText("编辑角色")).not.toBeInTheDocument();
     expect(screen.getByText("读取角色")).toBeInTheDocument();
   });
@@ -193,9 +202,9 @@ describe("EmploymentDetailDrawer responsibility wayfinding", () => {
       items: [assignment],
       nextCursor: null,
     });
-    const { user } = render(<EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} />);
+    render(<EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} />);
 
-    await user.click(await screen.findByRole("tab", { name: "组织责任" }));
+    await screen.findByRole("region", { name: "组织责任" });
 
     expect(services.searchAssignments).toHaveBeenCalledWith({
       employmentId: 42,
@@ -203,11 +212,13 @@ describe("EmploymentDetailDrawer responsibility wayfinding", () => {
       limit: 20,
     });
     expect((await screen.findAllByText("暂停")).length).toBeGreaterThan(0);
-    expect(screen.getByText("负责人（head）")).toBeVisible();
-    expect(screen.getByRole("link", { name: "查看任命 #101" })).toHaveAttribute(
+    expect(screen.getByText("负责人")).toBeVisible();
+    expect(screen.getByRole("link", { name: "财务部" })).toHaveAttribute(
       "href",
       "/organization-responsibilities/assignments?employment=42&lifecycle=open&assignment=101",
     );
+    expect(screen.queryByText("#101")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /#101/ })).not.toBeInTheDocument();
   });
 });
 
@@ -352,4 +363,111 @@ describe("Employment mutation outcomes", () => {
       expect(mutation).toHaveBeenCalledOnce();
     },
   );
+});
+
+describe("Employment inline description editing", () => {
+  it("keeps a draft across tabs and discards it when cancelled", async () => {
+    services.getEmployment.mockResolvedValue({ ...employment, description: "原备注" });
+    const onChanged = vi.fn();
+    const { user } = render(<EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} onChanged={onChanged} />);
+    await user.click(await screen.findByRole("button", { name: "编辑备注" }));
+    const basic = within(screen.getByRole("region", { name: "基本信息" }));
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    await user.clear(basic.getByRole("textbox", { name: "备注" }));
+    await user.type(basic.getByRole("textbox", { name: "备注" }), "未保存的备注");
+    await user.click(screen.getByRole("tab", { name: "操作日志" }));
+    await user.click(screen.getByRole("tab", { name: "任职信息" }));
+    expect(basic.getByRole("textbox", { name: "备注" })).toHaveValue("未保存的备注");
+    await user.click(basic.getByRole("button", { name: /取\s*消/ }));
+    await user.click(screen.getByRole("button", { name: "编辑备注" }));
+    expect(basic.getByRole("textbox", { name: "备注" })).toHaveValue("原备注");
+    expect(services.updateEmployment).not.toHaveBeenCalled();
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  it("preserves the draft when saving is rejected without replaying the write", async () => {
+    services.getEmployment.mockResolvedValue(employment);
+    services.updateEmployment.mockRejectedValue(new Error("备注修改被拒绝"));
+    const onChanged = vi.fn();
+    const { user } = render(<EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} onChanged={onChanged} />);
+    await user.click(await screen.findByRole("button", { name: "编辑备注" }));
+    await user.type(screen.getByRole("textbox", { name: "备注" }), "保留草稿");
+    await user.click(screen.getByRole("button", { name: /保\s*存/ }));
+    expect(await screen.findByText("备注修改被拒绝")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "备注" })).toHaveValue("保留草稿");
+    expect(screen.getByRole("button", { name: /保\s*存/ })).toBeEnabled();
+    expect(services.updateEmployment).toHaveBeenCalledExactlyOnceWith(42, { description: "保留草稿" });
+    expect(services.getEmployment).toHaveBeenCalledTimes(1);
+    expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  it("clears an existing description and reloads the saved fact", async () => {
+    services.getEmployment
+      .mockResolvedValueOnce({ ...employment, description: "原备注" })
+      .mockResolvedValue(employment);
+    services.updateEmployment.mockResolvedValue({ changed: true, result: null });
+    const onChanged = vi.fn();
+    const { user } = render(<EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} onChanged={onChanged} />);
+    await user.click(await screen.findByRole("button", { name: "编辑备注" }));
+    await user.clear(screen.getByRole("textbox", { name: "备注" }));
+    await user.click(screen.getByRole("button", { name: /保\s*存/ }));
+    await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
+    expect(services.updateEmployment).toHaveBeenCalledExactlyOnceWith(42, { description: null });
+    expect(screen.queryByRole("textbox", { name: "备注" })).not.toBeInTheDocument();
+    expect(screen.queryByText("原备注")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "编辑备注" })).toBeEnabled();
+  });
+
+  it.each([false, true])(
+    "finishes an acknowledged update when detail refresh fails, committed=%s",
+    async (committed) => {
+      services.getEmployment.mockResolvedValueOnce(employment).mockRejectedValue(new Error("详情暂不可用"));
+      if (committed) services.updateEmployment.mockRejectedValue(new AdminMutationCommittedError(null));
+      else services.updateEmployment.mockResolvedValue({ changed: true, result: null });
+      const onChanged = vi.fn();
+      const { user } = render(
+        <EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} onChanged={onChanged} />,
+      );
+      await user.click(await screen.findByRole("button", { name: "编辑备注" }));
+      await user.type(screen.getByRole("textbox", { name: "备注" }), "已保存的备注");
+      await user.click(screen.getByRole("button", { name: /保\s*存/ }));
+      expect(await screen.findByText(/备注已保存，但详情刷新失败/)).toBeInTheDocument();
+      expect(screen.queryByRole("textbox", { name: "备注" })).not.toBeInTheDocument();
+      if (committed) expect(within(screen.getByRole("dialog")).getByRole("alert")).toHaveTextContent("操作已生效");
+      expect(services.updateEmployment).toHaveBeenCalledTimes(1);
+      expect(services.getEmployment).toHaveBeenCalledTimes(2);
+      expect(onChanged).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("starts a fresh description editor when the selected Employment changes", async () => {
+    services.getEmployment.mockResolvedValueOnce({ ...employment, description: "第一段任职备注" }).mockResolvedValue({
+      ...employment,
+      id: 43,
+      description: "第二段任职备注",
+    });
+    const props = { open: true, onClose: vi.fn() };
+    const view = render(<EmploymentDetailDrawer {...props} employmentId={42} />);
+    await view.user.click(await screen.findByRole("button", { name: "编辑备注" }));
+    await view.user.type(screen.getByRole("textbox", { name: "备注" }), "未保存内容");
+    view.rerender(<EmploymentDetailDrawer {...props} employmentId={43} />);
+    await view.user.click(await screen.findByRole("button", { name: "编辑备注" }));
+    expect(screen.getByRole("textbox", { name: "备注" })).toHaveValue("第二段任职备注");
+    expect(services.updateEmployment).not.toHaveBeenCalled();
+  });
+
+  it("keeps ended Employment descriptions read-only", async () => {
+    services.getEmployment.mockResolvedValue({
+      ...employment,
+      status: EmploymentStatus.Disable,
+      isPrimary: false,
+      allowedActions: createHrEmploymentAllowedActions(EmploymentStatus.Disable, false),
+    });
+    const { user } = render(<EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} />);
+    const edit = await screen.findByRole("button", { name: "编辑备注" });
+    expect(edit).toBeDisabled();
+    await user.click(edit);
+    expect(screen.queryByRole("textbox", { name: "备注" })).not.toBeInTheDocument();
+    expect(services.updateEmployment).not.toHaveBeenCalled();
+  });
 });

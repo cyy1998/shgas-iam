@@ -191,6 +191,30 @@ async function facts() {
   };
 }
 
+test("searches employment role assignments by the displayed organization and position", async () => {
+  const role = await seedRole();
+  const holder = await seedHolder(role.id);
+  const { service } = createCommand();
+  for (const text of ["Organization", "org", "Position", "position", "Holder"]) {
+    const page = await service.searchAssignments(role.roleCode, {
+      pageNum: 1,
+      pageSize: 1,
+      conditions: {
+        fuzzyConditions: { text },
+        exactConditions: { targetType: RoleAssignmentTargetType.Employment, includeDescendants: false },
+      },
+    });
+    expect(page.total).toBe(1);
+    expect(page.result.map((row) => row.id)).toEqual([holder.assignment.id]);
+  }
+  const empty = await service.searchAssignments(role.roleCode, {
+    pageNum: 1,
+    pageSize: 1,
+    conditions: { fuzzyConditions: { text: "no-such-target" }, exactConditions: {} },
+  });
+  expect(empty).toMatchObject({ result: [], total: 0 });
+});
+
 async function failure(operation: () => Promise<unknown>) {
   try {
     await operation();

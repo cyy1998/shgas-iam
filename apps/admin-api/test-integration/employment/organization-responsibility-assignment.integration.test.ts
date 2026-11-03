@@ -1812,6 +1812,108 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     expect(secondPage.nextCursor).toBeNull();
   });
 
+  test("filters holders by name or account before counting, paging and applying HR scope", async () => {
+    const fixture = await seedScenario();
+    await harness!.db
+      .update(users)
+      .set({ name: "王小明", username: "account_A%7" })
+      .where(eq(users.id, fixture.userId));
+    await harness!.db
+      .update(users)
+      .set({ name: "李小红", username: "account-B" })
+      .where(eq(users.id, fixture.secondUserId));
+    const [head, secondHolder, ended, outsideTarget] = await harness!.db
+      .insert(organizationResponsibilityAssignments)
+      .values([
+        {
+          employmentId: fixture.employmentId,
+          targetOrganizationId: fixture.targetOrganizationId,
+          typeCode: OrganizationResponsibilityTypeCode.Head,
+          status: OrganizationResponsibilityAssignmentStatus.Enable,
+          startTime: fixture.now,
+        },
+        {
+          employmentId: fixture.secondEmploymentId,
+          targetOrganizationId: fixture.targetOrganizationId,
+          typeCode: OrganizationResponsibilityTypeCode.Supervising,
+          status: OrganizationResponsibilityAssignmentStatus.Enable,
+          startTime: fixture.now,
+        },
+        {
+          employmentId: fixture.employmentId,
+          targetOrganizationId: fixture.targetOrganizationId,
+          typeCode: OrganizationResponsibilityTypeCode.Supervising,
+          status: OrganizationResponsibilityAssignmentStatus.Disable,
+          startTime: fixture.now,
+          endTime: new Date(fixture.now.getTime() + 1_000),
+        },
+        {
+          employmentId: fixture.employmentId,
+          targetOrganizationId: fixture.holderRootOrganizationId,
+          typeCode: OrganizationResponsibilityTypeCode.Supervising,
+          status: OrganizationResponsibilityAssignmentStatus.Enable,
+          startTime: fixture.now,
+        },
+      ])
+      .returning({ id: organizationResponsibilityAssignments.id });
+    const service = createOrganizationResponsibilityService({
+      repository: createAdminApiRepositories(harness!.db).organizationResponsibility,
+    });
+    const scope = await createHrOrganizationResponsibilityAuthorization([
+      fixture.holderOrganizationId,
+      fixture.targetOrganizationId,
+    ]);
+
+    const first = await service.searchAssignments(
+      { userText: "小明", lifecycle: "all", limit: 20, pageNum: 1, pageSize: 1 },
+      scope,
+    );
+    expect(first.total).toBe(2);
+    expect(first.items.map((item) => item.id)).toEqual([ended!.id]);
+    const second = await service.searchAssignments(
+      { userText: "ACCOUNT_A%", lifecycle: "all", limit: 20, pageNum: 2, pageSize: 1 },
+      scope,
+    );
+    expect(second.total).toBe(2);
+    expect(second.items.map((item) => item.id)).toEqual([head!.id]);
+    const cursor = await service.searchAssignments({ userText: "王小", lifecycle: "all", limit: 1 }, scope);
+    expect(cursor.items.map((item) => item.id)).toEqual([ended!.id]);
+    expect(cursor.nextCursor).toBe(String(ended!.id));
+    const cursorNext = await service.searchAssignments(
+      { userText: "王小", lifecycle: "all", limit: 1, cursor: cursor.nextCursor! },
+      scope,
+    );
+    expect(cursorNext.items.map((item) => item.id)).toEqual([head!.id]);
+    const combined = await service.searchAssignments(
+      {
+        userText: "account-b",
+        targetOrganizationCode: "TARGET",
+        employmentId: fixture.secondEmploymentId,
+        typeCode: OrganizationResponsibilityTypeCode.Supervising,
+        lifecycle: "open",
+        limit: 20,
+        pageNum: 1,
+        pageSize: 20,
+      },
+      scope,
+    );
+    expect(combined.total).toBe(1);
+    expect(combined.items.map((item) => item.id)).toEqual([secondHolder!.id]);
+    for (const userText of ["不存在的用户", "account-X%", "account_A_"]) {
+      const missing = await service.searchAssignments(
+        { userText, lifecycle: "all", limit: 20, pageNum: 1, pageSize: 20 },
+        scope,
+      );
+      expect(missing).toEqual({ items: [], total: 0, nextCursor: null });
+    }
+    const full = await service.searchAssignments(
+      { userText: "小明", lifecycle: "all", limit: 20, pageNum: 1, pageSize: 20 },
+      testFullOrganizationResponsibilityAuthorization,
+    );
+    expect(full.total).toBe(3);
+    expect(full.items.map((item) => item.id)).toEqual([outsideTarget!.id, ended!.id, head!.id]);
+  });
+
   test("searches globally by target, Employment, Type, lifecycle, and cursor", async () => {
     const fixture = await seedScenario();
     const [head, paused, ended] = await harness!.db

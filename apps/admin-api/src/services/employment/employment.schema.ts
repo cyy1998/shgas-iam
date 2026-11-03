@@ -34,6 +34,16 @@ export {
 export const EmploymentAdminPaginationQueryDtoSchema = createPageQuerySchema(
   z.object({
     fuzzyConditions: z.object({
+      userText: z
+        .string()
+        .trim()
+        .max(128)
+        .transform((value) => value || undefined)
+        .optional()
+        .openapi({
+          example: "王小明",
+          description: "仅模糊匹配任职用户的 username/name",
+        }),
       text: z.string().optional().openapi({
         example: "138550",
         description: "模糊匹配任职 ID、username/name、组织编码/名称、岗位编码/名称",

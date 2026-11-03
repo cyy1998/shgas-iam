@@ -55,6 +55,15 @@ export type AuditRepository = ReturnType<typeof createAuditRepository>;
 
 function auditLogWhere(query: AuditLogPaginationQueryDto) {
   const conditions = query.conditions;
+  const targetIdKeyword =
+    conditions.targetKeyword !== undefined && /^\d+$/.test(conditions.targetKeyword)
+      ? Number(conditions.targetKeyword)
+      : undefined;
+  // target_id is a PostgreSQL integer; larger numeric keywords can still be business codes.
+  const matchingTargetId =
+    targetIdKeyword !== undefined && targetIdKeyword > 0 && targetIdKeyword <= 2_147_483_647
+      ? eq(auditLogs.targetId, targetIdKeyword)
+      : undefined;
   return and(
     conditions.action === undefined ? undefined : eq(auditLogs.action, conditions.action),
     conditions.actions === undefined ? undefined : inArray(auditLogs.action, conditions.actions),
@@ -76,7 +85,7 @@ function auditLogWhere(query: AuditLogPaginationQueryDto) {
     conditions.targetCode === undefined ? undefined : eq(auditLogs.targetCode, conditions.targetCode),
     conditions.targetKeyword === undefined
       ? undefined
-      : ilikeContainsIf(auditLogs.targetCode, conditions.targetKeyword),
+      : or(ilikeContainsIf(auditLogs.targetCode, conditions.targetKeyword), matchingTargetId),
     conditions.requestId === undefined ? undefined : eq(auditLogs.requestId, conditions.requestId),
     conditions.traceId === undefined ? undefined : eq(auditLogs.traceId, conditions.traceId),
     conditions.eventTimeFrom === undefined ? undefined : gte(auditLogs.eventTime, conditions.eventTimeFrom),

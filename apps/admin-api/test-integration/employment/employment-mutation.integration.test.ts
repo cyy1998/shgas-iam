@@ -7,6 +7,7 @@ import { createEmploymentAdapter } from "@admin-api/routes/admin/employment/empl
 import { createEmploymentRoute } from "@admin-api/routes/admin/employment/employment.index";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
+import { EmploymentAdminPaginationQueryDtoSchema } from "@admin-api/services/employment/employment.schema";
 import { createEmploymentService } from "@admin-api/services/employment/employment.service";
 import { createChangeEmploymentAvailabilityUseCase } from "@admin-api/use-cases/employment/change-employment-availability/change-employment-availability.use-case";
 import { createCreateEmploymentUseCase } from "@admin-api/use-cases/employment/create-employment/create-employment.use-case";
@@ -298,6 +299,61 @@ async function waitForLock(table: string, minimum = 1) {
 }
 
 describe("Employment lifecycle reads through production PostgreSQL", () => {
+  test("filters users independently from broad employment keywords before counting and paging", async () => {
+    const fixture = await seed();
+    const [otherUser] = await harness.db
+      .insert(users)
+      .values({
+        username: "other_account%7",
+        name: "Other User",
+        userType: UserType.Formal,
+      })
+      .returning();
+    await harness.db.insert(employments).values({ ...fixture.value, userId: otherUser!.id });
+    const repository = createAdminApiRepositories(harness.db).employment;
+    const search = (userText: string, exactConditions = {}) =>
+      repository.searchEmploymentsFuzzyForAdminPaged(
+        EmploymentAdminPaginationQueryDtoSchema.parse({
+          pageNum: 1,
+          pageSize: 1,
+          conditions: { fuzzyConditions: { userText }, exactConditions },
+        }),
+      );
+    const holder = await search(" HOLder ");
+    expect(holder.total).toBe(1);
+    expect(holder.rows.map((row) => row.id)).toEqual([fixture.employment!.id]);
+    for (const text of ["ORG", "Position", String(fixture.employment!.id)]) {
+      const page = await search(text);
+      expect(page.total).toBe(0);
+      expect(page.rows).toEqual([]);
+    }
+    const excluded = await search("holder", { isPrimary: true });
+    expect(excluded.total).toBe(0);
+    for (const text of ["%", "_"]) {
+      const literal = await search(text);
+      expect(literal.total).toBe(1);
+      expect(literal.rows[0]?.user.username).toBe(otherUser!.username);
+    }
+    const outsideScope = await repository.searchEmploymentsFuzzyForAdminPaged(
+      EmploymentAdminPaginationQueryDtoSchema.parse({
+        pageNum: 1,
+        pageSize: 1,
+        conditions: { fuzzyConditions: { userText: "holder" }, exactConditions: {} },
+      }),
+      { organizationIds: [] },
+    );
+    expect(outsideScope.total).toBe(0);
+    const broad = await repository.searchEmploymentsFuzzyForAdminPaged({
+      pageNum: 1,
+      pageSize: 1,
+      conditions: { fuzzyConditions: { text: "ORG" }, exactConditions: {} },
+    });
+    expect(broad.total).toBe(2);
+    expect(broad.rows).toHaveLength(1);
+    const blank = await search("  ");
+    expect(blank.total).toBe(2);
+  });
+
   test.each([
     {
       name: "paused parents",

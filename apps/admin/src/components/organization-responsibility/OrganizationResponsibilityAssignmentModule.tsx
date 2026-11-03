@@ -1,4 +1,6 @@
 import AuditLogTable from "@admin/components/audit/AuditLogTable";
+import styles from "@admin/components/detail/DetailDrawer.module.less";
+import DetailHeaderActions from "@admin/components/detail/DetailHeaderActions";
 import { requestEmploymentOptionsWithoutId } from "@admin/components/employment-select-options";
 import OrganizationTreeSelector from "@admin/components/OrganizationTreeSelector";
 import {
@@ -20,7 +22,19 @@ import {
   OrganizationStatus,
 } from "@iam/contracts";
 import { useAccess } from "@umijs/max";
-import { Alert, Button, Descriptions, Drawer, message, Tabs, Tag } from "antd";
+import {
+  Alert,
+  Button,
+  Descriptions,
+  type DescriptionsProps,
+  Drawer,
+  message,
+  Space,
+  Tabs,
+  Tag,
+  Typography,
+  theme,
+} from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 import OrganizationResponsibilityAssignmentFormModal from "./OrganizationResponsibilityAssignmentFormModal";
 import OrganizationResponsibilityAssignmentLifecycleActions from "./OrganizationResponsibilityAssignmentLifecycleActions";
@@ -55,6 +69,7 @@ const lifecycleCommandHandlers = {
 export type OrganizationResponsibilityAssignmentState = {
   targetOrganizationCode?: string;
   employmentId?: number;
+  userText?: string;
   typeCode?: OrganizationResponsibilityTypeCode;
   lifecycle: OrganizationResponsibilityAssignmentLifecycle;
   assignmentId: number | null;
@@ -76,6 +91,7 @@ type Host =
 type AssignmentSearchFormValues = {
   targetOrganizationCode?: string;
   employmentId?: number | { value: number };
+  userText?: string;
   typeCode?: OrganizationResponsibilityTypeCode;
   lifecycle?: OrganizationResponsibilityAssignmentLifecycle;
 };
@@ -135,6 +151,7 @@ function assignmentColumns(
     {
       title: "状态",
       dataIndex: "status",
+      search: false,
       render: (_, row) => (
         <Tag
           color={
@@ -162,19 +179,24 @@ function assignmentColumns(
     },
     {
       title: "用户",
+      dataIndex: "userText",
+      fieldProps: { placeholder: "输入姓名或账号", maxLength: 128 },
       render: (_, row) =>
         formatReference(`${row.holder.user.name}（${row.holder.user.username}）`, row.holder.user.isDelete),
     },
     {
       title: "任职组织路径",
+      search: false,
       render: (_, row) => formatOrganizationPath(row.holder.organization.fullPath),
     },
     {
       title: "目标组织路径",
+      search: false,
       render: (_, row) => formatOrganizationPath(row.targetOrganization.fullPath),
     },
     {
       title: "岗位",
+      search: false,
       render: (_, row) =>
         formatReference(
           `${row.holder.position.posName}（${row.holder.position.posCode}）`,
@@ -184,6 +206,7 @@ function assignmentColumns(
     {
       title: "操作",
       key: "actions",
+      valueType: "option",
       fixed: "right",
       width: 88,
       render: (_, row) => (
@@ -195,16 +218,18 @@ function assignmentColumns(
   ];
 }
 
-function detailItems(detail: OrganizationResponsibilityAssignmentView) {
+function assignmentDetailItems(detail: OrganizationResponsibilityAssignmentView): DescriptionsProps["items"] {
   return [
     {
       key: "type",
       label: "责任类型",
-      children: formatOrganizationResponsibilityType(detail.typeCode),
+      style: { width: "50%" },
+      children: formatOrganizationResponsibilityType(detail.typeCode, { includeCode: false }),
     },
     {
       key: "target",
       label: "目标组织",
+      style: { width: "50%" },
       children: formatReference(
         `${detail.targetOrganization.orgName}（${detail.targetOrganization.orgCode}）`,
         detail.targetOrganization.isDelete,
@@ -213,12 +238,8 @@ function detailItems(detail: OrganizationResponsibilityAssignmentView) {
     {
       key: "target-path",
       label: "目标组织路径",
+      span: "filled",
       children: formatOrganizationPath(detail.targetOrganization.fullPath),
-    },
-    {
-      key: "status",
-      label: "状态",
-      children: formatOrganizationResponsibilityStatus(detail.status),
     },
     {
       key: "start-time",
@@ -230,31 +251,34 @@ function detailItems(detail: OrganizationResponsibilityAssignmentView) {
       label: "结束时间",
       children: detail.endTime === null ? "—" : formatTime(detail.endTime),
     },
+  ];
+}
+
+function holderItems(detail: OrganizationResponsibilityAssignmentView): DescriptionsProps["items"] {
+  return [
     {
       key: "user",
       label: "持有人",
+      style: { width: "50%" },
       children: formatReference(
         `${detail.holder.user.name}（${detail.holder.user.username}）`,
         detail.holder.user.isDelete,
       ),
     },
     {
-      key: "org-path",
-      label: "任职组织路径",
-      children: formatOrganizationPath(detail.holder.organization.fullPath),
-    },
-    {
       key: "position",
       label: "岗位",
+      style: { width: "50%" },
       children: formatReference(
         `${detail.holder.position.posName}（${detail.holder.position.posCode}）`,
         detail.holder.position.isDelete,
       ),
     },
     {
-      key: "employment-id",
-      label: "任职 ID",
-      children: `#${detail.holder.employmentId}`,
+      key: "org-path",
+      label: "任职组织路径",
+      span: "filled",
+      children: formatOrganizationPath(detail.holder.organization.fullPath),
     },
   ];
 }
@@ -270,6 +294,14 @@ function assignmentMatchesFilters(
     return false;
   }
   if (filters.typeCode && assignment.typeCode !== filters.typeCode) return false;
+  if (filters.userText) {
+    const keyword = filters.userText.toLowerCase();
+    if (
+      !assignment.holder.user.name.toLowerCase().includes(keyword) &&
+      !assignment.holder.user.username.toLowerCase().includes(keyword)
+    )
+      return false;
+  }
   if (filters.lifecycle === "all") return true;
   const isOpen =
     assignment.status === OrganizationResponsibilityAssignmentStatus.Enable ||
@@ -279,6 +311,7 @@ function assignmentMatchesFilters(
 
 export default function OrganizationResponsibilityAssignmentModule({ host }: { host: Host }) {
   const access = useAccess();
+  const { token } = theme.useToken();
   const fixedTarget = host.kind === "organization" ? host.targetOrganizationCode : undefined;
   const initialState: OrganizationResponsibilityAssignmentState =
     host.kind === "global"
@@ -323,6 +356,7 @@ export default function OrganizationResponsibilityAssignmentModule({ host }: { h
               }
             : {}),
           ...(filters.employmentId ? { employmentId: filters.employmentId } : {}),
+          ...(filters.userText ? { userText: filters.userText } : {}),
           ...(filters.typeCode ? { typeCode: filters.typeCode } : {}),
           lifecycle: filters.lifecycle,
           pageSize,
@@ -360,7 +394,7 @@ export default function OrganizationResponsibilityAssignmentModule({ host }: { h
         if (requestId === listRequestIdRef.current) setLoading(false);
       }
     },
-    [filters.employmentId, filters.lifecycle, filters.targetOrganizationCode, filters.typeCode],
+    [filters.employmentId, filters.lifecycle, filters.targetOrganizationCode, filters.typeCode, filters.userText],
   );
 
   const loadDetail = useCallback(
@@ -430,6 +464,7 @@ export default function OrganizationResponsibilityAssignmentModule({ host }: { h
           }
         : {}),
       ...(values.typeCode ? { typeCode: values.typeCode } : {}),
+      ...(values.userText?.trim() ? { userText: values.userText.trim() } : {}),
       lifecycle: values.lifecycle ?? "open",
       assignmentId: null,
     };
@@ -512,6 +547,7 @@ export default function OrganizationResponsibilityAssignmentModule({ host }: { h
                 }
               : undefined,
             typeCode: initialState.typeCode,
+            userText: initialState.userText,
             lifecycle: initialState.lifecycle,
           },
         }}
@@ -550,11 +586,46 @@ export default function OrganizationResponsibilityAssignmentModule({ host }: { h
       )}
 
       <Drawer
-        title={detail ? `任命 #${detail.id}` : "责任任命详情"}
+        title={
+          detail ? (
+            <Space size={6} wrap>
+              <span>{formatReference(detail.targetOrganization.orgName, detail.targetOrganization.isDelete)}</span>
+              <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                {formatOrganizationResponsibilityType(detail.typeCode, { includeCode: false })}
+              </Typography.Text>
+              <Tag
+                color={
+                  detail.status === OrganizationResponsibilityAssignmentStatus.Enable
+                    ? "green"
+                    : detail.status === OrganizationResponsibilityAssignmentStatus.Pause
+                      ? "gold"
+                      : "default"
+                }
+              >
+                {formatOrganizationResponsibilityStatus(detail.status)}
+              </Tag>
+            </Space>
+          ) : (
+            "责任任命详情"
+          )
+        }
         open={detailOpen}
         loading={detailLoading}
-        size="large"
+        size={840}
         onClose={closeDetail}
+        classNames={{ header: styles["drawer-header"], extra: styles["drawer-actions"] }}
+        styles={{ header: { padding: "14px 20px" }, body: { padding: "16px 20px", background: token.colorBgLayout } }}
+        extra={
+          detail && (
+            <DetailHeaderActions>
+              <OrganizationResponsibilityAssignmentLifecycleActions
+                loading={lifecycleLoading}
+                allowedActions={detail.allowedActions}
+                onCommand={runLifecycleCommand}
+              />
+            </DetailHeaderActions>
+          )
+        }
       >
         {detailError && <Alert type="error" showIcon message={detailError} />}
         {detail && (
@@ -564,14 +635,35 @@ export default function OrganizationResponsibilityAssignmentModule({ host }: { h
                 key: "detail",
                 label: "任命详情",
                 children: (
-                  <>
-                    <OrganizationResponsibilityAssignmentLifecycleActions
-                      loading={lifecycleLoading}
-                      allowedActions={detail.allowedActions}
-                      onCommand={runLifecycleCommand}
-                    />
-                    <Descriptions column={1} items={detailItems(detail)} />
-                  </>
+                  <div className={styles.content}>
+                    {[
+                      { title: "任命信息", items: assignmentDetailItems(detail) },
+                      { title: "持有人与任职", items: holderItems(detail) },
+                    ].map((section) => (
+                      <section
+                        key={section.title}
+                        aria-label={section.title}
+                        className={`${styles.section} ${styles["basic-section"]}`}
+                        style={{ background: token.colorBgContainer, borderColor: token.colorBorderSecondary }}
+                      >
+                        <div className={styles["section-header"]}>
+                          <Typography.Title level={5} className={styles["section-title"]}>
+                            {section.title}
+                          </Typography.Title>
+                        </div>
+                        <Descriptions
+                          className={styles.descriptions}
+                          size="middle"
+                          column={{ xs: 1, sm: 2 }}
+                          styles={{
+                            label: { fontSize: 13 },
+                            content: { fontSize: 14, lineHeight: "24px", overflowWrap: "anywhere" },
+                          }}
+                          items={section.items}
+                        />
+                      </section>
+                    ))}
+                  </div>
                 ),
               },
               ...(access.canAccessAudit
@@ -581,13 +673,22 @@ export default function OrganizationResponsibilityAssignmentModule({ host }: { h
                       label: "操作日志",
                       forceRender: true,
                       children: (
-                        <AuditLogTable
-                          key={`${detail.id}:${auditRevision}`}
-                          fixedConditions={{
-                            targetType: "organization_responsibility_assignment",
-                            targetId: detail.id,
-                          }}
-                        />
+                        <section
+                          aria-label="操作日志"
+                          className={styles.section}
+                          style={{ background: token.colorBgContainer, borderColor: token.colorBorderSecondary }}
+                        >
+                          <AuditLogTable
+                            key={`${detail.id}:${auditRevision}`}
+                            fixedConditions={{
+                              targetType: "organization_responsibility_assignment",
+                              targetId: detail.id,
+                            }}
+                            pageSize={10}
+                            search={false}
+                            size="small"
+                          />
+                        </section>
                       ),
                     },
                   ]

@@ -1,23 +1,18 @@
 import StatusTag from "@admin/components/StatusTag";
 import UserDetailDrawer from "@admin/pages/users/components/UserDetailDrawer";
 import UserFormModal from "@admin/pages/users/components/UserFormModal";
-import { searchUsers, type UserDetailVo, type UserVo } from "@admin/services/user";
+import { searchUsers, type UserVo } from "@admin/services/user";
 import { type ActionType, PageContainer, type ProColumns, ProTable } from "@ant-design/pro-components";
 import { getUserStatusOptions, getUserTypeOptions, type UserStatus, type UserType } from "@iam/contracts";
 import { useAccess } from "@umijs/max";
 import { Alert, Button, message } from "antd";
 import { useRef, useState } from "react";
 
-type FormState =
-  | { open: false }
-  | { open: true; mode: "create" }
-  | { open: true; mode: "edit"; initialValues: UserDetailVo };
-
 export default function UsersPage() {
   const access = useAccess();
   const actionRef = useRef<ActionType>(undefined);
   const [committedWarning, setCommittedWarning] = useState<string>();
-  const [formState, setFormState] = useState<FormState>({ open: false });
+  const [createFormOpen, setCreateFormOpen] = useState(false);
   const [drawerUsername, setDrawerUsername] = useState<string | null>(null);
 
   const handleError = (err: unknown) => message.error(err instanceof Error ? err.message : "操作失败");
@@ -124,7 +119,7 @@ export default function UsersPage() {
         toolBarRender={() =>
           access.canCreateUser
             ? [
-                <Button key="create" type="primary" onClick={() => setFormState({ open: true, mode: "create" })}>
+                <Button key="create" type="primary" onClick={() => setCreateFormOpen(true)}>
                   + 新建用户
                 </Button>,
               ]
@@ -133,25 +128,21 @@ export default function UsersPage() {
       />
 
       <UserFormModal
-        open={formState.open}
-        mode={formState.open ? formState.mode : "create"}
-        initialValues={formState.open && formState.mode === "edit" ? formState.initialValues : null}
-        onOpenChange={(open) => {
-          if (!open) setFormState({ open: false });
-        }}
+        open={createFormOpen}
+        onOpenChange={setCreateFormOpen}
         onCommitted={(error, username, generatedPasswordMissing) => {
           setCommittedWarning(
             generatedPasswordMissing
               ? `用户创建已生效，但初始密码未能交付。${error.message}；请先修复，再主动重置密码。`
               : error.message,
           );
-          setFormState({ open: false });
+          setCreateFormOpen(false);
           setDrawerUsername(username);
           actionRef.current?.reload();
         }}
         onSuccess={(username) => {
           if (username) setDrawerUsername(username);
-          setFormState({ open: false });
+          setCreateFormOpen(false);
           actionRef.current?.reload();
         }}
       />
@@ -160,10 +151,6 @@ export default function UsersPage() {
         open={drawerUsername !== null}
         username={drawerUsername}
         onClose={() => setDrawerUsername(null)}
-        onEdit={(detail) => {
-          setDrawerUsername(null);
-          setFormState({ open: true, mode: "edit", initialValues: detail });
-        }}
         onChanged={() => actionRef.current?.reload()}
       />
     </PageContainer>

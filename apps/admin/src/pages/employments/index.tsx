@@ -84,10 +84,10 @@ export default function EmploymentsPage() {
   const columns: ProColumns<EmploymentVo>[] = [
     {
       title: "用户",
-      dataIndex: "name",
+      dataIndex: "userText",
       render: (_, r) => formatUser(r),
       width: 160,
-      fieldProps: { placeholder: "工号或姓名" },
+      fieldProps: { placeholder: "工号或姓名", maxLength: 128 },
     },
     {
       title: "组织",
@@ -168,19 +168,19 @@ export default function EmploymentsPage() {
             const {
               current = 1,
               pageSize = 20,
-              name,
+              userText,
               status,
               isPrimary,
               organizationOrgCode,
             } = params as {
               current?: number;
               pageSize?: number;
-              name?: string;
+              userText?: string;
               status?: string | number;
               isPrimary?: "true" | "false" | boolean;
               organizationOrgCode?: string;
             };
-            const text = (name ?? "").trim();
+            const text = (userText ?? "").trim();
             const statusNum =
               status === undefined || status === null || status === ""
                 ? undefined
@@ -191,7 +191,7 @@ export default function EmploymentsPage() {
               pageNum: current,
               pageSize,
               conditions: {
-                fuzzyConditions: text ? { text } : {},
+                fuzzyConditions: text ? { userText: text } : {},
                 exactConditions: {
                   statuses: statusNum !== undefined ? [statusNum] : [EmploymentStatus.Enable, EmploymentStatus.Pause],
                   isPrimary: isPrimaryBool,
