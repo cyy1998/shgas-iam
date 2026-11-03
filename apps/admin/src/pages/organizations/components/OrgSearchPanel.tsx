@@ -14,6 +14,7 @@ export default function OrgSearchPanel({ onSelect }: Props) {
   return (
     <div>
       <Input.Search
+        aria-label="搜索组织名称或编码"
         placeholder="搜索组织名称或编码"
         allowClear
         value={keyword}
@@ -97,7 +98,7 @@ function OrgSearchResults({ text, onSelect }: ResultsProps) {
               >
                 <span>
                   {r.orgName}
-                  <span style={{ color: "#999", marginLeft: 6 }}>({r.orgCode})</span>
+                  <span style={{ color: "#596879", marginLeft: 6 }}>({r.orgCode})</span>
                 </span>
                 <StatusTag domain="org" status={r.status} />
               </div>

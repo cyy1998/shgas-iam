@@ -1,7 +1,6 @@
 import AuditLogTable from "@admin/components/audit/AuditLogTable";
 import styles from "@admin/components/detail/DetailDrawer.module.less";
 import DetailHeaderActions from "@admin/components/detail/DetailHeaderActions";
-import { requestEmploymentOptionsWithoutId } from "@admin/components/employment-select-options";
 import OrganizationTreeSelector from "@admin/components/OrganizationTreeSelector";
 import {
   endOrganizationResponsibilityAssignment,
@@ -12,6 +11,7 @@ import {
   resumeOrganizationResponsibilityAssignment,
   searchOrganizationResponsibilityAssignments,
 } from "@admin/services/organization-responsibility";
+import { CloseOutlined, PlusOutlined } from "@ant-design/icons";
 import { type ProColumns, ProTable } from "@ant-design/pro-components";
 import {
   ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS,
@@ -28,7 +28,9 @@ import {
   Descriptions,
   type DescriptionsProps,
   Drawer,
+  Input,
   message,
+  Select,
   Space,
   Tabs,
   Tag,
@@ -38,6 +40,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import OrganizationResponsibilityAssignmentFormModal from "./OrganizationResponsibilityAssignmentFormModal";
 import OrganizationResponsibilityAssignmentLifecycleActions from "./OrganizationResponsibilityAssignmentLifecycleActions";
+import toolbarStyles from "./OrganizationResponsibilityAssignmentToolbar.module.less";
 import {
   formatOrganizationResponsibilityStatus,
   formatOrganizationResponsibilityType,
@@ -88,9 +91,9 @@ type Host =
       onStateChange: (state: OrganizationResponsibilityAssignmentState) => void;
     };
 
-type AssignmentSearchFormValues = {
+type AssignmentFilterValues = {
   targetOrganizationCode?: string;
-  employmentId?: number | { value: number };
+  employmentId?: number;
   userText?: string;
   typeCode?: OrganizationResponsibilityTypeCode;
   lifecycle?: OrganizationResponsibilityAssignmentLifecycle;
@@ -108,37 +111,8 @@ function formatTime(value: string | Date) {
   return new Date(value instanceof Date ? value.getTime() : value).toLocaleString();
 }
 
-function assignmentColumns(
-  onOpenDetail: (id: number) => void,
-  fixedTarget?: string,
-): ProColumns<OrganizationResponsibilityAssignmentView>[] {
+function assignmentColumns(onOpenDetail: (id: number) => void): ProColumns<OrganizationResponsibilityAssignmentView>[] {
   return [
-    {
-      title: "目标组织",
-      dataIndex: "targetOrganizationCode",
-      hideInTable: true,
-      search: fixedTarget ? false : undefined,
-      formItemRender: () => (
-        <OrganizationTreeSelector
-          visibleStatuses={[OrganizationStatus.Enable, OrganizationStatus.Pause, OrganizationStatus.Disable]}
-          selectableStatuses={[OrganizationStatus.Enable, OrganizationStatus.Pause, OrganizationStatus.Disable]}
-          placeholder="全部目标组织"
-        />
-      ),
-    },
-    {
-      title: "任职",
-      dataIndex: "employmentId",
-      hideInTable: true,
-      valueType: "select",
-      request: requestEmploymentOptionsWithoutId,
-      fieldProps: {
-        filterOption: false,
-        labelInValue: true,
-        placeholder: "搜索用户、账号、组织或岗位",
-        showSearch: true,
-      },
-    },
     {
       title: "责任类型",
       dataIndex: "typeCode",
@@ -165,17 +139,6 @@ function assignmentColumns(
           {formatOrganizationResponsibilityStatus(row.status)}
         </Tag>
       ),
-    },
-    {
-      title: "生命周期",
-      dataIndex: "lifecycle",
-      hideInTable: true,
-      valueType: "select",
-      valueEnum: {
-        open: { text: "进行中" },
-        ended: { text: "已结束" },
-        all: { text: "全部" },
-      },
     },
     {
       title: "用户",
@@ -322,6 +285,7 @@ export default function OrganizationResponsibilityAssignmentModule({ host }: { h
           assignmentId: null,
         };
   const [filters, setFilters] = useState<OrganizationResponsibilityAssignmentState>(initialState);
+  const [searchText, setSearchText] = useState(initialState.userText ?? "");
   const [items, setItems] = useState<OrganizationResponsibilityAssignmentView[]>([]);
   const [pagination, setPagination] = useState({
     current: initialState.pageNum ?? 1,
@@ -437,7 +401,7 @@ export default function OrganizationResponsibilityAssignmentModule({ host }: { h
 
   useEffect(() => {
     let cancelled = false;
-    void loadPage(initialState.pageNum ?? 1, initialState.pageSize ?? PAGE_SIZE).then(() => {
+    void loadPage(filters.pageNum ?? 1, filters.pageSize ?? PAGE_SIZE).then(() => {
       if (!cancelled && initialState.assignmentId) {
         void loadDetail(initialState.assignmentId);
       }
@@ -447,22 +411,16 @@ export default function OrganizationResponsibilityAssignmentModule({ host }: { h
       listRequestIdRef.current += 1;
       detailRequestIdRef.current += 1;
     };
-  }, [initialState.assignmentId, initialState.pageNum, initialState.pageSize, loadDetail, loadPage]);
+  }, [initialState.assignmentId, filters.pageNum, filters.pageSize, loadDetail, loadPage]);
 
-  const applyFilters = (values: AssignmentSearchFormValues) => {
+  const applyFilters = (values: AssignmentFilterValues) => {
     const nextState: OrganizationResponsibilityAssignmentState = {
       ...(fixedTarget
         ? { targetOrganizationCode: fixedTarget }
         : values.targetOrganizationCode
           ? { targetOrganizationCode: values.targetOrganizationCode }
           : {}),
-      ...(values.employmentId
-        ? {
-            employmentId: Number(
-              typeof values.employmentId === "number" ? values.employmentId : values.employmentId.value,
-            ),
-          }
-        : {}),
+      ...(values.employmentId ? { employmentId: values.employmentId } : {}),
       ...(values.typeCode ? { typeCode: values.typeCode } : {}),
       ...(values.userText?.trim() ? { userText: values.userText.trim() } : {}),
       lifecycle: values.lifecycle ?? "open",
@@ -472,7 +430,10 @@ export default function OrganizationResponsibilityAssignmentModule({ host }: { h
     if (host.kind === "global") host.onStateChange(nextState);
   };
 
+  const updateFilters = (values: AssignmentFilterValues) => applyFilters({ ...filters, ...values });
+
   const resetFilters = () => {
+    setSearchText("");
     const nextState: OrganizationResponsibilityAssignmentState = {
       ...(fixedTarget ? { targetOrganizationCode: fixedTarget } : {}),
       lifecycle: "open",
@@ -532,27 +493,88 @@ export default function OrganizationResponsibilityAssignmentModule({ host }: { h
 
   return (
     <>
-      <ProTable<OrganizationResponsibilityAssignmentView, AssignmentSearchFormValues>
+      <ProTable<OrganizationResponsibilityAssignmentView, AssignmentFilterValues>
+        className="iam-admin-list"
+        size="small"
         rowKey="id"
         loading={loading}
-        columns={assignmentColumns(openDetail, fixedTarget)}
+        columns={assignmentColumns(openDetail)}
         dataSource={items}
-        form={{
-          initialValues: {
-            targetOrganizationCode: initialState.targetOrganizationCode,
-            employmentId: initialState.employmentId
-              ? {
-                  value: initialState.employmentId,
-                  label: "已按指定任职筛选",
-                }
-              : undefined,
-            typeCode: initialState.typeCode,
-            userText: initialState.userText,
-            lifecycle: initialState.lifecycle,
-          },
-        }}
-        headerTitle="责任任命列表"
-        search={{ labelWidth: "auto" }}
+        headerTitle={
+          <div className={toolbarStyles.toolbar}>
+            <div className="iam-admin-filters">
+              <Input.Search
+                className={toolbarStyles.search}
+                aria-label="搜索责任用户"
+                placeholder="搜索姓名或账号"
+                maxLength={128}
+                allowClear
+                value={searchText}
+                onChange={(event) => setSearchText(event.target.value)}
+                onSearch={(userText) => updateFilters({ userText })}
+              />
+              {!fixedTarget && (
+                <fieldset className={toolbarStyles.organization} aria-label="目标组织">
+                  <OrganizationTreeSelector
+                    visibleStatuses={[OrganizationStatus.Enable, OrganizationStatus.Pause, OrganizationStatus.Disable]}
+                    selectableStatuses={[
+                      OrganizationStatus.Enable,
+                      OrganizationStatus.Pause,
+                      OrganizationStatus.Disable,
+                    ]}
+                    placeholder="全部目标组织"
+                    value={filters.targetOrganizationCode}
+                    onChange={(targetOrganizationCode) => updateFilters({ targetOrganizationCode })}
+                  />
+                </fieldset>
+              )}
+              <Select
+                className={toolbarStyles.type}
+                aria-label="责任类型"
+                placeholder="全部责任类型"
+                allowClear
+                value={filters.typeCode}
+                options={ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG.map((type) => ({
+                  value: type.code,
+                  label: type.name,
+                }))}
+                onChange={(typeCode) => updateFilters({ typeCode })}
+              />
+              <Select
+                className={toolbarStyles.lifecycle}
+                aria-label="生命周期"
+                value={filters.lifecycle}
+                options={[
+                  { value: "open", label: "进行中" },
+                  { value: "ended", label: "已结束" },
+                  { value: "all", label: "全部生命周期" },
+                ]}
+                onChange={(lifecycle) => updateFilters({ lifecycle })}
+              />
+              {filters.employmentId && (
+                <Tag
+                  className={toolbarStyles["employment-scope"]}
+                  closeIcon={<CloseOutlined aria-label="清除任职筛选" />}
+                  styles={{ close: { padding: 4 } }}
+                  onClose={() => updateFilters({ employmentId: undefined })}
+                >
+                  已限定任职
+                </Tag>
+              )}
+              {(filters.userText ||
+                (!fixedTarget && filters.targetOrganizationCode) ||
+                filters.typeCode ||
+                filters.employmentId ||
+                filters.lifecycle !== "open") && (
+                <Button type="text" onClick={resetFilters}>
+                  清除筛选
+                </Button>
+              )}
+            </div>
+          </div>
+        }
+        search={false}
+        options={{ reload: () => void loadPage(undefined, undefined, { preserveOnError: true }) }}
         scroll={{ x: 1200 }}
         pagination={{
           ...pagination,
@@ -561,13 +583,16 @@ export default function OrganizationResponsibilityAssignmentModule({ host }: { h
           onChange: (current, pageSize) =>
             void loadPage(pageSize === pagination.pageSize ? current : 1, pageSize, { preserveOnError: true }),
         }}
-        onSubmit={applyFilters}
-        onReset={resetFilters}
         toolBarRender={() =>
           access.canCreateOrganizationResponsibility
             ? [
-                <Button key="create" type="primary" onClick={() => setCreateOpen(true)}>
-                  + 新建责任任命
+                <Button
+                  key="create"
+                  type="primary"
+                  icon={<PlusOutlined aria-hidden />}
+                  onClick={() => setCreateOpen(true)}
+                >
+                  新建责任任命
                 </Button>,
               ]
             : []

@@ -12,9 +12,9 @@ import TransferModal from "@admin/pages/employments/components/TransferModal";
 import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
 import { resignUser } from "@admin/services/employment";
 import { deleteUser, getUser, type UserDetailVo, updateUser, updateUserStatus } from "@admin/services/user";
-import { DeleteOutlined, DownOutlined, KeyOutlined, LogoutOutlined } from "@ant-design/icons";
+import { DeleteOutlined, DownOutlined, EditOutlined, KeyOutlined, LogoutOutlined } from "@ant-design/icons";
 import { EmploymentStatus, getUserStatusOptions, UserStatus } from "@iam/contracts";
-import { Link, useAccess } from "@umijs/max";
+import { history, Link, useAccess } from "@umijs/max";
 import {
   Alert,
   Button,
@@ -34,9 +34,10 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { CSSProperties } from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { confirmResetPassword } from "./ResetPasswordModal";
 import UserBasicInformation from "./UserBasicInformation";
+import userStyles from "./UserDetail.module.less";
 
 type EmploymentRow = UserDetailVo["employments"][number];
 
@@ -76,11 +77,6 @@ export default function UserDetailDrawer({ open, username, onClose, onChanged }:
 function UserDetailDrawerContent({ open, username, onClose, onChanged }: Props) {
   const access = useAccess();
   const { token } = theme.useToken();
-  const headerDangerButtonStyle: CSSProperties = {
-    borderColor: token.colorErrorBorder,
-    color: token.colorErrorTextActive,
-    fontWeight: 500,
-  };
   const [committedWarning, setCommittedWarning] = useState<string>();
   const [detail, setDetail] = useState<UserDetailVo | null>(null);
   const [loading, setLoading] = useState(open && username !== null);
@@ -90,10 +86,58 @@ function UserDetailDrawerContent({ open, username, onClose, onChanged }: Props) 
   const [activeTab, setActiveTab] = useState("details");
   const [editingProfile, setEditingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [profileDirty, setProfileDirty] = useState(false);
+  const discardConfirmationOpen = useRef(false);
   const employments = detail?.employments ?? [];
   const visibleEmployments = employments.filter(
     (row) => showEndedEmployments || row.status !== EmploymentStatus.Disable,
   );
+
+  const confirmDiscard = useCallback(
+    (onDiscard: () => void) => {
+      if (savingProfile || discardConfirmationOpen.current) return;
+      if (!profileDirty) {
+        onDiscard();
+        return;
+      }
+      discardConfirmationOpen.current = true;
+      Modal.confirm({
+        title: "放弃未保存的修改？",
+        content: "用户资料的修改尚未保存，离开后将丢失。",
+        okText: "放弃修改",
+        cancelText: "继续编辑",
+        okType: "danger",
+        onOk: () => {
+          discardConfirmationOpen.current = false;
+          setProfileDirty(false);
+          onDiscard();
+        },
+        onCancel: () => {
+          discardConfirmationOpen.current = false;
+        },
+      });
+    },
+    [profileDirty, savingProfile],
+  );
+
+  useEffect(() => {
+    if (!open || (!profileDirty && !savingProfile)) return;
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    const unblock = history.block((transition) => {
+      confirmDiscard(() => {
+        unblock();
+        transition.retry();
+      });
+    });
+    return () => {
+      window.removeEventListener("beforeunload", beforeUnload);
+      unblock();
+    };
+  }, [open, profileDirty, savingProfile, confirmDiscard]);
 
   useEffect(() => {
     if (!open || !username) return;
@@ -125,7 +169,10 @@ function UserDetailDrawerContent({ open, username, onClose, onChanged }: Props) 
     try {
       const d = await getUser(username);
       setDetail(d);
-      if (!d.allowedActions.editProfile.allowed) setEditingProfile(false);
+      if (!d.allowedActions.editProfile.allowed) {
+        setEditingProfile(false);
+        setProfileDirty(false);
+      }
     } finally {
       setLoading(false);
     }
@@ -148,6 +195,7 @@ function UserDetailDrawerContent({ open, username, onClose, onChanged }: Props) 
         setCommittedWarning(error.message);
       }
       setEditingProfile(false);
+      setProfileDirty(false);
       try {
         await refresh();
       } catch (error) {
@@ -251,6 +299,8 @@ function UserDetailDrawerContent({ open, username, onClose, onChanged }: Props) 
     {
       title: "任职信息",
       key: "employment",
+      fixed: "left",
+      width: 200,
       render: (_: unknown, row) => (
         <Space orientation="vertical" size={4} style={{ width: "100%", minWidth: 0 }}>
           <Typography.Text strong style={{ fontSize: 13, overflowWrap: "anywhere" }}>
@@ -267,11 +317,7 @@ function UserDetailDrawerContent({ open, username, onClose, onChanged }: Props) 
               </Typography.Text>
             )}
             <StatusTag domain="employment" status={row.status} />
-            {row.isPrimary ? (
-              <Tag color="blue" style={{ marginInlineEnd: 0 }}>
-                主岗
-              </Tag>
-            ) : null}
+            {row.isPrimary ? <Tag style={{ marginInlineEnd: 0 }}>主岗</Tag> : null}
           </Space>
         </Space>
       ),
@@ -381,10 +427,11 @@ function UserDetailDrawerContent({ open, username, onClose, onChanged }: Props) 
         </>
       )}
       <Drawer
+        rootClassName={userStyles.drawer}
         size={840}
         open={open}
         onClose={() => {
-          if (!savingProfile) onClose();
+          confirmDiscard(onClose);
         }}
         closable={!savingProfile}
         keyboard={!savingProfile}
@@ -393,7 +440,7 @@ function UserDetailDrawerContent({ open, username, onClose, onChanged }: Props) 
         classNames={{ header: styles["drawer-header"], extra: styles["drawer-actions"] }}
         styles={{
           header: { padding: "14px 20px" },
-          body: { padding: "16px 20px", background: token.colorBgLayout },
+          body: { padding: "16px 20px", background: "#f9fafb" },
         }}
         title={
           detail ? (
@@ -413,6 +460,17 @@ function UserDetailDrawerContent({ open, username, onClose, onChanged }: Props) 
           !editingProfile &&
           !savingProfile && (
             <DetailHeaderActions>
+              <AuthorizationActionButton
+                decision={detail.allowedActions.editProfile}
+                icon={<EditOutlined aria-hidden />}
+                type="primary"
+                onClick={() => {
+                  setActiveTab("details");
+                  setEditingProfile(true);
+                }}
+              >
+                编辑
+              </AuthorizationActionButton>
               <Space size={8}>
                 <AuthorizationActionDropdown
                   decision={detail.allowedActions.changeStatus}
@@ -455,28 +513,6 @@ function UserDetailDrawerContent({ open, username, onClose, onChanged }: Props) 
                   重置密码
                 </AuthorizationActionButton>
               </Space>
-              <div className={styles["header-danger-actions"]} style={{ borderColor: token.colorBorderSecondary }}>
-                <AuthorizationActionButton
-                  variant="filled"
-                  color="danger"
-                  decision={detail.allowedActions.delete}
-                  onClick={onDelete}
-                  icon={<DeleteOutlined aria-hidden />}
-                  style={detail.allowedActions.delete.allowed ? headerDangerButtonStyle : undefined}
-                >
-                  删除
-                </AuthorizationActionButton>
-                <AuthorizationActionButton
-                  variant="filled"
-                  color="danger"
-                  decision={detail.allowedActions.resign}
-                  onClick={onResign}
-                  icon={<LogoutOutlined aria-hidden />}
-                  style={detail.allowedActions.resign.allowed ? headerDangerButtonStyle : undefined}
-                >
-                  离职
-                </AuthorizationActionButton>
-              </div>
             </DetailHeaderActions>
           )
         }
@@ -500,9 +536,9 @@ function UserDetailDrawerContent({ open, username, onClose, onChanged }: Props) 
                       detail={detail}
                       editing={editingProfile}
                       saving={savingProfile}
-                      onEdit={() => setEditingProfile(true)}
-                      onCancel={() => setEditingProfile(false)}
+                      onCancel={() => confirmDiscard(() => setEditingProfile(false))}
                       onSave={saveProfile}
+                      onDirtyChange={setProfileDirty}
                     />
                     <section
                       aria-label="雇佣信息"
@@ -545,6 +581,9 @@ function UserDetailDrawerContent({ open, username, onClose, onChanged }: Props) 
                           )}
                         </Space>
                       </div>
+                      <Typography.Paragraph className={userStyles["mobile-table-hint"]}>
+                        左右滑动查看任职详情
+                      </Typography.Paragraph>
                       <ConfigProvider
                         theme={{
                           token: { fontSize: 13 },
@@ -570,6 +609,34 @@ function UserDetailDrawerContent({ open, username, onClose, onChanged }: Props) 
                         />
                       </ConfigProvider>
                     </section>
+                    {!editingProfile && !savingProfile && (
+                      <section aria-label="危险操作" className={userStyles["danger-section"]}>
+                        <div>
+                          <Typography.Title level={5}>危险操作</Typography.Title>
+                          <Typography.Text type="secondary">
+                            离职将结束开放任职并停用账号；删除前需处理关联记录。
+                          </Typography.Text>
+                        </div>
+                        <DetailHeaderActions>
+                          <AuthorizationActionButton
+                            danger
+                            decision={detail.allowedActions.resign}
+                            onClick={onResign}
+                            icon={<LogoutOutlined aria-hidden />}
+                          >
+                            离职
+                          </AuthorizationActionButton>
+                          <AuthorizationActionButton
+                            danger
+                            decision={detail.allowedActions.delete}
+                            onClick={onDelete}
+                            icon={<DeleteOutlined aria-hidden />}
+                          >
+                            删除
+                          </AuthorizationActionButton>
+                        </DetailHeaderActions>
+                      </section>
+                    )}
                   </div>
                 ),
               },

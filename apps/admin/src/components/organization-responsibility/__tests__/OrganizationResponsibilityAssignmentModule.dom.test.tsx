@@ -192,13 +192,9 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
       />,
     );
     await screen.findByRole("button", { name: "详情" });
-    await user.click(screen.getByText("展开", { exact: true }));
-    expect(screen.queryByText("操作", { selector: "label" })).toBeNull();
-    const userField = screen.getByText("用户", { selector: "label" }).closest(".ant-form-item");
-    const input = userField?.querySelector("input");
-    if (!input) throw new Error("User search input is missing");
+    const input = screen.getByRole("searchbox", { name: "搜索责任用户" });
     await user.type(input, " 李四 ");
-    await user.click(screen.getByRole("button", { name: /查\s*询/ }));
+    await user.keyboard("{Enter}");
     await waitFor(() =>
       expect(responsibilityService.searchAssignments).toHaveBeenLastCalledWith({
         lifecycle: "open",
@@ -208,7 +204,7 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
       }),
     );
     expect(onStateChange).toHaveBeenLastCalledWith({ lifecycle: "open", assignmentId: null, userText: "李四" });
-    await user.click(screen.getByRole("button", { name: /重\s*置/ }));
+    await user.click(screen.getByRole("button", { name: "清除筛选" }));
     await waitFor(() =>
       expect(responsibilityService.searchAssignments).toHaveBeenLastCalledWith({
         lifecycle: "open",
@@ -216,6 +212,74 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
         pageNum: 1,
       }),
     );
+  });
+
+  it("applies type and lifecycle changes immediately while preserving scope and resetting pagination", async () => {
+    responsibilityService.searchAssignments.mockResolvedValue({ items: [assignment], total: 100, nextCursor: null });
+    const onStateChange = vi.fn();
+    const { user } = render(
+      <OrganizationResponsibilityAssignmentModule
+        host={{
+          kind: "global",
+          state: {
+            targetOrganizationCode: "FIN",
+            employmentId: 42,
+            userText: "张三",
+            lifecycle: "open",
+            assignmentId: null,
+            pageNum: 3,
+          },
+          onStateChange,
+        }}
+      />,
+    );
+    await waitFor(() =>
+      expect(responsibilityService.searchAssignments).toHaveBeenLastCalledWith({
+        targetOrganizationCode: "FIN",
+        employmentId: 42,
+        userText: "张三",
+        lifecycle: "open",
+        pageNum: 3,
+        pageSize: 20,
+      }),
+    );
+
+    await user.click(screen.getByRole("combobox", { name: "责任类型" }));
+    await user.click(await screen.findByTitle("分管领导"));
+    await waitFor(() =>
+      expect(responsibilityService.searchAssignments).toHaveBeenLastCalledWith({
+        targetOrganizationCode: "FIN",
+        employmentId: 42,
+        userText: "张三",
+        typeCode: OrganizationResponsibilityTypeCode.Supervising,
+        lifecycle: "open",
+        pageNum: 1,
+        pageSize: 20,
+      }),
+    );
+    await user.click(screen.getByRole("combobox", { name: "生命周期" }));
+    await user.click(await screen.findByTitle("已结束"));
+    await waitFor(() =>
+      expect(responsibilityService.searchAssignments).toHaveBeenLastCalledWith({
+        targetOrganizationCode: "FIN",
+        employmentId: 42,
+        userText: "张三",
+        typeCode: OrganizationResponsibilityTypeCode.Supervising,
+        lifecycle: "ended",
+        pageNum: 1,
+        pageSize: 20,
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "清除筛选" }));
+    await waitFor(() =>
+      expect(responsibilityService.searchAssignments).toHaveBeenLastCalledWith({
+        lifecycle: "open",
+        pageNum: 1,
+        pageSize: 20,
+      }),
+    );
+    expect(screen.getByRole("searchbox", { name: "搜索责任用户" })).toHaveValue("");
+    expect(onStateChange).toHaveBeenLastCalledWith({ lifecycle: "open", assignmentId: null });
   });
 
   it("hydrates global filters and stable detail through the shared Module interface", async () => {
@@ -237,7 +301,7 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
 
     const detailButton = await screen.findByRole("button", { name: "详情" });
     expect(detailButton).toBeVisible();
-    expect(screen.getByText("已按指定任职筛选")).toBeVisible();
+    expect(screen.getByText("已限定任职")).toBeVisible();
     const row = detailButton.closest("tr");
     if (!(row instanceof HTMLElement)) throw new Error("Assignment table row is missing");
     expect(within(row).getByText("启用")).toBeVisible();
@@ -395,34 +459,59 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
     });
   });
 
-  it("publishes edited global scope without silently retaining detail or cursor state", async () => {
+  it("clears linked employment scope while preserving other filters and returning to the first page", async () => {
+    responsibilityService.searchAssignments.mockResolvedValue({ items: [assignment], total: 100, nextCursor: null });
     const onStateChange = vi.fn();
     const { user } = render(
       <OrganizationResponsibilityAssignmentModule
         host={{
           kind: "global",
-          state: { lifecycle: "open", assignmentId: null },
+          state: {
+            targetOrganizationCode: "FIN",
+            employmentId: 42,
+            userText: "张三",
+            typeCode: OrganizationResponsibilityTypeCode.Head,
+            lifecycle: "all",
+            assignmentId: null,
+            pageNum: 3,
+          },
           onStateChange,
         }}
       />,
     );
-    await screen.findByRole("button", { name: "详情" });
+    await waitFor(() =>
+      expect(responsibilityService.searchAssignments).toHaveBeenLastCalledWith({
+        targetOrganizationCode: "FIN",
+        employmentId: 42,
+        userText: "张三",
+        typeCode: OrganizationResponsibilityTypeCode.Head,
+        lifecycle: "all",
+        pageNum: 3,
+        pageSize: 20,
+      }),
+    );
 
-    await user.type(screen.getByLabelText("目标组织"), "FIN");
-    expect(screen.queryByRole("spinbutton", { name: "任职 ID" })).not.toBeInTheDocument();
-    const employment = screen.getByRole("combobox", { name: "任职" });
-    await user.type(employment, "张三");
-    await user.click(await screen.findByTitle("张三（zhangsan） / 集团 / 运营部 / 运营负责人（OPS-LEAD）"));
-    const queryButton = screen.getByRole("button", { name: /查\s*询/ });
-    await waitFor(() => expect(queryButton).toBeEnabled());
-    await user.click(queryButton);
-
-    expect(onStateChange).toHaveBeenCalledWith({
+    const clearScope = screen.getByRole("button", { name: "清除任职筛选" });
+    clearScope.focus();
+    await user.keyboard("{Enter}");
+    await waitFor(() =>
+      expect(responsibilityService.searchAssignments).toHaveBeenLastCalledWith({
+        targetOrganizationCode: "FIN",
+        userText: "张三",
+        typeCode: OrganizationResponsibilityTypeCode.Head,
+        lifecycle: "all",
+        pageNum: 1,
+        pageSize: 20,
+      }),
+    );
+    expect(onStateChange).toHaveBeenLastCalledWith({
       targetOrganizationCode: "FIN",
-      employmentId: 42,
-      lifecycle: "open",
+      userText: "张三",
+      typeCode: OrganizationResponsibilityTypeCode.Head,
+      lifecycle: "all",
       assignmentId: null,
     });
+    expect(screen.queryByRole("button", { name: "清除任职筛选" })).not.toBeInTheDocument();
   });
 
   it("shows an explicit URL error instead of querying a different scope", async () => {

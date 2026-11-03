@@ -1,10 +1,11 @@
 import StatusTag from "@admin/components/StatusTag";
 import PositionFormModal from "@admin/pages/positions/components/PositionFormModal";
 import { deletePosition, type PositionVo, searchPositions, updatePositionStatus } from "@admin/services/position";
+import { PlusOutlined } from "@ant-design/icons";
 import { type ActionType, PageContainer, type ProColumns, ProTable } from "@ant-design/pro-components";
 import { getPositionStatusOptions } from "@iam/contracts";
 import { useAccess } from "@umijs/max";
-import { Button, Dropdown, Modal, message } from "antd";
+import { Button, Dropdown, Input, Modal, message } from "antd";
 import { useRef, useState } from "react";
 
 export default function PositionsPage() {
@@ -12,6 +13,8 @@ export default function PositionsPage() {
   const actionRef = useRef<ActionType>(undefined);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<PositionVo | null>(null);
+  const [searchText, setSearchText] = useState("");
+  const [filters, setFilters] = useState<{ text?: string }>({});
 
   const handleError = (err: unknown) => {
     message.error(err instanceof Error ? err.message : "操作失败");
@@ -50,28 +53,22 @@ export default function PositionsPage() {
   };
 
   const columns: ProColumns<PositionVo>[] = [
-    {
-      title: "岗位",
-      dataIndex: "text",
-      hideInTable: true,
-      fieldProps: { placeholder: "岗位编码或名称" },
-    },
-    { title: "岗位编码", dataIndex: "posCode", width: 160, search: false },
-    { title: "岗位名称", dataIndex: "posName", width: 200, search: false },
+    { title: "岗位编码", dataIndex: "posCode", width: 150, search: false },
+    { title: "岗位名称", dataIndex: "posName", width: 180, search: false },
     { title: "描述", dataIndex: "description", ellipsis: true, search: false },
     {
       title: "状态",
       dataIndex: "status",
-      width: 100,
+      width: 80,
       search: false,
       render: (_, row) => <StatusTag domain="position" status={row.status} />,
     },
-    { title: "雇佣人数", dataIndex: "memberNumber", width: 100, search: false },
+    { title: "雇佣人数", dataIndex: "memberNumber", width: 90, align: "right", search: false },
     {
       title: "操作",
       fixed: "right",
       valueType: "option",
-      width: 220,
+      width: 160,
       render: (_, row) =>
         [
           access.canEditPosition && (
@@ -114,13 +111,33 @@ export default function PositionsPage() {
   ];
 
   return (
-    <PageContainer title="职位管理">
+    <PageContainer title={false} breadcrumbRender={false}>
       <ProTable<PositionVo>
+        className="iam-admin-list"
+        size="small"
         actionRef={actionRef}
         rowKey="posCode"
         columns={columns}
-        search={{ labelWidth: "auto" }}
-        scroll={{ x: 900 }}
+        search={false}
+        params={filters}
+        headerTitle={
+          <div className="iam-admin-filters">
+            <Input.Search
+              className="iam-admin-search"
+              aria-label="搜索岗位"
+              placeholder="搜索岗位编码或名称"
+              allowClear
+              value={searchText}
+              onChange={(event) => {
+                setSearchText(event.target.value);
+                if (!event.target.value) setFilters({});
+              }}
+              onSearch={(text) => setFilters({ text: text.trim() || undefined })}
+            />
+          </div>
+        }
+        scroll={{ x: 760 }}
+        pagination={{ defaultPageSize: 20, hideOnSinglePage: true, showSizeChanger: true }}
         request={async (params) => {
           try {
             const {
@@ -156,12 +173,13 @@ export default function PositionsPage() {
                 <Button
                   key="create"
                   type="primary"
+                  icon={<PlusOutlined aria-hidden />}
                   onClick={() => {
                     setEditing(null);
                     setModalOpen(true);
                   }}
                 >
-                  + 新建岗位
+                  新建岗位
                 </Button>,
               ]
             : []

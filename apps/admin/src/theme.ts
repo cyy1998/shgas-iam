@@ -1,30 +1,35 @@
 import type { ThemeConfig } from "antd";
 
 const formControlTokens = {
-  colorText: "#102033",
-  colorBgContainer: "#fbfdff",
-  colorBorder: "#d9e3ee",
+  colorText: "#182535",
+  colorBgContainer: "#fff",
+  colorBorder: "#d9dde2",
   borderRadius: 8,
-  hoverBorderColor: "#a8c8f5",
-  activeBorderColor: "#2874f0",
+  hoverBorderColor: "#657282",
+  activeBorderColor: "#182535",
 };
 
 const inputTokens = {
   ...formControlTokens,
   activeBg: "#fff",
-  hoverBg: "#fbfdff",
-  activeShadow: "0 0 0 3px rgba(40, 116, 240, 0.14)",
+  hoverBg: "#fff",
+  activeShadow: "0 0 0 3px rgba(24, 37, 53, 0.12)",
 };
 
 export const adminTheme = {
   token: {
-    colorPrimary: "#1554ad",
-    colorInfo: "#2874f0",
+    colorPrimary: "#182535",
+    colorLink: "#182535",
+    colorLinkHover: "#304154",
+    colorLinkActive: "#101820",
+    colorInfo: "#596879",
     colorSuccess: "#1a7f64",
     colorWarning: "#b56a0d",
     colorError: "#b42318",
-    colorTextBase: "#102033",
-    colorBgLayout: "#eef3f7",
+    colorTextBase: "#182535",
+    colorTextSecondary: "#596879",
+    colorTextPlaceholder: "#657282",
+    colorBgLayout: "#f4f6f8",
     borderRadius: 8,
     wireframe: false,
   },
@@ -37,9 +42,11 @@ export const adminTheme = {
       borderRadiusLG: 8,
     },
     Table: {
-      headerBg: "#f6f9fc",
+      headerBg: "#fff",
+      cellPaddingBlockSM: 8,
+      cellFontSizeSM: 14,
       headerColor: "#596879",
-      rowHoverBg: "#f7fbff",
+      rowHoverBg: "#f7f8fa",
     },
     Input: inputTokens,
     InputNumber: inputTokens,
@@ -47,8 +54,8 @@ export const adminTheme = {
     Mentions: inputTokens,
     Select: {
       ...formControlTokens,
-      selectorBg: "#fbfdff",
-      activeOutlineColor: "rgba(40, 116, 240, 0.14)",
+      selectorBg: "#fff",
+      activeOutlineColor: "rgba(24, 37, 53, 0.12)",
       controlOutlineWidth: 3,
     },
   },

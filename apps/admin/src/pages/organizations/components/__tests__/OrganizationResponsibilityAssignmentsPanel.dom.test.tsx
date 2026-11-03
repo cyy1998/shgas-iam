@@ -381,8 +381,27 @@ describe("OrganizationResponsibilityAssignmentsPanel", () => {
         pageSize: 50,
       }),
     );
+    await user.type(screen.getByRole("searchbox", { name: "搜索责任用户" }), "张三{Enter}");
+    await waitFor(() =>
+      expect(responsibilityService.listAssignments).toHaveBeenLastCalledWith({
+        targetOrganizationCode: "FIN",
+        userText: "张三",
+        lifecycle: "open",
+        pageNum: 1,
+        pageSize: 20,
+      }),
+    );
     await user.click(screen.getByTitle("2"));
-    await user.click(screen.getByRole("button", { name: "重 置" }));
+    await waitFor(() =>
+      expect(responsibilityService.listAssignments).toHaveBeenLastCalledWith({
+        targetOrganizationCode: "FIN",
+        userText: "张三",
+        lifecycle: "open",
+        pageNum: 2,
+        pageSize: 20,
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "清除筛选" }));
     await waitFor(() =>
       expect(responsibilityService.listAssignments).toHaveBeenLastCalledWith({
         targetOrganizationCode: "FIN",

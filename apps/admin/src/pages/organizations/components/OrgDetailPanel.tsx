@@ -14,6 +14,7 @@ import { getOrganizationStatusOptions, OrganizationStatus } from "@iam/contracts
 import { useAccess } from "@umijs/max";
 import { Button, Empty, Modal, message, Space, Table, Tabs } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import styles from "../OrganizationsPage.module.less";
 import OrganizationResponsibilityAssignmentsPanel from "./OrganizationResponsibilityAssignmentsPanel";
 
 type Props = {
@@ -67,7 +68,7 @@ export default function OrgDetailPanel({
   const access = useAccess();
   if (!detail) {
     return (
-      <div style={{ padding: 48 }}>
+      <div style={{ padding: "40px 16px" }}>
         <Empty description="请选择左侧组织查看详情" />
       </div>
     );
@@ -122,25 +123,19 @@ export default function OrgDetailPanel({
 
   return (
     <div style={{ padding: 16 }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          marginBottom: 16,
-        }}
-      >
-        <Space size="middle">
-          <h3 style={{ margin: 0 }}>
+      <div className={styles["detail-header"]}>
+        <Space size={8} className={styles.identity}>
+          <h3>
             {detail.orgName}
-            <span style={{ color: "#999", fontSize: 12, marginLeft: 8 }}>{detail.orgCode}</span>
+            <span className={styles.secondary}>{detail.orgCode}</span>
           </h3>
           <StatusTag domain="org" status={detail.status} />
         </Space>
-        <Space>
+        <Space className={styles.actions}>
           <AuthorizationActionButton decision={detail.allowedActions.createChild} onClick={onCreateChild}>
             + 下级组织
           </AuthorizationActionButton>
-          <AuthorizationActionButton decision={detail.allowedActions.edit} onClick={onEdit}>
+          <AuthorizationActionButton type="primary" decision={detail.allowedActions.edit} onClick={onEdit}>
             编辑
           </AuthorizationActionButton>
           <AuthorizationActionDropdown
@@ -171,7 +166,8 @@ export default function OrgDetailPanel({
             children: (
               <>
                 <ProDescriptions<OrganizationDetailVo>
-                  column={2}
+                  size="small"
+                  column={{ xs: 1, sm: 2 }}
                   dataSource={detail}
                   loading={loading}
                   columns={[
@@ -210,16 +206,17 @@ export default function OrgDetailPanel({
                   ]}
                 />
 
-                <div style={{ marginTop: 24 }}>
+                <div style={{ marginTop: 16 }}>
                   <h4>
                     下级组织
                     {childrenPage && childrenPage.total > 0 && (
-                      <span style={{ color: "#999", fontSize: 12, marginLeft: 8 }}>共 {childrenPage.total} 条</span>
+                      <span className={styles.secondary}>共 {childrenPage.total} 条</span>
                     )}
                   </h4>
                   <Table<OrganizationTreeNode>
                     rowKey="orgCode"
                     size="small"
+                    scroll={{ x: 480 }}
                     loading={childrenLoading}
                     columns={childColumns(onSelectChild)}
                     dataSource={childrenPage?.result ?? []}

@@ -3,22 +3,24 @@ import StatusTag from "@admin/components/StatusTag";
 import EmploymentDetailDrawer from "@admin/pages/employments/components/EmploymentDetailDrawer";
 import EmploymentFormModal from "@admin/pages/employments/components/EmploymentFormModal";
 import { type EmploymentVo, searchEmployments } from "@admin/services/employment";
-import {
-  type ActionType,
-  PageContainer,
-  type ProColumns,
-  type ProFormInstance,
-  ProTable,
-} from "@ant-design/pro-components";
+import { PlusOutlined } from "@ant-design/icons";
+import { type ActionType, PageContainer, type ProColumns, ProTable } from "@ant-design/pro-components";
 import { EmploymentStatus, getEmploymentStatusOptions } from "@iam/contracts";
 import { useAccess, useLocation } from "@umijs/max";
-import { Alert, Button, message, Space, Tag } from "antd";
+import { Alert, Button, Input, message, Select, Tag } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type PresetFromUrl = {
   username?: string;
   name?: string;
   employmentId?: number;
+};
+
+type EmploymentFilters = {
+  userText?: string;
+  organizationOrgCode?: string;
+  isPrimary?: boolean;
+  status?: EmploymentStatus;
 };
 
 function parseQuery(search: string): PresetFromUrl {
@@ -49,7 +51,9 @@ export default function EmploymentsPage() {
   const access = useAccess();
   const [committedWarning, setCommittedWarning] = useState<string>();
   const actionRef = useRef<ActionType>(undefined);
-  const searchFormRef = useRef<ProFormInstance>(undefined);
+  const [searchText, setSearchText] = useState("");
+  const [filters, setFilters] = useState<EmploymentFilters>({});
+  const searchOrgCodeRef = useRef<string | undefined>(undefined);
   const location = useLocation();
 
   const [formOpen, setFormOpen] = useState(false);
@@ -58,10 +62,11 @@ export default function EmploymentsPage() {
   const [formPresetOrgCode, setFormPresetOrgCode] = useState<string | null>(null);
   const [drawerId, setDrawerId] = useState<number | null>(null);
 
-  const getSearchOrgCode = useCallback(() => {
-    const value = searchFormRef.current?.getFieldValue("organizationOrgCode");
-    return typeof value === "string" && value ? value : null;
-  }, []);
+  useEffect(() => {
+    searchOrgCodeRef.current = filters.organizationOrgCode;
+  }, [filters.organizationOrgCode]);
+
+  const getSearchOrgCode = useCallback(() => searchOrgCodeRef.current || null, []);
 
   // URL presets open either Employment detail or the create modal.
   useEffect(() => {
@@ -117,7 +122,7 @@ export default function EmploymentsPage() {
         true: { text: "是" },
         false: { text: "否" },
       },
-      render: (_, r) => (r.isPrimary ? <Tag color="blue">主岗</Tag> : null),
+      render: (_, r) => (r.isPrimary ? <Tag>主岗</Tag> : null),
     },
     {
       title: "状态",
@@ -154,14 +159,77 @@ export default function EmploymentsPage() {
   ];
 
   return (
-    <PageContainer title="雇佣关系">
+    <PageContainer title={false} breadcrumbRender={false}>
       {committedWarning && <Alert type="warning" showIcon title={committedWarning} />}
       <ProTable<EmploymentVo>
+        className="iam-admin-list"
+        size="small"
         actionRef={actionRef}
-        formRef={searchFormRef}
         rowKey="id"
         columns={columns}
-        search={{ labelWidth: "auto" }}
+        search={false}
+        params={filters}
+        headerTitle={
+          <div className="iam-admin-filters">
+            <Input.Search
+              className="iam-admin-search"
+              aria-label="搜索雇佣用户"
+              placeholder="搜索工号或姓名"
+              maxLength={128}
+              allowClear
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
+              onSearch={(value) => setFilters((current) => ({ ...current, userText: value.trim() || undefined }))}
+            />
+            <div className="iam-admin-filter-fields">
+              <fieldset style={{ width: 180, minWidth: 0, margin: 0, padding: 0, border: 0 }} aria-label="组织范围">
+                <OrganizationTreeSelector
+                  placeholder="全部组织"
+                  value={filters.organizationOrgCode}
+                  onChange={(organizationOrgCode) => setFilters((current) => ({ ...current, organizationOrgCode }))}
+                />
+              </fieldset>
+              <Select
+                aria-label="主岗筛选"
+                placeholder="全部岗位"
+                allowClear
+                value={filters.isPrimary === undefined ? undefined : String(filters.isPrimary)}
+                options={[
+                  { label: "主岗", value: "true" },
+                  { label: "非主岗", value: "false" },
+                ]}
+                onChange={(value: string | undefined) =>
+                  setFilters((current) => ({
+                    ...current,
+                    isPrimary: value === undefined ? undefined : value === "true",
+                  }))
+                }
+              />
+              <Select
+                aria-label="雇佣状态"
+                placeholder="在职与暂停"
+                allowClear
+                value={filters.status}
+                options={getEmploymentStatusOptions()}
+                onChange={(status: EmploymentStatus | undefined) => setFilters((current) => ({ ...current, status }))}
+              />
+            </div>
+            {(filters.userText ||
+              filters.organizationOrgCode ||
+              filters.isPrimary !== undefined ||
+              filters.status !== undefined) && (
+              <Button
+                type="link"
+                onClick={() => {
+                  setSearchText("");
+                  setFilters({});
+                }}
+              >
+                清除筛选
+              </Button>
+            )}
+          </div>
+        }
         scroll={{ x: 1200 }}
         request={async (params) => {
           try {
@@ -211,22 +279,24 @@ export default function EmploymentsPage() {
             return { data: [], total: 0, success: false };
           }
         }}
-        toolBarRender={() => [
-          <Space key="toolbar">
-            {access.canCreateEmployment && (
-              <Button
-                type="primary"
-                onClick={() => {
-                  setFormPresetUsername(null);
-                  setFormPresetOrgCode(getSearchOrgCode());
-                  setFormOpen(true);
-                }}
-              >
-                + 新增雇佣
-              </Button>
-            )}
-          </Space>,
-        ]}
+        toolBarRender={() =>
+          access.canCreateEmployment
+            ? [
+                <Button
+                  key="create"
+                  type="primary"
+                  icon={<PlusOutlined aria-hidden />}
+                  onClick={() => {
+                    setFormPresetUsername(null);
+                    setFormPresetOrgCode(getSearchOrgCode());
+                    setFormOpen(true);
+                  }}
+                >
+                  新增雇佣
+                </Button>,
+              ]
+            : []
+        }
       />
 
       <EmploymentFormModal

@@ -130,7 +130,7 @@ export default function ClientEditPage() {
 
   if (loadState.status === "loading") {
     return (
-      <PageContainer title="加载应用">
+      <PageContainer title={false} breadcrumbRender={false}>
         <Card loading data-testid="client-edit-loading" />
       </PageContainer>
     );
@@ -138,7 +138,7 @@ export default function ClientEditPage() {
 
   if (loadState.status === "not-found") {
     return (
-      <PageContainer>
+      <PageContainer title={false} breadcrumbRender={false}>
         {repairAlert}
         <Result
           status="404"
@@ -156,7 +156,7 @@ export default function ClientEditPage() {
 
   if (loadState.status === "error") {
     return (
-      <PageContainer>
+      <PageContainer title={false} breadcrumbRender={false}>
         {repairAlert}
         <Result
           status="error"
@@ -179,10 +179,11 @@ export default function ClientEditPage() {
 
   return (
     <PageContainer
+      breadcrumbRender={false}
       title={client.clientName}
       subTitle={
         <Space>
-          <Typography.Text code>{client.clientCode}</Typography.Text>
+          <Typography.Text type="secondary">{client.clientCode}</Typography.Text>
           <StatusTag domain="client" status={client.status} />
         </Space>
       }

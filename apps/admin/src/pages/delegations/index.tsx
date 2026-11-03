@@ -30,6 +30,7 @@ import {
 import dayjs, { type Dayjs } from "dayjs";
 import { useCallback, useEffect, useRef, useState } from "react";
 import DelegationObjectSelect from "./DelegationObjectSelect";
+import styles from "./DelegationsPage.module.less";
 
 type BusinessState = "scheduled" | "active" | "paused" | "expired" | "ended";
 const states: { value: BusinessState; label: string }[] = [
@@ -207,7 +208,7 @@ export default function DelegationsPage() {
     }
   };
   return (
-    <PageContainer title="委托管理">
+    <PageContainer title={false} breadcrumbRender={false}>
       <Space orientation="vertical" style={{ width: "100%" }} size="middle">
         {warning && <Alert title={warning} type="warning" showIcon />}
         {error && (
@@ -226,43 +227,44 @@ export default function DelegationsPage() {
             }
           />
         )}
-        <Card styles={{ body: { padding: "20px 24px 8px" } }}>
+        <Card className={styles.surface} styles={{ body: { padding: 16 } }}>
           <Form
+            className={styles.filters}
             name="delegation-filter"
             form={filterForm}
-            labelCol={{ flex: "90px" }}
+            labelCol={{ flex: "80px" }}
             wrapperCol={{ flex: 1 }}
             onFinish={() => {
               void load();
             }}
           >
-            <Row gutter={24}>
-              <Col xs={24} sm={12} lg={8} xxl={6}>
+            <Row gutter={16}>
+              <Col xs={24} sm={12} lg={8} xl={6}>
                 <Form.Item name="delegator" label="委托人筛选">
                   <DelegationObjectSelect kind="user" purpose="filter" />
                 </Form.Item>
               </Col>
-              <Col xs={24} sm={12} lg={8} xxl={6}>
+              <Col xs={24} sm={12} lg={8} xl={6}>
                 <Form.Item name="delegatee" label="受托人筛选">
                   <DelegationObjectSelect kind="user" purpose="filter" />
                 </Form.Item>
               </Col>
-              <Col xs={24} sm={12} lg={8} xxl={6}>
+              <Col xs={24} sm={12} lg={8} xl={6}>
                 <Form.Item name="clientId" label="应用筛选">
                   <DelegationObjectSelect kind="client" purpose="filter" />
                 </Form.Item>
               </Col>
-              <Col xs={24} sm={12} lg={8} xxl={6}>
+              <Col xs={24} sm={12} lg={8} xl={6}>
                 <Form.Item name="orgCode" label="组织筛选">
                   <DelegationObjectSelect kind="organization" purpose="filter" />
                 </Form.Item>
               </Col>
-              <Col xs={24} sm={12} lg={8} xxl={6}>
+              <Col xs={24} sm={12} lg={8} xl={6}>
                 <Form.Item name="businessState" label="状态">
                   <Select options={states} allowClear placeholder="全部状态" />
                 </Form.Item>
               </Col>
-              <Col xs={24} sm={12} lg={8} xxl={6}>
+              <Col xs={24} sm={12} lg={8} xl={6}>
                 <Form.Item name="startTime" label="期间起点">
                   <DatePicker
                     showTime={{ format: "HH:mm" }}
@@ -272,7 +274,7 @@ export default function DelegationsPage() {
                   />
                 </Form.Item>
               </Col>
-              <Col xs={24} sm={12} lg={8} xxl={6}>
+              <Col xs={24} sm={12} lg={8} xl={6}>
                 <Form.Item name="endTime" label="期间终点">
                   <DatePicker
                     showTime={{ format: "HH:mm" }}
@@ -282,7 +284,7 @@ export default function DelegationsPage() {
                   />
                 </Form.Item>
               </Col>
-              <Col xs={24} sm={12} lg={8} xxl={6} style={{ marginLeft: "auto", textAlign: "right", marginBottom: 24 }}>
+              <Col span={24} className={styles.toolbar}>
                 <Space>
                   <Button
                     onClick={() => {
@@ -296,29 +298,25 @@ export default function DelegationsPage() {
                     查询
                   </Button>
                 </Space>
+                <Space size={8}>
+                  <Button
+                    onClick={() => {
+                      void load();
+                    }}
+                  >
+                    刷新
+                  </Button>
+                  {access.canCreateDelegation && (
+                    <Button type="primary" onClick={() => edit()}>
+                      新建委托
+                    </Button>
+                  )}
+                </Space>
               </Col>
             </Row>
           </Form>
-        </Card>
-        <Card
-          extra={
-            <Space>
-              <Button
-                onClick={() => {
-                  void load();
-                }}
-              >
-                刷新
-              </Button>
-              {access.canCreateDelegation && (
-                <Button type="primary" onClick={() => edit()}>
-                  新建委托
-                </Button>
-              )}
-            </Space>
-          }
-        >
           <Table<DelegationVo>
+            size="small"
             rowKey="id"
             loading={loading}
             dataSource={rows.filter((row) => !businessState || matchesState(row, businessState, observedAt))}
@@ -376,16 +374,19 @@ export default function DelegationsPage() {
               { title: "说明", dataIndex: "description" },
               {
                 title: "操作",
+                width: 190,
+                fixed: "right",
                 render: (_, row) => (
-                  <Space>
+                  <Space size={8}>
                     {row.allowedActions.edit.allowed && (
-                      <Button type="link" disabled={saving} onClick={() => edit(row)}>
+                      <Button type="link" size="small" disabled={saving} onClick={() => edit(row)}>
                         编辑
                       </Button>
                     )}
                     {row.allowedActions.pause.allowed && (
                       <Button
                         type="link"
+                        size="small"
                         disabled={saving}
                         onClick={() => {
                           void changeStatus(row, ClientDelegationStatus.Pause);
@@ -397,6 +398,7 @@ export default function DelegationsPage() {
                     {row.allowedActions.resume.allowed && (
                       <Button
                         type="link"
+                        size="small"
                         disabled={saving}
                         onClick={() => {
                           void changeStatus(row, ClientDelegationStatus.Enable);
@@ -408,6 +410,7 @@ export default function DelegationsPage() {
                     {row.allowedActions.end.allowed && (
                       <Button
                         type="link"
+                        size="small"
                         danger
                         disabled={saving}
                         onClick={() =>

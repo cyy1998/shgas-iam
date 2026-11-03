@@ -2,6 +2,7 @@ import styles from "@admin/components/detail/DetailDrawer.module.less";
 import type { UserDetailVo, updateUser } from "@admin/services/user";
 import { ProForm } from "@ant-design/pro-components";
 import { Button, ConfigProvider, Form, message, Space } from "antd";
+import { useRef } from "react";
 import UserProfileFields from "./UserProfileFields";
 
 type Props = {
@@ -9,12 +10,19 @@ type Props = {
   saving: boolean;
   onCancel: () => void;
   onSave: (data: Parameters<typeof updateUser>[1]) => Promise<boolean>;
+  onDirtyChange: (dirty: boolean) => void;
 };
 
 type ProfileValues = Pick<UserDetailVo, "name" | "mobile" | "wxId" | "userType">;
 
-export default function UserProfileForm({ detail, saving, onCancel, onSave }: Props) {
+export default function UserProfileForm({ detail, saving, onCancel, onSave, onDirtyChange }: Props) {
   const [form] = Form.useForm<ProfileValues>();
+  const initialValues = useRef<ProfileValues>({
+    name: detail.name,
+    mobile: detail.mobile ?? "",
+    wxId: detail.wxId ?? "",
+    userType: detail.userType,
+  });
 
   return (
     <ConfigProvider theme={{ components: { Form: { itemMarginBottom: 20, labelFontSize: 13 } } }}>
@@ -27,11 +35,13 @@ export default function UserProfileForm({ detail, saving, onCancel, onSave }: Pr
         colProps={{ xs: 24, sm: 12 }}
         rowProps={{ gutter: 24 }}
         disabled={saving}
-        initialValues={{
-          name: detail.name,
-          mobile: detail.mobile ?? "",
-          wxId: detail.wxId ?? "",
-          userType: detail.userType,
+        initialValues={initialValues.current}
+        onValuesChange={(_, values) => {
+          onDirtyChange(
+            (Object.keys(initialValues.current) as (keyof ProfileValues)[]).some(
+              (key) => (values[key] ?? "") !== (initialValues.current[key] ?? ""),
+            ),
+          );
         }}
         onFinish={async (values) => {
           const data: Parameters<typeof updateUser>[1] = {};

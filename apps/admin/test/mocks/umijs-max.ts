@@ -37,6 +37,7 @@ export function defineConfig<T>(config: T): T {
 }
 
 export const history = {
+  block: vi.fn<(callback: (transition: { retry: () => void }) => void) => () => void>(() => vi.fn()),
   push: vi.fn(),
   replace: vi.fn(),
   location: window.location,
@@ -60,6 +61,7 @@ export function __resetUmiMaxMocks() {
   accessMock = fullAdminAccess;
   history.push.mockReset();
   history.replace.mockReset();
+  history.block.mockClear();
 }
 
 export function Link({ to, href, children, ...rest }: LinkProps) {

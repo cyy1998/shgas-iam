@@ -10,7 +10,7 @@ import {
   listLoginRestrictions,
   releaseLoginRestriction,
 } from "@admin/services/session-management";
-import { type ActionType, type ProColumns, ProTable } from "@ant-design/pro-components";
+import { type ActionType, type ProColumns, ProFormSelect, ProTable } from "@ant-design/pro-components";
 import { Alert, Button, Modal, message, Space } from "antd";
 import { useEffect, useRef, useState } from "react";
 
@@ -48,6 +48,7 @@ function RemainingTime(props: { initialSeconds: number }) {
 
 export default function LoginRestrictionsTab() {
   const actionRef = useRef<ActionType>(undefined);
+  const [filterUserId, setFilterUserId] = useState<number>();
   const [loadError, setLoadError] = useState<LoginRestrictionListErrorKindValue | null>(null);
   const [restrictionRows, setRestrictionRows] = useState<LoginRestrictionListItem[]>([]);
   const [releasingUserId, setReleasingUserId] = useState<number | null>(null);
@@ -104,18 +105,6 @@ export default function LoginRestrictionsTab() {
   };
 
   const columns: ProColumns<LoginRestrictionListItem>[] = [
-    {
-      title: "用户",
-      dataIndex: "userId",
-      hideInTable: true,
-      valueType: "select",
-      request: requestUserOptions,
-      fieldProps: {
-        filterOption: false,
-        placeholder: "输入工号或姓名搜索",
-        showSearch: true,
-      },
-    },
     {
       title: "用户",
       key: "user",
@@ -207,11 +196,34 @@ export default function LoginRestrictionsTab() {
         />
       ) : null}
       <ProTable<LoginRestrictionListItem>
+        className="iam-admin-list"
+        size="small"
         actionRef={actionRef}
+        params={{ userId: filterUserId }}
+        headerTitle={
+          <div className="iam-admin-filters">
+            <ProFormSelect
+              ignoreFormItem
+              request={requestUserOptions}
+              debounceTime={300}
+              placeholder="输入工号或姓名搜索"
+              fieldProps={{
+                "aria-label": "筛选限制用户",
+                className: "iam-admin-search",
+                style: { width: 280 },
+                allowClear: true,
+                showSearch: true,
+                filterOption: false,
+                value: filterUserId,
+                onChange: setFilterUserId,
+              }}
+            />
+          </div>
+        }
         rowKey={(restriction) => restriction.user.id}
         columns={columns}
         dataSource={restrictionRows}
-        search={{ labelWidth: "auto" }}
+        search={false}
         scroll={{ x: 1050 }}
         options={{ reload: false }}
         locale={loadError ? { emptyText: "加载失败" } : undefined}

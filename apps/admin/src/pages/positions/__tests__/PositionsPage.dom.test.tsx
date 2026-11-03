@@ -96,7 +96,7 @@ describe("PositionsPage mutation results through the position service", () => {
       </ConfigProvider>,
     );
     await screen.findByText(adminPositionSearchResult.result[0].posName);
-    await user.click(screen.getByRole("button", { name: "+ 新建岗位" }));
+    await user.click(screen.getByRole("button", { name: "新建岗位" }));
     const dialog = within(await screen.findByRole("dialog"));
     await user.type(dialog.getAllByRole("textbox")[0], "  NEW  ");
     await user.type(dialog.getAllByRole("textbox")[1], "  新岗位  ");

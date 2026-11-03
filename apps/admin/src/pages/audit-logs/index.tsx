@@ -3,7 +3,7 @@ import { PageContainer } from "@ant-design/pro-components";
 
 export default function AuditLogsPage() {
   return (
-    <PageContainer title="审计日志">
+    <PageContainer title={false} breadcrumbRender={false}>
       <AuditLogTable />
     </PageContainer>
   );

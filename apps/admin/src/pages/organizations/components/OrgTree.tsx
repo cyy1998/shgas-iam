@@ -1,4 +1,5 @@
 import type { OrganizationChildrenPage, OrganizationTreeNode } from "@admin/services/organization";
+import { adminTheme } from "@admin/theme";
 import { getOrganizationStatusOptions } from "@iam/contracts";
 import { Badge, Empty, Spin, Tree } from "antd";
 import type { DataNode } from "antd/es/tree";
@@ -54,7 +55,7 @@ function toOrgNode(node: OrganizationTreeNode): TreeDataNode {
 function makeLoadMoreNode(parentOrgCode: string | null, nextPage: number, remaining: number): TreeDataNode {
   return {
     key: loadMoreKey(parentOrgCode, nextPage),
-    title: <span style={{ color: "#1677ff" }}>{`加载更多（剩余 ${remaining} 条）`}</span>,
+    title: <span style={{ color: adminTheme.token.colorLink }}>{`加载更多（剩余 ${remaining} 条）`}</span>,
     isLeaf: true,
     isLoadMore: true,
     loadMoreParent: parentOrgCode,

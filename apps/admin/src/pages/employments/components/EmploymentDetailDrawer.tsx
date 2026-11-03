@@ -165,7 +165,7 @@ function EmploymentDetailDrawerContent({ open, employmentId, onClose, onChanged 
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               {detail.user.username}
             </Typography.Text>
-            {detail.isPrimary ? <Tag color="blue">主岗</Tag> : null}
+            {detail.isPrimary ? <Tag>主岗</Tag> : null}
             <StatusTag domain="employment" status={detail.status} />
           </Space>
         ) : (
@@ -254,7 +254,7 @@ function EmploymentDetailDrawerContent({ open, employmentId, onClose, onChanged 
                       </div>
                       <Descriptions
                         className={styles.descriptions}
-                        size="middle"
+                        size="small"
                         column={{ xs: 1, sm: 2 }}
                         styles={{
                           label: { fontSize: 13 },

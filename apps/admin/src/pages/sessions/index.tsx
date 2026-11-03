@@ -14,7 +14,7 @@ import {
   type SessionRevokeInput,
   type SessionRevokeResult,
 } from "@admin/services/session-management";
-import { type ActionType, PageContainer, type ProColumns, ProTable } from "@ant-design/pro-components";
+import { type ActionType, PageContainer, type ProColumns, ProFormSelect, ProTable } from "@ant-design/pro-components";
 import { Alert, Button, Modal, message, Space, Tabs, Tag, Typography } from "antd";
 import { useCallback, useRef, useState } from "react";
 
@@ -71,6 +71,7 @@ function renderOrigin(session: SessionListItem) {
 export default function SessionsPage() {
   const actionRef = useRef<ActionType>(undefined);
   const clientActionRef = useRef<ActionType>(undefined);
+  const [filterUserId, setFilterUserId] = useState<number>();
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<SessionListErrorKindValue | null>(null);
   const [sessionRows, setSessionRows] = useState<SessionListItem[]>([]);
@@ -197,18 +198,6 @@ export default function SessionsPage() {
   const columns: ProColumns<SessionListItem>[] = [
     {
       title: "用户",
-      dataIndex: "userId",
-      hideInTable: true,
-      valueType: "select",
-      request: requestUserOptions,
-      fieldProps: {
-        filterOption: false,
-        placeholder: "输入工号或姓名搜索",
-        showSearch: true,
-      },
-    },
-    {
-      title: "用户",
       key: "user",
       width: 160,
       search: false,
@@ -255,7 +244,7 @@ export default function SessionsPage() {
       search: false,
       render: (_, session) => (
         <Space wrap>
-          {session.isCurrentSession ? <Tag color="blue">当前会话</Tag> : null}
+          {session.isCurrentSession ? <Tag>当前会话</Tag> : null}
           {session.isCurrentUser ? <Tag>本人</Tag> : null}
         </Space>
       ),
@@ -363,7 +352,30 @@ export default function SessionsPage() {
         />
       ) : null}
       <ProTable<SessionListItem>
+        className="iam-admin-list"
+        size="small"
         actionRef={actionRef}
+        params={{ userId: filterUserId }}
+        headerTitle={
+          <div className="iam-admin-filters">
+            <ProFormSelect
+              ignoreFormItem
+              request={requestUserOptions}
+              debounceTime={300}
+              placeholder="输入工号或姓名搜索"
+              fieldProps={{
+                "aria-label": "筛选会话用户",
+                className: "iam-admin-search",
+                style: { width: 280 },
+                allowClear: true,
+                showSearch: true,
+                filterOption: false,
+                value: filterUserId,
+                onChange: setFilterUserId,
+              }}
+            />
+          </div>
+        }
         rowKey={(session) => session.record?.identity.id ?? session.principalSessionId}
         columns={columns}
         expandable={{
@@ -384,7 +396,7 @@ export default function SessionsPage() {
             ) : null,
         }}
         dataSource={sessionRows}
-        search={{ labelWidth: "auto" }}
+        search={false}
         scroll={{ x: 1160 }}
         options={{ reload: false }}
         locale={loadError ? { emptyText: "加载失败" } : undefined}
@@ -442,7 +454,7 @@ export default function SessionsPage() {
   );
 
   return (
-    <PageContainer title="会话管理">
+    <PageContainer title={false} breadcrumbRender={false}>
       <Tabs
         defaultActiveKey="records"
         items={[

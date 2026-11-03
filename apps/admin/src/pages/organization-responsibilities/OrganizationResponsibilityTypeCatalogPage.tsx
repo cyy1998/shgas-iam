@@ -30,8 +30,8 @@ export default function OrganizationResponsibilityTypeCatalogPage() {
   }, []);
 
   return (
-    <PageContainer title="责任类型目录" breadcrumbRender={false}>
-      <Card>
+    <PageContainer title={false} breadcrumbRender={false}>
+      <Card size="small">
         <Alert
           type="info"
           showIcon
@@ -39,6 +39,8 @@ export default function OrganizationResponsibilityTypeCatalogPage() {
           style={{ marginBottom: 16 }}
         />
         <Table<OrganizationResponsibilityTypeView>
+          size="small"
+          scroll={{ x: 680 }}
           rowKey="code"
           loading={loading}
           dataSource={catalog}

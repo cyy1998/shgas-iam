@@ -55,8 +55,8 @@ export default function BasicSettings({ client, onDirtyChange, onMutated, onComm
   };
 
   return (
-    <Space orientation="vertical" size="large" style={{ width: "100%" }}>
-      <Card title="基础信息">
+    <Space orientation="vertical" size={16} style={{ width: "100%", maxWidth: 960 }}>
+      <Card title="基础信息" size="small">
         <Form<BasicFormValues>
           form={form}
           layout="vertical"
@@ -96,7 +96,7 @@ export default function BasicSettings({ client, onDirtyChange, onMutated, onComm
         </Form>
       </Card>
 
-      <Card title="内部 API 凭据">
+      <Card title="内部 API 凭据" size="small">
         <Form
           form={secretForm}
           layout="vertical"
@@ -131,7 +131,7 @@ export default function BasicSettings({ client, onDirtyChange, onMutated, onComm
           </Button>
         </Form>
       </Card>
-      <Card title="全局状态">
+      <Card title="全局状态" size="small">
         <Space wrap>
           <Select
             aria-label="全局状态"
@@ -171,7 +171,7 @@ export default function BasicSettings({ client, onDirtyChange, onMutated, onComm
         </Space>
       </Card>
 
-      <Card title="删除应用">
+      <Card title="删除应用" size="small">
         <Space orientation="vertical">
           <Typography.Text type="secondary">
             请先处理角色分配并删除此应用下的全部角色，暂停或停用的角色也会阻止删除。

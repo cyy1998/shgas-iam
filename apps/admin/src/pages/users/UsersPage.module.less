@@ -1,0 +1,271 @@
+/* stylelint-disable selector-pseudo-class-no-unknown -- CSS Modules uses :global for scoped Ant Design overrides. */
+.page {
+  --users-ink: #182535;
+  --users-muted: #596879;
+  --users-border: #e4e8ed;
+
+  :global(.ant-page-header-no-children) {
+    display: none;
+  }
+
+  :global(.ant-pro-page-container-children-container) {
+    margin: 0 24px;
+    padding: 0;
+  }
+
+  :global(.ant-btn) {
+    font-weight: 500;
+    box-shadow: none;
+  }
+
+  :global(.ant-pro-card) {
+    border: 0;
+    border-radius: 8px;
+    box-shadow: none;
+    backdrop-filter: none;
+    background: #fff;
+  }
+
+  :global(.ant-pro-table-list-toolbar) {
+    padding: 0 16px;
+  }
+
+  :global(.ant-pro-table-list-toolbar-container) {
+    min-height: 56px;
+    padding: 10px 0;
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  :global(.ant-pro-table-list-toolbar-left) {
+    flex: 1;
+    min-width: 0;
+    justify-content: flex-start;
+  }
+
+  :global(.ant-pro-table-list-toolbar-right) {
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  :global(.ant-pro-table-list-toolbar-title) {
+    flex: 1;
+    min-width: 0;
+    overflow: visible;
+    margin: 0;
+    color: var(--users-muted);
+    font-size: 13px;
+    font-weight: 400;
+  }
+
+  :global(.ant-pro-table-list-toolbar-setting-item) {
+    color: var(--users-muted);
+  }
+
+  :global(.ant-pro-table > .ant-pro-card > .ant-pro-card-body) {
+    padding: 0 16px 8px;
+  }
+
+  :global(.ant-table-thead > tr > th) {
+    padding-block: 8px;
+    font-size: 13px;
+    font-weight: 500 !important;
+    background: #fff !important;
+  }
+
+  :global(.ant-table-tbody > tr > td) {
+    padding-block: 8px;
+    line-height: 22px;
+  }
+
+  :global(.ant-table-cell::before) {
+    display: none;
+  }
+
+  :global(.ant-tag) {
+    font-weight: 400;
+  }
+
+  :global(.ant-input::placeholder),
+  :global(.ant-select-placeholder) {
+    color: #657282;
+  }
+
+  :global(.ant-alert) {
+    margin-bottom: 16px;
+  }
+}
+
+.surface {
+  // One fluid content column; the toolbar and table share 16px inner gutters.
+  min-width: 0;
+  background: #fff;
+  border: 1px solid var(--users-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+}
+
+.search {
+  flex: 1 1 220px;
+  min-width: 160px;
+  max-width: 320px;
+}
+
+.filter-fields {
+  display: flex;
+  gap: 8px;
+
+  :global(.ant-select) {
+    width: 128px;
+  }
+}
+
+.filter-toggle {
+  display: none;
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--users-ink);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.secondary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--users-muted);
+  font-size: 12px;
+}
+
+.mobile-summary {
+  display: none;
+  color: var(--users-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 767px) {
+  .page {
+    :global(.ant-pro-page-container-children-container) {
+      margin-inline: 16px;
+    }
+
+    :global(.ant-pro-table > .ant-pro-card > .ant-pro-card-body) {
+      padding-inline: 12px;
+    }
+
+    :global(.ant-pro-table-list-toolbar) {
+      padding-inline: 12px;
+    }
+
+    :global(.ant-pro-table-list-toolbar-container) {
+      flex-flow: row wrap;
+      gap: 8px;
+    }
+
+    :global(.ant-pro-table-list-toolbar-left) {
+      flex-basis: 100%;
+      justify-content: flex-start;
+    }
+
+    :global(.ant-pro-table-list-toolbar-right) {
+      margin-inline-start: auto;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    :global(.ant-table-tbody > tr > td:first-child) {
+      width: auto;
+    }
+  }
+
+  .filters {
+    gap: 10px;
+    padding: 0;
+  }
+
+  .search {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+  }
+
+  .filter-toggle {
+    display: inline-flex;
+  }
+
+  .filter-fields {
+    display: none;
+    width: 100%;
+
+    :global(.ant-select) {
+      flex: 1;
+      width: 0;
+    }
+  }
+
+  .expanded {
+    display: flex;
+  }
+
+  .mobile-summary {
+    display: block;
+  }
+
+  .identity {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+
+  .name,
+  .secondary {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .secondary,
+  .mobile-summary {
+    font-size: 13px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1100px) {
+  .search {
+    flex-basis: 140px;
+    min-width: 120px;
+  }
+
+  .filter-toggle {
+    display: inline-flex;
+  }
+
+  .filter-fields {
+    display: none;
+    width: 100%;
+  }
+
+  .expanded {
+    display: flex;
+  }
+}

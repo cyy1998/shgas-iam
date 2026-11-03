@@ -102,21 +102,19 @@ test("filters assignments by user and restores the keyword after reloading", asy
   });
   await page.goto("/iam-admin/organization-responsibilities/assignments");
   await expect(page.getByRole("row").filter({ hasText: "张三（zhangsan）" })).toBeVisible();
-  await page.getByText("展开", { exact: true }).click();
-  await page.getByRole("textbox", { name: /用户/ }).fill(" 李四 ");
-  await page.getByRole("button", { name: /查\s*询/ }).click();
+  await page.getByRole("searchbox", { name: "搜索责任用户" }).fill(" 李四 ");
+  await page.getByRole("searchbox", { name: "搜索责任用户" }).press("Enter");
   await expect(page.getByRole("row").filter({ hasText: "张三（zhangsan）" })).toHaveCount(0);
   await expect(page.getByRole("row").filter({ hasText: "李四（lisi）" })).toBeVisible();
   expect(new URL(page.url()).searchParams.get("user")).toBe("李四");
   await page.reload();
-  await page.getByText("展开", { exact: true }).click();
-  const userInput = page.getByRole("textbox", { name: /用户/ });
+  const userInput = page.getByRole("searchbox", { name: "搜索责任用户" });
   await expect(userInput).toHaveValue("李四");
   await userInput.fill(" no-match ");
-  await page.getByRole("button", { name: /查\s*询/ }).click();
+  await userInput.press("Enter");
   await expect(page.getByRole("button", { name: "详情" })).toHaveCount(0);
   await expect(page.getByText("无符合条件的责任任命")).toBeVisible();
-  await page.getByRole("button", { name: /重\s*置/ }).click();
+  await page.getByRole("button", { name: "清除筛选" }).click();
   await expect(page.getByRole("button", { name: "详情" })).toHaveCount(2);
   expect(new URL(page.url()).searchParams.has("user")).toBe(false);
   expect(searches.at(-1)?.userText).toBeUndefined();
@@ -342,7 +340,7 @@ test("hydrates global filters and manages the complete lifecycle with audit refr
   );
 
   await expect(page.getByRole("button", { name: "详情" })).toBeVisible();
-  await expect(page.getByText("已按指定任职筛选")).toBeVisible();
+  await expect(page.getByText("已限定任职")).toBeVisible();
   const drawer = page.getByRole("dialog");
   await expect(drawer.getByText("张三（zhangsan）")).toBeVisible();
   await expect(drawer.getByText(/#101|#42|任职 ID/)).toHaveCount(0);
@@ -389,6 +387,26 @@ test("hydrates global filters and manages the complete lifecycle with audit refr
       pageNum: 2,
       pageSize: 20,
     });
+  await page.getByRole("button", { name: "清除任职筛选" }).click();
+  await expect
+    .poll(() => searchInputs.at(-1))
+    .toEqual({
+      targetOrganizationCode: "FIN",
+      typeCode: OrganizationResponsibilityTypeCode.Head,
+      lifecycle: "all",
+      pageNum: 1,
+      pageSize: 20,
+    });
+  const clearedUrl = new URL(page.url());
+  expect(clearedUrl.searchParams.has("employment")).toBe(false);
+  expect(clearedUrl.searchParams.get("target")).toBe("FIN");
+  expect(clearedUrl.searchParams.get("type")).toBe("head");
+  expect(clearedUrl.searchParams.get("lifecycle")).toBe("all");
+  await expect(page.getByRole("button", { name: "清除任职筛选" })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "详情" })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "清除任职筛选" })).toHaveCount(0);
+  expect(searchInputs.at(-1)).not.toHaveProperty("employmentId");
 });
 
 test("preserves authority context after internal and forbidden lifecycle failures without replay", async ({ page }) => {
@@ -488,7 +506,8 @@ test("Organization Responsibility directories remain readable while unrelated ma
   await expect(page.getByRole("cell", { name: "head" })).toBeVisible();
 
   await page.goto("/iam-admin/organization-responsibilities/assignments");
-  await expect(page.getByText("责任任命列表")).toBeVisible();
+  await expect(page.getByRole("table")).toBeVisible();
+  await expect(page.getByText("无符合条件的责任任命")).toBeVisible();
   await expect(page.getByRole("button", { name: /新建责任任命/ })).toHaveCount(0);
 
   await page.goto("/iam-admin/clients");

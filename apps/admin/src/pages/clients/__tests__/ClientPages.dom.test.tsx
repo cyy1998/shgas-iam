@@ -88,14 +88,12 @@ describe("Client pages through the real services", () => {
     const { user } = render(<ClientsPage />);
     await waitFor(() => expect(inputs).toHaveLength(1));
     expect(screen.queryByText("IAM 管理后台")).not.toBeInTheDocument();
-    await user.click(screen.getByText("展开", { exact: true }));
     await user.click(screen.getByLabelText("全局状态", { exact: true }));
     await user.click(await screen.findByTitle("维护中"));
     await user.click(screen.getByLabelText("SSO 协议", { exact: true }));
     await user.click(await screen.findByTitle("Custom SSO"));
     await user.click(screen.getByLabelText("SSO 启用", { exact: true }));
     await user.click(await screen.findByTitle("已停用"));
-    await user.click(screen.getByRole("button", { name: /查\s*询/ }));
     await waitFor(() =>
       expect(inputs.at(-1)).toMatchObject({
         conditions: {

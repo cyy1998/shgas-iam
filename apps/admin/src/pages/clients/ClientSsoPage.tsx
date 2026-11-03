@@ -219,7 +219,6 @@ export default function ClientSsoPage() {
         width: "100%",
         maxWidth: 960,
         display: "flex",
-        margin: "0 auto",
       }}
     >
       {repairNotice && <Alert type="warning" showIcon title={repairNotice} />}
@@ -229,7 +228,8 @@ export default function ClientSsoPage() {
       )}
       {client && (
         <Card
-          title="SSO配置"
+          title="SSO 配置"
+          size="small"
           extra={
             <Button disabled={busy} onClick={() => void refresh()}>
               刷新详情

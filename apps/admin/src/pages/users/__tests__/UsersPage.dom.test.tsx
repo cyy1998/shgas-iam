@@ -3,7 +3,7 @@ import UserFormModal from "@admin/pages/users/components/UserFormModal";
 import { ApiErrorCode } from "@iam/contracts";
 import { ConfigProvider, Modal, message } from "antd";
 import { HttpResponse, http } from "msw";
-import { type ComponentProps, useState } from "react";
+import { type ComponentProps, useId, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { adminUserDetail, adminUserSearchResult } from "~admin/test/mocks/fixtures";
 import { server } from "~admin/test/mocks/server";
@@ -31,6 +31,18 @@ vi.mock("@ant-design/pro-components", async (importOriginal) => {
     />
   );
   return { ...actual, ModalForm, default: { ...actual, ModalForm } };
+});
+
+// rc-component uses the same `test-id` for every generated ID in NODE_ENV=test.
+// Give the page's filter inputs unique IDs so they cannot steal the modal's labelled-by target.
+vi.mock("antd", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("antd")>();
+  const Select = (props: ComponentProps<typeof actual.Select>) => {
+    const id = useId();
+    return <actual.Select {...props} id={props.id ?? id} />;
+  };
+  const exports = { ...actual, Select: Object.assign(Select, actual.Select) };
+  return { ...exports, default: exports };
 });
 
 ConfigProvider.config({
@@ -68,6 +80,23 @@ function renderPage() {
   const details = vi.fn((_info: { request: Request }) => HttpResponse.json([{ result: { data: adminUserDetail } }]));
   const searches = vi.fn(() => HttpResponse.json([{ result: { data: adminUserSearchResult } }]));
   server.use(
+    http.get("*/rpc/:procedures", ({ params }) => {
+      const procedures = String(params.procedures).split(",");
+      if (
+        procedures.length !== 2 ||
+        !procedures.includes("admin.user.search") ||
+        !procedures.includes("admin.organizationResponsibility.searchAssignments")
+      )
+        return;
+      searches();
+      return HttpResponse.json(
+        procedures.map((procedure) => ({
+          result: {
+            data: procedure === "admin.user.search" ? adminUserSearchResult : { items: [], total: 0, nextCursor: null },
+          },
+        })),
+      );
+    }),
     http.get("*/rpc/admin.user.detail", details),
     http.get("*/rpc/admin.user.search", searches),
     http.get("*/rpc/admin.organizationResponsibility.searchAssignments", () =>
@@ -162,7 +191,7 @@ describe("UsersPage mutation outcomes", () => {
     });
     const { user, details } = renderPage();
     await screen.findByText(adminUserSearchResult.result[0].name);
-    await user.click(screen.getByRole("button", { name: "+ 新建用户" }));
+    await user.click(screen.getByRole("button", { name: "新建用户" }));
     const form = within(await screen.findByRole("dialog", { name: "新建用户" }));
     await user.type(form.getByRole("textbox", { name: "用户名" }), "submitted-user");
     await user.type(form.getByRole("textbox", { name: "姓名" }), "新用户");
@@ -189,7 +218,7 @@ describe("UsersPage mutation outcomes", () => {
     async (explicitPassword) => {
       const requests = mutation("create", null, true);
       const { user, details } = renderPage();
-      await user.click(screen.getByRole("button", { name: "+ 新建用户" }));
+      await user.click(screen.getByRole("button", { name: "新建用户" }));
       const form = within(await screen.findByRole("dialog", { name: "新建用户" }));
       await user.type(form.getByRole("textbox", { name: "用户名" }), "new-user");
       await user.type(form.getByRole("textbox", { name: "姓名" }), "新用户");
@@ -273,6 +302,7 @@ describe("User forms through the user service", () => {
     await user.clear(form.getByRole("textbox", { name: "姓名" }));
     await user.type(form.getByRole("textbox", { name: "姓名" }), "未保存姓名");
     await user.click(form.getByRole("button", { name: /取\s*消/ }));
+    await user.click(await screen.findByRole("button", { name: "放弃修改" }));
     await user.click(screen.getByRole("button", { name: /编\s*辑/ }));
     expect(form.getByRole("textbox", { name: "姓名" })).toHaveValue(adminUserDetail.name);
     await user.click(form.getByRole("button", { name: /保\s*存/ }));

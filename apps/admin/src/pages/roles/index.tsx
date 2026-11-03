@@ -5,9 +5,9 @@ import { requestClientOptions } from "@admin/pages/roles/role-selectors";
 import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
 import { deleteRole, type RoleVo, searchRoles, updateRoleStatus } from "@admin/services/role";
 import { PlusOutlined } from "@ant-design/icons";
-import { type ActionType, PageContainer, type ProColumns, ProTable } from "@ant-design/pro-components";
+import { type ActionType, PageContainer, type ProColumns, ProFormSelect, ProTable } from "@ant-design/pro-components";
 import { getRoleStatusOptions, type RoleStatus } from "@iam/contracts";
-import { Alert, Button, Dropdown, Modal, message } from "antd";
+import { Alert, Button, Dropdown, Input, Modal, message, Select } from "antd";
 import { useRef, useState } from "react";
 
 export default function RolesPage() {
@@ -15,6 +15,8 @@ export default function RolesPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [drawerRoleCode, setDrawerRoleCode] = useState<string | null>(null);
   const [drawerEditing, setDrawerEditing] = useState(false);
+  const [searchText, setSearchText] = useState("");
+  const [filters, setFilters] = useState<{ text?: string; clientCode?: string; status?: RoleStatus }>({});
 
   const [committedWarning, setCommittedWarning] = useState<string>();
   const [detailReloadSeq, setDetailReloadSeq] = useState(0);
@@ -77,14 +79,8 @@ export default function RolesPage() {
   };
 
   const columns: ProColumns<RoleVo>[] = [
-    {
-      title: "角色",
-      dataIndex: "text",
-      hideInTable: true,
-      fieldProps: { placeholder: "角色编码或名称" },
-    },
-    { title: "角色编码", dataIndex: "roleCode", width: 170, search: false },
-    { title: "角色名称", dataIndex: "roleName", width: 180, search: false },
+    { title: "角色编码", dataIndex: "roleCode", width: 150, search: false },
+    { title: "角色名称", dataIndex: "roleName", width: 160, search: false },
     {
       title: "所属应用",
       dataIndex: "clientCode",
@@ -101,7 +97,7 @@ export default function RolesPage() {
     {
       title: "状态",
       dataIndex: "status",
-      width: 110,
+      width: 80,
       valueType: "select",
       valueEnum: Object.fromEntries(getRoleStatusOptions().map((o) => [o.value, { text: o.label }])),
       render: (_, row) => <StatusTag domain="role" status={row.status} />,
@@ -109,7 +105,8 @@ export default function RolesPage() {
     {
       title: "分配数",
       dataIndex: "assignmentCount",
-      width: 100,
+      width: 80,
+      align: "right",
       search: false,
     },
     {
@@ -123,7 +120,7 @@ export default function RolesPage() {
       title: "操作",
       fixed: "right",
       valueType: "option",
-      width: 260,
+      width: 200,
       render: (_, row) => [
         <Button
           key="detail"
@@ -164,14 +161,69 @@ export default function RolesPage() {
   ];
 
   return (
-    <PageContainer title="角色管理">
+    <PageContainer title={false} breadcrumbRender={false}>
       {committedWarning && drawerRoleCode === null && <Alert type="warning" showIcon title={committedWarning} />}
       <ProTable<RoleVo>
+        className="iam-admin-list"
+        size="small"
         actionRef={actionRef}
         rowKey="roleCode"
         columns={columns}
-        search={{ labelWidth: "auto" }}
-        scroll={{ x: 1170 }}
+        search={false}
+        params={filters}
+        headerTitle={
+          <div className="iam-admin-filters">
+            <Input.Search
+              className="iam-admin-search"
+              aria-label="搜索角色"
+              placeholder="搜索角色编码或名称"
+              value={searchText}
+              allowClear
+              onChange={(event) => {
+                setSearchText(event.target.value);
+                if (!event.target.value) setFilters((current) => ({ ...current, text: undefined }));
+              }}
+              onSearch={(text) => setFilters((current) => ({ ...current, text: text.trim() || undefined }))}
+            />
+            <div className="iam-admin-filter-fields">
+              <ProFormSelect
+                noStyle
+                request={requestClientOptions}
+                debounceTime={300}
+                fieldProps={{
+                  "aria-label": "所属应用",
+                  placeholder: "全部应用",
+                  allowClear: true,
+                  showSearch: true,
+                  filterOption: false,
+                  value: filters.clientCode,
+                  onChange: (clientCode) => setFilters((current) => ({ ...current, clientCode })),
+                }}
+              />
+              <Select
+                aria-label="角色状态"
+                placeholder="全部状态"
+                allowClear
+                value={filters.status}
+                options={getRoleStatusOptions()}
+                onChange={(status) => setFilters((current) => ({ ...current, status }))}
+              />
+            </div>
+            {Object.values(filters).some((value) => value !== undefined) && (
+              <Button
+                type="text"
+                onClick={() => {
+                  setSearchText("");
+                  setFilters({});
+                }}
+              >
+                重置
+              </Button>
+            )}
+          </div>
+        }
+        scroll={{ x: 1040 }}
+        pagination={{ defaultPageSize: 20, hideOnSinglePage: true, showSizeChanger: true }}
         request={async (params) => {
           try {
             const {

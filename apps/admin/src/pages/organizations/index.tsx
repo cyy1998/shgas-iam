@@ -10,10 +10,12 @@ import {
   type OrganizationChildrenPage,
   type OrganizationDetailVo,
 } from "@admin/services/organization";
+import { PlusOutlined } from "@ant-design/icons";
 import { PageContainer } from "@ant-design/pro-components";
 import { useAccess } from "@umijs/max";
 import { Alert, Button, Card, Col, message, Row, Space } from "antd";
 import { useCallback, useEffect, useState } from "react";
+import styles from "./OrganizationsPage.module.less";
 
 type FormState =
   | { open: false }
@@ -122,33 +124,38 @@ export default function OrganizationsPage() {
   };
 
   return (
-    <PageContainer title="组织管理">
+    <PageContainer title={false} breadcrumbRender={false} className={styles.page}>
       {committedWarning && <Alert type="warning" showIcon message={committedWarning} />}
-      <Row gutter={16}>
-        <Col span={8}>
-          <Card
-            title="组织树"
-            extra={
-              access.canCreateOrganizationRoot ? (
-                <Button type="primary" size="small" onClick={() => setFormState({ open: true, mode: "create-root" })}>
-                  + 新建根组织
+      <Row gutter={[16, 16]} align="top">
+        <Col xs={24} lg={8} xl={7}>
+          <Card size="small" className={styles.tree} title="组织树">
+            <div className={styles["tree-content"]}>
+              <Space orientation="vertical" size={12} style={{ width: "100%" }}>
+                <OrgSearchPanel onSelect={selectOrganization} />
+                <OrgTree
+                  loadChildrenPage={loadChildrenPage}
+                  selectedKey={selectedCode}
+                  onSelect={selectOrganization}
+                  reloadSeq={treeReloadSeq}
+                />
+              </Space>
+            </div>
+            {access.canCreateOrganizationRoot && (
+              <div className={styles["tree-footer"]}>
+                <Button
+                  type="text"
+                  className={styles["create-root"]}
+                  icon={<PlusOutlined aria-hidden />}
+                  onClick={() => setFormState({ open: true, mode: "create-root" })}
+                >
+                  新建根组织
                 </Button>
-              ) : null
-            }
-          >
-            <Space orientation="vertical" size="middle" style={{ width: "100%" }}>
-              <OrgSearchPanel onSelect={selectOrganization} />
-              <OrgTree
-                loadChildrenPage={loadChildrenPage}
-                selectedKey={selectedCode}
-                onSelect={selectOrganization}
-                reloadSeq={treeReloadSeq}
-              />
-            </Space>
+              </div>
+            )}
           </Card>
         </Col>
-        <Col span={16}>
-          <Card styles={{ body: { padding: 0 } }}>
+        <Col xs={24} lg={16} xl={17}>
+          <Card size="small" styles={{ body: { padding: 0 } }}>
             <OrgDetailPanel
               loading={detailLoading}
               detail={detailData}

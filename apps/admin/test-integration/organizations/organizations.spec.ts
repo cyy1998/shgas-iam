@@ -211,9 +211,12 @@ test("manages both Organization Responsibility types inside Organization detail"
   await expect(page.getByText("集团 / 财务部").first()).toBeVisible();
 
   await page.getByRole("button", { name: "详情" }).first().click();
-  await expect(page.getByRole("dialog").getByText("任命 #101")).toBeVisible();
-  await expect(page.getByRole("dialog").getByText("集团 / 财务部")).toBeVisible();
-  await page.getByRole("dialog").getByRole("button", { name: "暂停任命" }).click();
+  const assignmentDrawer = page.getByRole("dialog");
+  await expect(
+    assignmentDrawer.getByRole("region", { name: "任命信息" }).getByText("负责人", { exact: true }),
+  ).toBeVisible();
+  await expect(assignmentDrawer.getByText("集团 / 财务部")).toBeVisible();
+  await assignmentDrawer.getByRole("button", { name: "暂停任命" }).click();
   await expect.poll(() => pauseInputs).toEqual([{ id: 101 }]);
   await page.keyboard.press("Escape");
 

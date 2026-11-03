@@ -172,7 +172,7 @@ describe("OrganizationsPage mutation results through the organization service", 
     const requests = mutation("create");
     const { user } = await page();
     const initialReads = reads.children.mock.calls.length;
-    await user.click(screen.getByRole("button", { name: "+ 新建根组织" }));
+    await user.click(screen.getByRole("button", { name: "新建根组织" }));
     const dialog = within(await screen.findByRole("dialog"));
     await user.type(dialog.getAllByRole("textbox")[0], "  NEW  ");
     await user.type(dialog.getAllByRole("textbox")[1], "  新组织  ");

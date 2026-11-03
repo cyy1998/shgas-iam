@@ -20,7 +20,7 @@ export default function UserSummary(props: UserSummaryProps) {
   const status = accountStatusDisplay[accountStatus];
 
   return (
-    <Space orientation="vertical" size={2}>
+    <Space size={8} wrap>
       <Space size={8}>
         <Typography.Text>{name ?? "未知用户"}</Typography.Text>
         <Typography.Text type="secondary">{username ?? "无用户名"}</Typography.Text>

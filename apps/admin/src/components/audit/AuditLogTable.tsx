@@ -85,7 +85,7 @@ type Props = {
   size?: "small" | "middle" | "large";
 };
 
-export default function AuditLogTable({ fixedConditions = {}, pageSize = 20, search = true, size }: Props) {
+export default function AuditLogTable({ fixedConditions = {}, pageSize = 20, search = true, size = "small" }: Props) {
   const [selectedLog, setSelectedLog] = useState<AuditLogVo | null>(null);
 
   const columns: ProColumns<AuditLogTableRow>[] = [
@@ -246,10 +246,15 @@ export default function AuditLogTable({ fixedConditions = {}, pageSize = 20, sea
   return (
     <>
       <ProTable<AuditLogTableRow>
+        className="iam-admin-list"
         rowKey="id"
         size={size}
         columns={columns}
-        search={search ? { labelWidth: "auto" } : false}
+        search={
+          search
+            ? { labelWidth: "auto", defaultCollapsed: true, span: { xs: 24, sm: 12, md: 12, lg: 8, xl: 6, xxl: 6 } }
+            : false
+        }
         options={search ? undefined : false}
         pagination={{ defaultPageSize: pageSize, showSizeChanger: search }}
         request={async (params) => {

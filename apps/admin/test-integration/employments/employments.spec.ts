@@ -23,19 +23,19 @@ test("Employment filters and creation selectors use the granted organization sco
     },
   });
 
-  await page.getByText("展开", { exact: true }).click();
-  await page.getByRole("combobox", { name: "状态 :" }).click();
+  await page.getByRole("combobox", { name: "雇佣状态" }).click();
   await page.getByText("结束", { exact: true }).last().click();
-  await page.getByRole("button", { name: /查\s*询/ }).click();
-  await expect.poll(() => employmentSearchInputs.length).toBeGreaterThan(1);
-  expect(employmentSearchInputs.at(-1)).toMatchObject({
-    conditions: { exactConditions: { statuses: [EmploymentStatus.Disable] } },
-  });
+  await expect
+    .poll(() => employmentSearchInputs.at(-1))
+    .toMatchObject({
+      conditions: { exactConditions: { statuses: [EmploymentStatus.Disable] } },
+    });
 
-  await page.getByRole("textbox", { name: /用户/ }).fill(" 张三 ");
-  await page.getByRole("combobox", { name: /主岗/ }).click();
-  await page.getByTitle("否", { exact: true }).click();
-  await page.getByRole("button", { name: /查\s*询/ }).click();
+  const userSearch = page.getByRole("searchbox", { name: "搜索雇佣用户" });
+  await userSearch.fill(" 张三 ");
+  await userSearch.press("Enter");
+  await page.getByRole("combobox", { name: "主岗筛选" }).click();
+  await page.getByTitle("非主岗", { exact: true }).click();
   await expect
     .poll(() => employmentSearchInputs.at(-1))
     .toMatchObject({
@@ -44,7 +44,7 @@ test("Employment filters and creation selectors use the granted organization sco
         exactConditions: { statuses: [EmploymentStatus.Disable], isPrimary: false },
       },
     });
-  await page.getByRole("button", { name: /重\s*置/ }).click();
+  await page.getByRole("button", { name: "清除筛选" }).click();
   await expect
     .poll(() => employmentSearchInputs.at(-1))
     .toMatchObject({

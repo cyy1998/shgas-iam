@@ -11,7 +11,7 @@ import {
 import { ConfigProvider, Modal, message } from "antd";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHrEmploymentAllowedActions } from "~admin/test/mocks/fixtures";
-import { __setAccess } from "~admin/test/mocks/umijs-max";
+import { __setAccess, history } from "~admin/test/mocks/umijs-max";
 import { act, render, screen, waitFor, within } from "~admin/test/render";
 
 const lifecycle = vi.hoisted(() => ({
@@ -21,6 +21,7 @@ const lifecycle = vi.hoisted(() => ({
   getUser: vi.fn(),
   deleteUser: vi.fn(),
   updateUserStatus: vi.fn(),
+  updateUser: vi.fn(),
   pauseEmployment: vi.fn(),
   resignUser: vi.fn(),
   resumeEmployment: vi.fn(),
@@ -61,6 +62,7 @@ vi.mock("@admin/services/user", () => ({
   deleteUser: lifecycle.deleteUser,
   getUser: lifecycle.getUser,
   updateUserStatus: lifecycle.updateUserStatus,
+  updateUser: lifecycle.updateUser,
 }));
 vi.mock("@admin/services/organization-responsibility", () => ({
   searchOrganizationResponsibilityAssignments: lifecycle.searchAssignments,
@@ -227,6 +229,98 @@ describe("UserDetailDrawer Employment lifecycle actions", () => {
       message.destroy();
     });
     ConfigProvider.config({ holderRender: undefined });
+  });
+
+  describe("unsaved profile changes", () => {
+    async function editProfile() {
+      lifecycle.getUser.mockResolvedValue(detail(EmploymentStatus.Enable));
+      const onClose = vi.fn();
+      const view = render(<UserDetailDrawer open username="zhangsan" onClose={onClose} onChanged={vi.fn()} />);
+      await view.user.click(await screen.findByRole("button", { name: /编\s*辑/ }));
+      return { ...view, onClose, name: screen.getByRole("textbox", { name: "姓名" }) };
+    }
+
+    async function discardDialog() {
+      const titles = await screen.findAllByText("放弃未保存的修改？");
+      const dialog = titles.find((title) => title.classList.contains("ant-modal-confirm-title"))?.closest(".ant-modal");
+      expect(dialog).not.toBeNull();
+      return within(dialog as HTMLElement);
+    }
+
+    it("keeps the draft after declining close and closes only after explicit discard", async () => {
+      const { user, name, onClose } = await editProfile();
+      await user.clear(name);
+      await user.type(name, "新姓名");
+      await user.click(screen.getByRole("button", { name: "关闭" }));
+      await user.click((await discardDialog()).getByRole("button", { name: "继续编辑" }));
+      expect(onClose).not.toHaveBeenCalled();
+      expect(name).toHaveValue("新姓名");
+      await user.click(screen.getByRole("button", { name: "关闭" }));
+      await user.click((await discardDialog()).getByRole("button", { name: "放弃修改" }));
+      await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+      expect(lifecycle.updateUser).not.toHaveBeenCalled();
+    });
+
+    it("does not ask to discard when values are restored to their original state", async () => {
+      const { user, name, onClose } = await editProfile();
+      await user.clear(name);
+      await user.type(name, "临时姓名");
+      await user.clear(name);
+      await user.type(name, "张三");
+      await user.click(screen.getByRole("button", { name: "关闭" }));
+      expect(onClose).toHaveBeenCalledOnce();
+      expect(screen.queryByText("放弃未保存的修改？")).not.toBeInTheDocument();
+    });
+
+    it("preserves the draft across tabs and cancellation until discard is confirmed", async () => {
+      const { user, name } = await editProfile();
+      await user.clear(name);
+      await user.type(name, "新姓名");
+      await user.click(screen.getByRole("tab", { name: "操作日志" }));
+      await user.click(screen.getByRole("tab", { name: "用户信息" }));
+      expect(screen.getByRole("textbox", { name: "姓名" })).toHaveValue("新姓名");
+      await user.click(screen.getByRole("button", { name: /^取\s*消$/ }));
+      await user.click((await discardDialog()).getByRole("button", { name: "继续编辑" }));
+      expect(screen.getByRole("textbox", { name: "姓名" })).toHaveValue("新姓名");
+      await user.click(screen.getByRole("button", { name: /^取\s*消$/ }));
+      await user.click((await discardDialog()).getByRole("button", { name: "放弃修改" }));
+      await waitFor(() => expect(screen.queryByRole("textbox", { name: "姓名" })).not.toBeInTheDocument());
+    });
+
+    it("blocks browser unloading and route navigation until explicit discard", async () => {
+      const { user, name } = await editProfile();
+      await user.clear(name);
+      await user.type(name, "新姓名");
+      const event = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(true);
+      const retry = vi.fn();
+      const blockNavigation = history.block.mock.lastCall?.[0];
+      expect(blockNavigation).toBeDefined();
+      await act(async () => blockNavigation?.({ retry }));
+      expect(retry).not.toHaveBeenCalled();
+      await user.click((await discardDialog()).getByRole("button", { name: "放弃修改" }));
+      await waitFor(() => expect(retry).toHaveBeenCalledOnce());
+    });
+
+    it("clears the dirty state after saving and prevents closing during submission", async () => {
+      let resolveSave!: (value: { changed: boolean; result: null }) => void;
+      lifecycle.updateUser.mockReturnValue(
+        new Promise((resolve) => {
+          resolveSave = resolve;
+        }),
+      );
+      const { user, name, onClose } = await editProfile();
+      await user.clear(name);
+      await user.type(name, "新姓名");
+      await user.click(screen.getByRole("button", { name: /保\s*存/ }));
+      await waitFor(() => expect(lifecycle.updateUser).toHaveBeenCalledWith("zhangsan", { name: "新姓名" }));
+      expect(screen.queryByRole("button", { name: "关闭" })).not.toBeInTheDocument();
+      await act(async () => resolveSave({ changed: true, result: null }));
+      await user.click(await screen.findByRole("button", { name: "关闭" }));
+      expect(onClose).toHaveBeenCalledOnce();
+      expect(screen.queryByText("放弃未保存的修改？")).not.toBeInTheDocument();
+    });
   });
 
   describe("resignation outcomes", () => {

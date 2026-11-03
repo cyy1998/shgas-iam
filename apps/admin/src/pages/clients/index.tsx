@@ -5,7 +5,7 @@ import { PlusOutlined } from "@ant-design/icons";
 import { PageContainer, type ProColumns, ProTable } from "@ant-design/pro-components";
 import { ClientSsoProtocol, type ClientStatus, getClientStatusOptions } from "@iam/contracts";
 import { history, Link } from "@umijs/max";
-import { Button, message, Tag } from "antd";
+import { Button, Input, message, Select, Tag } from "antd";
 import { useState } from "react";
 
 function editClient(clientCode: string) {
@@ -14,16 +14,17 @@ function editClient(clientCode: string) {
 
 export default function ClientsPage() {
   const [createOpen, setCreateOpen] = useState(false);
+  const [searchText, setSearchText] = useState("");
+  const [filters, setFilters] = useState<{
+    text?: string;
+    status?: ClientStatus;
+    ssoProtocol?: ClientSsoProtocol;
+    ssoEnabled?: boolean;
+  }>({});
 
   const handleError = (err: unknown) => message.error(err instanceof Error ? err.message : "操作失败");
 
   const columns: ProColumns<ClientVo>[] = [
-    {
-      title: "应用",
-      dataIndex: "text",
-      hideInTable: true,
-      fieldProps: { placeholder: "应用编码或名称" },
-    },
     { title: "应用编码", dataIndex: "clientCode", width: 150, search: false },
     { title: "应用名称", dataIndex: "clientName", width: 180, search: false },
     { title: "访问地址", dataIndex: "url", ellipsis: true, search: false },
@@ -72,12 +73,80 @@ export default function ClientsPage() {
   ];
 
   return (
-    <PageContainer title="应用管理">
+    <PageContainer title={false} breadcrumbRender={false}>
       <ProTable<ClientVo>
+        className="iam-admin-list"
+        size="small"
         rowKey="clientCode"
         columns={columns}
-        search={{ labelWidth: "auto" }}
-        scroll={{ x: 1300 }}
+        search={false}
+        params={filters}
+        headerTitle={
+          <div className="iam-admin-filters">
+            <Input.Search
+              className="iam-admin-search"
+              aria-label="搜索应用"
+              placeholder="搜索应用编码或名称"
+              value={searchText}
+              allowClear
+              onChange={(event) => {
+                setSearchText(event.target.value);
+                if (!event.target.value) setFilters((current) => ({ ...current, text: undefined }));
+              }}
+              onSearch={(text) => setFilters((current) => ({ ...current, text: text.trim() || undefined }))}
+            />
+            <div className="iam-admin-filter-fields">
+              <Select
+                aria-label="全局状态"
+                placeholder="全部状态"
+                allowClear
+                value={filters.status}
+                options={getClientStatusOptions()}
+                onChange={(status) => setFilters((current) => ({ ...current, status }))}
+              />
+              <Select
+                aria-label="SSO 协议"
+                placeholder="全部协议"
+                allowClear
+                value={filters.ssoProtocol}
+                options={[
+                  { value: ClientSsoProtocol.Oidc, label: "OIDC" },
+                  { value: ClientSsoProtocol.CustomSso, label: "Custom SSO" },
+                ]}
+                onChange={(ssoProtocol) => setFilters((current) => ({ ...current, ssoProtocol }))}
+              />
+              <Select
+                aria-label="SSO 启用"
+                placeholder="SSO 启用状态"
+                allowClear
+                value={filters.ssoEnabled?.toString()}
+                options={[
+                  { value: "true", label: "已启用" },
+                  { value: "false", label: "已停用" },
+                ]}
+                onChange={(value) =>
+                  setFilters((current) => ({
+                    ...current,
+                    ssoEnabled: value === undefined ? undefined : value === "true",
+                  }))
+                }
+              />
+            </div>
+            {Object.values(filters).some((value) => value !== undefined) && (
+              <Button
+                type="text"
+                onClick={() => {
+                  setSearchText("");
+                  setFilters({});
+                }}
+              >
+                重置
+              </Button>
+            )}
+          </div>
+        }
+        scroll={{ x: 1080 }}
+        pagination={{ defaultPageSize: 20, hideOnSinglePage: true, showSizeChanger: true }}
         request={async (params) => {
           try {
             const { current = 1, pageSize = 20, text: searchText, status, ssoProtocol, ssoEnabled } = params;

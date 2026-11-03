@@ -34,6 +34,7 @@ export default function ClientSessionsTable(props: ClientSessionsTableProps) {
     <Space orientation="vertical" style={{ width: "100%" }}>
       {error ? <Alert showIcon type="error" title={error} /> : null}
       <ProTable<SessionListItem>
+        size="small"
         actionRef={props.actionRef}
         rowKey={(session) => session.record?.identity.id ?? session.principalSessionId}
         headerTitle="应用会话"

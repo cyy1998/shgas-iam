@@ -257,6 +257,9 @@ function OrganizationTreeSelectorContent({
       onSearch={onSearch}
       treeData={searchData ?? treeData}
       placeholder={placeholder}
+      popupMatchSelectWidth={480}
+      popupAlign={{ overflow: { adjustX: true, adjustY: true, shiftX: 16 } }}
+      styles={{ popup: { root: { minWidth: 0, maxWidth: "calc(100vw - 32px)" } } }}
       style={{ width: "100%" }}
     />
   );

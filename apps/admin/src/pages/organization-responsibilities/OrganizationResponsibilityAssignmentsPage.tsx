@@ -77,7 +77,7 @@ export default function OrganizationResponsibilityAssignmentsPage() {
   const state = parseOrganizationResponsibilityAssignmentState(location.search);
 
   return (
-    <PageContainer title="责任任命" breadcrumbRender={false}>
+    <PageContainer title={false} breadcrumbRender={false}>
       {state === null ? (
         <Alert type="error" showIcon message="责任任命链接参数无效" description="请检查筛选条件或详情链接。" />
       ) : (

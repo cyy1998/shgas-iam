@@ -659,11 +659,11 @@ test("session records support navigation, exact user filtering, pagination, and 
   await expect(page.getByText("未知").first()).toBeVisible();
   await expect.poll(() => inputs.at(-1)?.pageNum).toBe(2);
 
-  const userSelect = page.getByRole("combobox", { name: "用户" });
+  const userSelect = page.getByRole("combobox", { name: "筛选会话用户" });
   await userSelect.fill("张");
   await page.getByText("张三（zhangsan）").click();
-  await page.getByRole("button", { name: /查\s*询/ }).click();
   await expect.poll(() => inputs.at(-1)?.conditions?.userId).toBe(42);
+  await expect.poll(() => inputs.at(-1)?.pageNum).toBe(1);
   await expect(page.getByText("张三", { exact: true })).toBeVisible();
 
   const requestCount = inputs.length;
@@ -729,10 +729,9 @@ test("temporary login restrictions show canonical facts, exact user filtering, a
     .toBeLessThan(initialSeconds);
   restrictionExpect(inputs).toHaveLength(requestCount);
 
-  const userSelect = panel.locator(".ant-form-item").filter({ hasText: "用户" }).getByRole("combobox");
+  const userSelect = panel.getByRole("combobox", { name: "筛选限制用户" });
   await userSelect.fill("张");
   await page.getByText("张三（zhangsan）").click();
-  await panel.getByRole("button", { name: /查\s*询/ }).click();
   await restrictionExpect.poll(() => inputs.at(-1)?.conditions?.userId).toBe(42);
   await restrictionExpect(panel.getByText("已删除用户")).toHaveCount(0);
 });

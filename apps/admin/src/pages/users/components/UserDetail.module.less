@@ -1,0 +1,75 @@
+/* stylelint-disable selector-pseudo-class-no-unknown -- CSS Modules :global scopes Ant Design overrides. */
+.drawer {
+  :global(.ant-drawer-title),
+  :global(.ant-typography),
+  :global(.ant-btn) {
+    font-weight: 400;
+  }
+
+  :global(.ant-drawer-title) {
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  :global(.ant-btn),
+  :global(.ant-btn:hover) {
+    box-shadow: none;
+  }
+
+  :global(.ant-table-thead > tr > th) {
+    font-weight: 500 !important;
+    background: #fafafa !important;
+  }
+
+  :global(.ant-tabs-tab) {
+    font-weight: 500;
+  }
+
+  :global(h5.ant-typography) {
+    font-weight: 600;
+  }
+
+  :global(.ant-typography-secondary) {
+    color: #596879;
+  }
+}
+
+.mobile-table-hint {
+  display: none;
+}
+
+.basic-section {
+  padding: 20px;
+}
+
+.danger-section {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 0 4px;
+  border-top: 1px solid #e8e8e8;
+
+  h5 {
+    margin: 0 0 6px;
+    font-size: 14px;
+  }
+
+  span {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 575px) {
+  .mobile-table-hint {
+    display: block;
+    margin: 0 0 8px;
+    color: #596879;
+    font-size: 12px;
+  }
+
+  .basic-section {
+    padding: 16px;
+  }
+}

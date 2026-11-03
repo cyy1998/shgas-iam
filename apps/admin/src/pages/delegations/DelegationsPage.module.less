@@ -1,0 +1,46 @@
+/* stylelint-disable selector-pseudo-class-no-unknown -- CSS Modules uses :global for scoped Ant Design overrides. */
+.surface {
+  min-width: 0;
+
+  :global(.ant-table-cell .ant-btn-link) {
+    padding-inline: 0;
+  }
+}
+
+.filters {
+  border-bottom: 1px solid #e4e8ed;
+
+  :global(.ant-form-item) {
+    margin-bottom: 12px;
+  }
+
+  :global(.ant-form-item-label) {
+    text-align: start;
+  }
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 575px) {
+  .filters :global(.ant-form-item-label) {
+    padding-bottom: 4px;
+  }
+}
+
+@media (min-width: 576px) {
+  .filters {
+    :global(.ant-form-item-row) {
+      flex-wrap: nowrap;
+    }
+
+    :global(.ant-form-item-control) {
+      min-width: 0;
+    }
+  }
+}

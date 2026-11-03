@@ -1,44 +1,41 @@
-import AuthorizationActionButton from "@admin/components/AuthorizationActionButton";
 import styles from "@admin/components/detail/DetailDrawer.module.less";
 import type { UserDetailVo, updateUser } from "@admin/services/user";
 import { Descriptions, Space, Tag, Typography, theme } from "antd";
+import userStyles from "./UserDetail.module.less";
 import UserProfileForm from "./UserProfileForm";
 
 type Props = {
   detail: UserDetailVo;
   editing: boolean;
   saving: boolean;
-  onEdit: () => void;
   onCancel: () => void;
   onSave: (data: Parameters<typeof updateUser>[1]) => Promise<boolean>;
+  onDirtyChange: (dirty: boolean) => void;
 };
 
-export default function UserBasicInformation({ detail, editing, saving, onEdit, onCancel, onSave }: Props) {
+export default function UserBasicInformation({ detail, editing, saving, onCancel, onSave, onDirtyChange }: Props) {
   const { token } = theme.useToken();
 
   return (
     <section
       aria-label="基本信息"
-      className={`${styles.section} ${styles["basic-section"]}`}
+      className={`${styles.section} ${styles["basic-section"]} ${userStyles["basic-section"]}`}
       style={{ background: token.colorBgContainer, borderColor: token.colorBorderSecondary }}
     >
       <div className={styles["section-header"]}>
         <Typography.Title level={5} className={styles["section-title"]}>
           基本信息
         </Typography.Title>
-        {!editing && !saving && (
-          <AuthorizationActionButton
-            decision={detail.allowedActions.editProfile}
-            onClick={onEdit}
-            type="link"
-            size="small"
-          >
-            编辑
-          </AuthorizationActionButton>
-        )}
+        {editing && <Typography.Text type="secondary">编辑资料</Typography.Text>}
       </div>
       {editing && detail.allowedActions.editProfile.allowed ? (
-        <UserProfileForm detail={detail} saving={saving} onCancel={onCancel} onSave={onSave} />
+        <UserProfileForm
+          detail={detail}
+          saving={saving}
+          onCancel={onCancel}
+          onSave={onSave}
+          onDirtyChange={onDirtyChange}
+        />
       ) : (
         <Descriptions
           className={styles.descriptions}

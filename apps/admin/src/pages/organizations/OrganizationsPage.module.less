@@ -1,0 +1,76 @@
+/* stylelint-disable selector-pseudo-class-no-unknown -- CSS Modules :global scopes Ant Design overrides. */
+.page {
+  :global(.ant-alert) {
+    margin-bottom: 16px;
+  }
+}
+
+.tree {
+  :global(.ant-card-body) {
+    padding: 0;
+  }
+}
+
+.tree-content {
+  max-height: calc(100dvh - 180px);
+  padding: 12px;
+  overflow: auto;
+}
+
+.tree-footer {
+  padding: 8px 12px;
+  border-top: 1px solid #e4e8ed;
+}
+
+.detail-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+
+  h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+}
+
+.tree :global(.ant-btn).create-root {
+  height: 32px;
+  margin-left: -8px;
+  padding-inline: 8px;
+  gap: 6px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 400;
+
+  :global(.anticon) {
+    font-size: 12px;
+  }
+}
+
+.identity {
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.actions {
+  flex-wrap: wrap;
+}
+
+.secondary {
+  margin-left: 8px;
+  color: #596879;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+@media (max-width: 991px) {
+  .tree-content {
+    max-height: min(360px, calc(100dvh - 240px));
+  }
+}

@@ -1,11 +1,77 @@
 // Browser Integration uses a mocked backend; this is not a full-system journey.
 
 import type { AuditLogSearchParams } from "@admin/services/audit";
+import type { UserSearchParams } from "@admin/services/user";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
 import { expect, test } from "@playwright/test";
-import { adminUserDetail, createHrEmploymentAllowedActions, hrAdminUserDetail } from "../../test/mocks/fixtures";
+import {
+  adminUserDetail,
+  adminUserSearchResult,
+  createHrEmploymentAllowedActions,
+  hrAdminUserDetail,
+} from "../../test/mocks/fixtures";
 import { fulfillTrpc, mockAdminApi, parseTrpcBatchInput } from "../fixtures";
 import { collectMutationRequests, mockScopedManagementApi } from "../scoped-management.fixture";
+
+test("User filters query the server and clearing them restores the unfiltered first page", async ({ page }) => {
+  await mockAdminApi(page);
+  const searches: UserSearchParams[] = [];
+  await page.route("**/rpc/admin.user.search**", (route) => {
+    searches.push(parseTrpcBatchInput<UserSearchParams>(route));
+    return fulfillTrpc(route, { ...adminUserSearchResult, total: 45 });
+  });
+  await page.goto("/iam-admin/users");
+  await page.locator(".ant-pagination-next").click();
+  await expect.poll(() => searches.at(-1)?.pageNum).toBe(2);
+  await page.getByRole("searchbox", { name: "搜索用户" }).fill("  张三  ");
+  await page.getByRole("searchbox", { name: "搜索用户" }).press("Enter");
+  await expect
+    .poll(() => searches.at(-1))
+    .toMatchObject({
+      pageNum: 1,
+      conditions: { fuzzyConditions: { text: "张三" } },
+    });
+  await page.getByRole("combobox", { name: "用户状态" }).click();
+  await page.locator(".ant-select-item-option-content").getByText("暂停", { exact: true }).click();
+  await expect.poll(() => searches.at(-1)?.conditions?.exactConditions?.statuses).toEqual([UserStatus.Pause]);
+  await page.getByRole("button", { name: "清除筛选" }).click();
+  await expect
+    .poll(() => searches.at(-1))
+    .toMatchObject({
+      pageNum: 1,
+      conditions: { fuzzyConditions: {}, exactConditions: {} },
+    });
+  await expect(page.getByRole("searchbox", { name: "搜索用户" })).toHaveValue("");
+});
+
+test("User list query failure stays visible and can be retried", async ({ page }) => {
+  await mockAdminApi(page);
+  let unavailable = true;
+  await page.route("**/rpc/admin.user.search**", (route) =>
+    unavailable
+      ? route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify([
+            {
+              error: {
+                message: "用户查询暂时不可用",
+                code: -32603,
+                data: { code: "INTERNAL_SERVER_ERROR", httpStatus: 503 },
+              },
+            },
+          ]),
+        })
+      : fulfillTrpc(route, adminUserSearchResult),
+  );
+  await page.goto("/iam-admin/users");
+  await expect(page.getByRole("alert")).toContainText("用户列表加载失败");
+  await expect(page.getByText("暂无用户", { exact: true })).toHaveCount(0);
+  unavailable = false;
+  await page.getByRole("button", { name: /重\s*试/ }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.locator("td").getByRole("button", { name: "查看", exact: true })).toHaveCount(3);
+});
 
 test("scoped User detail navigates to the selected Employment without exposing authorization internals", async ({
   page,
@@ -124,6 +190,11 @@ test("User basic information is edited and saved in the existing detail", async 
   await expect(nameField).toHaveValue(hrAdminUserDetail.name);
   await nameField.fill("未保存姓名");
   await panel.getByRole("button", { name: /取\s*消/ }).click();
+  await page.getByRole("button", { name: "继续编辑", exact: true }).click();
+  await expect(nameField).toHaveValue("未保存姓名");
+  await panel.getByRole("button", { name: /取\s*消/ }).click();
+  await page.getByRole("button", { name: "放弃修改", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(1);
   await drawer.getByRole("button", { name: /编\s*辑/ }).click();
   await expect(nameField).toHaveValue(hrAdminUserDetail.name);
   expect(updates).toEqual([]);
