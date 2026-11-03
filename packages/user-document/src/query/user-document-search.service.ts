@@ -1,3 +1,4 @@
+import { resolveDocumentPagination, userDocumentSelection } from "@iam/contracts";
 import { FilterValidationError } from "@iam/filter-engine";
 import { PublishedUserDocumentSchema } from "../document";
 import { projectPublishedUserDocument, UserDocumentSearchRequestSchema } from "../document-query";
@@ -17,23 +18,31 @@ export function createUserDocumentSearchService(deps: UserDocumentSearchServiceD
     async searchDocuments(input: unknown, authenticatedClientCode: string) {
       const request = UserDocumentSearchRequestSchema.safeParse(input);
       if (!request.success) throw new UserDocumentFilterValidationError();
-      let rows: Awaited<ReturnType<UserDocumentSearchRepositoryPort["searchCurrentDocuments"]>>;
+      const pagination = resolveDocumentPagination(request.data);
+      let result: Awaited<ReturnType<UserDocumentSearchRepositoryPort["searchCurrentDocuments"]>>;
       try {
-        rows = await deps.documentRepository.searchCurrentDocuments(request.data.filter, authenticatedClientCode);
+        result = await deps.documentRepository.searchCurrentDocuments(
+          request.data.filter,
+          authenticatedClientCode,
+          request.data.sort,
+          pagination,
+        );
       } catch (error) {
         if (error instanceof FilterValidationError) throw new UserDocumentFilterValidationError();
         throw new UserDocumentSearchUnavailableError();
       }
-      if (rows.length > USER_DOCUMENT_RESULT_LIMIT) throw new UserDocumentSearchResultTooLargeError();
+      if (pagination === undefined && result.rows.length > USER_DOCUMENT_RESULT_LIMIT)
+        throw new UserDocumentSearchResultTooLargeError();
       try {
-        return rows.map((row) => {
+        const items = result.rows.map((row) => {
           const document = projectPublishedUserDocument(
             PublishedUserDocumentSchema.parse(row),
             authenticatedClientCode,
           );
           if (document === null) throw new Error("Directory query returned a tombstone");
-          return document;
+          return userDocumentSelection.select(document, request.data.select);
         });
+        return { items, total: result.total, page: pagination?.page ?? null, pageSize: pagination?.pageSize ?? null };
       } catch {
         throw new UserDocumentDocumentIntegrityError();
       }

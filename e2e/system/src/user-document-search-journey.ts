@@ -234,10 +234,12 @@ export async function waitForEmploymentSearchVisibility(input: {
 async function searchDsl(input: InternalRequestInput, filter: unknown) {
   const response = await input.request.post(`${input.origin}/api/iam/internal/users/search-dsl`, {
     headers: { apikey: input.internalApiKey },
-    data: { filter },
+    data: { filter, select: Object.keys(UserDocumentSchema.shape) },
   });
   expect(response.status()).toBe(200);
-  const data = readData(await response.json());
+  const result = readRecord(readData(await response.json()));
+  const data = result?.items;
+  expect(result).toMatchObject({ total: Array.isArray(data) ? data.length : -1, page: null, pageSize: null });
   expect(Array.isArray(data)).toBe(true);
   if (!Array.isArray(data)) throw new Error("Internal user search requires a document array");
   for (const profile of data) UserDocumentSchema.parse(profile);

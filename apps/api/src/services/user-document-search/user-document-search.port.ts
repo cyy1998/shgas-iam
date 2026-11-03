@@ -1,5 +1,5 @@
-import type { UserDocument } from "@iam/contracts";
+import type { UserDocumentSearchResult } from "@iam/contracts";
 
 export interface UserDocumentSearchPort {
-  readonly searchDsl: (input: unknown, authenticatedClientCode: string) => Promise<UserDocument[]>;
+  readonly searchDsl: (input: unknown, authenticatedClientCode: string) => Promise<UserDocumentSearchResult>;
 }

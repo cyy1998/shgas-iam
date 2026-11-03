@@ -104,7 +104,7 @@ test("wires canonical Filter search to the Base query and preserves Internal det
     wxId: null,
   };
   const detail = { ...base, status: UserStatus.Enable, userType: UserType.Formal, employments: [] };
-  const searchDocuments = mock(async (_input: unknown) => [detail]);
+  const searchDocuments = mock(async (_input: unknown) => ({ items: [detail], total: 1, page: null, pageSize: null }));
   const getDetailByUsername = mock(async (_username: string) => detail);
   const userDocumentSearch = createUserDocumentSearchAdapter({ searchDocuments });
   const activeRoutes = await createApiRoutes({
@@ -153,8 +153,8 @@ test("wires canonical Filter search to the Base query and preserves Internal det
   });
   const body = await response.json();
   expect(response.status).toBe(200);
-  expect(body).toMatchObject({ code: 200, data: [detail] });
-  expect(searchDocuments).toHaveBeenCalledWith(input, "internal");
+  expect(body).toMatchObject({ code: 200, data: { items: [detail], total: 1, page: null, pageSize: null } });
+  expect(searchDocuments).toHaveBeenCalledWith({ ...input, paginate: false }, "internal");
   expect(getDetailByUsername).not.toHaveBeenCalled();
 
   const detailResponse = await app.request("http://localhost/internal/users/alice");

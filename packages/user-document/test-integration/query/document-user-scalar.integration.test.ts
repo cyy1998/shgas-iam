@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import process from "node:process";
-import { ApiErrorCode, UserStatus, UserType } from "@iam/contracts";
+import { ApiErrorCode, UserDocumentSchema, UserStatus, UserType } from "@iam/contracts";
 import { relations } from "@iam/db/relations";
 import { userDocuments, users } from "@iam/db/schema";
 import { createFilterEngine, searchCollection, searchObject, searchScalar } from "@iam/filter-engine";
@@ -118,8 +118,9 @@ describe("User Document v4 User scalar tracer", () => {
       .select({ schemaVersion: userDocuments.schemaVersion })
       .from(userDocuments)
       .where(eq(userDocuments.userId, 1));
-    const bases = await query.searchDocuments(
+    const { items: bases } = await query.searchDocuments(
       {
+        select: Object.keys(UserDocumentSchema.shape),
         filter: {
           field: "subjectIdentifier",
           op: "eq",
@@ -181,8 +182,9 @@ describe("User Document v4 User scalar tracer", () => {
         value: ["13800000002", "13800000002"],
       },
     });
-    const formalWithoutBobMobile = await query.searchDocuments(
+    const { items: formalWithoutBobMobile } = await query.searchDocuments(
       {
+        select: Object.keys(UserDocumentSchema.shape),
         filter: {
           and: [
             {
@@ -203,8 +205,9 @@ describe("User Document v4 User scalar tracer", () => {
       },
       "internal",
     );
-    const aliceOrBob = await query.searchDocuments(
+    const { items: aliceOrBob } = await query.searchDocuments(
       {
+        select: Object.keys(UserDocumentSchema.shape),
         filter: {
           or: [
             { field: "name", op: "eq", value: "Alice" },
@@ -214,13 +217,14 @@ describe("User Document v4 User scalar tracer", () => {
       },
       "internal",
     );
-    const wrongCase = await query.searchDocuments(
-      {
-        filter: { field: "name", op: "eq", value: "alice" },
-      },
+    const { items: wrongCase } = await query.searchDocuments(
+      { select: Object.keys(UserDocumentSchema.shape), filter: { field: "name", op: "eq", value: "alice" } },
       "internal",
     );
-    const nullableIn = await query.searchDocuments(normalized, "internal");
+    const { items: nullableIn } = await query.searchDocuments(
+      { ...normalized, select: Object.keys(UserDocumentSchema.shape) },
+      "internal",
+    );
 
     expect(normalized.filter).toEqual({
       field: "mobile",
@@ -254,9 +258,7 @@ describe("User Document v4 User scalar tracer", () => {
     await candidatePersistence.upsert(candidate!);
     const error = await query
       .searchDocuments(
-        {
-          filter: { field: "wxId", op: "eq", value: "w".repeat(129) },
-        },
+        { select: Object.keys(UserDocumentSchema.shape), filter: { field: "wxId", op: "eq", value: "w".repeat(129) } },
         "internal",
       )
       .catch((error) => error);
@@ -298,7 +300,10 @@ describe("User Document v4 User scalar tracer", () => {
     ];
 
     for (const filter of boundaryFilters) {
-      const bases = await query.searchDocuments({ filter }, "internal");
+      const { items: bases } = await query.searchDocuments(
+        { select: Object.keys(UserDocumentSchema.shape), filter },
+        "internal",
+      );
       expect(bases).toEqual([]);
     }
   });
@@ -330,6 +335,7 @@ describe("User Document v4 User scalar tracer", () => {
     const error = await query
       .searchDocuments(
         {
+          select: Object.keys(UserDocumentSchema.shape),
           filter: {
             field: "username",
             op: "eq",
@@ -398,6 +404,7 @@ describe("User Document v4 User scalar tracer", () => {
       const error = await timeoutQuery
         .searchDocuments(
           {
+            select: Object.keys(UserDocumentSchema.shape),
             filter: {
               field: "username",
               op: "eq",
@@ -447,8 +454,9 @@ describe("User Document v4 User scalar tracer", () => {
     );
     for (const candidate of candidates.reverse()) await candidatePersistence.upsert(candidate);
 
-    const exactLimit = await query.searchDocuments(
+    const { items: exactLimit } = await query.searchDocuments(
       {
+        select: Object.keys(UserDocumentSchema.shape),
         filter: { field: "userType", op: "eq", value: UserType.Formal },
       },
       "internal",
@@ -460,6 +468,7 @@ describe("User Document v4 User scalar tracer", () => {
     const error = await query
       .searchDocuments(
         {
+          select: Object.keys(UserDocumentSchema.shape),
           filter: {
             field: "userType",
             op: "in",

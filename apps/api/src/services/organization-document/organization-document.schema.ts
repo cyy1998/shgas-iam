@@ -1,4 +1,4 @@
-import { z } from "@hono/zod-openapi";
+import { DocumentPaginationSchema, organizationDocumentSelection, organizationDocumentSorting } from "@iam/contracts";
 import { createFilterTransportSchemas } from "@iam/filter-engine";
 
 const transportSchemas = createFilterTransportSchemas({
@@ -9,9 +9,10 @@ const transportSchemas = createFilterTransportSchemas({
 });
 export const OrganizationFilterTransportSchema = transportSchemas.expressionSchema;
 
-export const OrganizationDocumentTransportRequestSchema = z
-  .object({
-    filter: transportSchemas.budgetedSchema,
-  })
+export const OrganizationDocumentTransportRequestSchema = DocumentPaginationSchema.safeExtend({
+  filter: transportSchemas.budgetedSchema.optional(),
+  select: organizationDocumentSelection.selectSchema.optional(),
+  sort: organizationDocumentSorting.sortSchema.optional(),
+})
   .strict()
   .openapi("OrganizationDocumentRequest");

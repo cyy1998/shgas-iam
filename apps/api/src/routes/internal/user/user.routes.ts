@@ -8,7 +8,7 @@ import {
   StandardErrorResponseSchema,
   ValidationFailureResponseSchema,
 } from "@iam/api-core/core/openapi/schemas/error-response-schema";
-import { UserDocumentSchema } from "@iam/contracts";
+import { UserDocumentSchema, UserDocumentSearchResultSchema } from "@iam/contracts";
 import { UserNameWriteSchema, UsernameWriteSchema } from "@iam/domain/user";
 import { UserDocumentSearchTransportRequestSchema } from "@iam/user-document/document/query";
 
@@ -36,18 +36,21 @@ export const usersSearchDsl = createRoute({
   path: "/search-dsl",
   tags,
   request: {
-    body: jsonContentRequired(UserDocumentSearchTransportRequestSchema, "User Document Filter DSL 搜索条件"),
+    body: jsonContentRequired(
+      UserDocumentSearchTransportRequestSchema,
+      "用户筛选、分页、排序及返回字段；paginate 默认 false，开启时 page 默认 1、pageSize 默认 50",
+    ),
   },
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.UNPROCESSABLE_ENTITY]: jsonContent(
       z.union([ValidationFailureResponseSchema, StandardErrorResponseSchema]),
-      "Filter 校验失败或搜索结果超过固定上限",
+      "查询参数非法、超预算或关闭分页时匹配超过 500 项",
     ),
-    [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(StandardErrorResponseSchema, "用户搜索暂时不可用"),
+    [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(StandardErrorResponseSchema, "用户文档损坏、查询失败或超时"),
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(z.array(PublicUserDocumentSchema)),
-      "完整用户文档搜索结果",
+      createSuccessResponseSchema(UserDocumentSearchResultSchema),
+      "用户文档搜索结果；分页时本页与精确 total 同快照，非分页时 page/pageSize 为空",
     ),
   },
 });

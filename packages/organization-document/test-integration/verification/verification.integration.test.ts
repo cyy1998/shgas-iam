@@ -92,7 +92,7 @@ test("verification rejects old schema rows including tombstones while online sea
 
   expect(report.failures).toContainEqual({ code: "schema-mismatch", count: 2, organizationIds: [1, 2], outboxIds: [] });
   expect(report.status).toBe("failed");
-  expect(visible).toEqual([]);
+  expect(visible.items).toEqual([]);
 });
 
 for (const corruption of ["extra-field", "wrong-distance"] as const) {

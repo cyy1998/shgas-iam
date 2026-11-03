@@ -294,7 +294,7 @@ Access lease 在实际执行该主体修复时领取，不为整页提前占用�
 Facts reader 合法缓存命中直接返回；缺失、损坏或主体错配时按主体合并回源，从已发布 document 派生同版本 Facts 或墓碑并尽力回填。回填失败仍可使用合法 PG 结果；Redis 读取故障不回源，不查询源业务表或旧副本。读取诊断只含操作、结果和耗时，观测失败不改变认证。
 重新 Enable 仍要求当前源账号允许、全部直接用户 Outbox 完成、当前完整 Facts 与已完成重建匹配、PG/Redis 与 post-publication 满足恢复条件；retained-newer 缓存尤其墓碑不能被忽略，删除屏障保持 disabled。
 
-Internal 搜索与精确详情直接读取当前 schema 已发布目录，返回同版本、同 Client 上下文的完整公开文档；角色条件和输出都先绑定认证 Client。无本 Client 角色的有效任职仍保留空 roles，内部 Client 归属、数据库 ID 和管理历史不公开。无可读条目的详情返回 404，损坏或查询失败返回 503，不回源拼装。
+Internal 搜索与精确详情直接读取当前 schema 已发布目录；详情返回完整公开文档，搜索先完整校验并按 Client 生成公开内容，再执行 select。默认身份字段、合法选择路径与部分输出结构由[公开文档搜索契约](../../packages/contracts/src/document-search.ts)沿公开 schema 派生。角色条件和输出都先绑定认证 Client。无本 Client 角色的有效任职仍保留空 roles，内部 Client 归属、数据库 ID 和管理历史不公开。无可读条目的详情返回 404，损坏或查询失败返回 503，不回源拼装。
 
 正式用户 PG gate 在一个 REPEATABLE READ READ ONLY 事务完整核对全部源用户、文档/墓碑、Outbox、Rebuild State、主及后续处理凭据、源事实与孤立记录；Redis gate 用一致 PG 库存检查完整 Facts/墓碑与屏障。两者只读、不入队、不修复，Backfill 原因码不是就绪条件。不能跳过删除用户或仅核对数量。
 用户 PG gate 复用逐对象构建结果，将已知源完整性与 schema 问题按用户汇总并继续后续分页；数据库、Redis、未知构建异常或构建结果覆盖不完整仍中断核验。

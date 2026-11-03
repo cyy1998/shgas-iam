@@ -1,6 +1,11 @@
 import { z } from "@hono/zod-openapi";
 import type { UserDocument } from "@iam/contracts";
-import { UserDocumentSchema } from "@iam/contracts";
+import {
+  DocumentPaginationSchema,
+  UserDocumentSchema,
+  userDocumentSelection,
+  userDocumentSorting,
+} from "@iam/contracts";
 import type { PublishedUserLoginProfile } from "@iam/domain";
 import { PublishedUserLoginProfileSchema } from "@iam/domain";
 import type { FilterForShape } from "@iam/filter-engine";
@@ -18,9 +23,16 @@ const transport = createFilterTransportSchemas({
 
 export type UserDocumentFilter = FilterForShape<typeof structure.fields>;
 export const UserDocumentFilterSchema = engine.filterSchema;
-export const UserDocumentSearchRequestSchema = z.object({ filter: UserDocumentFilterSchema }).strict();
-export const UserDocumentSearchTransportRequestSchema = z
-  .object({ filter: transport.budgetedSchema })
+export const UserDocumentSearchRequestSchema = DocumentPaginationSchema.safeExtend({
+  filter: UserDocumentFilterSchema.optional(),
+  select: userDocumentSelection.selectSchema.optional(),
+  sort: userDocumentSorting.sortSchema.optional(),
+}).strict();
+export const UserDocumentSearchTransportRequestSchema = DocumentPaginationSchema.safeExtend({
+  filter: transport.budgetedSchema.optional(),
+  select: userDocumentSelection.selectSchema.optional(),
+  sort: userDocumentSorting.sortSchema.optional(),
+})
   .strict()
   .openapi("UserDocumentSearchRequest");
 

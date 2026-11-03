@@ -327,10 +327,13 @@ async function verifyDirectory(api: Protocol) {
     const response = await api.request(`/internal/${kind}/search-dsl`, {
       method: "POST",
       headers: { apikey: `internal-${client}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ filter }),
+      body: JSON.stringify({
+        filter,
+        select: Object.keys(kind === "users" ? UserDocumentSchema.shape : OrganizationDocumentSchema.shape),
+      }),
     });
     check(response.status === 200, "Published directory search failed");
-    return (await response.json()).data;
+    return (await response.json()).data.items;
   }
   for (const username of ["alice", "bob", "paused", "disabled"]) {
     const detail = await get(`/internal/users/${username}`);

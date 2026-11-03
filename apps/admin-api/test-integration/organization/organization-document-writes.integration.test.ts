@@ -233,9 +233,12 @@ test("a stalled real Redis wake preserves committed source work and the same que
     });
     for (const change of changes) await processor.processOutbox({ outboxId: change.id });
     for (const rebuild of rebuilds) await processor.processRebuild(rebuild);
-    const documents = await createOrganizationDocumentQueryService({
+    const { items: documents } = await createOrganizationDocumentQueryService({
       repository: createOrganizationDocumentQueryRepository(pg.db),
-    }).search({ filter: { field: "code", op: "in", value: ["OUTAGE", "RESTORED"] } });
+    }).search({
+      filter: { field: "code", op: "in", value: ["OUTAGE", "RESTORED"] },
+      select: ["code", "name", "type", "status", "level", "isVirtual", "isEntity", "path"],
+    });
     expect(documents).toMatchObject([{ code: "OUTAGE" }, { code: "RESTORED", name: "Recovered" }]);
   });
 }, 15_000);

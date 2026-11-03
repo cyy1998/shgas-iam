@@ -56,6 +56,7 @@ export async function expectInternalResponsibilityDsl(input: ResponsibilityJourn
   const response = await input.request.post(`${input.origin}/api/iam/internal/users/search-dsl`, {
     headers: { apikey: input.internalApiKey },
     data: {
+      select: Object.keys(UserDocumentSchema.shape),
       filter: {
         exists: {
           path: "employments",
@@ -85,7 +86,7 @@ export async function expectInternalResponsibilityDsl(input: ResponsibilityJourn
   });
   expect(response.status()).toBe(200);
   const body = readRecord(await response.json());
-  const profiles = body?.data;
+  const profiles = readRecord(body?.data)?.items;
   if (!Array.isArray(profiles)) throw new Error("Internal user search requires a document array");
   const documents = profiles.map((profile) => UserDocumentSchema.parse(profile));
   expect(documents.some((document) => document.username === input.adminUsername)).toBe(true);

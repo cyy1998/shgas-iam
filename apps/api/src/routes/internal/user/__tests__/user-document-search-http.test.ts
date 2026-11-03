@@ -5,7 +5,7 @@ import { createUserRoute } from "@api/routes/internal/user/user.index";
 import { createUserDocumentSearchAdapter } from "@api/services/user-document-search/user-document-search.adapter";
 import createApp from "@iam/api-core/core/create-app";
 import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares";
-import { UserStatus, UserType } from "@iam/contracts";
+import { UserDocumentSchema, UserStatus, UserType } from "@iam/contracts";
 import { userDocuments } from "@iam/db/schema";
 import type { GenericClientRuntimeDto } from "@iam/domain/client";
 import { USER_DOCUMENT_SCHEMA_VERSION } from "@iam/user-document";
@@ -15,7 +15,7 @@ import pino from "pino";
 import appConfig from "~api/app.config";
 
 test("maps the canonical v4 Filter request through the production Internal HTTP route", async () => {
-  const searchCurrentDocuments = mock(async () => []);
+  const searchCurrentDocuments = mock(async () => ({ rows: [], total: 0 }));
   const query = createUserDocumentSearchService({
     documentRepository: {
       searchCurrentDocuments,
@@ -51,11 +51,11 @@ test("maps the canonical v4 Filter request through the production Internal HTTP 
   });
 
   expect(valid.status).toBe(200);
-  expect(await valid.json()).toMatchObject({ code: 200, data: [] });
+  expect(await valid.json()).toMatchObject({ code: 200, data: { items: [], total: 0, page: null, pageSize: null } });
   expect(legacy.status).toBe(422);
   expect(await legacy.json()).toMatchObject({ code: "COMMON.VALIDATION_FAILED" });
-  expect(empty.status).toBe(422);
-  expect(await empty.json()).toMatchObject({ code: "COMMON.VALIDATION_FAILED" });
+  expect(empty.status).toBe(200);
+  expect(await empty.json()).toMatchObject({ code: 200, data: { items: [], total: 0 } });
   expect(missingBody.status).toBe(422);
   expect(await missingBody.json()).toMatchObject({ code: "COMMON.VALIDATION_FAILED" });
   expect(emptyStringBody.status).toBe(422);
@@ -64,7 +64,7 @@ test("maps the canonical v4 Filter request through the production Internal HTTP 
   expect(await whitespaceBody.json()).toMatchObject({ code: "COMMON.VALIDATION_FAILED" });
   expect(excessiveRawValues.status).toBe(422);
   expect(callerControlledExecution.status).toBe(422);
-  expect(searchCurrentDocuments).toHaveBeenCalledTimes(1);
+  expect(searchCurrentDocuments).toHaveBeenCalledTimes(2);
 });
 
 test("returns 422 for retired authorization paths while role conditions remain searchable", async () => {
@@ -73,7 +73,7 @@ test("returns 422 for retired authorization paths while role conditions remain s
       documentRepository: {
         async searchCurrentDocuments(filter) {
           compileUserDocumentFilter(filter, userDocuments.document, "internal");
-          return [];
+          return { rows: [], total: 0 };
         },
       },
     }),
@@ -92,7 +92,7 @@ test("returns 422 for retired authorization paths while role conditions remain s
 });
 
 test("rejects retired document wrappers and subtree operators through Internal HTTP", async () => {
-  const searchCurrentDocuments = mock(async () => []);
+  const searchCurrentDocuments = mock(async () => ({ rows: [], total: 0 }));
   const app = createProductionApp(createUserDocumentSearchService({ documentRepository: { searchCurrentDocuments } }));
   for (const filter of [
     { field: "user.username", op: "eq", value: "alice" },
@@ -135,28 +135,36 @@ test("returns one complete canonical document without storage metadata", async (
   };
   const query = createUserDocumentSearchService({
     documentRepository: {
-      searchCurrentDocuments: mock(async () => [
-        {
-          userId: 1,
-          subjectIdentifier: document.subjectIdentifier,
-          schemaVersion: USER_DOCUMENT_SCHEMA_VERSION,
-          sourceVersion: "4",
-          publishedAt: new Date(),
-          document,
-        },
-      ]),
+      searchCurrentDocuments: mock(async () => ({
+        rows: [
+          {
+            userId: 1,
+            subjectIdentifier: document.subjectIdentifier,
+            schemaVersion: USER_DOCUMENT_SCHEMA_VERSION,
+            sourceVersion: "4",
+            publishedAt: new Date(),
+            document,
+          },
+        ],
+        total: 1,
+      })),
     },
   });
   const response = await request(createProductionApp(query), {
     filter: { field: "username", op: "eq", value: "alice" },
+    select: Object.keys(UserDocumentSchema.shape),
   });
   const body = await response.json();
   expect(response.status).toBe(200);
-  expect(body).toEqual({ code: 200, message: "success", data: [document] });
+  expect(body).toEqual({
+    code: 200,
+    message: "success",
+    data: { items: [document], total: 1, page: null, pageSize: null },
+  });
 });
 
 test("preserves Profile HTTP depth and node budgets before executing the query", async () => {
-  const searchCurrentDocuments = mock(async () => []);
+  const searchCurrentDocuments = mock(async () => ({ rows: [], total: 0 }));
   const app = createProductionApp(
     createUserDocumentSearchService({
       documentRepository: { searchCurrentDocuments },
@@ -168,7 +176,7 @@ test("preserves Profile HTTP depth and node budgets before executing the query",
   const valid = await request(app, { filter: atDepthLimit });
   const validBody = await valid.json();
   expect(valid.status).toBe(200);
-  expect(validBody).toMatchObject({ code: 200, data: [] });
+  expect(validBody).toMatchObject({ code: 200, data: { items: [], total: 0, page: null, pageSize: null } });
   const tooManyNodes = { and: Array.from({ length: 8 }, () => ({ and: Array.from({ length: 8 }, () => condition) })) };
   for (const filter of [
     { not: atDepthLimit },
@@ -188,7 +196,7 @@ test("preserves Profile HTTP depth and node budgets before executing the query",
 test("describes one generic recursive Filter AST without enumerating field and operator pairs", async () => {
   const query = createUserDocumentSearchService({
     documentRepository: {
-      searchCurrentDocuments: mock(async () => []),
+      searchCurrentDocuments: mock(async () => ({ rows: [], total: 0 })),
     },
   });
   const app = createProductionApp(query);
@@ -204,13 +212,15 @@ test("describes one generic recursive Filter AST without enumerating field and o
   expect(document.components.schemas.UserDocumentSearchRequest).toMatchObject({
     type: "object",
     additionalProperties: false,
-    required: ["filter"],
     properties: {
       filter: {
         $ref: "#/components/schemas/UserDocumentFilterExpression",
       },
+      paginate: { type: "boolean", default: false },
+      select: { type: "array", minItems: 1 },
     },
   });
+  expect(document.components.schemas.UserDocumentSearchRequest).not.toHaveProperty("required");
   const expressionDocument = JSON.stringify(document.components.schemas.UserDocumentFilterExpression);
   expect(document.components.schemas.UserDocumentFilterExpression).toMatchObject({
     anyOf: expect.any(Array),
@@ -329,7 +339,7 @@ async function requestWithRawBody(app: ReturnType<typeof createProductionApp>, b
 }
 
 test("requires a valid Internal Client credential before querying user documents", async () => {
-  const searchCurrentDocuments = mock(async () => []);
+  const searchCurrentDocuments = mock(async () => ({ rows: [], total: 0 }));
   const app = createProductionApp(
     createUserDocumentSearchService({ documentRepository: { searchCurrentDocuments } }),
     true,

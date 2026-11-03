@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { createUnitOfWork } from "@iam/api-core/uow";
-import { OrganizationStatus, OrganizationType } from "@iam/contracts";
+import { OrganizationDocumentSchema, OrganizationStatus, OrganizationType } from "@iam/contracts";
 import type { DbTransaction } from "@iam/db";
 import { sql } from "drizzle-orm";
 import { createOrganizationDocumentInvalidation, type OrganizationDocumentSourceChange } from "../../src/producer";
@@ -292,12 +292,18 @@ function createWork() {
       while (rebuildJobs.length > 0) await processor.processRebuild(rebuildJobs.shift()!);
     },
     async search(code: string) {
-      return await query.search({ filter: { field: "code", op: "eq", value: code } });
+      const result = await query.search({
+        filter: { field: "code", op: "eq", value: code },
+        select: Object.keys(OrganizationDocumentSchema.shape),
+      });
+      return result.items.map((document) => OrganizationDocumentSchema.parse(document));
     },
     async searchSubtree(code: string) {
-      return await query.search({
+      const result = await query.search({
+        select: Object.keys(OrganizationDocumentSchema.shape),
         filter: { exists: { path: "path", where: { field: "code", op: "eq", value: code } } },
       });
+      return result.items.map((document) => OrganizationDocumentSchema.parse(document));
     },
   };
 }

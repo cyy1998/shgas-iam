@@ -1,5 +1,5 @@
+import { organizationDocumentSelection, resolveDocumentPagination } from "@iam/contracts";
 import { FilterValidationError } from "@iam/filter-engine";
-import { z } from "zod";
 import { parseStoredOrganizationDocument } from "../schema";
 import {
   OrganizationDirectoryNotFoundError,
@@ -7,12 +7,11 @@ import {
   OrganizationDocumentResultTooLargeError,
   OrganizationDocumentUnavailableError,
 } from "./organization-document.error";
+import { OrganizationDocumentRequestSchema } from "./organization-document.filter";
 import {
   ORGANIZATION_DOCUMENT_RESULT_LIMIT,
   type OrganizationDocumentQueryRepositoryPort,
 } from "./organization-document.port";
-
-const SearchRequestEnvelopeSchema = z.object({ filter: z.unknown().nonoptional() }).strict();
 
 export function createOrganizationDocumentQueryService(deps: {
   readonly repository: OrganizationDocumentQueryRepositoryPort;
@@ -33,18 +32,23 @@ export function createOrganizationDocumentQueryService(deps: {
       }
     },
     async search(input: unknown) {
-      const request = SearchRequestEnvelopeSchema.safeParse(input);
+      const request = OrganizationDocumentRequestSchema.safeParse(input);
       if (!request.success) throw new OrganizationDocumentFilterValidationError();
-      let rows: readonly { readonly document: unknown }[];
+      const pagination = resolveDocumentPagination(request.data);
+      let result: Awaited<ReturnType<OrganizationDocumentQueryRepositoryPort["searchCurrentDocuments"]>>;
       try {
-        rows = await deps.repository.searchCurrentDocuments(request.data.filter);
+        result = await deps.repository.searchCurrentDocuments(request.data.filter, request.data.sort, pagination);
       } catch (error) {
         if (error instanceof FilterValidationError) throw new OrganizationDocumentFilterValidationError();
         throw new OrganizationDocumentUnavailableError();
       }
-      if (rows.length > ORGANIZATION_DOCUMENT_RESULT_LIMIT) throw new OrganizationDocumentResultTooLargeError();
+      if (pagination === undefined && result.rows.length > ORGANIZATION_DOCUMENT_RESULT_LIMIT)
+        throw new OrganizationDocumentResultTooLargeError();
       try {
-        return rows.map((row) => parseStoredOrganizationDocument(row.document));
+        const items = result.rows.map((row) =>
+          organizationDocumentSelection.select(parseStoredOrganizationDocument(row.document), request.data.select),
+        );
+        return { items, total: result.total, page: pagination?.page ?? null, pageSize: pagination?.pageSize ?? null };
       } catch {
         throw new OrganizationDocumentUnavailableError();
       }

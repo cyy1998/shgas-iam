@@ -162,8 +162,7 @@ test("strictly rejects legacy, empty, unknown, and wrongly typed expressions", a
   const invalidRequests = [
     undefined,
     null,
-    {},
-    { filter: undefined },
+    { filter: null },
     { filter: { field: "username", op: "eq", value: "alice" }, limit: 1 },
     { filter: { all: [] } },
     { filter: { any: [] } },

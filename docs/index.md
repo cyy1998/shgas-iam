@@ -118,7 +118,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [ADR-0043](adr/0043-retire-public-and-legacy-internal-directory-search.md)                 | decision | Current | 2026-10-26    | 2026-11-26  | 直接退役五个旧搜索入口；保留 Internal DSL、详情、Admin 与独立委托能力。                                    |
 | [ADR-0044](adr/0044-publish-gateway-configurations-through-a-stateless-api.md)             | decision | Current | 2026-10-16    | 2026-10-31  | 无状态 Gateway API、Client 凭据校验、补偿恢复与实例内串行的已接受取舍。                                    |
 | [ADR-0045](adr/0045-retire-privilege-permission-points.md)                                 | decision | Current | 2026-10-21    | 2026-11-21  | 权限点退役、契约硬切换、删表与全量重建；保留角色、Client 委托及有效登录态，发布单独验收。                  |
-| [ADR-0046](adr/0046-unify-user-and-organization-read-documents.md)                         | decision | Current | 2026-11-02    | 2026-12-02  | 统一文档、Client 隔离与可靠发布见 Spec #283；根结构修订及两类 Document 的 Worker 内置周期 repair 已接受。  |
+| [ADR-0046](adr/0046-unify-user-and-organization-read-documents.md)                         | decision | Current | 2026-11-03    | 2026-12-03  | 统一文档见 Spec #283；根结构及周期 repair 已接受；搜索结果控制修订见 Spec #310。                           |
 | [ADR-0047](adr/0047-separate-operations-cli-from-worker.md)                                | decision | Current | 2026-11-02    | 2026-12-02  | 人工维护命令直接切换至 Ops CLI、独立配置、同版本镜像及维护 Compose；共享 owner 能力，Worker 保留自动恢复。 |
 
 </details>
@@ -146,7 +146,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 
 | Document                                                   | Type         | Status  | Last verified | Next review | Notes                                              |
 | ---------------------------------------------------------- | ------------ | ------- | ------------- | ----------- | -------------------------------------------------- |
-| [后端架构](architecture/backend-architecture.md)           | architecture | Current | 2026-11-02    | 2026-12-02  | 分层、事务、关键模块协作与一致性约束。             |
+| [后端架构](architecture/backend-architecture.md)           | architecture | Current | 2026-11-03    | 2026-12-03  | 分层、事务、关键模块协作与一致性约束。             |
 | [共享契约与数据库](architecture/contracts-and-database.md) | architecture | Current | 2026-10-26    | 2026-11-26  | 代码选址、包出口、运行环境、DTO 演进与持久化边界。 |
 | [前端架构](architecture/frontend-architecture.md)          | architecture | Current | 2026-10-25    | 2026-11-25  | 页面、请求、权限、状态与失败恢复的职责。           |
 | [仓库地图](architecture/repository-map.md)                 | architecture | Current | 2026-11-02    | 2026-12-02  | 代码、基础设施、工具与生成目录定位。               |
@@ -185,8 +185,8 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [应用委托](features/delegation/client-delegation.md)               | feature | Current | 2026-10-25    | 2026-11-25  | 管理权限、创建、期间冲突、生命周期和代办人查询。 |
 | [网关配置发布](features/gateway/gateway-configuration.md)          | feature | Current | 2026-10-25    | 2026-11-25  | 校验、预览、发布、删除范围及人工恢复。           |
 | [组织责任管理](features/organization-responsibility/management.md) | feature | Current | 2026-10-25    | 2026-11-25  | HR 范围、任命、名额、生命周期和历史查看。        |
-| [组织搜索](features/search/organization-search.md)                 | feature | Current | 2026-10-25    | 2026-11-25  | 组织属性、层级与路径查询、结果范围和更新延迟。   |
-| [用户搜索](features/search/user-search.md)                         | feature | Current | 2026-10-26    | 2026-11-26  | 用户与任职条件、摘要结果、限制和委托组合。       |
+| [组织搜索](features/search/organization-search.md)                 | feature | Current | 2026-11-03    | 2026-12-03  | 组织属性、层级与路径查询、结果范围和更新延迟。   |
+| [用户搜索](features/search/user-search.md)                         | feature | Current | 2026-11-03    | 2026-12-03  | 用户与任职条件、字段选择、限制和委托组合。       |
 | [登录与会话](features/sso/login-and-session.md)                    | feature | Current | 2026-10-25    | 2026-11-25  | 登录恢复、会话下线、改密和临时登录限制。         |
 | [应用单点登录](features/sso/single-sign-on.md)                     | feature | Current | 2026-10-25    | 2026-11-25  | 接入方式、登录流程、共享信息和退出责任。         |
 | [用户信息共享](features/sso/subject-delivery.md)                   | feature | Current | 2026-10-26    | 2026-11-26  | 可提供的资料、披露范围、更新延迟和应用责任。     |
@@ -207,7 +207,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [委托接入](guides/delegation.md)            | guide | Current | 2026-10-25    | 2026-11-25  | Client 范围、代办人解析和失败处理。        |
 | [网关配置接入](guides/gateway.md)           | guide | Current | 2026-10-25    | 2026-11-25  | 凭据、YAML、调用步骤及未知结果处理。       |
 | [OIDC 接入指南](guides/oidc.md)             | guide | Current | 2026-10-26    | 2026-11-26  | 端点、参数、示例、Scope、CORS 和退出。     |
-| [搜索接入](guides/search.md)                | guide | Current | 2026-10-27    | 2026-11-27  | 用户与组织查询示例、过滤条件及结果限制。   |
+| [搜索接入](guides/search.md)                | guide | Current | 2026-11-03    | 2026-12-03  | 用户与组织查询示例、过滤条件及结果限制。   |
 
 </details>
 

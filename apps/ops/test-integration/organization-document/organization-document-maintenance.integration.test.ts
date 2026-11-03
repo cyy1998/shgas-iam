@@ -117,8 +117,9 @@ test("first build and incompatible schema recovery require a fresh full verifica
   await harness.sql`UPDATE organization_document SET schema_version=2 WHERE organization_id IN (1,2)`;
   await harness.sql`UPDATE organization SET org_name='Upgraded root', is_virtual=true WHERE id=1`;
   await harness.sql`UPDATE organization SET status=${OrganizationStatus.Pause} WHERE id=2`;
-  const oldSchemaResults = await search.search({
+  const { items: oldSchemaResults } = await search.search({
     filter: { exists: { path: "path", where: { field: "code", op: "eq", value: "ROOT" } } },
+    select: ["code", "name", "type", "status", "level", "isVirtual", "isEntity", "path"],
   });
   expect(oldSchemaResults).toEqual([]);
   const incompatible = await command("verify", 1);
@@ -145,8 +146,9 @@ test("first build and incompatible schema recovery require a fresh full verifica
     expect(row.source_version).toBe(row.version);
     expect(row.status).toBe("processed");
   }
-  const documents = await search.search({
+  const { items: documents } = await search.search({
     filter: { exists: { path: "path", where: { field: "code", op: "eq", value: "ROOT" } } },
+    select: ["code", "name", "type", "status", "level", "isVirtual", "isEntity", "path"],
   });
   expect(documents.map((document) => document.code)).toEqual(["ROOT", "CHILD"]);
   expect(documents[0]).toMatchObject({ name: "Upgraded root", isVirtual: true });

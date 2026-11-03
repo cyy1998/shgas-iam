@@ -9,6 +9,11 @@ import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
+import {
+  StandardErrorResponseSchema,
+  ValidationFailureResponseSchema,
+} from "@iam/api-core/core/openapi/schemas/error-response-schema";
+import { OrganizationDocumentSearchResultSchema } from "@iam/contracts";
 import { OrganizationDocumentSchema } from "@iam/organization-document";
 
 const tags = ["Internal/Organization"];
@@ -19,12 +24,17 @@ export const organizationsSearchDsl = createRoute({
   method: "post",
   path: "/search-dsl",
   tags,
-  request: { body: jsonContentRequired(OrganizationDocumentTransportRequestSchema, "严格组织 Filter DSL") },
+  request: { body: jsonContentRequired(OrganizationDocumentTransportRequestSchema, "组织筛选、分页、排序及返回字段") },
   responses: {
     ...commonErrorResponses,
+    [HttpStatusCodes.UNPROCESSABLE_ENTITY]: jsonContent(
+      z.union([ValidationFailureResponseSchema, StandardErrorResponseSchema]),
+      "查询参数非法、超预算或非分页匹配超过 500 项",
+    ),
+    [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(StandardErrorResponseSchema, "组织文档损坏、查询失败或超时"),
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(z.array(OrganizationDocumentResponseSchema)),
-      "完整组织搜索文档",
+      createSuccessResponseSchema(OrganizationDocumentSearchResultSchema),
+      "组织文档搜索结果和精确总数；非分页时 page/pageSize 为 null",
     ),
   },
 });

@@ -73,7 +73,10 @@ test("organization backfill uses the normal consumer to publish complete documen
     repository: createOrganizationDocumentQueryRepository(harness.db),
   });
   const result = await runBackfillCLI(redis, prefix);
-  const beforeConsumption = await search.search({ filter: { field: "code", op: "eq", value: "CHILD" } });
+  const { items: beforeConsumption } = await search.search({
+    filter: { field: "code", op: "eq", value: "CHILD" },
+    select: ["code", "name", "type", "status", "level", "isVirtual", "isEntity", "path"],
+  });
   expect(result.output).toContain('"registered":2');
   expect(result.output).toContain('"enqueued":2');
   expect(result.output).toContain('"publication":"not-verified"');
@@ -143,7 +146,10 @@ test(
     const search = createOrganizationDocumentQueryService({
       repository: createOrganizationDocumentQueryRepository(harness.db),
     });
-    const published = await search.search({ filter: { field: "code", op: "eq", value: "ROOT" } });
+    const { items: published } = await search.search({
+      filter: { field: "code", op: "eq", value: "ROOT" },
+      select: ["code", "name", "type", "status", "level", "isVirtual", "isEntity", "path"],
+    });
     expect(result.output).toContain("Organization document command shutting down");
     expect(Array.from(changes)).toEqual([{ organization_id: 1, status: "pending" }]);
     expect(published).toEqual([]);
@@ -154,7 +160,10 @@ test(
 async function waitForPublishedChild(search: ReturnType<typeof createOrganizationDocumentQueryService>) {
   const deadline = Date.now() + 8_000;
   while (Date.now() < deadline) {
-    const documents = await search.search({ filter: { field: "code", op: "eq", value: "CHILD" } });
+    const { items: documents } = await search.search({
+      filter: { field: "code", op: "eq", value: "CHILD" },
+      select: ["code", "name", "type", "status", "level", "isVirtual", "isEntity", "path"],
+    });
     if (documents.length) return documents;
     await new Promise((resolve) => setTimeout(resolve, 20));
   }

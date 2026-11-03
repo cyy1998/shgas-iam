@@ -211,11 +211,13 @@ async function publishOrganizationChanges() {
 }
 
 async function searchOrganizations(codes: string[]) {
-  return await createOrganizationDocumentQueryService({
+  const { items } = await createOrganizationDocumentQueryService({
     repository: createOrganizationDocumentQueryRepository(harness.db),
   }).search({
     filter: { field: "code", op: "in", value: codes },
+    select: ["code", "name", "type", "status", "level", "isVirtual", "isEntity", "path"],
   });
+  return items;
 }
 
 async function failure(operation: () => Promise<unknown>) {

@@ -4,7 +4,7 @@ import { createOrganizationHandlers } from "@api/routes/internal/organization/or
 import { createOrganizationRoute } from "@api/routes/internal/organization/organization.index";
 import createApp from "@iam/api-core/core/create-app";
 import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares";
-import { OrganizationStatus, OrganizationType } from "@iam/contracts";
+import { OrganizationDocumentSchema, OrganizationStatus, OrganizationType } from "@iam/contracts";
 import type { GenericClientRuntimeDto } from "@iam/domain/client";
 import {
   createOrganizationDocumentQueryRepository,
@@ -26,10 +26,17 @@ const publishedDocument = {
 
 test("returns the complete published organization document through the production Internal route", async () => {
   const app = createProductionApp(async () => [{ document: publishedDocument }]);
-  const response = await request(app, { filter: { field: "code", op: "eq", value: "ROOT" } });
+  const response = await request(app, {
+    filter: { field: "code", op: "eq", value: "ROOT" },
+    select: Object.keys(OrganizationDocumentSchema.shape),
+  });
   const body = await response.json();
   expect(response.status).toBe(200);
-  expect(body).toEqual({ code: 200, message: "success", data: [publishedDocument] });
+  expect(body).toEqual({
+    code: 200,
+    message: "success",
+    data: { items: [publishedDocument], total: 1, page: null, pageSize: null },
+  });
 });
 
 test("exact directory detail uses the same paused published document as search", async () => {
@@ -65,6 +72,12 @@ test("publishes the recursive DSL request and the common public document shape i
   expect(
     document.paths["/internal/organizations/search-dsl"].post.requestBody.content["application/json"].schema,
   ).toEqual({ $ref: "#/components/schemas/OrganizationDocumentRequest" });
+  expect(document.components.schemas.OrganizationDocumentRequest.properties.paginate).toMatchObject({
+    type: "boolean",
+    default: false,
+  });
+  expect(document.components.schemas.OrganizationDocumentRequest.properties).toHaveProperty("page");
+  expect(document.components.schemas.OrganizationDocumentRequest.properties.pageSize).toMatchObject({ maximum: 500 });
   expect(document.components.schemas.OrganizationDocument.required).toEqual(
     expect.arrayContaining(["code", "name", "type", "status", "level", "isVirtual", "isEntity", "path"]),
   );
@@ -76,7 +89,6 @@ test("publishes the recursive DSL request and the common public document shape i
 test("rejects unknown fields, incorrect types and operators, empty expressions and caller-selected execution", async () => {
   const app = createProductionApp(async () => []);
   for (const body of [
-    {},
     { filter: {} },
     { filter: { and: [] } },
     { filter: { or: [] } },
@@ -137,7 +149,7 @@ test("accepts duplicate in values within the distinct-value budget and preserves
   });
   const result = await response.json();
   expect(response.status).toBe(200);
-  expect(result).toEqual({ code: 200, message: "success", data: [] });
+  expect(result).toEqual({ code: 200, message: "success", data: { items: [], total: 0, page: null, pageSize: null } });
 });
 
 test("returns all 500 matches and rejects a 501st match as a whole", async () => {
@@ -148,7 +160,7 @@ test("returns all 500 matches and rejects a 501st match as a whole", async () =>
   );
   const fullBody = await full.json();
   expect(full.status).toBe(200);
-  expect(fullBody.data).toHaveLength(500);
+  expect(fullBody.data.items).toHaveLength(500);
   const excessive = await request(
     createProductionApp(async () => Array.from({ length: 501 }, () => ({ document: publishedDocument }))),
     { filter },

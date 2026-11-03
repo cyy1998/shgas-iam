@@ -7,6 +7,7 @@ import {
   OrganizationType,
   PositionStatus,
   RoleAssignmentTargetType,
+  UserDocumentSchema,
   UserStatus,
   UserType,
 } from "@iam/contracts";
@@ -136,8 +137,9 @@ describe("User Document v4 Employment tracer", () => {
     const candidate = await builder.buildOne({ userId: 1, sourceVersion: "1" });
     await candidatePersistence.upsert(candidate!);
 
-    const byRootSubtree = await query.searchDocuments(
+    const { items: byRootSubtree } = await query.searchDocuments(
       {
+        select: Object.keys(UserDocumentSchema.shape),
         filter: {
           exists: {
             path: "employments",
@@ -147,8 +149,9 @@ describe("User Document v4 Employment tracer", () => {
       },
       "profile-client",
     );
-    const byTargetSubtree = await query.searchDocuments(
+    const { items: byTargetSubtree } = await query.searchDocuments(
       {
+        select: Object.keys(UserDocumentSchema.shape),
         filter: {
           exists: {
             path: "employments",
@@ -160,8 +163,9 @@ describe("User Document v4 Employment tracer", () => {
       },
       "profile-client",
     );
-    const byPathNodeDistance = await query.searchDocuments(
+    const { items: byPathNodeDistance } = await query.searchDocuments(
       {
+        select: Object.keys(UserDocumentSchema.shape),
         filter: {
           exists: {
             path: "employments",
@@ -181,8 +185,9 @@ describe("User Document v4 Employment tracer", () => {
       },
       "profile-client",
     );
-    const byPathNodeDistanceIn = await query.searchDocuments(
+    const { items: byPathNodeDistanceIn } = await query.searchDocuments(
       {
+        select: Object.keys(UserDocumentSchema.shape),
         filter: {
           exists: {
             path: "employments",
@@ -201,8 +206,9 @@ describe("User Document v4 Employment tracer", () => {
       },
       "profile-client",
     );
-    const byPrimaryIn = await query.searchDocuments(
+    const { items: byPrimaryIn } = await query.searchDocuments(
       {
+        select: Object.keys(UserDocumentSchema.shape),
         filter: {
           exists: {
             path: "employments",
@@ -216,8 +222,9 @@ describe("User Document v4 Employment tracer", () => {
       },
       "profile-client",
     );
-    const outsideSubtree = await query.searchDocuments(
+    const { items: outsideSubtree } = await query.searchDocuments(
       {
+        select: Object.keys(UserDocumentSchema.shape),
         filter: {
           exists: {
             path: "employments",
@@ -295,8 +302,9 @@ describe("User Document v4 Employment tracer", () => {
     ]);
     await candidatePersistence.upsert(candidate!);
 
-    const sameResponsibility = await query.searchDocuments(
+    const { items: sameResponsibility } = await query.searchDocuments(
       {
+        select: Object.keys(UserDocumentSchema.shape),
         filter: employmentResponsibilities({
           and: [
             { field: "type.code", op: "eq", value: OrganizationResponsibilityTypeCode.Head },
@@ -306,8 +314,9 @@ describe("User Document v4 Employment tracer", () => {
       },
       "profile-client",
     );
-    const independentResponsibilities = await query.searchDocuments(
+    const { items: independentResponsibilities } = await query.searchDocuments(
       {
+        select: Object.keys(UserDocumentSchema.shape),
         filter: {
           exists: {
             path: "employments",
@@ -332,16 +341,18 @@ describe("User Document v4 Employment tracer", () => {
       },
       "profile-client",
     );
-    const targetSubtree = await query.searchDocuments(
+    const { items: targetSubtree } = await query.searchDocuments(
       {
+        select: Object.keys(UserDocumentSchema.shape),
         filter: employmentResponsibilities({
           exists: { path: "targetOrganization.path", where: { field: "code", op: "eq", value: "target-root" } },
         }),
       },
       "profile-client",
     );
-    const notExistsHead = await query.searchDocuments(
+    const { items: notExistsHead } = await query.searchDocuments(
       {
+        select: Object.keys(UserDocumentSchema.shape),
         filter: {
           not: employmentResponsibilities({
             field: "type.code",
@@ -352,8 +363,9 @@ describe("User Document v4 Employment tracer", () => {
       },
       "profile-client",
     );
-    const existsNotHead = await query.searchDocuments(
+    const { items: existsNotHead } = await query.searchDocuments(
       {
+        select: Object.keys(UserDocumentSchema.shape),
         filter: employmentResponsibilities({
           not: {
             field: "type.code",
@@ -390,8 +402,9 @@ describe("User Document v4 Employment tracer", () => {
     const candidate = await builder.buildOne({ userId: 1, sourceVersion: "1" });
     await candidatePersistence.upsert(candidate!);
 
-    const crossEmploymentJoin = await query.searchDocuments(
+    const { items: crossEmploymentJoin } = await query.searchDocuments(
       {
+        select: Object.keys(UserDocumentSchema.shape),
         filter: {
           exists: {
             path: "employments",
@@ -406,8 +419,9 @@ describe("User Document v4 Employment tracer", () => {
       },
       "profile-client",
     );
-    const independentScopes = await query.searchDocuments(
+    const { items: independentScopes } = await query.searchDocuments(
       {
+        select: Object.keys(UserDocumentSchema.shape),
         filter: {
           and: [
             {
@@ -427,8 +441,9 @@ describe("User Document v4 Employment tracer", () => {
       },
       "profile-client",
     );
-    const oneCompleteEmployment = await query.searchDocuments(
+    const { items: oneCompleteEmployment } = await query.searchDocuments(
       {
+        select: Object.keys(UserDocumentSchema.shape),
         filter: {
           exists: {
             path: "employments",
@@ -472,9 +487,13 @@ describe("User Document v4 Employment tracer", () => {
         },
       },
     });
-    const containsAny = await query.searchDocuments(normalized, "profile-client");
-    const containsAll = await query.searchDocuments(
+    const { items: containsAny } = await query.searchDocuments(
+      { ...normalized, select: Object.keys(UserDocumentSchema.shape) },
+      "profile-client",
+    );
+    const { items: containsAll } = await query.searchDocuments(
       {
+        select: Object.keys(UserDocumentSchema.shape),
         filter: {
           exists: {
             path: "employments",
@@ -488,8 +507,9 @@ describe("User Document v4 Employment tracer", () => {
       },
       "profile-client",
     );
-    const missingAll = await query.searchDocuments(
+    const { items: missingAll } = await query.searchDocuments(
       {
+        select: Object.keys(UserDocumentSchema.shape),
         filter: {
           exists: {
             path: "employments",
@@ -529,6 +549,7 @@ describe("User Document v4 Employment tracer", () => {
     try {
       await query.searchDocuments(
         {
+          select: Object.keys(UserDocumentSchema.shape),
           filter: {
             and: [
               { field: "username", op: "eq", value: "alice" },

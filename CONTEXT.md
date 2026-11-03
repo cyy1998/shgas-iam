@@ -14,7 +14,7 @@ IAM 交付角色事实，由接入应用解释角色对应的业务操作权限�
 User Profile 继续表示领域用户档案；文档表示发布后的目录事实。
 
 **User Search**:
-以用户为结果根，按用户及其明确公开的关联事实筛选，并返回当前 Client 可见的完整 User Document 的查询能力。
+以用户为结果根，按用户及其明确公开的关联事实筛选，并返回当前 Client 可见的 User Document 或其选定字段的查询能力。
 _Avoid_: generic entity query, historical profile search
 
 **User Document**:
@@ -33,7 +33,7 @@ _Avoid_: Organization Search Document, organization source of truth, editable or
 _Avoid_: global role search, caller-selected client, response-only role filtering
 
 **Internal Directory Detail**:
-按用户或组织的公开标识精确读取的目录事实，其公开文档与同一发布版本、同一披露上下文下的搜索单项一致；
+按用户或组织的公开标识精确读取的目录事实，其公开文档与同一发布版本、同一披露上下文下未裁剪字段的搜索单项一致；
 它允许落后于源事实，包含未删除的启用、暂停和禁用对象，不包含 Admin 管理专属的历史、内部引用或操作能力。
 _Avoid_: Admin detail, source-table DTO, protocol payload
 
@@ -64,7 +64,7 @@ _Avoid_: session payload, protocol payload
 _Avoid_: ancestorCodes, ancestorDepths, storage path encoding
 
 **Organization Search**:
-以未删除的 Organization 为结果根，按组织自身属性和完整路径筛选并返回完整 Organization Document 的查询能力；Enable、Pause、Disable 均可查询，状态由调用方显式筛选，不包含成员、岗位、角色或责任持有人反查。
+以未删除的 Organization 为结果根，按组织自身属性和完整路径筛选并返回 Organization Document 或其选定字段的查询能力；Enable、Pause、Disable 均可查询，状态由调用方显式筛选，不包含成员、岗位、角色或责任持有人反查。
 _Avoid_: organization member search, generic entity query
 
 **Directory Search Path**:
@@ -80,7 +80,8 @@ _Avoid_: generic query DSL, result projection DSL, flattened relation filter
 _Avoid_: fuzzy equality, implicit normalization, global role filtering
 
 **Directory Search Budget**:
-保护目录查询的资源边界：最大深度 8、节点 64、and/or 子项 16、查询集合去重值 50、字符串 128、结果 500，并有数据库和请求期限。非法、空、超预算或超结果上限整体返回 422，无匹配返回空数组，损坏或不可用整体返回 503，不截断或返回部分结果。
+保护目录查询的资源边界，约束过滤复杂度、返回规模和执行时间；分页模式不以单页上限限制全部匹配对象数量。
+分页仅界定本次返回的对象范围，不保证跨请求固定结果集合，也不允许跳过本页失败对象拼成部分成功。
 _Avoid_: unbounded filter, unbounded result set, partial search success
 
 Client Delegation 独立于文档与过滤条件，调用与切换边界见[委托接入](docs/guides/delegation.md)。
