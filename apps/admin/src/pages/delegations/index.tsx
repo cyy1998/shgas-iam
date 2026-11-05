@@ -7,6 +7,7 @@ import {
   searchDelegations,
   updateDelegation,
 } from "@admin/services/delegation";
+import { FilterOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import { PageContainer } from "@ant-design/pro-components";
 import { ClientDelegationStatus } from "@iam/contracts";
 import { useAccess } from "@umijs/max";
@@ -14,18 +15,17 @@ import {
   Alert,
   Button,
   Card,
-  Col,
   DatePicker,
   Descriptions,
   Form,
   Input,
   Modal,
   message,
-  Row,
   Select,
   Space,
   Table,
   Tag,
+  Tooltip,
 } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -76,6 +76,10 @@ export default function DelegationsPage() {
   const access = useAccess();
   const [filterForm] = Form.useForm<Filters>();
   const [form] = Form.useForm<Values>();
+  const [moreFiltersOpen, setMoreFiltersOpen] = useState(false);
+  const filterValues = Form.useWatch((values: Filters) => values, { form: filterForm, preserve: true }) ?? {};
+  const moreFilterCount = [filterValues.orgCode, filterValues.startTime, filterValues.endTime].filter(Boolean).length;
+  const hasFilters = Object.values(filterValues).some((value) => value !== undefined && value !== null && value !== "");
   const [rows, setRows] = useState<DelegationVo[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -88,7 +92,7 @@ export default function DelegationsPage() {
   const requestSequence = useRef(0);
   const load = useCallback(async () => {
     const request = ++requestSequence.current;
-    const values = filterForm.getFieldsValue();
+    const values = filterForm.getFieldsValue(true);
     const query: DelegationSearchInput = {
       ...(values.delegator ? { delegatorUsernames: [values.delegator] } : {}),
       ...(values.delegatee ? { delegateeUsernames: [values.delegatee] } : {}),
@@ -232,88 +236,96 @@ export default function DelegationsPage() {
             className={styles.filters}
             name="delegation-filter"
             form={filterForm}
-            labelCol={{ flex: "80px" }}
-            wrapperCol={{ flex: 1 }}
-            onFinish={() => {
-              void load();
-            }}
+            onValuesChange={() => void load()}
           >
-            <Row gutter={16}>
-              <Col xs={24} sm={12} lg={8} xl={6}>
-                <Form.Item name="delegator" label="委托人筛选">
-                  <DelegationObjectSelect kind="user" purpose="filter" />
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={12} lg={8} xl={6}>
-                <Form.Item name="delegatee" label="受托人筛选">
-                  <DelegationObjectSelect kind="user" purpose="filter" />
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={12} lg={8} xl={6}>
-                <Form.Item name="clientId" label="应用筛选">
-                  <DelegationObjectSelect kind="client" purpose="filter" />
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={12} lg={8} xl={6}>
-                <Form.Item name="orgCode" label="组织筛选">
-                  <DelegationObjectSelect kind="organization" purpose="filter" />
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={12} lg={8} xl={6}>
-                <Form.Item name="businessState" label="状态">
-                  <Select options={states} allowClear placeholder="全部状态" />
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={12} lg={8} xl={6}>
-                <Form.Item name="startTime" label="期间起点">
-                  <DatePicker
-                    showTime={{ format: "HH:mm" }}
-                    format="YYYY-MM-DD HH:mm"
-                    placeholder="请选择起点时间"
-                    style={{ width: "100%" }}
+            <div className={styles.toolbar}>
+              <div className={styles["primary-filters"]}>
+                <Form.Item name="delegator">
+                  <DelegationObjectSelect
+                    kind="user"
+                    purpose="filter"
+                    aria-label="委托人筛选"
+                    placeholder="全部委托人"
                   />
                 </Form.Item>
-              </Col>
-              <Col xs={24} sm={12} lg={8} xl={6}>
-                <Form.Item name="endTime" label="期间终点">
-                  <DatePicker
-                    showTime={{ format: "HH:mm" }}
-                    format="YYYY-MM-DD HH:mm"
-                    placeholder="请选择终点时间"
-                    style={{ width: "100%" }}
+                <Form.Item name="delegatee">
+                  <DelegationObjectSelect
+                    kind="user"
+                    purpose="filter"
+                    aria-label="受托人筛选"
+                    placeholder="全部受托人"
                   />
                 </Form.Item>
-              </Col>
-              <Col span={24} className={styles.toolbar}>
-                <Space>
+                <Form.Item name="clientId">
+                  <DelegationObjectSelect kind="client" purpose="filter" aria-label="应用筛选" placeholder="全部应用" />
+                </Form.Item>
+                <Form.Item name="businessState" className={styles["state-filter"]}>
+                  <Select aria-label="委托状态" options={states} allowClear placeholder="全部状态" />
+                </Form.Item>
+                <Button
+                  type="text"
+                  icon={<FilterOutlined aria-hidden />}
+                  aria-expanded={moreFiltersOpen}
+                  onClick={() => setMoreFiltersOpen((current) => !current)}
+                >
+                  更多筛选{moreFilterCount ? `（${moreFilterCount}）` : ""}
+                </Button>
+                {hasFilters && (
                   <Button
+                    type="text"
                     onClick={() => {
                       filterForm.resetFields();
                       void load();
                     }}
                   >
-                    重置
+                    清除筛选
                   </Button>
-                  <Button htmlType="submit" type="primary" loading={loading}>
-                    查询
+                )}
+              </div>
+              <Space size={8} className={styles.actions}>
+                {access.canCreateDelegation && (
+                  <Button type="primary" icon={<PlusOutlined aria-hidden />} onClick={() => edit()}>
+                    新建委托
                   </Button>
-                </Space>
-                <Space size={8}>
+                )}
+                <Tooltip title="刷新">
                   <Button
-                    onClick={() => {
-                      void load();
-                    }}
-                  >
-                    刷新
-                  </Button>
-                  {access.canCreateDelegation && (
-                    <Button type="primary" onClick={() => edit()}>
-                      新建委托
-                    </Button>
-                  )}
-                </Space>
-              </Col>
-            </Row>
+                    type="text"
+                    aria-label="刷新"
+                    icon={<ReloadOutlined aria-hidden />}
+                    onClick={() => void load()}
+                  />
+                </Tooltip>
+              </Space>
+            </div>
+            {moreFiltersOpen && (
+              <div className={styles["more-filters"]}>
+                <Form.Item name="orgCode">
+                  <DelegationObjectSelect
+                    kind="organization"
+                    purpose="filter"
+                    aria-label="组织筛选"
+                    placeholder="全部组织"
+                  />
+                </Form.Item>
+                <Form.Item name="startTime">
+                  <DatePicker
+                    aria-label="期间起点"
+                    showTime={{ format: "HH:mm" }}
+                    format="YYYY-MM-DD HH:mm"
+                    placeholder="期间起点"
+                  />
+                </Form.Item>
+                <Form.Item name="endTime">
+                  <DatePicker
+                    aria-label="期间终点"
+                    showTime={{ format: "HH:mm" }}
+                    format="YYYY-MM-DD HH:mm"
+                    placeholder="期间终点"
+                  />
+                </Form.Item>
+              </div>
+            )}
           </Form>
           <Table<DelegationVo>
             size="small"

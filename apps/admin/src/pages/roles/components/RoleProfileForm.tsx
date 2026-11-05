@@ -1,7 +1,7 @@
-import styles from "@admin/components/detail/DetailDrawer.module.less";
 import type { RoleDetailVo, RoleUpdateInput } from "@admin/services/role";
 import { getRoleStatusOptions } from "@iam/contracts";
 import { Button, Col, ConfigProvider, Form, Input, message, Row, Select, Space } from "antd";
+import styles from "./RoleDetailDrawer.module.less";
 
 type Props = {
   detail: RoleDetailVo;
@@ -16,9 +16,10 @@ export default function RoleProfileForm({ detail, saving, onCancel, onSave }: Pr
   const [form] = Form.useForm<ProfileValues>();
 
   return (
-    <ConfigProvider theme={{ components: { Form: { itemMarginBottom: 20, labelFontSize: 13 } } }}>
+    <ConfigProvider theme={{ components: { Form: { itemMarginBottom: 16, labelFontSize: 13 } } }}>
       <Form<ProfileValues>
         name="role-profile"
+        className={styles.profile}
         form={form}
         layout="vertical"
         size="middle"
@@ -62,12 +63,12 @@ export default function RoleProfileForm({ detail, saving, onCancel, onSave }: Pr
             </Form.Item>
           </Col>
         </Row>
-        <Space size={8} className={styles["form-actions"]}>
-          <Button type="primary" htmlType="submit" loading={saving}>
-            保存
-          </Button>
+        <Space size={8} className={styles["profile-actions"]}>
           <Button onClick={onCancel} disabled={saving}>
             取消
+          </Button>
+          <Button type="primary" htmlType="submit" loading={saving}>
+            保存
           </Button>
         </Space>
       </Form>

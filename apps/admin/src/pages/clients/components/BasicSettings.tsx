@@ -3,6 +3,7 @@ import { type ClientDetailVo, deleteClient, updateClient, updateClientStatus } f
 import { ClientStatus, getClientStatusOptions } from "@iam/contracts";
 import { Button, Card, Form, Input, message, Select, Space, Typography } from "antd";
 import { useEffect, useState } from "react";
+import styles from "../ClientSettings.module.less";
 import { confirmClientSettingAction } from "./settingsHelpers";
 
 type Props = {
@@ -55,8 +56,8 @@ export default function BasicSettings({ client, onDirtyChange, onMutated, onComm
   };
 
   return (
-    <Space orientation="vertical" size={16} style={{ width: "100%", maxWidth: 960 }}>
-      <Card title="基础信息" size="small">
+    <div className={styles["basic-layout"]}>
+      <Card title="应用资料" size="small" className={styles.panel}>
         <Form<BasicFormValues>
           form={form}
           layout="vertical"
@@ -96,7 +97,7 @@ export default function BasicSettings({ client, onDirtyChange, onMutated, onComm
         </Form>
       </Card>
 
-      <Card title="内部 API 凭据" size="small">
+      <Card title="内部 API 凭据" size="small" className={styles.panel}>
         <Form
           form={secretForm}
           layout="vertical"
@@ -131,7 +132,7 @@ export default function BasicSettings({ client, onDirtyChange, onMutated, onComm
           </Button>
         </Form>
       </Card>
-      <Card title="全局状态" size="small">
+      <Card title="全局状态" size="small" className={styles["setting-row"]}>
         <Space wrap>
           <Select
             aria-label="全局状态"
@@ -171,8 +172,8 @@ export default function BasicSettings({ client, onDirtyChange, onMutated, onComm
         </Space>
       </Card>
 
-      <Card title="删除应用" size="small">
-        <Space orientation="vertical">
+      <Card title="删除应用" size="small" className={styles["setting-row"]}>
+        <div className={styles["danger-content"]}>
           <Typography.Text type="secondary">
             请先处理角色分配并删除此应用下的全部角色，暂停或停用的角色也会阻止删除。
             删除应用是软删除，会终止此应用的会话，但不要求先移除协议配置。
@@ -199,8 +200,8 @@ export default function BasicSettings({ client, onDirtyChange, onMutated, onComm
           >
             删除应用
           </Button>
-        </Space>
+        </div>
       </Card>
-    </Space>
+    </div>
   );
 }

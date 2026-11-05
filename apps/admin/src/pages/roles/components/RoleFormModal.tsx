@@ -3,7 +3,8 @@ import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
 import { createRole } from "@admin/services/role";
 import { ModalForm, ProFormSelect, ProFormText, ProFormTextArea } from "@ant-design/pro-components";
 import { getRoleStatusOptions, RoleStatus } from "@iam/contracts";
-import { message } from "antd";
+import { Form, message } from "antd";
+import { useEffect } from "react";
 
 type Props = {
   open: boolean;
@@ -12,9 +13,31 @@ type Props = {
   onCommitted: (error: AdminMutationCommittedError, roleCode: string) => void;
 };
 
+type RoleFormValues = {
+  clientCode: string;
+  roleCode: string;
+  roleName: string;
+  status: RoleStatus;
+  description?: string;
+};
+
+function roleCodeSuffix(value: string, clientCode?: string) {
+  const prefix = clientCode ? `${clientCode}:` : "";
+  const code = value.trim();
+  return prefix && code.startsWith(prefix) ? code.slice(prefix.length).trim() : code;
+}
+
 export default function RoleFormModal({ open, onOpenChange, onSuccess, onCommitted }: Props) {
+  const [form] = Form.useForm<RoleFormValues>();
+  const clientCode = Form.useWatch("clientCode", form);
+
+  useEffect(() => {
+    if (open) form.resetFields();
+  }, [form, open]);
+
   return (
-    <ModalForm
+    <ModalForm<RoleFormValues>
+      form={form}
       name="role-form"
       title="新建角色"
       open={open}
@@ -26,9 +49,10 @@ export default function RoleFormModal({ open, onOpenChange, onSuccess, onCommitt
       initialValues={{ status: RoleStatus.Enable }}
       onOpenChange={onOpenChange}
       onFinish={async (values) => {
+        const roleCode = `${values.clientCode}:${roleCodeSuffix(values.roleCode, values.clientCode)}`;
         try {
           const outcome = await createRole({
-            roleCode: values.roleCode,
+            roleCode,
             roleName: values.roleName,
             clientCode: values.clientCode,
             description: values.description ?? null,
@@ -39,7 +63,7 @@ export default function RoleFormModal({ open, onOpenChange, onSuccess, onCommitt
           return true;
         } catch (err) {
           if (err instanceof AdminMutationCommittedError) {
-            onCommitted(err, values.roleCode);
+            onCommitted(err, roleCode);
             return true;
           }
           message.error(err instanceof Error ? err.message : "保存失败");
@@ -47,13 +71,11 @@ export default function RoleFormModal({ open, onOpenChange, onSuccess, onCommitt
         }
       }}
     >
-      <ProFormText name="roleCode" label="角色编码" rules={[{ required: true }]} fieldProps={{ maxLength: 64 }} />
-      <ProFormText name="roleName" label="角色名称" rules={[{ required: true }]} fieldProps={{ maxLength: 128 }} />
       <ProFormSelect
         name="clientCode"
         label="所属应用"
         showSearch
-        rules={[{ required: true }]}
+        rules={[{ required: true, message: "请选择所属应用" }]}
         fieldProps={{
           filterOption: false,
           placeholder: "输入应用名称或编码搜索",
@@ -61,6 +83,34 @@ export default function RoleFormModal({ open, onOpenChange, onSuccess, onCommitt
         }}
         request={(params) => requestClientOptions(params)}
       />
+      <ProFormText
+        name="roleCode"
+        label="角色编码"
+        dependencies={["clientCode"]}
+        normalize={(value: string) => {
+          const prefix = clientCode ? `${clientCode}:` : "";
+          return prefix && value.trim().startsWith(prefix) ? roleCodeSuffix(value, clientCode) : value;
+        }}
+        rules={[
+          { required: true, message: "请输入角色编码" },
+          {
+            validator: (_, value: string | undefined) => {
+              const suffix = roleCodeSuffix(value ?? "", clientCode);
+              if (!suffix) return Promise.reject(new Error("请输入角色编码"));
+              if (clientCode && clientCode.length + 1 + suffix.length > 64)
+                return Promise.reject(new Error("角色编码含应用前缀不能超过 64 个字符"));
+              return Promise.resolve();
+            },
+          },
+        ]}
+        fieldProps={{
+          addonBefore: clientCode ? `${clientCode}:` : undefined,
+          placeholder: "请输入角色编码后缀",
+          maxLength: 64,
+        }}
+        extra="自动添加所属应用编码前缀，只需填写角色编码后缀。"
+      />
+      <ProFormText name="roleName" label="角色名称" rules={[{ required: true }]} fieldProps={{ maxLength: 128 }} />
       <ProFormSelect
         name="status"
         label="状态"

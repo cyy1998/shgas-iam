@@ -2,18 +2,11 @@ import type { AuditLogSearchConditions, AuditLogVo } from "@admin/services/audit
 import { searchAuditLogs } from "@admin/services/audit";
 import type { ProColumns } from "@ant-design/pro-components";
 import { ProTable } from "@ant-design/pro-components";
-import { Button, Checkbox, message, Select, Space, Tag, Typography } from "antd";
+import { Button, message, Space, Tag, Typography } from "antd";
 import { useState } from "react";
 import AuditLogDetailDrawer from "./AuditLogDetailDrawer";
-import {
-  actorTypeLabels,
-  auditActionOptions,
-  getActionLabel,
-  getActorDisplay,
-  getTargetDisplay,
-  outcomeLabels,
-  targetTypeLabels,
-} from "./auditLogDisplay";
+import AuditLogFilters, { type AuditLogFilterValues } from "./AuditLogFilters";
+import { getActionLabel, getActorDisplay, getTargetDisplay, outcomeLabels } from "./auditLogDisplay";
 import { buildConditions } from "./auditLogTable.helpers";
 
 type AuditLogTableRow = AuditLogVo & {
@@ -23,22 +16,10 @@ type AuditLogTableRow = AuditLogVo & {
   targetKeyword?: string;
 };
 
-const actorTypeValueEnum: Record<string, { text: string }> = {
-  admin: { text: actorTypeLabels.admin },
-  user: { text: actorTypeLabels.user },
-  client: { text: actorTypeLabels.client },
-  system: { text: actorTypeLabels.system },
-  anonymous: { text: actorTypeLabels.anonymous },
-};
-
 const outcomeValueEnum: Record<string, { status: string; text: string }> = {
   success: { text: outcomeLabels.success, status: "Success" },
   failure: { text: outcomeLabels.failure, status: "Error" },
 };
-
-const targetTypeValueEnum = Object.fromEntries(
-  Object.entries(targetTypeLabels).map(([value, text]) => [value, { text }]),
-);
 
 function formatDate(value: AuditLogVo["eventTime"]) {
   return value ? new Date(value).toLocaleString() : "—";
@@ -86,34 +67,10 @@ type Props = {
 };
 
 export default function AuditLogTable({ fixedConditions = {}, pageSize = 20, search = true, size = "small" }: Props) {
+  const [filters, setFilters] = useState<AuditLogFilterValues>({});
   const [selectedLog, setSelectedLog] = useState<AuditLogVo | null>(null);
 
   const columns: ProColumns<AuditLogTableRow>[] = [
-    {
-      title: "时间范围",
-      dataIndex: "eventTimeRange",
-      valueType: "dateTimeRange",
-      hideInTable: true,
-      search: search ? undefined : false,
-    },
-    {
-      title: "动作",
-      dataIndex: "actions",
-      hideInTable: true,
-      search: search ? undefined : false,
-      formItemRender: () => (
-        <Select
-          allowClear
-          showSearch
-          mode="multiple"
-          options={auditActionOptions}
-          placeholder="请选择动作"
-          maxTagCount="responsive"
-          optionFilterProp="label"
-          menuItemSelectedIcon={({ isSelected }) => <Checkbox checked={isSelected} style={{ pointerEvents: "none" }} />}
-        />
-      ),
-    },
     {
       title: "动作",
       dataIndex: "action",
@@ -142,40 +99,10 @@ export default function AuditLogTable({ fixedConditions = {}, pageSize = 20, sea
     },
     {
       title: "操作者",
-      dataIndex: "actorKeyword",
-      hideInTable: true,
-      search: search ? undefined : false,
-      fieldProps: { placeholder: "用户名 / client / system" },
-    },
-    {
-      title: "Actor 类型",
-      dataIndex: "actorType",
-      hideInTable: true,
-      search: search ? undefined : false,
-      valueType: "select",
-      valueEnum: actorTypeValueEnum,
-    },
-    {
-      title: "操作者",
       key: "actor",
       width: 180,
       search: false,
       render: (_, row) => renderActor(row),
-    },
-    {
-      title: "目标对象",
-      dataIndex: "targetKeyword",
-      hideInTable: true,
-      search: search ? undefined : false,
-      fieldProps: { placeholder: "目标编码 / ID" },
-    },
-    {
-      title: "目标类型",
-      dataIndex: "targetType",
-      hideInTable: true,
-      search: search ? undefined : false,
-      valueType: "select",
-      valueEnum: targetTypeValueEnum,
     },
     {
       title: "目标对象",
@@ -250,11 +177,9 @@ export default function AuditLogTable({ fixedConditions = {}, pageSize = 20, sea
         rowKey="id"
         size={size}
         columns={columns}
-        search={
-          search
-            ? { labelWidth: "auto", defaultCollapsed: true, span: { xs: 24, sm: 12, md: 12, lg: 8, xl: 6, xxl: 6 } }
-            : false
-        }
+        search={false}
+        params={filters}
+        headerTitle={search ? <AuditLogFilters values={filters} onChange={setFilters} /> : false}
         options={search ? undefined : false}
         pagination={{ defaultPageSize: pageSize, showSizeChanger: search }}
         request={async (params) => {

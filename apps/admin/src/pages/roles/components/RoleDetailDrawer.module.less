@@ -1,3 +1,68 @@
+/* stylelint-disable selector-pseudo-class-no-unknown -- CSS Modules scopes Ant Design description cells. */
+.basic-descriptions :global(.ant-descriptions-item) {
+  width: 50%;
+}
+
+/* stylelint-enable selector-pseudo-class-no-unknown */
+.basic-metadata {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 575px) {
+  /* stylelint-disable selector-pseudo-class-no-unknown -- CSS Modules scopes Ant Design description cells. */
+  .basic-descriptions :global(.ant-descriptions-item) {
+    width: 100%;
+  }
+  /* stylelint-enable selector-pseudo-class-no-unknown */
+
+  .basic-metadata {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.edit-identity {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 24px;
+  margin: 0 0 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e4e8ed;
+
+  dt {
+    margin-bottom: 6px;
+    color: #596879;
+    font-size: 13px;
+    line-height: 22px;
+  }
+
+  dd {
+    margin: 0;
+    font-size: 14px;
+    line-height: 22px;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* stylelint-disable selector-pseudo-class-no-unknown -- CSS Modules scopes the role edit form. */
+.profile :global(.ant-form-item-label) {
+  padding-bottom: 6px;
+}
+/* stylelint-enable selector-pseudo-class-no-unknown */
+
+.profile-actions {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  margin-top: 8px;
+}
+
+@media (max-width: 575px) {
+  .edit-identity {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .filters {
   margin-bottom: 16px;
   padding: 12px 14px;

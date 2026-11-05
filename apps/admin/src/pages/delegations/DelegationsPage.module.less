@@ -8,39 +8,76 @@
 }
 
 .filters {
-  border-bottom: 1px solid #e4e8ed;
+  margin-bottom: 8px;
 
   :global(.ant-form-item) {
-    margin-bottom: 12px;
-  }
-
-  :global(.ant-form-item-label) {
-    text-align: start;
+    min-width: 0;
+    margin-bottom: 0;
   }
 }
 
 .toolbar {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 12px;
 }
 
-@media (max-width: 575px) {
-  .filters :global(.ant-form-item-label) {
-    padding-bottom: 4px;
+.primary-filters,
+.more-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+
+  > :global(.ant-form-item) {
+    width: 176px;
   }
 }
 
-@media (min-width: 576px) {
-  .filters {
-    :global(.ant-form-item-row) {
-      flex-wrap: nowrap;
-    }
+.primary-filters {
+  flex: 1;
 
-    :global(.ant-form-item-control) {
-      min-width: 0;
+  > :global(.ant-form-item).state-filter {
+    width: 128px;
+  }
+}
+
+.actions {
+  flex-shrink: 0;
+}
+
+.more-filters {
+  margin-top: 8px;
+
+  > :global(.ant-form-item) {
+    width: 208px;
+  }
+
+  :global(.ant-picker) {
+    width: 100%;
+  }
+}
+
+@media (max-width: 767px) {
+  .toolbar {
+    flex-wrap: wrap;
+  }
+
+  .primary-filters {
+    flex-basis: 100%;
+  }
+
+  .primary-filters,
+  .more-filters {
+    > :global(.ant-form-item) {
+      flex: 1 1 140px;
+      width: auto;
     }
+  }
+
+  .actions {
+    margin-left: auto;
   }
 }

@@ -198,17 +198,52 @@ describe("Admin delegation management", () => {
     const { user } = await page();
     await user.click(screen.getByRole("combobox", { name: "应用筛选" }));
     await user.click(await screen.findByText("报销应用（expense）", { selector: ".ant-select-item-option-content" }));
-    await user.click(screen.getByRole("button", { name: /查\s*询/ }));
     await waitFor(() =>
       expect(reads.mock.calls.some(([input]) => String(input).includes('"clientIds":[3]'))).toBe(true),
     );
+  });
+
+  it("keeps advanced filters active when collapsed and clears all conditions", async () => {
+    const { user } = await page();
+    const latestQuery = () => {
+      const batch = JSON.parse(String(reads.mock.calls.at(-1)?.[0] ?? "{}"));
+      return Object.values(batch)[0];
+    };
+    await user.click(screen.getByRole("button", { name: "更多筛选" }));
+    await user.click(screen.getByRole("combobox", { name: "组织筛选" }));
+    await user.click(await screen.findByText("总部（ROOT）", { selector: ".ant-select-item-option-content" }));
+    const start = screen.getByRole("textbox", { name: "期间起点" });
+    await user.click(start);
+    fireEvent.change(start, { target: { value: "2026-11-01 09:35" } });
+    await user.keyboard("{Enter}");
+    await waitFor(() =>
+      expect(latestQuery()).toMatchObject({
+        orgCodes: ["ROOT"],
+        startTime: new Date("2026-11-01T09:35").toISOString(),
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "更多筛选（2）" }));
+    await user.click(screen.getByRole("combobox", { name: "应用筛选" }));
+    await user.click(await screen.findByText("报销应用（expense）", { selector: ".ant-select-item-option-content" }));
+    await waitFor(() =>
+      expect(latestQuery()).toEqual({
+        clientIds: [3],
+        orgCodes: ["ROOT"],
+        startTime: new Date("2026-11-01T09:35").toISOString(),
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "刷新" }));
+    await waitFor(() => expect(latestQuery()).toHaveProperty("orgCodes", ["ROOT"]));
+    await user.click(screen.getByRole("button", { name: "清除筛选" }));
+    await waitFor(() => expect(latestQuery()).toEqual({}));
+    await user.click(screen.getByRole("button", { name: "更多筛选" }));
+    expect(screen.getByRole("textbox", { name: "期间起点" })).toHaveValue("");
   });
 
   it("can filter historical identities while the creation selector only offers available objects", async () => {
     const { user } = await page();
     await user.click(screen.getByRole("combobox", { name: "应用筛选" }));
     await user.click(await screen.findByText("历史应用（retired）", { selector: ".ant-select-item-option-content" }));
-    await user.click(screen.getByRole("button", { name: /查\s*询/ }));
     await waitFor(() =>
       expect(reads.mock.calls.some(([input]) => String(input).includes('"clientIds":[8]'))).toBe(true),
     );
@@ -266,9 +301,8 @@ describe("Admin delegation management", () => {
     const ended = screen.getByText("结束历史").closest("tr")!;
     expect(within(ended).getByText("已到期")).toBeInTheDocument();
     expect(within(ended).queryByRole("button", { name: "恢复" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("combobox", { name: "状态" }));
+    await user.click(screen.getByRole("combobox", { name: "委托状态" }));
     await user.click(await screen.findByText("已到期", { selector: ".ant-select-item-option-content" }));
-    await user.click(screen.getByRole("button", { name: /查\s*询/ }));
     await waitFor(() =>
       expect(reads.mock.calls.some(([input]) => String(input).includes('"statuses":[1,2]'))).toBe(true),
     );

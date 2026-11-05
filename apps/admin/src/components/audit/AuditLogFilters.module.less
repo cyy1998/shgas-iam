@@ -1,0 +1,46 @@
+.filters {
+  min-width: 0;
+}
+
+.primary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.range {
+  width: 340px;
+  max-width: 100%;
+}
+
+.actions {
+  width: 220px;
+}
+
+.outcome {
+  width: 120px;
+}
+
+.more {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+@media (max-width: 767px) {
+  .range {
+    width: 100%;
+  }
+
+  .actions,
+  .outcome {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  .more {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

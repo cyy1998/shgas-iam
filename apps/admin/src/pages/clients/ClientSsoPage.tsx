@@ -17,6 +17,7 @@ import {
 import { history, useParams } from "@umijs/max";
 import { Alert, Button, Card, Form, Input, Modal, message, Select, Space, Spin, Typography } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
+import styles from "./ClientSettings.module.less";
 
 type FormValues = {
   protocol: ClientSsoProtocol;
@@ -212,172 +213,153 @@ export default function ClientSsoPage() {
 
   if (!client && !error) return <Spin aria-label="加载应用" />;
   return (
-    <Space
-      orientation="vertical"
-      size={16}
-      style={{
-        width: "100%",
-        maxWidth: 960,
-        display: "flex",
-      }}
-    >
+    <div className={styles["sso-layout"]}>
       {repairNotice && <Alert type="warning" showIcon title={repairNotice} />}
       {operationNotice && <Alert type="error" showIcon title={operationNotice} />}
       {error && (
         <Alert type="error" title="应用详情加载失败" action={<Button onClick={() => void refresh()}>刷新</Button>} />
       )}
       {client && (
-        <Card
-          title="SSO 配置"
-          size="small"
-          extra={
-            <Button disabled={busy} onClick={() => void refresh()}>
-              刷新详情
-            </Button>
-          }
-        >
-          <Form
-            form={form}
-            layout="vertical"
-            disabled={busy || error}
-            onValuesChange={(changed: Partial<FormValues>) => {
-              for (const field of Object.keys(changed) as (keyof FormValues)[]) dirtyFieldsRef.current.add(field);
-              setDirty(true);
-            }}
+        <>
+          <Card
+            className={styles.panel}
+            title="协议配置"
+            size="small"
+            extra={
+              <Button type="text" size="small" disabled={busy} onClick={() => void refresh()}>
+                刷新详情
+              </Button>
+            }
           >
-            <Form.Item name="protocol" label="SSO 协议">
-              <Select
-                placeholder="请选择 SSO 协议"
-                options={[
-                  { value: ClientSsoProtocol.Oidc, label: "OIDC" },
-                  {
-                    value: ClientSsoProtocol.CustomSso,
-                    label: "Custom SSO",
-                  },
-                ]}
-              />
-            </Form.Item>
-            {protocol === ClientSsoProtocol.Oidc && (
-              <>
-                <Form.Item name="clientType" label="OIDC 客户端类型">
-                  <Select
-                    options={[
-                      {
-                        value: OidcClientType.Public,
-                        label: "Public（none + S256）",
-                      },
-                      {
-                        value: OidcClientType.Confidential,
-                        label: "Confidential（client_secret_basic + S256）",
-                      },
-                    ]}
-                  />
-                </Form.Item>
-                <Form.Item name="redirectUris" label="登录Redirect URIs">
-                  <Select mode="tags" open={false} suffixIcon={null} />
-                </Form.Item>
-                <Form.Item name="postLogoutRedirectUris" label="登出Redirect URIs">
-                  <Select mode="tags" open={false} suffixIcon={null} />
-                </Form.Item>
-                <Form.Item name="allowedScopes" label="披露 scope">
-                  <Select
-                    mode="multiple"
-                    options={Object.values(OidcScope).map((value) => ({
-                      value,
-                      label: value,
-                    }))}
-                  />
-                </Form.Item>
-              </>
-            )}
-            {protocol === ClientSsoProtocol.CustomSso && (
-              <>
-                <Form.Item name="callbackType" label="回调类型" required>
-                  <Select
-                    placeholder="请选择回调类型"
-                    options={[
-                      {
-                        value: ClientSsoCallbackType.Managed,
-                        label: "托管回调",
-                      },
-                      {
-                        value: ClientSsoCallbackType.Business,
-                        label: "业务回调",
-                      },
-                    ]}
-                  />
-                </Form.Item>
-                {callbackType === ClientSsoCallbackType.Business && (
-                  <Form.Item name="callbackEndpoint" label="回调地址" required>
-                    <Input />
-                  </Form.Item>
-                )}
-                <Form.Item name="validRedirectUrls" label="Redirect URIs">
-                  <Select mode="tags" open={false} suffixIcon={null} />
-                </Form.Item>
-                <Form.Item name="subjectClaims" label="主体披露字段">
-                  <Select
-                    mode="multiple"
-                    options={SUBJECT_CLAIMS.map((value) => ({
-                      value,
-                      label: value,
-                    }))}
-                  />
-                </Form.Item>
-              </>
-            )}
-            <Space
-              wrap
-              style={{
-                width: "100%",
-                borderTop: "1px solid var(--ant-color-border-secondary, #f0f0f0)",
-                paddingTop: 20,
+            <Form
+              form={form}
+              layout="vertical"
+              disabled={busy || error}
+              onValuesChange={(changed: Partial<FormValues>) => {
+                for (const field of Object.keys(changed) as (keyof FormValues)[]) dirtyFieldsRef.current.add(field);
+                setDirty(true);
               }}
             >
-              <Button
-                type="primary"
-                disabled={busy || error || !client.allowedActions.selectProtocol}
-                onClick={saveConfig}
-              >
-                保存协议及配置
-              </Button>
-              <Button
-                disabled={busy || error || dirty || !client.allowedActions.setEnabled || client.ssoConfig === null}
-                onClick={() => void run(() => clientSsoService.setEnabled(clientCode, !client.ssoEnabled))}
-              >
-                {client.ssoEnabled ? "停用 SSO" : "启用 SSO"}
-              </Button>
-              <Button
-                danger
-                disabled={busy || error || !client.allowedActions.selectProtocol || client.ssoConfig === null}
-                onClick={() => {
-                  Modal.confirm({
-                    title: "移除 SSO 配置？",
-                    content: "将删除已保存的协议配置并关闭 SSO，当前未保存的修改也会丢弃。再次使用时需要重新配置。",
-                    okText: "移除配置",
-                    cancelText: "取消",
-                    okType: "danger",
-                    onOk: () =>
-                      run(
-                        () => clientSsoService.selectProtocol(clientCode, null),
-                        Object.keys(form.getFieldsValue(true)) as (keyof FormValues)[],
-                      ),
-                  });
-                }}
-              >
-                移除 SSO 配置
-              </Button>
-            </Space>
-          </Form>
-          <div
-            style={{
-              marginTop: 24,
-              paddingTop: 20,
-              borderTop: "1px solid var(--ant-color-border-secondary, #f0f0f0)",
-            }}
-          >
+              <Form.Item name="protocol" label="SSO 协议">
+                <Select
+                  placeholder="请选择 SSO 协议"
+                  options={[
+                    { value: ClientSsoProtocol.Oidc, label: "OIDC" },
+                    {
+                      value: ClientSsoProtocol.CustomSso,
+                      label: "Custom SSO",
+                    },
+                  ]}
+                />
+              </Form.Item>
+              {protocol === ClientSsoProtocol.Oidc && (
+                <>
+                  <Form.Item name="clientType" label="OIDC 客户端类型">
+                    <Select
+                      options={[
+                        {
+                          value: OidcClientType.Public,
+                          label: "Public（none + S256）",
+                        },
+                        {
+                          value: OidcClientType.Confidential,
+                          label: "Confidential（client_secret_basic + S256）",
+                        },
+                      ]}
+                    />
+                  </Form.Item>
+                  <Form.Item name="redirectUris" label="登录Redirect URIs">
+                    <Select mode="tags" open={false} suffixIcon={null} />
+                  </Form.Item>
+                  <Form.Item name="postLogoutRedirectUris" label="登出Redirect URIs">
+                    <Select mode="tags" open={false} suffixIcon={null} />
+                  </Form.Item>
+                  <Form.Item name="allowedScopes" label="披露 scope">
+                    <Select
+                      mode="multiple"
+                      options={Object.values(OidcScope).map((value) => ({
+                        value,
+                        label: value,
+                      }))}
+                    />
+                  </Form.Item>
+                </>
+              )}
+              {protocol === ClientSsoProtocol.CustomSso && (
+                <>
+                  <Form.Item name="callbackType" label="回调类型" required>
+                    <Select
+                      placeholder="请选择回调类型"
+                      options={[
+                        {
+                          value: ClientSsoCallbackType.Managed,
+                          label: "托管回调",
+                        },
+                        {
+                          value: ClientSsoCallbackType.Business,
+                          label: "业务回调",
+                        },
+                      ]}
+                    />
+                  </Form.Item>
+                  {callbackType === ClientSsoCallbackType.Business && (
+                    <Form.Item name="callbackEndpoint" label="回调地址" required>
+                      <Input />
+                    </Form.Item>
+                  )}
+                  <Form.Item name="validRedirectUrls" label="Redirect URIs">
+                    <Select mode="tags" open={false} suffixIcon={null} />
+                  </Form.Item>
+                  <Form.Item name="subjectClaims" label="主体披露字段">
+                    <Select
+                      mode="multiple"
+                      options={SUBJECT_CLAIMS.map((value) => ({
+                        value,
+                        label: value,
+                      }))}
+                    />
+                  </Form.Item>
+                </>
+              )}
+              <Space wrap className={styles["config-actions"]}>
+                <Button
+                  type="primary"
+                  disabled={busy || error || !client.allowedActions.selectProtocol}
+                  onClick={saveConfig}
+                >
+                  保存协议及配置
+                </Button>
+                <Button
+                  disabled={busy || error || dirty || !client.allowedActions.setEnabled || client.ssoConfig === null}
+                  onClick={() => void run(() => clientSsoService.setEnabled(clientCode, !client.ssoEnabled))}
+                >
+                  {client.ssoEnabled ? "停用 SSO" : "启用 SSO"}
+                </Button>
+                <Button
+                  danger
+                  disabled={busy || error || !client.allowedActions.selectProtocol || client.ssoConfig === null}
+                  onClick={() => {
+                    Modal.confirm({
+                      title: "移除 SSO 配置？",
+                      content: "将删除已保存的协议配置并关闭 SSO，当前未保存的修改也会丢弃。再次使用时需要重新配置。",
+                      okText: "移除配置",
+                      cancelText: "取消",
+                      okType: "danger",
+                      onOk: () =>
+                        run(
+                          () => clientSsoService.selectProtocol(clientCode, null),
+                          Object.keys(form.getFieldsValue(true)) as (keyof FormValues)[],
+                        ),
+                    });
+                  }}
+                >
+                  移除 SSO 配置
+                </Button>
+              </Space>
+            </Form>
+          </Card>
+          <Card title="SSO Secret" size="small" className={styles["secret-panel"]}>
             <Space orientation="vertical" size={16} style={{ width: "100%" }}>
-              <Typography.Text strong>SSO Secret</Typography.Text>
               <Space wrap>
                 <Button
                   disabled={busy || dirty || error || !client.allowedActions.rotateSecret}
@@ -406,9 +388,9 @@ export default function ClientSsoPage() {
                 />
               )}
             </Space>
-          </div>
-        </Card>
+          </Card>
+        </>
       )}
-    </Space>
+    </div>
   );
 }

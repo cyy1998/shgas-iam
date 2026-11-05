@@ -13,12 +13,16 @@ export default function DelegationObjectSelect({
   value,
   onChange,
   id,
+  placeholder = "输入名称或编码搜索",
+  "aria-label": ariaLabel,
 }: {
   kind: "user" | "client" | "organization";
   purpose: DelegationSelectorInput["purpose"];
   value?: string | number;
   onChange?: (value: string | number | undefined) => void;
   id?: string;
+  placeholder?: string;
+  "aria-label"?: string;
 }) {
   const [options, setOptions] = useState<{ value: string | number; label: string }[]>([]);
   const [loading, setLoading] = useState(false);
@@ -67,6 +71,7 @@ export default function DelegationObjectSelect({
   return (
     <Select
       id={id}
+      aria-label={ariaLabel}
       value={value}
       onChange={onChange}
       options={options}
@@ -79,7 +84,7 @@ export default function DelegationObjectSelect({
       }}
       allowClear
       style={{ width: "100%", minWidth: 0 }}
-      placeholder="输入名称或编码搜索"
+      placeholder={placeholder}
       notFoundContent={failed ? "加载失败，请重新搜索" : undefined}
     />
   );

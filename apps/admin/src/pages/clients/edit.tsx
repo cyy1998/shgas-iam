@@ -7,6 +7,7 @@ import { PageContainer } from "@ant-design/pro-components";
 import { history, useLocation, useParams } from "@umijs/max";
 import { Alert, Button, Card, Modal, message, Result, Space, Tabs, Typography } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
+import styles from "./ClientSettings.module.less";
 
 type ClientSection = "basic" | "sso";
 
@@ -179,6 +180,7 @@ export default function ClientEditPage() {
 
   return (
     <PageContainer
+      className={styles.page}
       breadcrumbRender={false}
       title={client.clientName}
       subTitle={
