@@ -325,6 +325,9 @@ readiness、同 origin 旅程及独立双 hostname 阶段。完整行为和诊�
 [测试编排架构](../architecture/testing-architecture.md#full-system-e2e)与
 [双入口验收](../architecture/testing-architecture.md#双入口验收与产物隔离)。
 
+Seed 回读本次用户的 Document、Facts 与访问屏障一致性后进入业务旅程；业务 E2E 不依赖 Ops CLI。
+Ops 命令通过根 `pnpm test:integration --workspace @iam/ops` 验证，维护制品与恢复流程按对应发布手册验收。
+
 只使用测试生成的数据与凭据，不接入生产端点、生产凭据或真实 PII。产物位于 `e2e/system/test-results/`；
 workspace-local 单 journey 命令用于聚焦调试：
 

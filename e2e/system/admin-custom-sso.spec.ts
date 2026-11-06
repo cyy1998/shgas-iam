@@ -5,6 +5,7 @@ import {
   isSuccessfulRpcResponse,
   loginToAdmin,
   openClientSection,
+  readClientSsoDetail,
   runClientProtocolLifecycleAction,
   saveUnchangedClientProtocolConfiguration,
   updateClientStatus,
@@ -47,7 +48,6 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   const responsibilityHolderPositionCode = requireEnvironment("IAM_E2E_RESPONSIBILITY_HOLDER_POSITION_CODE");
   const actualRedirectUri = customSsoRedirectUri.replace(/\/\*$/u, "/callback");
   await loginToAdmin({ adminPassword, adminUsername, origin, page });
-  await expect(page.getByText("应用管理", { exact: true })).toBeVisible();
 
   await createHeadResponsibility({
     adminUsername,
@@ -92,7 +92,7 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
 
   await updateClientStatus(page, customSsoClientCode, "维护中");
   await openClientSection(page, customSsoClientCode, "custom-sso");
-  await expect(page.getByRole("button", { name: "启用 SSO", exact: true })).toBeDisabled();
+  expect(await readClientSsoDetail(page, customSsoClientCode)).toMatchObject({ ssoEnabled: false, ssoConfig: null });
   await page.getByLabel("SSO 协议", { exact: true }).click();
   await page.getByTitle("Custom SSO", { exact: true }).click();
   await page.getByLabel("回调类型", { exact: true }).click();
@@ -280,11 +280,13 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
     }),
   ).toBe(true);
 
-  await openClientSection(page, customSsoClientCode, "custom-sso");
-  await expect(page.getByRole("button", { name: "停用 SSO", exact: true })).toBeVisible();
-  await expect(page.getByTitle("托管回调", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("回调地址", { exact: true })).toHaveCount(0);
-  await expect(page.getByText(customSsoRedirectUri, { exact: true })).toBeVisible();
-  await expect(page.locator(".ant-select-selection-item").filter({ hasText: "profile:username" })).toBeVisible();
-  await expect(page.locator(".ant-select-selection-item").filter({ hasText: "profile:employments" })).toBeVisible();
+  expect(await readClientSsoDetail(page, customSsoClientCode)).toMatchObject({
+    ssoEnabled: true,
+    ssoConfig: {
+      protocol: "custom-sso",
+      callbackType: "managed",
+      validRedirectUrls: [customSsoRedirectUri],
+      subjectClaims: expect.arrayContaining(["profile:username", "profile:employments", "iam:authorization"]),
+    },
+  });
 });

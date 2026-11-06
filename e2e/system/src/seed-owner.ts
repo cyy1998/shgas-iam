@@ -34,18 +34,21 @@ import {
 } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
+import { USER_DOCUMENT_SCHEMA_VERSION } from "@iam/user-document/document";
 import { createSubjectFactsRedisInspector } from "@iam/user-document/subject-facts";
 import type { CreateUserDocumentWorkerModuleInput } from "@iam/user-document/worker";
 import { createUserDocumentWorkerModule } from "@iam/user-document/worker";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { Redis } from "ioredis";
 import { createE2EGatewayApiKey } from "./gateway-credential";
 import type {
   E2EScenarioGeneratedReferences,
   E2EScenarioOwner,
+  E2EScenarioReadBack,
   E2EScenarioReferences,
   E2EScenarioSeedReferences,
 } from "./seed.ts";
+import { createE2ESeedSubjects } from "./seed.ts";
 
 export interface CreateProductionE2EScenarioOwnerInput {
   db: typeof database;
@@ -710,35 +713,7 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
     }
 
     await waitForPublishedUserDocuments(scenario);
-    const access = await subjectAccess.seedMany(
-      [
-        {
-          subjectIdentifier: scenario.adminSubjectIdentifier,
-          state: "enabled",
-        },
-        {
-          subjectIdentifier: scenario.hrAdminSubjectIdentifier,
-          state: "enabled",
-        },
-        {
-          subjectIdentifier: scenario.delegateeSubjectIdentifier,
-          state: "enabled",
-        },
-        {
-          subjectIdentifier: scenario.pausedSubjectIdentifier,
-          state: "disabled",
-        },
-        {
-          subjectIdentifier: scenario.disabledSubjectIdentifier,
-          state: "disabled",
-        },
-        {
-          subjectIdentifier: scenario.noScopeHrAdminSubjectIdentifier,
-          state: "enabled",
-        },
-      ],
-      input.clock.nowDate(),
-    );
+    const access = await subjectAccess.seedMany(createE2ESeedSubjects(scenario), input.clock.nowDate());
     if (access.seeded !== 6 || access.retainedExisting !== 0) {
       throw new Error("E2E Subject Access bootstrap did not seed all six users");
     }
@@ -750,42 +725,50 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
 
   async function waitForPublishedUserDocuments(references: E2EScenarioSeedReferences) {
     const deadline = Date.now() + 30_000;
-    const subjectIdentifiers = [
-      references.adminSubjectIdentifier,
-      references.hrAdminSubjectIdentifier,
-      references.delegateeSubjectIdentifier,
-      references.pausedSubjectIdentifier,
-      references.disabledSubjectIdentifier,
-      references.noScopeHrAdminSubjectIdentifier,
-    ];
+    const subjectIdentifiers = createE2ESeedSubjects(references).map((subject) => subject.subjectIdentifier);
     while (Date.now() < deadline) {
-      const rows = await input.db
-        .select({
-          subjectIdentifier: userDocuments.subjectIdentifier,
-          documentSchemaVersion: userDocuments.schemaVersion,
-          documentVersion: userDocuments.sourceVersion,
-          version: userDocumentRebuildStates.version,
-          rebuildStatus: userDocumentRebuildStates.status,
-        })
-        .from(userDocuments)
-        .innerJoin(userDocumentRebuildStates, eq(userDocumentRebuildStates.userId, userDocuments.userId));
-      const selectedRows = rows.filter((row) => subjectIdentifiers.includes(row.subjectIdentifier));
+      const rows = await readSeedDocumentStates(subjectIdentifiers);
+      const documents = new Map(rows.map((row) => [row.subjectIdentifier, row]));
       const facts = await subjectFactsInspector.inspectMany(subjectIdentifiers);
       if (
-        selectedRows.length === subjectIdentifiers.length &&
-        selectedRows.every(
-          (row) =>
-            row.documentSchemaVersion === 1 &&
+        subjectIdentifiers.every((subjectIdentifier, index) => {
+          const row = documents.get(subjectIdentifier);
+          const result = facts[index];
+          return (
+            row !== undefined &&
+            row.documentSchemaVersion === USER_DOCUMENT_SCHEMA_VERSION &&
             row.documentVersion === row.version &&
-            row.rebuildStatus === UserDocumentWorkStatus.Processed,
-        ) &&
-        facts.every((result) => result.status === "valid" && result.record.kind === "document")
+            row.rebuildStatus === UserDocumentWorkStatus.Processed &&
+            result?.status === "valid" &&
+            result.record.kind === "document" &&
+            result.record.subjectIdentifier === subjectIdentifier &&
+            result.record.sourceVersion === row.documentVersion
+          );
+        })
       ) {
         return;
       }
       await Bun.sleep(250);
     }
     throw new Error("E2E production Worker did not publish all v1 User Documents before the deadline");
+  }
+
+  async function readSeedDocumentStates(subjectIdentifiers: string[]) {
+    return await input.db
+      .select({
+        subjectIdentifier: users.subjectIdentifier,
+        documentVersion: userDocuments.sourceVersion,
+        documentSchemaVersion: userDocuments.schemaVersion,
+        version: userDocumentRebuildStates.version,
+        rebuildStatus: userDocumentRebuildStates.status,
+      })
+      .from(users)
+      .innerJoin(
+        userDocuments,
+        and(eq(userDocuments.userId, users.id), eq(userDocuments.subjectIdentifier, users.subjectIdentifier)),
+      )
+      .innerJoin(userDocumentRebuildStates, eq(userDocumentRebuildStates.userId, users.id))
+      .where(inArray(users.subjectIdentifier, subjectIdentifiers));
   }
 
   async function readBack(references: E2EScenarioReferences) {
@@ -1011,58 +994,16 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
               clientId: adminClient.id,
             })
           ).get(noScopeHrRoleBearingEmployment.id) ?? []);
-    const documentState =
-      admin === undefined
-        ? undefined
-        : (
-            await input.db
-              .select({
-                documentVersion: userDocuments.sourceVersion,
-                documentSchemaVersion: userDocuments.schemaVersion,
-                version: userDocumentRebuildStates.version,
-                rebuildStatus: userDocumentRebuildStates.status,
-              })
-              .from(userDocuments)
-              .innerJoin(userDocumentRebuildStates, eq(userDocumentRebuildStates.userId, userDocuments.userId))
-              .where(
-                and(
-                  eq(userDocuments.userId, admin.id),
-                  eq(userDocuments.subjectIdentifier, references.adminSubjectIdentifier),
-                ),
-              )
-              .limit(1)
-          )[0];
-    const hrDocumentState =
-      hrAdmin === undefined
-        ? undefined
-        : (
-            await input.db
-              .select({
-                documentVersion: userDocuments.sourceVersion,
-                documentSchemaVersion: userDocuments.schemaVersion,
-                version: userDocumentRebuildStates.version,
-                rebuildStatus: userDocumentRebuildStates.status,
-              })
-              .from(userDocuments)
-              .innerJoin(userDocumentRebuildStates, eq(userDocumentRebuildStates.userId, userDocuments.userId))
-              .where(
-                and(
-                  eq(userDocuments.userId, hrAdmin.id),
-                  eq(userDocuments.subjectIdentifier, references.hrAdminSubjectIdentifier),
-                ),
-              )
-              .limit(1)
-          )[0];
-    const barriers = await subjectAccess.inspectMany([
-      references.adminSubjectIdentifier,
-      references.hrAdminSubjectIdentifier,
-    ]);
+    const seedSubjects = createE2ESeedSubjects(references);
+    const subjectIdentifiers = seedSubjects.map((subject) => subject.subjectIdentifier);
+    const documentStates = await readSeedDocumentStates(subjectIdentifiers);
+    const documents = new Map(documentStates.map((document) => [document.subjectIdentifier, document]));
+    const documentState = documents.get(references.adminSubjectIdentifier);
+    const hrDocumentState = documents.get(references.hrAdminSubjectIdentifier);
+    const barriers = await subjectAccess.inspectMany(subjectIdentifiers);
     const barrierResult = barriers[0];
     const hrBarrierResult = barriers[1];
-    const facts = await subjectFactsInspector.inspectMany([
-      references.adminSubjectIdentifier,
-      references.hrAdminSubjectIdentifier,
-    ]);
+    const facts = await subjectFactsInspector.inspectMany(subjectIdentifiers);
     const factsResult = facts[0];
     const hrFactsResult = facts[1];
     const factEmployments =
@@ -1075,6 +1016,22 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
         : [];
 
     return {
+      subjects: seedSubjects.map(({ subjectIdentifier }, index): E2EScenarioReadBack["subjects"][number] => {
+        const document = documents.get(subjectIdentifier);
+        const fact = facts[index];
+        const barrier = barriers[index];
+        return {
+          subjectIdentifier,
+          documentSchemaVersion: document?.documentSchemaVersion ?? 0,
+          documentVersion: document?.documentVersion ?? "",
+          rebuildVersion: document?.version ?? "",
+          rebuildStatus: document?.rebuildStatus ?? null,
+          factsSubjectIdentifier:
+            fact?.status === "valid" && fact.record.kind === "document" ? fact.record.subjectIdentifier : "",
+          factsVersion: fact?.status === "valid" && fact.record.kind === "document" ? fact.record.sourceVersion : "",
+          subjectAccess: barrier?.status === "valid" ? barrier.record.state : (barrier?.status ?? "missing"),
+        };
+      }),
       admin: {
         active: admin?.status === UserStatus.Enable && admin.isDelete === false,
         passwordConfigured: typeof admin?.password === "string" && admin.password.length > 0,

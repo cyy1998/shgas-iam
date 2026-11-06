@@ -30,7 +30,6 @@ function createRuntimeLifecycle(overrides: Partial<ExactProjectRuntimeLifecycle>
     seedE2EScenario: async () => undefined,
     startHealthyInfrastructure: async () => undefined,
     startRepoRuntimes: async () => undefined,
-    verifyUserDocumentReadiness: async () => undefined,
     verifyCanonicalOriginConfiguration: async () => undefined,
     ...overrides,
   };
@@ -111,7 +110,6 @@ describe("exact-project runtime lifecycle", () => {
         startRepoRuntimes: async (value) => events.push(`runtimes:${value.project}`),
         verifyCanonicalOriginConfiguration: async (value) => events.push(`origin:${value.origin}`),
         seedE2EScenario: async (value) => events.push(`seed:${value.runId}`),
-        verifyUserDocumentReadiness: async (value) => events.push(`profile-gates:${value.runId}`),
         renderGatewayRoutes: async (value) => events.push(`routes:${value.origin}`),
         awaitGatewayRouteReadiness: async (value) => events.push(`ready:${value.origin}`),
         collectDiagnostics: async () => events.push("diagnostics"),
@@ -130,7 +128,6 @@ describe("exact-project runtime lifecycle", () => {
       "runtimes:iam-e2e-run-contract-01",
       "origin:http://127.0.0.1:43123",
       "seed:run-contract-01",
-      "profile-gates:run-contract-01",
       "routes:http://127.0.0.1:43123",
       "ready:http://127.0.0.1:43123",
       "diagnostics",
@@ -206,16 +203,15 @@ describe("exact-project runtime lifecycle", () => {
     expect(events).toEqual(["infra", "migrate", "runtimes", "routes", "ready", "diagnostics", "cleanup"]);
   });
 
-  test("keeps Gateway routes closed when a User Document gate fails", async () => {
+  test("keeps Gateway routes closed when seed readiness fails", async () => {
     const events: string[] = [];
-    const gateFailure = new Error("User Document PostgreSQL gate failed");
+    const seedFailure = new Error("Seed Document/Facts/Subject Access readiness failed");
 
     const run = runExactProjectRuntimeLifecycle(
       createRuntimeLifecycle({
-        seedE2EScenario: async () => events.push("seed"),
-        verifyUserDocumentReadiness: async () => {
-          events.push("profile-gates");
-          throw gateFailure;
+        seedE2EScenario: async () => {
+          events.push("seed");
+          throw seedFailure;
         },
         renderGatewayRoutes: async () => events.push("routes"),
         awaitGatewayRouteReadiness: async () => events.push("ready"),
@@ -228,8 +224,8 @@ describe("exact-project runtime lifecycle", () => {
       () => undefined,
       (error) => error,
     );
-    expect(rejection).toBe(gateFailure);
-    expect(events).toEqual(["seed", "profile-gates", "diagnostics", "cleanup"]);
+    expect(rejection).toBe(seedFailure);
+    expect(events).toEqual(["seed", "diagnostics", "cleanup"]);
   });
 
   test("turns a capturable signal into a rejected run and cleans the exact project", async () => {

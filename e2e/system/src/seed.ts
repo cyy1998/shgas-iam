@@ -1,4 +1,11 @@
-import { ClientSsoCallbackType, ClientSsoProtocol, OidcClientType, SubjectClaim } from "@iam/contracts";
+import {
+  ClientSsoCallbackType,
+  ClientSsoProtocol,
+  OidcClientType,
+  SubjectClaim,
+  UserDocumentWorkStatus,
+} from "@iam/contracts";
+import { USER_DOCUMENT_SCHEMA_VERSION } from "@iam/user-document/document";
 import { createE2EGatewayApiKey } from "./gateway-credential";
 
 export interface E2EScenarioReferences {
@@ -83,6 +90,16 @@ export type E2EScenarioIdentity = Pick<
 >;
 
 export interface E2EScenarioReadBack {
+  subjects: Array<{
+    subjectIdentifier: string;
+    documentSchemaVersion: number;
+    documentVersion: string;
+    rebuildVersion: string;
+    rebuildStatus: UserDocumentWorkStatus | null;
+    factsSubjectIdentifier: string;
+    factsVersion: string;
+    subjectAccess: "enabled" | "disabled" | "blocking" | "missing" | "invalid";
+  }>;
   admin: {
     active: boolean;
     passwordConfigured: boolean;
@@ -283,6 +300,19 @@ export function createE2EScenarioInternalApiKey(runId: string) {
   return `iam-e2e-internal-api-key-${requireRunKey(runId)}`;
 }
 
+export function createE2ESeedSubjects(
+  references: E2EScenarioSeedReferences,
+): Array<{ subjectIdentifier: string; state: "enabled" | "disabled" }> {
+  return [
+    { subjectIdentifier: references.adminSubjectIdentifier, state: "enabled" },
+    { subjectIdentifier: references.hrAdminSubjectIdentifier, state: "enabled" },
+    { subjectIdentifier: references.delegateeSubjectIdentifier, state: "enabled" },
+    { subjectIdentifier: references.pausedSubjectIdentifier, state: "disabled" },
+    { subjectIdentifier: references.disabledSubjectIdentifier, state: "disabled" },
+    { subjectIdentifier: references.noScopeHrAdminSubjectIdentifier, state: "enabled" },
+  ];
+}
+
 function requireEntryOrigin(value: string, entry: "internal" | "external") {
   const url = new URL(value);
   if (
@@ -305,6 +335,27 @@ function requireRunKey(runId: string) {
 }
 
 function assertScenarioReadBack(expected: E2EScenarioReferences, actual: E2EScenarioReadBack) {
+  const expectedSubjects = createE2ESeedSubjects(expected);
+  const subjects = new Map(actual.subjects.map((subject) => [subject.subjectIdentifier, subject]));
+  if (
+    actual.subjects.length !== expectedSubjects.length ||
+    subjects.size !== expectedSubjects.length ||
+    !expectedSubjects.every(({ subjectIdentifier, state }) => {
+      const subject = subjects.get(subjectIdentifier);
+      return (
+        subject !== undefined &&
+        subject.documentSchemaVersion === USER_DOCUMENT_SCHEMA_VERSION &&
+        subject.documentVersion !== "" &&
+        subject.documentVersion === subject.rebuildVersion &&
+        subject.rebuildStatus === UserDocumentWorkStatus.Processed &&
+        subject.factsSubjectIdentifier === subjectIdentifier &&
+        subject.factsVersion === subject.documentVersion &&
+        subject.subjectAccess === state
+      );
+    })
+  ) {
+    throw new Error("E2E seed read-back did not confirm all six users' documents, facts and access barriers");
+  }
   const matches =
     actual.admin.active &&
     actual.admin.passwordConfigured &&

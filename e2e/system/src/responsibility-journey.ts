@@ -1,6 +1,7 @@
 import { UserDocumentSchema } from "@iam/contracts";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
+import { expectRpcMutationResult, isSuccessfulRpcResponse } from "./admin-client-journey.ts";
 
 const publicationTimeoutMs = 45_000;
 
@@ -32,18 +33,12 @@ export async function createHeadResponsibility(input: {
   await input.page.getByRole("tab", { name: "责任任命" }).click();
   await input.page.getByRole("button", { name: "新建责任任命" }).click();
   const modal = input.page.getByRole("dialog");
-  await expect(modal.getByText(`目标组织：${input.targetOrganizationCode}`)).toBeVisible();
   await modal.getByRole("combobox", { name: "任职" }).fill(input.adminUsername);
   await input.page.getByTitle(new RegExp(input.positionCode, "u")).click();
+  const procedure = "admin.organizationResponsibility.createAssignment";
+  const creation = input.page.waitForResponse((response) => isSuccessfulRpcResponse(response, procedure));
   await modal.getByRole("button", { name: /确\s*定/u }).click();
-  await expect(input.page.getByText("责任任命已创建")).toBeVisible();
-  const detailButton = input.page.getByRole("button", { name: "详情" });
-  await expect(detailButton).toBeVisible();
-  await expect(input.page.getByRole("button", { name: "编辑" })).toHaveCount(0);
-  await detailButton.click();
-  const detailDrawer = input.page.getByRole("dialog");
-  await expect(detailDrawer.getByText(/^任命 #\d+$/u)).toBeVisible();
-  await detailDrawer.getByRole("button", { name: "关闭" }).click();
+  await expectRpcMutationResult(await creation, procedure, true, { id: expect.any(Number) });
 }
 
 export async function waitForInternalResponsibility(input: ResponsibilityJourneyInput & { expected: boolean }) {

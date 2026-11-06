@@ -100,8 +100,9 @@ APISIX 启动配置与 IAM 路由由 `e2e/system/test-assets/` 独立维护，�
 1. Preflight 使用独立 deadline，在资源与 descriptor 创建前失败退出。
 2. Descriptor 落盘后先写未尝试迁移的 receipt，再准备 project 内诊断工具与资源；诊断阶段不临时构建，不公开 APISIX Admin host port。
 3. Migration receipt 区分未尝试、已尝试、完成与安全失败，不保存原始错误或环境。
-4. Seed 通过生产领域能力建立并回读状态，经真实 Worker 收敛，在 Gateway HTTP 发布前执行 PG、Facts 与访问屏障门禁。
+4. Seed 通过生产领域能力建立状态，经真实 Worker 收敛，回读本次六个用户的 Document、Facts 版本与预期访问屏障状态，确认一致后才进入 Gateway 发布与业务旅程。
    核对 rendered Compose 中各入口的 canonical origin；导出必要 seed receipt 后才删除 seed 容器，缺失或导出失败阻断旅程。
+   业务 E2E 不调用人工维护 CLI；Ops 命令的行为由其专属 Integration 验证，维护制品与恢复流程按对应验收执行。
 5. 协议 readiness 校验 discovery 各端点及 issuer 的 canonical origin，Custom SSO 两入口配置也须匹配；随后执行浏览器 preflight。
 
 Receipt 只含阶段、时间、安全失败类别或本次公开引用，不保存凭据。具体流程见[e2e/system](../../e2e/system/)。

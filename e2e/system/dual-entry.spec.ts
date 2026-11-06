@@ -148,10 +148,18 @@ for (const entry of entries) {
         preferred_username: requireEnvironment("IAM_E2E_ADMIN_USERNAME"),
       });
       await page.goto(`${entry.origin}/oidc/session/end`);
-      expect(await page.locator("form").getAttribute("action")).toBe("/oidc/session/end/confirm");
+      const confirmation = page.waitForResponse((response) => {
+        const target = new URL(response.url());
+        return (
+          response.request().method() === "POST" &&
+          target.origin === entry.origin &&
+          target.pathname === "/oidc/session/end/confirm"
+        );
+      });
       await page
         .getByRole("button", { name: logoutMode === "cancel" ? "No, stay signed in" : "Yes, sign me out" })
         .click();
+      expect([302, 303]).toContain((await confirmation).status());
       await expect(page).toHaveURL(`${entry.origin}/oidc/session/end/success`);
       const after = await userInfo();
       expect(after.status()).toBe(logoutMode === "cancel" ? 200 : 401);

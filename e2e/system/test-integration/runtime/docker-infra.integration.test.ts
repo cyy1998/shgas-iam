@@ -222,52 +222,6 @@ describe("exact-project Docker infrastructure", () => {
     }
   });
 
-  test("runs both current User Document gates before route publication", async () => {
-    const captures: string[][] = [];
-    const operations = await createOperations({
-      captureCommand: async (command, args) => {
-        captures.push([command, ...args]);
-        const operation = args.at(-3)?.replace("user-document:", "");
-        return {
-          stdout: JSON.stringify({
-            version: 1,
-            gate: operation === "verify-postgres" ? "postgres" : "redis-access",
-            status: "passed",
-          }),
-          stderr: "",
-        };
-      },
-    });
-
-    await operations.verifyUserDocumentReadiness(descriptor);
-
-    expect(captures.map((command) => command.slice(-6))).toEqual([
-      ["worker", "bun", "run", "user-document:verify-postgres", "--batch-size", "100"],
-      ["worker", "bun", "run", "user-document:verify-redis", "--batch-size", "100"],
-    ]);
-    expect(captures.flat().join(" ")).not.toMatch(/password|token|secret/iu);
-  });
-
-  test.each([
-    { reason: "retired schema", version: 4, gate: "postgres", status: "passed" },
-    { reason: "unknown schema", version: 999, gate: "postgres", status: "passed" },
-    { reason: "failed inventory", version: 1, gate: "postgres", status: "failed" },
-    { reason: "wrong gate", version: 1, gate: "redis-access", status: "passed" },
-  ])("rejects a gate command reporting $reason", async ({ reason: _reason, ...report }) => {
-    const operations = await createOperations({
-      captureCommand: async () => ({
-        stdout: JSON.stringify(report),
-        stderr: "",
-      }),
-    });
-
-    const failure = await operations.verifyUserDocumentReadiness(descriptor).then(
-      () => undefined,
-      (error) => error,
-    );
-    expect(failure).toMatchObject({ message: "User Document postgres gate did not report a passing v1 inventory" });
-  });
-
   test("renders run-scoped client, role, and Gateway authority from the descriptor", async () => {
     const environments: NodeJS.ProcessEnv[] = [];
     const operations = await createOperations({

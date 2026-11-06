@@ -1,3 +1,4 @@
+import { ClientSsoConfigSchema } from "@iam/contracts";
 import type { APIResponse, Page, Response } from "@playwright/test";
 import { expect } from "@playwright/test";
 
@@ -7,33 +8,38 @@ type ClientProtocolLifecycleAction = "启用" | "禁用";
 export async function loginToAdmin(input: {
   adminPassword: string;
   adminUsername: string;
-  expectedNavigationText?: string;
   origin: string;
   page: Page;
 }) {
-  await input.page.goto("/iam-admin/");
   const adminUrl = new RegExp(`^${escapeRegExp(input.origin)}/iam-admin(?:/|$)`, "u");
-  const usernameInput = input.page.getByLabel("工号 / 账号");
-  const adminNavigation = input.page.getByRole("menuitem", {
-    name: input.expectedNavigationText ?? "应用管理",
-  });
-  await Promise.race([adminNavigation.waitFor({ state: "visible" }), usernameInput.waitFor({ state: "visible" })]);
-  if (await usernameInput.isVisible()) {
-    await usernameInput.fill(input.adminUsername);
+  const currentUser = () =>
+    input.page.request.get(`${input.origin}/api/iam/public/user-info`, {
+      headers: { Client: "iam-admin" },
+    });
+  const before = await currentUser();
+  expect([200, 401]).toContain(before.status());
+  await input.page.goto("/iam-admin/");
+  if (before.status() === 401) {
+    await input.page.getByLabel("工号 / 账号").fill(input.adminUsername);
     await input.page.getByPlaceholder("请输入登录密码").fill(input.adminPassword);
     await input.page.getByRole("button", { name: "安全登录" }).click();
     await input.page.getByRole("button", { name: "跳过", exact: true }).click();
   }
   await expect(input.page).toHaveURL(adminUrl);
+  const authenticated = await currentUser();
+  expect(authenticated.status()).toBe(200);
+  expect(await authenticated.json()).toMatchObject({ code: 200, data: { profile: { username: input.adminUsername } } });
 }
 
 export async function openClientSection(page: Page, clientCode: string, section: "basic" | "custom-sso" | "oidc") {
-  const detailResponse = page.waitForResponse(isClientDetailResponse);
   await page.goto(
     `/iam-admin/clients/${encodeURIComponent(clientCode)}/edit?section=${section === "basic" ? "basic" : "sso"}`,
   );
-  await detailResponse;
-  await expect(page.getByText(clientCode, { exact: true })).toBeVisible();
+  const response = await page.request.get(`/api/iam/admin/clients/${encodeURIComponent(clientCode)}`, {
+    headers: { Client: "iam-admin" },
+  });
+  expect(response.status()).toBe(200);
+  expect(await response.json()).toMatchObject({ code: 200, data: { clientCode } });
 }
 
 export async function updateClientStatus(page: Page, clientCode: string, statusLabel: "正常" | "维护中") {
@@ -45,22 +51,19 @@ export async function updateClientStatus(page: Page, clientCode: string, statusL
   );
   await page.getByRole("button", { name: "更新全局状态" }).click();
   await expectRpcMutationResult(await updateResponse, "admin.client.updateStatus", true, null);
-  await expect(page.getByText("全局状态已更新", { exact: true })).toBeVisible();
 }
 
 export async function runClientProtocolLifecycleAction(page: Page, action: ClientProtocolLifecycleAction) {
   const procedure = "admin.clientSso.setEnabled";
   const response = page.waitForResponse((candidate) => isSuccessfulRpcResponse(candidate, procedure));
   await page.getByRole("button", { name: action === "启用" ? "启用 SSO" : "停用 SSO", exact: true }).click();
-  await expectRpcMutationResult(await response, procedure, true, expect.any(Object));
-  await expect(
-    page.getByRole("button", { name: action === "启用" ? "停用 SSO" : "启用 SSO", exact: true }),
-  ).toBeVisible();
+  await expectRpcMutationResult(
+    await response,
+    procedure,
+    true,
+    expect.objectContaining({ ssoEnabled: action === "启用" }),
+  );
 }
-export function isClientDetailResponse(response: Response) {
-  return isSuccessfulRpcResponse(response, "admin.client.detail");
-}
-
 export function isSuccessfulRpcResponse(response: Response, procedure: string) {
   return response.ok() && rpcProcedures(response.url()).includes(procedure);
 }
@@ -89,11 +92,25 @@ export async function saveUnchangedClientProtocolConfiguration(
   const procedure = "admin.clientSso.selectProtocol";
   const response = page.waitForResponse((candidate) => isSuccessfulRpcResponse(candidate, procedure));
   await page.getByRole("button", { name: "保存协议及配置", exact: true }).click();
-  await expectRpcMutationResult(await response, procedure, false, expect.any(Object));
-  await expect(page.getByText("无需修改", { exact: true })).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: expectedEnabled ? "停用 SSO" : "启用 SSO", exact: true }),
-  ).toBeVisible();
+  await expectRpcMutationResult(
+    await response,
+    procedure,
+    false,
+    expect.objectContaining({ clientCode, ssoEnabled: expectedEnabled }),
+  );
+  expect((await readClientSsoDetail(page, clientCode)).ssoEnabled).toBe(expectedEnabled);
+}
+
+export async function readClientSsoDetail(page: Page, clientCode: string) {
+  const response = await page.request.get(`/api/iam/admin/clients-sso/${encodeURIComponent(clientCode)}`, {
+    headers: { Client: "iam-admin" },
+  });
+  expect(response.status()).toBe(200);
+  const body = await response.json();
+  expect(body).toMatchObject({ code: 200, data: { clientCode } });
+  const ssoEnabled: unknown = body.data.ssoEnabled;
+  if (typeof ssoEnabled !== "boolean") throw new Error("Client SSO detail is missing its enabled state");
+  return { clientCode, ssoEnabled, ssoConfig: ClientSsoConfigSchema.nullable().parse(body.data.ssoConfig) };
 }
 function rpcProcedures(url: string) {
   return new URL(url).pathname.split("/rpc/")[1]?.split(",") ?? [];

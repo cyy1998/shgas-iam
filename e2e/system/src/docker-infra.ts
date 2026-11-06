@@ -1,7 +1,6 @@
 import { Buffer } from "node:buffer";
 import { access, mkdir, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
-import { USER_DOCUMENT_SCHEMA_VERSION } from "@iam/user-document/document";
 import {
   cleanupManagedResources,
   createManagedResourceRun,
@@ -468,33 +467,6 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
       if (failures.length > 1) throw new AggregateError(failures, "E2E seed or required receipt export failed");
     },
 
-    async verifyUserDocumentReadiness(descriptor: RunDescriptor, signal?: AbortSignal) {
-      for (const operation of ["verify-postgres", "verify-redis"] as const) {
-        const script = `user-document:${operation}`;
-        const result = await options.captureCommand(
-          "docker",
-          projectArguments(descriptor, [
-            "run",
-            "--rm",
-            "--no-deps",
-            "worker",
-            "bun",
-            "run",
-            script,
-            "--batch-size",
-            "100",
-          ]),
-          {
-            capture: { maxBytes: 64 * 1024, mode: "line-tail" },
-            cwd: options.repositoryRoot,
-            env: descriptorEnvironment(descriptor),
-            signal: signal ?? options.signal,
-          },
-        );
-        assertUserDocumentGateOutput(operation, `${result.stdout}\n${result.stderr}`);
-      }
-    },
-
     async renderGatewayRoutes(descriptor: RunDescriptor, signal?: AbortSignal) {
       await options.runCommand(
         "docker",
@@ -599,25 +571,6 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
       } else await cleanupRun(run, signal);
     },
   };
-}
-
-function assertUserDocumentGateOutput(operation: "verify-postgres" | "verify-redis", output: string) {
-  const expectedGate = operation === "verify-postgres" ? "postgres" : "redis-access";
-  const passed = output.split(/\r?\n/u).some((line) => {
-    try {
-      const record = JSON.parse(line) as Record<string, unknown>;
-      return (
-        record.version === USER_DOCUMENT_SCHEMA_VERSION && record.gate === expectedGate && record.status === "passed"
-      );
-    } catch {
-      return false;
-    }
-  });
-  if (!passed) {
-    throw new Error(
-      `User Document ${expectedGate} gate did not report a passing v${USER_DOCUMENT_SCHEMA_VERSION} inventory`,
-    );
-  }
 }
 
 function boundCompleteLineTail(value: string, maxBytes: number) {

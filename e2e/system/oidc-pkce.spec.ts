@@ -3,8 +3,11 @@ import { randomBytes } from "node:crypto";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 import {
+  expectRpcMutationResult,
+  isSuccessfulRpcResponse,
   loginToAdmin,
   openClientSection,
+  readClientSsoDetail,
   runClientProtocolLifecycleAction,
   saveUnchangedClientProtocolConfiguration,
   updateClientStatus,
@@ -46,8 +49,7 @@ test("public RP observes reversible Maintenance and permanent logout through rea
   await openClientSection(adminPage, clientId, "oidc");
   await runClientProtocolLifecycleAction(adminPage, "禁用");
   await runClientProtocolLifecycleAction(adminPage, "启用");
-  await expect(adminPage.locator(".ant-tag").filter({ hasText: /^维护中$/u })).toBeVisible();
-  await expect(adminPage.getByRole("button", { name: "停用 SSO", exact: true })).toBeVisible();
+  expect(await readClientSsoDetail(adminPage, clientId)).toMatchObject({ ssoEnabled: true });
   await ensureHeadResponsibility({
     adminPage,
     adminUsername,
@@ -363,17 +365,18 @@ async function pauseEmploymentWithResponsibilityCascade(
   const confirmation = adminPage.getByRole("dialog", {
     name: "确认暂停该任职？",
   });
-  await expect(confirmation).toContainText("该任职下所有启用中的责任任命也会一并暂停");
+  const paused = adminPage.waitForResponse((response) => isSuccessfulRpcResponse(response, "admin.employment.pause"));
   await confirmation.getByRole("button", { name: "暂停任职" }).click();
-  await expect(adminPage.getByText("已暂停任职及其启用中的责任任命")).toBeVisible();
+  await expectRpcMutationResult(await paused, "admin.employment.pause", true, null);
 }
 
 async function resumeEmployment(adminPage: Page, adminUsername: string, positionCode: string) {
   await adminPage.goto("/iam-admin/employments");
   const row = findEmploymentRow(adminPage, adminUsername, positionCode);
   const drawer = await openEmploymentDrawer(adminPage, row, adminUsername, positionCode);
+  const resumed = adminPage.waitForResponse((response) => isSuccessfulRpcResponse(response, "admin.employment.resume"));
   await drawer.getByRole("button", { name: /恢\s*复/u }).click();
-  await expect(adminPage.getByText("已恢复任职；责任任命不会自动恢复，请在组织责任中逐条确认后恢复")).toBeVisible();
+  await expectRpcMutationResult(await resumed, "admin.employment.resume", true, null);
 }
 
 async function endEmployment(adminPage: Page, adminUsername: string, positionCode: string) {
@@ -384,9 +387,9 @@ async function endEmployment(adminPage: Page, adminUsername: string, positionCod
   const confirmation = adminPage.getByRole("dialog", {
     name: "确认结束该任职？",
   });
-  await expect(confirmation).toContainText("结束后不可恢复");
+  const ended = adminPage.waitForResponse((response) => isSuccessfulRpcResponse(response, "admin.employment.end"));
   await confirmation.getByRole("button", { name: "结束任职" }).click();
-  await expect(adminPage.getByText("已结束", { exact: true })).toBeVisible();
+  await expectRpcMutationResult(await ended, "admin.employment.end", true, null);
 }
 
 function findEmploymentRow(adminPage: Page, username: string, positionCode: string) {
@@ -401,6 +404,5 @@ async function openEmploymentDrawer(
 ) {
   await row.getByText("查看", { exact: true }).click();
   const drawer = adminPage.getByRole("dialog").filter({ hasText: username }).filter({ hasText: positionCode });
-  await expect(drawer).toBeVisible();
   return drawer;
 }

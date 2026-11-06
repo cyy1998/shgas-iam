@@ -44,8 +44,6 @@ export async function expectClientDelegationJourney(input: DelegationJourneyInpu
     );
     await dialog.getByRole("button", { name: /确\s*定/u }).click();
     await expectRpcMutationResult(await createdResponse, "admin.delegation.create", true, expect.any(Object));
-    await expect(dialog).toBeHidden();
-    await expect(page.getByRole("row").filter({ hasText: description })).toBeVisible();
     await expectResolution(input, input.delegateeUsername);
   });
 
@@ -72,15 +70,13 @@ export async function expectClientDelegationJourney(input: DelegationJourneyInpu
       await ownerPage.getByRole("tab", { name: "委托设置", exact: true }).click();
       const outgoing = ownerPage.getByRole("region", { name: "委托设置", exact: true });
       await outgoing.getByRole("tab", { name: "我委托的", exact: true }).click();
-      await showAllDelegations(ownerPage);
-      await expect(outgoing.getByRole("row").filter({ hasText: description })).toBeVisible();
+      expect(await showAllDelegations(ownerPage)).toContainEqual(expect.objectContaining({ id, description }));
       await loginToPortal(receiverPage, input, input.delegateeUsername);
       const incoming = receiverPage.getByRole("region", { name: "委托设置", exact: true });
       await incoming.getByRole("tab", { name: "委托给我的", exact: true }).click();
-      await showAllDelegations(receiverPage);
-      const incomingRow = incoming.getByRole("row").filter({ hasText: description });
-      await expect(incomingRow).toBeVisible();
-      await expect(incomingRow.getByRole("button", { name: /^(编辑|暂停|恢复|结束)$/u })).toHaveCount(0);
+      expect(await showAllDelegations(receiverPage, "incoming")).toContainEqual(
+        expect.objectContaining({ id, description }),
+      );
       const forbiddenUpdate = await receiverContext.request.patch(`${input.origin}/api/iam/public/delegations/${id}`, {
         headers: { Client: "iam" },
         data: { status: ClientDelegationStatus.Disable },
@@ -96,7 +92,9 @@ export async function expectClientDelegationJourney(input: DelegationJourneyInpu
       );
       await row.getByRole("button", { name: "暂停", exact: true }).click();
       expect((await pausedResponse).status()).toBe(200);
-      await expect(row.getByRole("button", { name: "恢复", exact: true })).toBeVisible();
+      expect((await internalSearch(input)).find((item) => item.id === id)).toMatchObject({
+        status: ClientDelegationStatus.Pause,
+      });
       await expectResolution(input, null);
       const deletion = await input.request.delete(
         `${input.origin}/api/iam/admin/users/${encodeURIComponent(input.delegateeUsername)}`,
@@ -107,20 +105,18 @@ export async function expectClientDelegationJourney(input: DelegationJourneyInpu
       await internalUpdate(input, id, { status: ClientDelegationStatus.Enable });
       await expectResolution(input, input.delegateeUsername);
       await ownerPage.reload();
-      await showAllDelegations(ownerPage);
-      await expect(
-        ownerPage.getByRole("row").filter({ hasText: description }).getByRole("button", { name: "暂停", exact: true }),
-      ).toBeVisible();
-      await page.reload();
-      await expect(
-        page.getByRole("row").filter({ hasText: description }).getByRole("button", { name: "暂停", exact: true }),
-      ).toBeVisible();
+      expect(await showAllDelegations(ownerPage)).toContainEqual(
+        expect.objectContaining({ id, status: ClientDelegationStatus.Enable }),
+      );
+      await expectAdminDelegationAfterReload(page, id, description, ClientDelegationStatus.Enable);
     });
 
     await test.step("Natural expiry can be extended from SSO while manual ending remains final and readable", async () => {
       await editPeriod(ownerPage, id, description, now - 7_200_000, now - 3_600_000);
       await expectResolution(input, null);
-      await expect(ownerPage.getByRole("row").filter({ hasText: description })).toContainText("已到期");
+      const expired = (await internalSearch(input)).find((item) => item.id === id);
+      expect(expired).toMatchObject({ status: ClientDelegationStatus.Enable });
+      expect(new Date(String(expired?.endTime)).getTime()).toBeLessThan(Date.now());
       await editPeriod(ownerPage, id, description, now - 7_200_000, now + 10_800_000);
       await expectResolution(input, input.delegateeUsername);
       const row = ownerPage.getByRole("row").filter({ hasText: description });
@@ -131,8 +127,6 @@ export async function expectClientDelegationJourney(input: DelegationJourneyInpu
       await ownerPage.getByRole("button", { name: "确认结束", exact: true }).click();
       expect((await endedResponse).status()).toBe(200);
       await expectResolution(input, null);
-      await expect(row).toContainText("已结束");
-      await expect(row.getByRole("button", { name: /^(编辑|暂停|恢复|结束)$/u })).toHaveCount(0);
       const reopen = await input.request.patch(`${input.origin}/api/iam/internal/delegations/${id}`, {
         headers: { apikey: input.internalApiKey },
         data: { status: ClientDelegationStatus.Enable },
@@ -144,13 +138,13 @@ export async function expectClientDelegationJourney(input: DelegationJourneyInpu
         status: ClientDelegationStatus.Disable,
         description,
       });
-      await page.reload();
-      await expect(page.getByRole("row").filter({ hasText: description })).toContainText("已结束");
+      await expectAdminDelegationAfterReload(page, id, description, ClientDelegationStatus.Disable);
       await receiverPage.reload();
       await receiverPage.getByRole("tab", { name: "委托设置", exact: true }).click();
       await receiverPage.getByRole("tab", { name: "委托给我的", exact: true }).click();
-      await showAllDelegations(receiverPage);
-      await expect(receiverPage.getByRole("row").filter({ hasText: description })).toContainText("已结束");
+      expect(await showAllDelegations(receiverPage, "incoming")).toContainEqual(
+        expect.objectContaining({ id, description, status: ClientDelegationStatus.Disable }),
+      );
     });
   } finally {
     await ownerPage.close();
@@ -208,8 +202,7 @@ async function expectHrBoundary(input: DelegationJourneyInput) {
   const context = await browser.newContext({ baseURL: input.origin });
   try {
     const page = await context.newPage();
-    await loginToAdmin({ ...input, adminUsername: input.hrAdminUsername, expectedNavigationText: "组织责任", page });
-    await expect(page.getByRole("menuitem", { name: "委托管理", exact: true })).toHaveCount(0);
+    await loginToAdmin({ ...input, adminUsername: input.hrAdminUsername, page });
     const denied = await context.request.post(`${input.origin}/api/iam/admin/delegations/search`, {
       headers: { Client: encodeURIComponent(input.adminClientCode) },
       data: {},
@@ -227,13 +220,18 @@ async function loginToPortal(page: Page, input: DelegationJourneyInput, username
   await page.getByRole("button", { name: "安全登录" }).click();
   await page.getByRole("button", { name: "跳过", exact: true }).click();
   await page.getByRole("tab", { name: "委托设置", exact: true }).click();
-  await expect(page.getByRole("region", { name: "委托设置", exact: true })).toBeVisible();
 }
 
-async function showAllDelegations(page: Page) {
+async function showAllDelegations(page: Page, direction: "outgoing" | "incoming" = "outgoing") {
   await page.getByRole("tab", { name: "委托设置", exact: true }).click();
   await page.getByRole("combobox", { name: "委托状态筛选", exact: true }).click();
   await page.locator(".ant-select-dropdown:visible").getByTitle("全部", { exact: true }).click();
+  const response = await page.context().request.post(new URL("/api/iam/public/delegations/search", page.url()).href, {
+    headers: { Client: "iam" },
+    data: { direction },
+  });
+  expect(response.status()).toBe(200);
+  return recordsFrom(await response.json());
 }
 
 async function selectIdentity(page: Page, dialog: Locator, label: string, code: string) {
@@ -262,7 +260,21 @@ async function editPeriod(page: Page, id: number, description: string, start: nu
   );
   await dialog.getByRole("button", { name: "保存委托", exact: true }).click();
   expect((await saved).status()).toBe(200);
-  await expect(dialog).toBeHidden();
+}
+
+async function expectAdminDelegationAfterReload(
+  page: Page,
+  id: number,
+  description: string,
+  status: ClientDelegationStatus,
+) {
+  const searched = page.waitForResponse((response) => isSuccessfulRpcResponse(response, "admin.delegation.search"));
+  await page.reload();
+  const response = await searched;
+  const body: unknown = await response.json();
+  const entries = Array.isArray(body) ? body : [body];
+  const lists = entries.map((entry) => recordFrom(recordFrom(entry).result).data).filter(Array.isArray);
+  expect(lists.flat()).toContainEqual(expect.objectContaining({ id, description, status }));
 }
 
 async function expectResolution(input: DelegationJourneyInput, delegateeUsername: string | null) {

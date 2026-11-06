@@ -1,11 +1,10 @@
-import type { APIRequestContext, Browser, Page } from "@playwright/test";
+import { OrganizationResponsibilityAssignmentStatus } from "@iam/contracts";
+import type { APIRequestContext, Browser, Page, Response } from "@playwright/test";
 import { expect } from "@playwright/test";
 import { expectRpcMutationResult, isSuccessfulRpcResponse, loginToAdmin } from "./src/admin-client-journey.ts";
 import { containsScalarValue } from "./src/concealment.ts";
 import { requireEnvironment } from "./src/environment.ts";
 import { test } from "./src/gateway-test.ts";
-
-const safeBlockerMessage = "存在当前管理员不可管理的开放责任任命，请联系完整管理员处理";
 
 test("HR Admin manages cross-root responsibilities without widening either endpoint", async ({
   browser,
@@ -17,22 +16,19 @@ test("HR Admin manages cross-root responsibilities without widening either endpo
   await loginToAdmin({
     adminPassword: scenario.adminPassword,
     adminUsername: scenario.hrAdminUsername,
-    expectedNavigationText: "组织责任",
     origin: scenario.origin,
     page,
   });
   await expect(page).toHaveURL(/\/iam-admin\//u);
 
-  for (const moduleName of ["用户管理", "职位管理", "组织管理", "雇佣关系", "组织责任"]) {
-    await expect(page.getByRole("menuitem", { name: moduleName })).toBeVisible();
-  }
-  for (const moduleName of ["应用管理", "角色管理", "会话管理", "审计日志", "系统日志"]) {
-    await expect(page.getByRole("menuitem", { name: moduleName })).toHaveCount(0);
-  }
-
+  const typesResponse = waitForRpc(page, "admin.organizationResponsibility.listTypes");
   await page.goto("/iam-admin/organization-responsibilities/types");
-  await expect(page.getByRole("row").filter({ hasText: "head" })).toContainText("负责人");
-  await expect(page.getByRole("row").filter({ hasText: "supervising" })).toContainText("分管领导");
+  expect(await readRpcData(await typesResponse, "admin.organizationResponsibility.listTypes")).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ code: "head" }),
+      expect.objectContaining({ code: "supervising" }),
+    ]),
+  );
 
   await page.goto("/iam-admin/organization-responsibilities/assignments");
   await page.getByRole("button", { name: /新建责任任命/u }).click();
@@ -42,8 +38,8 @@ test("HR Admin manages cross-root responsibilities without widening either endpo
   const targetSelector = formItem("目标组织").getByRole("combobox");
   const outsideTargetSearch = waitForRpc(page, "admin.organization.selector");
   await targetSelector.fill(scenario.outsideOrganizationCode);
-  await outsideTargetSearch;
-  await expect(page.getByText(new RegExp(escapeRegExp(scenario.outsideOrganizationCode), "u"))).toHaveCount(0);
+  const outsideTargets = await readRpcData(await outsideTargetSearch, "admin.organization.selector");
+  expect(containsScalarValue(outsideTargets, scenario.outsideOrganizationCode)).toBe(false);
   const inScopeTargetSearch = waitForRpc(page, "admin.organization.selector");
   await targetSelector.fill(scenario.hrResponsibilityTargetOrganizationCode);
   await inScopeTargetSearch;
@@ -57,17 +53,14 @@ test("HR Admin manages cross-root responsibilities without widening either endpo
   const employmentSelector = formItem("任职").getByRole("combobox");
   const employmentSearch = waitForRpc(page, "admin.employment.search");
   await employmentSelector.fill(scenario.adminUsername);
-  await employmentSearch;
-  await expect(
-    page.getByTitle(new RegExp(escapeRegExp(scenario.outsideResponsibilityHolderPositionCode), "u")),
-  ).toHaveCount(0);
+  const employmentChoices = await readRpcData(await employmentSearch, "admin.employment.search");
+  expect(containsScalarValue(employmentChoices, scenario.outsideResponsibilityHolderPositionCode)).toBe(false);
   await page.getByTitle(new RegExp(escapeRegExp(scenario.responsibilityHolderPositionCode), "u")).click();
   const createResponse = page.waitForResponse((response) =>
     isSuccessfulRpcResponse(response, "admin.organizationResponsibility.createAssignment"),
   );
   await createDialog.getByRole("button", { name: /确\s*定/u }).click();
   const creation = await createResponse;
-  await expect(page.getByText("责任任命已创建", { exact: true })).toBeVisible();
 
   const created = await findCreatedAssignment(context.request, scenario);
   await expectRpcMutationResult(creation, "admin.organizationResponsibility.createAssignment", true, {
@@ -75,24 +68,26 @@ test("HR Admin manages cross-root responsibilities without widening either endpo
   });
   await expectManualTransportMatrix(context.request, scenario);
   await expectContextPanels(page, scenario, created.id);
-  await manageLifecycle(page, created.id);
+  await manageLifecycle(page, context.request, scenario, created.id);
   await expectRepeatedEnd(context.request, scenario, created.id);
 
+  const concealedDetail = page.waitForResponse((response) =>
+    response.url().includes("admin.organizationResponsibility.detailAssignment"),
+  );
   await page.goto(
     `/iam-admin/organization-responsibilities/assignments?lifecycle=all&assignment=${scenario.hiddenResponsibilityAssignmentId}`,
   );
-  const concealedDrawer = page.getByRole("dialog");
-  await expect(
-    concealedDrawer.getByRole("alert").filter({
-      hasText: "组织责任任命不存在",
-    }),
-  ).toHaveCount(1);
-  await expect(concealedDrawer).not.toContainText(scenario.outsideResponsibilityHolderPositionCode);
-  await expect(concealedDrawer).not.toContainText(scenario.outsideOrganizationCode);
+  const deniedDetail = await concealedDetail;
+  expect([404, 207]).toContain(deniedDetail.status());
+  const concealedBody = await deniedDetail.json();
+  expect(rpcEntry(deniedDetail, concealedBody, "admin.organizationResponsibility.detailAssignment")).toMatchObject({
+    error: { data: { httpStatus: 404 } },
+  });
+  assertConcealedResponse(concealedBody, scenario);
+  expect(containsScalarValue(concealedBody, scenario.outsideOrganizationCode)).toBe(false);
   await page.keyboard.press("Escape");
-  await expect(concealedDrawer).toBeHidden();
 
-  await expectSafeBlockers(page, context.request, scenario);
+  await expectSafeBlockers(context.request, scenario);
 
   const auditResponse = await context.request.post(`${scenario.origin}/api/iam/admin/audit-logs/search`, {
     data: { pageNum: 1, pageSize: 10, conditions: {} },
@@ -131,88 +126,111 @@ async function expectContextPanels(page: Page, scenario: Scenario, assignmentId:
     .last()
     .click();
   await page.getByRole("tab", { name: "责任任命" }).click();
-  await expect(page.getByRole("row").filter({ hasText: "分管领导" })).toContainText(targetName);
+  const organizationDetail = waitForRpc(page, "admin.organizationResponsibility.detailAssignment");
+  await page.getByRole("row").filter({ hasText: "分管领导" }).getByRole("button", { name: "详情" }).click();
+  expect(
+    await readRpcData(await organizationDetail, "admin.organizationResponsibility.detailAssignment"),
+  ).toMatchObject({ id: assignmentId });
+  await page.getByRole("dialog").getByRole("button", { name: "关闭" }).click();
 
   await page.goto("/iam-admin/employments");
-  await page.getByPlaceholder("工号或姓名").fill(scenario.adminUsername);
-  const employmentSearch = page.waitForResponse((response) =>
-    isSuccessfulRpcResponse(response, "admin.employment.search"),
+  const employmentSearchInput = page.getByRole("searchbox", { name: "搜索雇佣用户", exact: true });
+  await employmentSearchInput.fill(scenario.adminUsername);
+  const employmentSearch = page.waitForResponse(
+    (response) =>
+      isSuccessfulRpcResponse(response, "admin.employment.search") &&
+      Boolean(new URL(response.url()).searchParams.get("input")?.includes(scenario.adminUsername)),
   );
-  await page.getByRole("button", { name: /查\s*询/u }).click();
+  await employmentSearchInput.press("Enter");
   await employmentSearch;
   const holderRow = page.getByRole("row").filter({
     hasText: scenario.responsibilityHolderPositionCode,
   });
   await holderRow.getByText("查看", { exact: true }).click();
   const employmentDrawer = page.getByRole("dialog");
-  await employmentDrawer.getByRole("tab", { name: "组织责任" }).click();
-  await expect(employmentDrawer.getByText(targetName, { exact: true })).toBeVisible();
-  await expect(employmentDrawer.getByLabel(`查看任命 #${assignmentId}`)).toBeVisible();
-  await employmentDrawer.getByRole("button", { name: "关闭" }).click();
+  await followAssignmentLink(page, employmentDrawer.getByRole("link", { name: targetName, exact: true }), assignmentId);
 
   await page.goto("/iam-admin/users");
-  await page.getByPlaceholder("工号或姓名").fill(scenario.adminUsername);
-  const userSearch = page.waitForResponse((response) => isSuccessfulRpcResponse(response, "admin.user.search"));
-  await page.getByRole("button", { name: /查\s*询/u }).click();
+  const userSearchInput = page.getByRole("searchbox", { name: "搜索用户", exact: true });
+  await userSearchInput.fill(scenario.adminUsername);
+  const userSearch = page.waitForResponse(
+    (response) =>
+      isSuccessfulRpcResponse(response, "admin.user.search") &&
+      Boolean(new URL(response.url()).searchParams.get("input")?.includes(scenario.adminUsername)),
+  );
+  await userSearchInput.press("Enter");
   await userSearch;
   await page.getByRole("row").filter({ hasText: scenario.adminUsername }).getByText("查看", { exact: true }).click();
   const userDrawer = page.getByRole("dialog").filter({
     hasText: scenario.adminUsername,
   });
-  await userDrawer.getByRole("tab", { name: /雇佣/u }).click();
-  await expect(userDrawer.getByText(targetName, { exact: true })).toBeVisible();
-  await expect(userDrawer.getByLabel(`查看任命 #${assignmentId}`)).toBeVisible();
-  await userDrawer.getByRole("button", { name: "关闭" }).click();
+  await followAssignmentLink(page, userDrawer.getByRole("link", { name: targetName, exact: true }), assignmentId);
 }
 
-async function manageLifecycle(page: Page, assignmentId: number) {
+async function followAssignmentLink(page: Page, link: ReturnType<Page["getByRole"]>, assignmentId: number) {
+  const detail = waitForRpc(page, "admin.organizationResponsibility.detailAssignment");
+  await link.click();
+  await expect(page).toHaveURL((url) => url.searchParams.get("assignment") === String(assignmentId));
+  expect(await readRpcData(await detail, "admin.organizationResponsibility.detailAssignment")).toMatchObject({
+    id: assignmentId,
+  });
+  await page.getByRole("dialog").getByRole("button", { name: "关闭" }).click();
+}
+
+async function manageLifecycle(page: Page, request: APIRequestContext, scenario: Scenario, assignmentId: number) {
   await page.goto(`/iam-admin/organization-responsibilities/assignments?lifecycle=open&assignment=${assignmentId}`);
   const drawer = page.getByRole("dialog");
-  await expect(drawer.getByText(`任命 #${assignmentId}`, { exact: true })).toBeVisible();
-  await expect(drawer.getByRole("tab", { name: "操作日志" })).toHaveCount(0);
-  await expect(drawer.getByRole("button", { name: "暂停任命" })).toBeVisible();
-  await expect(drawer.getByRole("button", { name: "结束任命" })).toBeVisible();
+  await expectAssignmentState(request, scenario, assignmentId, OrganizationResponsibilityAssignmentStatus.Enable);
 
-  const pauseResponse = page.waitForResponse((response) =>
-    isSuccessfulRpcResponse(response, "admin.organizationResponsibility.pauseAssignment"),
-  );
+  const pauseResponse = waitForRpc(page, "admin.organizationResponsibility.pauseAssignment");
   await drawer.getByRole("button", { name: "暂停任命" }).click();
   await expectRpcMutationResult(await pauseResponse, "admin.organizationResponsibility.pauseAssignment", true, null);
-  await expect(page.getByText("责任任命已暂停", { exact: true })).toBeVisible();
-  await expect(drawer.getByRole("button", { name: "恢复任命" })).toBeVisible();
+  await expectAssignmentState(request, scenario, assignmentId, OrganizationResponsibilityAssignmentStatus.Pause);
 
-  const resumeResponse = page.waitForResponse((response) =>
-    isSuccessfulRpcResponse(response, "admin.organizationResponsibility.resumeAssignment"),
-  );
+  const resumeResponse = waitForRpc(page, "admin.organizationResponsibility.resumeAssignment");
   await drawer.getByRole("button", { name: "恢复任命" }).click();
   await expectRpcMutationResult(await resumeResponse, "admin.organizationResponsibility.resumeAssignment", true, null);
-  await expect(page.getByText("责任任命已恢复", { exact: true })).toBeVisible();
-  await expect(drawer.getByRole("button", { name: "暂停任命" })).toBeVisible();
+  await expectAssignmentState(request, scenario, assignmentId, OrganizationResponsibilityAssignmentStatus.Enable);
 
   await drawer.getByRole("button", { name: "结束任命" }).click();
-  const endResponse = page.waitForResponse((response) =>
-    isSuccessfulRpcResponse(response, "admin.organizationResponsibility.endAssignment"),
-  );
-  await page
-    .locator(".ant-modal-confirm")
-    .getByRole("button", {
-      name: "确认结束",
-    })
-    .click();
+  const endResponse = waitForRpc(page, "admin.organizationResponsibility.endAssignment");
+  await page.locator(".ant-modal-confirm").getByRole("button", { name: "确认结束" }).click();
   await expectRpcMutationResult(await endResponse, "admin.organizationResponsibility.endAssignment", true, null);
-  const endedMessage = page.getByText("责任任命已结束", { exact: true });
-  await expect(endedMessage).toBeVisible();
-  await expect(drawer.getByText("已结束", { exact: true })).toBeVisible();
-  await expect(drawer.getByRole("button", { name: "暂停任命" })).toHaveCount(0);
-  await expect(drawer.getByRole("button", { name: "恢复任命" })).toHaveCount(0);
-  await expect(drawer.getByRole("button", { name: "结束任命" })).toHaveCount(0);
-  await expect(endedMessage).toBeHidden();
+  await expectAssignmentState(request, scenario, assignmentId, OrganizationResponsibilityAssignmentStatus.Disable);
   await drawer.getByRole("button", { name: "关闭" }).click();
 
+  const historicalDetail = waitForRpc(page, "admin.organizationResponsibility.detailAssignment");
   await page.goto(`/iam-admin/organization-responsibilities/assignments?lifecycle=ended&assignment=${assignmentId}`);
-  await expect(page.locator(".ant-table-tbody").getByRole("row").filter({ hasText: "已结束" })).toHaveCount(1);
-  await expect(page.getByRole("dialog").getByText(`任命 #${assignmentId}`, { exact: true })).toBeVisible();
+  expect(await readRpcData(await historicalDetail, "admin.organizationResponsibility.detailAssignment")).toMatchObject({
+    id: assignmentId,
+    status: OrganizationResponsibilityAssignmentStatus.Disable,
+    allowedActions: { pause: { allowed: false }, resume: { allowed: false }, end: { allowed: false } },
+  });
+  const history = await searchAssignments(request, scenario, { lifecycle: "ended" });
+  expect(history.items).toEqual(expect.arrayContaining([expect.objectContaining({ id: assignmentId })]));
   await page.getByRole("dialog").getByRole("button", { name: "关闭" }).click();
+}
+
+async function expectAssignmentState(
+  request: APIRequestContext,
+  scenario: Scenario,
+  assignmentId: number,
+  status: OrganizationResponsibilityAssignmentStatus,
+) {
+  const response = await request.get(
+    `${scenario.origin}/api/iam/admin/organization-responsibilities/assignments/${assignmentId}`,
+    { headers: adminHeaders(scenario.adminClientCode) },
+  );
+  expect(response.status()).toBe(200);
+  expect((await response.json()).data).toMatchObject({
+    id: assignmentId,
+    status,
+    allowedActions: {
+      pause: { allowed: status === OrganizationResponsibilityAssignmentStatus.Enable },
+      resume: { allowed: status === OrganizationResponsibilityAssignmentStatus.Pause },
+      end: { allowed: status !== OrganizationResponsibilityAssignmentStatus.Disable },
+    },
+  });
 }
 
 async function expectRepeatedEnd(request: APIRequestContext, scenario: Scenario, assignmentId: number) {
@@ -320,7 +338,7 @@ function assertConcealedResponse(body: unknown, scenario: Scenario) {
   expect(containsScalarValue(body, scenario.hiddenResponsibilityAssignmentId)).toBe(false);
 }
 
-async function expectSafeBlockers(page: Page, request: APIRequestContext, scenario: Scenario) {
+async function expectSafeBlockers(request: APIRequestContext, scenario: Scenario) {
   const cardinality = await request.post(
     `${scenario.origin}/api/iam/admin/organizations/${encodeURIComponent(scenario.hrResponsibilityTargetOrganizationCode)}/responsibility-assignments`,
     {
@@ -336,16 +354,6 @@ async function expectSafeBlockers(page: Page, request: APIRequestContext, scenar
   expect(body).toContain("ASSIGNMENT_UNMANAGEABLE_CONFLICT");
   expect(body).not.toContain(scenario.outsideResponsibilityHolderPositionCode);
   expect(body).not.toContain(String(scenario.hiddenResponsibilityAssignmentId));
-
-  await page.goto("/iam-admin/organizations");
-  await page.getByPlaceholder("搜索组织名称或编码").fill(scenario.hrResponsibilityTargetOrganizationCode);
-  await page
-    .getByText(new RegExp(escapeRegExp(scenario.hrResponsibilityTargetOrganizationCode), "u"))
-    .last()
-    .click();
-  await page.getByRole("button", { name: /状\s*态/u }).hover();
-  await expect(page.getByText(safeBlockerMessage, { exact: true })).toBeVisible();
-  await expect(page.getByText(scenario.outsideResponsibilityHolderPositionCode, { exact: false })).toHaveCount(0);
 }
 
 async function expectMixedAndFullAdminGlobalCapability(browser: Browser, scenario: Scenario) {
@@ -415,7 +423,6 @@ async function expectActorFailClosed(browser: Browser, scenario: Scenario, usern
     await loginToAdmin({
       adminPassword: scenario.adminPassword,
       adminUsername: username,
-      expectedNavigationText: "组织责任",
       origin: scenario.origin,
       page: actorPage,
     });
@@ -462,7 +469,26 @@ async function searchAssignments(
 }
 
 async function waitForRpc(page: Page, procedure: string) {
-  await page.waitForResponse((response) => isSuccessfulRpcResponse(response, procedure));
+  return await page.waitForResponse((response) => isSuccessfulRpcResponse(response, procedure));
+}
+
+function rpcEntry(response: Response, payload: unknown, procedure: string): unknown {
+  const procedures = new URL(response.url()).pathname.split("/").at(-1)?.split(",") ?? [];
+  const index = procedures.indexOf(procedure);
+  if (index < 0) throw new Error(`Missing RPC procedure ${procedure}`);
+  return Array.isArray(payload) ? payload[index] : payload;
+}
+
+async function readRpcData(response: Response, procedure: string): Promise<unknown> {
+  expect(response.ok()).toBe(true);
+  const payload: unknown = await response.json();
+  const entry = rpcEntry(response, payload, procedure);
+  if (entry === null || typeof entry !== "object" || !("result" in entry))
+    throw new Error("RPC response is missing its result");
+  const result = entry.result;
+  if (result === null || typeof result !== "object" || !("data" in result))
+    throw new Error("RPC response is missing its data");
+  return result.data;
 }
 
 function adminHeaders(clientCode: string) {

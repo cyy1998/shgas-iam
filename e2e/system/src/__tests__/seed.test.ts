@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { ClientSsoCallbackType, ClientSsoProtocol, OidcClientType, SubjectClaim } from "@iam/contracts";
-import type { E2EScenarioOwner, E2EScenarioReferences } from "../seed.ts";
-import { seedE2EScenario } from "../seed.ts";
+import {
+  ClientSsoCallbackType,
+  ClientSsoProtocol,
+  OidcClientType,
+  SubjectClaim,
+  UserDocumentWorkStatus,
+} from "@iam/contracts";
+import type { E2EScenarioOwner, E2EScenarioReadBack, E2EScenarioReferences } from "../seed.ts";
+import { createE2ESeedSubjects, seedE2EScenario } from "../seed.ts";
 
 describe("E2E scenario seed", () => {
   test("establishes the fixed scenario through its owner and returns only run-scoped references", async () => {
@@ -27,7 +33,7 @@ describe("E2E scenario seed", () => {
       canonicalOrigin: "http://127.0.0.1:43123",
       internalOrigin: "http://internal.iam.localhost:43123",
       owner,
-      random: { uuid: () => "3b766c91-1daa-4c09-89e4-ea87ad123456" },
+      random: scenarioRandom(),
       runId: "20260806123000000-a1b2c3d4",
     });
 
@@ -36,16 +42,16 @@ describe("E2E scenario seed", () => {
       runId: "20260806123000000-a1b2c3d4",
       canonicalOrigin: "http://127.0.0.1:43123",
       internalOrigin: "http://internal.iam.localhost:43123",
-      adminSubjectIdentifier: "3b766c91-1daa-4c09-89e4-ea87ad123456",
+      adminSubjectIdentifier: "3b766c91-1daa-4c09-89e4-ea87ad123451",
       adminUsername: "e2e-admin-123000000-a1b2c3d4",
-      hrAdminSubjectIdentifier: "3b766c91-1daa-4c09-89e4-ea87ad123456",
+      hrAdminSubjectIdentifier: "3b766c91-1daa-4c09-89e4-ea87ad123452",
       hrAdminUsername: "e2e-hr-admin-123000000-a1b2c3d4",
       hrAdminUpdatedName: "E2E HR Admin Updated 123000000-a1b2c3d4",
-      delegateeSubjectIdentifier: "3b766c91-1daa-4c09-89e4-ea87ad123456",
+      delegateeSubjectIdentifier: "3b766c91-1daa-4c09-89e4-ea87ad123453",
       delegateeUsername: "e2e-delegatee-123000000-a1b2c3d4",
-      pausedSubjectIdentifier: "3b766c91-1daa-4c09-89e4-ea87ad123456",
+      pausedSubjectIdentifier: "3b766c91-1daa-4c09-89e4-ea87ad123454",
       pausedUsername: "e2e-paused-123000000-a1b2c3d4",
-      disabledSubjectIdentifier: "3b766c91-1daa-4c09-89e4-ea87ad123456",
+      disabledSubjectIdentifier: "3b766c91-1daa-4c09-89e4-ea87ad123455",
       disabledUsername: "e2e-disabled-123000000-a1b2c3d4",
       organizationCode: "e2e-org-123000000-a1b2c3d4",
       responsibilityHolderOrganizationCode: "e2e-holder-org-123000000-a1b2c3d4",
@@ -111,7 +117,7 @@ describe("E2E scenario seed", () => {
         adminPassword: "SYNTHETIC-PASSWORD-ONLY-FOR-E2E",
         canonicalOrigin: "http://127.0.0.1:43123",
         owner,
-        random: { uuid: () => "3b766c91-1daa-4c09-89e4-ea87ad123456" },
+        random: scenarioRandom(),
         runId: "20260806123000000-a1b2c3d4",
       }),
     ).rejects.toThrow("E2E scenario owner read-back did not confirm the complete fixed scenario");
@@ -137,10 +143,86 @@ describe("E2E scenario seed", () => {
         adminPassword: "SYNTHETIC-PASSWORD-ONLY-FOR-E2E",
         canonicalOrigin: "http://127.0.0.1:43123",
         owner,
-        random: { uuid: () => "3b766c91-1daa-4c09-89e4-ea87ad123456" },
+        random: scenarioRandom(),
         runId: "20260806123000000-a1b2c3d4",
       }),
     ).rejects.toThrow("E2E scenario owner read-back did not confirm the complete fixed scenario");
+  });
+
+  test.each([0, 1, 2, 3, 4, 5])("rejects stale Facts for seed user %i", async (index) => {
+    await expectSeedReadBackFailure((readBack) => {
+      requiredSeedSubject(readBack, index).factsVersion = "2";
+    });
+  });
+
+  test.each([
+    [0, "disabled"],
+    [1, "disabled"],
+    [2, "disabled"],
+    [3, "enabled"],
+    [4, "enabled"],
+    [5, "disabled"],
+  ] as const)("rejects the wrong access state for seed user %i", async (index, state) => {
+    await expectSeedReadBackFailure((readBack) => {
+      requiredSeedSubject(readBack, index).subjectAccess = state;
+    });
+  });
+
+  test.each([
+    "missing-user",
+    "duplicate-user",
+    "foreign-user",
+    "missing-document",
+    "wrong-schema",
+    "pending-rebuild",
+    "stale-document",
+    "missing-facts",
+    "wrong-facts-subject",
+    "missing-access",
+    "invalid-access",
+    "blocking-access",
+  ] as const)("rejects incomplete seed readiness: %s", async (variant) => {
+    await expectSeedReadBackFailure((readBack) => {
+      const subject = requiredSeedSubject(readBack, 2);
+      switch (variant) {
+        case "missing-user":
+          readBack.subjects.pop();
+          break;
+        case "duplicate-user":
+          readBack.subjects[5] = { ...subject };
+          break;
+        case "foreign-user":
+          subject.subjectIdentifier = "another-subject";
+          break;
+        case "missing-document":
+          subject.documentVersion = "";
+          break;
+        case "wrong-schema":
+          subject.documentSchemaVersion = 2;
+          break;
+        case "pending-rebuild":
+          subject.rebuildStatus = UserDocumentWorkStatus.Pending;
+          break;
+        case "stale-document":
+          subject.rebuildVersion = "2";
+          break;
+        case "missing-facts":
+          subject.factsVersion = "";
+          break;
+        case "wrong-facts-subject":
+          subject.factsSubjectIdentifier = "another-subject";
+          break;
+        case "missing-access":
+          subject.subjectAccess = "missing";
+          break;
+        case "invalid-access":
+          subject.subjectAccess = "invalid";
+          break;
+        case "blocking-access":
+          subject.subjectAccess = "blocking";
+          break;
+      }
+    });
   });
 
   test("rejects a gateway-ready iam Client whose portal SSO delivery is disabled", async () => {
@@ -157,7 +239,7 @@ describe("E2E scenario seed", () => {
         adminPassword: "SYNTHETIC-PASSWORD-ONLY-FOR-E2E",
         canonicalOrigin: "http://127.0.0.1:43123",
         owner,
-        random: { uuid: () => "3b766c91-1daa-4c09-89e4-ea87ad123456" },
+        random: scenarioRandom(),
         runId: "20260806123000000-a1b2c3d4",
       });
     } catch (error) {
@@ -193,7 +275,7 @@ describe("E2E scenario seed", () => {
           adminPassword: "SYNTHETIC-PASSWORD-ONLY-FOR-E2E",
           canonicalOrigin: "http://127.0.0.1:43123",
           owner,
-          random: { uuid: () => "3b766c91-1daa-4c09-89e4-ea87ad123456" },
+          random: scenarioRandom(),
           runId: "20260806123000000-a1b2c3d4",
         });
       } catch (error) {
@@ -204,8 +286,50 @@ describe("E2E scenario seed", () => {
   );
 });
 
-function completeReadBack(references: E2EScenarioReferences) {
+function requiredSeedSubject(readBack: E2EScenarioReadBack, index: number) {
+  const subject = readBack.subjects[index];
+  if (subject === undefined) throw new Error("Seed test fixture is missing a subject");
+  return subject;
+}
+
+async function expectSeedReadBackFailure(mutate: (readBack: E2EScenarioReadBack) => void) {
+  let failure: unknown;
+  try {
+    await seedE2EScenario({
+      adminPassword: "SYNTHETIC-PASSWORD-ONLY-FOR-E2E",
+      canonicalOrigin: "http://127.0.0.1:43123",
+      owner: {
+        establish: async () => generatedReferences(),
+        readBack: async (references) => {
+          const readBack = completeReadBack(references);
+          mutate(readBack);
+          return readBack;
+        },
+      },
+      random: scenarioRandom(),
+      runId: "20260806123000000-a1b2c3d4",
+    });
+  } catch (error) {
+    failure = error;
+  }
+  expect(failure).toBeInstanceOf(Error);
+  expect(failure).toMatchObject({
+    message: "E2E seed read-back did not confirm all six users' documents, facts and access barriers",
+  });
+}
+
+function completeReadBack(references: E2EScenarioReferences): E2EScenarioReadBack {
   return {
+    subjects: createE2ESeedSubjects(references).map(({ subjectIdentifier, state }) => ({
+      subjectIdentifier,
+      documentSchemaVersion: 1,
+      documentVersion: "1",
+      rebuildVersion: "1",
+      rebuildStatus: UserDocumentWorkStatus.Processed,
+      factsSubjectIdentifier: subjectIdentifier,
+      factsVersion: "1",
+      subjectAccess: state,
+    })),
     admin: {
       active: true,
       passwordConfigured: true,
@@ -367,4 +491,9 @@ function generatedReferences() {
     outsideResponsibilityHolderEmploymentId: 43,
     responsibilityHolderEmploymentId: 44,
   };
+}
+
+function scenarioRandom() {
+  let next = 0;
+  return { uuid: () => `3b766c91-1daa-4c09-89e4-ea87ad12345${++next}` };
 }
