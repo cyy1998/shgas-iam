@@ -33,7 +33,7 @@ test("formal Ops help discovers every maintenance group without resource configu
         executable: process.execPath,
         args: ["--no-env-file", "run", "src/index.ts", "--help"],
         cwd: opsRoot,
-        env: { ...process.env, IAM_OPS_DATABASE_URL: undefined, IAM_OPS_REDIS_HOST: undefined },
+        env: { ...process.env, IAM_OPS_DATABASE_URL: undefined, IAM_OPS_REDIS_URL: undefined },
       }),
   });
   for (const group of [
@@ -60,7 +60,7 @@ test.each(operations)(
           executable: process.execPath,
           args: ["--no-env-file", "run", "src/index.ts", group!, operation!, "--help"],
           cwd: opsRoot,
-          env: { ...process.env, IAM_OPS_DATABASE_URL: "private-invalid-url", IAM_OPS_REDIS_PORT: "invalid-port" },
+          env: { ...process.env, IAM_OPS_DATABASE_URL: "private-invalid-url", IAM_OPS_REDIS_URL: "invalid-redis-url" },
         }),
     });
     expect(result.output).toContain(`iam-ops ${group} ${operation}`);
@@ -109,7 +109,7 @@ test.each([
           executable: process.execPath,
           args: ["--no-env-file", "run", "src/index.ts", ...args],
           cwd: opsRoot,
-          env: { ...process.env, IAM_OPS_DATABASE_URL: "private-invalid-url", IAM_OPS_REDIS_HOST: undefined },
+          env: { ...process.env, IAM_OPS_DATABASE_URL: "private-invalid-url", IAM_OPS_REDIS_URL: undefined },
         }),
     });
     expect(result.output).toContain("Unknown Ops command");

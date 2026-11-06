@@ -3,6 +3,7 @@ import { mkdtemp, rm, rmdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { redisUrlString } from "@iam/api-core/redis/config";
 import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
 import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/api-core/testing/process-smoke-harness";
 import { OrganizationStatus, OrganizationType } from "@iam/contracts";
@@ -17,14 +18,7 @@ let stopExecutors: Array<() => Promise<void> | void>;
 let redis: { host: string; port: number; db: number; password?: string; username?: string };
 beforeEach(async () => {
   stopExecutors = [];
-  const url = new URL(resolveOpsRedisTestUrl(process.env));
-  redis = {
-    host: url.hostname,
-    port: Number(url.port || 6379),
-    db: Number(url.pathname.slice(1) || 0),
-    username: url.username ? decodeURIComponent(url.username) : undefined,
-    password: url.password ? decodeURIComponent(url.password) : undefined,
-  };
+  redis = redisUrlString().parse(resolveOpsRedisTestUrl(process.env));
   harness = await createOpsPostgresTestHarness();
   stopExecutors.push(harness.close);
   queue = createJobQueue({ name: "organization-document", redis });
@@ -193,11 +187,7 @@ async function command(
           ...process.env,
           NODE_ENV: "test",
           IAM_OPS_DATABASE_URL: harness.commandDatabaseUrl,
-          IAM_OPS_REDIS_HOST: redis.host,
-          IAM_OPS_REDIS_PORT: String(redis.port),
-          IAM_OPS_REDIS_DB: String(redis.db),
-          IAM_OPS_REDIS_USERNAME: redis.username,
-          IAM_OPS_REDIS_PASSWORD: redis.password,
+          IAM_OPS_REDIS_URL: resolveOpsRedisTestUrl(process.env),
           IAM_OPS_LOG_FORMAT: "json",
           IAM_OPS_LOG_LEVEL: "info",
           IAM_OPS_TEST_INTERRUPT_FILE: interruptFile,

@@ -1,7 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import type { DedicatedRedisTestConfig } from "@iam/api-core/testing/external-test-resources";
 import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
 import {
   createProcessSmokeEnvironment,
@@ -54,7 +53,7 @@ describe("Admin client cache Redis contract", () => {
         "unrelated",
       );
 
-      await runCacheRuntimeEntry(["update", oldClientCode, oldSecret, newClientCode, newSecret], harness.redisConfig);
+      await runCacheRuntimeEntry(["update", oldClientCode, oldSecret, newClientCode, newSecret], harness.redisUrl);
 
       const deletedValues = await scope.observer.mget(...expectedDeletedKeys);
       const unrelatedValue = await scope.observer.get(unrelatedKey);
@@ -63,7 +62,7 @@ describe("Admin client cache Redis contract", () => {
     });
   });
 });
-async function runCacheRuntimeEntry(args: string[], redisConfig: DedicatedRedisTestConfig) {
+async function runCacheRuntimeEntry(args: string[], redisUrl: string) {
   await withOwnedTemporaryDirectory({
     prefix: "iam-admin-api-cache-entry-",
     cleanupTimeoutMs: 5_000,
@@ -75,7 +74,7 @@ async function runCacheRuntimeEntry(args: string[], redisConfig: DedicatedRedisT
             executable: process.execPath,
             args: ["--no-env-file", "run", "test-integration/client/client-cache-invalidation.fixture.ts", ...args],
             cwd: adminApiRoot,
-            env: createCacheRuntimeEnvironment(temporaryDirectory, redisConfig),
+            env: createCacheRuntimeEnvironment(temporaryDirectory, redisUrl),
           }),
         completionTimeoutMs: 20_000,
         cleanupTimeoutMs: 5_000,
@@ -85,7 +84,7 @@ async function runCacheRuntimeEntry(args: string[], redisConfig: DedicatedRedisT
   });
 }
 
-function createCacheRuntimeEnvironment(temporaryDirectory: string, redisConfig: DedicatedRedisTestConfig) {
+function createCacheRuntimeEnvironment(temporaryDirectory: string, redisUrl: string) {
   return createProcessSmokeEnvironment({
     source: process.env,
     temporaryDirectory,
@@ -94,10 +93,7 @@ function createCacheRuntimeEnvironment(temporaryDirectory: string, redisConfig: 
       IAM_ADMIN_API_DATABASE_URL: "postgresql://iam:password@127.0.0.1:1/iam",
       IAM_ADMIN_API_PASSWORD_HASH_ROUNDS: "4",
       IAM_ADMIN_API_PORT: "1",
-      IAM_ADMIN_API_REDIS_HOST: redisConfig.host,
-      IAM_ADMIN_API_REDIS_PORT: String(redisConfig.port),
-      IAM_ADMIN_API_REDIS_DB: String(redisConfig.db),
-      IAM_ADMIN_API_REDIS_PASSWORD: redisConfig.password,
+      IAM_ADMIN_API_REDIS_URL: redisUrl,
       IAM_ADMIN_API_LOG_LEVEL: "silent",
       IAM_ADMIN_API_LOG_FORMAT: "json",
       IAM_ADMIN_API_SESSION_KERNEL_NAMESPACE: "sess:admin-api-cache-entry:",

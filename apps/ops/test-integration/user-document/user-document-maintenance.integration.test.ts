@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { createLogger, LoggerSourceApp } from "@iam/api-core/logger";
 import { runMaintenanceCommandWithLifecycle } from "@iam/api-core/maintenance";
+import { redisUrlString } from "@iam/api-core/redis/config";
 import {
   createRedisSubjectAccessStore,
   createSubjectAccessBarrier,
@@ -269,13 +270,7 @@ async function createMaintenanceFixture() {
   const pg = await createOpsPostgresTestHarness();
   stopExecutors.push(pg.close);
   const redisUrl = resolveOpsRedisTestUrl(process.env);
-  const url = new URL(redisUrl);
-  const redisConfig = {
-    host: url.hostname,
-    port: Number(url.port || 6379),
-    db: Number(url.pathname.slice(1) || 0),
-    password: url.password ? decodeURIComponent(url.password) : undefined,
-  };
+  const redisConfig = redisUrlString().parse(redisUrl);
   const redis = new Redis(redisUrl);
   stopExecutors.push(async () => {
     try {
@@ -379,10 +374,7 @@ async function createMaintenanceFixture() {
       ...process.env,
       NODE_ENV: "test",
       IAM_OPS_DATABASE_URL: databaseUrl.toString(),
-      IAM_OPS_REDIS_HOST: redisConfig.host,
-      IAM_OPS_REDIS_PORT: String(redisConfig.port),
-      IAM_OPS_REDIS_DB: String(redisConfig.db),
-      IAM_OPS_REDIS_PASSWORD: redisConfig.password,
+      IAM_OPS_REDIS_URL: redisUrl,
       IAM_OPS_USER_DOCUMENT_BACKFILL_BATCH_SIZE: "1",
       IAM_OPS_LOG_LEVEL: "info",
       IAM_OPS_LOG_FORMAT: "json",

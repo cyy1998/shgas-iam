@@ -36,21 +36,11 @@ afterEach(async () => {
 
 test("organization backfill uses the normal consumer to publish complete documents without users or cache state", async () => {
   const prefix = DEFAULT_QUEUE_PREFIX;
-  const url = new URL(resolveOpsRedisTestUrl(process.env));
-  const redis = {
-    host: url.hostname,
-    port: Number(url.port || 6379),
-    db: Number(url.pathname.slice(1) || 0),
-    password: url.password ? decodeURIComponent(url.password) : undefined,
-  };
   const runtime = createOrganizationFixtureRuntime(
     {
       NODE_ENV: "test",
       IAM_OPS_DATABASE_URL: harness.commandDatabaseUrl,
-      IAM_OPS_REDIS_HOST: redis.host,
-      IAM_OPS_REDIS_PORT: String(redis.port),
-      IAM_OPS_REDIS_DB: String(redis.db),
-      IAM_OPS_REDIS_PASSWORD: redis.password,
+      IAM_OPS_REDIS_URL: resolveOpsRedisTestUrl(process.env),
     },
     createLogger({ nodeEnv: "test", logLevel: "silent", logFormat: "json", sourceApp: LoggerSourceApp.Ops }),
   );
@@ -72,7 +62,7 @@ test("organization backfill uses the normal consumer to publish complete documen
   const search = createOrganizationDocumentQueryService({
     repository: createOrganizationDocumentQueryRepository(harness.db),
   });
-  const result = await runBackfillCLI(redis, prefix);
+  const result = await runBackfillCLI(prefix);
   const { items: beforeConsumption } = await search.search({
     filter: { field: "code", op: "eq", value: "CHILD" },
     select: ["code", "name", "type", "status", "level", "isVirtual", "isEntity", "path"],
@@ -120,9 +110,7 @@ test(
                 TEMP: temporaryDirectory,
                 NODE_ENV: "test",
                 IAM_OPS_DATABASE_URL: harness.commandDatabaseUrl,
-                IAM_OPS_REDIS_HOST: "127.0.0.1",
-                IAM_OPS_REDIS_PORT: "1",
-                IAM_OPS_REDIS_DB: "15",
+                IAM_OPS_REDIS_URL: "redis://127.0.0.1:1/15",
                 IAM_OPS_LOG_LEVEL: "info",
                 IAM_OPS_LOG_FORMAT: "json",
                 FORCE_COLOR: "0",
@@ -170,7 +158,7 @@ async function waitForPublishedChild(search: ReturnType<typeof createOrganizatio
   throw new Error("Organization consumer did not publish the child document");
 }
 
-async function runBackfillCLI(redis: { host: string; port: number; db: number; password?: string }, prefix: string) {
+async function runBackfillCLI(prefix: string) {
   const pending = withOwnedTemporaryDirectory({
     prefix: "iam-organization-backfill-success-",
     cleanupTimeoutMs: 5_000,
@@ -188,10 +176,7 @@ async function runBackfillCLI(redis: { host: string; port: number; db: number; p
               TEMP: temporaryDirectory,
               NODE_ENV: "test",
               IAM_OPS_DATABASE_URL: harness.commandDatabaseUrl,
-              IAM_OPS_REDIS_HOST: redis.host,
-              IAM_OPS_REDIS_PORT: String(redis.port),
-              IAM_OPS_REDIS_DB: String(redis.db),
-              IAM_OPS_REDIS_PASSWORD: redis.password,
+              IAM_OPS_REDIS_URL: resolveOpsRedisTestUrl(process.env),
               IAM_OPS_ORGANIZATION_DOCUMENT_QUEUE_PREFIX: prefix,
               IAM_OPS_LOG_LEVEL: "info",
               IAM_OPS_LOG_FORMAT: "json",

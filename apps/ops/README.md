@@ -24,8 +24,9 @@ pnpm --filter @iam/ops iam-ops employment verify
 所有分组与操作支持 `--help`，帮助不连接资源。报告、退出语义、停写前提、重试范围和限额沿用各能力的既有契约。
 
 从 [.env.example](.env.example) 准备私有 `apps/ops/.env`；CLI 只读取自己的文件，已有进程变量优先。
-配置使用 `IAM_OPS_*`，不读取 Worker 的 `.env`，不接受旧维护变量别名。PostgreSQL-only 命令只需数据库，Redis-only 命令只需显式 Redis host、port、DB 和适用凭据；日志使用独立 `iam-ops` 身份。
-Redis 认证用户名与密码按原文传递，空串视为未提供；在环境文件中保留首尾空白时使用引号，不把凭据写入日志或报告。
+配置使用 `IAM_OPS_*`，不读取 Worker 的 `.env`，不接受旧维护变量别名。PostgreSQL-only 命令只需数据库，Redis-only 命令只需 `IAM_OPS_REDIS_URL`；日志使用独立 `iam-ops` 身份。
+Redis URL 使用 `redis://[username:password@]host[:port][/db]`，未写端口或 DB 时使用 `6379` 和 `0`，必须显式提供地址。
+认证用户名与密码中的特殊字符须按 URL percent encoding 转义，解析后按原文传递；不把 URL 或凭据写入日志或报告。
 前缀变化不改变目标数据库、队列前缀或 Redis namespace。私有配置不得提交或进入镜像。
 
 Document backfill／部分 repair 只登记或重新唤醒持久工作，仍需匹配版本的 Worker 收敛，再执行独立完整 gate。

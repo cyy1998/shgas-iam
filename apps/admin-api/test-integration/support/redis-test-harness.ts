@@ -20,6 +20,7 @@ export interface AdminApiRedisTestScope {
 }
 
 export interface AdminApiRedisTestHarness {
+  readonly redisUrl: string;
   readonly createScope: () => Promise<AdminApiRedisTestScope>;
   readonly close: () => Promise<void>;
   readonly reset: () => Promise<void>;
@@ -48,6 +49,7 @@ export async function createAdminApiRedisTestHarness(options?: {
   }
 
   return {
+    redisUrl,
     redisConfig,
     registerStopExecutor,
     async createScope() {

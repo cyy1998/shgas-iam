@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
+import { redisUrlString } from "@iam/api-core/redis/config";
 import {
   runProcessCommandSmoke,
   spawnOwnedProcessTree,
@@ -23,7 +24,11 @@ import {
 } from "@iam/organization-document/worker";
 import { createHangingRedisServer } from "../support/hanging-redis-server";
 import { createOpsPostgresTestHarness, reserveOpsPostgresConnection } from "../support/postgres-test-harness";
-import { resetOpsRedisTestDatabase, resolveOpsRedisTestUrl } from "../support/redis-test-harness";
+import {
+  overrideOpsRedisTestUrl,
+  resetOpsRedisTestDatabase,
+  resolveOpsRedisTestUrl,
+} from "../support/redis-test-harness";
 
 const opsRoot = fileURLToPath(new URL("../../", import.meta.url));
 let harness: Awaited<ReturnType<typeof createOpsPostgresTestHarness>>;
@@ -34,14 +39,7 @@ let redis: { host: string; port: number; db: number; password?: string; username
 let search: ReturnType<typeof createOrganizationDocumentQueryService>;
 beforeEach(async () => {
   stopExecutors = [];
-  const url = new URL(resolveOpsRedisTestUrl(process.env));
-  redis = {
-    host: url.hostname,
-    port: Number(url.port || 6379),
-    db: Number(url.pathname.slice(1) || 0),
-    password: url.password ? decodeURIComponent(url.password) : undefined,
-    username: url.username ? decodeURIComponent(url.username) : undefined,
-  };
+  redis = redisUrlString().parse(resolveOpsRedisTestUrl(process.env));
   harness = await createOpsPostgresTestHarness();
   stopExecutors.push(harness.close);
   prefix = DEFAULT_QUEUE_PREFIX;
@@ -140,11 +138,7 @@ function environment(overrides: NodeJS.ProcessEnv = {}) {
     ...process.env,
     NODE_ENV: "test",
     IAM_OPS_DATABASE_URL: harness.commandDatabaseUrl,
-    IAM_OPS_REDIS_HOST: redis.host,
-    IAM_OPS_REDIS_PORT: String(redis.port),
-    IAM_OPS_REDIS_DB: String(redis.db),
-    IAM_OPS_REDIS_USERNAME: redis.username,
-    IAM_OPS_REDIS_PASSWORD: redis.password,
+    IAM_OPS_REDIS_URL: resolveOpsRedisTestUrl(process.env),
     IAM_OPS_ORGANIZATION_DOCUMENT_QUEUE_PREFIX: prefix,
     IAM_OPS_LOG_FORMAT: "json",
     IAM_OPS_LOG_LEVEL: "info",
@@ -283,7 +277,7 @@ test("repair closes a connected Redis peer that never answers readiness and leav
   await module.processor.backfillAllOrganizations();
   const server = await createHangingRedisServer();
   stopExecutors.push(server.close);
-  const result = await command("repair", [], 1, { IAM_OPS_REDIS_PORT: String(server.port) });
+  const result = await command("repair", [], 1, { IAM_OPS_REDIS_URL: overrideOpsRedisTestUrl({ port: server.port }) });
   const states = await harness.sql`SELECT status FROM organization_document_outbox`;
   expect(result.output).toContain('"status":"failed"');
   expect(result.output).toContain("Organization document command shutting down");
@@ -294,7 +288,7 @@ test("backfill aborts on its deadline, force-closes unready Redis, and reports n
   const server = await createHangingRedisServer();
   stopExecutors.push(server.close);
   const result = await command("backfill", ["--deadline-ms", "100"], 1, {
-    IAM_OPS_REDIS_PORT: String(server.port),
+    IAM_OPS_REDIS_URL: overrideOpsRedisTestUrl({ port: server.port }),
   });
   expect(result.output).toContain('"signal":"deadline"');
   expect(result.output).not.toContain("Organization document backfill registered;");
@@ -306,9 +300,13 @@ test("repair handles interruption through the real CLI signal listener and close
   await module.processor.backfillAllOrganizations();
   const server = await createHangingRedisServer();
   stopExecutors.push(server.close);
-  const result = await command("repair", [], 143, { IAM_OPS_REDIS_PORT: String(server.port) }, [
-    "--preload=./test-integration/support/interrupt-command.fixture.ts",
-  ]);
+  const result = await command(
+    "repair",
+    [],
+    143,
+    { IAM_OPS_REDIS_URL: overrideOpsRedisTestUrl({ port: server.port }) },
+    ["--preload=./test-integration/support/interrupt-command.fixture.ts"],
+  );
   expect(result.output).toContain('"signal":"SIGTERM"');
   expect(result.output).not.toContain("Organization document repair wakeups finished;");
 });

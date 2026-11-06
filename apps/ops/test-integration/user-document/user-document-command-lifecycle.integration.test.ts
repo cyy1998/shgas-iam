@@ -98,7 +98,7 @@ async function runVerify(
   operation = "verify-postgres",
 ) {
   const readiness = operation.startsWith("verify-");
-  const redisUrl = new URL(resolveOpsRedisTestUrl(process.env));
+  const redisUrl = resolveOpsRedisTestUrl(process.env);
   return await runProcessCommandSmoke({
     label: "User Document verification lifecycle",
     expectedExitCode,
@@ -122,10 +122,7 @@ async function runVerify(
           ...process.env,
           NODE_ENV: "test",
           IAM_OPS_DATABASE_URL: harness.commandDatabaseUrl,
-          IAM_OPS_REDIS_HOST: readiness ? "127.0.0.1" : redisUrl.hostname,
-          IAM_OPS_REDIS_PORT: readiness ? "1" : redisUrl.port,
-          IAM_OPS_REDIS_DB: readiness ? "0" : redisUrl.pathname.slice(1),
-          IAM_OPS_REDIS_PASSWORD: redisUrl.password ? decodeURIComponent(redisUrl.password) : undefined,
+          IAM_OPS_REDIS_URL: readiness ? "redis://127.0.0.1:1/0" : redisUrl,
           IAM_OPS_LOG_LEVEL: "info",
           IAM_OPS_LOG_FORMAT: "json",
           FORCE_COLOR: "0",

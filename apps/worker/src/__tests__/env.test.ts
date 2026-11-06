@@ -1,22 +1,22 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 
 type ParseWorkerEnv = typeof import("../env").parseWorkerEnv;
+type ParseDocumentRepairInvocation = typeof import("../env").parseDocumentRepairInvocation;
 
 let parseWorkerEnv: ParseWorkerEnv;
+let parseDocumentRepairInvocation: ParseDocumentRepairInvocation;
 
 function validEnv(): NodeJS.ProcessEnv {
   return {
     IAM_WORKER_DATABASE_URL: "postgresql://iam:password@localhost/iam",
-    IAM_WORKER_REDIS_HOST: "localhost",
-    IAM_WORKER_REDIS_PORT: "6379",
-    IAM_WORKER_REDIS_DB: "0",
+    IAM_WORKER_REDIS_URL: "redis://localhost:6379/0",
   };
 }
 
 describe("worker environment", () => {
   beforeAll(async () => {
     Object.assign(process.env, validEnv());
-    ({ parseWorkerEnv } = await import("../env"));
+    ({ parseWorkerEnv, parseDocumentRepairInvocation } = await import("../env"));
   });
 
   test("runtime rejects a queue namespace unavailable to formal source producers", () => {
@@ -64,6 +64,36 @@ describe("worker environment", () => {
       repair: { enabled: false, intervalMs: 60_000, limit: 500, deadlineMs: 30_000 },
     });
     expect("IAM_WORKER_DATABASE_URL" in env).toBe(false);
+  });
+
+  test("requires the app Redis URL without falling back to a global Redis URL", () => {
+    expect(() =>
+      parseWorkerEnv({ ...validEnv(), IAM_WORKER_REDIS_URL: undefined, REDIS_URL: "redis://localhost:6379/0" }),
+    ).toThrow("IAM_WORKER_REDIS_URL");
+  });
+
+  test("preserves decoded Redis URL credentials in the isolated repair input", () => {
+    const env = parseWorkerEnv({
+      ...validEnv(),
+      IAM_WORKER_REDIS_URL: "redis://repair%40user:p%40ss%3Aword@[::1]:6380/2",
+    });
+    expect(env.redis).toEqual({
+      host: "::1",
+      port: 6380,
+      db: 2,
+      username: "repair@user",
+      password: "p@ss:word",
+    });
+    const invocation = parseDocumentRepairInvocation({
+      IAM_WORKER_DOCUMENT_REPAIR_INPUT: JSON.stringify({
+        document: "user",
+        postgresInvocationId: "7e4fd09a-8ddb-488f-88e5-e0c24cbdf761",
+        limit: 100,
+        deadlineMs: 10_000,
+        env,
+      }),
+    });
+    expect(invocation.env.redis).toEqual(env.redis);
   });
 
   test("parses an enabled User Document repair schedule", () => {

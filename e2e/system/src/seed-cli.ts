@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { redisUrlString } from "@iam/api-core/redis/config";
 import db, { closeDb } from "@iam/db";
 import Redis from "ioredis";
 import { requireEnvironment } from "./environment.ts";
@@ -18,13 +19,9 @@ async function runSeed() {
     attemptedAt,
   });
 
-  const redisHost = requireEnvironment("IAM_E2E_REDIS_HOST");
-  const redisPort = requireIntegerEnvironment("IAM_E2E_REDIS_PORT");
-  const redisDb = requireIntegerEnvironment("IAM_E2E_REDIS_DB");
+  const redisConfig = redisUrlString().parse(requireEnvironment("IAM_E2E_REDIS_URL"));
   const redis = new Redis({
-    host: redisHost,
-    port: redisPort,
-    db: redisDb,
+    ...redisConfig,
     lazyConnect: true,
   });
   try {
@@ -36,11 +33,7 @@ async function runSeed() {
       owner: createProductionE2EScenarioOwner({
         db,
         redis,
-        queueRedis: {
-          host: redisHost,
-          port: redisPort,
-          db: redisDb,
-        },
+        queueRedis: redisConfig,
         clock: { nowDate: () => new Date() },
         random: { uuid: randomUUID },
         passwordHashCost: 10,
@@ -69,12 +62,6 @@ async function runSeed() {
     redis.disconnect(false);
     await closeDb({ timeoutSeconds: 5 });
   }
-}
-
-function requireIntegerEnvironment(name: string) {
-  const value = Number(requireEnvironment(name));
-  if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${name} must be a non-negative integer`);
-  return value;
 }
 
 runSeed().catch(() => {

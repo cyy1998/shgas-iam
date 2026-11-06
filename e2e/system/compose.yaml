@@ -23,7 +23,8 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U iam_e2e -d iam_e2e"]
+      # Initialization uses a temporary Unix socket; consumers need the final TCP listener.
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "iam_e2e", "-d", "iam_e2e"]
       interval: 2s
       timeout: 3s
       retries: 30
@@ -96,9 +97,7 @@ services:
     labels: *e2e-labels
     environment:
       DATABASE_URL: postgresql://iam_e2e:iam_e2e_local_password@postgres:5432/iam_e2e
-      IAM_E2E_REDIS_HOST: redis
-      IAM_E2E_REDIS_PORT: "6379"
-      IAM_E2E_REDIS_DB: "0"
+      IAM_E2E_REDIS_URL: redis://redis:6379/0
       IAM_E2E_RUN_ID: ${IAM_E2E_RUN_ID:-preflight}
       IAM_E2E_ORIGIN: ${IAM_E2E_ORIGIN:-http://127.0.0.1:49152}
       IAM_E2E_INTERNAL_ORIGIN: ${IAM_E2E_INTERNAL_ORIGIN:-http://127.0.0.1:49152}
@@ -116,9 +115,7 @@ services:
     environment:
       <<: *runtime-common
       IAM_API_DATABASE_URL: postgresql://iam_e2e:iam_e2e_local_password@postgres:5432/iam_e2e
-      IAM_API_REDIS_HOST: redis
-      IAM_API_REDIS_PORT: "6379"
-      IAM_API_REDIS_DB: "0"
+      IAM_API_REDIS_URL: redis://redis:6379/0
       IAM_API_PORT: "30000"
       IAM_API_LOG_FORMAT: json
       IAM_API_PASSWORD_HASH_ROUNDS: "10"
@@ -164,17 +161,13 @@ services:
     environment:
       <<: *runtime-common
       IAM_ADMIN_API_DATABASE_URL: postgresql://iam_e2e:iam_e2e_local_password@postgres:5432/iam_e2e
-      IAM_ADMIN_API_REDIS_HOST: redis
-      IAM_ADMIN_API_REDIS_PORT: "6379"
-      IAM_ADMIN_API_REDIS_DB: "0"
+      IAM_ADMIN_API_REDIS_URL: redis://redis:6379/0
       IAM_ADMIN_API_PORT: "30001"
       IAM_ADMIN_API_LOG_FORMAT: json
       IAM_ADMIN_API_ADMIN_CLIENT_CODES: ${IAM_E2E_ADMIN_CLIENT_CODE:-iam-admin}
       IAM_ADMIN_API_SESSION_KERNEL_NAMESPACE: "iam:session"
       IAM_ADMIN_API_USER_SESSION_TTL_SECONDS: "86400"
       IAM_ADMIN_API_CLIENT_SESSION_TTL_SECONDS: "86400"
-      IAM_ADMIN_API_SSO_INTERNAL_ORIGIN: ${IAM_E2E_INTERNAL_ORIGIN:-http://127.0.0.1:49152}
-      IAM_ADMIN_API_SSO_EXTERNAL_ORIGIN: ${IAM_E2E_ORIGIN:-http://127.0.0.1:49152}
     depends_on: *runtime-dependencies
     healthcheck:
       test:
@@ -197,9 +190,7 @@ services:
     environment:
       <<: *runtime-common
       IAM_WORKER_DATABASE_URL: postgresql://iam_e2e:iam_e2e_local_password@postgres:5432/iam_e2e
-      IAM_WORKER_REDIS_HOST: redis
-      IAM_WORKER_REDIS_PORT: "6379"
-      IAM_WORKER_REDIS_DB: "0"
+      IAM_WORKER_REDIS_URL: redis://redis:6379/0
       IAM_WORKER_ENABLED_MODULES: user-document
       IAM_WORKER_HTTP_ENABLED: "true"
       IAM_WORKER_HTTP_PORT: "30003"

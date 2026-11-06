@@ -13,16 +13,11 @@ export function createUserDocumentReadinessCommandComposition(options: {
   buildBatchSize: number;
   logger: OpsLogger;
   deadlineMs: number;
-  redis?: RedisConfig & { username?: string };
+  redis?: RedisConfig;
 }) {
   const postgres = createMaintenancePostgresResources({ ...options, scope: "user" });
   const clock = { nowDate: () => new Date(), now: Date.now };
-  const redis = options.redis
-    ? createOfflineMaintenanceRedis(
-        { ...options.redis, username: options.redis.username, password: options.redis.password },
-        new AbortController().signal,
-      )
-    : undefined;
+  const redis = options.redis ? createOfflineMaintenanceRedis(options.redis, new AbortController().signal) : undefined;
   const verifierInput = { db: postgres.db, clock, config: { buildBatchSize: options.buildBatchSize } };
   const gate = redis
     ? createCurrentUserDocumentRedisAccessReadiness({

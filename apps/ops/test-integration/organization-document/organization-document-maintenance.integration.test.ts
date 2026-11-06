@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { createLogger, LoggerSourceApp } from "@iam/api-core/logger";
+import { redisUrlString } from "@iam/api-core/redis/config";
 import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/api-core/testing/process-smoke-harness";
 import { OrganizationStatus, OrganizationType } from "@iam/contracts";
 import { createJobQueue, DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
@@ -32,14 +33,7 @@ test("first build and incompatible schema recovery require a fresh full verifica
   const harness = await createOpsPostgresTestHarness();
   stopExecutors.push(harness.close);
   const redisUrl = resolveOpsRedisTestUrl(process.env);
-  const url = new URL(redisUrl);
-  const redis = {
-    host: url.hostname,
-    port: Number(url.port || 6379),
-    db: Number(url.pathname.slice(1) || 0),
-    username: url.username ? decodeURIComponent(url.username) : undefined,
-    password: url.password ? decodeURIComponent(url.password) : undefined,
-  };
+  const redis = redisUrlString().parse(redisUrl);
   const observer = new Redis(redisUrl);
   stopExecutors.push(async () => {
     try {
@@ -60,10 +54,7 @@ test("first build and incompatible schema recovery require a fresh full verifica
     {
       NODE_ENV: "test",
       IAM_OPS_DATABASE_URL: harness.commandDatabaseUrl,
-      IAM_OPS_REDIS_HOST: redis.host,
-      IAM_OPS_REDIS_PORT: String(redis.port),
-      IAM_OPS_REDIS_DB: String(redis.db),
-      IAM_OPS_REDIS_PASSWORD: redis.password,
+      IAM_OPS_REDIS_URL: resolveOpsRedisTestUrl(process.env),
     },
     createLogger({ nodeEnv: "test", logLevel: "silent", logFormat: "json", sourceApp: LoggerSourceApp.Ops }),
   );
@@ -198,11 +189,7 @@ test("first build and incompatible schema recovery require a fresh full verifica
             ...process.env,
             NODE_ENV: "test",
             IAM_OPS_DATABASE_URL: harness.commandDatabaseUrl,
-            IAM_OPS_REDIS_HOST: redis.host,
-            IAM_OPS_REDIS_PORT: String(redis.port),
-            IAM_OPS_REDIS_DB: String(redis.db),
-            IAM_OPS_REDIS_USERNAME: redis.username,
-            IAM_OPS_REDIS_PASSWORD: redis.password,
+            IAM_OPS_REDIS_URL: resolveOpsRedisTestUrl(process.env),
             IAM_OPS_ORGANIZATION_DOCUMENT_QUEUE_PREFIX: prefix,
             IAM_OPS_LOG_LEVEL: "info",
             IAM_OPS_LOG_FORMAT: "json",

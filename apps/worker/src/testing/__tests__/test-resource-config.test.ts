@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
 import process from "node:process";
 import { createWorkerPostgresTestHarness } from "~worker/test-integration/support/postgres-test-harness";
-import { createWorkerRedisTestHarness } from "~worker/test-integration/support/redis-test-harness";
+import {
+  createWorkerRedisTestHarness,
+  resolveWorkerRedisTestUrl,
+} from "~worker/test-integration/support/redis-test-harness";
 
 // These failure paths stop before resource creation; real isolation stays in resource contracts.
 test.each([
@@ -15,9 +18,6 @@ test.each([
     [`${runtimePrefix}_DATABASE_URL`]: "postgres://127.0.0.1:1/runtime-sentinel",
     REDIS_URL: "redis://127.0.0.1:1/0",
     [`${runtimePrefix}_REDIS_URL`]: "redis://127.0.0.1:1/0",
-    [`${runtimePrefix}_REDIS_HOST`]: "127.0.0.1",
-    [`${runtimePrefix}_REDIS_PORT`]: "1",
-    [`${runtimePrefix}_REDIS_DB`]: "0",
   };
   const previous = Object.fromEntries(Object.keys(overrides).map((key) => [key, process.env[key]]));
   let harness: Awaited<ReturnType<typeof create>> | undefined;
@@ -44,4 +44,23 @@ test.each([
       }
     }
   }
+});
+
+test("Redis test resources cannot identify the runtime database with different credentials or omitted defaults", () => {
+  expect(() =>
+    resolveWorkerRedisTestUrl({
+      IAM_WORKER_TEST_REDIS_URL: "redis://test-user:test-secret@LOCALHOST/0",
+      IAM_WORKER_REDIS_URL: "redis://runtime-user:runtime-secret@localhost:6379",
+    }),
+  ).toThrow("must not identify the Worker runtime Redis resource");
+});
+
+test("Redis test resources retain a distinct database and its complete credentials", () => {
+  const testUrl = "redis://test-user:p%40ss%3Aword@[::1]:6379/1";
+  expect(
+    resolveWorkerRedisTestUrl({
+      IAM_WORKER_TEST_REDIS_URL: testUrl,
+      IAM_WORKER_REDIS_URL: "redis://runtime-user:runtime-secret@[::1]:6379/0",
+    }),
+  ).toBe(testUrl);
 });

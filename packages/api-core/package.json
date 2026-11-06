@@ -22,6 +22,7 @@
     "./middlewares/*": "./src/middlewares/*.ts",
     "./observability": "./src/observability/index.ts",
     "./redis": "./src/redis/index.ts",
+    "./redis/config": "./src/redis/config.ts",
     "./security": "./src/security/index.ts",
     "./subject-access": "./src/subject-access/index.ts",
     "./subject-access/testing": "./src/subject-access/testing.ts",

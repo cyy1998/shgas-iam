@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import process from "node:process";
+import { redisUrlString } from "@iam/api-core/redis/config";
 import {
   resetExclusiveRedisTestDatabase,
   runWithOwnedTestResources,
@@ -20,7 +21,6 @@ export interface OpsRedisTestHarness {
 
 export async function createOpsRedisTestHarness(source: NodeJS.ProcessEnv = process.env): Promise<OpsRedisTestHarness> {
   const redisUrl = resolveOpsRedisTestUrl(source);
-  const parsed = new URL(redisUrl);
   const writer = createRedisClient(redisUrl);
   const observer = createRedisClient(redisUrl);
   let closePromise: Promise<void> | undefined;
@@ -56,7 +56,7 @@ export async function createOpsRedisTestHarness(source: NodeJS.ProcessEnv = proc
       return keys;
     },
     commandEnvironment(temporaryDirectory) {
-      return createClientRuntimeMaintenanceProcessEnvironment(parsed, temporaryDirectory);
+      return createClientRuntimeMaintenanceProcessEnvironment(redisUrl, temporaryDirectory);
     },
     close,
   };
@@ -81,17 +81,13 @@ export async function resetOpsRedisTestDatabase(stopExecutors: ReadonlyArray<() 
   });
 }
 
-function createClientRuntimeMaintenanceProcessEnvironment(parsed: URL, temporaryDirectory: string) {
+function createClientRuntimeMaintenanceProcessEnvironment(redisUrl: string, temporaryDirectory: string) {
   return createProcessSmokeEnvironment({
     source: process.env,
     temporaryDirectory,
     overrides: {
       NODE_ENV: "test",
-      IAM_OPS_REDIS_HOST: parsed.hostname,
-      IAM_OPS_REDIS_PORT: parsed.port || "6379",
-      IAM_OPS_REDIS_USERNAME: parsed.username ? decodeURIComponent(parsed.username) : undefined,
-      IAM_OPS_REDIS_PASSWORD: parsed.password ? decodeURIComponent(parsed.password) : undefined,
-      IAM_OPS_REDIS_DB: parsed.pathname.length > 1 ? decodeURIComponent(parsed.pathname.slice(1)) : "0",
+      IAM_OPS_REDIS_URL: redisUrl,
       IAM_OPS_LOG_LEVEL: "warn",
       IAM_OPS_LOG_FORMAT: "json",
       FORCE_COLOR: "0",
@@ -109,23 +105,29 @@ export function resolveOpsRedisTestUrl(source: NodeJS.ProcessEnv) {
       `${TEST_REDIS_URL_ENV} must point to a caller-provided dedicated Redis test instance; no fallback is allowed`,
     );
   }
-  const parsed = new URL(redisUrl);
-  if (parsed.protocol !== "redis:")
-    throw new Error(`${TEST_REDIS_URL_ENV} must use the redis protocol supported by the Ops runtime`);
-  if (parsed.search) throw new Error(`${TEST_REDIS_URL_ENV} must not use query parameters`);
-  const runtimeHost = source.IAM_OPS_REDIS_HOST;
-  const runtimePort = source.IAM_OPS_REDIS_PORT || "6379";
-  const runtimeDb = source.IAM_OPS_REDIS_DB || "0";
-  const testDb = parsed.pathname.length > 1 ? decodeURIComponent(parsed.pathname.slice(1)) : "0";
-  if (
-    runtimeHost &&
-    parsed.hostname.toLowerCase() === runtimeHost.toLowerCase() &&
-    (parsed.port || "6379") === runtimePort &&
-    testDb === runtimeDb
-  ) {
-    throw new Error(`${TEST_REDIS_URL_ENV} must not identify the Ops runtime Redis resource`);
+  const test = redisUrlString().safeParse(redisUrl);
+  if (!test.success)
+    throw new Error(`${TEST_REDIS_URL_ENV} must contain a valid Redis URL supported by the Ops runtime`);
+  if (source.IAM_OPS_REDIS_URL !== undefined) {
+    const runtime = redisUrlString().safeParse(source.IAM_OPS_REDIS_URL);
+    if (!runtime.success) throw new Error("IAM_OPS_REDIS_URL must contain a valid Ops runtime Redis URL");
+    if (
+      test.data.host.toLowerCase() === runtime.data.host.toLowerCase() &&
+      test.data.port === runtime.data.port &&
+      test.data.db === runtime.data.db
+    ) {
+      throw new Error(`${TEST_REDIS_URL_ENV} must not identify the Ops runtime Redis resource`);
+    }
   }
   return redisUrl;
+}
+
+export function overrideOpsRedisTestUrl(overrides: { port?: number; username?: string; password?: string }) {
+  const url = new URL(resolveOpsRedisTestUrl(process.env));
+  if (overrides.port !== undefined) url.port = String(overrides.port);
+  if (overrides.username !== undefined) url.username = encodeURIComponent(overrides.username);
+  if (overrides.password !== undefined) url.password = encodeURIComponent(overrides.password);
+  return url.href;
 }
 
 function createRedisClient(redisUrl: string) {

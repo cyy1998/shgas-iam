@@ -24,6 +24,7 @@ import { createSessionClearMaintenance } from "@ops/composition/session-clear-ma
 import Redis from "ioredis";
 import {
   createOpsRedisTestHarness,
+  overrideOpsRedisTestUrl,
   resetOpsRedisTestDatabase,
   resolveOpsRedisTestUrl,
 } from "../support/redis-test-harness";
@@ -165,11 +166,16 @@ async function seedUnified(ns: string) {
   ];
 }
 
-for (const variant of ["leading-and-trailing-whitespace", "only-whitespace"] as const) {
+for (const variant of ["leading-and-trailing-whitespace", "only-whitespace", "reserved-url-characters"] as const) {
   test(`the formal CLI preserves a Redis ACL password containing ${variant}`, async () => {
     const ns = `opaque-credentials:${randomUUID()}`;
     const username = `ops-opaque-${randomUUID()}`;
-    const password = variant === "only-whitespace" ? " \t " : `  opaque-${randomUUID()}  `;
+    const password =
+      variant === "only-whitespace"
+        ? " \t "
+        : variant === "reserved-url-characters"
+          ? `opaque-@:/?#%${randomUUID()}`
+          : `  opaque-${randomUUID()}  `;
     await harness.writer.call(
       "ACL",
       "SETUSER",
@@ -190,8 +196,7 @@ for (const variant of ["leading-and-trailing-whitespace", "only-whitespace"] as 
     const peerKeys = await fixtures(`peer:${ns}`).kernel.seedUnified();
     const before = await observation([...targetKeys, ...peerKeys]);
     const environment = {
-      IAM_OPS_REDIS_USERNAME: username,
-      IAM_OPS_REDIS_PASSWORD: password,
+      IAM_OPS_REDIS_URL: overrideOpsRedisTestUrl({ username, password }),
     };
     const result = await command("iam-ops", "session", "inventory", target(ns), 0, environment);
     expect(result.report.status).toBe("completed");
@@ -199,6 +204,7 @@ for (const variant of ["leading-and-trailing-whitespace", "only-whitespace"] as 
       targetKeys.length,
     );
     expect(result.output).not.toContain(password);
+    expect(result.output).not.toContain(environment.IAM_OPS_REDIS_URL);
     // A missing AUTH must not succeed through the permissive default account.
     // The configured ACL can inventory, but cannot clear the same owned records.
     await command("iam-ops", "session", "apply", target(ns), 1, environment);
@@ -329,7 +335,7 @@ test("inventory and verify need only SCAN; clear needs only SCAN and UNLINK", as
   cleanups.push(async () => {
     await harness.writer.call("ACL", "DELUSER", user);
   });
-  const env = { IAM_OPS_REDIS_USERNAME: user, IAM_OPS_REDIS_PASSWORD: "scan-password" };
+  const env = { IAM_OPS_REDIS_URL: overrideOpsRedisTestUrl({ username: user, password: "scan-password" }) };
   await command("iam-ops", "session", "verify", target(ns), 0, env);
   const reader = await restrictedRedis(user);
   const dirty = await fixtures(ns).oidc.seedMalformedToken();
@@ -442,13 +448,17 @@ test("Snapshot full repair clears invalid payloads without changing sessions", a
 }, 30_000);
 
 test("cleanup rejects invalid input before connecting", async () => {
-  const rejected = await command("iam-ops", "session", "apply", ["--layout", "unified"], 2, { IAM_OPS_REDIS_HOST: "" });
+  const rejected = await command("iam-ops", "session", "apply", ["--layout", "unified"], 2, { IAM_OPS_REDIS_URL: "" });
   expect(rejected.report.reason).toBe("invalid-input");
 }, 15_000);
 
 test("cleanup reports invalid Redis configuration as an operation failure", async () => {
   const ns = `session-clear:${randomUUID()}`;
-  await command("iam-ops", "session", "inventory", target(ns), 1, { IAM_OPS_REDIS_HOST: "" });
+  const secretUrl = "redis://private-user:private-password@localhost/invalid-db";
+  const result = await command("iam-ops", "session", "inventory", target(ns), 1, { IAM_OPS_REDIS_URL: secretUrl });
+  expect(result.output).toContain("IAM_OPS_REDIS_URL");
+  expect(result.output).not.toContain("private-");
+  expect(result.output).not.toContain(secretUrl);
 }, 15_000);
 
 async function listen(server: ReturnType<typeof createServer>, sockets: Set<Socket>) {
@@ -474,7 +484,7 @@ test("nonresponding Redis is bounded by the cleanup deadline", async () => {
   const port = await listen(server, sockets);
   const started = Date.now();
   await command("iam-ops", "session", "inventory", [...target(ns), "--deadline-ms", "200"], 1, {
-    IAM_OPS_REDIS_PORT: String(port),
+    IAM_OPS_REDIS_URL: overrideOpsRedisTestUrl({ port }),
   });
   expect(Date.now() - started).toBeLessThan(10_000);
 }, 30_000);
@@ -513,7 +523,9 @@ test("clear reports failure when the UNLINK reply is lost and safely reruns afte
     });
   });
   const port = await listen(server, sockets);
-  const failed = await command("iam-ops", "session", "apply", target(ns), 1, { IAM_OPS_REDIS_PORT: String(port) });
+  const failed = await command("iam-ops", "session", "apply", target(ns), 1, {
+    IAM_OPS_REDIS_URL: overrideOpsRedisTestUrl({ port }),
+  });
   expect(failed.report.status).toBe("failed");
   expect(committed).toBe(true);
   const remaining = await harness.observer.exists(...keys);

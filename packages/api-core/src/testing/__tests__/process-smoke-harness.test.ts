@@ -34,7 +34,7 @@ describe("process smoke harness", () => {
       overrides: {
         NODE_ENV: "test",
         IAM_API_DATABASE_URL: "postgresql://iam:password@127.0.0.1:1/iam",
-        IAM_API_REDIS_HOST: "127.0.0.1",
+        IAM_API_REDIS_URL: "redis://127.0.0.1:6379/0",
         TEMP: "C:\\unowned-override",
       },
     });
@@ -45,7 +45,7 @@ describe("process smoke harness", () => {
       SystemRoot: "C:\\sentinel-windows",
       NODE_ENV: "test",
       IAM_API_DATABASE_URL: "postgresql://iam:password@127.0.0.1:1/iam",
-      IAM_API_REDIS_HOST: "127.0.0.1",
+      IAM_API_REDIS_URL: "redis://127.0.0.1:6379/0",
       TEMP: "C:\\owned-smoke-temp",
       TMP: "C:\\owned-smoke-temp",
       TMPDIR: "C:\\owned-smoke-temp",

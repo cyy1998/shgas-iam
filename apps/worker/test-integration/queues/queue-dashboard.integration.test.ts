@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
+import { redisUrlString } from "@iam/api-core/redis/config";
 import { createJobQueue, createJobWorker } from "@iam/jobs";
 import type { WorkerEnv } from "@worker/env";
 import { createWorkerHttpApp } from "@worker/http/server";
@@ -29,13 +30,7 @@ afterEach(async () => {
 });
 
 function createFixture(readOnly = true) {
-  const url = new URL(resolveWorkerRedisTestUrl(process.env));
-  const redis = {
-    host: url.hostname,
-    port: Number(url.port || 6379),
-    db: Number(url.pathname.slice(1) || 0),
-    password: url.password ? decodeURIComponent(url.password) : undefined,
-  };
+  const redis = redisUrlString().parse(resolveWorkerRedisTestUrl(process.env));
   const name = `test-${randomUUID()}`;
   const queue = createJobQueue<{ value: number }, number>({
     name,

@@ -144,10 +144,15 @@ async function main() {
             overrides: {
               NODE_ENV: "test",
               IAM_WORKER_DATABASE_URL: h.databaseUrl,
-              IAM_WORKER_REDIS_HOST: redisConfig.host,
-              IAM_WORKER_REDIS_PORT: String(redisConfig.port),
-              IAM_WORKER_REDIS_DB: String(redisConfig.db),
-              IAM_WORKER_REDIS_PASSWORD: redisConfig.password,
+              // 固定旧制品仍要求拆分输入；当前候选仅接收 Redis URL。
+              ...(legacy
+                ? {
+                    IAM_WORKER_REDIS_HOST: redisConfig.host,
+                    IAM_WORKER_REDIS_PORT: String(redisConfig.port),
+                    IAM_WORKER_REDIS_DB: String(redisConfig.db),
+                    IAM_WORKER_REDIS_PASSWORD: redisConfig.password,
+                  }
+                : { IAM_WORKER_REDIS_URL: redisUrl }),
               IAM_WORKER_ENABLED_MODULES: legacy
                 ? "user-profile,organization-search"
                 : "user-document,organization-document",
@@ -169,10 +174,7 @@ async function main() {
             overrides: {
               NODE_ENV: "test",
               IAM_OPS_DATABASE_URL: h.databaseUrl,
-              IAM_OPS_REDIS_HOST: redisConfig.host,
-              IAM_OPS_REDIS_PORT: String(redisConfig.port),
-              IAM_OPS_REDIS_DB: String(redisConfig.db),
-              IAM_OPS_REDIS_PASSWORD: redisConfig.password,
+              IAM_OPS_REDIS_URL: redisUrl,
               IAM_OPS_LOG_FORMAT: "json",
               IAM_OPS_LOG_LEVEL: "info",
               IAM_OPS_USER_DOCUMENT_BACKFILL_BATCH_SIZE: "1",
@@ -276,13 +278,18 @@ async function main() {
         await completeGates(true);
         await mark("fixed-old-profile4-org1-full-inventory");
         let port = 0;
-        const apiEnvironment = (context: Parameters<typeof createEntryEnvironment>[0]) =>
-          createEntryEnvironment(context, {
+        const apiEnvironment = (context: Parameters<typeof createEntryEnvironment>[0], legacy: boolean) => {
+          const environment = createEntryEnvironment(context, {
             IAM_API_DATABASE_URL: h.databaseUrl,
-            IAM_API_REDIS_HOST: redisConfig.host,
-            IAM_API_REDIS_PORT: String(redisConfig.port),
-            IAM_API_REDIS_DB: String(redisConfig.db),
-            IAM_API_REDIS_PASSWORD: redisConfig.password,
+            // 固定旧制品不识别 URL；此适配不进入当前候选的环境。
+            ...(legacy
+              ? {
+                  IAM_API_REDIS_HOST: redisConfig.host,
+                  IAM_API_REDIS_PORT: String(redisConfig.port),
+                  IAM_API_REDIS_DB: String(redisConfig.db),
+                  IAM_API_REDIS_PASSWORD: redisConfig.password,
+                }
+              : { IAM_API_REDIS_URL: redisUrl }),
             IAM_API_SESSION_KERNEL_NAMESPACE: namespace,
             IAM_API_OIDC_NAMESPACE: oidcScope.namespace,
             IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON: JSON.stringify({ "entry-smoke": loginKeys.privateKey }),
@@ -294,6 +301,9 @@ async function main() {
             IAM_API_OIDC_CONTINUATION_TTL_SECONDS: "1800",
             IAM_API_OIDC_TOKEN_TTL_SECONDS: "1800",
           });
+          if (legacy) delete environment.IAM_API_REDIS_URL;
+          return environment;
+        };
         const oldApi = createProcessSmokeSuite({
           label: "fixed95dc API",
           temporaryDirectoryPrefix: "iam-document-old-api-",
@@ -308,7 +318,7 @@ async function main() {
               executable: join(baseline.runtime, "api.exe"),
               args: [],
               cwd: baseline.runtime,
-              env: apiEnvironment(context),
+              env: apiEnvironment(context, true),
             });
           },
           childReadinessEvidence: (context) => `server: http://${context.hostname}:${context.port}`,
@@ -454,7 +464,7 @@ async function main() {
               executable: join(candidate.runtime, "api.exe"),
               args: [],
               cwd: candidate.runtime,
-              env: apiEnvironment(context),
+              env: apiEnvironment(context, false),
             }),
           childReadinessEvidence: (context) => `server: http://${context.hostname}:${context.port}`,
           async probe(context, signal) {

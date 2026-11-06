@@ -1,19 +1,13 @@
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { createOfflineMaintenanceRedis, runMaintenanceCommandWithLifecycle } from "@iam/api-core/maintenance";
+import { parseDedicatedRedisTestUrl } from "@iam/api-core/testing/external-test-resources";
 import Redis from "ioredis";
 
 function configuration() {
   const value = process.env.IAM_API_CORE_TEST_REDIS_URL;
   if (!value) throw new Error("Root-managed Redis test resource is required");
-  const url = new URL(value);
-  return {
-    host: url.hostname,
-    port: Number(url.port || 6379),
-    db: Number(url.pathname.slice(1) || 0),
-    username: url.username ? decodeURIComponent(url.username) : undefined,
-    password: url.password ? decodeURIComponent(url.password) : undefined,
-  };
+  return parseDedicatedRedisTestUrl({ name: "IAM_API_CORE_TEST_REDIS_URL", value });
 }
 
 async function waitForClosed(observer: Redis, ids: string[]) {

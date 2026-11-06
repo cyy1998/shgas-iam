@@ -8,9 +8,7 @@ export function createUnavailableStorageCommandEnvironment(input: { databaseUrl:
     overrides: {
       NODE_ENV: "test",
       IAM_WORKER_DATABASE_URL: input.databaseUrl,
-      IAM_WORKER_REDIS_HOST: "127.0.0.1",
-      IAM_WORKER_REDIS_PORT: "1",
-      IAM_WORKER_REDIS_DB: "15",
+      IAM_WORKER_REDIS_URL: "redis://127.0.0.1:1/15",
       IAM_WORKER_ENABLED_MODULES: "none",
       IAM_WORKER_HTTP_ENABLED: "false",
       IAM_WORKER_BULL_BOARD_ENABLED: "false",

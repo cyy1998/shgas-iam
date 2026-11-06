@@ -2,8 +2,8 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-11-03
-Next review: 2026-12-03
+Last verified: 2026-11-06
+Next review: 2026-12-06
 
 本页覆盖当前版本首次部署、常规更新和兼容版本回退。旧 Profile/Organization Search 升级先按[统一 Document 硬切换](data-maintenance.md#统一-document-硬切换)，其他跨代来源见[独立迁移指引](README.md#一次性迁移与旧版本)。
 本地开发见[项目快速开始](../../README.md#-快速开始)；网关、登录密钥、数据重建和日志栈按[专题入口](README.md)操作。
@@ -12,6 +12,16 @@ Next review: 2026-12-03
 
 从 [生产环境模板](../../docker/.env.prod.example) 准备每台主机私有的 `docker/.env`，选择固定版本的镜像与匹配配置。
 Compose 解析时会校验所选文件的全部必填变量，即使只启动一个服务也要补齐；`config --quiet` 可检查配置而不输出展开后的秘密。
+
+Redis 客户端连接统一使用 `IAM_<APP>_REDIS_URL`；应用 Compose 将共享 `IAM_REDIS_URL` 传给 API、Admin API 和 Worker，
+一次性 Ops 使用独立的 `IAM_OPS_REDIS_URL`。格式为 `redis://[username:password@]host[:port][/db]`，省略端口和 DB 时分别为
+`6379`、`0`。只支持 `redis://`，不接受 query、fragment 或缺失的主机；用户名、密码中的特殊字符必须百分号编码。
+解析规则由[共享 Redis 配置](../../packages/api-core/src/redis/config.ts)维护，URL 不承载重试或关闭策略。
+
+升级到当前版本时，先把已有私有配置中的 Redis host、port、username、password、db 合成对应 URL，并删除旧拆分字段；
+旧字段不再作为应用输入。目标主机、端口和 DB 须保持一致，避免连接到另一份状态。Redis 服务端仍由 data Compose 的
+`REDIS_PASSWORD` 设置访问密码，客户端 URL 中解码后的密码须与该服务端配置匹配。然后按下方常规更新流程重建受影响应用；
+源码运行使用各 app 的配置，固定旧版本维护制品使用其匹配版本配置。
 
 | 编排                                                                            | 服务与部署要求                                                                                             |
 | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |

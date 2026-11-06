@@ -8,9 +8,7 @@ function validEnv(): NodeJS.ProcessEnv {
   return {
     IAM_API_OIDC_CURRENT_JWK_JSON: "runtime-validates-signing-material",
     IAM_API_DATABASE_URL: "postgresql://iam:password@localhost/iam",
-    IAM_API_REDIS_HOST: "localhost",
-    IAM_API_REDIS_PORT: "6379",
-    IAM_API_REDIS_DB: "0",
+    IAM_API_REDIS_URL: "redis://localhost:6379/0",
     IAM_API_SMS_SIGNATURE_KEY: "sms-signature",
     IAM_API_SMS_URL: "https://sms.example.com/send",
     IAM_API_CUSTOM_SSO_TOKEN_TTL_SECONDS: "86400",
@@ -61,6 +59,23 @@ describe("API environment", () => {
         IAM_API_CUSTOM_SSO_PROJECTION_RETRY_AFTER_SECONDS: "0",
       }),
     ).toThrow();
+  });
+
+  test("maps a Redis URL to its complete connection configuration", () => {
+    const env = parseApiEnv({ ...validEnv(), IAM_API_REDIS_URL: "redis://api-user:p%40ss%3Aword@cache.local:6380/3" });
+    expect(env.redis).toEqual({ host: "cache.local", port: 6380, db: 3, username: "api-user", password: "p@ss:word" });
+  });
+
+  test("requires a Redis URL instead of separate connection fields", () => {
+    expect(() =>
+      parseApiEnv({
+        ...validEnv(),
+        IAM_API_REDIS_URL: undefined,
+        IAM_API_REDIS_HOST: "localhost",
+        IAM_API_REDIS_PORT: "6379",
+        IAM_API_REDIS_DB: "0",
+      }),
+    ).toThrow("IAM_API_REDIS_URL");
   });
 
   test("accepts production configuration without lookup secrets", () => {

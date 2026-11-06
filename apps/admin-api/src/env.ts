@@ -1,11 +1,5 @@
 import { z } from "@hono/zod-openapi";
-
-function optionalNonEmptyString() {
-  return z
-    .string()
-    .optional()
-    .transform((value) => value?.trim() || undefined);
-}
+import { type RedisConfig, redisUrlString } from "@iam/api-core/redis/config";
 
 function listString(defaultValue: string) {
   return z
@@ -24,10 +18,7 @@ const RawEnvSchema = z.object({
   IAM_ADMIN_API_PASSWORD_HASH_ROUNDS: z.coerce.number().int().positive().default(10),
   IAM_ADMIN_API_PORT: z.coerce.number().int().min(1).max(65535).default(30001),
   NODE_ENV: z.string().default("development"),
-  IAM_ADMIN_API_REDIS_HOST: z.string().min(1),
-  IAM_ADMIN_API_REDIS_PORT: z.coerce.number().int().min(1).max(65535),
-  IAM_ADMIN_API_REDIS_PASSWORD: optionalNonEmptyString(),
-  IAM_ADMIN_API_REDIS_DB: z.coerce.number().int().min(0),
+  IAM_ADMIN_API_REDIS_URL: redisUrlString(),
   IAM_ADMIN_API_LOG_LEVEL: z.string().default("info"),
   IAM_ADMIN_API_LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
   IAM_ADMIN_API_ADMIN_CLIENT_CODES: listString("iam-admin"),
@@ -37,8 +28,6 @@ const RawEnvSchema = z.object({
     .default("iam:session"),
   IAM_ADMIN_API_USER_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
   IAM_ADMIN_API_CLIENT_SESSION_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
-  IAM_ADMIN_API_SSO_INTERNAL_ORIGIN: z.url().default("http://iam-sso.internal.localhost:30080"),
-  IAM_ADMIN_API_SSO_EXTERNAL_ORIGIN: z.url().default("http://iam-sso.localhost:30080"),
 });
 
 type RawEnv = z.infer<typeof RawEnvSchema>;
@@ -48,12 +37,7 @@ export interface Env extends Record<string, unknown> {
   passwordHashRounds: number;
   port: number;
   nodeEnv: string;
-  redis: {
-    host: string;
-    port: number;
-    password?: string;
-    db: number;
-  };
+  redis: RedisConfig;
   log: {
     level: string;
     format: "auto" | "json" | "pretty";
@@ -61,7 +45,6 @@ export interface Env extends Record<string, unknown> {
   auth: {
     adminClientCodes: string[];
   };
-  sso: { internalOrigin: string; externalOrigin: string };
   sessionKernel: {
     namespace: string;
     userSessionTtlSeconds: number;
@@ -75,22 +58,13 @@ function toAdminApiEnv(raw: RawEnv): Env {
     passwordHashRounds: raw.IAM_ADMIN_API_PASSWORD_HASH_ROUNDS,
     port: raw.IAM_ADMIN_API_PORT,
     nodeEnv: raw.NODE_ENV,
-    redis: {
-      host: raw.IAM_ADMIN_API_REDIS_HOST,
-      port: raw.IAM_ADMIN_API_REDIS_PORT,
-      password: raw.IAM_ADMIN_API_REDIS_PASSWORD,
-      db: raw.IAM_ADMIN_API_REDIS_DB,
-    },
+    redis: raw.IAM_ADMIN_API_REDIS_URL,
     log: {
       level: raw.IAM_ADMIN_API_LOG_LEVEL,
       format: raw.IAM_ADMIN_API_LOG_FORMAT,
     },
     auth: {
       adminClientCodes: raw.IAM_ADMIN_API_ADMIN_CLIENT_CODES,
-    },
-    sso: {
-      internalOrigin: new URL(raw.IAM_ADMIN_API_SSO_INTERNAL_ORIGIN).origin,
-      externalOrigin: new URL(raw.IAM_ADMIN_API_SSO_EXTERNAL_ORIGIN).origin,
     },
     sessionKernel: {
       namespace: raw.IAM_ADMIN_API_SESSION_KERNEL_NAMESPACE,

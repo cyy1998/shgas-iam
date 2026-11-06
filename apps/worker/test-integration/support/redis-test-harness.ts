@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import process from "node:process";
+import { redisUrlString } from "@iam/api-core/redis/config";
 import {
+  parseDedicatedRedisTestUrl,
   resetExclusiveRedisTestDatabase,
   runWithOwnedTestResources,
 } from "@iam/api-core/testing/external-test-resources";
@@ -22,7 +24,6 @@ export async function createWorkerRedisTestHarness(
   source: NodeJS.ProcessEnv = process.env,
 ): Promise<WorkerRedisTestHarness> {
   const redisUrl = resolveWorkerRedisTestUrl(source);
-  const parsed = new URL(redisUrl);
   const writer = createRedisClient(redisUrl);
   const observer = createRedisClient(redisUrl);
   let closePromise: Promise<void> | undefined;
@@ -58,7 +59,7 @@ export async function createWorkerRedisTestHarness(
       return keys;
     },
     commandEnvironment(temporaryDirectory) {
-      return createClientRuntimeMaintenanceProcessEnvironment(parsed, temporaryDirectory);
+      return createClientRuntimeMaintenanceProcessEnvironment(redisUrl, temporaryDirectory);
     },
     close,
   };
@@ -83,16 +84,13 @@ export async function resetWorkerRedisTestDatabase(stopExecutors: ReadonlyArray<
   });
 }
 
-function createClientRuntimeMaintenanceProcessEnvironment(parsed: URL, temporaryDirectory: string) {
+function createClientRuntimeMaintenanceProcessEnvironment(redisUrl: string, temporaryDirectory: string) {
   return createProcessSmokeEnvironment({
     source: process.env,
     temporaryDirectory,
     overrides: {
       NODE_ENV: "test",
-      IAM_WORKER_REDIS_HOST: parsed.hostname,
-      IAM_WORKER_REDIS_PORT: parsed.port || "6379",
-      IAM_WORKER_REDIS_PASSWORD: parsed.password ? decodeURIComponent(parsed.password) : undefined,
-      IAM_WORKER_REDIS_DB: parsed.pathname.length > 1 ? decodeURIComponent(parsed.pathname.slice(1)) : "0",
+      IAM_WORKER_REDIS_URL: redisUrl,
       IAM_WORKER_LOG_LEVEL: "warn",
       IAM_WORKER_LOG_FORMAT: "json",
       FORCE_COLOR: "0",
@@ -110,26 +108,17 @@ export function resolveWorkerRedisTestUrl(source: NodeJS.ProcessEnv) {
       `${TEST_REDIS_URL_ENV} must point to a caller-provided dedicated Redis test instance; no fallback is allowed`,
     );
   }
-  const parsed = new URL(redisUrl);
-  if (parsed.protocol !== "redis:")
-    throw new Error(`${TEST_REDIS_URL_ENV} must use the redis protocol supported by the Worker runtime`);
-  if (parsed.search) throw new Error(`${TEST_REDIS_URL_ENV} must not use query parameters`);
-  if (parsed.username && decodeURIComponent(parsed.username) !== "default") {
-    throw new Error(
-      `${TEST_REDIS_URL_ENV} cannot use a Redis ACL username unsupported by the Worker runtime configuration`,
-    );
-  }
-  const runtimeHost = source.IAM_WORKER_REDIS_HOST;
-  const runtimePort = source.IAM_WORKER_REDIS_PORT || "6379";
-  const runtimeDb = source.IAM_WORKER_REDIS_DB || "0";
-  const testDb = parsed.pathname.length > 1 ? decodeURIComponent(parsed.pathname.slice(1)) : "0";
-  if (
-    runtimeHost &&
-    parsed.hostname.toLowerCase() === runtimeHost.toLowerCase() &&
-    (parsed.port || "6379") === runtimePort &&
-    testDb === runtimeDb
-  ) {
-    throw new Error(`${TEST_REDIS_URL_ENV} must not identify the Worker runtime Redis resource`);
+  const test = parseDedicatedRedisTestUrl({ name: TEST_REDIS_URL_ENV, value: redisUrl });
+  const runtimeUrl = source.IAM_WORKER_REDIS_URL;
+  if (runtimeUrl) {
+    const runtime = redisUrlString().parse(runtimeUrl);
+    if (
+      test.host.toLowerCase() === runtime.host.toLowerCase() &&
+      test.port === runtime.port &&
+      test.db === runtime.db
+    ) {
+      throw new Error(`${TEST_REDIS_URL_ENV} must not identify the Worker runtime Redis resource`);
+    }
   }
   return redisUrl;
 }

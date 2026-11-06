@@ -1,17 +1,7 @@
 import { z } from "@hono/zod-openapi";
+import { type RedisConfig, redisUrlString } from "@iam/api-core/redis/config";
+import { booleanString, optionalNonEmptyString } from "@iam/api-core/utils/env-schema";
 import { isRootRelativeNavigation } from "@iam/contracts";
-
-function booleanString(defaultValue: boolean) {
-  return z
-    .string()
-    .optional()
-    .transform((value) => {
-      if (value === undefined || value.trim() === "") {
-        return defaultValue;
-      }
-      return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
-    });
-}
 
 function jsonRecordString(description: string) {
   return z.string().transform((value, ctx) => {
@@ -32,13 +22,6 @@ function jsonRecordString(description: string) {
       return z.NEVER;
     }
   });
-}
-
-function optionalNonEmptyString() {
-  return z
-    .string()
-    .optional()
-    .transform((value) => value?.trim() || undefined);
 }
 
 function originString() {
@@ -76,10 +59,7 @@ const RawEnvSchema = z
     IAM_API_WECHAT_CORP_SECRET: z.string().min(1),
     IAM_API_MAGIC_CODE: z.string().min(1),
     NODE_ENV: z.string().default("development"),
-    IAM_API_REDIS_HOST: z.string().min(1),
-    IAM_API_REDIS_PORT: z.coerce.number().int().min(1).max(65535),
-    IAM_API_REDIS_PASSWORD: optionalNonEmptyString(),
-    IAM_API_REDIS_DB: z.coerce.number().int().min(0),
+    IAM_API_REDIS_URL: redisUrlString(),
     IAM_API_LOGIN_ENDPOINT: z.string().refine(isRootRelativeNavigation, {
       message: "IAM_API_LOGIN_ENDPOINT must be a safe root-relative path",
     }),
@@ -166,12 +146,7 @@ export interface Env extends Record<string, unknown> {
   passwordHashRounds: number;
   port: number;
   nodeEnv: string;
-  redis: {
-    host: string;
-    port: number;
-    password?: string;
-    db: number;
-  };
+  redis: RedisConfig;
   log: {
     level: string;
     format: "auto" | "json" | "pretty";
@@ -242,12 +217,7 @@ function toApiEnv(raw: RawEnv): Env {
     passwordHashRounds: raw.IAM_API_PASSWORD_HASH_ROUNDS,
     port: raw.IAM_API_PORT,
     nodeEnv: raw.NODE_ENV,
-    redis: {
-      host: raw.IAM_API_REDIS_HOST,
-      port: raw.IAM_API_REDIS_PORT,
-      password: raw.IAM_API_REDIS_PASSWORD,
-      db: raw.IAM_API_REDIS_DB,
-    },
+    redis: raw.IAM_API_REDIS_URL,
     log: {
       level: raw.IAM_API_LOG_LEVEL,
       format: raw.IAM_API_LOG_FORMAT,

@@ -58,7 +58,7 @@ const redisUrl = requireExternalTestUrl({
   lane: "API composition",
   name: "IAM_API_TEST_REDIS_URL",
 });
-const redisConfig = parseDedicatedRedisTestUrl({ name: "IAM_API_TEST_REDIS_URL", value: redisUrl });
+parseDedicatedRedisTestUrl({ name: "IAM_API_TEST_REDIS_URL", value: redisUrl });
 const suite = createProcessSmokeSuite({
   label: "unified API production entry",
   temporaryDirectoryPrefix: "iam-api-unified-",
@@ -155,10 +155,7 @@ test(
             cwd: fileURLToPath(new URL("../../", import.meta.url)),
             env: createEntryEnvironment(context, {
               IAM_API_DATABASE_URL: pg.databaseUrl,
-              IAM_API_REDIS_HOST: redisConfig.host,
-              IAM_API_REDIS_PORT: String(redisConfig.port),
-              IAM_API_REDIS_PASSWORD: redisConfig.password,
-              IAM_API_REDIS_DB: String(redisConfig.db),
+              IAM_API_REDIS_URL: redisUrl,
               IAM_API_SESSION_KERNEL_NAMESPACE: namespace,
               IAM_API_OIDC_NAMESPACE: `${namespace}:oidc`,
               IAM_API_USER_SESSION_TTL_SECONDS: "86400",

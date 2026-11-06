@@ -123,7 +123,7 @@ test("rejects rediss when the production Redis configuration cannot carry TLS", 
       value: "redis://:password@redis.test:6380/12",
     }),
   }).toEqual({
-    redissMessage: `${name} does not support rediss because the production Redis configuration has no TLS settings; use redis with a dedicated test resource`,
+    redissMessage: `${name} must use redis://; TLS is not supported`,
     redis: {
       db: 12,
       host: "redis.test",
@@ -131,6 +131,23 @@ test("rejects rediss when the production Redis configuration cannot carry TLS", 
       port: 6380,
     },
   });
+});
+
+test("test Redis URLs preserve ACL identities and reject options that override connection policy", () => {
+  const name = "IAM_EXAMPLE_TEST_REDIS_URL";
+  expect(parseDedicatedRedisTestUrl({ name, value: "redis://user%40test:p%40ss@[::1]:6380/12" })).toEqual({
+    host: "::1",
+    port: 6380,
+    db: 12,
+    username: "user@test",
+    password: "p@ss",
+  });
+  const failure = captureErrorMessage(() =>
+    parseDedicatedRedisTestUrl({ name, value: "redis://secret-user:secret-password@redis.test/0?connectTimeout=0" }),
+  );
+  expect(failure).toContain(name);
+  expect(failure).not.toContain("secret-user");
+  expect(failure).not.toContain("secret-password");
 });
 
 test("requires a dedicated PostgreSQL URL without falling back to a runtime database", () => {

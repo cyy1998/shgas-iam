@@ -2,7 +2,7 @@ import Redis from "ioredis";
 import type { RedisConfig } from "../redis";
 
 /** No runtime defaults, retry queue, PostgreSQL, consumer or HTTP server. */
-export function createOfflineMaintenanceRedis(config: RedisConfig & { username?: string }, signal: AbortSignal) {
+export function createOfflineMaintenanceRedis(config: RedisConfig, signal: AbortSignal) {
   const redis = new Redis({
     ...config,
     lazyConnect: true,

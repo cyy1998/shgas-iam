@@ -16,7 +16,7 @@ function environment(enabled = true) {
   try {
     return parseWorkerEnv({
       IAM_WORKER_DATABASE_URL: "postgresql://unused:unused@localhost/unused",
-      IAM_WORKER_REDIS_HOST: "localhost",
+      IAM_WORKER_REDIS_URL: "redis://localhost:6379/0",
       NODE_ENV: "test",
       IAM_WORKER_USER_DOCUMENT_REPAIR_ENABLED: String(enabled),
       IAM_WORKER_USER_DOCUMENT_REPAIR_INTERVAL_MS: String(intervalMs),

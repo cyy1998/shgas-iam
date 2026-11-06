@@ -224,7 +224,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [网关管理](releases/apisix-gateway-release.md)       | runbook | Current | 2026-10-25    | 2026-11-25  | 首次配置、HTTP 发布、数据面检查和失败恢复。                         |
 | [登录与会话](releases/authentication-and-session.md) | runbook | Current | 2026-11-02    | 2026-12-02  | 密码配置、OIDC 双入口与密钥、会话清理和 Snapshot 恢复。             |
 | [数据维护](releases/data-maintenance.md)             | runbook | Current | 2026-11-03    | 2026-12-03  | Document、Subject Access 的两阶段修复、全量重建及完整核验。         |
-| [部署与发布](releases/deployment.md)                 | runbook | Current | 2026-11-03    | 2026-12-03  | 首次部署、常规更新、正式迁移、一次性 Ops 制品、兼容回退与定向停止。 |
+| [部署与发布](releases/deployment.md)                 | runbook | Current | 2026-11-06    | 2026-12-06  | 首次部署、常规更新、正式迁移、一次性 Ops 制品、兼容回退与定向停止。 |
 | [日志与排障](releases/observability-system-logs.md)  | runbook | Current | 2026-10-25    | 2026-11-25  | 日志栈、Grafana、Trace 关联、告警与采集恢复。                       |
 
 </details>

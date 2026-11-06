@@ -30,9 +30,7 @@ function createEntryEnvironment(context: ProcessSmokeAttemptContext, enabledModu
     overrides: {
       NODE_ENV: "test",
       IAM_WORKER_DATABASE_URL: "postgresql://iam:password@127.0.0.1:1/iam",
-      IAM_WORKER_REDIS_HOST: "127.0.0.1",
-      IAM_WORKER_REDIS_PORT: "1",
-      IAM_WORKER_REDIS_DB: "15",
+      IAM_WORKER_REDIS_URL: "redis://127.0.0.1:1/15",
       IAM_WORKER_ENABLED_MODULES: enabledModules,
       IAM_WORKER_HTTP_ENABLED: "true",
       IAM_WORKER_HTTP_PORT: String(context.port),

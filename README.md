@@ -177,23 +177,34 @@ docker compose -f docker/compose.dev.yaml up -d db redis
 
 `docker/compose.dev.yaml` 中 PostgreSQL 默认暴露在 `localhost:5432`，Redis 默认暴露在
 `localhost:6390`。如果在宿主机直接运行 Bun 服务，本地环境变量请按应用使用
-`IAM_API_REDIS_HOST=localhost` / `IAM_API_REDIS_PORT=6390`、
-`IAM_ADMIN_API_REDIS_HOST=localhost` / `IAM_ADMIN_API_REDIS_PORT=6390`、
-
-`IAM_WORKER_REDIS_HOST=localhost` / `IAM_WORKER_REDIS_PORT=6390`。
+`IAM_API_REDIS_URL=redis://localhost:6390/0`、`IAM_ADMIN_API_REDIS_URL=redis://localhost:6390/0`、
+`IAM_WORKER_REDIS_URL=redis://localhost:6390/0`。Ops 使用同样格式的 `IAM_OPS_REDIS_URL`。
 
 ### 配置环境变量
 
+按实际启动方式创建需要的配置文件；示例中的注释项仅在需要覆盖默认值时填写。
+源码运行时，只为需要启动的 app 复制对应配置：
+
 ```bash
-cp packages/db/.env.example packages/db/.env
 cp apps/api/.env.example apps/api/.env
 cp apps/admin-api/.env.example apps/admin-api/.env
 cp apps/worker/.env.example apps/worker/.env
 cp apps/ops/.env.example apps/ops/.env
 cp apps/admin/.env.example apps/admin/.env.local
 cp apps/sso/.env.example apps/sso/.env.local
-cp docker/.env.dev.example docker/.env
 cp apps/gateway/.env.example apps/gateway/.env
+```
+
+使用数据库迁移工具时单独准备：
+
+```bash
+cp packages/db/.env.example packages/db/.env
+```
+
+Docker 开发使用统一的 Compose 配置：
+
+```bash
+cp docker/.env.dev.example docker/.env
 ```
 
 本地 PostgreSQL 对应的连接串可设置为：
@@ -425,126 +436,67 @@ Playwright Chromium 系统依赖时，preflight 会提示运行 `pnpm e2e:instal
 
 ## ⚙️ 环境变量
 
+按运行方式选择配置入口：源码运行使用各 app 的 `.env`（前端为 `.env.local`）；Docker 使用与 Compose 配套的
+`docker/.env`，一次性 Ops 容器使用独立的 `docker/.env.ops`。无需同时维护所有入口。
+示例中的活跃项用于资源地址、密钥和常用开关；注释项为可选覆盖，完整配置与默认值以各 app 的解析入口为准。
+
+Redis 连接统一使用 `IAM_<APP>_REDIS_URL`，例如 `redis://user:password@localhost:6379/0`；
+用户名、密码中的特殊字符需百分号编码。Docker 应用通过共享的 `IAM_REDIS_URL` 注入，Ops 仍独立配置。
+已有配置需将旧拆分字段替换为 URL，具体要求见[部署输入](docs/releases/deployment.md#部署输入)。
+
 ### 数据库包（`packages/db/.env`）
 
-以 `packages/db/.env.example` 和 `packages/db/drizzle.config.ts` 为准：
-
-| 变量名         | 说明                                         | 默认值/示例        |
-| -------------- | -------------------------------------------- | ------------------ |
-| `DATABASE_URL` | PostgreSQL 连接字符串，可带 `?schema=public` | `postgresql://...` |
+[示例](packages/db/.env.example)只配置 `DATABASE_URL`，由 [Drizzle CLI](packages/db/drizzle.config.ts)用于迁移等工具命令。
+应用运行时使用各自的 `IAM_<APP>_DATABASE_URL`。
 
 ### 公共 API（`apps/api/.env`）
 
-以 `apps/api/.env.example` 和 `apps/api/src/env.ts` 为准：
+从 [API 示例](apps/api/.env.example)填写 PostgreSQL、Redis、短信和企业微信连接，以及登录密钥与 SSO 入口。
+连接使用本地 Compose 时，Redis 的宿主端口为 `6390`。完整校验见 [API env](apps/api/src/env.ts)。
 
-| 变量名                                                                                                                                             | 说明                                                             | 默认值/示例                |
-| -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | -------------------------- |
-| `IAM_API_DATABASE_URL`                                                                                                                             | PostgreSQL 连接字符串，可带 `?schema=public`                     | `postgresql://...`         |
-| `IAM_API_REDIS_HOST`                                                                                                                               | Redis 地址                                                       | `localhost`                |
-| `IAM_API_REDIS_PORT`                                                                                                                               | Redis 端口；使用本地 compose 时宿主机端口为 6390                 | `6379` / `6390`            |
-| `IAM_API_REDIS_PASSWORD`                                                                                                                           | Redis 密码；空字符串会转换为未设置                               | 空                         |
-| `IAM_API_REDIS_DB`                                                                                                                                 | Redis DB 编号                                                    | `0`                        |
-| `IAM_API_PORT`                                                                                                                                     | 公共 API 监听端口                                                | `30000`                    |
-| `NODE_ENV`                                                                                                                                         | 运行环境；生产环境会关闭 OpenAPI 文档                            | `development`              |
-| `IAM_API_LOG_LEVEL`                                                                                                                                | Pino 日志级别                                                    | `info`                     |
-| `IAM_API_LOG_FORMAT`                                                                                                                               | Pino 日志格式                                                    | `auto`                     |
-| `IAM_API_PASSWORD_HASH_ROUNDS`                                                                                                                     | 密码哈希轮数                                                     | `10`                       |
-| `IAM_API_MAGIC_CODE`                                                                                                                               | 特殊操作验证码                                                   | 必填                       |
-| `IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID`                                                                                                              | 当前密码登录 SM2 密钥编号                                        | `2026-05-primary`          |
-| `IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON`                                                                                                       | 密码登录 SM2 私钥映射 JSON                                       | `{"kid":"private"}`        |
-| `IAM_API_LOGIN_CREDENTIAL_MAX_SKEW_MS`                                                                                                             | 密码登录凭证时间戳允许偏差（毫秒）                               | `300000`                   |
-| `IAM_API_LOGIN_CREDENTIAL_NONCE_TTL_SECONDS`                                                                                                       | 密码登录 nonce 防重放 TTL（秒）                                  | `360`                      |
-| `IAM_API_SESSION_KERNEL_NAMESPACE`                                                                                                                 | Session Kernel Redis key namespace                               | `sess:v2:`                 |
-| `IAM_API_WECHAT_CORP_ID` / `IAM_API_WECHAT_CORP_SECRET`                                                                                            | 企业微信配置                                                     | 必填                       |
-| `IAM_API_SMS_URL` / `IAM_API_SMS_SIGNATURE_KEY`                                                                                                    | 短信服务配置                                                     | 必填                       |
-| `IAM_API_USER_SESSION_TTL_SECONDS`                                                                                                                 | UserSession 固定根期限（秒）                                     | `86400`                    |
-| `IAM_API_CLIENT_SESSION_TTL_SECONDS`                                                                                                               | ClientSession 独立期限（秒），两协议共用并受根上限裁剪           | `86400`                    |
-| `IAM_API_CUSTOM_SSO_TOKEN_TTL_SECONDS`                                                                                                             | Custom Token 自身签发期限（秒），不替代两类会话 TTL              | `86400`                    |
-| `IAM_API_AUTH_CODE_TTL_SECONDS`                                                                                                                    | 授权码过期时间（秒）                                             | `300`                      |
-| `IAM_API_CUSTOM_SSO_PROJECTION_RETRY_AFTER_SECONDS`                                                                                                | Custom SSO Subject Access 或 Projection 暂不可用时的建议重试秒数 | `3`                        |
-| `IAM_API_LOGIN_ENDPOINT`                                                                                                                           | 登录端点                                                         | `/portal/login`            |
-| `IAM_API_SSO_INTERNAL_ORIGIN`                                                                                                                      | 内网 SSO 入口 origin，用于 discovery URL 拼接                    | 必填                       |
-| `IAM_API_SSO_EXTERNAL_ORIGIN`                                                                                                                      | 外网 SSO 入口 origin，用于 discovery URL 拼接                    | 必填                       |
-| `IAM_API_AUTHORIZATION_ENDPOINT`                                                                                                                   | 授权端点                                                         | `/sso/authorize`           |
-| `IAM_API_LOGOUT_ENDPOINT`                                                                                                                          | 登出端点                                                         | `/sso/logout`              |
-| `IAM_API_THIRDPARTY_OA_ENDPOINT`                                                                                                                   | 第三方 OA 端点                                                   | `/sso/thirdparty/oa`       |
-| `IAM_API_CAP_ENABLED` / `IAM_API_CAP_SITE_KEY` / `IAM_API_CAP_SECRET`                                                                              | Cap 人机校验开关、站点 key 与 secret                             | `false` / `iam-sso` / 必填 |
-| `IAM_API_CAP_CHALLENGE_TTL_MS` / `IAM_API_CAP_TOKEN_TTL_SECONDS`                                                                                   | Cap challenge 与 token 有效期                                    | `600000` / `600`           |
-| `IAM_API_HUMAN_VERIFICATION_WINDOW_SECONDS` / `IAM_API_HUMAN_VERIFICATION_LOGIN_FAILURE_THRESHOLD` / `IAM_API_HUMAN_VERIFICATION_LOOKUP_THRESHOLD` | 人机校验风险窗口和触发阈值                                       | `600` / `3` / `20`         |
+API 与 SSO 前端的登录 KID、公私钥必须配对。Cap 开关与站点配置需与前端对应；注释中的有效期、风险阈值、日志和监听端口
+已有默认值，需要调优时再覆盖。
 
 ### 管理端 API（`apps/admin-api/.env`）
 
-以 `apps/admin-api/.env.example` 和 `apps/admin-api/src/env.ts` 为准：
-
-| 变量名                                   | 说明                                                  | 默认值/示例        |
-| ---------------------------------------- | ----------------------------------------------------- | ------------------ |
-| `IAM_ADMIN_API_DATABASE_URL`             | PostgreSQL 连接字符串                                 | `postgresql://...` |
-| `IAM_ADMIN_API_REDIS_HOST`               | Redis 地址                                            | `localhost`        |
-| `IAM_ADMIN_API_REDIS_PORT`               | Redis 端口；使用本地 compose 时宿主机端口为 6390      | `6379` / `6390`    |
-| `IAM_ADMIN_API_REDIS_PASSWORD`           | Redis 密码；空字符串会转换为未设置                    | 空                 |
-| `IAM_ADMIN_API_REDIS_DB`                 | Redis DB 编号                                         | `0`                |
-| `IAM_ADMIN_API_PORT`                     | 管理端 API 监听端口                                   | `30001`            |
-| `NODE_ENV`                               | 运行环境                                              | `development`      |
-| `IAM_ADMIN_API_LOG_LEVEL`                | Pino 日志级别                                         | `info`             |
-| `IAM_ADMIN_API_LOG_FORMAT`               | Pino 日志格式                                         | `auto`             |
-| `IAM_ADMIN_API_PASSWORD_HASH_ROUNDS`     | 密码哈希轮数                                          | `10`               |
-| `IAM_ADMIN_API_ADMIN_CLIENT_CODES`       | 允许访问管理端 API 的 client code，逗号分隔           | `iam-admin`        |
-| `IAM_ADMIN_API_SESSION_KERNEL_NAMESPACE` | Session Kernel Redis key namespace；需与公共 API 一致 | `sess:v2:`         |
+从 [Admin API 示例](apps/admin-api/.env.example)填写 PostgreSQL、Redis 和允许访问的 Client code。
+Session Kernel namespace、UserSession 与 ClientSession 期限分别与 API 保持一致；两类会话期限独立配置。
+完整校验见 [Admin API env](apps/admin-api/src/env.ts)。
 
 ### API OIDC 配置
 
 `IAM_API_SSO_INTERNAL_ORIGIN`、`IAM_API_SSO_EXTERNAL_ORIGIN` 与 `IAM_API_OIDC_CURRENT_JWK_JSON` 必填；previous JWK 可选。
 两项 HTTP(S) origin 分别加 `/oidc` 得到固定 issuer，相同 origin 合并为同一身份。Gateway 按受控 host 覆盖
-`X-IAM-Entry-Network`，API 拒绝缺失/非法标记；单 issuer/public-origin 输入已退役。两入口共用 Client、密钥及会话关系。
-当前双入口配置与密钥维护见[OIDC 发布手册](docs/releases/authentication-and-session.md#oidc-双入口配置)；首次切换按[固定历史流程](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/releases/oidc-release-runbook.md)核对来源。
-完整 TTL、namespace、secure Cookie 与登录路径见 [API env](apps/api/.env.example)。旧 Provider env/镜像/Cookie keys 已退役。
-API/Admin 共用 Kernel namespace 和固定根期限；旧 idle/absolute/tombstone 配置已移除。
-当前会话与 Snapshot 恢复按[统一维护手册](docs/releases/authentication-and-session.md)；旧数据操作见[历史命令入口](docs/development/commands.md#历史数据维护工具)。
+`X-IAM-Entry-Network`，API 拒绝缺失/非法标记；两入口共用 Client、密钥及会话关系。
+当前双入口配置与密钥维护见[登录与会话手册](docs/releases/authentication-and-session.md#oidc-双入口配置)。
+Cookie Secure 未显式配置时由运行环境推导，生产默认开启；OIDC 与 Custom SSO 的 Token TTL 不替代两类会话期限。
 
 ### Worker（`apps/worker/.env`）
 
-以 `apps/worker/.env.example` 和 `apps/worker/src/env.ts` 为准。关键变量包括：
-
-| 变量名                                                                                                     | 说明                                                                                            | 默认值/示例                              |
-| ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| `IAM_WORKER_DATABASE_URL`                                                                                  | PostgreSQL 连接字符串                                                                           | `postgresql://...`                       |
-| `IAM_WORKER_REDIS_HOST` / `IAM_WORKER_REDIS_PORT` / `IAM_WORKER_REDIS_DB`                                  | Redis 连接配置                                                                                  | `localhost` / `6379` / `0`               |
-| `IAM_WORKER_ENABLED_MODULES`                                                                               | 启用模块：`all`、`none` 或逗号分隔模块 key；当前模块为 `user-document`、`organization-document` | `all`                                    |
-| `IAM_WORKER_HTTP_ENABLED` / `IAM_WORKER_HTTP_PORT` / `IAM_WORKER_HEALTH_PATH`                              | health/Bull Board HTTP server 配置                                                              | `true` / `30003` / `/healthz`            |
-| `IAM_WORKER_BULL_BOARD_ENABLED` / `IAM_WORKER_BULL_BOARD_PATH`                                             | 是否启用 Bull Board 与挂载路径                                                                  | `false` / `/admin/queues`                |
-| `IAM_WORKER_BULL_BOARD_AUTH_ENABLED` / `IAM_WORKER_BULL_BOARD_USERNAME` / `IAM_WORKER_BULL_BOARD_PASSWORD` | Bull Board Basic Auth 配置；生产启用 dashboard 时必须配置                                       | `true` / `iam-worker` / `iam-worker-dev` |
-| `IAM_WORKER_USER_DOCUMENT_CONCURRENCY`                                                                     | User Document worker 并发数                                                                     | `2`                                      |
-| `IAM_WORKER_USER_DOCUMENT_REBUILD_BATCH_SIZE`                                                              | Worker 消费时每批构建数量                                                                       | `100`                                    |
-| `IAM_WORKER_USER_DOCUMENT_REPAIR_STALE_SECONDS`                                                            | Worker 周期 repair 默认修复 stale pending/processing 的秒数                                     | `300`                                    |
+[Worker 示例](apps/worker/.env.example)显式选择 `user-document,organization-document`，避免未来新增模块自动启用；
+也支持 `all`、`none` 或模块列表。HTTP、Bull Board 与两类周期 repair 分别配置，调优项见 [Worker env](apps/worker/src/env.ts)。
+生产启用 Bull Board 时须提供认证凭据；User Document 与 Organization Document 的 repair 开关和预算保持独立。
 
 ### 管理后台（`apps/admin/.env.local`）
 
-| 变量名                            | 说明                       | 默认值                   |
-| --------------------------------- | -------------------------- | ------------------------ |
-| `PORT`                            | Umi dev server 端口        | `8001`                   |
-| `UMI_APP_ADMIN_API_PREFIX`        | 管理端 API 前缀            | `/api/iam`               |
-| `UMI_APP_ADMIN_SSO_AUTHORIZE_URL` | SSO 授权端点               | `/sso/authorize`         |
-| `UMI_APP_ADMIN_SSO_LOGOUT_URL`    | SSO 登出端点               | `/sso/logout`            |
-| `UMI_APP_ADMIN_CLIENT_CODE`       | 当前应用注册的 client code | `iam-admin`              |
-| `UMI_APP_ADMIN_GRAFANA_URL`       | Grafana 系统日志入口       | `http://localhost:30030` |
-| `UMI_APP_ADMIN_SYSTEM_LOG_ENV`    | Grafana dashboard 环境变量 | `dev`                    |
+从 [Admin 示例](apps/admin/.env.example)设置开发端口、API 前缀、Client code 与 Grafana 地址。
+SSO 授权/登出 URL 和系统日志环境已有默认值，需要不同入口时再覆盖；读取入口见 [Admin config](apps/admin/src/constants/config.ts)。
 
 ### SSO 门户（`apps/sso/.env.local`）
 
-| 变量名                                    | 说明                                                   | 默认值                                          |
-| ----------------------------------------- | ------------------------------------------------------ | ----------------------------------------------- |
-| `PORT`                                    | Umi dev server 端口                                    | `8000`                                          |
-| `UMI_APP_SSO_API_PREFIX`                  | API 前缀；为空时使用同域相对路径                       | `/api/iam`                                      |
-| `UMI_APP_SSO_CLIENT_CODE`                 | SSO 客户端代码                                         | `iam`                                           |
-| `UMI_APP_SSO_WELL_KNOWN_URL`              | authentication configuration 端点                      | `/sso/.well-known/authentication-configuration` |
-| `UMI_APP_SSO_CAP_SITE_KEY`                | Cap 站点 key                                           | `iam-sso`                                       |
-| `UMI_APP_SSO_CAP_ENDPOINT`                | 内嵌 Cap challenge/redeem 端点                         | `/api/iam/open/cap/iam-sso/`                    |
-| `UMI_APP_SSO_CAP_WASM_URL`                | 本地 Cap WASM 资源；避免浏览器请求 jsDelivr CDN        | `/portal/cap/cap_wasm_bg.wasm`                  |
-| `UMI_APP_SSO_CAP_PAKO_URL`                | 本地 pako fallback 资源；避免旧浏览器请求 jsDelivr CDN | `/portal/cap/pako_inflate.min.js`               |
-| `UMI_APP_SSO_LOGIN_CREDENTIAL_KID`        | 密码登录 SM2 公钥编号                                  | `2026-05-primary`                               |
-| `UMI_APP_SSO_LOGIN_CREDENTIAL_PUBLIC_KEY` | 密码登录 SM2 公钥；与后端私钥映射匹配                  | 必填                                            |
+从 [SSO 示例](apps/sso/.env.example)设置 API 前缀、Client code、Cap site key 和与 API 配对的登录公钥。
+源码构建未设置 Cap endpoint 时，按 API 前缀与 site key 派生；Docker 构建仍使用 Compose 的显式 build args。
+读取入口见 [SSO config](apps/sso/src/constants/config.ts)。
 
-Cap 前端资源已放在 `apps/sso/public/cap/`，构建时会复制到 SSO 产物的 `cap/` 目录。生产环境若调整 `base` / `publicPath`，需要同步覆盖 `UMI_APP_SSO_CAP_WASM_URL` 和 `UMI_APP_SSO_CAP_PAKO_URL`。
+Cap 资源随 `apps/sso/public/cap/` 一起构建。调整 `base` / `publicPath` 时，按实际路径覆盖
+`UMI_APP_SSO_CAP_WASM_URL` 和 `UMI_APP_SSO_CAP_PAKO_URL`。
+
+### Ops 与 Gateway
+
+[Ops 示例](apps/ops/.env.example)只需填写本次命令使用的 PostgreSQL 或 Redis 资源，帮助无需连接；日志和批量参数可选。
+独立配置、命令范围和执行方式见 [Ops README](apps/ops/README.md)。
+[Gateway 示例](apps/gateway/.env.example)必填独立只读数据库连接、APISIX Admin URL 和 Admin Key；
+监听地址、请求大小和超时使用 [Gateway env](apps/gateway/src/env.ts) 的默认值，可按部署需要覆盖。
 
 ## 📚 API 文档
 

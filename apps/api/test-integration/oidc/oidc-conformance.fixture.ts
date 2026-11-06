@@ -38,7 +38,7 @@ export async function createOidcConformanceCandidate(options: {
   await requireManagedApiResources();
   const redisUrl = process.env.IAM_API_TEST_REDIS_URL;
   if (!redisUrl) throw new Error("IAM_API_TEST_REDIS_URL is required");
-  const redisConfig = parseDedicatedRedisTestUrl({ name: "IAM_API_TEST_REDIS_URL", value: redisUrl });
+  parseDedicatedRedisTestUrl({ name: "IAM_API_TEST_REDIS_URL", value: redisUrl });
   const temporaryDirectory = await mkdtemp(join(tmpdir(), "iam195-candidate-"));
   const cleanups: (() => unknown | Promise<unknown>)[] = [];
   function registerCleanup(cleanup: () => unknown | Promise<unknown>) {
@@ -155,10 +155,7 @@ export async function createOidcConformanceCandidate(options: {
     }
     const resourceEnvironment = createEntryEnvironment(context, {
       IAM_API_DATABASE_URL: pg.databaseUrl,
-      IAM_API_REDIS_HOST: redisConfig.host,
-      IAM_API_REDIS_PORT: String(redisConfig.port),
-      IAM_API_REDIS_PASSWORD: redisConfig.password,
-      IAM_API_REDIS_DB: String(redisConfig.db),
+      IAM_API_REDIS_URL: redisUrl,
       IAM_API_SESSION_KERNEL_NAMESPACE: namespace,
       IAM_API_OIDC_NAMESPACE: `${namespace}:oidc`,
       IAM_API_LOGIN_ENDPOINT: "/login",

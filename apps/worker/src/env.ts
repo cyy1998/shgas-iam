@@ -1,3 +1,5 @@
+import { type RedisConfig, redisUrlString } from "@iam/api-core/redis/config";
+import { booleanString, optionalNonEmptyString } from "@iam/api-core/utils/env-schema";
 import { DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
 import { z } from "zod";
 
@@ -7,23 +9,6 @@ export type WorkerModuleSelection = {
   mode: "all" | "none" | "list";
   keys: string[];
 };
-
-function booleanString(defaultValue: boolean) {
-  return z
-    .string()
-    .optional()
-    .transform((value) => {
-      if (value === undefined || value.trim() === "") return defaultValue;
-      return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
-    });
-}
-
-function optionalNonEmptyString() {
-  return z
-    .string()
-    .optional()
-    .transform((value) => value?.trim() || undefined);
-}
 
 function slashPath(defaultValue: string) {
   return z
@@ -77,10 +62,7 @@ function moduleSelection(defaultValue: "all" | "none" | string) {
 const RawWorkerEnvSchema = z
   .object({
     IAM_WORKER_DATABASE_URL: z.string().min(1),
-    IAM_WORKER_REDIS_HOST: z.string().min(1),
-    IAM_WORKER_REDIS_PORT: z.coerce.number().int().min(1).max(65535).default(6379),
-    IAM_WORKER_REDIS_PASSWORD: optionalNonEmptyString(),
-    IAM_WORKER_REDIS_DB: z.coerce.number().int().min(0).default(0),
+    IAM_WORKER_REDIS_URL: redisUrlString(),
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     IAM_WORKER_LOG_LEVEL: z.string().default("info"),
     IAM_WORKER_LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
@@ -151,12 +133,7 @@ type RawWorkerEnv = z.infer<typeof RawWorkerEnvSchema>;
 
 export interface WorkerEnv {
   databaseUrl: string;
-  redis: {
-    host: string;
-    port: number;
-    password?: string;
-    db: number;
-  };
+  redis: RedisConfig;
   nodeEnv: "development" | "test" | "production";
   log: {
     level: string;
@@ -205,12 +182,7 @@ export interface WorkerEnv {
 function toWorkerEnv(raw: RawWorkerEnv): WorkerEnv {
   return {
     databaseUrl: raw.IAM_WORKER_DATABASE_URL,
-    redis: {
-      host: raw.IAM_WORKER_REDIS_HOST,
-      port: raw.IAM_WORKER_REDIS_PORT,
-      password: raw.IAM_WORKER_REDIS_PASSWORD,
-      db: raw.IAM_WORKER_REDIS_DB,
-    },
+    redis: raw.IAM_WORKER_REDIS_URL,
     nodeEnv: raw.NODE_ENV,
     log: {
       level: raw.IAM_WORKER_LOG_LEVEL,
@@ -299,6 +271,7 @@ const DocumentRepairInvocationSchema = z.object({
       host: z.string().min(1),
       port: z.number().int().positive().max(65535),
       db: z.number().int().nonnegative(),
+      username: z.string().optional(),
       password: z.string().optional(),
     }),
     log: z.object({ level: z.string(), format: z.enum(["auto", "json", "pretty"]) }),

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { parseEnv } from "node:util";
+import { redisUrlString } from "@iam/api-core/redis/config";
 import { DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
 import { z } from "zod";
 
@@ -15,10 +16,6 @@ export function loadOpsEnvironment() {
   }
 }
 
-const optionalRedisCredential = z
-  .string()
-  .optional()
-  .transform((value) => value || undefined);
 const logging = {
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   IAM_OPS_LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
@@ -28,17 +25,11 @@ const postgres = {
   IAM_OPS_DATABASE_URL: z.url().refine((value) => /^postgres(?:ql)?:/iu.test(value)),
 };
 const RawOpsEnvSchema = z.object({
-  IAM_OPS_DATABASE_URL: postgres.IAM_OPS_DATABASE_URL,
-  NODE_ENV: logging.NODE_ENV,
-  IAM_OPS_LOG_LEVEL: logging.IAM_OPS_LOG_LEVEL,
-  IAM_OPS_LOG_FORMAT: logging.IAM_OPS_LOG_FORMAT,
+  ...postgres,
+  ...logging,
 });
 const redis = {
-  IAM_OPS_REDIS_HOST: z.string().trim().min(1),
-  IAM_OPS_REDIS_PORT: z.string().regex(/^\d+$/u).transform(Number).pipe(z.number().int().min(1).max(65535)),
-  IAM_OPS_REDIS_DB: z.string().regex(/^\d+$/u).transform(Number).pipe(z.number().int().min(0).max(2147483647)),
-  IAM_OPS_REDIS_PASSWORD: optionalRedisCredential,
-  IAM_OPS_REDIS_USERNAME: optionalRedisCredential,
+  IAM_OPS_REDIS_URL: redisUrlString(),
 };
 const userDocument = {
   IAM_OPS_USER_DOCUMENT_REBUILD_BATCH_SIZE: z.coerce.number().int().positive().default(100),
@@ -56,34 +47,28 @@ function parse<T extends z.ZodType>(schema: T, source: NodeJS.ProcessEnv): z.out
   return result.data;
 }
 
-export function parseOfflineMaintenanceEnv(source: NodeJS.ProcessEnv) {
-  const raw = parse(z.object(redis), source);
-  return {
-    host: raw.IAM_OPS_REDIS_HOST,
-    port: raw.IAM_OPS_REDIS_PORT,
-    db: raw.IAM_OPS_REDIS_DB,
-    password: raw.IAM_OPS_REDIS_PASSWORD,
-    username: raw.IAM_OPS_REDIS_USERNAME,
-  };
-}
-export function parseEmploymentCommandEnv(source: NodeJS.ProcessEnv) {
-  const raw = parse(RawOpsEnvSchema, source);
+function toPostgresCommandEnv(raw: z.output<typeof RawOpsEnvSchema>) {
   return {
     databaseUrl: raw.IAM_OPS_DATABASE_URL,
     nodeEnv: raw.NODE_ENV,
     log: { level: raw.IAM_OPS_LOG_LEVEL, format: raw.IAM_OPS_LOG_FORMAT },
   };
+}
+
+export function parseOfflineMaintenanceEnv(source: NodeJS.ProcessEnv) {
+  return parse(z.object(redis), source).IAM_OPS_REDIS_URL;
+}
+export function parseEmploymentCommandEnv(source: NodeJS.ProcessEnv) {
+  return toPostgresCommandEnv(parse(RawOpsEnvSchema, source));
 }
 export function parseAuditActionMaintenanceCommandEnv(source: NodeJS.ProcessEnv) {
   const raw = parse(z.object(postgres), source);
   return { databaseUrl: raw.IAM_OPS_DATABASE_URL };
 }
 export function parseUserDocumentPostgresReadinessCommandEnv(source: NodeJS.ProcessEnv) {
-  const raw = parse(z.object({ ...postgres, ...logging, ...userDocument }), source);
+  const raw = parse(RawOpsEnvSchema.extend(userDocument), source);
   return {
-    databaseUrl: raw.IAM_OPS_DATABASE_URL,
-    nodeEnv: raw.NODE_ENV,
-    log: { level: raw.IAM_OPS_LOG_LEVEL, format: raw.IAM_OPS_LOG_FORMAT },
+    ...toPostgresCommandEnv(raw),
     userDocument: {
       rebuildBatchSize: raw.IAM_OPS_USER_DOCUMENT_REBUILD_BATCH_SIZE,
       backfillBatchSize: raw.IAM_OPS_USER_DOCUMENT_BACKFILL_BATCH_SIZE,
@@ -122,11 +107,7 @@ export function parseOrganizationDocumentBackfillCommandEnv(source: NodeJS.Proce
   );
   return {
     ...parseEmploymentCommandEnv(source),
-    redis: parseOfflineMaintenanceEnv({
-      ...source,
-      IAM_OPS_REDIS_PORT: source.IAM_OPS_REDIS_PORT ?? "6379",
-      IAM_OPS_REDIS_DB: source.IAM_OPS_REDIS_DB ?? "0",
-    }),
+    redis: parseOfflineMaintenanceEnv(source),
     organizationDocument: {
       backfillBatchSize: raw.IAM_OPS_ORGANIZATION_DOCUMENT_BACKFILL_BATCH_SIZE,
       repairStaleSeconds: raw.IAM_OPS_ORGANIZATION_DOCUMENT_REPAIR_STALE_SECONDS,

@@ -1,15 +1,11 @@
 import type Redis from "ioredis";
+import { type RedisConfig, redisUrlString } from "../redis/config";
 
 export interface OwnedTestResourceLifecycle {
   readonly registerCleanup: (cleanup: () => Promise<void> | void) => void;
 }
 
-export interface DedicatedRedisTestConfig {
-  readonly db: number;
-  readonly host: string;
-  readonly password?: string;
-  readonly port: number;
-}
+export type DedicatedRedisTestConfig = Readonly<RedisConfig>;
 
 /** 仅用于本例独占的 DB；调用方登记全部执行者，控制连接在 reset 后另行关闭。 */
 export async function resetExclusiveRedisTestDatabase(input: {
@@ -71,30 +67,9 @@ export function parseDedicatedRedisTestUrl(input: {
   readonly name: string;
   readonly value: string;
 }): DedicatedRedisTestConfig {
-  const parsed = new URL(input.value);
-  if (parsed.protocol === "rediss:") {
-    throw new Error(
-      `${input.name} does not support rediss because the production Redis configuration has no TLS settings; use redis with a dedicated test resource`,
-    );
-  }
-  if (parsed.protocol !== "redis:") throw new Error(`${input.name} must use the redis protocol`);
-  if (parsed.hostname.length === 0) throw new Error(`${input.name} must contain a Redis hostname`);
-
-  const databasePath = parsed.pathname === "" || parsed.pathname === "/" ? "0" : parsed.pathname.slice(1);
-  if (!/^\d+$/u.test(databasePath)) throw new Error(`${input.name} must contain a valid database number`);
-  const db = Number(databasePath);
-  if (!Number.isSafeInteger(db)) throw new Error(`${input.name} must contain a valid database number`);
-
-  const port = Number(parsed.port || "6379");
-  if (!Number.isSafeInteger(port) || port < 1 || port > 65_535)
-    throw new Error(`${input.name} must contain a valid Redis port`);
-
-  return {
-    db,
-    host: parsed.hostname,
-    password: parsed.password ? decodeURIComponent(parsed.password) : undefined,
-    port,
-  };
+  const parsed = redisUrlString().safeParse(input.value);
+  if (!parsed.success) throw new Error(`${input.name} ${parsed.error.issues[0]?.message}`);
+  return parsed.data;
 }
 
 function postgresDatabaseIdentity(parsed: URL) {

@@ -7,9 +7,7 @@ let parseAdminApiEnv: ParseAdminApiEnv;
 function validEnv(): NodeJS.ProcessEnv {
   return {
     IAM_ADMIN_API_DATABASE_URL: "postgresql://iam:password@localhost/iam",
-    IAM_ADMIN_API_REDIS_HOST: "localhost",
-    IAM_ADMIN_API_REDIS_PORT: "6379",
-    IAM_ADMIN_API_REDIS_DB: "0",
+    IAM_ADMIN_API_REDIS_URL: "redis://localhost:6379/0",
   };
 }
 
@@ -42,5 +40,31 @@ describe("admin API environment", () => {
     });
     for (const key of ["IAM_ADMIN_API_USER_SESSION_TTL_SECONDS", "IAM_ADMIN_API_CLIENT_SESSION_TTL_SECONDS"])
       expect(() => parseAdminApiEnv({ ...validEnv(), [key]: "0" })).toThrow();
+  });
+
+  test("maps a Redis URL to its complete connection configuration", () => {
+    const env = parseAdminApiEnv({
+      ...validEnv(),
+      IAM_ADMIN_API_REDIS_URL: "redis://admin-user:p%40ss%3Aword@cache.local:6380/3",
+    });
+    expect(env.redis).toEqual({
+      host: "cache.local",
+      port: 6380,
+      db: 3,
+      username: "admin-user",
+      password: "p@ss:word",
+    });
+  });
+
+  test("requires a Redis URL instead of separate connection fields", () => {
+    expect(() =>
+      parseAdminApiEnv({
+        ...validEnv(),
+        IAM_ADMIN_API_REDIS_URL: undefined,
+        IAM_ADMIN_API_REDIS_HOST: "localhost",
+        IAM_ADMIN_API_REDIS_PORT: "6379",
+        IAM_ADMIN_API_REDIS_DB: "0",
+      }),
+    ).toThrow("IAM_ADMIN_API_REDIS_URL");
   });
 });

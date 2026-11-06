@@ -10,7 +10,8 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "iam_test", "-d", "iam_test"]
+      # Initialization uses a temporary Unix socket; consumers need the final TCP listener.
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "iam_test", "-d", "iam_test"]
       interval: 1s
       timeout: 3s
       retries: 30
