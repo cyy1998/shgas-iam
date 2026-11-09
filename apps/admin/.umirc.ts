@@ -31,6 +31,7 @@ export default defineConfig({
       path: HR_MANUAL_PATH,
       name: "HR 管理员使用说明书",
       component: "./help/HrManualPage",
+      layout: false,
       hideInMenu: true,
     },
     {

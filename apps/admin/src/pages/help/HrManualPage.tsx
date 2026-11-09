@@ -1,17 +1,65 @@
 import { HR_MANUAL_PATH } from "@admin/admin-route-registry";
-import { ArrowLeftOutlined, ArrowRightOutlined, LinkOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, ArrowRightOutlined } from "@ant-design/icons";
 import { Link, useLocation } from "@umijs/max";
 import { Image } from "antd";
 import { useEffect, useRef } from "react";
 import styles from "./HrManualPage.module.less";
-import { hrManualSections } from "./hr-manual-content";
+import { hrManualSections, type ManualStep } from "./hr-manual-content";
 import { hrManualImages } from "./hr-manual-images";
+
+function StepIllustration({ step }: { step: Exclude<ManualStep, string> }) {
+  const picture = hrManualImages[step.image];
+  const marks = picture.marks
+    .filter((_mark, index) => !step.highlights || step.highlights.includes(index + 1))
+    .map((mark, index) => ({ ...mark, number: index + 1 }));
+
+  return (
+    <div className={styles["step-illustration"]}>
+      {marks.length > 1 && (
+        <ul className={styles.legend} aria-label="图中操作位置">
+          {marks.map((mark) => (
+            <li key={mark.number}>
+              <span>{mark.number}</span>
+              {mark.label}
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className={styles["image-frame"]} style={{ maxWidth: picture.width }}>
+        <Image
+          src={`/iam-admin/help/hr/${picture.file}`}
+          alt={picture.alt}
+          loading="lazy"
+          width="100%"
+          style={{ aspectRatio: `${picture.width} / ${picture.height}` }}
+          preview={{ mask: "查看大图" }}
+        />
+        {marks.map((mark) => (
+          <span
+            key={mark.number}
+            className={styles.marker}
+            style={{
+              left: `clamp(14px, ${mark.x}%, calc(100% - 14px))`,
+              top: `clamp(14px, ${mark.y}%, calc(100% - 14px))`,
+            }}
+            aria-hidden="true"
+          >
+            {mark.number}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function HrManualPage() {
   const { hash } = useLocation();
-  const selectedIndex = hrManualSections.findIndex((section) => `#${section.id}` === hash);
+  const selectedIndex = hrManualSections.findIndex(
+    (section) => `#${section.id}` === hash || section.tasks.some((task) => task.id && `#${task.id}` === hash),
+  );
   const activeIndex = Math.max(0, selectedIndex);
   const section = hrManualSections[activeIndex];
+  const taskId = section.tasks.find((task) => task.id && `#${task.id}` === hash)?.id;
   const previous = hrManualSections[activeIndex - 1];
   const next = hrManualSections[activeIndex + 1];
   const chapterRef = useRef<HTMLElement>(null);
@@ -19,25 +67,26 @@ export default function HrManualPage() {
 
   useEffect(() => {
     document.title = `${section.title} · HR 管理员使用说明书`;
-    if (previousHash.current !== hash) {
-      chapterRef.current?.scrollIntoView({ block: "start" });
-      chapterRef.current?.focus({ preventScroll: true });
+    if (previousHash.current !== hash || taskId) {
+      const target = taskId ? document.getElementById(taskId) : chapterRef.current;
+      target?.scrollIntoView({ block: "start" });
+      target?.focus({ preventScroll: true });
     }
     previousHash.current = hash;
-  }, [hash, section.title]);
+  }, [hash, section.title, taskId]);
 
   return (
-    <div className={styles.manual}>
+    <main className={styles.manual}>
       <header className={styles.header}>
-        <p className={styles.eyebrow}>使用帮助 / 人事管理</p>
+        <Link className={styles["back-link"]} to="/">
+          <ArrowLeftOutlined aria-hidden /> 返回管理后台
+        </Link>
         <h1>HR 管理员使用说明书</h1>
-        <p>从第一次操作到日常查阅，按任务找到操作步骤、适用条件和结果确认方法。</p>
-        <p className={styles.hint}>截图中的人员和组织均为虚构示例。实际可操作范围以当前账号和页面提示为准。</p>
       </header>
 
       <div className={styles.layout}>
         <nav className={styles.contents} aria-label="说明书目录">
-          <p className={styles["contents-title"]}>章节目录</p>
+          <p className={styles["contents-title"]}>使用场景</p>
           <ol>
             {hrManualSections.map((item, index) => (
               <li key={item.id}>
@@ -48,20 +97,11 @@ export default function HrManualPage() {
               </li>
             ))}
           </ol>
-          <p className={styles["contents-hint"]}>切换章节后，复制浏览器地址即可分享该章节。</p>
         </nav>
 
         <article className={styles.chapter} ref={chapterRef} tabIndex={-1} aria-labelledby="manual-chapter-title">
-          <div className={styles["chapter-heading"]}>
-            <span className={styles.eyebrow}>
-              第 {activeIndex + 1} 章 / 共 {hrManualSections.length} 章
-            </span>
-            <Link to={`${HR_MANUAL_PATH}#${section.id}`} aria-label={`本章链接：${section.title}`}>
-              <LinkOutlined aria-hidden /> 本章链接
-            </Link>
-          </div>
           <h2 id="manual-chapter-title">{section.title}</h2>
-          <p className={styles.intro}>{section.intro}</p>
+          {section.intro && <p className={styles.intro}>{section.intro}</p>}
           {section.links && (
             <div className={styles["page-links"]}>
               {section.links.map((link) => (
@@ -74,11 +114,10 @@ export default function HrManualPage() {
           )}
 
           {section.tasks.map((task) => (
-            <section key={task.title} className={styles.task}>
+            <section key={task.title} id={task.id} tabIndex={task.id ? -1 : undefined} className={styles.task}>
               <h3>{task.title}</h3>
               {task.prerequisites && (
                 <div className={styles.prerequisites}>
-                  <h4>操作前提</h4>
                   <ul>
                     {task.prerequisites.map((item) => (
                       <li key={item}>{item}</li>
@@ -88,13 +127,19 @@ export default function HrManualPage() {
               )}
               <ol className={styles.steps}>
                 {task.steps.map((step) => (
-                  <li key={step}>{step}</li>
+                  <li key={typeof step === "string" ? step : step.text}>
+                    {typeof step === "string" ? (
+                      step
+                    ) : (
+                      <>
+                        {step.text}
+                        <StepIllustration step={step} />
+                      </>
+                    )}
+                  </li>
                 ))}
               </ol>
-              <p className={styles.result}>
-                <strong>结果确认</strong>
-                {task.result}
-              </p>
+              {task.result && <p className={styles.result}>{task.result}</p>}
               {task.notes && (
                 <aside className={styles.notes} aria-label={`${task.title}注意事项`}>
                   <ul>
@@ -104,43 +149,6 @@ export default function HrManualPage() {
                   </ul>
                 </aside>
               )}
-            </section>
-          ))}
-
-          {hrManualImages[section.id]?.map((picture) => (
-            <section className={styles.screenshot} key={picture.file} aria-label={picture.alt}>
-              <h3>{picture.alt}</h3>
-              <ul className={styles.legend}>
-                {picture.marks.map((mark, index) => (
-                  <li key={mark.label}>
-                    <span>{index + 1}</span>
-                    {mark.label}
-                  </li>
-                ))}
-              </ul>
-              <div className={styles["image-frame"]} style={{ maxWidth: picture.width }}>
-                <Image
-                  src={`/iam-admin/help/hr/${picture.file}`}
-                  alt={picture.alt}
-                  loading="lazy"
-                  width="100%"
-                  style={{ aspectRatio: `${picture.width} / ${picture.height}` }}
-                  preview={{ mask: "查看大图" }}
-                />
-                {picture.marks.map((mark, index) => (
-                  <span
-                    key={mark.label}
-                    className={styles.marker}
-                    style={{
-                      left: `clamp(14px, ${mark.x}%, calc(100% - 14px))`,
-                      top: `clamp(14px, ${mark.y}%, calc(100% - 14px))`,
-                    }}
-                    aria-hidden="true"
-                  >
-                    {index + 1}
-                  </span>
-                ))}
-              </div>
             </section>
           ))}
 
@@ -160,6 +168,6 @@ export default function HrManualPage() {
           </footer>
         </article>
       </div>
-    </div>
+    </main>
   );
 }
