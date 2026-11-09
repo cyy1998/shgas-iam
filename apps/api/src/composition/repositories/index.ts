@@ -5,7 +5,7 @@ import { createOrganizationRepository } from "@api/services/organization/organiz
 import { createPositionRepository } from "@api/services/position/position.repository";
 import { createUserRepository } from "@api/services/user/user.repository";
 import type { DbClient } from "@iam/db";
-import { createUserDocumentQueryRepository } from "@iam/user-document/query/repository";
+import { createUserDocumentQueryRepository } from "@iam/documents/user/query/repository";
 
 export function createApiRepositories(client: DbClient) {
   return {

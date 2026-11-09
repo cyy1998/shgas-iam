@@ -4,11 +4,11 @@ import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-author
 import { createHrAdministrationScopeResolver } from "@admin-api/services/admin-authorization/hr-administration-scope.resolver";
 import { createAdminAuditService } from "@admin-api/services/audit/audit.service";
 import type { CreateAppOptions } from "@iam/api-core/core/create-app";
+import { createRoleAssignmentResolver } from "@iam/assignment-resolution/role-assignment";
 import type { DbClient } from "@iam/db";
 import db from "@iam/db";
-import { createOrganizationDocumentWriteResources } from "@iam/organization-document/producer";
-import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
-import { createUserDocumentWriteResources } from "@iam/user-document/producer";
+import { createOrganizationDocumentWriteResources } from "@iam/documents/organization/producer";
+import { createUserDocumentWriteResources } from "@iam/documents/user/producer";
 import { createAdminApiMiddlewares } from "./middlewares";
 import { createAdminApiRepositories } from "./repositories";
 import { createAdminApiRouteComposition } from "./routes";

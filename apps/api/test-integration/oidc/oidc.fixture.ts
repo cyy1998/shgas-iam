@@ -19,6 +19,7 @@ import {
 } from "@iam/contracts";
 import { createUnifiedCustomSsoRedisTestScope } from "@iam/custom-sso/testing";
 import { relations } from "@iam/db/relations";
+import { createSubjectFactsReader, createSubjectFactsRedisCache } from "@iam/documents/user/subject-facts";
 import { createOidcClientAuthRateLimiter, createOidcSigningKeys } from "@iam/oidc";
 import { createOidcRedisTestScope } from "@iam/oidc/testing";
 import { createUnifiedSessionRedisTestScope } from "@iam/session-kernel/testing";
@@ -30,7 +31,6 @@ import {
   SubjectAccessUnavailableError,
 } from "@iam/subject-access";
 import { createRedisSubjectAccessStore, createSubjectAccessBootstrap } from "@iam/subject-access/redis";
-import { createSubjectFactsReader, createSubjectFactsRedisCache } from "@iam/user-document/subject-facts";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { Hono } from "hono";
 import postgres from "postgres";

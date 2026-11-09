@@ -1,5 +1,5 @@
 import { parseArgs } from "node:util";
-import type { OrganizationDocumentVerificationReport } from "@iam/organization-document/maintenance";
+import type { OrganizationDocumentVerificationReport } from "@iam/documents/organization/maintenance";
 import { runMaintenanceCommandWithLifecycle } from "@iam/runtime/maintenance";
 import { parseDocumentCommandDeadline } from "../document-command-lifecycle";
 

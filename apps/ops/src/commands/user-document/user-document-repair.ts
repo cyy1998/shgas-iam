@@ -1,6 +1,6 @@
 import { parseArgs } from "node:util";
+import type { UserDocumentRepairOptions } from "@iam/documents/user/maintenance";
 import { runMaintenanceCommandWithLifecycle } from "@iam/runtime/maintenance";
-import type { UserDocumentRepairOptions } from "@iam/user-document/maintenance";
 import { parseDocumentCommandDeadline } from "../document-command-lifecycle";
 
 interface UserDocumentRepairCliOptions extends UserDocumentRepairOptions {

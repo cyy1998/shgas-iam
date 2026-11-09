@@ -1,11 +1,10 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
-import { createJobQueue, DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
-import { createOrganizationDocumentInvalidation } from "@iam/organization-document/producer";
+import { createOrganizationDocumentInvalidation } from "@iam/documents/organization/producer";
 import {
   createOrganizationDocumentQueryRepository,
   createOrganizationDocumentQueryService,
-} from "@iam/organization-document/query";
+} from "@iam/documents/organization/query";
 import {
   createOrganizationDocumentWorkerModule,
   type ORGANIZATION_OUTBOX_JOB_NAME,
@@ -14,7 +13,8 @@ import {
   OrganizationOutboxJobPayloadSchema,
   type OrganizationRebuildJobPayload,
   OrganizationRebuildJobPayloadSchema,
-} from "@iam/organization-document/worker";
+} from "@iam/documents/organization/worker";
+import { createJobQueue, DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
 import { redisUrlString } from "@iam/runtime/redis/config";
 import {
   runProcessCommandSmoke,

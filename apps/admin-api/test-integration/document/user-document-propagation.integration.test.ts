@@ -30,10 +30,10 @@ import {
   userDocumentRebuildStates,
   users,
 } from "@iam/db/schema";
+import { createUserDocumentJobProducer } from "@iam/documents/user/producer";
+import { createSubjectFactsReader } from "@iam/documents/user/subject-facts";
+import { createUserDocumentWorkerModule } from "@iam/documents/user/worker";
 import { mapUnitOfWork } from "@iam/unit-of-work";
-import { createUserDocumentJobProducer } from "@iam/user-document/producer";
-import { createSubjectFactsReader } from "@iam/user-document/subject-facts";
-import { createUserDocumentWorkerModule } from "@iam/user-document/worker";
 import { eq } from "drizzle-orm";
 import { testFullOrganizationResponsibilityAuthorization } from "../../src/testing/admin-authorization";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";

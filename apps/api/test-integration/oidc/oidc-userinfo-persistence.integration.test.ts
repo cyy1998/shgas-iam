@@ -5,7 +5,7 @@ import { OidcScope, OrganizationLevel, OrganizationType, RoleAssignmentTargetTyp
 import { relations } from "@iam/db/relations";
 import { clients, employments, organizationClosures, organizations, positions, roles, users } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
-import { createSubjectFactsReader, createSubjectFactsRedisCache } from "@iam/user-document/subject-facts";
+import { createSubjectFactsReader, createSubjectFactsRedisCache } from "@iam/documents/user/subject-facts";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import Redis from "ioredis";

@@ -9,8 +9,8 @@ import {
 } from "@iam/api-core/core/openapi/schemas/error-response-schema";
 import { UserDocumentSchema, UserDocumentSearchResultSchema } from "@iam/contracts";
 import { HttpStatusCodes } from "@iam/contracts/http";
+import { UserDocumentSearchTransportRequestSchema } from "@iam/documents/user/document/query";
 import { UserNameWriteSchema, UsernameWriteSchema } from "@iam/domain/user";
-import { UserDocumentSearchTransportRequestSchema } from "@iam/user-document/document/query";
 
 const tags = ["Internal/User"];
 const PublicUserDocumentSchema = z.object(UserDocumentSchema.shape).openapi("UserDocument");

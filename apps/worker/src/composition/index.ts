@@ -1,12 +1,12 @@
 import db, { closeDb } from "@iam/db";
-import { createOrganizationDocumentWorkerModule } from "@iam/organization-document/worker";
-import { createSubjectAccessRepair, createSubjectAccessTransitionRecovery } from "@iam/subject-access/recovery";
-import { createSubjectFactsRedisPublisher } from "@iam/user-document";
+import { createOrganizationDocumentWorkerModule } from "@iam/documents/organization/worker";
+import { createSubjectFactsRedisPublisher } from "@iam/documents/user";
 import {
   createSubjectAccessTransitionRecoveryAuthority,
   createSubjectAccessTransitionRepository,
-} from "@iam/user-document/subject-access-transition";
-import { createSubjectAccessAuthorityRepository, createUserDocumentWorkerModule } from "@iam/user-document/worker";
+} from "@iam/documents/user/subject-access-transition";
+import { createSubjectAccessAuthorityRepository, createUserDocumentWorkerModule } from "@iam/documents/user/worker";
+import { createSubjectAccessRepair, createSubjectAccessTransitionRecovery } from "@iam/subject-access/recovery";
 import type { WorkerEnv } from "@worker/env";
 import { createWorkerHttpApp, startWorkerHttpServer } from "@worker/http/server";
 import {

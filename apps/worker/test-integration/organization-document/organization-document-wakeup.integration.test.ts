@@ -8,8 +8,8 @@ import {
   createOrganizationDocumentInvalidation,
   createOrganizationDocumentWriteResources,
   type OrganizationOutboxJobPayload,
-} from "@iam/organization-document/producer";
-import { createOrganizationDocumentWorkerModule } from "@iam/organization-document/worker";
+} from "@iam/documents/organization/producer";
+import { createOrganizationDocumentWorkerModule } from "@iam/documents/organization/worker";
 import { parseDedicatedRedisTestUrl, runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import { createUnitOfWork } from "@iam/unit-of-work";
 import { eq } from "drizzle-orm";

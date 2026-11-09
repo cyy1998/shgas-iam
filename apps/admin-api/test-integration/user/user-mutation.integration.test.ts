@@ -35,6 +35,7 @@ import {
   userDocumentRebuildStates,
   users,
 } from "@iam/db/schema";
+import { createSubjectAccessTransitionRepository } from "@iam/documents/user/subject-access-transition";
 import { UserHasOpenEmploymentError, UserNotFoundError, UsernameAlreadyExistsError } from "@iam/domain/user";
 import { BadRequestError } from "@iam/runtime/errors";
 import { createSubjectAccessBarrier, createSubjectAccessOperations } from "@iam/subject-access";
@@ -42,7 +43,6 @@ import { createSubjectAccessLifecycle } from "@iam/subject-access/lifecycle";
 import { createInMemorySubjectAccessStore } from "@iam/subject-access/testing";
 import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
 import { mapUnitOfWork } from "@iam/unit-of-work";
-import { createSubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono } from "hono";
 import { addTestAdminAuthorizationMiddleware } from "../../src/testing/admin-authorization";

@@ -1,4 +1,5 @@
 import type { OrganizationResponsibilityReadScope } from "@admin-api/services/admin-authorization/admin-organization-responsibility-authorization.type";
+import { createOrganizationResponsibilityParentLifecycleReader } from "@iam/assignment-resolution/organization-responsibility/parent-lifecycle";
 import type { EmploymentStatus, OrganizationStatus } from "@iam/contracts";
 import { OrganizationResponsibilityAssignmentStatus, OrganizationResponsibilityTypeCode } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
@@ -20,7 +21,6 @@ import {
   OrganizationResponsibilityAssignmentDuplicateOpenError,
   OrganizationResponsibilityAssignmentUnmanageableConflictError,
 } from "@iam/domain/organization-responsibility";
-import { createOrganizationResponsibilityParentLifecycleReader } from "@iam/organization-responsibility-resolution/parent-lifecycle";
 import { and, asc, desc, eq, inArray, isNull, lt, ne, notInArray, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type {

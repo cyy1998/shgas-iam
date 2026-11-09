@@ -5,7 +5,7 @@ import {
   SubjectClaim,
   UserDocumentWorkStatus,
 } from "@iam/contracts";
-import { USER_DOCUMENT_SCHEMA_VERSION } from "@iam/user-document/document";
+import { USER_DOCUMENT_SCHEMA_VERSION } from "@iam/documents/user/document";
 import { createE2EGatewayApiKey } from "./gateway-credential";
 
 export interface E2EScenarioReferences {

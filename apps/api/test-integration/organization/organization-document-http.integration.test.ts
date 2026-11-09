@@ -7,17 +7,17 @@ import { createOrganizationRoute } from "@api/routes/internal/organization/organ
 import createApp from "@iam/api-core/core/create-app";
 import { ClientStatus, OrganizationDocumentSchema, OrganizationStatus, OrganizationType } from "@iam/contracts";
 import { organizationClosures, organizationDocuments, organizations } from "@iam/db/schema";
-import type { GenericClientRuntimeDto } from "@iam/domain/client";
 import {
   createOrganizationDocumentQueryRepository,
   createOrganizationDocumentQueryService,
   ORGANIZATION_DOCUMENT_SCHEMA_VERSION,
-} from "@iam/organization-document";
+} from "@iam/documents/organization";
 import {
   createOrganizationDocumentProcessor,
   type OrganizationOutboxJobPayload,
   type OrganizationRebuildJobPayload,
-} from "@iam/organization-document/worker";
+} from "@iam/documents/organization/worker";
+import type { GenericClientRuntimeDto } from "@iam/domain/client";
 import { eq, sql } from "drizzle-orm";
 import pino from "pino";
 import appConfig from "~api/app.config";

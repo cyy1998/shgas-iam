@@ -1,4 +1,4 @@
-import type { UserDocumentSearchService } from "@iam/user-document/query";
+import type { UserDocumentSearchService } from "@iam/documents/user/query";
 import type { UserDocumentSearchPort } from "./user-document-search.port";
 
 export function createUserDocumentSearchAdapter(query: Pick<UserDocumentSearchService, "searchDocuments">) {

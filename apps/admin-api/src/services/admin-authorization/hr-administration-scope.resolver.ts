@@ -1,7 +1,7 @@
+import type { RoleAssignmentResolver } from "@iam/assignment-resolution/role-assignment";
 import { EmploymentStatus, OrganizationLevel } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import { employments, organizationClosures, organizations } from "@iam/db/schema";
-import type { RoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { and, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 

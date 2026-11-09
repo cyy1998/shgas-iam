@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import { OrganizationStatus, OrganizationType } from "@iam/contracts";
-import { DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
 import {
   createOrganizationDocumentQueryRepository,
   createOrganizationDocumentQueryService,
-} from "@iam/organization-document/query";
-import { createOrganizationDocumentWorkerModule } from "@iam/organization-document/worker";
+} from "@iam/documents/organization/query";
+import { createOrganizationDocumentWorkerModule } from "@iam/documents/organization/worker";
+import { DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
 import { createLogger, LoggerSourceApp } from "@iam/runtime/logger";
 import {
   PROCESS_SMOKE_TEST_TIMEOUT_MS,

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createLoginCredential, UserDocumentSchema } from "@iam/contracts";
-import { OrganizationDocumentSchema } from "@iam/organization-document";
+import { OrganizationDocumentSchema } from "@iam/documents/organization";
 import { check, requiredText, same } from "./check.fixture";
 import { clients, loginKeys, password, redirectUri, secret } from "./source.fixture";
 

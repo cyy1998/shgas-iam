@@ -7,9 +7,9 @@ import { createUserDocumentSearchAdapter } from "@api/services/user-document-sea
 import createApp from "@iam/api-core/core/create-app";
 import { UserDocumentSchema, UserStatus, UserType } from "@iam/contracts";
 import { userDocuments } from "@iam/db/schema";
+import { USER_DOCUMENT_SCHEMA_VERSION } from "@iam/documents/user";
+import { compileUserDocumentFilter, createUserDocumentSearchService } from "@iam/documents/user/query";
 import type { GenericClientRuntimeDto } from "@iam/domain/client";
-import { USER_DOCUMENT_SCHEMA_VERSION } from "@iam/user-document";
-import { compileUserDocumentFilter, createUserDocumentSearchService } from "@iam/user-document/query";
 import { createMiddleware } from "hono/factory";
 import pino from "pino";
 import appConfig from "~api/app.config";

@@ -7,6 +7,9 @@ import { fileURLToPath } from "node:url";
 import { UserStatus } from "@iam/contracts";
 import { closeMaintenancePostgresInvocation, createMaintenancePostgresResources } from "@iam/db/maintenance";
 import { users } from "@iam/db/schema";
+import { createSubjectFactsRedisCache, DocumentFactsCacheRecordSchema } from "@iam/documents/user";
+import { createUserDocumentInvalidation } from "@iam/documents/user/producer";
+import { createUserDocumentWorkerModule } from "@iam/documents/user/worker";
 import { createLogger, LoggerSourceApp } from "@iam/runtime/logger";
 import { createSubjectAccessBarrier } from "@iam/subject-access";
 import { createRedisSubjectAccessStore, createSubjectAccessBootstrap } from "@iam/subject-access/redis";
@@ -19,9 +22,6 @@ import {
   withOwnedTemporaryDirectory,
 } from "@iam/test-support/process-smoke-harness";
 import { createUnitOfWork } from "@iam/unit-of-work";
-import { createSubjectFactsRedisCache, DocumentFactsCacheRecordSchema } from "@iam/user-document";
-import { createUserDocumentInvalidation } from "@iam/user-document/producer";
-import { createUserDocumentWorkerModule } from "@iam/user-document/worker";
 import { startDocumentRepairSchedule } from "@worker/composition/document-repair-schedule";
 import { parseWorkerEnv } from "@worker/env";
 import { createWorkerPostgresTestHarness } from "../support/postgres-test-harness";

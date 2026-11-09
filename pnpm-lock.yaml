@@ -326,6 +326,9 @@ importers:
       '@iam/api-core':
         specifier: workspace:*
         version: link:../../packages/api-core
+      '@iam/assignment-resolution':
+        specifier: workspace:*
+        version: link:../../packages/assignment-resolution
       '@iam/client-snapshot':
         specifier: workspace:*
         version: link:../../packages/client-snapshot
@@ -341,6 +344,9 @@ importers:
       '@iam/delegation':
         specifier: workspace:*
         version: link:../../packages/delegation
+      '@iam/documents':
+        specifier: workspace:*
+        version: link:../../packages/documents
       '@iam/domain':
         specifier: workspace:*
         version: link:../../packages/domain
@@ -350,15 +356,6 @@ importers:
       '@iam/login-restriction':
         specifier: workspace:*
         version: link:../../packages/login-restriction
-      '@iam/organization-document':
-        specifier: workspace:*
-        version: link:../../packages/organization-document
-      '@iam/organization-responsibility-resolution':
-        specifier: workspace:*
-        version: link:../../packages/organization-responsibility-resolution
-      '@iam/role-assignment-resolution':
-        specifier: workspace:*
-        version: link:../../packages/role-assignment-resolution
       '@iam/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
@@ -371,9 +368,6 @@ importers:
       '@iam/unit-of-work':
         specifier: workspace:*
         version: link:../../packages/unit-of-work
-      '@iam/user-document':
-        specifier: workspace:*
-        version: link:../../packages/user-document
       '@scalar/hono-api-reference':
         specifier: ^0.11.11
         version: 0.11.11(hono@4.12.30)
@@ -426,6 +420,9 @@ importers:
       '@iam/api-core':
         specifier: workspace:*
         version: link:../../packages/api-core
+      '@iam/assignment-resolution':
+        specifier: workspace:*
+        version: link:../../packages/assignment-resolution
       '@iam/client-snapshot':
         specifier: workspace:*
         version: link:../../packages/client-snapshot
@@ -444,6 +441,9 @@ importers:
       '@iam/delegation':
         specifier: workspace:*
         version: link:../../packages/delegation
+      '@iam/documents':
+        specifier: workspace:*
+        version: link:../../packages/documents
       '@iam/domain':
         specifier: workspace:*
         version: link:../../packages/domain
@@ -459,15 +459,6 @@ importers:
       '@iam/oidc':
         specifier: workspace:*
         version: link:../../packages/oidc
-      '@iam/organization-document':
-        specifier: workspace:*
-        version: link:../../packages/organization-document
-      '@iam/organization-responsibility-resolution':
-        specifier: workspace:*
-        version: link:../../packages/organization-responsibility-resolution
-      '@iam/role-assignment-resolution':
-        specifier: workspace:*
-        version: link:../../packages/role-assignment-resolution
       '@iam/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
@@ -480,9 +471,6 @@ importers:
       '@iam/unit-of-work':
         specifier: workspace:*
         version: link:../../packages/unit-of-work
-      '@iam/user-document':
-        specifier: workspace:*
-        version: link:../../packages/user-document
       '@scalar/hono-api-reference':
         specifier: ^0.11.11
         version: 0.11.11(hono@4.12.30)
@@ -608,15 +596,15 @@ importers:
       '@iam/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@iam/documents':
+        specifier: workspace:*
+        version: link:../../packages/documents
       '@iam/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
       '@iam/oidc':
         specifier: workspace:*
         version: link:../../packages/oidc
-      '@iam/organization-document':
-        specifier: workspace:*
-        version: link:../../packages/organization-document
       '@iam/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
@@ -626,9 +614,6 @@ importers:
       '@iam/subject-access':
         specifier: workspace:*
         version: link:../../packages/subject-access
-      '@iam/user-document':
-        specifier: workspace:*
-        version: link:../../packages/user-document
       drizzle-orm:
         specifier: 1.0.0-rc.2
         version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
@@ -754,21 +739,18 @@ importers:
       '@iam/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@iam/documents':
+        specifier: workspace:*
+        version: link:../../packages/documents
       '@iam/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
-      '@iam/organization-document':
-        specifier: workspace:*
-        version: link:../../packages/organization-document
       '@iam/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
       '@iam/subject-access':
         specifier: workspace:*
         version: link:../../packages/subject-access
-      '@iam/user-document':
-        specifier: workspace:*
-        version: link:../../packages/user-document
       drizzle-orm:
         specifier: 1.0.0-rc.2
         version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
@@ -806,27 +788,27 @@ importers:
 
   e2e/system:
     dependencies:
+      '@iam/assignment-resolution':
+        specifier: workspace:*
+        version: link:../../packages/assignment-resolution
       '@iam/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
       '@iam/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@iam/documents':
+        specifier: workspace:*
+        version: link:../../packages/documents
       '@iam/domain':
         specifier: workspace:*
         version: link:../../packages/domain
-      '@iam/role-assignment-resolution':
-        specifier: workspace:*
-        version: link:../../packages/role-assignment-resolution
       '@iam/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
       '@iam/subject-access':
         specifier: workspace:*
         version: link:../../packages/subject-access
-      '@iam/user-document':
-        specifier: workspace:*
-        version: link:../../packages/user-document
       drizzle-orm:
         specifier: 1.0.0-rc.2
         version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
@@ -889,6 +871,34 @@ importers:
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+
+  packages/assignment-resolution:
+    dependencies:
+      '@iam/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@iam/db':
+        specifier: workspace:*
+        version: link:../db
+      '@iam/domain':
+        specifier: workspace:*
+        version: link:../domain
+      drizzle-orm:
+        specifier: 1.0.0-rc.2
+        version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
+    devDependencies:
+      '@types/bun':
+        specifier: latest
+        version: 1.4.4
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -1052,18 +1062,63 @@ importers:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
 
-  packages/document-update:
+  packages/documents:
     dependencies:
+      '@hono/zod-openapi':
+        specifier: ^1.5.1
+        version: 1.5.1(hono@4.12.30)(zod@4.4.3)
+      '@iam/assignment-resolution':
+        specifier: workspace:*
+        version: link:../assignment-resolution
+      '@iam/client-subject-projection':
+        specifier: workspace:*
+        version: link:../client-subject-projection
+      '@iam/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@iam/db':
         specifier: workspace:*
         version: link:../db
+      '@iam/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@iam/filter-engine':
+        specifier: workspace:*
+        version: link:../filter-engine
+      '@iam/jobs':
+        specifier: workspace:*
+        version: link:../jobs
+      '@iam/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      '@iam/subject-access':
+        specifier: workspace:*
+        version: link:../subject-access
+      bullmq:
+        specifier: ^6.3.8
+        version: 6.3.8(ioredis@6.0.0(supports-color@10.2.2))
       drizzle-orm:
         specifier: 1.0.0-rc.2
         version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
+      '@iam/test-support':
+        specifier: workspace:*
+        version: link:../test-support
+      '@iam/unit-of-work':
+        specifier: workspace:*
+        version: link:../unit-of-work
       '@types/bun':
         specifier: latest
         version: 1.4.4
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      ioredis:
+        specifier: ^6.0.0
+        version: 6.0.0(supports-color@10.2.2)
       postgres:
         specifier: ^3.4.9
         version: 3.4.9
@@ -1192,102 +1247,6 @@ importers:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
 
-  packages/organization-document:
-    dependencies:
-      '@iam/contracts':
-        specifier: workspace:*
-        version: link:../contracts
-      '@iam/db':
-        specifier: workspace:*
-        version: link:../db
-      '@iam/document-update':
-        specifier: workspace:*
-        version: link:../document-update
-      '@iam/filter-engine':
-        specifier: workspace:*
-        version: link:../filter-engine
-      '@iam/jobs':
-        specifier: workspace:*
-        version: link:../jobs
-      bullmq:
-        specifier: ^6.3.8
-        version: 6.3.8(ioredis@6.0.0(supports-color@10.2.2))
-      drizzle-orm:
-        specifier: 1.0.0-rc.2
-        version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-    devDependencies:
-      '@iam/unit-of-work':
-        specifier: workspace:*
-        version: link:../unit-of-work
-      '@types/bun':
-        specifier: latest
-        version: 1.4.4
-      '@typescript/native':
-        specifier: npm:typescript@7.0.2
-        version: typescript@7.0.2
-      postgres:
-        specifier: ^3.4.9
-        version: 3.4.9
-      typescript:
-        specifier: npm:@typescript/typescript6@6.0.2
-        version: '@typescript/typescript6@6.0.2'
-
-  packages/organization-responsibility-resolution:
-    dependencies:
-      '@iam/contracts':
-        specifier: workspace:*
-        version: link:../contracts
-      '@iam/db':
-        specifier: workspace:*
-        version: link:../db
-      '@iam/domain':
-        specifier: workspace:*
-        version: link:../domain
-      drizzle-orm:
-        specifier: 1.0.0-rc.2
-        version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
-    devDependencies:
-      '@types/bun':
-        specifier: latest
-        version: 1.4.4
-      '@typescript/native':
-        specifier: npm:typescript@7.0.2
-        version: typescript@7.0.2
-      postgres:
-        specifier: ^3.4.9
-        version: 3.4.9
-      typescript:
-        specifier: npm:@typescript/typescript6@6.0.2
-        version: '@typescript/typescript6@6.0.2'
-
-  packages/role-assignment-resolution:
-    dependencies:
-      '@iam/contracts':
-        specifier: workspace:*
-        version: link:../contracts
-      '@iam/db':
-        specifier: workspace:*
-        version: link:../db
-      drizzle-orm:
-        specifier: 1.0.0-rc.2
-        version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
-    devDependencies:
-      '@types/bun':
-        specifier: latest
-        version: 1.4.4
-      '@typescript/native':
-        specifier: npm:typescript@7.0.2
-        version: typescript@7.0.2
-      postgres:
-        specifier: ^3.4.9
-        version: 3.4.9
-      typescript:
-        specifier: npm:@typescript/typescript6@6.0.2
-        version: '@typescript/typescript6@6.0.2'
-
   packages/runtime:
     dependencies:
       '@iam/contracts':
@@ -1403,73 +1362,6 @@ importers:
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
-      typescript:
-        specifier: npm:@typescript/typescript6@6.0.2
-        version: '@typescript/typescript6@6.0.2'
-
-  packages/user-document:
-    dependencies:
-      '@hono/zod-openapi':
-        specifier: ^1.5.1
-        version: 1.5.1(hono@4.12.30)(zod@4.4.3)
-      '@iam/client-subject-projection':
-        specifier: workspace:*
-        version: link:../client-subject-projection
-      '@iam/contracts':
-        specifier: workspace:*
-        version: link:../contracts
-      '@iam/db':
-        specifier: workspace:*
-        version: link:../db
-      '@iam/document-update':
-        specifier: workspace:*
-        version: link:../document-update
-      '@iam/domain':
-        specifier: workspace:*
-        version: link:../domain
-      '@iam/filter-engine':
-        specifier: workspace:*
-        version: link:../filter-engine
-      '@iam/jobs':
-        specifier: workspace:*
-        version: link:../jobs
-      '@iam/organization-responsibility-resolution':
-        specifier: workspace:*
-        version: link:../organization-responsibility-resolution
-      '@iam/role-assignment-resolution':
-        specifier: workspace:*
-        version: link:../role-assignment-resolution
-      '@iam/runtime':
-        specifier: workspace:*
-        version: link:../runtime
-      '@iam/subject-access':
-        specifier: workspace:*
-        version: link:../subject-access
-      drizzle-orm:
-        specifier: 1.0.0-rc.2
-        version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
-    devDependencies:
-      '@iam/test-support':
-        specifier: workspace:*
-        version: link:../test-support
-      '@iam/unit-of-work':
-        specifier: workspace:*
-        version: link:../unit-of-work
-      '@types/bun':
-        specifier: latest
-        version: 1.4.4
-      '@typescript/native':
-        specifier: npm:typescript@7.0.2
-        version: typescript@7.0.2
-      ioredis:
-        specifier: ^6.0.0
-        version: 6.0.0(supports-color@10.2.2)
-      postgres:
-        specifier: ^3.4.9
-        version: 3.4.9
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'

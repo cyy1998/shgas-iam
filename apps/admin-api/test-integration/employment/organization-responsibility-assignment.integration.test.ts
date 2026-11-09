@@ -15,6 +15,7 @@ import { createResignUserUseCase } from "@admin-api/use-cases/employment/resign-
 import { createTransferEmploymentUseCase } from "@admin-api/use-cases/employment/transfer-employment/transfer-employment.use-case";
 import { createCreateOrganizationResponsibilityAssignmentUseCase } from "@admin-api/use-cases/organization-responsibility/create-assignment/create-assignment.use-case";
 import { createManageOrganizationResponsibilityAssignmentLifecycleUseCase } from "@admin-api/use-cases/organization-responsibility/manage-assignment-lifecycle/manage-assignment-lifecycle.use-case";
+import { createRoleAssignmentResolver } from "@iam/assignment-resolution/role-assignment";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -43,6 +44,7 @@ import {
   users,
 } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
+import { createSubjectAccessTransitionRepository } from "@iam/documents/user/subject-access-transition";
 import { OrganizationHasOpenResponsibilityAssignmentError } from "@iam/domain/organization";
 import {
   OrganizationResponsibilityAssignmentCardinalityConflictError,
@@ -50,12 +52,10 @@ import {
   OrganizationResponsibilityAssignmentNotFoundError,
   OrganizationResponsibilityAssignmentUnmanageableConflictError,
 } from "@iam/domain/organization-responsibility";
-import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { createSubjectAccessBarrier } from "@iam/subject-access";
 import { createSubjectAccessLifecycle } from "@iam/subject-access/lifecycle";
 import { createInMemorySubjectAccessStore } from "@iam/subject-access/testing";
 import { mapUnitOfWork } from "@iam/unit-of-work";
-import { createSubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
 import { and, eq } from "drizzle-orm";
 import {
   testFullOrganizationResponsibilityAuthorization,

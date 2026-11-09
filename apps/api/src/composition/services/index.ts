@@ -19,13 +19,26 @@ import type { DbClient } from "@iam/db";
 import db from "@iam/db";
 import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
 import { createDelegationService } from "@iam/delegation";
-import { createLoginRestriction } from "@iam/login-restriction";
-import { createRedisLoginRestrictionStore } from "@iam/login-restriction/redis";
-import { createOidcClientAuthRateLimiter } from "@iam/oidc";
 import {
   createOrganizationDocumentQueryRepository,
   createOrganizationDocumentQueryService,
-} from "@iam/organization-document";
+} from "@iam/documents/organization";
+import {
+  createInternalUserDocumentQueryRepository,
+  createInternalUserDocumentQueryService,
+  createSubjectFactsReader,
+  createSubjectFactsRedisCache,
+} from "@iam/documents/user";
+import {
+  createUserDocumentQueryService,
+  createUserDocumentSearchRepository,
+  createUserDocumentSearchService,
+} from "@iam/documents/user/query";
+import { createSubjectAccessTransitionRepository } from "@iam/documents/user/subject-access-transition";
+import { createSubjectFactsLoggerObservability } from "@iam/documents/user/subject-facts";
+import { createLoginRestriction } from "@iam/login-restriction";
+import { createRedisLoginRestrictionStore } from "@iam/login-restriction/redis";
+import { createOidcClientAuthRateLimiter } from "@iam/oidc";
 import { createUnifiedSessionKernel } from "@iam/session-kernel";
 import type { SubjectAccessOperation } from "@iam/subject-access";
 import {
@@ -37,19 +50,6 @@ import { createSubjectAccessLifecycle } from "@iam/subject-access/lifecycle";
 import { createRedisSubjectAccessStore } from "@iam/subject-access/redis";
 import { createUnifiedSubjectAccessSessionRevocation } from "@iam/subject-access/session-kernel";
 import { mapUnitOfWork } from "@iam/unit-of-work";
-import {
-  createInternalUserDocumentQueryRepository,
-  createInternalUserDocumentQueryService,
-  createSubjectFactsReader,
-  createSubjectFactsRedisCache,
-} from "@iam/user-document";
-import {
-  createUserDocumentQueryService,
-  createUserDocumentSearchRepository,
-  createUserDocumentSearchService,
-} from "@iam/user-document/query";
-import { createSubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
-import { createSubjectFactsLoggerObservability } from "@iam/user-document/subject-facts";
 import { createPublicDelegationDependencies } from "../public-delegation";
 import type { ApiRepositories } from "../repositories";
 import { createRootAuthenticationComposition } from "../root-authentication";

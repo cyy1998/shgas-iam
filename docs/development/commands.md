@@ -388,11 +388,10 @@ pnpm test:integration --workspace @iam/worker
 pnpm test:integration --workspace @iam/ops
 
 # 共享 PostgreSQL owners
-pnpm test:integration --workspace @iam/role-assignment-resolution --workspace @iam/organization-responsibility-resolution
-pnpm test:integration --workspace @iam/organization-document
+pnpm test:integration --workspace @iam/assignment-resolution
 
-# Admin 事务和缓存；User Document 同时声明 PG/Redis
-pnpm test:integration --workspace @iam/admin-api --workspace @iam/user-document
+# Admin 事务与缓存、用户和组织文档及共享更新；Documents 声明 PG/Redis
+pnpm test:integration --workspace @iam/admin-api --workspace @iam/documents
 
 # 共享 Redis owners；单文件也使用所属 workspace 的完整资源声明
 pnpm test:integration --workspace @iam/session-kernel --workspace @iam/subject-access --workspace @iam/client-snapshot --workspace @iam/oidc --workspace @iam/runtime --workspace @iam/test-support --workspace @iam/login-restriction
@@ -593,7 +592,7 @@ Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit�
 - API Core：`pnpm --filter @iam/api-core <lint|test|test:unit|typecheck>`
 - Custom SSO：`pnpm --filter @iam/custom-sso <lint|test|test:unit|typecheck>`；完整 HTTP/Redis 在 API collection。
 - Client Subject Projection：`pnpm --filter @iam/client-subject-projection <lint|test|test:unit|typecheck>`
-- User Document：`pnpm --filter @iam/user-document <lint|test|test:unit|typecheck>`
+- Documents：`pnpm --filter @iam/documents <lint|test|test:unit|typecheck>`
 - Filter Engine：`pnpm --filter @iam/filter-engine <lint|test|test:unit|typecheck>`；JSONB 编译的真实 PostgreSQL 行为由 User Document owner 验证。
 - Worker：`pnpm --filter @iam/worker <dev|serve|lint|test|test:unit|typecheck>`
 - Ops：`pnpm --filter @iam/ops iam-ops <group> <operation> [options]`，全部命令与参数见[Ops README](../../apps/ops/README.md)。
@@ -619,8 +618,7 @@ Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit�
 - Admin frontend：`pnpm --filter @iam/admin <dev|build|lint|test|test:unit|typecheck|format>`
 - SSO frontend：`pnpm --filter @iam/sso <dev|build|lint|test|test:unit|typecheck|format>`
 - Database：`pnpm --filter @iam/db <lint|test|test:unit|typecheck|db:push|db:generate|db:migrate|db:check>`
-- Role Assignment：`pnpm --filter @iam/role-assignment-resolution <lint|typecheck>`
-- Organization Responsibility Resolution：`pnpm --filter @iam/organization-responsibility-resolution <lint|typecheck>`
+- Assignment Resolution：`pnpm --filter @iam/assignment-resolution <lint|typecheck>`
 - Gateway：`pnpm --filter @iam/gateway-apisix <dev|start|lint|test|test:unit|typecheck>`；配置发布通过 HTTP API。
 
 `iam-ops employment verify` 只在运维人员显式调用时扫描 Employment，不属于 Worker 启动或请求路径。它在 PostgreSQL

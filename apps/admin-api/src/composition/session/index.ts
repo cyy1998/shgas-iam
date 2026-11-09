@@ -1,4 +1,5 @@
 import db from "@iam/db";
+import { createSubjectAccessTransitionRepository } from "@iam/documents/user/subject-access-transition";
 import { createLoginRestriction } from "@iam/login-restriction";
 import { createRedisLoginRestrictionStore } from "@iam/login-restriction/redis";
 import { createUnifiedSessionKernel } from "@iam/session-kernel";
@@ -11,7 +12,6 @@ import {
 import { createSubjectAccessLifecycle } from "@iam/subject-access/lifecycle";
 import { createRedisSubjectAccessStore } from "@iam/subject-access/redis";
 import { createUnifiedSubjectAccessSessionRevocation } from "@iam/subject-access/session-kernel";
-import { createSubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
 import type { AdminApiRuntimePorts } from "../runtime";
 import { createUnifiedAdminLifecycleRevocation } from "./unified-lifecycle";
 

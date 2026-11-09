@@ -41,6 +41,7 @@ import {
   userDocumentRebuildStates,
   users,
 } from "@iam/db/schema";
+import { createSubjectAccessTransitionRepository } from "@iam/documents/user/subject-access-transition";
 import { EmploymentAlreadyExistsError, EmploymentNotEditableError } from "@iam/domain/employment";
 import { BadRequestError } from "@iam/runtime/errors";
 import { createSubjectAccessBarrier } from "@iam/subject-access";
@@ -48,7 +49,6 @@ import { createSubjectAccessLifecycle } from "@iam/subject-access/lifecycle";
 import { createInMemorySubjectAccessStore } from "@iam/subject-access/testing";
 import type { TransactionContext } from "@iam/unit-of-work";
 import { mapUnitOfWork } from "@iam/unit-of-work";
-import { createSubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";

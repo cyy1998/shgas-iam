@@ -4,7 +4,9 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { OrganizationLevel, OrganizationType, UserStatus } from "@iam/contracts";
 import { organizationClosures, organizations, users } from "@iam/db/schema";
-import { createOrganizationDocumentInvalidation } from "@iam/organization-document/producer";
+import { createOrganizationDocumentInvalidation } from "@iam/documents/organization/producer";
+import { createSubjectFactsRedisCache, DocumentFactsCacheRecordSchema } from "@iam/documents/user";
+import { createUserDocumentInvalidation } from "@iam/documents/user/producer";
 import { createSubjectAccessBootstrap } from "@iam/subject-access/redis";
 import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import {
@@ -14,8 +16,6 @@ import {
   withOwnedTemporaryDirectory,
 } from "@iam/test-support/process-smoke-harness";
 import { createUnitOfWork } from "@iam/unit-of-work";
-import { createSubjectFactsRedisCache, DocumentFactsCacheRecordSchema } from "@iam/user-document";
-import { createUserDocumentInvalidation } from "@iam/user-document/producer";
 import { createWorkerPostgresTestHarness } from "../support/postgres-test-harness";
 import { createWorkerRedisTestHarness, resetWorkerRedisTestDatabase } from "../support/redis-test-harness";
 

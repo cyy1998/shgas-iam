@@ -36,11 +36,8 @@ COPY packages/custom-sso/package.json ./packages/custom-sso/
 COPY packages/oidc/package.json ./packages/oidc/
 COPY packages/domain/package.json ./packages/domain/
 COPY packages/jobs/package.json ./packages/jobs/
-COPY packages/organization-responsibility-resolution/package.json ./packages/organization-responsibility-resolution/
-COPY packages/role-assignment-resolution/package.json ./packages/role-assignment-resolution/
-COPY packages/user-document/package.json ./packages/user-document/
-COPY packages/organization-document/package.json ./packages/organization-document/
-COPY packages/document-update/package.json ./packages/document-update/
+COPY packages/assignment-resolution/package.json ./packages/assignment-resolution/
+COPY packages/documents/package.json ./packages/documents/
 COPY packages/filter-engine/package.json ./packages/filter-engine/
 COPY apps/worker/package.json ./apps/worker/
 ARG HTTP_PROXY
@@ -65,11 +62,8 @@ COPY packages/custom-sso/ ./packages/custom-sso/
 COPY packages/oidc/ ./packages/oidc/
 COPY packages/domain/ ./packages/domain/
 COPY packages/jobs/ ./packages/jobs/
-COPY packages/organization-responsibility-resolution/ ./packages/organization-responsibility-resolution/
-COPY packages/role-assignment-resolution/ ./packages/role-assignment-resolution/
-COPY packages/user-document/ ./packages/user-document/
-COPY packages/organization-document/ ./packages/organization-document/
-COPY packages/document-update/ ./packages/document-update/
+COPY packages/assignment-resolution/ ./packages/assignment-resolution/
+COPY packages/documents/ ./packages/documents/
 COPY packages/filter-engine/ ./packages/filter-engine/
 COPY apps/worker/ ./apps/worker/
 RUN --mount=type=cache,id=iam-pnpm-v12,target=/pnpm/store \

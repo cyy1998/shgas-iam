@@ -14,7 +14,7 @@ import {
 } from "@iam/api-core/core/openapi/schemas/error-response-schema";
 import { OrganizationDocumentSearchResultSchema } from "@iam/contracts";
 import { HttpStatusCodes } from "@iam/contracts/http";
-import { OrganizationDocumentSchema } from "@iam/organization-document";
+import { OrganizationDocumentSchema } from "@iam/documents/organization";
 
 const tags = ["Internal/Organization"];
 // Add transport metadata without depending on when the shared Zod schema was created.

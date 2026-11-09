@@ -140,7 +140,7 @@ null 在升序和降序中都置于末尾；全部排序键同值时按内部唯
 字段类型、枚举和错误响应直接查代码，接入指南不另维护字段清单：
 
 - [用户搜索 schema](../../packages/contracts/src/document.ts)与[用户 HTTP 定义](../../apps/api/src/routes/internal/user/user.routes.ts)。
-- [组织搜索 schema](../../packages/organization-document/src/schema.ts)与[组织 HTTP 定义](../../apps/api/src/routes/internal/organization/organization.routes.ts)。
+- [组织搜索 schema](../../packages/documents/src/organization/schema.ts)与[组织 HTTP 定义](../../apps/api/src/routes/internal/organization/organization.routes.ts)。
 - [共有表达式解析](../../packages/filter-engine/src/filter-transport.ts)。
 
 旧 Public 搜索、Internal 非 DSL 搜索和搜索合并委托接口已退役；Internal 详情使用相同已发布文档，管理端查询继续使用管理专属模型。

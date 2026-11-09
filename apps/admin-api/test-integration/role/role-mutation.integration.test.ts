@@ -4,6 +4,7 @@ import { createAdminApiRepositories } from "@admin-api/composition/repositories"
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import type { AdminRoleTransactionPorts } from "@admin-api/services/role/role.port";
 import { createRoleService } from "@admin-api/services/role/role.service";
+import { createRoleAssignmentResolver } from "@iam/assignment-resolution/role-assignment";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -28,6 +29,11 @@ import {
   users,
 } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
+import { StoredUserDocumentSchema } from "@iam/documents/user/document";
+import {
+  createCurrentUserDocumentProjectionBundle,
+  createUserDocumentUpdateProcessor,
+} from "@iam/documents/user/worker";
 import { ClientNotFoundError } from "@iam/domain/client";
 import {
   RoleAssignmentExistsError,
@@ -36,14 +42,8 @@ import {
   RoleHasAssignmentError,
   RoleNotFoundError,
 } from "@iam/domain/role";
-import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { BadRequestError } from "@iam/runtime/errors";
 import { mapUnitOfWork } from "@iam/unit-of-work";
-import { StoredUserDocumentSchema } from "@iam/user-document/document";
-import {
-  createCurrentUserDocumentProjectionBundle,
-  createUserDocumentUpdateProcessor,
-} from "@iam/user-document/worker";
 import { eq } from "drizzle-orm";
 import type { AdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";

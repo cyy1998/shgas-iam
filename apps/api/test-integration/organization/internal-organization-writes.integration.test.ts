@@ -31,16 +31,16 @@ import {
   userDocumentOutboxEntries,
   users,
 } from "@iam/db/schema";
-import type { GenericClientRuntimeDto } from "@iam/domain/client";
 import {
   createOrganizationDocumentQueryRepository,
   createOrganizationDocumentQueryService,
-} from "@iam/organization-document";
+} from "@iam/documents/organization";
 import {
   createOrganizationDocumentProcessor,
   type OrganizationOutboxJobPayload,
   type OrganizationRebuildJobPayload,
-} from "@iam/organization-document/worker";
+} from "@iam/documents/organization/worker";
+import type { GenericClientRuntimeDto } from "@iam/domain/client";
 import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
 import { mapUnitOfWork } from "@iam/unit-of-work";
 import { eq } from "drizzle-orm";

@@ -5,11 +5,11 @@ import { createOrganizationHandlers } from "@api/routes/internal/organization/or
 import { createOrganizationRoute } from "@api/routes/internal/organization/organization.index";
 import createApp from "@iam/api-core/core/create-app";
 import { OrganizationDocumentSchema, OrganizationStatus, OrganizationType } from "@iam/contracts";
-import type { GenericClientRuntimeDto } from "@iam/domain/client";
 import {
   createOrganizationDocumentQueryRepository,
   createOrganizationDocumentQueryService,
-} from "@iam/organization-document";
+} from "@iam/documents/organization";
+import type { GenericClientRuntimeDto } from "@iam/domain/client";
 import pino from "pino";
 import appConfig from "~api/app.config";
 

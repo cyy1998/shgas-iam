@@ -10,7 +10,7 @@ import { HttpStatusCodes } from "@iam/contracts/http";
 import {
   type OrganizationDocumentQueryService,
   OrganizationDocumentUnavailableError,
-} from "@iam/organization-document";
+} from "@iam/documents/organization";
 import type { OrganizationRouteHandler } from "./organization.type";
 
 export const INTERNAL_ORGANIZATION_HANDLER_TIMEOUT_MS = 5_000;

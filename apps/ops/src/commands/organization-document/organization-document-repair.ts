@@ -2,7 +2,7 @@ import { parseArgs } from "node:util";
 import type {
   OrganizationDocumentRepairOptions,
   OrganizationDocumentRepairReport,
-} from "@iam/organization-document/maintenance";
+} from "@iam/documents/organization/maintenance";
 import { runMaintenanceCommandWithLifecycle } from "@iam/runtime/maintenance";
 import { parseDocumentCommandDeadline } from "../document-command-lifecycle";
 

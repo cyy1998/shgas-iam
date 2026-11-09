@@ -5,7 +5,7 @@ import {
   createOrganizationDocumentProcessor,
   type OrganizationOutboxJobPayload,
   type OrganizationRebuildJobPayload,
-} from "@iam/organization-document/worker";
+} from "@iam/documents/organization/worker";
 import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
 import { createOpsPostgresTestHarness } from "../support/postgres-test-harness";
 

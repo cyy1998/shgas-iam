@@ -214,7 +214,7 @@ Token 记录保存协议校验所需事实、有效期限与原会话绑定；�
 
 ### 角色分配解析
 
-`@iam/role-assignment-resolution` 统一有效角色与受影响用户的反向解析，调用方不复制 assignment 或组织闭包规则。
+`@iam/assignment-resolution/role-assignment` 统一有效角色与受影响用户的反向解析，调用方不复制 assignment 或组织闭包规则。
 Composition 用当前连接创建并复用 resolver，失效模块自行创建事务绑定实例。
 
 正向解析检查任职、分配目标和角色有效性；岗位与直属组织完整性由 Document builder 在发布前校验。
@@ -223,13 +223,13 @@ Composition 用当前连接创建并复用 resolver，失效模块自行创建�
 
 ### Organization Responsibility 解析
 
-独立 resolver 负责有效责任和跨树 holder 反向解析，调用方显式提供观察时间。
+`@iam/assignment-resolution/organization-responsibility` 负责有效责任和跨树 holder 反向解析，调用方显式提供观察时间。
 查询在数据库层排除 Disable 的已结束责任，关联目标的完整性重查也使用相同范围；Enable 与 Pause 的引用、父生命周期、
 期间或开放名额异常时整批拒绝，未知责任状态仍报完整性异常。已结束记录保留在管理历史中，不参与当前责任解析和校验。
 resolver 不拥有缓存、授权、管理历史或协议输出。
 组织变更的失效集合同时包含子树任职用户和责任反向 holder；Type 的披露字段或排序变化也须使 holder 失效。
 
-`@iam/organization-responsibility-resolution/parent-lifecycle` 独立提供开放责任目标子树的读取与父生命周期拒绝。
+`@iam/assignment-resolution/organization-responsibility/parent-lifecycle` 独立提供开放责任目标子树的读取与父生命周期拒绝。
 API 与 Admin API composition 绑定当前事务；Admin 责任 repository 和父生命周期 participant 复用该能力。
 其他模块通过注入的业务 port 消费，不直接导入此写入侧出口。组织暂停或停用按实际修改对象在源事务内检查，
 拒绝时源事实、审计与两类文档 Outbox 一起回滚；该预检不增加锁，也不保护随后插入的 phantom。
@@ -269,11 +269,11 @@ Client、本人或全局管理范围；app 不互相导入私有实现。解析�
 
 ## 读模型与异步处理
 
-`@iam/document-update` 由 User Document 与 Organization Document 共同消费，负责事务绑定登记与通知合并、领取、完成凭据重放、
+`@iam/documents` 的包内更新核心由 User Document 与 Organization Document 共同消费，负责事务绑定登记与通知合并、领取、完成凭据重放、
 重建版本与处理所有权仲裁、批量重建编排、原子发布和两阶段 repair。文档模块提供来源解释、关联展开、构建和写入适配器，
 用户模块另拥有 Facts 缓存和 Subject Access 后续责任。共用编排不合并两类文档的数据或事务。
 
-`@iam/user-document` / `@iam/organization-document` 的 producer 由 API/Admin API composition 接入，worker 由 Worker composition 接入；query repository 由查询 composition 接入。业务模块只消费注入能力，不自行跨出口创建实现。
+`@iam/documents/user` / `@iam/documents/organization` 的 producer 由 API/Admin API composition 接入，worker 由 Worker composition 接入；query repository 由查询 composition 接入。业务模块只消费注入能力，不自行跨出口创建实现。
 
 API/Admin API 在每个源事务内分别合并两类 Document 唤醒，每类提交后整次入队共用 2 秒预算，
 每个 transport 批次最多 500 个任务，超时后停止发送剩余批次。唤醒失败保留源事实、审计和 Outbox，
@@ -285,7 +285,7 @@ HTTP producer 与维护命令使用专用快速失败连接，连接无响应时
 对象资料异常独立失败，源查询失败使该批构建失败，未完成领取按原 owner 条件释放或由 stale repair 回收。
 发布按数量和文档字节分组，锁定并重验版本和 owner，将文档或墓碑、processed 及 owner 登记的后续义务原子提交。
 确定回滚的目标局部错误可有界拆分隔离；连接、配置或未知提交结果停止扩散重试。已确认提交的对象仍交给 owner 后处理，
-不因其他对象或后续批次失败而丢失。共享实现见[重建编排](../../packages/document-update/src/batch-rebuild.ts)。
+不因其他对象或后续批次失败而丢失。共享实现见[重建编排](../../packages/documents/src/update/batch-rebuild.ts)。
 
 ### User Document 失效
 
@@ -297,7 +297,7 @@ Outbox processed 表示全部目标重建要求已经持久登记，不表示入
 普通重建将同次 Outbox 展开或 repair 唤醒的用户请求交给共享重建编排，有界批次内共享业务构建读取。
 批次不成为新的持久业务对象，各用户仍独立保存版本与处理结果，不跨独立 Outbox 等待凑批；旧单对象任务也经同一编排执行。
 构建与发布的批界可以不同；PG 发布按用户数和文档字节数再切成小组，单个大文档独立处理。
-接口见[更新处理器](../../packages/user-document/src/worker/user-document-update.processor.ts)。
+接口见[更新处理器](../../packages/documents/src/user/worker/user-document-update.processor.ts)。
 
 每次构建固定源快照和观察时点，读取开放任职并校验岗位、组织与完整路径，再投影有效任职及角色的明确 Client 归属。
 PostgreSQL 每个用户只保存一份业务 document 及身份、schema、sourceVersion、发布时间等技术元数据；不再保存 detail、searchDoc、subjectFacts 或独立基础资料副本。Admin 和源账号查询保留管理专属模型。
@@ -308,7 +308,7 @@ User 的写入适配器在共享发布事务内登记 post-publication 义务；
 PG 提交确认后才处理外部作用。用户后处理集合领取、批量读取已发布文档，并按每个对象的版本和独立 token 写回完成或失败；
 Facts 与 Subject Access 仍逐主体执行，共享模块实例的有界并发额度。已知结果及时成批写回，不等待同页最慢成员；
 Access lease 在实际执行该主体修复时领取，不为整页提前占用。Redis 失败不回滚文档，主 processed 也不解除后续恢复责任。
-正常消费和 repair 复用[后处理器](../../packages/user-document/src/worker/user-document-post-publication.processor.ts)。
+正常消费和 repair 复用[后处理器](../../packages/documents/src/user/worker/user-document-post-publication.processor.ts)。
 两条入口共用每个发布版本的自动尝试预算，领取与过期接管都消耗一次机会；耗尽后保留未完成义务并报告人工处理，
 不占用后续 repair 的领取额度。活跃的最后一次尝试仍可完成，新版本发布重新获得预算。
 人工重试可以指定用户与发布版本，或显式强制批量 repair；预算重置与新 owner 的领取原子完成，
@@ -330,7 +330,7 @@ Employment verifier 独立以一致只读快照检查任职及父对象，报告
 
 ### Organization Search 发布与核验
 
-`@iam/organization-document` 独立拥有 `organization_document_outbox`、`organization_document_rebuild_state` 和
+`@iam/documents/organization` 独立拥有 `organization_document_outbox`、`organization_document_rebuild_state` 和
 `organization_document`，通过共享核心处理来源消息、重建要求与发布。源事务用实际修改结果登记变化：创建、状态和删除登记自身，
 code/name/type 变化登记子树；零行修改不登记。提交后按当前闭包展开，后续创建的后代由自己的变化登记覆盖。
 
@@ -347,8 +347,8 @@ repair 在源事件和重建两阶段回收失败或过期工作，跳过活跃�
 独立 verifier 在同一 `REPEATABLE READ READ ONLY` 事务读取源组织、闭包、文档/墓碑、Rebuild State 和 Outbox 凭据，
 完整检查覆盖、结构、源事实、处理版本及孤立记录，不写数据或派发任务。历史完成事件可以指向较早版本，不能指向未完成的更高版本。
 核验失败须修复后重新全量检查，不能抽样放流。
-关键验证见[恢复测试](../../packages/organization-document/test-integration/recovery/recovery.integration.test.ts)与
-[核验测试](../../packages/organization-document/test-integration/verification/verification.integration.test.ts)，操作见
+关键验证见[恢复测试](../../packages/documents/test-integration/organization/recovery/recovery.integration.test.ts)与
+[核验测试](../../packages/documents/test-integration/organization/verification/verification.integration.test.ts)，操作见
 [组织搜索维护](../releases/data-maintenance.md#组织搜索全量重建)。
 
 ### Filter 引擎

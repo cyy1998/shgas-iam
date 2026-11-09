@@ -53,6 +53,7 @@ import {
   userDocumentRebuildStates,
   users,
 } from "@iam/db/schema";
+import { createSubjectAccessTransitionRepository } from "@iam/documents/user/subject-access-transition";
 import { createLoginRestriction } from "@iam/login-restriction";
 import { createRedisLoginRestrictionStore } from "@iam/login-restriction/redis";
 import type { CapturedSession } from "@iam/session-kernel";
@@ -67,7 +68,6 @@ import { createSubjectAccessLifecycle } from "@iam/subject-access/lifecycle";
 import { createRedisSubjectAccessStore, createSubjectAccessBootstrap } from "@iam/subject-access/redis";
 import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import { createUnitOfWork, mapUnitOfWork } from "@iam/unit-of-work";
-import { createSubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";

@@ -62,17 +62,10 @@ const architectureWorkspaces: readonly (readonly [
   ["@iam/custom-sso", "packages/custom-sso", ["source", "docker", "canonical"]],
   ["@iam/oidc", "packages/oidc", ["source", "docker", "canonical"]],
   ["@iam/client-subject-projection", "packages/client-subject-projection", ["source", "docker", "canonical"]],
-  [
-    "@iam/organization-responsibility-resolution",
-    "packages/organization-responsibility-resolution",
-    ["source", "docker", "canonical"],
-  ],
-  ["@iam/role-assignment-resolution", "packages/role-assignment-resolution", ["source", "docker"]],
-  ["@iam/user-document", "packages/user-document", ["source", "docker", "canonical"]],
+  ["@iam/assignment-resolution", "packages/assignment-resolution", ["source", "docker", "canonical"]],
+  ["@iam/documents", "packages/documents", ["source", "docker", "canonical"]],
   ["@iam/delegation", "packages/delegation", ["source", "docker", "canonical"]],
   ["@iam/filter-engine", "packages/filter-engine", ["source", "docker"]],
-  ["@iam/organization-document", "packages/organization-document", ["source", "docker", "canonical"]],
-  ["@iam/document-update", "packages/document-update", ["source", "docker", "canonical"]],
   ["@iam/admin", "apps/admin", ["canonical"]],
   ["@iam/api-core", "packages/api-core", ["source", "docker", "canonical"]],
   ["@iam/unit-of-work", "packages/unit-of-work", ["source", "docker", "canonical"]],
@@ -136,7 +129,7 @@ const clientSubjectProjectionExternalOwnerTargets: readonly StaticModulePattern[
   { kind: "prefix", module: "packages/subject-access/src" },
   { kind: "prefix", module: "packages/db/src" },
   { kind: "prefix", module: "packages/domain/src" },
-  { kind: "prefix", module: "packages/user-document/src" },
+  { kind: "prefix", module: "packages/documents/src/user" },
   { kind: "prefix", module: "apps" },
   { kind: "prefix", module: "@hono" },
   { kind: "package", module: "hono" },
@@ -205,7 +198,9 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
   {
     ruleId: "organization-responsibility-parent-lifecycle-owner",
     sourceScopes: ["apps", "packages"],
-    targets: [{ kind: "prefix", module: "packages/organization-responsibility-resolution/src/parent-lifecycle" }],
+    targets: [
+      { kind: "prefix", module: "packages/assignment-resolution/src/organization-responsibility/parent-lifecycle" },
+    ],
     allowedSources: [
       "apps/api/src/composition",
       "apps/admin-api/src/composition",
@@ -234,7 +229,7 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
     sourceScopes: ["packages/subject-access/src"],
     targets: [
       { kind: "prefix", module: "packages/db/src" },
-      { kind: "prefix", module: "packages/user-document/src" },
+      { kind: "prefix", module: "packages/documents/src/user" },
       { kind: "prefix", module: "apps" },
       { kind: "prefix", module: "@hono" },
       { kind: "package", module: "hono" },
@@ -489,7 +484,7 @@ function collectRoleResolutionOwnerViolations(sources: readonly IndexedSourceFil
           if (!declaration.moduleSpecifier || !ts.isStringLiteral(declaration.moduleSpecifier)) return [];
           const moduleSpecifier = declaration.moduleSpecifier.text;
           if (
-            normalizeStaticModulePath(moduleSpecifier) !== "@iam/role-assignment-resolution" ||
+            normalizeStaticModulePath(moduleSpecifier) !== "@iam/assignment-resolution/role-assignment" ||
             !hasValueDependency(declaration)
           ) {
             return [];
@@ -501,7 +496,7 @@ function collectRoleResolutionOwnerViolations(sources: readonly IndexedSourceFil
               line: lineOf(source.sourceFile, declaration),
               message:
                 `Only declared composition and User Document module owners may ` +
-                `${valueDependencyOperation(declaration)} Role Assignment Resolver package ` +
+                `${valueDependencyOperation(declaration)} Role Assignment Resolver module ` +
                 `"${moduleSpecifier}".`,
             },
           ];
@@ -517,7 +512,7 @@ function collectUserDocumentOwnerViolations(sources: readonly IndexedSourceFile[
       if (!declaration.moduleSpecifier || !ts.isStringLiteral(declaration.moduleSpecifier)) return [];
       const moduleSpecifier = declaration.moduleSpecifier.text;
       const normalizedModule = normalizeStaticModulePath(moduleSpecifier);
-      if (normalizedModule === "@iam/user-document/producer" && !isUserDocumentProducerOwner(source.file)) {
+      if (normalizedModule === "@iam/documents/user/producer" && !isUserDocumentProducerOwner(source.file)) {
         return [
           {
             ruleId: "user-document-owner",
@@ -529,7 +524,7 @@ function collectUserDocumentOwnerViolations(sources: readonly IndexedSourceFile[
           },
         ];
       }
-      if (normalizedModule === "@iam/user-document/worker" && !isUserDocumentWorkerOwner(source.file)) {
+      if (normalizedModule === "@iam/documents/user/worker" && !isUserDocumentWorkerOwner(source.file)) {
         return [
           {
             ruleId: "user-document-owner",
@@ -542,7 +537,7 @@ function collectUserDocumentOwnerViolations(sources: readonly IndexedSourceFile[
         ];
       }
       if (
-        normalizedModule === "@iam/user-document/query/repository" &&
+        normalizedModule === "@iam/documents/user/query/repository" &&
         !isUserDocumentQueryRepositoryOwner(source.file)
       ) {
         return [
@@ -904,7 +899,7 @@ function isCompositionOwner(file: string) {
 
 function isRoleAssignmentSchemaOwner(file: string) {
   return (
-    file === "packages/role-assignment-resolution/src/internal/resolver.ts" ||
+    file === "packages/assignment-resolution/src/role-assignment/internal/resolver.ts" ||
     file === "apps/admin-api/src/services/role/role.repository.ts"
   );
 }
@@ -912,19 +907,19 @@ function isRoleAssignmentSchemaOwner(file: string) {
 function isRoleAssignmentResolverValueOwner(file: string) {
   return (
     /^apps\/(?:api|admin-api|worker)\/src\/composition(?:\/|$)/u.test(file) ||
-    file === "packages/user-document/src/invalidation/user-document-source.ts" ||
-    file === "packages/user-document/src/worker/user-document-projection.ts"
+    file === "packages/documents/src/user/invalidation/user-document-source.ts" ||
+    file === "packages/documents/src/user/worker/user-document-projection.ts"
   );
 }
 
 function isUserDocumentProducerOwner(file: string) {
   return (
-    file.startsWith("packages/user-document/src/") || /^apps\/(?:api|admin-api)\/src\/composition(?:\/|$)/u.test(file)
+    file.startsWith("packages/documents/src/user/") || /^apps\/(?:api|admin-api)\/src\/composition(?:\/|$)/u.test(file)
   );
 }
 
 function isUserDocumentWorkerOwner(file: string) {
-  return file.startsWith("packages/user-document/src/") || /^apps\/worker\/src\/composition(?:\/|$)/u.test(file);
+  return file.startsWith("packages/documents/src/user/") || /^apps\/worker\/src\/composition(?:\/|$)/u.test(file);
 }
 
 function isUserDocumentQueryRepositoryOwner(file: string) {

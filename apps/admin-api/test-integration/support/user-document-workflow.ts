@@ -5,7 +5,7 @@ import { userDocumentOutboxEntries, userDocumentRebuildStates } from "@iam/db/sc
 import {
   createCurrentUserDocumentProjectionBundle,
   createUserDocumentUpdateProcessor,
-} from "@iam/user-document/worker";
+} from "@iam/documents/user/worker";
 import { eq, sql } from "drizzle-orm";
 
 /** Consume the real committed Outbox stage at the external queue seam. Rebuild delivery remains controlled by each test. */

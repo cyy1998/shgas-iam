@@ -1,11 +1,11 @@
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
 import { buildOrganizationResponsibilityAssignmentLifecycleAudit } from "@admin-api/services/audit/events/organization-responsibility-assignment.audit";
+import { createOrganizationResponsibilityParentLifecycleGuard } from "@iam/assignment-resolution/organization-responsibility/parent-lifecycle";
 import {
   ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_AUDIT_ACTIONS,
   OrganizationResponsibilityAssignmentStatus,
 } from "@iam/contracts";
-import { createOrganizationResponsibilityParentLifecycleGuard } from "@iam/organization-responsibility-resolution/parent-lifecycle";
 import type {
   OrganizationResponsibilityAssignmentLifecycleChange,
   OrganizationResponsibilityAssignmentWriteTarget,

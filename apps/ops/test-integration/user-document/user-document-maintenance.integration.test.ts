@@ -9,6 +9,17 @@ import {
   RoleStatus,
   UserStatus,
 } from "@iam/contracts";
+import {
+  createSubjectFactsRedisCache,
+  createSubjectFactsRedisPublisher,
+  DocumentFactsCacheRecordSchema,
+} from "@iam/documents/user";
+import { repairUserDocument } from "@iam/documents/user/maintenance";
+import {
+  createCurrentUserDocumentReadiness,
+  createSubjectAccessAuthorityRepository,
+  createUserDocumentWorkerModule,
+} from "@iam/documents/user/worker";
 import { createLogger, LoggerSourceApp } from "@iam/runtime/logger";
 import { runMaintenanceCommandWithLifecycle } from "@iam/runtime/maintenance";
 import { redisUrlString } from "@iam/runtime/redis/config";
@@ -16,17 +27,6 @@ import { createSubjectAccessBarrier } from "@iam/subject-access";
 import { createSubjectAccessRepair } from "@iam/subject-access/recovery";
 import { createRedisSubjectAccessStore, createSubjectAccessBootstrap } from "@iam/subject-access/redis";
 import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
-import {
-  createSubjectFactsRedisCache,
-  createSubjectFactsRedisPublisher,
-  DocumentFactsCacheRecordSchema,
-} from "@iam/user-document";
-import { repairUserDocument } from "@iam/user-document/maintenance";
-import {
-  createCurrentUserDocumentReadiness,
-  createSubjectAccessAuthorityRepository,
-  createUserDocumentWorkerModule,
-} from "@iam/user-document/worker";
 import { runUserDocumentBackfillCommand } from "@ops/commands/user-document/user-document-backfill";
 import {
   runUserDocumentPostgresGateCommand,

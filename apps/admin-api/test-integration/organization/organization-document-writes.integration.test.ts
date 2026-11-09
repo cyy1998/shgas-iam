@@ -6,16 +6,16 @@ import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import { createOrganizationService } from "@admin-api/services/organization/organization.service";
 import { OrganizationType } from "@iam/contracts";
 import { organizationDocumentOutboxEntries, organizations } from "@iam/db/schema";
-import { OrganizationCreateDtoSchema } from "@iam/domain/organization";
 import {
   createOrganizationDocumentQueryRepository,
   createOrganizationDocumentQueryService,
-} from "@iam/organization-document";
-import { createOrganizationDocumentWriteResources } from "@iam/organization-document/producer";
+} from "@iam/documents/organization";
+import { createOrganizationDocumentWriteResources } from "@iam/documents/organization/producer";
 import {
   createOrganizationDocumentProcessor,
   type OrganizationRebuildJobPayload,
-} from "@iam/organization-document/worker";
+} from "@iam/documents/organization/worker";
+import { OrganizationCreateDtoSchema } from "@iam/domain/organization";
 import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import { mapUnitOfWork } from "@iam/unit-of-work";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";

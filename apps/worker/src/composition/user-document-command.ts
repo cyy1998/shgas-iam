@@ -1,7 +1,5 @@
 import { createMaintenancePostgresResources } from "@iam/db/maintenance";
-import { closeMaintenanceResources, createOfflineMaintenanceRedis } from "@iam/runtime/maintenance";
-import { createSubjectAccessRepair, createSubjectAccessTransitionRecovery } from "@iam/subject-access/recovery";
-import { createSubjectFactsRedisPublisher } from "@iam/user-document";
+import { createSubjectFactsRedisPublisher } from "@iam/documents/user";
 import {
   createCurrentUserDocumentProjectionBundle,
   createSubjectAccessAuthorityRepository,
@@ -10,11 +8,13 @@ import {
   repairSubjectAccess,
   repairUserDocument,
   type UserDocumentRepairOptions,
-} from "@iam/user-document/maintenance";
+} from "@iam/documents/user/maintenance";
 import {
   createSubjectAccessTransitionRecoveryAuthority,
   createSubjectAccessTransitionRepository,
-} from "@iam/user-document/subject-access-transition";
+} from "@iam/documents/user/subject-access-transition";
+import { closeMaintenanceResources, createOfflineMaintenanceRedis } from "@iam/runtime/maintenance";
+import { createSubjectAccessRepair, createSubjectAccessTransitionRecovery } from "@iam/subject-access/recovery";
 import type { DocumentRepairInvocation } from "@worker/env";
 
 type UserDocumentRepairEnv = Pick<DocumentRepairInvocation["env"], "databaseUrl" | "redis" | "userDocument">;

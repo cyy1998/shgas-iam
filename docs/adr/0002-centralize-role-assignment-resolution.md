@@ -4,8 +4,7 @@ status: accepted
 
 # 以独立模块统一角色分配解析
 
-Admin 与 User Profile 的构建、失效需要同一套 Effective Role 和受影响用户解析。由独立包
-`@iam/role-assignment-resolution` 接收数据库能力，隐藏分配来源、组织闭包、去重与查询实现；调用方只拥有各自的结果映射。
+Admin 与 User Profile 的构建、失效需要同一套 Effective Role 和受影响用户解析。由 `@iam/assignment-resolution/role-assignment` 模块接收数据库能力，隐藏分配来源、组织闭包、去重与查询实现；调用方只拥有各自的结果映射。
 OIDC 消费已发布 Subject Facts，不直接调用角色解析器。
 
 ## 理由与代价

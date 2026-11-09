@@ -99,7 +99,7 @@ User Document 除搜索与目录详情外，还为 Subject Facts 和 Subject Acc
 
 全关联审计还确认：角色分配会物理删除，持久变化必须保留删除前的关联目标；任职或责任结束必须保留已知用户，
 不能期待提交后从当前有效关联中重新找到。生产端登记还须核对实际修改对象与各 mutation 的覆盖，
-不能只搬运已有失效调用。相关入口见[失效模块](../../packages/user-document/src/invalidation/user-document-invalidation.ts)
+不能只搬运已有失效调用。相关入口见[失效模块](../../packages/documents/src/user/invalidation/user-document-invalidation.ts)
 与[角色管理](../../apps/admin-api/src/services/role/role.service.ts)。除 #239 外的并发窗口仍需运行验证。
 
 本决定修订 [ADR-0015](0015-adopt-schema-driven-user-profile-filter-dsl.md) 的固定摘要与跨副本一致性取舍，
@@ -215,7 +215,7 @@ Outbox 表示随源业务事务持久登记、由后台可靠处理的文档更�
 已经原子提交，不以队列投递成功或全部目标发布完成为准。Rebuild State 按目标文档保存最新要求和处理状态，
 不是一条队列 job 对应一行；完成后仍保留状态，用于和已发布版本比较。用户的 Outbox 表是本次新增阶段，不能误记为已有表改名。
 
-模块包名同步采用 `@iam/user-document`、`@iam/organization-document`。TypeScript 表符号对应
+两类文档通过 `@iam/documents/user`、`@iam/documents/organization` 各自公开接口，更新核心由包内共享。TypeScript 表符号对应
 `userDocuments` / `organizationDocuments`、`userDocumentOutboxEntries` / `organizationDocumentOutboxEntries`、
 `userDocumentRebuildStates` / `organizationDocumentRebuildStates`；类型、schema、repository、Worker、维护命令与可观测事件
 统一沿用同一职责词汇。队列 job 单独表达展开失效与重建文档，不把状态表称为 job。

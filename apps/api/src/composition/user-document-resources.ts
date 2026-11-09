@@ -1,5 +1,5 @@
+import { createUserDocumentWriteResources } from "@iam/documents/user/producer";
 import type { BullMqRedisConfig } from "@iam/jobs";
-import { createUserDocumentWriteResources } from "@iam/user-document/producer";
 import type { createInternalUserQueryResource } from "./internal-user-query";
 import { createInternalUserQueryResource as createQueryResourceDefault } from "./internal-user-query";
 

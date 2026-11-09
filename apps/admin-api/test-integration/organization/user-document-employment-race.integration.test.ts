@@ -5,10 +5,10 @@ import { createOrganizationService } from "@admin-api/services/organization/orga
 import { createCreateEmploymentUseCase } from "@admin-api/use-cases/employment/create-employment/create-employment.use-case";
 import { OrganizationLevel, OrganizationType } from "@iam/contracts";
 import { organizationClosures, organizations, positions, users } from "@iam/db/schema";
+import { createInternalUserDocumentQueryRepository, createInternalUserDocumentQueryService } from "@iam/documents/user";
+import { createUserDocumentJobProducer } from "@iam/documents/user/producer";
+import { createUserDocumentWorkerModule } from "@iam/documents/user/worker";
 import { mapUnitOfWork } from "@iam/unit-of-work";
-import { createInternalUserDocumentQueryRepository, createInternalUserDocumentQueryService } from "@iam/user-document";
-import { createUserDocumentJobProducer } from "@iam/user-document/producer";
-import { createUserDocumentWorkerModule } from "@iam/user-document/worker";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 
 const observedAt = new Date("2026-10-26T12:00:00Z");

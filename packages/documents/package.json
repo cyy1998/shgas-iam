@@ -1,0 +1,65 @@
+{
+  "name": "@iam/documents",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    "./user": "./src/user/index.ts",
+    "./user/document": "./src/user/document.ts",
+    "./user/document/query": "./src/user/document-query.ts",
+    "./user/producer": "./src/user/producer.ts",
+    "./user/query": "./src/user/query.ts",
+    "./user/query/repository": "./src/user/query/user-document-query.repository.ts",
+    "./user/subject-access-transition": "./src/user/subject-access/subject-access-transition.repository.ts",
+    "./user/subject-facts": "./src/user/subject-facts.ts",
+    "./user/worker": "./src/user/worker.ts",
+    "./user/maintenance": "./src/user/maintenance.ts",
+    "./organization": "./src/organization/index.ts",
+    "./organization/producer": "./src/organization/producer.ts",
+    "./organization/query": "./src/organization/query.ts",
+    "./organization/worker": "./src/organization/worker.ts",
+    "./organization/maintenance": "./src/organization/maintenance.ts"
+  },
+  "scripts": {
+    "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
+    "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
+    "test": "pnpm test:unit",
+    "test:unit": "bun test --max-concurrency=2 src",
+    "typecheck": "pnpm exec tsc --noEmit",
+    "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
+    "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check",
+    "test:integration:bun": "node ../../scripts/run-package-integration.mjs bun -- bun test test-integration"
+  },
+  "dependencies": {
+    "@hono/zod-openapi": "^1.5.1",
+    "@iam/assignment-resolution": "workspace:*",
+    "@iam/client-subject-projection": "workspace:*",
+    "@iam/contracts": "workspace:*",
+    "@iam/db": "workspace:*",
+    "@iam/domain": "workspace:*",
+    "@iam/filter-engine": "workspace:*",
+    "@iam/jobs": "workspace:*",
+    "@iam/runtime": "workspace:*",
+    "@iam/subject-access": "workspace:*",
+    "bullmq": "^6.3.8",
+    "drizzle-orm": "1.0.0-rc.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@iam/test-support": "workspace:*",
+    "@iam/unit-of-work": "workspace:*",
+    "@types/bun": "latest",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "ioredis": "^6.0.0",
+    "postgres": "^3.4.9",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  },
+  "iamTest": {
+    "integration": {
+      "bun": {
+        "postgres": "IAM_DOCUMENTS_TEST_DATABASE_URL",
+        "redis": "IAM_DOCUMENTS_TEST_REDIS_URL"
+      }
+    }
+  }
+}

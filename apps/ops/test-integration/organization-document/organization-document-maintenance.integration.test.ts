@@ -2,16 +2,16 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { OrganizationStatus, OrganizationType } from "@iam/contracts";
-import { createJobQueue, DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
 import {
   createOrganizationDocumentQueryRepository,
   createOrganizationDocumentQueryService,
-} from "@iam/organization-document/query";
+} from "@iam/documents/organization/query";
 import {
   createOrganizationDocumentVerifier,
   createOrganizationDocumentWorkerModule,
   ORGANIZATION_DOCUMENT_QUEUE_NAME,
-} from "@iam/organization-document/worker";
+} from "@iam/documents/organization/worker";
+import { createJobQueue, DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
 import { createLogger, LoggerSourceApp } from "@iam/runtime/logger";
 import { redisUrlString } from "@iam/runtime/redis/config";
 import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";

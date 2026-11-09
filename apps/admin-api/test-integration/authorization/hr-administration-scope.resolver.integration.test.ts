@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { createHrAdministrationScopeResolver } from "@admin-api/services/admin-authorization/hr-administration-scope.resolver";
+import { createRoleAssignmentResolver } from "@iam/assignment-resolution/role-assignment";
 import {
   ClientStatus,
   EmploymentStatus,
@@ -13,7 +14,6 @@ import {
 import type { DbClient } from "@iam/db";
 import { clients, employments, organizationClosures, organizations, positions, roles } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
-import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
 import { eq } from "drizzle-orm";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 

@@ -12,7 +12,7 @@ import {
   users,
 } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
-import { StoredUserDocumentSchema } from "@iam/user-document/document";
+import { StoredUserDocumentSchema } from "@iam/documents/user/document";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import type { HrAdminOutcomeOwner, HrAdminOutcomeScenario } from "./hr-admin-outcome.ts";
 import { HR_ADMIN_RESPONSIBILITY_AUDIT_ACTIONS } from "./hr-admin-outcome.ts";

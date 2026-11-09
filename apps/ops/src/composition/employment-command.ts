@@ -1,5 +1,5 @@
 import { createMaintenancePostgresResources } from "@iam/db/maintenance";
-import { createEmploymentRepository, createEmploymentVerifier } from "@iam/user-document/maintenance";
+import { createEmploymentRepository, createEmploymentVerifier } from "@iam/documents/user/maintenance";
 import type { OpsLogger } from "./runtime";
 
 export function createEmploymentCommandComposition(options: { databaseUrl: string; logger: OpsLogger }) {

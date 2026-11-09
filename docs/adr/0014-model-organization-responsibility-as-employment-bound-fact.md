@@ -10,7 +10,7 @@ Type Catalog 由 IAM 代码拥有，采用只增不减、没有运行时生命�
 
 ## 理由与代价
 
-Admin 拥有 Assignment 命令及其与父生命周期的事务协调；独立解析包拥有 Effective 正向解析和跨树 holder 反向解析。
+Admin 拥有 Assignment 命令及其与父生命周期的事务协调；`@iam/assignment-resolution/organization-responsibility` 模块拥有 Effective 正向解析和跨树 holder 反向解析。
 这样 Profile 失效能同时覆盖任职组织与责任目标，不让各协议重建不同的责任事实。各消费方使用同一当前发布模型，
 不保留多代在线混读。
 

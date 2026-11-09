@@ -1,5 +1,5 @@
 import { createMaintenancePostgresResources } from "@iam/db/maintenance";
-import { createOrganizationDocumentVerifier } from "@iam/organization-document/maintenance";
+import { createOrganizationDocumentVerifier } from "@iam/documents/organization/maintenance";
 import type { OpsLogger } from "./runtime";
 
 export function createOrganizationDocumentVerifyCommandComposition(options: {

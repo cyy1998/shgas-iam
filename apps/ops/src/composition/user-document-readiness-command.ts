@@ -1,10 +1,10 @@
 import { createMaintenancePostgresResources } from "@iam/db/maintenance";
-import { closeMaintenanceResources, createOfflineMaintenanceRedis } from "@iam/runtime/maintenance";
-import type { RedisConfig } from "@iam/runtime/redis/config";
 import {
   createCurrentUserDocumentPostgresReadiness,
   createCurrentUserDocumentRedisAccessReadiness,
-} from "@iam/user-document/maintenance";
+} from "@iam/documents/user/maintenance";
+import { closeMaintenanceResources, createOfflineMaintenanceRedis } from "@iam/runtime/maintenance";
+import type { RedisConfig } from "@iam/runtime/redis/config";
 import type { OpsLogger } from "./runtime";
 import { createOpsSubjectAccess } from "./subject-access";
 

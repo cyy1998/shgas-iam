@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { OrganizationDocumentTransportRequestSchema } from "@api/services/organization-document/organization-document.schema";
 import { createRoute, OpenAPIHono } from "@hono/zod-openapi";
-import { UserDocumentSearchTransportRequestSchema } from "@iam/user-document/query";
+import { UserDocumentSearchTransportRequestSchema } from "@iam/documents/user/query";
 
 test("both Filter transport entries generate independently named recursive OpenAPI components", () => {
   const app = new OpenAPIHono();

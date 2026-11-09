@@ -1,22 +1,22 @@
 import type { ApiAuditLogWriter } from "@api/services/audit/audit.service";
 import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
+import {
+  createOrganizationResponsibilityParentLifecycleGuard,
+  createOrganizationResponsibilityParentLifecycleReader,
+  type OrganizationResponsibilityParentLifecycleGuard,
+} from "@iam/assignment-resolution/organization-responsibility/parent-lifecycle";
 import type { DbClient } from "@iam/db";
 import {
   type CreateOrganizationDocumentInvalidationInput,
   createOrganizationDocumentInvalidation,
   type OrganizationDocumentInvalidation,
-} from "@iam/organization-document/producer";
-import {
-  createOrganizationResponsibilityParentLifecycleGuard,
-  createOrganizationResponsibilityParentLifecycleReader,
-  type OrganizationResponsibilityParentLifecycleGuard,
-} from "@iam/organization-responsibility-resolution/parent-lifecycle";
+} from "@iam/documents/organization/producer";
+import type { CreateUserDocumentInvalidationDeps, UserDocumentInvalidation } from "@iam/documents/user/producer";
+import { createUserDocumentInvalidation } from "@iam/documents/user/producer";
+import type { SubjectAccessTransitionRepository } from "@iam/documents/user/subject-access-transition";
+import { createSubjectAccessTransitionRepository } from "@iam/documents/user/subject-access-transition";
 import type { AfterCommitLoggerPort, UnitOfWorkPort } from "@iam/unit-of-work";
 import { createUnitOfWork } from "@iam/unit-of-work";
-import type { CreateUserDocumentInvalidationDeps, UserDocumentInvalidation } from "@iam/user-document/producer";
-import { createUserDocumentInvalidation } from "@iam/user-document/producer";
-import type { SubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
-import { createSubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
 import type { ApiRepositories } from "../repositories";
 import { createApiRepositories } from "../repositories";
 import type { ClockPort } from "../runtime";

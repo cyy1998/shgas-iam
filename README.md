@@ -8,7 +8,7 @@
 
 - **Monorepo 一体化开发**：pnpm workspace 管理依赖，Turborepo 编排开发、构建和检查任务
 - **服务分层**：`apps/api` 承载 public/open/internal/sso/auth 等公共能力，`apps/admin-api` 承载 admin REST 与管理端 tRPC，API 同时承载标准 OIDC 协议面，`apps/worker` 承载后台队列消费和运维面板
-- **共享包拆分**：`packages/db` 提供 Drizzle schema/relations/client/migrations，`packages/api-core` 提供 Hono/OpenAPI/tRPC HTTP 接入，`packages/runtime` 提供共享运行支撑，`packages/contracts` 提供跨端共享枚举和稳定契约，`packages/domain` 提供共享 DTO、审计 helper 和业务错误，`packages/jobs` 与 `packages/user-document` 提供 BullMQ 队列与用户档案读模型能力
+- **共享包拆分**：`packages/db` 提供 Drizzle schema/relations/client/migrations，`packages/api-core` 提供 Hono/OpenAPI/tRPC HTTP 接入，`packages/runtime` 提供共享运行支撑，`packages/contracts` 提供跨端共享枚举和稳定契约，`packages/domain` 提供共享 DTO、审计 helper 和业务错误，`packages/jobs` 与 `packages/documents` 提供 BullMQ 队列与用户、组织读模型能力
 - **类型安全调用**：管理后台通过 `@trpc/client` 消费 `@iam/admin-api/trpc` 暴露的 `AppRouter` 类型
 - **声明式后端装配**：API 后端的 `app.config.ts` 声明 API tier，app-local composition root materialize 路由和 tier 中间件，再交给 `@iam/api-core` 挂载
 - **Drizzle + PostgreSQL**：数据库层集中在 `packages/db`，使用 Drizzle ORM v1 relations 和 PostgreSQL
@@ -75,7 +75,8 @@ iam-service/
 │   ├── db/                          # Drizzle schema、relations、migrations、db client（@iam/db）
 │   ├── domain/                      # 共享 DTO schema/type、审计 helper、业务错误（@iam/domain）
 │   ├── jobs/                        # BullMQ queue/worker 基础设施（@iam/jobs）
-│   └── user-document/     # 用户档案读模型 producer/query/worker（@iam/user-document）
+│   ├── assignment-resolution/       # 有效角色与组织责任解析（@iam/assignment-resolution）
+│   └── documents/                   # 用户与组织读模型及共享更新流程（@iam/documents）
 ├── docker/                          # 本地依赖栈、开发和生产 compose 文件
 ├── docs/                            # Current 架构/功能/runbook、Agent 工作流、ADR 与历史记录
 ├── scripts/                         # 仓库级辅助脚本
@@ -119,7 +120,8 @@ OIDC 由 API composition 装配 `@iam/oidc`，HTTP adapter 保持外部 `/oidc` 
 - `@iam/contracts`：提供前后端共享枚举与稳定契约，避免在多个应用里重复定义状态码和业务枚举
 - `@iam/domain`：提供共享 DTO schema/type、审计 helper、脱敏规则和可复用业务错误
 - `@iam/jobs`：提供 BullMQ 连接、队列、worker 和默认 job options
-- `@iam/user-document`：提供用户档案读模型 producer、query service、Outbox producer 和 worker module
+- `@iam/assignment-resolution` 提供角色分配、组织责任解析和组织责任的父生命周期检查
+- `@iam/documents` 提供用户与组织文档的失效、查询、发布和修复，两类文档共用包内更新核心
 
 其余能力与依赖方向见[仓库地图](docs/architecture/repository-map.md#共享-packages)和[后端架构](docs/architecture/backend-architecture.md#核心依赖方向)。
 
@@ -359,9 +361,9 @@ pnpm --filter @iam/domain typecheck
 pnpm --filter @iam/jobs lint
 pnpm --filter @iam/jobs test
 pnpm --filter @iam/jobs typecheck
-pnpm --filter @iam/user-document lint
-pnpm --filter @iam/user-document test
-pnpm --filter @iam/user-document typecheck
+pnpm --filter @iam/documents lint
+pnpm --filter @iam/documents test
+pnpm --filter @iam/documents typecheck
 ```
 
 ### 前端
@@ -418,7 +420,7 @@ Playwright Chromium 系统依赖时，preflight 会提示运行 `pnpm e2e:instal
 ### 添加后台任务模块
 
 1. 队列契约优先放在 `packages/contracts/src/jobs/`，BullMQ 基础设施放在 `packages/jobs`
-2. 业务读模型或 worker 逻辑可放在拥有该能力的共享包，例如 `packages/user-document`
+2. 业务读模型或 worker 逻辑可放在拥有该能力的共享包，例如 `packages/documents`
 3. 在 `apps/worker/src/modules/registry.ts` 兼容 `WorkerModule` 接口，并在 `apps/worker/src/composition/index.ts` 装配
 4. 新模块应支持 `IAM_WORKER_ENABLED_MODULES=<module-key>`、`all` 和 `none`
 

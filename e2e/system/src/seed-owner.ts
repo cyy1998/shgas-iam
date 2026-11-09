@@ -1,3 +1,4 @@
+import { createRoleAssignmentResolver } from "@iam/assignment-resolution/role-assignment";
 import {
   ClientSsoCallbackType,
   ClientSsoProtocol,
@@ -31,13 +32,12 @@ import {
   users,
 } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
-import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
+import { USER_DOCUMENT_SCHEMA_VERSION } from "@iam/documents/user/document";
+import { createSubjectFactsRedisInspector } from "@iam/documents/user/subject-facts";
+import type { CreateUserDocumentWorkerModuleInput } from "@iam/documents/user/worker";
+import { createUserDocumentWorkerModule } from "@iam/documents/user/worker";
 import { hashSecret } from "@iam/runtime/security/bcrypt";
 import { createSubjectAccessBootstrap } from "@iam/subject-access/redis";
-import { USER_DOCUMENT_SCHEMA_VERSION } from "@iam/user-document/document";
-import { createSubjectFactsRedisInspector } from "@iam/user-document/subject-facts";
-import type { CreateUserDocumentWorkerModuleInput } from "@iam/user-document/worker";
-import { createUserDocumentWorkerModule } from "@iam/user-document/worker";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Redis } from "ioredis";
 import { createE2EGatewayApiKey } from "./gateway-credential";

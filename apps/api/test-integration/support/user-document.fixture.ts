@@ -1,5 +1,5 @@
 import type { DbClient } from "@iam/db";
-import { createCurrentUserDocumentProjectionBundle } from "@iam/user-document/worker";
+import { createCurrentUserDocumentProjectionBundle } from "@iam/documents/user/worker";
 
 /** Publishes a source-backed document through the same builder and row owner as the Worker. */
 export async function publishUserDocument(db: DbClient, userId: number, sourceVersion = "1") {

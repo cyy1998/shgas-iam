@@ -16,26 +16,26 @@ import {
   UserType,
 } from "@iam/contracts";
 import { userDocuments, users } from "@iam/db/schema";
-import type { GenericClientRuntimeDto } from "@iam/domain/client";
-import { createUnitOfWork } from "@iam/unit-of-work";
 import {
   createInternalUserDocumentQueryRepository,
   createInternalUserDocumentQueryService,
   createUserDocumentSearchRepository,
   createUserDocumentSearchService,
   USER_DOCUMENT_SCHEMA_VERSION,
-} from "@iam/user-document";
-import { createUserDocumentInvalidation } from "@iam/user-document/producer";
+} from "@iam/documents/user";
+import { createUserDocumentInvalidation } from "@iam/documents/user/producer";
 import {
   createSubjectFactsReader,
   createSubjectFactsRedisCache,
   createSubjectFactsRedisPublisher,
-} from "@iam/user-document/subject-facts";
+} from "@iam/documents/user/subject-facts";
 import {
   createCurrentUserDocumentProjectionBundle,
   createSubjectAccessAuthorityRepository,
   createUserDocumentUpdateProcessor,
-} from "@iam/user-document/worker";
+} from "@iam/documents/user/worker";
+import type { GenericClientRuntimeDto } from "@iam/domain/client";
+import { createUnitOfWork } from "@iam/unit-of-work";
 import { eq } from "drizzle-orm";
 import Redis from "ioredis";
 import pino from "pino";

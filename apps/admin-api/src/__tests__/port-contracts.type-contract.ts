@@ -39,8 +39,8 @@ import type {
 } from "@admin-api/use-cases/employment/resign-user/resign-user.port";
 import type { CreateOrganizationResponsibilityAssignmentTransactionPorts } from "@admin-api/use-cases/organization-responsibility/create-assignment/create-assignment.port";
 import type { ManageOrganizationResponsibilityAssignmentLifecycleTransactionPorts } from "@admin-api/use-cases/organization-responsibility/manage-assignment-lifecycle/manage-assignment-lifecycle.port";
+import type { RoleAssignmentResolver } from "@iam/assignment-resolution/role-assignment";
 import type { LoginRestriction } from "@iam/login-restriction";
-import type { RoleAssignmentResolver } from "@iam/role-assignment-resolution";
 
 type AdminSessionRevocationPort = ReturnType<typeof createUnifiedAdminLifecycleRevocation>;
 

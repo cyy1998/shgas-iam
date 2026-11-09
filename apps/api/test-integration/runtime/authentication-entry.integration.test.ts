@@ -12,6 +12,8 @@ import {
   OidcScope,
   SubjectClaim,
 } from "@iam/contracts";
+import { createDocumentFactsCacheRecord } from "@iam/documents/user/document";
+import { createSubjectFactsRedisCache } from "@iam/documents/user/subject-facts";
 import { createUnifiedSessionKernel } from "@iam/session-kernel";
 import type { SubjectAccessOperation } from "@iam/subject-access";
 import {
@@ -34,8 +36,6 @@ import {
   PROCESS_SMOKE_TEST_TIMEOUT_MS,
   spawnOwnedProcessTree,
 } from "@iam/test-support/process-smoke-harness";
-import { createDocumentFactsCacheRecord } from "@iam/user-document/document";
-import { createSubjectFactsRedisCache } from "@iam/user-document/subject-facts";
 import Redis from "ioredis";
 import { sm2 } from "sm-crypto";
 import { createEntryEnvironment } from "../support/api-env.fixture";

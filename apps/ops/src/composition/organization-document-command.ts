@@ -1,6 +1,6 @@
 import { createMaintenancePostgresResources } from "@iam/db/maintenance";
-import { createOrganizationDocumentProcessor } from "@iam/organization-document/maintenance";
-import { createOrganizationDocumentWriteResources } from "@iam/organization-document/producer";
+import { createOrganizationDocumentProcessor } from "@iam/documents/organization/maintenance";
+import { createOrganizationDocumentWriteResources } from "@iam/documents/organization/producer";
 import { closeMaintenanceResources } from "@iam/runtime/maintenance";
 import type { OrganizationDocumentBackfillCommandEnv } from "@ops/env";
 import type { OpsLogger } from "./runtime";

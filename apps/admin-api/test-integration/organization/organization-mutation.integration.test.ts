@@ -29,6 +29,14 @@ import {
   users,
 } from "@iam/db/schema";
 import {
+  createOrganizationDocumentQueryRepository,
+  createOrganizationDocumentQueryService,
+} from "@iam/documents/organization";
+import {
+  createOrganizationDocumentProcessor,
+  type OrganizationRebuildJobPayload,
+} from "@iam/documents/organization/worker";
+import {
   OrganizationCodeExistsError,
   OrganizationCreateDtoSchema,
   OrganizationHasChildrenError,
@@ -37,14 +45,6 @@ import {
   OrganizationNotFoundError,
   OrganizationUpdateDtoSchema,
 } from "@iam/domain/organization";
-import {
-  createOrganizationDocumentQueryRepository,
-  createOrganizationDocumentQueryService,
-} from "@iam/organization-document";
-import {
-  createOrganizationDocumentProcessor,
-  type OrganizationRebuildJobPayload,
-} from "@iam/organization-document/worker";
 import { BadRequestError } from "@iam/runtime/errors";
 import { mapUnitOfWork } from "@iam/unit-of-work";
 import { eq } from "drizzle-orm";

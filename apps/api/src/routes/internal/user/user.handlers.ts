@@ -4,10 +4,10 @@ import type { RegisterPurveyorContactUseCase } from "@api/use-cases/internal/reg
 import { getContextValue } from "@iam/api-core/core/request-context";
 import * as resp from "@iam/api-core/http";
 import { HttpStatusCodes } from "@iam/contracts/http";
+import type { InternalUserDocumentQueryService } from "@iam/documents/user";
+import { InternalUserDocumentSearchUnavailableError } from "@iam/documents/user";
+import { UserDocumentSearchUnavailableError } from "@iam/documents/user/query";
 import { AuthzUnauthorizedError } from "@iam/runtime/errors";
-import type { InternalUserDocumentQueryService } from "@iam/user-document";
-import { InternalUserDocumentSearchUnavailableError } from "@iam/user-document";
-import { UserDocumentSearchUnavailableError } from "@iam/user-document/query";
 import type { UserRouteHandler } from "./user.type";
 import { runWithinInternalUserHandlerBudget } from "./user-handler-budget";
 
