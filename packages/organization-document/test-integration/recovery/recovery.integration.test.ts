@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { createUnitOfWork } from "@iam/api-core/uow";
 import { OrganizationDocumentSchema } from "@iam/contracts";
+import { createUnitOfWork } from "@iam/unit-of-work";
 import { createOrganizationDocumentInvalidation } from "../../src/producer";
 import { createOrganizationDocumentQueryRepository, createOrganizationDocumentQueryService } from "../../src/query";
 import type { OrganizationOutboxJobPayload, OrganizationRebuildJobPayload } from "../../src/work.types";

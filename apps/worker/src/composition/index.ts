@@ -1,6 +1,6 @@
-import { createSubjectAccessRepair, createSubjectAccessTransitionRecovery } from "@iam/api-core/subject-access";
 import db, { closeDb } from "@iam/db";
 import { createOrganizationDocumentWorkerModule } from "@iam/organization-document/worker";
+import { createSubjectAccessRepair, createSubjectAccessTransitionRecovery } from "@iam/subject-access/recovery";
 import { createSubjectFactsRedisPublisher } from "@iam/user-document";
 import {
   createSubjectAccessTransitionRecoveryAuthority,

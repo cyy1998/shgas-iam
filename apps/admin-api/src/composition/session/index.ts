@@ -1,15 +1,16 @@
-import { createLoginRestriction, createRedisLoginRestrictionStore } from "@iam/api-core/login-restriction";
-import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
-import {
-  createRedisSubjectAccessStore,
-  createSubjectAccessBarrier,
-  createSubjectAccessLifecycle,
-  createSubjectAccessOperations,
-  createUnifiedSubjectAccessSessionRevocation,
-  requireSubjectAccessOperation,
-} from "@iam/api-core/subject-access";
 import db from "@iam/db";
+import { createLoginRestriction } from "@iam/login-restriction";
+import { createRedisLoginRestrictionStore } from "@iam/login-restriction/redis";
 import { createUnifiedSessionKernel } from "@iam/session-kernel";
+import type { SubjectAccessOperation } from "@iam/subject-access";
+import {
+  createSubjectAccessBarrier,
+  createSubjectAccessOperations,
+  requireSubjectAccessOperation,
+} from "@iam/subject-access";
+import { createSubjectAccessLifecycle } from "@iam/subject-access/lifecycle";
+import { createRedisSubjectAccessStore } from "@iam/subject-access/redis";
+import { createUnifiedSubjectAccessSessionRevocation } from "@iam/subject-access/session-kernel";
 import { createSubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
 import type { AdminApiRuntimePorts } from "../runtime";
 import { createUnifiedAdminLifecycleRevocation } from "./unified-lifecycle";

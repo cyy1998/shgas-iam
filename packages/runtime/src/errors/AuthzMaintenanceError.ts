@@ -1,0 +1,10 @@
+import { ApiErrorCode } from "@iam/contracts";
+import { SERVICE_UNAVAILABLE } from "@iam/contracts/http";
+import { AuthzError } from "./AuthzError";
+
+export class AuthzMaintenanceError extends AuthzError {
+  constructor(message: string = "系统维护中") {
+    super(message, ApiErrorCode.Maintenance, SERVICE_UNAVAILABLE);
+    this.name = "AuthzMaintenanceError";
+  }
+}

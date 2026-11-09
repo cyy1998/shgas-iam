@@ -9,14 +9,14 @@ import {
   customSsoLocalSessionCookieName,
   encodeCustomSsoClientCode,
 } from "@api/services/sso/transport/custom-sso-client-code.transport";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
-import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";
-import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import * as resp from "@iam/api-core/http";
+import { SubjectAccessSessionInvalidHttpError } from "@iam/api-core/http/subject-access";
 import { createErrorHandler } from "@iam/api-core/middlewares";
-import { SubjectAccessSessionInvalidHttpError, SubjectAccessUnavailableError } from "@iam/api-core/subject-access";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import { ApiErrorCode, ClientStatus } from "@iam/contracts";
+import { HttpStatusCodes } from "@iam/contracts/http";
+import { AuthzMaintenanceError, AuthzUnauthorizedError } from "@iam/runtime/errors";
+import { SubjectAccessUnavailableError } from "@iam/subject-access";
 import { Hono } from "hono";
 
 type InternalTestClient = {

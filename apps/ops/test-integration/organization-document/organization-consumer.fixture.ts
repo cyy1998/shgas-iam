@@ -1,6 +1,6 @@
-import { createLogger, LoggerSourceApp } from "@iam/api-core/logger";
 import { createMaintenancePostgresResources } from "@iam/db/maintenance";
 import { createOrganizationDocumentWorkerModule } from "@iam/organization-document/worker";
+import { createLogger, LoggerSourceApp } from "@iam/runtime/logger";
 import { parseOrganizationDocumentBackfillCommandEnv } from "../../src/env";
 import { createOrganizationFixtureRuntime } from "./organization-worker-runtime";
 

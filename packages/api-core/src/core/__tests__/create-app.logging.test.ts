@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { SystemLogEvent } from "@iam/runtime/logger";
 import pino from "pino";
-import { SystemLogEvent } from "../../logger";
 import createApp from "../create-app";
 import { createRouter } from "../create-router";
 import { defineConfig } from "../define-config";

@@ -27,6 +27,10 @@ composition → routes → use-cases → services / ports
 - Composition 创建依赖并连接各层。共享 `createApp` 只接收已创建的路由和 middleware，app 私有接线由 app 自己负责。
 - Route 的类型和值依赖均不得越过业务层访问 repository 或 UnitOfWork；service 不反向依赖 use case，纯领域规则不依赖 app。
 - API、Admin API、Worker、Ops、Gateway 各有独立 composition。Gateway 的 `src/http/` 同样遵守薄协议入口边界。
+- `@iam/api-core` 提供显式子路径供 HTTP 应用装配 Hono、OpenAPI 和 tRPC，并共享请求上下文、错误映射、响应和分页。
+  Worker、Ops 和共享业务包直接消费所属能力。API 专用的 Internal Client 认证及绑定归 API。
+- `@iam/runtime` 的 workspace 依赖限于共享契约。应用传入配置并负责资源和信号的接线，业务能力各自维护状态与恢复。
+  `@iam/test-support` 只供开发和测试。
 
 ### Composition 与 Port
 
@@ -39,6 +43,8 @@ API/Admin API 的实例装配遵守以下边界：
 - 具体 service/repository 的运行时导入与实例化由 composition 负责，业务模块使用注入的实例。
 - 全局数据库实例只由 composition 与 repository 实现接入。
 - Redis 单例由 composition 或 Redis 基础设施层接入；logger 单例由 composition、app 入口或日志基础设施层接入。
+
+共享资源能力由 `@iam/runtime` 的显式子路径提供。各 app 读取自己的环境、创建资源并负责关闭。API Core 组装 HTTP 日志字段。
 
 类型引用不加载实例，但仍须遵守 route 和 port 的依赖限制。具体检查范围见
 [架构守卫](../../scripts/architecture-guard.ts)。
@@ -56,7 +62,8 @@ Trace ID 按 `traceparent`、`x-b3-traceid`、`x-trace-id` 优先级解析；tra
 
 ### Transactions 与 afterCommit
 
-一个业务流程只拥有一个 UnitOfWork 事务边界，不嵌套 UnitOfWork。Composition 用当前事务连接创建 repository、审计和其他
+`@iam/unit-of-work` 持有事务编排、提交后任务和回滚确认。一个业务流程只使用一个 UnitOfWork 事务边界。
+Composition 用当前事务连接创建 repository、审计和其他
 事务接口；业务代码只消费这些接口，不向下传递原始 transaction client。Port factory 和 callback 共用同一个
 `afterCommit` 注册口，映射 UnitOfWork 时须保留它。
 
@@ -68,7 +75,8 @@ Client Snapshot 失效也遵守这一规则。提交成功后按注册顺序尝�
 | required   | 记录错误，全部任务尝试后汇总失败并返回调用方；用于调用契约要求完成的传播 |
 | bestEffort | 记录告警，业务结果仍成功；用于可恢复的撤销或重建唤醒                     |
 
-提交后任务失败不能回滚数据库，也不能据此自动重放业务写入。事务结果未知时先保留未知状态，由模块核对事实并恢复。
+提交后任务失败时数据库已提交，调用方修复后续作用。事务适配器原样抛回 callback 的错误对象时，UnitOfWork 按该对象身份
+记录一次回滚确认。事务报错后，Subject Access lifecycle 消费这项确认才尝试恢复前一屏障。未确认的事务结果由所属模块按持久事实恢复。
 调用方结果见[Admin 写入结果与失败恢复](../development/backend-implementation.md#admin-写入结果与失败恢复)。
 
 供应商联系人 create-or-attach 使用同手机号的事务 advisory lock，新建与复用路径都先锁后查。
@@ -95,31 +103,41 @@ Admin PostgreSQL 写入统一在同一 UnitOfWork 内锁定目标，再校验、
 
 ### Client Snapshot
 
-API Core 独占 Client 缓存控制、普通配置和敏感凭据。普通读取一次固定 Client 状态与单协议配置；凭据通过独立窄接口取得并认证，
+`@iam/client-snapshot` 统一拥有 Client 缓存控制、普通配置和敏感凭据。普通读取一次固定 Client 状态与单协议配置；凭据通过独立窄接口取得并认证，
 普通查询和 DTO 不携带 Secret。认证成功只交付身份信息，敏感观察和比较细节留在模块内。
 
 缓存缺失或损坏才回源；Redis 读取故障直接失败。同一读取器、Client 和失效观察的并发回源合并。
 成功失效阻止旧结果晚到回填，新请求不能复用失效前的在途观察；已接受 Snapshot 的调用仍可完成。
 发布遇失效冲突至多重取一次，再冲突返回暂态失败。
 
-Client 写入提交后统一失效普通与敏感缓存，合法配置、启停等意图即使 no-op 也保留审计和 required 失效；InternalAuthz 缓存按自身机制失效。确认提交但传播失败时报告已提交；
+根出口提供普通读取契约，`/credentials` 提供凭据读取契约及认证。
+`/composition` 装配两个 reader、Gate 和统一失效。
+数据库 source adapter 由 [DB](../../packages/db/src/client-snapshot.ts) 持有，API 和 Admin API 在装配时注入。
+`/maintenance` 提供 Ops 使用的 repair 和独立 verify。`/testing` 提供 Snapshot 专用 Redis fixture。
+
+Admin Client 写入提交后通过装配所得的统一失效操作清除普通与敏感缓存。
+合法配置、启停等意图即使 no-op 也保留审计和 required 失效。InternalAuthz 缓存按自身机制失效。
+确认提交但传播失败时报告已提交。
 COMMIT 未知时保留原错误并保守失效。Secret 重读只读并记审计。配置、启停和轮换均不自动撤销会话。
 
 维护模块只处理当前 owner 库存，保留非目标 Client、其他 owner、旧布局及未知键族，不修改数据库或会话。
 Redis 备份恢复后须停流排空、全量修复，再由独立只读核验确认库存清零，不能等待 TTL 自愈。
 操作见[Snapshot 修复](../releases/authentication-and-session.md#client-snapshot-修复)，
-关键并发行为见[Snapshot 集成测试](../../packages/api-core/test-integration/client-snapshot/client-snapshot.integration.test.ts)。
+关键并发行为见[Snapshot 集成测试](../../packages/client-snapshot/test-integration/client-snapshot/client-snapshot.integration.test.ts)。
 
 ### Temporary Login Restriction
 
-API Core 统一登录失败计数、限制状态和派生索引，Redis adapter 拥有键、原子转换和服务端时间。
+`@iam/login-restriction` 统一登录失败历史、有效限制、管理查询、解除和派生索引。API 与 Admin API 通过根接口消费业务能力，
+由各自的 composition 通过 `@iam/login-restriction/redis` 注入 Redis adapter。键、原子转换和服务端时间由 adapter 持有。
+该包的生产代码独立于 API Core、应用和测试支撑。密码和短信认证、用户资料补充、HTTP 映射及审计由应用负责。
 登录与管理入口仅消费该能力；解除原子清除限制、失败历史和索引，不创建宽限期或改变已有会话。
 无法确认 Redis 状态时报告暂态故障，不能算作凭据错误。管理解除先作用、后写审计，失败处理遵守审计安全边界。
-索引不反向决定限制是否生效，缺少用户资料也不能隐藏或阻止解除限制。阈值与字段见[登录功能](../features/sso/login-and-session.md)及代码。
+索引不反向决定限制是否生效，缺少用户资料也不能隐藏或阻止解除限制。阈值与字段见[登录功能](../features/sso/login-and-session.md)，
+并由[真实 Redis 集成测试](../../packages/login-restriction/test-integration/login-restriction/login-restriction.integration.test.ts)验证原子状态转换。
 
 ### Subject Access Barrier
 
-API Core 拥有账号实时访问屏障。每个业务操作在首次取得可信主体后获取一次许可，固定本次成功、拒绝或暂态结果；
+`@iam/subject-access` 拥有账号实时访问屏障。每个业务操作在首次取得可信主体后获取一次许可，固定本次成功、拒绝或暂态结果；
 并行分支共享该结果，投影复用许可。下一次操作重新检查，在途已许可请求不因后续禁用而回查。浏览器旅程中的各请求是独立操作。
 
 许可绑定主体、代际和活跃容器，不能伪造、换主体或转交后台；容器关闭后拒绝继续使用。
@@ -128,7 +146,11 @@ Kernel 检查会话存在、期限、归属和撤销，不解释账号状态；C
 
 明确失效拒绝访问，并按原上下文精确撤销；旧代清理不能影响新代。blocking、缺失、损坏或基础设施故障作为暂态失败，
 保留可恢复 Cookie。管理会话查询只观察索引和记录，不给目标账号发许可或触发访问清理。
-错误与 HTTP 映射由[Subject Access adapter](../../packages/api-core/src/subject-access/)维护，底层写异常不得泄漏原始 Redis 内容。
+核心操作定义撤销的确认计数、逐项结果与未完成捕获；会话 adapter 通过 Session Kernel 捕获和执行，返回原实例及其失败或未知结果。
+API 和 Admin API 通过 [HTTP adapter](../../packages/api-core/src/http/subject-access.ts) 映射核心错误并处理 Cookie，底层写异常不得泄漏原始 Redis 内容。
+
+`/redis` 提供原子存储、bootstrap 与检查，`/lifecycle` 协调账号变更，`/recovery` 提供 repair 与 transition recovery。会话适配器经
+`/session-kernel` 提供，单向消费 Kernel。API Core 的 HTTP adapter 使用 Subject Access 根接口。
 
 账号生命周期按以下顺序协调 PostgreSQL 与 Redis：
 
@@ -139,7 +161,10 @@ Kernel 检查会话存在、期限、归属和撤销，不解释账号状态；C
 同态状态更新恢复原状态；合法重复离职仍尝试生命周期恢复与会话撤销。离职在业务事务前尽力捕获已有会话原上下文，提交后合并捕获代际与 callback 前代精确撤销。
 捕获失败退回 callback 前代，未知更早代留待重试；捕获不是全局快照，晚到旧会话由后续重试或访问校验处理。
 
-Worker 恢复先用 PostgreSQL 服务端时间回收 stale pending intent，并跳过活跃行锁；失败则停止，随后才处理 Redis transition 与账号修复。
+User Document 持有 PostgreSQL transition intent 及已发布 Document/Facts 的恢复依据实现。各运行时通过 composition 注入这些依赖，
+Subject Access 使用同一 UnitOfWork 的回滚确认。
+
+Worker 与 Ops 执行恢复时先用 PostgreSQL 服务端时间回收 stale pending intent，并跳过活跃行锁；失败则停止，随后才处理 Redis transition 与账号修复。
 修复按源账号状态决定；启用前须证明当前 Document 与已完成重建一致，完整 Facts 合法且成功发布，直接用户 Outbox 和独立后续义务已满足。
 Redis 领取和 lease、确认与新 transition 原子协调，旧 worker 不能删除或推迟新工作。repair 不从缺失屏障直接创建 enabled。
 旧调度记录补齐年龄时保留可恢复的最早观察，后续 lease/backoff 不重置年龄。
@@ -147,12 +172,12 @@ Redis 领取和 lease、确认与新 transition 原子协调，旧 worker 不能
 专用 Subject Access repair 仍需数据库写权限；文档工作的 stale 参数不改变 intent 的服务端时间阈值。
 部署方负责配置 Worker 内置周期 repair 和告警，把 stale 阈值、等待下一轮及有界排空计入恢复时限。
 步骤见[数据维护](../releases/data-maintenance.md)，关键行为见
-[操作许可测试](../../packages/api-core/test-integration/subject-access/subject-access-operation-kernel.integration.test.ts)。
+[操作许可测试](../../packages/subject-access/test-integration/subject-access/subject-access-operation-kernel.integration.test.ts)。
 
 ### Session runtime 与跨 App 边界
 
 Session Kernel 只拥有 UserSession 和 ClientSession，由 Redis 原子状态决定时间、关系、观察与撤销。
-它不依赖协议、API Core 或 app；Code、Token 和续接由各协议拥有。认证用例负责凭据、登录限制、认证方式和审计，随后创建根会话。
+它不依赖 Subject Access、协议、API Core 或 app；Code、Token 和续接由各协议拥有。认证用例负责凭据、登录限制、认证方式和审计，随后创建根会话。
 
 Custom SSO 路由与用例通过注入的应用接口访问会话，不直接导入 Kernel、协议内部实现或 app Redis。
 Admin 用户和 Client 业务通过撤销接口操作会话，Kernel 接线及原上下文适配由 composition 负责。
@@ -176,7 +201,7 @@ Admin 用户和 Client 业务通过撤销接口操作会话，Kernel 接线及�
 
 ### Custom SSO 与 OIDC
 
-两协议各自拥有授权、续接、Code 一次消费、Token、交付和补偿，单向消费 Kernel、Client Snapshot 与主体投影。
+两协议各自拥有授权、续接、Code 一次消费、Token、交付和补偿，单向消费 Kernel、Client Snapshot、Subject Access 与主体投影。
 API 负责 HTTP、Cookie、错误和重定向，不能重建协议状态机；OIDC 不依赖 Custom SSO、app、HTTP 或数据库实现。
 
 Code 固定原 Client、会话实例、用途和授权事实；消费前认证当前 Client 并定位原实例，后续配置不能绕过原用途约束。
@@ -217,7 +242,7 @@ Admin 通过同一授权能力区分 full 与 scoped。HR 在分页前同时约�
 ### Client Subject Projection
 
 `@iam/client-subject-projection` 拥有协议中性的 Catalog、披露裁剪和投影。核心通过注入的 Facts 与许可接口协作，
-不直接依赖数据库、读模型实现、app、会话运行时或协议包。一次交付用同一份合法 Facts，
+不直接依赖数据库、读模型实现、app、运行支撑、会话运行时或协议包。一次交付用同一份合法 Facts，
 仅交付 Subject Identifier 时不读取 Facts。调用方提交主体、Client、披露选择和本操作许可；投影不重新认证或读取 Client 配置。
 
 普通资料和授权都消费已发布 Facts，不在请求时检查重建新鲜度或联查源角色表。角色变更可能在重建前继续交付旧事实，
@@ -358,10 +383,10 @@ Worker 停机先停止调度并终止、等待所属 repair 进程，再确认�
 User Document owner 统一编排 stale transition 回收、backlog 观察、transition 恢复、Document/后处理与 Subject Access 修复和结果汇总。
 app 显式装配依赖、注册信号并呈现报告；领域接口不读取 app 配置或持有进程生命周期。
 PostgreSQL invocation 的独立连接、语句超时及精确取消由 `@iam/db/maintenance` 拥有；
-离线 Redis、deadline、显式信号接入及聚合关闭由 `@iam/api-core/maintenance` 拥有，队列仍由 `@iam/jobs` 拥有。
+`@iam/runtime/maintenance` 提供离线 Redis、deadline 和聚合关闭，信号由 app 显式接入；队列由 `@iam/jobs` 拥有。
 原始执行失败和必需关闭失败均保留；自动子进程的资源清理失败同样停止后续轮次。
-Windows standalone Worker 配套同目录的 `windows-job-launcher.exe` 与 `windows-job-supervisor.ps1`；
-源码运行继续使用既有 Bun/Node Job launcher，两个形态都通过同一 Job 所有权和关闭实现管理子进程。
+`@iam/runtime/process` 管理 POSIX 所属进程树和 Windows Job。Windows 源码模式使用 Runtime 源码目录中的 launcher 与 supervisor，
+standalone Worker 从可执行文件的同级目录加载 `windows-job-launcher.exe` 与 `windows-job-supervisor.ps1`。
 对应开关关闭、未启用该 consumer 或 dashboard-only 时不启动该周期任务。多实例复用持久领取和版本仲裁，不依赖进程内计时器实现跨实例互斥。
 接线见[周期恢复](../../apps/worker/src/composition/document-repair-schedule.ts)，配置与运行检查见[数据维护](../releases/data-maintenance.md#周期任务与监控)。
 

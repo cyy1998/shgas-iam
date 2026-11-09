@@ -1,4 +1,4 @@
-import * as HttpStatusCodes from "../../http-status-codes";
+import { HttpStatusCodes } from "@iam/contracts/http";
 import {
   InternalErrorResponseSchema,
   StandardErrorResponseSchema,

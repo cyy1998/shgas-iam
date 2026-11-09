@@ -5,11 +5,11 @@ import { decodeCustomSsoClientCode } from "@api/services/sso/transport/custom-ss
 import { expireCustomSsoCookies } from "@api/services/sso/transport/custom-sso-cookie";
 import type { LoginWithOaUseCase } from "@api/use-cases/authentication/login-with-oa/login-with-oa.use-case";
 import type { LoginWithWechatUseCase } from "@api/use-cases/authentication/login-with-wechat/login-with-wechat.use-case";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
-import { InvalidSsoClientError } from "@iam/api-core/errors/InvalidSsoClientError";
 import * as resp from "@iam/api-core/http";
-import { createSubjectAccessHttpAdapter } from "@iam/api-core/subject-access";
+import { createSubjectAccessHttpAdapter } from "@iam/api-core/http/subject-access";
 import { ApiErrorCode, ClientCodeSchema } from "@iam/contracts";
+import { HttpStatusCodes } from "@iam/contracts/http";
+import { InvalidSsoClientError } from "@iam/custom-sso";
 import type { Context } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 import type { SsoRouteHandler } from "./sso.type";

@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { createRoleAdapter } from "@admin-api/routes/admin/role/role.adapter";
 import { createRoleRoute } from "@admin-api/routes/admin/role/role.index";
-import { BadRequestError } from "@iam/api-core/errors";
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import { RoleAssignmentTargetType, RoleStatus } from "@iam/contracts";
 import { RoleCodeExistsError, RoleNotFoundError } from "@iam/domain/role";
+import { BadRequestError } from "@iam/runtime/errors";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import {

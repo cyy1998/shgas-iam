@@ -1,7 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import { ADMIN_OPERATION_REGISTRY } from "@admin-api/services/admin-authorization/admin-operation.registry";
-import { SystemLogEvent } from "@iam/api-core/logger";
 import {
   ADMIN_MODULE_CODES,
   EmploymentStatus,
@@ -11,6 +10,7 @@ import {
   UserStatus,
 } from "@iam/contracts";
 import { OrganizationResponsibilityAssignmentNotFoundError } from "@iam/domain/organization-responsibility";
+import { SystemLogEvent } from "@iam/runtime/logger";
 
 function actor(roles: string[]) {
   return {

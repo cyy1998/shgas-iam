@@ -1,8 +1,13 @@
-import { reviveIsoDates } from "@iam/api-core/utils";
 import type { GenericClientRuntimeDto } from "@iam/domain/client";
 import { GenericClientRuntimeDtoSchema, toGenericClientRuntimeDto } from "@iam/domain/client";
 import { ZodError } from "zod";
 import type { ClientServiceDeps } from "./client.port";
+
+const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
+
+function reviveIsoDates(_key: string, value: unknown) {
+  return typeof value === "string" && ISO_DATE_REGEX.test(value) ? new Date(value) : value;
+}
 
 export function createClientService(deps: ClientServiceDeps) {
   async function setClientCache(clientDto: GenericClientRuntimeDto) {

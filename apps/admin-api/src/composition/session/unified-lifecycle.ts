@@ -1,16 +1,14 @@
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import { AdminLoginStateUnavailableError } from "@admin-api/services/session-management/session-management.error";
-import type {
-  createUnifiedSubjectAccessSessionRevocation,
-  UnifiedSessionRevocationSummary,
-} from "@iam/api-core/subject-access";
+import type { SubjectAccessRevocationSummary } from "@iam/subject-access";
+import type { createUnifiedSubjectAccessSessionRevocation } from "@iam/subject-access/session-kernel";
 
 /** Lifecycle callbacks must not mistake a fulfilled batch with unknown effects for completion. */
 export function createUnifiedAdminLifecycleRevocation(
   revocation: ReturnType<typeof createUnifiedSubjectAccessSessionRevocation>,
   logger: { error: (fields: Record<string, unknown>, message: string) => void },
 ) {
-  function confirmed(summary: UnifiedSessionRevocationSummary) {
+  function confirmed(summary: SubjectAccessRevocationSummary) {
     if (summary.unfinished.length > 0) {
       logger.error(
         {

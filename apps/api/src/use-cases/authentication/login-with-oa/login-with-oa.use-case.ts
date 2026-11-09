@@ -1,10 +1,10 @@
 import { buildOaLoginSuccessAudit } from "@api/services/audit/events/auth.audit";
 import { toSessionOrigin } from "@api/services/session/session-origin";
-import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
-import { InvalidSsoClientError } from "@iam/api-core/errors/InvalidSsoClientError";
-import { LoginFailedError } from "@iam/api-core/errors/LoginFailedError";
 import { UserType } from "@iam/contracts";
+import { InvalidSsoClientError } from "@iam/custom-sso";
+import { AuthzUnauthorizedError } from "@iam/runtime/errors";
 import { sm3 } from "sm-crypto";
+import { LoginFailedError } from "../login.error";
 import type { LoginWithOaDeps } from "./login-with-oa.port";
 import type { LoginWithOaInput, LoginWithOaOptions, LoginWithOaResult } from "./login-with-oa.type";
 

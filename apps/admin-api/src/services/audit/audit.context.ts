@@ -1,8 +1,8 @@
 import { getRequestId, getRequestIp, getTraceId } from "@iam/api-core/core/request-context";
-import { pickObservabilityContext } from "@iam/api-core/observability";
-import type { UnitOfWorkTransactionOptions } from "@iam/api-core/uow";
 import type { AuditActorType, AuditDetails, AuditOutcome, AuditRequestContext } from "@iam/domain/audit";
 import { normalizeAuditActor } from "@iam/domain/audit";
+import { pickObservabilityContext } from "@iam/runtime/observability";
+import type { UnitOfWorkTransactionOptions } from "@iam/unit-of-work";
 import type { Context } from "hono";
 
 export type AuditLogInput = {

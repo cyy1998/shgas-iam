@@ -2,18 +2,18 @@ import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { createSubjectAccessBootstrap } from "@iam/api-core/subject-access";
-import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
+import { OrganizationLevel, OrganizationType, UserStatus } from "@iam/contracts";
+import { organizationClosures, organizations, users } from "@iam/db/schema";
+import { createOrganizationDocumentInvalidation } from "@iam/organization-document/producer";
+import { createSubjectAccessBootstrap } from "@iam/subject-access/redis";
+import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import {
   createBoundedProcessLogCapture,
   runProcessSmoke,
   spawnOwnedProcessTree,
   withOwnedTemporaryDirectory,
-} from "@iam/api-core/testing/process-smoke-harness";
-import { createUnitOfWork } from "@iam/api-core/uow";
-import { OrganizationLevel, OrganizationType, UserStatus } from "@iam/contracts";
-import { organizationClosures, organizations, users } from "@iam/db/schema";
-import { createOrganizationDocumentInvalidation } from "@iam/organization-document/producer";
+} from "@iam/test-support/process-smoke-harness";
+import { createUnitOfWork } from "@iam/unit-of-work";
 import { createSubjectFactsRedisCache, DocumentFactsCacheRecordSchema } from "@iam/user-document";
 import { createUserDocumentInvalidation } from "@iam/user-document/producer";
 import { createWorkerPostgresTestHarness } from "../support/postgres-test-harness";

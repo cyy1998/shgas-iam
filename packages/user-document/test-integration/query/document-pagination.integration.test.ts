@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
 import { UserStatus, UserType } from "@iam/contracts";
 import { relations } from "@iam/db/relations";
+import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import type { PublishedUserDocument } from "../../src/document";

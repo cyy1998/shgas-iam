@@ -15,13 +15,13 @@ import type { AdminBindings, AdminRouteHandler } from "@admin-api/types/lib";
 import type { z } from "@hono/zod-openapi";
 import { createRoute } from "@hono/zod-openapi";
 import { createRouter } from "@iam/api-core/core/create-router";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
 import { router } from "@iam/api-core/trpc";
 import { createAdminMutationResultSchema } from "@iam/contracts";
+import { HttpStatusCodes } from "@iam/contracts/http";
 import type { Context } from "hono";
 import { z as schema } from "zod";
 

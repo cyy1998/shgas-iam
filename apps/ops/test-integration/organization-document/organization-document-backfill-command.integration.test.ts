@@ -1,12 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
-import { createLogger, LoggerSourceApp } from "@iam/api-core/logger";
-import {
-  PROCESS_SMOKE_TEST_TIMEOUT_MS,
-  runProcessCommandSmoke,
-  spawnOwnedProcessTree,
-  withOwnedTemporaryDirectory,
-} from "@iam/api-core/testing/process-smoke-harness";
 import { OrganizationStatus, OrganizationType } from "@iam/contracts";
 import { DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
 import {
@@ -14,6 +7,13 @@ import {
   createOrganizationDocumentQueryService,
 } from "@iam/organization-document/query";
 import { createOrganizationDocumentWorkerModule } from "@iam/organization-document/worker";
+import { createLogger, LoggerSourceApp } from "@iam/runtime/logger";
+import {
+  PROCESS_SMOKE_TEST_TIMEOUT_MS,
+  runProcessCommandSmoke,
+  spawnOwnedProcessTree,
+  withOwnedTemporaryDirectory,
+} from "@iam/test-support/process-smoke-harness";
 import { createOpsPostgresTestHarness } from "../support/postgres-test-harness";
 import { resetOpsRedisTestDatabase, resolveOpsRedisTestUrl } from "../support/redis-test-harness";
 import { createOrganizationFixtureRuntime } from "./organization-worker-runtime";

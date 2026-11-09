@@ -26,8 +26,14 @@ type StaticModulePattern = Readonly<{
 
 type StaticModuleOwnershipRule = Readonly<{
   ruleId:
+    | "client-snapshot-owner"
     | "client-subject-projection-owner"
+    | "http-owner"
+    | "login-restriction-ownership"
+    | "runtime-owner"
+    | "test-support-ownership"
     | "session-runtime-owner"
+    | "subject-access-owner"
     | "worker-ownership"
     | "ops-ownership"
     | "organization-responsibility-parent-lifecycle-owner";
@@ -51,6 +57,8 @@ const architectureWorkspaces: readonly (readonly [
   ["@iam/worker", "apps/worker", ["source", "canonical"]],
   ["@iam/ops", "apps/ops", ["source", "canonical"]],
   ["@iam/session-kernel", "packages/session-kernel", ["source", "docker", "canonical"]],
+  ["@iam/subject-access", "packages/subject-access", ["source", "docker", "canonical"]],
+  ["@iam/login-restriction", "packages/login-restriction", ["source", "docker", "canonical"]],
   ["@iam/custom-sso", "packages/custom-sso", ["source", "docker", "canonical"]],
   ["@iam/oidc", "packages/oidc", ["source", "docker", "canonical"]],
   ["@iam/client-subject-projection", "packages/client-subject-projection", ["source", "docker", "canonical"]],
@@ -66,7 +74,12 @@ const architectureWorkspaces: readonly (readonly [
   ["@iam/organization-document", "packages/organization-document", ["source", "docker", "canonical"]],
   ["@iam/document-update", "packages/document-update", ["source", "docker", "canonical"]],
   ["@iam/admin", "apps/admin", ["canonical"]],
-  ["@iam/api-core", "packages/api-core", ["canonical"]],
+  ["@iam/api-core", "packages/api-core", ["source", "docker", "canonical"]],
+  ["@iam/unit-of-work", "packages/unit-of-work", ["source", "docker", "canonical"]],
+  ["@iam/client-snapshot", "packages/client-snapshot", ["source", "docker", "canonical"]],
+  ["@iam/runtime", "packages/runtime", ["source", "docker", "canonical"]],
+  ["@iam/contracts", "packages/contracts", ["canonical"]],
+  ["@iam/test-support", "packages/test-support", ["canonical"]],
   ["@iam/db", "packages/db", ["canonical"]],
   ["@iam/domain", "packages/domain", ["canonical"]],
   ["@iam/sso", "apps/sso", ["canonical"]],
@@ -117,8 +130,10 @@ interface WorkspaceDependencyNode {
 }
 
 const clientSubjectProjectionExternalOwnerTargets: readonly StaticModulePattern[] = [
+  { kind: "prefix", module: "packages/runtime/src" },
+  { kind: "prefix", module: "packages/client-snapshot/src" },
   { kind: "prefix", module: "packages/session-kernel/src" },
-  { kind: "prefix", module: "packages/api-core/src" },
+  { kind: "prefix", module: "packages/subject-access/src" },
   { kind: "prefix", module: "packages/db/src" },
   { kind: "prefix", module: "packages/domain/src" },
   { kind: "prefix", module: "packages/user-document/src" },
@@ -131,6 +146,62 @@ const clientSubjectProjectionExternalOwnerTargets: readonly StaticModulePattern[
 ];
 
 const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
+  {
+    ruleId: "http-owner",
+    sourceScopes: ["packages", "apps/worker/src", "apps/ops/src"],
+    allowedSources: ["packages/api-core/src"],
+    targets: [{ kind: "prefix", module: "packages/api-core/src" }],
+    message: (moduleSpecifier, declaration) =>
+      `Non-HTTP owners must not ${dependencyOperation(declaration)} API Core module "${moduleSpecifier}"; ` +
+      "depend on the capability owner directly.",
+  },
+  {
+    ruleId: "runtime-owner",
+    sourceScopes: ["packages/runtime/src"],
+    targets: [
+      { kind: "prefix", module: "@iam" },
+      { kind: "prefix", module: "apps" },
+      { kind: "prefix", module: "packages" },
+      { kind: "prefix", module: "@hono" },
+      { kind: "prefix", module: "@trpc" },
+      { kind: "package", module: "hono" },
+      { kind: "package", module: "hono-pino" },
+      { kind: "package", module: "@scalar/hono-api-reference" },
+    ],
+    allowedTargets: [
+      { kind: "prefix", module: "packages/contracts/src" },
+      { kind: "prefix", module: "packages/runtime/src" },
+    ],
+    message: (moduleSpecifier) =>
+      `Runtime must not depend on application, business or HTTP module "${moduleSpecifier}"; ` +
+      "use only platform libraries and shared contracts.",
+  },
+  {
+    ruleId: "test-support-ownership",
+    sourceScopes: ["apps", "packages"],
+    targets: [{ kind: "prefix", module: "packages/test-support/src" }],
+    message: (moduleSpecifier) =>
+      `Production modules must not use test resources "${moduleSpecifier}"; keep the dependency in tests.`,
+  },
+  {
+    ruleId: "client-snapshot-owner",
+    sourceScopes: ["packages/client-snapshot/src"],
+    targets: [
+      { kind: "prefix", module: "packages/db/src" },
+      { kind: "prefix", module: "apps" },
+      { kind: "prefix", module: "@hono" },
+      { kind: "package", module: "hono" },
+    ],
+    message: (moduleSpecifier) =>
+      `Client Snapshot must not import an app, Hono or database implementation "${moduleSpecifier}"; inject its source and Redis ports.`,
+  },
+  {
+    ruleId: "login-restriction-ownership",
+    sourceScopes: ["packages/login-restriction/src"],
+    targets: [{ kind: "prefix", module: "apps" }],
+    message: (moduleSpecifier) =>
+      `Login Restriction production sources must not depend on "${moduleSpecifier}"; inject the storage boundary.`,
+  },
   {
     ruleId: "organization-responsibility-parent-lifecycle-owner",
     sourceScopes: ["apps", "packages"],
@@ -159,17 +230,31 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
       `OIDC must not import another protocol, app or HTTP owner "${moduleSpecifier}"; inject its external capabilities.`,
   },
   {
+    ruleId: "subject-access-owner",
+    sourceScopes: ["packages/subject-access/src"],
+    targets: [
+      { kind: "prefix", module: "packages/db/src" },
+      { kind: "prefix", module: "packages/user-document/src" },
+      { kind: "prefix", module: "apps" },
+      { kind: "prefix", module: "@hono" },
+      { kind: "package", module: "hono" },
+    ],
+    message: (moduleSpecifier) =>
+      "Subject Access must not depend on an app, Hono or persistence authority: " + moduleSpecifier,
+  },
+  {
     ruleId: "session-runtime-owner",
     sourceScopes: ["packages/session-kernel/src"],
     targets: [
-      { kind: "prefix", module: "packages/api-core/src" },
+      { kind: "prefix", module: "packages/subject-access/src" },
+      { kind: "prefix", module: "packages/client-snapshot/src" },
       { kind: "package", module: "@iam/custom-sso" },
       { kind: "prefix", module: "packages/custom-sso/src" },
       { kind: "prefix", module: "packages/oidc/src" },
       { kind: "prefix", module: "apps" },
     ],
     message: (moduleSpecifier) =>
-      `Session Kernel must not import runtime or protocol owner "${moduleSpecifier}"; inject its external capabilities.`,
+      `Session Kernel must not import account access, runtime, or protocol owner "${moduleSpecifier}"; inject its external capabilities.`,
   },
   {
     ruleId: "client-subject-projection-owner",
@@ -557,7 +642,7 @@ function collectSourceDependencyDirectionViolations(source: IndexedSourceFile): 
       ];
     }
     if (source.file.includes("/src/routes/") || source.file.startsWith("apps/gateway/src/http/")) {
-      if (moduleSpecifier === "@iam/api-core/uow") {
+      if (matchesStaticModulePattern(moduleSpecifier, { kind: "package", module: "@iam/unit-of-work" })) {
         return [
           {
             ruleId: "dependency-direction",

@@ -13,7 +13,6 @@ import type { ClientSsoTransactionPorts } from "@admin-api/services/client-sso/c
 import { createClientSsoRepository } from "@admin-api/services/client-sso/client-sso.repository";
 import { createClientSsoService } from "@admin-api/services/client-sso/client-sso.service";
 import { createErrorHandler } from "@iam/api-core/middlewares";
-import { createUnitOfWork } from "@iam/api-core/uow";
 import type { ClientSsoConfig } from "@iam/contracts";
 import {
   ApiErrorCode,
@@ -26,6 +25,7 @@ import {
 import type { DbClient } from "@iam/db";
 import { auditLogs, clientDelegations, clients, roles } from "@iam/db/schema";
 import { toClientAdminDetailDto } from "@iam/domain/client";
+import { createUnitOfWork } from "@iam/unit-of-work";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";

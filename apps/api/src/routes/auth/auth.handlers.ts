@@ -1,5 +1,6 @@
 import type { LoggerPort } from "@api/composition/runtime";
 import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
+import { verifyInternalClient } from "@api/middlewares/internal-client-authentication";
 import { getApiAuditRequestContext } from "@api/services/audit/audit.context";
 import type { LoginCredentialParser } from "@api/services/authentication/login-credential.parser";
 import type { ClientService } from "@api/services/client/client.service";
@@ -10,14 +11,13 @@ import {
 import { expireCustomSsoCookies } from "@api/services/sso/transport/custom-sso-cookie";
 import type { LoginWithMobileUseCase } from "@api/use-cases/authentication/login-with-mobile/login-with-mobile.use-case";
 import type { LoginWithPasswordUseCase } from "@api/use-cases/authentication/login-with-password/login-with-password.use-case";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
-import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import * as resp from "@iam/api-core/http";
-import { SystemLogEvent } from "@iam/api-core/logger";
-import { verifyInternalClient } from "@iam/api-core/middlewares";
-import { createSubjectAccessHttpAdapter } from "@iam/api-core/subject-access";
+import { createSubjectAccessHttpAdapter } from "@iam/api-core/http/subject-access";
 import { ClientCodeSchema } from "@iam/contracts";
+import { HttpStatusCodes } from "@iam/contracts/http";
 import { CustomSsoRequestMismatchError } from "@iam/custom-sso";
+import { AuthzUnauthorizedError } from "@iam/runtime/errors";
+import { SystemLogEvent } from "@iam/runtime/logger";
 import { getCookie, setCookie } from "hono/cookie";
 import type { AuthRouteHandler } from "./auth.type";
 

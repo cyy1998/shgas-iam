@@ -12,17 +12,8 @@ import type { AdminUserTransactionPorts } from "@admin-api/services/user/user.po
 import { createUserService } from "@admin-api/services/user/user.service";
 import { createCreateEmploymentUseCase } from "@admin-api/use-cases/employment/create-employment/create-employment.use-case";
 import { createEndEmploymentUseCase } from "@admin-api/use-cases/employment/end-employment/end-employment.use-case";
-import { BadRequestError } from "@iam/api-core/errors";
-import { createErrorHandler } from "@iam/api-core/middlewares/error-handler";
-import {
-  createSubjectAccessBarrier,
-  createSubjectAccessLifecycle,
-  createSubjectAccessOperations,
-} from "@iam/api-core/subject-access";
-import { createInMemorySubjectAccessStore } from "@iam/api-core/subject-access/testing";
-import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/api-core/testing/process-smoke-harness";
+import { createErrorHandler } from "@iam/api-core/middlewares";
 import { createTRPCContext } from "@iam/api-core/trpc";
-import { mapUnitOfWork } from "@iam/api-core/uow";
 import {
   ApiErrorCode,
   ClientDelegationStatus,
@@ -45,6 +36,12 @@ import {
   users,
 } from "@iam/db/schema";
 import { UserHasOpenEmploymentError, UserNotFoundError, UsernameAlreadyExistsError } from "@iam/domain/user";
+import { BadRequestError } from "@iam/runtime/errors";
+import { createSubjectAccessBarrier, createSubjectAccessOperations } from "@iam/subject-access";
+import { createSubjectAccessLifecycle } from "@iam/subject-access/lifecycle";
+import { createInMemorySubjectAccessStore } from "@iam/subject-access/testing";
+import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
+import { mapUnitOfWork } from "@iam/unit-of-work";
 import { createSubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono } from "hono";

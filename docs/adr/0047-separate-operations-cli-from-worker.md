@@ -38,7 +38,7 @@ User repair 中仍留在 CLI 的 transition 回收、恢复、文档与发布后
 手动和自动入口共同消费同一流程；命令解析、环境变量、报告呈现和进程退出留在 app。
 
 共用的 PostgreSQL invocation 连接、精确取消和关闭能力归 `@iam/db`；离线 Redis 连接、deadline、信号和聚合关闭能力归
-`@iam/api-core` 的窄基础设施出口，由 app 显式创建或注册。队列连接继续使用 `@iam/jobs`。
+`@iam/runtime/maintenance`，由 app 显式创建或注册。队列连接继续使用 `@iam/jobs`。
 按已有 owner 分配这些能力，不新增聚合各领域依赖的统一运维核心包。
 
 Ops 和 Worker 各自持有薄装配。Ops 提供人工命令入口；Worker 周期调度只启动本 app 内部的专用 repair 子进程，

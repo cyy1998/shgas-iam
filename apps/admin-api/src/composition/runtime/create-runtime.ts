@@ -2,8 +2,7 @@ import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import env from "@admin-api/env";
 import redis from "@admin-api/lib/infra/redis";
 import { logger } from "@admin-api/lib/logger";
-import { generateRandomPassword } from "@iam/api-core/utils";
-import { hash } from "bcrypt-ts";
+import { hashSecret } from "@iam/runtime/security/bcrypt";
 import { createAdminClientCache } from "./client-cache";
 import type { AdminApiRuntimePorts } from "./types";
 
@@ -11,6 +10,15 @@ export interface CreateAdminApiRuntimeOptions {
   env?: typeof env;
   logger?: typeof logger;
   redis?: typeof redis;
+}
+
+function generateRandomPassword(length = 8) {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let result = "";
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
 }
 
 export function createAdminApiRuntime(options: CreateAdminApiRuntimeOptions = {}): AdminApiRuntimePorts {
@@ -23,7 +31,7 @@ export function createAdminApiRuntime(options: CreateAdminApiRuntimeOptions = {}
     redis: runtimeRedis,
     passwordHasher: {
       async hashPassword(password) {
-        return await hash(password, runtimeEnv.passwordHashRounds);
+        return await hashSecret(password, runtimeEnv.passwordHashRounds);
       },
     },
     random: {

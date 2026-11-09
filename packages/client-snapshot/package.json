@@ -1,0 +1,39 @@
+{
+  "name": "@iam/client-snapshot",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./credentials": "./src/credentials.ts",
+    "./composition": "./src/composition.ts",
+    "./maintenance": "./src/maintenance.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "scripts": {
+    "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
+    "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
+    "typecheck": "pnpm exec tsc --noEmit",
+    "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
+    "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check",
+    "test:integration:bun": "node ../../scripts/run-package-integration.mjs bun -- bun test test-integration"
+  },
+  "dependencies": {
+    "@iam/contracts": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@iam/test-support": "workspace:*",
+    "@types/bun": "latest",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "ioredis": "^6.0.0",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  },
+  "iamTest": {
+    "integration": {
+      "bun": {
+        "redis": "IAM_CLIENT_SNAPSHOT_TEST_REDIS_URL"
+      }
+    }
+  }
+}

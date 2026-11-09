@@ -1,10 +1,10 @@
 import { createCustomSsoUnavailableResponse } from "@api/services/sso/transport/custom-sso-retryable.openapi";
 import { createRoute, z } from "@hono/zod-openapi";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
 import { ClientCodeSchema } from "@iam/contracts";
+import { HttpStatusCodes } from "@iam/contracts/http";
 import { LoginPageGuardResultSchema, SSOMetaInfoSchema, SsoTokenResultSchema } from "./sso.schema";
 import { CUSTOM_SSO_BASIC_SECURITY_SCHEME } from "./sso.security";
 

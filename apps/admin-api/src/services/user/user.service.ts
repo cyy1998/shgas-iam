@@ -5,9 +5,6 @@ import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.co
 import { buildAdminUserAudit } from "@admin-api/services/audit/events/user.audit";
 import { EmploymentDetailDtoSchema, toEmploymentDto } from "@admin-api/services/employment/employment.schema";
 import { UserDetailDtoSchema, UserDtoSchema } from "@admin-api/services/user/user.schema";
-import { BadRequestError } from "@iam/api-core/errors";
-import type { SubjectAccessMutationReceipt, SubjectAccessOperation } from "@iam/api-core/subject-access";
-import { requireSubjectAccessOperation } from "@iam/api-core/subject-access";
 import { EmploymentStatus, UserStatus } from "@iam/contracts";
 import {
   UserHasOpenClientDelegationError,
@@ -15,6 +12,9 @@ import {
   UserNotFoundError,
   UsernameAlreadyExistsError,
 } from "@iam/domain/user";
+import { BadRequestError } from "@iam/runtime/errors";
+import type { SubjectAccessMutationReceipt, SubjectAccessOperation } from "@iam/subject-access";
+import { requireSubjectAccessOperation } from "@iam/subject-access";
 import type { AdminUserServiceDeps, AdminUserTransactionStorePort } from "./user.port";
 import type { User, UserAdminCreateDto, UserDetailDto, UserPaginationQueryDto, UserUpdateDto } from "./user.type";
 

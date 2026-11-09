@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { AdminMutationCommittedError, createAdminMutation } from "@admin-api/services/admin-mutation/admin-mutation";
-import { AfterCommitRequiredTaskError, createUnitOfWork } from "@iam/api-core/uow";
+import { AfterCommitRequiredTaskError, createUnitOfWork } from "@iam/unit-of-work";
 
 describe("Admin mutation failure boundary", () => {
   test("classifies required task failure only after UoW commit, without replaying business writes", async () => {

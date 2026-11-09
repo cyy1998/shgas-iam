@@ -2,7 +2,6 @@ import { createAdminMutation } from "@admin-api/services/admin-mutation/admin-mu
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildRoleAssignmentAudit, buildRoleAudit } from "@admin-api/services/audit/events/role.audit";
-import { BadRequestError } from "@iam/api-core/errors";
 import { RoleAssignmentTargetType, RoleStatus } from "@iam/contracts";
 import { ClientNotFoundError } from "@iam/domain/client";
 import type { RoleAssignmentTargetSummaryDto } from "@iam/domain/role";
@@ -15,6 +14,7 @@ import {
   toRoleDetailDto,
   toRoleDto,
 } from "@iam/domain/role";
+import { BadRequestError } from "@iam/runtime/errors";
 import type { AdminRoleServiceDeps, AdminRoleTransactionPorts } from "./role.port";
 import type {
   RoleAssignmentCreateDto,

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { createOidcHttpRouter } from "@api/routes/oidc/oidc.http";
-import { createSubjectAccessOperations } from "@iam/api-core/subject-access";
+import { createSubjectAccessOperations } from "@iam/subject-access";
 
 test("OIDC HTTP reports safe protocol and dependency failure classifications without request secrets", async () => {
   const failures: unknown[] = [];

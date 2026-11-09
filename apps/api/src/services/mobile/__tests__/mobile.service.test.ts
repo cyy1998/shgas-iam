@@ -2,8 +2,8 @@ import { describe, expect, mock, test } from "bun:test";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import { createMobileService } from "@api/services/mobile/mobile.service";
 import { createMemoryRedis } from "@api/testing/fakes";
-import { INTERNAL_SERVER_ERROR } from "@iam/api-core/core/http-status-codes";
 import { ApiErrorCode, UserStatus, UserType } from "@iam/contracts";
+import { INTERNAL_SERVER_ERROR } from "@iam/contracts/http";
 
 function createService() {
   const redis = createMemoryRedis();

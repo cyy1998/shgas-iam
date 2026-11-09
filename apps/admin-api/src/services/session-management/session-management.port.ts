@@ -1,7 +1,7 @@
 import type { AdminAuditContext, AuditLogInput } from "@admin-api/services/audit/audit.context";
-import type { UnifiedSessionRevocationSummary } from "@iam/api-core/subject-access";
 import type { UserStatus } from "@iam/contracts";
 import type { CapturedSession } from "@iam/session-kernel";
+import type { SubjectAccessRevocationSummary } from "@iam/subject-access";
 import type { AdminSessionListItem } from "./session-management.type";
 
 export interface AdminSessionInventoryItem {
@@ -68,7 +68,7 @@ export interface AdminLoginRestrictionPort {
   }>;
 }
 
-export type AdminSessionControlSummary = { sessions: UnifiedSessionRevocationSummary };
+export type AdminSessionControlSummary = { sessions: SubjectAccessRevocationSummary };
 
 export interface AdminSessionControlPort {
   executeCapturedSessions?: (

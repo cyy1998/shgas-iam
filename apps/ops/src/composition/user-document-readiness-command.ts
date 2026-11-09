@@ -1,6 +1,6 @@
-import { closeMaintenanceResources, createOfflineMaintenanceRedis } from "@iam/api-core/maintenance";
-import type { RedisConfig } from "@iam/api-core/redis";
 import { createMaintenancePostgresResources } from "@iam/db/maintenance";
+import { closeMaintenanceResources, createOfflineMaintenanceRedis } from "@iam/runtime/maintenance";
+import type { RedisConfig } from "@iam/runtime/redis/config";
 import {
   createCurrentUserDocumentPostgresReadiness,
   createCurrentUserDocumentRedisAccessReadiness,

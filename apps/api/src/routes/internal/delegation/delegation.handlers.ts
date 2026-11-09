@@ -6,11 +6,11 @@ import {
   ClientDelegationResolutionUnavailableError,
 } from "@api/use-cases/internal/resolve-client-delegations/resolve-client-delegations.error";
 import type { ResolveClientDelegationsUseCase } from "@api/use-cases/internal/resolve-client-delegations/resolve-client-delegations.use-case";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { getContextValue } from "@iam/api-core/core/request-context";
-import { AuthzUnauthorizedError } from "@iam/api-core/errors";
 import * as resp from "@iam/api-core/http";
+import { HttpStatusCodes } from "@iam/contracts/http";
 import type { DelegationService } from "@iam/delegation";
+import { AuthzUnauthorizedError } from "@iam/runtime/errors";
 import type { Context } from "hono";
 import type { DelegationRouteHandler } from "./delegation.type";
 

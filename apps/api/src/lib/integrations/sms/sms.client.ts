@@ -1,6 +1,6 @@
+import { createHmac } from "node:crypto";
 import type { ClockPort, RandomPort } from "@api/composition/runtime";
 import { z } from "@hono/zod-openapi";
-import { hmacSha256 } from "@iam/api-core/utils";
 
 const SMSServiceResultSchema = z.object({
   resultCode: z.string(),
@@ -36,7 +36,7 @@ export function createSmsClient(deps: CreateSmsClientDeps) {
       message,
       timestamp: currentTimestamp,
       origin,
-      signature: hmacSha256(data, deps.config.signatureKey),
+      signature: createHmac("sha256", deps.config.signatureKey).update(data).digest("hex"),
     };
   }
 

@@ -1,16 +1,15 @@
 import { randomUUID } from "node:crypto";
 import process from "node:process";
-import type { DedicatedRedisTestConfig } from "@iam/api-core/testing/external-test-resources";
+import type { DedicatedRedisTestConfig } from "@iam/test-support/external-test-resources";
 import {
   parseDedicatedRedisTestUrl,
   requireExternalTestUrl,
   resetExclusiveRedisTestDatabase,
   runWithOwnedTestResources,
-} from "@iam/api-core/testing/external-test-resources";
+} from "@iam/test-support/external-test-resources";
 import Redis from "ioredis";
 
-const DEFAULT_TEST_REDIS_URL_ENV = "IAM_ADMIN_API_TEST_REDIS_URL";
-type AdminApiRedisTestResourceEnvName = "IAM_ADMIN_API_TEST_REDIS_URL" | "IAM_API_CORE_TEST_REDIS_URL";
+const TEST_REDIS_URL_ENV = "IAM_ADMIN_API_TEST_REDIS_URL";
 
 export interface AdminApiRedisTestScope {
   readonly redis: Redis;
@@ -28,13 +27,14 @@ export interface AdminApiRedisTestHarness {
   readonly redisConfig: DedicatedRedisTestConfig;
 }
 
-export async function createAdminApiRedisTestHarness(options?: {
-  readonly resourceEnvName?: AdminApiRedisTestResourceEnvName;
-}): Promise<AdminApiRedisTestHarness> {
-  const resourceEnvName = options?.resourceEnvName ?? DEFAULT_TEST_REDIS_URL_ENV;
-  const redisUrl = requireDedicatedRedisTestUrl(resourceEnvName);
+export async function createAdminApiRedisTestHarness(): Promise<AdminApiRedisTestHarness> {
+  const redisUrl = requireExternalTestUrl({
+    environment: process.env,
+    lane: "Admin API Redis Integration",
+    name: TEST_REDIS_URL_ENV,
+  });
   const redisConfig = parseDedicatedRedisTestUrl({
-    name: resourceEnvName,
+    name: TEST_REDIS_URL_ENV,
     value: redisUrl,
   });
   const stopExecutors: Array<() => Promise<void>> = [];
@@ -128,13 +128,4 @@ async function closeRedis(redis: Redis) {
   } finally {
     redis.disconnect();
   }
-}
-
-function requireDedicatedRedisTestUrl(resourceEnvName: AdminApiRedisTestResourceEnvName) {
-  const redisUrl = requireExternalTestUrl({
-    environment: process.env,
-    lane: "Admin API Redis Integration",
-    name: resourceEnvName,
-  });
-  return redisUrl;
 }

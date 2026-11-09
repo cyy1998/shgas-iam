@@ -1,8 +1,5 @@
-import type { ClientSnapshotReader } from "@iam/api-core/client-snapshot";
-import { ClientSnapshotUnavailableError } from "@iam/api-core/client-snapshot";
-import { AuthzMaintenanceError, AuthzUnauthorizedError } from "@iam/api-core/errors";
-import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
-import { SubjectAccessUnavailableError } from "@iam/api-core/subject-access";
+import type { ClientSnapshotReader } from "@iam/client-snapshot";
+import { ClientSnapshotUnavailableError } from "@iam/client-snapshot";
 import { parseSubjectClaimSelection, SUBJECT_CLAIM_CATALOG } from "@iam/client-subject-projection";
 import { ClientSsoProtocol, ClientStatus } from "@iam/contracts";
 import {
@@ -11,8 +8,11 @@ import {
   CustomSsoTrafficGateUnavailableError,
 } from "@iam/custom-sso";
 import { resolveCustomSsoSubjectProjection } from "@iam/custom-sso/wire";
+import { AuthzMaintenanceError, AuthzUnauthorizedError } from "@iam/runtime/errors";
 import type { UnifiedSessionKernel } from "@iam/session-kernel";
 import { SessionStorageError } from "@iam/session-kernel";
+import type { SubjectAccessOperation } from "@iam/subject-access";
+import { SubjectAccessUnavailableError } from "@iam/subject-access";
 
 interface RootSessionServiceDeps {
   kernel: UnifiedSessionKernel<SubjectAccessOperation>;

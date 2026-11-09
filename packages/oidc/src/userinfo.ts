@@ -1,8 +1,8 @@
-import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
-import { requireSubjectAccessOperation } from "@iam/api-core/subject-access";
 import type { EmploymentProfileBase, OptionalSubjectClaim, SubjectFactsSnapshot } from "@iam/client-subject-projection";
 import { createPermittedClientSubjectProjectionService } from "@iam/client-subject-projection";
 import { OidcScope, OrganizationReferenceSchema, SubjectClaim } from "@iam/contracts";
+import type { SubjectAccessOperation } from "@iam/subject-access";
+import { requireSubjectAccessOperation } from "@iam/subject-access";
 import { OidcProtocolError } from "./errors";
 import type { OidcTokens } from "./tokens";
 

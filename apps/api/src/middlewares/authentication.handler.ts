@@ -1,4 +1,5 @@
 import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
+import { createInternalAuthenticationHandler } from "@api/middlewares/internal-client-authentication";
 import type { createRootSessionService } from "@api/services/authentication/root-session.service";
 import type { ClientService } from "@api/services/client/client.service";
 import type { CustomSsoSubjectDeliveryRequestScope } from "@api/services/sso/subject-delivery/custom-sso-subject-delivery-request-scope";
@@ -7,12 +8,10 @@ import {
   decodeCustomSsoClientCode,
 } from "@api/services/sso/transport/custom-sso-client-code.transport";
 import { expireCustomSsoCookies } from "@api/services/sso/transport/custom-sso-cookie";
-import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
-import { BadRequestError } from "@iam/api-core/errors/BadRequestError";
-import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares";
-import { createSubjectAccessHttpAdapter } from "@iam/api-core/subject-access";
+import { createSubjectAccessHttpAdapter } from "@iam/api-core/http/subject-access";
 import { ClientCodeSchema } from "@iam/contracts";
 import { CustomSsoClientDeliveryUnauthorizedError, CustomSsoRequestMismatchError } from "@iam/custom-sso";
+import { AuthzUnauthorizedError, BadRequestError } from "@iam/runtime/errors";
 import type { Context, Next } from "hono";
 import { getCookie } from "hono/cookie";
 

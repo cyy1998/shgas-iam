@@ -1,4 +1,4 @@
-import { createRedisClient } from "@iam/api-core/redis";
+import { createRedisClient } from "@iam/runtime/redis/connection";
 import type { WorkerEnv } from "@worker/env";
 import type Redis from "ioredis";
 import type { Logger } from "pino";

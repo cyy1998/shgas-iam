@@ -19,6 +19,7 @@
     "@iam/api-core": "workspace:*",
     "@iam/contracts": "workspace:*",
     "@iam/db": "workspace:*",
+    "@iam/runtime": "workspace:*",
     "drizzle-orm": "1.0.0-rc.2",
     "hono": "^4.12.30",
     "postgres": "^3.4.9",
@@ -26,6 +27,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@iam/test-support": "workspace:*",
     "@types/bun": "latest",
     "@typescript/native": "npm:typescript@7.0.2",
     "typescript": "npm:@typescript/typescript6@6.0.2"

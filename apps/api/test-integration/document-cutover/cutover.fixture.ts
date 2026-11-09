@@ -6,12 +6,11 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { inspect } from "node:util";
-import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
-import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
-import {
-  parseDedicatedRedisTestUrl,
-  resetExclusiveRedisTestDatabase,
-} from "@iam/api-core/testing/external-test-resources";
+import { createClientSnapshots } from "@iam/client-snapshot/composition";
+import { ClientStatus } from "@iam/contracts";
+import { createJobQueue } from "@iam/jobs";
+import type { SubjectAccessOperation } from "@iam/subject-access";
+import { parseDedicatedRedisTestUrl, resetExclusiveRedisTestDatabase } from "@iam/test-support/external-test-resources";
 import {
   createProcessSmokeEnvironment,
   createProcessSmokeSuite,
@@ -20,9 +19,7 @@ import {
   runProcessSmoke,
   spawnOwnedProcessTree,
   withOwnedTemporaryDirectory,
-} from "@iam/api-core/testing/process-smoke-harness";
-import { ClientStatus } from "@iam/contracts";
-import { createJobQueue } from "@iam/jobs";
+} from "@iam/test-support/process-smoke-harness";
 import Redis from "ioredis";
 import { z } from "zod";
 import { requireManagedApiResources, runManagedApiFixture } from "../oidc/managed-api-resources.fixture";

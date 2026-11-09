@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { createUnitOfWork } from "@iam/api-core/uow";
 import { OrganizationDocumentSchema, OrganizationStatus, OrganizationType } from "@iam/contracts";
 import type { DbTransaction } from "@iam/db";
+import { createUnitOfWork } from "@iam/unit-of-work";
 import { sql } from "drizzle-orm";
 import { createOrganizationDocumentInvalidation, type OrganizationDocumentSourceChange } from "../../src/producer";
 import { createOrganizationDocumentQueryRepository, createOrganizationDocumentQueryService } from "../../src/query";

@@ -1,6 +1,6 @@
-import { SERVICE_UNAVAILABLE } from "@iam/api-core/core/http-status-codes";
-import { CustomError } from "@iam/api-core/errors";
 import { ApiErrorCode } from "@iam/contracts";
+import { SERVICE_UNAVAILABLE } from "@iam/contracts/http";
+import { CustomError } from "@iam/runtime/errors";
 
 export class LoginProtectionUnavailableError extends CustomError {
   constructor(cause?: unknown) {

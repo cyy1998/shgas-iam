@@ -8,12 +8,12 @@ import {
   SessionManagementSessionListResultVoSchema,
 } from "@admin-api/routes/admin/session-management/session-management.schema";
 import { createRoute, z } from "@hono/zod-openapi";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
 import { StandardErrorResponseSchema } from "@iam/api-core/core/openapi/schemas/error-response-schema";
+import { HttpStatusCodes } from "@iam/contracts/http";
 
 const tags = ["Admin/Session Management"];
 

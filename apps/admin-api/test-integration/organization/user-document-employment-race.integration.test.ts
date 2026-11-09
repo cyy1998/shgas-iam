@@ -3,9 +3,9 @@ import { createAdminApiRepositories } from "@admin-api/composition/repositories"
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import { createOrganizationService } from "@admin-api/services/organization/organization.service";
 import { createCreateEmploymentUseCase } from "@admin-api/use-cases/employment/create-employment/create-employment.use-case";
-import { mapUnitOfWork } from "@iam/api-core/uow";
 import { OrganizationLevel, OrganizationType } from "@iam/contracts";
 import { organizationClosures, organizations, positions, users } from "@iam/db/schema";
+import { mapUnitOfWork } from "@iam/unit-of-work";
 import { createInternalUserDocumentQueryRepository, createInternalUserDocumentQueryService } from "@iam/user-document";
 import { createUserDocumentJobProducer } from "@iam/user-document/producer";
 import { createUserDocumentWorkerModule } from "@iam/user-document/worker";

@@ -5,8 +5,6 @@ import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import type { AdminUserAuthorization } from "@admin-api/services/admin-authorization/admin-user-authorization.type";
 import { createUserService } from "@admin-api/services/user/user.service";
-import type { SubjectAccessMutationReceipt, SubjectAccessTransitionTarget } from "@iam/api-core/subject-access";
-import { mapUnitOfWork } from "@iam/api-core/uow";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -18,6 +16,8 @@ import {
 } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import { auditLogs, employments, organizations, positions, users } from "@iam/db/schema";
+import type { SubjectAccessMutationReceipt, SubjectAccessTransitionTarget } from "@iam/subject-access";
+import { mapUnitOfWork } from "@iam/unit-of-work";
 import { asc, eq, inArray } from "drizzle-orm";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 

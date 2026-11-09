@@ -21,7 +21,6 @@
     "test:integration:bun": "node ../../scripts/run-package-integration.mjs bun -- bun test test-integration"
   },
   "dependencies": {
-    "@iam/api-core": "workspace:*",
     "@iam/contracts": "workspace:*",
     "@iam/db": "workspace:*",
     "@iam/document-update": "workspace:*",
@@ -32,6 +31,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@iam/unit-of-work": "workspace:*",
     "@types/bun": "latest",
     "@typescript/native": "npm:typescript@7.0.2",
     "postgres": "^3.4.9",

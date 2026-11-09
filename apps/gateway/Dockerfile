@@ -20,6 +20,10 @@ WORKDIR /workspace
 COPY .npmrc pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY patches/ ./patches/
 COPY packages/api-core/package.json ./packages/api-core/package.json
+COPY packages/subject-access/package.json ./packages/subject-access/package.json
+COPY packages/unit-of-work/package.json ./packages/unit-of-work/package.json
+COPY packages/runtime/package.json ./packages/runtime/package.json
+COPY packages/test-support/package.json ./packages/test-support/package.json
 COPY packages/session-kernel/package.json ./packages/session-kernel/package.json
 COPY packages/contracts/package.json ./packages/contracts/package.json
 COPY packages/db/package.json ./packages/db/package.json
@@ -27,6 +31,9 @@ COPY apps/gateway/package.json ./apps/gateway/package.json
 RUN --mount=type=cache,id=iam-gateway-pnpm-v12,target=/pnpm/store \
     pnpm install --filter @iam/gateway-apisix... --prod --frozen-lockfile --ignore-scripts
 COPY packages/api-core/ ./packages/api-core/
+COPY packages/subject-access/ ./packages/subject-access/
+COPY packages/unit-of-work/ ./packages/unit-of-work/
+COPY packages/runtime/ ./packages/runtime/
 COPY packages/session-kernel/ ./packages/session-kernel/
 COPY packages/contracts/ ./packages/contracts/
 COPY packages/db/ ./packages/db/

@@ -23,20 +23,9 @@ import { createClientSsoService } from "@admin-api/services/client-sso/client-ss
 import { AdminLoginStateAuditFailedAfterEffectError } from "@admin-api/services/session-management/session-management.error";
 import { AdminSessionRevokeResultSchema } from "@admin-api/services/session-management/session-management.schema";
 import { createFakePasswordHasher, createFakeRandom } from "@admin-api/test/fakes";
-import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
-import { createErrorHandler } from "@iam/api-core/middlewares/error-handler";
-import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
-import {
-  createRedisSubjectAccessStore,
-  createSubjectAccessBarrier,
-  createSubjectAccessBootstrap,
-  createSubjectAccessLifecycle,
-  requireSubjectAccessOperation,
-  SubjectAccessUnavailableError,
-} from "@iam/api-core/subject-access";
-import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
+import { createErrorHandler } from "@iam/api-core/middlewares";
 import { createTRPCContext } from "@iam/api-core/trpc";
-import { createUnitOfWork, mapUnitOfWork } from "@iam/api-core/uow";
+import { createClientSnapshots } from "@iam/client-snapshot/composition";
 import {
   ApiErrorCode,
   ClientDelegationStatus,
@@ -64,8 +53,20 @@ import {
   userDocumentRebuildStates,
   users,
 } from "@iam/db/schema";
+import { createLoginRestriction } from "@iam/login-restriction";
+import { createRedisLoginRestrictionStore } from "@iam/login-restriction/redis";
 import type { CapturedSession } from "@iam/session-kernel";
 import { createUnifiedSessionRedisTestScope } from "@iam/session-kernel/testing";
+import type { SubjectAccessOperation } from "@iam/subject-access";
+import {
+  createSubjectAccessBarrier,
+  requireSubjectAccessOperation,
+  SubjectAccessUnavailableError,
+} from "@iam/subject-access";
+import { createSubjectAccessLifecycle } from "@iam/subject-access/lifecycle";
+import { createRedisSubjectAccessStore, createSubjectAccessBootstrap } from "@iam/subject-access/redis";
+import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
+import { createUnitOfWork, mapUnitOfWork } from "@iam/unit-of-work";
 import { createSubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { eq } from "drizzle-orm";
@@ -169,6 +170,11 @@ async function fixture() {
       logger,
       transitionIntent: createSubjectAccessTransitionRepository(pg.db),
     });
+    const loginRestriction = createLoginRestriction({
+      clock: { now: Date.now },
+      random,
+      store: createRedisLoginRestrictionStore({ redis: barrierScope.redis }),
+    });
     const candidate = createRootSecurityComposition({
       kernel,
       barrier: {
@@ -197,14 +203,7 @@ async function fixture() {
       sessions: {
         users: repositories.user,
         logger,
-        loginRestrictions: {
-          listRestrictions: async () => {
-            throw new Error("Not used");
-          },
-          clearLoginState: async () => {
-            throw new Error("Not used");
-          },
-        },
+        loginRestrictions: loginRestriction,
         audit: {
           async recordAuditLog(input) {
             if (failAudit) throw new Error("Audit unavailable");
@@ -253,6 +252,7 @@ async function fixture() {
       },
       kernel,
       errorLogs,
+      loginRestriction,
       account,
       create,
       status,
@@ -271,6 +271,64 @@ async function fixture() {
     });
   }
 }
+
+test("Admin restriction release audits the effective change and repeated intent while leaving the root active", async () => {
+  const f = await fixture();
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => f.scope.close());
+    const current = await f.create();
+    const userId = f.account.id;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await f.loginRestriction.recordFailure({ triggerMethod: "mobile", userId });
+    }
+    const query = { pageNum: 1, pageSize: 10, userId };
+    const inventory = await f.sessionManagement.listLoginRestrictions(query);
+    expect(inventory).toMatchObject({
+      total: 1,
+      result: [{ user: { id: userId, username: f.account.username }, triggerMethod: "mobile" }],
+    });
+
+    const audit = {
+      actorType: "admin" as const,
+      actorUserId: userId,
+      principalSessionId: current.root.userSessionId,
+    };
+    const released = await f.sessionManagement.releaseLoginRestriction({ userId }, { ...audit, requestId: "release" });
+    expect(released).toEqual({ changed: true, result: { failureStateCleared: true } });
+    const repeated = await f.sessionManagement.releaseLoginRestriction({ userId }, { ...audit, requestId: "repeat" });
+    expect(repeated).toEqual({ changed: false, result: { failureStateCleared: true } });
+
+    const inventoryAfterRelease = await f.sessionManagement.listLoginRestrictions(query);
+    expect(inventoryAfterRelease).toMatchObject({ total: 0, result: [] });
+    const status = await f.status(current.bearer);
+    expect(status).toBe("resolved");
+    const audits = await pg.db.select().from(auditLogs).where(eq(auditLogs.targetId, userId));
+    const releases = audits.filter((row) => row.action === "admin.login_restriction.release");
+    expect(releases).toHaveLength(2);
+    expect(releases).toContainEqual(
+      expect.objectContaining({
+        requestId: "release",
+        details: {
+          cause: "too_many_login_failures",
+          triggerMethod: "mobile",
+          changed: true,
+          failureStateCleared: true,
+        },
+      }),
+    );
+    expect(releases).toContainEqual(
+      expect.objectContaining({
+        requestId: "repeat",
+        details: {
+          cause: "too_many_login_failures",
+          triggerMethod: "unknown",
+          changed: false,
+          failureStateCleared: true,
+        },
+      }),
+    );
+  });
+});
 
 test("formal self revoke and password reset preserve current root, terminate its children and audit actual effects", async () => {
   const f = await fixture();

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
 import { ClientStatus } from "@iam/contracts";
 import { clients } from "@iam/db/schema";
+import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import { ApisixAdminClient, loadRemoteState } from "../../src/apisix-admin-client";
 import { createGatewayComposition } from "../../src/composition";
 import { parseGatewayEnv } from "../../src/env";

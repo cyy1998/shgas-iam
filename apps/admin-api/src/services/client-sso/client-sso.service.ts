@@ -2,10 +2,9 @@ import { buildAdminResourceAudit } from "@admin-api/services/audit/admin-resourc
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { createAdminClientMutation } from "@admin-api/services/client/client-mutation";
-import { INTERNAL_SERVER_ERROR } from "@iam/api-core/core/http-status-codes";
-import { BadRequestError, CustomError } from "@iam/api-core/errors";
 import type { ClientSsoConfig } from "@iam/contracts";
 import { ApiErrorCode, ClientSsoCallbackType, ClientSsoProtocol, OidcClientType } from "@iam/contracts";
+import { INTERNAL_SERVER_ERROR } from "@iam/contracts/http";
 import {
   ClientHasOpenDelegationError,
   ClientHasRoleError,
@@ -13,6 +12,7 @@ import {
   normalizeClientSsoConfig,
   toClientSsoAdminDto,
 } from "@iam/domain/client";
+import { BadRequestError, CustomError } from "@iam/runtime/errors";
 import type { ClientSsoServiceDeps } from "./client-sso.port";
 import { ClientSsoSaveSchema, ClientSsoSelectSchema } from "./client-sso.schema";
 import type { ClientSsoRecord, ClientSsoSave, ClientSsoStorageUpdate } from "./client-sso.type";

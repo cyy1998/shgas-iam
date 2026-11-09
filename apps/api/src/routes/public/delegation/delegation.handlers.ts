@@ -1,8 +1,8 @@
 import { getApiAuditRequestContext } from "@api/services/audit/audit.context";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
-import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import * as resp from "@iam/api-core/http";
+import { HttpStatusCodes } from "@iam/contracts/http";
 import type { DelegationService } from "@iam/delegation";
+import { AuthzUnauthorizedError } from "@iam/runtime/errors";
 import type { PublicDelegationRouteHandler } from "./delegation.type";
 
 export interface PublicDelegationDependencies {

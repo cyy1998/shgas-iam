@@ -1,10 +1,10 @@
 import type { Env } from "@api/env";
 import type { OidcHintVerificationPort, OidcSigningPort } from "@iam/oidc";
+import type { AfterCommitLoggerPort } from "@iam/unit-of-work";
 import type Redis from "ioredis";
 import type { Logger } from "pino";
 
 export type LoggerPort = Pick<Logger, "debug" | "info" | "warn" | "error" | "child">;
-export type AfterCommitLoggerPort = Pick<Logger, "warn" | "error">;
 export type RedisPort = Redis;
 
 export interface PasswordHasherPort {

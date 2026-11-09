@@ -1,14 +1,8 @@
 import { randomUUID } from "node:crypto";
 import process from "node:process";
-import {
-  createRedisSubjectAccessStore,
-  createSubjectAccessBarrier,
-  createSubjectAccessBootstrap,
-} from "@iam/api-core/subject-access";
-import {
-  resetExclusiveRedisTestDatabase,
-  runWithOwnedTestResources,
-} from "@iam/api-core/testing/external-test-resources";
+import { createSubjectAccessBarrier } from "@iam/subject-access";
+import { createRedisSubjectAccessStore, createSubjectAccessBootstrap } from "@iam/subject-access/redis";
+import { resetExclusiveRedisTestDatabase, runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import Redis from "ioredis";
 import type { DocumentFactsCacheRecord } from "../../src/subject-facts";
 import {

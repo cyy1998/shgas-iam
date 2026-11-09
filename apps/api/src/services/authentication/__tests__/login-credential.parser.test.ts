@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createMemoryRedis } from "@api/testing/fakes";
-import { InvalidLoginCredentialError } from "@iam/api-core/errors/InvalidLoginCredentialError";
 import { createLoginCredential } from "@iam/contracts";
+import { InvalidLoginCredentialError } from "../login-credential.error";
 import { createLoginCredentialParser } from "../login-credential.parser";
 
 const KEY_PAIR = {

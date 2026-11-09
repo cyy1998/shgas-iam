@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { getTraceIdFromHeaders } from "../logger";
+import { getTraceIdFromHeaders } from "../http/request-log";
 
 function firstHeaderValue(value: string | undefined): string | null {
   const [first] = value?.split(",") ?? [];

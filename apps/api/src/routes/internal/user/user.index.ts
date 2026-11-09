@@ -1,5 +1,5 @@
 import { createRouter } from "@iam/api-core/core/create-router";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
+import { HttpStatusCodes } from "@iam/contracts/http";
 import { UserDocumentFilterValidationError } from "@iam/user-document/query";
 import type { UserHandlers } from "./user.handlers";
 import * as routes from "./user.routes";

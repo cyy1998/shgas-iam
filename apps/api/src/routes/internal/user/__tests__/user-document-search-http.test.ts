@@ -1,10 +1,10 @@
 import { expect, mock, test } from "bun:test";
+import { createInternalAuthenticationHandler } from "@api/middlewares/internal-client-authentication";
 import { createInternalMiddlewares } from "@api/routes/internal/_middleware";
 import { createUserHandlers } from "@api/routes/internal/user/user.handlers";
 import { createUserRoute } from "@api/routes/internal/user/user.index";
 import { createUserDocumentSearchAdapter } from "@api/services/user-document-search/user-document-search.adapter";
 import createApp from "@iam/api-core/core/create-app";
-import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares";
 import { UserDocumentSchema, UserStatus, UserType } from "@iam/contracts";
 import { userDocuments } from "@iam/db/schema";
 import type { GenericClientRuntimeDto } from "@iam/domain/client";

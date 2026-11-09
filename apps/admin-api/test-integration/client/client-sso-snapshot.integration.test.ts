@@ -6,12 +6,10 @@ import { createAuditRepository } from "@admin-api/services/audit/audit.repositor
 import { createAdminAuditService } from "@admin-api/services/audit/audit.service";
 import { createClientSsoRepository } from "@admin-api/services/client-sso/client-sso.repository";
 import { createClientSsoService } from "@admin-api/services/client-sso/client-sso.service";
-import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
-import { createClientSecretAuthenticator } from "@iam/api-core/client-snapshot/credentials";
-import { createClientSnapshotMaintenance } from "@iam/api-core/client-snapshot/maintenance";
 import { createErrorHandler } from "@iam/api-core/middlewares";
-import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
-import { createUnitOfWork } from "@iam/api-core/uow";
+import { createClientSnapshots } from "@iam/client-snapshot/composition";
+import { createClientSecretAuthenticator } from "@iam/client-snapshot/credentials";
+import { createClientSnapshotMaintenance } from "@iam/client-snapshot/maintenance";
 import type { ClientSsoConfig } from "@iam/contracts";
 import {
   ApiErrorCode,
@@ -25,6 +23,8 @@ import type { DbClient } from "@iam/db";
 import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
 import { auditLogs, clients } from "@iam/db/schema";
 import { createUnifiedSessionKernel } from "@iam/session-kernel";
+import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
+import { createUnitOfWork } from "@iam/unit-of-work";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { addTestAdminAuthorizationMiddleware } from "../../src/testing/admin-authorization";

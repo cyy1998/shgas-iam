@@ -9,7 +9,6 @@ import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/
 import type { OrganizationResponsibilityAssignmentSearchPage } from "@admin-api/services/organization-responsibility/organization-responsibility.schema";
 import type { CreateOrganizationResponsibilityServiceDeps } from "@admin-api/services/organization-responsibility/organization-responsibility.service";
 import { createOrganizationResponsibilityService } from "@admin-api/services/organization-responsibility/organization-responsibility.service";
-import { createSubjectAccessOperations, encodeSubjectAccessContext } from "@iam/api-core/subject-access";
 import {
   ApiErrorCode,
   ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG,
@@ -18,6 +17,7 @@ import {
   UserStatus,
 } from "@iam/contracts";
 import { OrganizationResponsibilityAssignmentNotOpenError } from "@iam/domain/organization-responsibility";
+import { createSubjectAccessOperations, encodeSubjectAccessContext } from "@iam/subject-access";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import {

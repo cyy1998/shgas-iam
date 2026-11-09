@@ -1,6 +1,6 @@
 import { mock } from "bun:test";
-import type { AfterCommitLoggerPort } from "@iam/api-core/uow";
-import { createImmediateUnitOfWork as createImmediateUnitOfWorkBase } from "@iam/api-core/uow";
+import type { AfterCommitLoggerPort } from "@iam/unit-of-work";
+import { createImmediateUnitOfWork as createImmediateUnitOfWorkBase } from "@iam/unit-of-work/testing";
 
 type RedisResult = [Error | null, unknown];
 type RedisOperation = () => Promise<unknown> | unknown;

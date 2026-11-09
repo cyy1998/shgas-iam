@@ -2,8 +2,8 @@ import type { PasswordHasherPort, RandomPort } from "@admin-api/composition/runt
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
 import type { UnifiedSessionEffectSchema } from "@admin-api/services/session-management/session-management.schema";
-import type { SubjectAccessMutationReceipt, SubjectAccessTransitionTarget } from "@iam/api-core/subject-access";
-import type { UnitOfWorkPort } from "@iam/api-core/uow";
+import type { SubjectAccessMutationReceipt, SubjectAccessTransitionTarget } from "@iam/subject-access";
+import type { UnitOfWorkPort } from "@iam/unit-of-work";
 import type { z } from "zod";
 import type { User, UserCreateDto, UserPaginationQueryDto, UserUpdateDto } from "./user.type";
 

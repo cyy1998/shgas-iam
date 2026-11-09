@@ -29,14 +29,16 @@
     }
   },
   "dependencies": {
-    "@iam/api-core": "workspace:*",
+    "@iam/client-snapshot": "workspace:*",
     "@iam/contracts": "workspace:*",
     "@iam/custom-sso": "workspace:*",
     "@iam/db": "workspace:*",
     "@iam/jobs": "workspace:*",
     "@iam/oidc": "workspace:*",
     "@iam/organization-document": "workspace:*",
+    "@iam/runtime": "workspace:*",
     "@iam/session-kernel": "workspace:*",
+    "@iam/subject-access": "workspace:*",
     "@iam/user-document": "workspace:*",
     "drizzle-orm": "1.0.0-rc.2",
     "ioredis": "^6.0.0",
@@ -45,6 +47,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@iam/test-support": "workspace:*",
+    "@iam/unit-of-work": "workspace:*",
     "@types/bun": "latest",
     "@typescript/native": "npm:typescript@7.0.2",
     "typescript": "npm:@typescript/typescript6@6.0.2"

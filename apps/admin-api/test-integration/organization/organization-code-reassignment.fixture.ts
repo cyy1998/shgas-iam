@@ -1,10 +1,10 @@
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import { createOrganizationService } from "@admin-api/services/organization/organization.service";
-import { mapUnitOfWork } from "@iam/api-core/uow";
 import { OrganizationType } from "@iam/contracts";
 import { relations } from "@iam/db/relations";
 import { OrganizationCreateDtoSchema } from "@iam/domain/organization";
+import { mapUnitOfWork } from "@iam/unit-of-work";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { z } from "zod";

@@ -1,6 +1,6 @@
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
-import type { UnitOfWorkPort } from "@iam/api-core/uow";
+import type { UnitOfWorkPort } from "@iam/unit-of-work";
 import type { AdminClientRecord, ClientCreateDto, ClientPaginationQueryDto, ClientUpdateDto } from "./client.type";
 
 export interface AdminClientReaderPort {

@@ -3,12 +3,12 @@ import { createAdminApiRepositories } from "@admin-api/composition/repositories"
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import type { AdminPositionTransactionPorts } from "@admin-api/services/position/position.port";
 import { createPositionService } from "@admin-api/services/position/position.service";
-import { BadRequestError } from "@iam/api-core/errors";
-import { mapUnitOfWork } from "@iam/api-core/uow";
 import { EmploymentStatus, OrganizationLevel, OrganizationType, PositionStatus, UserType } from "@iam/contracts";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import { auditLogs, employments, organizations, positions, userDocumentRebuildStates, users } from "@iam/db/schema";
 import { PositionCodeExistsError, PositionHasEmploymentError, PositionNotFoundError } from "@iam/domain/position";
+import { BadRequestError } from "@iam/runtime/errors";
+import { mapUnitOfWork } from "@iam/unit-of-work";
 import type { AdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 import { createUserDocumentSourceConsumer } from "../support/user-document-workflow";

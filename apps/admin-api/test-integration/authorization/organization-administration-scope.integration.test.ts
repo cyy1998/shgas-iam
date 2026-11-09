@@ -3,11 +3,11 @@ import { createAdminApiRepositories } from "@admin-api/composition/repositories"
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import type { AdminOrganizationAuthorization } from "@admin-api/services/admin-authorization/admin-organization-authorization.type";
 import { createOrganizationService } from "@admin-api/services/organization/organization.service";
-import { mapUnitOfWork } from "@iam/api-core/uow";
 import { OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import { organizationClosures, organizations } from "@iam/db/schema";
 import { OrganizationNotFoundError } from "@iam/domain/organization";
+import { mapUnitOfWork } from "@iam/unit-of-work";
 import { and, eq } from "drizzle-orm";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 

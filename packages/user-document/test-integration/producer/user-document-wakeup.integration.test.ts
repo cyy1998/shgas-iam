@@ -1,16 +1,16 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { createServer, type Socket } from "node:net";
-import {
-  parseDedicatedRedisTestUrl,
-  requireExternalTestUrl,
-  runWithOwnedTestResources,
-} from "@iam/api-core/testing/external-test-resources";
-import { createUnitOfWork } from "@iam/api-core/uow";
 import type { UserDocumentJobName, UserDocumentJobPayload } from "@iam/contracts";
 import { userDocumentOutboxEntries, userDocumentRebuildStates, userDocuments, users } from "@iam/db/schema";
 import type { DocumentOutboxJob } from "@iam/document-update";
 import { createJobWorker } from "@iam/jobs";
+import {
+  parseDedicatedRedisTestUrl,
+  requireExternalTestUrl,
+  runWithOwnedTestResources,
+} from "@iam/test-support/external-test-resources";
+import { createUnitOfWork } from "@iam/unit-of-work";
 import { eq } from "drizzle-orm";
 import {
   type CreateUserDocumentInvalidationDeps,

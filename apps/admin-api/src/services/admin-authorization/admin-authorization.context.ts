@@ -1,4 +1,4 @@
-import { AuthzForbiddenError } from "@iam/api-core/errors/AuthzForbiddenError";
+import { AuthzForbiddenError } from "@iam/runtime/errors";
 import type { Context, Next } from "hono";
 import type {
   AdminAuthorizationActor,

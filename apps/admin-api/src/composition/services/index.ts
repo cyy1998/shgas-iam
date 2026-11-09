@@ -7,10 +7,10 @@ import { createOrganizationService } from "@admin-api/services/organization/orga
 import { createOrganizationResponsibilityService } from "@admin-api/services/organization-responsibility/organization-responsibility.service";
 import { createPositionService } from "@admin-api/services/position/position.service";
 import { createRoleService } from "@admin-api/services/role/role.service";
-import { mapUnitOfWork } from "@iam/api-core/uow";
 import type { DbClient } from "@iam/db";
 import { createDelegationService } from "@iam/delegation";
 import type { RoleAssignmentResolver } from "@iam/role-assignment-resolution";
+import { mapUnitOfWork } from "@iam/unit-of-work";
 import type { AdminApiRepositories } from "../repositories";
 import { createRootSecurityComposition } from "../root-security";
 import type { AdminApiRuntimePorts } from "../runtime";

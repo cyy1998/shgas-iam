@@ -2,7 +2,6 @@ import { describe, expect, mock, test } from "bun:test";
 import type { AdminEmploymentAuthorization } from "@admin-api/services/admin-authorization/admin-employment-authorization.type";
 import { createEmploymentService } from "@admin-api/services/employment/employment.service";
 import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
-import { BadRequestError } from "@iam/api-core/errors";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -13,6 +12,7 @@ import {
   UserType,
 } from "@iam/contracts";
 import { EmploymentNotEditableError } from "@iam/domain/employment";
+import { BadRequestError } from "@iam/runtime/errors";
 import { createTestHrEmploymentAuthorization } from "../../../testing/hr-employment-authorization";
 
 const now = new Date("2026-01-01T00:00:00Z");

@@ -1,5 +1,5 @@
 import { z } from "@hono/zod-openapi";
-import { type RedisConfig, redisUrlString } from "@iam/api-core/redis/config";
+import { type RedisConfig, redisUrlString } from "@iam/runtime/redis/config";
 
 function listString(defaultValue: string) {
   return z

@@ -1,7 +1,7 @@
 import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
-import type { SubjectAccessMutationReceipt, SubjectAccessTransitionTarget } from "@iam/api-core/subject-access";
-import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { UserCreateDto } from "@iam/domain/user";
+import type { SubjectAccessMutationReceipt, SubjectAccessTransitionTarget } from "@iam/subject-access";
+import type { UnitOfWorkPort } from "@iam/unit-of-work";
 
 export type RegisterPurveyorContactProfileChange =
   | {

@@ -4,9 +4,9 @@ import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
 import { buildInternalPurveyorRegisterAudit } from "@api/services/audit/events/internal.audit";
 import { OrganizationCreateDtoSchema } from "@api/services/organization/organization.schema";
 import type { OrganizationService } from "@api/services/organization/organization.service";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import * as resp from "@iam/api-core/http";
 import { OrganizationType } from "@iam/contracts";
+import { HttpStatusCodes } from "@iam/contracts/http";
 import {
   type OrganizationDocumentQueryService,
   OrganizationDocumentUnavailableError,

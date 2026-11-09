@@ -1,22 +1,17 @@
-import type { ClientSnapshotReader } from "@iam/api-core/client-snapshot";
-import { ClientSnapshotUnavailableError } from "@iam/api-core/client-snapshot";
-import {
-  AuthzMaintenanceError,
-  AuthzUnauthorizedError,
-  BadRequestError,
-  InvalidRedirectUriError,
-  InvalidSsoClientError,
-} from "@iam/api-core/errors";
-import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
+import type { ClientSnapshotReader } from "@iam/client-snapshot";
+import { ClientSnapshotUnavailableError } from "@iam/client-snapshot";
+import { ClientSsoCallbackType, ClientSsoProtocol, ClientStatus, LoginPageGuardDecision } from "@iam/contracts";
+import { AuthzMaintenanceError, AuthzUnauthorizedError, BadRequestError } from "@iam/runtime/errors";
+import type { UnifiedSessionKernel } from "@iam/session-kernel";
+import { SessionStorageError } from "@iam/session-kernel";
+import type { SubjectAccessOperation } from "@iam/subject-access";
 import {
   requireSubjectAccessOperation,
   SubjectAccessDisabledError,
   SubjectAccessUnavailableError,
-} from "@iam/api-core/subject-access";
-import { ClientSsoCallbackType, ClientSsoProtocol, ClientStatus, LoginPageGuardDecision } from "@iam/contracts";
-import type { UnifiedSessionKernel } from "@iam/session-kernel";
-import { SessionStorageError } from "@iam/session-kernel";
+} from "@iam/subject-access";
 import { z } from "zod";
+import { InvalidRedirectUriError, InvalidSsoClientError } from "../authorization.error";
 import type { createSsoRedirectUrlValidator } from "../internal/redirect-url.validator";
 import { CustomSsoTrafficGateUnavailableError } from "../internal/traffic-gate";
 import type { AcceptedAuthorization, CustomSsoStateRedis } from "./state";

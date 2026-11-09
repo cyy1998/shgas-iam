@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
+import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import Redis from "ioredis";
 import { createRedisTestHarness } from "../support/redis-test-harness";
 

@@ -3,8 +3,8 @@ import { buildPasswordLoginFailureAudit, buildPasswordLoginSuccessAudit } from "
 import { isHumanVerificationRequiredError } from "@api/services/human-verification/human-verification.error";
 import { createHumanVerificationContext } from "@api/services/human-verification/human-verification.type";
 import { toSessionOrigin } from "@api/services/session/session-origin";
-import { LoginFailedError } from "@iam/api-core/errors/LoginFailedError";
 import { UserNotFoundError } from "@iam/domain/user";
+import { LoginFailedError } from "../login.error";
 import { runLoginProtectionOperation } from "../login-protection.helper";
 import type { AuthenticationLoginFailureStatus, AuthenticationLoginRestrictionStatus } from "../login-restriction.type";
 import { formatLoginFailureMessage, formatTemporaryLoginRestrictionMessage } from "../login-restriction-message";

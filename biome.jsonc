@@ -103,7 +103,10 @@
     },
     {
       // The old service preset reported console usage without blocking the command.
-      "includes": ["apps/{admin-api,api,worker}/**", "packages/{api-core,session-kernel}/**"],
+      "includes": [
+        "apps/{admin-api,api,worker}/**",
+        "packages/{api-core,client-snapshot,login-restriction,session-kernel,subject-access}/**"
+      ],
       "linter": {
         "rules": {
           "suspicious": {

@@ -2,7 +2,7 @@
 import { createHash } from "node:crypto";
 import { cp, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
-import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/api-core/testing/process-smoke-harness";
+import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
 import { check, requiredText } from "./check.fixture";
 import { repositoryRoot, requireCandidate } from "./source.fixture";
 
@@ -16,7 +16,7 @@ const entries = [
   ["api", "apps/api", "src/index.ts"],
   ["worker", "apps/worker", "src/index.ts"],
   ["iam-ops", "apps/ops", "src/index.ts"],
-  ["windows-job-launcher", "packages/api-core", "src/process/windows-job-launcher.mjs"],
+  ["windows-job-launcher", "packages/runtime", "src/process/windows-job-launcher.mjs"],
 ];
 const receipts = [];
 for (const [name, workspace, entry] of entries) {
@@ -56,7 +56,7 @@ for (const [name, workspace, entry] of entries) {
   receipts.push({ name, args, cwd: workspace });
 }
 await cp(
-  join(repositoryRoot, "packages/api-core/src/process/windows-job-supervisor.ps1"),
+  join(repositoryRoot, "packages/runtime/src/process/windows-job-supervisor.ps1"),
   join(output, "runtime/windows-job-supervisor.ps1"),
 );
 await cp(join(repositoryRoot, "apps/api/static"), join(output, "runtime/static"), { recursive: true });

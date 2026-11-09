@@ -4,7 +4,7 @@ import {
   buildPasswordResetFailureAudit,
   buildPasswordResetSuccessAudit,
 } from "@api/services/audit/events/self-user.audit";
-import { InvalidVerificationCodeError } from "@iam/api-core/errors/InvalidVerificationCodeError";
+import { InvalidVerificationCodeError } from "@api/services/mobile/mobile.error";
 import { UserNotFoundError } from "@iam/domain/user";
 import type { ResetPasswordUseCaseDeps } from "./reset-password.port";
 import type { ResetPasswordInput, ResetPasswordOptions } from "./reset-password.type";

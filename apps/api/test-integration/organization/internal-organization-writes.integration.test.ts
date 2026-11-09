@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { createApiRepositories } from "@api/composition/repositories";
 import { createApiUnitOfWork } from "@api/composition/tx";
+import { createInternalAuthenticationHandler } from "@api/middlewares/internal-client-authentication";
 import { createInternalMiddlewares } from "@api/routes/internal/_middleware";
 import { createOrganizationHandlers } from "@api/routes/internal/organization/organization.handlers";
 import { createOrganizationRoute } from "@api/routes/internal/organization/organization.index";
@@ -10,9 +11,6 @@ import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import type { OrganizationTransactionPorts } from "@api/services/organization/organization.port";
 import { createOrganizationService } from "@api/services/organization/organization.service";
 import createApp from "@iam/api-core/core/create-app";
-import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares";
-import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/api-core/testing/process-smoke-harness";
-import { mapUnitOfWork } from "@iam/api-core/uow";
 import {
   ClientStatus,
   OrganizationDocumentSchema,
@@ -43,6 +41,8 @@ import {
   type OrganizationOutboxJobPayload,
   type OrganizationRebuildJobPayload,
 } from "@iam/organization-document/worker";
+import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
+import { mapUnitOfWork } from "@iam/unit-of-work";
 import { eq } from "drizzle-orm";
 import pino from "pino";
 import appConfig from "~api/app.config";

@@ -1,5 +1,5 @@
 import { parseArgs } from "node:util";
-import { closeMaintenanceResources } from "@iam/api-core/maintenance";
+import { closeMaintenanceResources } from "@iam/runtime/maintenance";
 
 export interface EmploymentVerifyCommandReport {
   version: 1;
@@ -37,7 +37,7 @@ async function main(args: string[]) {
   parseArgs({ args, strict: true, allowPositionals: false, options: {} });
   const { parseEmploymentCommandEnv } = await import("@ops/env");
   const env = parseEmploymentCommandEnv(process.env);
-  const { createLogger, LoggerSourceApp } = await import("@iam/api-core/logger");
+  const { createLogger, LoggerSourceApp } = await import("@iam/runtime/logger");
   const logger = createLogger({
     nodeEnv: env.nodeEnv,
     logLevel: env.log.level,

@@ -1,3 +1,4 @@
+import * as resp from "@iam/api-core/http";
 import {
   BAD_REQUEST,
   INTERNAL_SERVER_ERROR,
@@ -6,8 +7,7 @@ import {
   SERVICE_UNAVAILABLE,
   UNAUTHORIZED,
   UNSUPPORTED_MEDIA_TYPE,
-} from "@iam/api-core/core/http-status-codes";
-import * as resp from "@iam/api-core/http";
+} from "@iam/contracts/http";
 import { Hono } from "hono";
 import { GatewayError } from "../services/gateway/gateway.error";
 import { gatewayApplyInputSchema, gatewayInputSchema } from "../services/gateway/gateway.schema";

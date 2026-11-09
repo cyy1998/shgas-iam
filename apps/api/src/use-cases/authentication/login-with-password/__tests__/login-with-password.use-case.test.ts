@@ -1,9 +1,9 @@
 import { describe, expect, mock, test } from "bun:test";
 import type { LoginWithPasswordDeps } from "@api/use-cases/authentication/login-with-password/login-with-password.port";
 import { createLoginWithPasswordUseCase } from "@api/use-cases/authentication/login-with-password/login-with-password.use-case";
-import { CustomError } from "@iam/api-core/errors/CustomError";
-import { LoginRestrictionUnavailableError } from "@iam/api-core/login-restriction";
 import { ApiErrorCode, UserStatus, UserType } from "@iam/contracts";
+import { LoginRestrictionUnavailableError } from "@iam/login-restriction";
+import { CustomError } from "@iam/runtime/errors";
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000001001";
 

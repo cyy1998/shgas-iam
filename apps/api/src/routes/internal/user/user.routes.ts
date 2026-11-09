@@ -1,5 +1,4 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
@@ -9,6 +8,7 @@ import {
   ValidationFailureResponseSchema,
 } from "@iam/api-core/core/openapi/schemas/error-response-schema";
 import { UserDocumentSchema, UserDocumentSearchResultSchema } from "@iam/contracts";
+import { HttpStatusCodes } from "@iam/contracts/http";
 import { UserNameWriteSchema, UsernameWriteSchema } from "@iam/domain/user";
 import { UserDocumentSearchTransportRequestSchema } from "@iam/user-document/document/query";
 

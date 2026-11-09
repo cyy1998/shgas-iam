@@ -1,9 +1,9 @@
 import { describe, expect, mock, test } from "bun:test";
 import { createRoute, z } from "@hono/zod-openapi";
 import { ApiErrorCode } from "@iam/contracts";
-import { SystemLogEvent } from "../../../logger";
+import { OK, UNPROCESSABLE_ENTITY } from "@iam/contracts/http";
+import { SystemLogEvent } from "@iam/runtime/logger";
 import { createRouter } from "../../create-router";
-import { OK, UNPROCESSABLE_ENTITY } from "../../http-status-codes";
 import jsonContent from "../helpers/json-content";
 
 const route = createRoute({

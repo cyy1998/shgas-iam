@@ -2,9 +2,9 @@ import type { PasswordHasherPort } from "@api/composition/runtime";
 import type { ApiRequestContext } from "@api/services/audit/audit.context";
 import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
 import type { MobileVerificationCodeReservation } from "@api/services/mobile/mobile.type";
-import type { SubjectAccessMutationReceipt, SubjectAccessTransitionTarget } from "@iam/api-core/subject-access";
-import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { PublishedUserLoginProfile } from "@iam/domain/user";
+import type { SubjectAccessMutationReceipt, SubjectAccessTransitionTarget } from "@iam/subject-access";
+import type { UnitOfWorkPort } from "@iam/unit-of-work";
 import type { User } from "./user.type";
 
 export interface ApiUserDocumentChange {

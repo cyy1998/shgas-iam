@@ -1,10 +1,10 @@
-import { INTERNAL_SERVER_ERROR } from "@iam/api-core/core/http-status-codes";
-import { CustomError } from "@iam/api-core/errors";
-import type { SubjectAccessLifecycleRunInput } from "@iam/api-core/subject-access";
-import type { TransactionContext, UnitOfWorkPort, UnitOfWorkTransactionOptions } from "@iam/api-core/uow";
-import { AfterCommitRequiredTaskError } from "@iam/api-core/uow";
 import type { AdminMutationResult } from "@iam/contracts";
 import { ApiErrorCode } from "@iam/contracts";
+import { INTERNAL_SERVER_ERROR } from "@iam/contracts/http";
+import { CustomError } from "@iam/runtime/errors";
+import type { SubjectAccessLifecycleRunInput } from "@iam/subject-access/lifecycle";
+import type { TransactionContext, UnitOfWorkPort, UnitOfWorkTransactionOptions } from "@iam/unit-of-work";
+import { AfterCommitRequiredTaskError } from "@iam/unit-of-work";
 
 export class AdminMutationCommittedError extends CustomError {
   constructor() {

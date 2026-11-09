@@ -1,4 +1,4 @@
-import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
+import { AuthzUnauthorizedError } from "@iam/runtime/errors";
 
 export class CustomSsoClientDeliveryUnauthorizedError extends AuthzUnauthorizedError {
   constructor() {

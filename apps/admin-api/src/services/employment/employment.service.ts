@@ -5,9 +5,9 @@ import type { AdminAuditContext } from "@admin-api/services/audit/audit.context"
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildEmploymentAudit } from "@admin-api/services/audit/events/employment.audit";
 import { EmploymentDetailDtoSchema, toEmploymentDto } from "@admin-api/services/employment/employment.schema";
-import { BadRequestError } from "@iam/api-core/errors";
 import { EmploymentStatus } from "@iam/contracts";
 import { EmploymentNotEditableError, EmploymentNotFoundError } from "@iam/domain/employment";
+import { BadRequestError } from "@iam/runtime/errors";
 import type { AdminEmploymentServiceDeps } from "./employment.port";
 import type { EmploymentAdminPaginationQueryDto, EmploymentUpdateDto } from "./employment.type";
 

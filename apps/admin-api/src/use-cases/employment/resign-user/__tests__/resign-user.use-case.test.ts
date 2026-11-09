@@ -6,8 +6,9 @@ import type {
   ResignUserUseCaseDeps,
 } from "@admin-api/use-cases/employment/resign-user/resign-user.port";
 import { createResignUserUseCase } from "@admin-api/use-cases/employment/resign-user/resign-user.use-case";
-import type { SubjectAccessLifecycleRunInput, SubjectAccessMutationReceipt } from "@iam/api-core/subject-access";
 import { UserStatus } from "@iam/contracts";
+import type { SubjectAccessMutationReceipt } from "@iam/subject-access";
+import type { SubjectAccessLifecycleRunInput } from "@iam/subject-access/lifecycle";
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
 const previousSubjectAccessTransitionId = "20000000-0000-4000-8000-000000000001";

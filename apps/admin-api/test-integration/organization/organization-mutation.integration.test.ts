@@ -4,8 +4,6 @@ import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import type { AdminOrganizationAuthorization } from "@admin-api/services/admin-authorization/admin-organization-authorization.type";
 import type { AdminOrganizationTransactionPorts } from "@admin-api/services/organization/organization.port";
 import { createOrganizationService } from "@admin-api/services/organization/organization.service";
-import { BadRequestError } from "@iam/api-core/errors";
-import { mapUnitOfWork } from "@iam/api-core/uow";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -47,6 +45,8 @@ import {
   createOrganizationDocumentProcessor,
   type OrganizationRebuildJobPayload,
 } from "@iam/organization-document/worker";
+import { BadRequestError } from "@iam/runtime/errors";
+import { mapUnitOfWork } from "@iam/unit-of-work";
 import { eq } from "drizzle-orm";
 import type { AdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";

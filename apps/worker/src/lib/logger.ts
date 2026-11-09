@@ -1,4 +1,4 @@
-import { createLogger, LoggerSourceApp } from "@iam/api-core/logger";
+import { createLogger, LoggerSourceApp } from "@iam/runtime/logger";
 import loadWorkerEnv from "@worker/env";
 
 const env = loadWorkerEnv();

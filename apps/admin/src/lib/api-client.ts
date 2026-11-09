@@ -1,6 +1,7 @@
 import { API_PREFIX, SSO_CLIENT_CODE } from "@admin/constants/config";
 import { redirectToLogin } from "@admin/utils/auth";
 import type { AppRouter } from "@iam/admin-api/trpc";
+import { UNAUTHORIZED } from "@iam/contracts/http";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 
 export async function adminRpcFetch(input: RequestInfo | URL, init?: RequestInit) {
@@ -9,7 +10,7 @@ export async function adminRpcFetch(input: RequestInfo | URL, init?: RequestInit
     credentials: "include",
     headers: { ...(init?.headers ?? {}), Client: SSO_CLIENT_CODE },
   });
-  if (response.status === 401) {
+  if (response.status === UNAUTHORIZED) {
     redirectToLogin();
     return new Promise<Response>(() => {});
   }

@@ -1,4 +1,4 @@
-import { BadRequestError } from "@iam/api-core/errors/BadRequestError";
+import { BadRequestError } from "@iam/runtime/errors";
 import type { AccountRecoveryServiceDeps } from "./account-recovery.port";
 
 export function createAccountRecoveryService(deps: AccountRecoveryServiceDeps) {

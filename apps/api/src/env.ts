@@ -1,7 +1,7 @@
 import { z } from "@hono/zod-openapi";
-import { type RedisConfig, redisUrlString } from "@iam/api-core/redis/config";
-import { booleanString, optionalNonEmptyString } from "@iam/api-core/utils/env-schema";
 import { isRootRelativeNavigation } from "@iam/contracts";
+import { booleanString, optionalNonEmptyString } from "@iam/runtime/env-schema";
+import { type RedisConfig, redisUrlString } from "@iam/runtime/redis/config";
 
 function jsonRecordString(description: string) {
   return z.string().transform((value, ctx) => {

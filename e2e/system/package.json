@@ -4,11 +4,12 @@
   "version": "0.0.1",
   "private": true,
   "dependencies": {
-    "@iam/api-core": "workspace:*",
     "@iam/contracts": "workspace:*",
     "@iam/db": "workspace:*",
     "@iam/domain": "workspace:*",
     "@iam/role-assignment-resolution": "workspace:*",
+    "@iam/runtime": "workspace:*",
+    "@iam/subject-access": "workspace:*",
     "@iam/user-document": "workspace:*",
     "drizzle-orm": "1.0.0-rc.2",
     "ioredis": "^6.0.0"
@@ -35,6 +36,7 @@
     }
   },
   "devDependencies": {
+    "@iam/test-support": "workspace:*",
     "@playwright/test": "^1.61.1",
     "@types/bun": "latest",
     "@typescript/native": "npm:typescript@7.0.2",

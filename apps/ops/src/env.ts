@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { parseEnv } from "node:util";
-import { redisUrlString } from "@iam/api-core/redis/config";
 import { DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
+import { redisUrlString } from "@iam/runtime/redis/config";
 import { z } from "zod";
 
 /** Only the Ops entrypoint loads this file; inherited process variables take precedence. */

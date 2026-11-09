@@ -1,6 +1,6 @@
 import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
-import type { TransactionContext, UnitOfWorkPort, UnitOfWorkTransactionOptions } from "@iam/api-core/uow";
-import { AfterCommitRequiredTaskError, consumeTransactionRollbackConfirmation } from "@iam/api-core/uow";
+import type { TransactionContext, UnitOfWorkPort, UnitOfWorkTransactionOptions } from "@iam/unit-of-work";
+import { AfterCommitRequiredTaskError, consumeTransactionRollbackConfirmation } from "@iam/unit-of-work";
 import type { AdminClientMutationLoggerPort, AdminClientRuntimeInvalidationPort } from "./client.port";
 
 const CLIENT_RUNTIME_INVALIDATION_TASK = "admin.client.runtime_snapshot.invalidate";

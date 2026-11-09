@@ -1,11 +1,11 @@
 import { describe, expect, mock, test } from "bun:test";
-import { createSubjectAccessOperations, SubjectAccessPermissionRequiredError } from "@iam/api-core/subject-access";
 import type { ResolveClientSubjectInput } from "@iam/client-subject-projection";
 import {
   createPermittedClientSubjectProjectionService,
   SubjectProjectionNotReadyError,
 } from "@iam/client-subject-projection";
 import { userDocuments } from "@iam/db/schema";
+import { createSubjectAccessOperations, SubjectAccessPermissionRequiredError } from "@iam/subject-access";
 import type { DocumentFactsCacheRecord } from "../../subject-facts";
 import { createSubjectFactsReader, createSubjectFactsRedisCache } from "../../subject-facts";
 

@@ -1,5 +1,5 @@
-import { SERVICE_UNAVAILABLE } from "@iam/api-core/core/http-status-codes";
 import { ApiErrorCode } from "@iam/contracts";
+import { SERVICE_UNAVAILABLE } from "@iam/contracts/http";
 
 export class InternalUserDocumentSearchUnavailableError extends Error {
   readonly code = ApiErrorCode.UserSearchUnavailable;

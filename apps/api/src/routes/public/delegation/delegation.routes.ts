@@ -1,11 +1,11 @@
 import { CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME } from "@api/services/sso/transport/custom-sso-delivery.security";
 import { CustomSsoDeliveryRequestHeadersSchema } from "@api/services/sso/transport/custom-sso-delivery-request.schema";
 import { createRoute, z } from "@hono/zod-openapi";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
+import { HttpStatusCodes } from "@iam/contracts/http";
 import {
   DelegationCreateSchema,
   DelegationDetailSchema,

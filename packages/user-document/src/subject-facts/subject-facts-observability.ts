@@ -1,4 +1,4 @@
-import { SystemLogEvent } from "@iam/api-core/logger";
+import { SystemLogEvent } from "@iam/runtime/logger";
 import type {
   SubjectFactsReaderObservabilityPort,
   SubjectFactsReaderObservation,

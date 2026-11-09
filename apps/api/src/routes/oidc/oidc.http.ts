@@ -1,8 +1,7 @@
 import { Buffer } from "node:buffer";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { getRequestId, getTraceId } from "@iam/api-core/core/request-context";
-import type { createSubjectAccessOperations } from "@iam/api-core/subject-access";
 import { appendNavigationParameters } from "@iam/contracts";
+import { HttpStatusCodes } from "@iam/contracts/http";
 import type {
   OidcAuthorization,
   OidcAuthorizationResult,
@@ -21,6 +20,7 @@ import {
   OidcLoginGuardSchema,
   OidcTokenResponseSchema,
 } from "@iam/oidc/wire";
+import type { createSubjectAccessOperations } from "@iam/subject-access";
 import type { Context } from "hono";
 import { Hono } from "hono";
 import { getConnInfo } from "hono/bun";

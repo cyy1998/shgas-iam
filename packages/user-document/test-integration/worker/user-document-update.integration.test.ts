@@ -1,8 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { createSubjectAccessRepair } from "@iam/api-core/subject-access";
-import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
-import { createUnitOfWork } from "@iam/api-core/uow";
 import {
   OrganizationLevel,
   OrganizationResponsibilityAssignmentStatus,
@@ -27,6 +24,9 @@ import {
   users,
 } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
+import { createSubjectAccessRepair } from "@iam/subject-access/recovery";
+import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
+import { createUnitOfWork } from "@iam/unit-of-work";
 import { eq } from "drizzle-orm";
 import { createUserDocumentInvalidation, type UserDocumentSourceChange } from "../../src/producer";
 import { createInternalUserDocumentQueryRepository } from "../../src/query/internal-user-query.repository";

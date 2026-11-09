@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { createInternalOrganizationQueryResource } from "@api/composition/internal-organization-query";
+import { createInternalAuthenticationHandler } from "@api/middlewares/internal-client-authentication";
 import { createInternalMiddlewares } from "@api/routes/internal/_middleware";
 import { createOrganizationHandlers } from "@api/routes/internal/organization/organization.handlers";
 import { createOrganizationRoute } from "@api/routes/internal/organization/organization.index";
 import createApp from "@iam/api-core/core/create-app";
-import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares";
 import { ClientStatus, OrganizationDocumentSchema, OrganizationStatus, OrganizationType } from "@iam/contracts";
 import { organizationClosures, organizationDocuments, organizations } from "@iam/db/schema";
 import type { GenericClientRuntimeDto } from "@iam/domain/client";

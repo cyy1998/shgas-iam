@@ -1,5 +1,5 @@
 import process from "node:process";
-import { closeMaintenanceResources } from "@iam/api-core/maintenance";
+import { closeMaintenanceResources } from "@iam/runtime/maintenance";
 import { parseAuditActionMaintenanceCommandEnv } from "@ops/env";
 import postgres from "postgres";
 

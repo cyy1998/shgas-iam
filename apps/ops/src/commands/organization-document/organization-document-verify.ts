@@ -1,6 +1,6 @@
 import { parseArgs } from "node:util";
-import { runMaintenanceCommandWithLifecycle } from "@iam/api-core/maintenance";
 import type { OrganizationDocumentVerificationReport } from "@iam/organization-document/maintenance";
+import { runMaintenanceCommandWithLifecycle } from "@iam/runtime/maintenance";
 import { parseDocumentCommandDeadline } from "../document-command-lifecycle";
 
 export async function runOrganizationDocumentVerifyCommand(
@@ -27,7 +27,7 @@ async function main(args: string[]) {
   const deadlineMs = parseDocumentCommandDeadline(values["deadline-ms"]);
   const { parseOrganizationDocumentVerifyCommandEnv } = await import("@ops/env");
   const env = parseOrganizationDocumentVerifyCommandEnv(process.env);
-  const { createLogger, LoggerSourceApp } = await import("@iam/api-core/logger");
+  const { createLogger, LoggerSourceApp } = await import("@iam/runtime/logger");
   const logger = createLogger({
     nodeEnv: env.nodeEnv,
     logLevel: env.log.level,

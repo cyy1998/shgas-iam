@@ -7,6 +7,7 @@ import { getAdminCapabilitySummary } from "@admin/services/authorization";
 import { loadCurrentAdminUser } from "@admin/services/current-user";
 import { redirectToLogin, restoreLoginRedirectState } from "@admin/utils/auth";
 import type { AdminCapabilitySummary } from "@iam/contracts";
+import { UNAUTHORIZED } from "@iam/contracts/http";
 import { history } from "@umijs/max";
 import { ConfigProvider } from "antd";
 import { createElement, type ReactElement } from "react";
@@ -75,7 +76,7 @@ export const request = {
     [
       (response: any) => response,
       (error: any) => {
-        if (error?.response?.status === 401) {
+        if (error?.response?.status === UNAUTHORIZED) {
           redirectToLogin();
           return new Promise(() => {});
         }

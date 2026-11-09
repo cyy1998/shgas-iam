@@ -4,13 +4,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
-import { spawnOwnedProcessTree } from "@iam/api-core/process";
-import type { OwnedTestResourceLifecycle } from "@iam/api-core/testing/external-test-resources";
+import { spawnOwnedProcessTree } from "@iam/runtime/process";
+import type { OwnedTestResourceLifecycle } from "@iam/test-support/external-test-resources";
 import {
   createBoundedProcessLogCapture,
   createProcessSmokeEnvironment,
   terminateProcessTree,
-} from "@iam/api-core/testing/process-smoke-harness";
+} from "@iam/test-support/process-smoke-harness";
 import { bounded } from "./lifecycle-sync.fixture";
 
 const packageRoot = fileURLToPath(new URL("../../", import.meta.url));

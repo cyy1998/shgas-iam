@@ -1,6 +1,6 @@
 import type { AuditLogInput } from "@admin-api/services/audit/audit.context";
-import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { Employment } from "@iam/domain/employment";
+import type { UnitOfWorkPort } from "@iam/unit-of-work";
 
 export interface ManagePrimaryEmploymentTransactionPorts {
   employmentStore: {

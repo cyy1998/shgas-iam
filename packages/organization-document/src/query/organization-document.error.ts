@@ -1,5 +1,5 @@
-import { NOT_FOUND, SERVICE_UNAVAILABLE, UNPROCESSABLE_ENTITY } from "@iam/api-core/core/http-status-codes";
 import { ApiErrorCode } from "@iam/contracts";
+import { NOT_FOUND, SERVICE_UNAVAILABLE, UNPROCESSABLE_ENTITY } from "@iam/contracts/http";
 
 export class OrganizationDirectoryNotFoundError extends Error {
   readonly code = ApiErrorCode.OrganizationNotFound;

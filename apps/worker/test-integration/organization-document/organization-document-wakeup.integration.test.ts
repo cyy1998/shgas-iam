@@ -1,8 +1,6 @@
 import { expect, test } from "bun:test";
 import { createConnection, createServer, type Socket } from "node:net";
 import process from "node:process";
-import { parseDedicatedRedisTestUrl, runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
-import { createUnitOfWork } from "@iam/api-core/uow";
 import { OrganizationLevel, OrganizationType } from "@iam/contracts";
 import { organizationClosures, organizations } from "@iam/db/schema";
 import {
@@ -12,6 +10,8 @@ import {
   type OrganizationOutboxJobPayload,
 } from "@iam/organization-document/producer";
 import { createOrganizationDocumentWorkerModule } from "@iam/organization-document/worker";
+import { parseDedicatedRedisTestUrl, runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
+import { createUnitOfWork } from "@iam/unit-of-work";
 import { eq } from "drizzle-orm";
 import { createWorkerPostgresTestHarness } from "../support/postgres-test-harness";
 import {

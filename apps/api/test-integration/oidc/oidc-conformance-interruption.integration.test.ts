@@ -4,7 +4,7 @@ import { cp, mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { requireDedicatedPostgresTestUrl, requireExternalTestUrl } from "@iam/api-core/testing/external-test-resources";
+import { requireDedicatedPostgresTestUrl, requireExternalTestUrl } from "@iam/test-support/external-test-resources";
 import Redis from "ioredis";
 import postgres from "postgres";
 import { withOidcConformanceLifecycle } from "../../src/testing/oidc-conformance-lifecycle.fixture";

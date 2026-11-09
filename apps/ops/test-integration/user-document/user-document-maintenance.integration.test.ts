@@ -1,16 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { createLogger, LoggerSourceApp } from "@iam/api-core/logger";
-import { runMaintenanceCommandWithLifecycle } from "@iam/api-core/maintenance";
-import { redisUrlString } from "@iam/api-core/redis/config";
-import {
-  createRedisSubjectAccessStore,
-  createSubjectAccessBarrier,
-  createSubjectAccessBootstrap,
-  createSubjectAccessRepair,
-} from "@iam/api-core/subject-access";
-import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/api-core/testing/process-smoke-harness";
 import {
   ClientDelegationStatus,
   ClientStatus,
@@ -19,6 +9,13 @@ import {
   RoleStatus,
   UserStatus,
 } from "@iam/contracts";
+import { createLogger, LoggerSourceApp } from "@iam/runtime/logger";
+import { runMaintenanceCommandWithLifecycle } from "@iam/runtime/maintenance";
+import { redisUrlString } from "@iam/runtime/redis/config";
+import { createSubjectAccessBarrier } from "@iam/subject-access";
+import { createSubjectAccessRepair } from "@iam/subject-access/recovery";
+import { createRedisSubjectAccessStore, createSubjectAccessBootstrap } from "@iam/subject-access/redis";
+import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
 import {
   createSubjectFactsRedisCache,
   createSubjectFactsRedisPublisher,

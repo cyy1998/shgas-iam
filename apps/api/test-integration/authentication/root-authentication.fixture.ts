@@ -2,20 +2,11 @@ import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { createRootAuthenticationComposition } from "@api/composition/root-authentication";
 import { createLoginCredentialParser } from "@api/services/authentication/login-credential.parser";
-import type { ClientSnapshotValue } from "@iam/api-core/client-snapshot";
-import { ClientSnapshotUnavailableError } from "@iam/api-core/client-snapshot";
-import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
-import { createClientSecretAuthenticator } from "@iam/api-core/client-snapshot/credentials";
-import { createErrorHandler } from "@iam/api-core/middlewares/error-handler";
-import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
-import {
-  createRedisSubjectAccessStore,
-  createSubjectAccessBarrier,
-  createSubjectAccessBootstrap,
-  requireSubjectAccessOperation,
-  SubjectAccessDisabledError,
-  SubjectAccessUnavailableError,
-} from "@iam/api-core/subject-access";
+import { createErrorHandler } from "@iam/api-core/middlewares";
+import type { ClientSnapshotValue } from "@iam/client-snapshot";
+import { ClientSnapshotUnavailableError } from "@iam/client-snapshot";
+import { createClientSnapshots } from "@iam/client-snapshot/composition";
+import { createClientSecretAuthenticator } from "@iam/client-snapshot/credentials";
 import type { SubjectFactsSnapshot } from "@iam/client-subject-projection";
 import {
   ClientSsoCallbackType,
@@ -29,6 +20,14 @@ import {
 import { createUnifiedCustomSsoRedisTestScope } from "@iam/custom-sso/testing";
 import { relations } from "@iam/db/relations";
 import { createUnifiedSessionRedisTestScope } from "@iam/session-kernel/testing";
+import type { SubjectAccessOperation } from "@iam/subject-access";
+import {
+  createSubjectAccessBarrier,
+  requireSubjectAccessOperation,
+  SubjectAccessDisabledError,
+  SubjectAccessUnavailableError,
+} from "@iam/subject-access";
+import { createRedisSubjectAccessStore, createSubjectAccessBootstrap } from "@iam/subject-access/redis";
 import { createSubjectFactsReader, createSubjectFactsRedisCache } from "@iam/user-document/subject-facts";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { Hono } from "hono";

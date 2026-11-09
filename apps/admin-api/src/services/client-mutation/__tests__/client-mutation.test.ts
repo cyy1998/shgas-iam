@@ -4,7 +4,7 @@ import {
   ClientMutationTargetRequiredError,
   createAdminClientMutation,
 } from "@admin-api/services/client/client-mutation";
-import { createImmediateUnitOfWork } from "@iam/api-core/uow";
+import { createImmediateUnitOfWork } from "@iam/unit-of-work/testing";
 
 function createLogger() {
   return {

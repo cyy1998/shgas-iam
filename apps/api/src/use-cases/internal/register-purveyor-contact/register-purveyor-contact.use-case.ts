@@ -1,8 +1,8 @@
 import { withApiRequestContext } from "@api/services/audit/audit.context";
 import { buildInternalPurveyorContactRegisterAudit } from "@api/services/audit/events/internal.audit";
-import { CustomError } from "@iam/api-core/errors/CustomError";
 import { UserType } from "@iam/contracts";
 import { OrganizationNotFoundError } from "@iam/domain/organization";
+import { CustomError } from "@iam/runtime/errors";
 import type { RegisterPurveyorContactUseCaseDeps } from "./register-purveyor-contact.port";
 import type { RegisterPurveyorContactInput, RegisterPurveyorContactOptions } from "./register-purveyor-contact.type";
 

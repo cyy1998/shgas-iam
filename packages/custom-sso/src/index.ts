@@ -1,6 +1,7 @@
 import type { UnifiedCustomSsoOperations } from "./unified";
 
 export type CustomSso = ReturnType<UnifiedCustomSsoOperations["forOperation"]>;
+export { InvalidSsoClientError } from "./authorization.error";
 export { CustomSsoClientDeliveryUnauthorizedError } from "./client-delivery.error";
 export type { CustomSsoAuditPort, CustomSsoLoggerPort } from "./custom-sso.port";
 export { createSsoRedirectUrlValidator } from "./internal/redirect-url.validator";

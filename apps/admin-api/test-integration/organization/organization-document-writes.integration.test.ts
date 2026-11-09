@@ -4,8 +4,6 @@ import { connect, createServer, type Socket } from "node:net";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import { createOrganizationService } from "@admin-api/services/organization/organization.service";
-import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
-import { mapUnitOfWork } from "@iam/api-core/uow";
 import { OrganizationType } from "@iam/contracts";
 import { organizationDocumentOutboxEntries, organizations } from "@iam/db/schema";
 import { OrganizationCreateDtoSchema } from "@iam/domain/organization";
@@ -18,6 +16,8 @@ import {
   createOrganizationDocumentProcessor,
   type OrganizationRebuildJobPayload,
 } from "@iam/organization-document/worker";
+import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
+import { mapUnitOfWork } from "@iam/unit-of-work";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 import { createAdminApiRedisTestHarness } from "../support/redis-test-harness";
 

@@ -1,5 +1,3 @@
-import { AuthzForbiddenError } from "@iam/api-core/errors/AuthzForbiddenError";
-import { SystemLogEvent } from "@iam/api-core/logger";
 import type {
   AdminAuthorizationDecision,
   AdminAuthorizationReasonCode,
@@ -20,6 +18,8 @@ import {
 import { EmploymentNotFoundError } from "@iam/domain/employment";
 import { OrganizationNotFoundError } from "@iam/domain/organization";
 import { OrganizationResponsibilityAssignmentNotFoundError } from "@iam/domain/organization-responsibility";
+import { AuthzForbiddenError } from "@iam/runtime/errors";
+import { SystemLogEvent } from "@iam/runtime/logger";
 import type {
   AdminEmploymentActionFacts,
   AdminEmploymentAuthorization,

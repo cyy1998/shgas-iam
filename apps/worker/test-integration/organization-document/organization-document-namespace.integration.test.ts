@@ -4,7 +4,7 @@ import {
   runProcessCommandSmoke,
   spawnOwnedProcessTree,
   withOwnedTemporaryDirectory,
-} from "@iam/api-core/testing/process-smoke-harness";
+} from "@iam/test-support/process-smoke-harness";
 import { createUnavailableStorageCommandEnvironment } from "../support/worker-command-smoke-environment";
 
 const workerRoot = fileURLToPath(new URL("../../", import.meta.url));

@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
-import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
 import { UserDocumentWorkStatus } from "@iam/contracts";
 import { userDocumentRebuildStates, userDocuments, users } from "@iam/db/schema";
+import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import { asc, eq } from "drizzle-orm";
 import postgres from "postgres";
 import { publication } from "../../src/__tests__/document-fixture";

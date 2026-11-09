@@ -4,8 +4,6 @@ import { createAdminApiRepositories } from "@admin-api/composition/repositories"
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import type { AdminRoleTransactionPorts } from "@admin-api/services/role/role.port";
 import { createRoleService } from "@admin-api/services/role/role.service";
-import { BadRequestError } from "@iam/api-core/errors";
-import { mapUnitOfWork } from "@iam/api-core/uow";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -39,6 +37,8 @@ import {
   RoleNotFoundError,
 } from "@iam/domain/role";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
+import { BadRequestError } from "@iam/runtime/errors";
+import { mapUnitOfWork } from "@iam/unit-of-work";
 import { StoredUserDocumentSchema } from "@iam/user-document/document";
 import {
   createCurrentUserDocumentProjectionBundle,

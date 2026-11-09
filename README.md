@@ -8,7 +8,7 @@
 
 - **Monorepo 一体化开发**：pnpm workspace 管理依赖，Turborepo 编排开发、构建和检查任务
 - **服务分层**：`apps/api` 承载 public/open/internal/sso/auth 等公共能力，`apps/admin-api` 承载 admin REST 与管理端 tRPC，API 同时承载标准 OIDC 协议面，`apps/worker` 承载后台队列消费和运维面板
-- **共享包拆分**：`packages/db` 提供 Drizzle schema/relations/client/migrations，`packages/api-core` 提供 Hono/OpenAPI/tRPC/Redis/Session Kernel/日志/中间件等基础设施，`packages/contracts` 提供跨端共享枚举和稳定契约，`packages/domain` 提供共享 DTO、审计 helper 和业务错误，`packages/jobs` 与 `packages/user-document` 提供 BullMQ 队列与用户档案读模型能力
+- **共享包拆分**：`packages/db` 提供 Drizzle schema/relations/client/migrations，`packages/api-core` 提供 Hono/OpenAPI/tRPC HTTP 接入，`packages/runtime` 提供共享运行支撑，`packages/contracts` 提供跨端共享枚举和稳定契约，`packages/domain` 提供共享 DTO、审计 helper 和业务错误，`packages/jobs` 与 `packages/user-document` 提供 BullMQ 队列与用户档案读模型能力
 - **类型安全调用**：管理后台通过 `@trpc/client` 消费 `@iam/admin-api/trpc` 暴露的 `AppRouter` 类型
 - **声明式后端装配**：API 后端的 `app.config.ts` 声明 API tier，app-local composition root materialize 路由和 tier 中间件，再交给 `@iam/api-core` 挂载
 - **Drizzle + PostgreSQL**：数据库层集中在 `packages/db`，使用 Drizzle ORM v1 relations 和 PostgreSQL
@@ -70,7 +70,7 @@ iam-service/
 │       ├── .umirc.ts
 │       └── .env.example
 ├── packages/
-│   ├── api-core/                    # Hono/OpenAPI/tRPC/中间件/日志/Redis/Session Kernel 等后端基础设施（@iam/api-core）
+│   ├── api-core/                    # Hono/OpenAPI/tRPC HTTP 接入（@iam/api-core）
 │   ├── contracts/                   # 跨端共享枚举与稳定契约类型（@iam/contracts）
 │   ├── db/                          # Drizzle schema、relations、migrations、db client（@iam/db）
 │   ├── domain/                      # 共享 DTO schema/type、审计 helper、业务错误（@iam/domain）
@@ -114,11 +114,14 @@ OIDC 由 API composition 装配 `@iam/oidc`，HTTP adapter 保持外部 `/oidc` 
 ### 共享包职责
 
 - `@iam/db`：集中维护 PostgreSQL schema、relations、migrations、Drizzle client 和查询工具
-- `@iam/api-core`：提供 `defineConfig`、`createApp`、路由工厂、OpenAPI helper、统一响应、错误、中间件、Redis、日志、Session Kernel 和 tRPC 基础设施
+- `@iam/runtime` 提供日志、观测上下文、Redis 连接、环境解析、安全工具、进程所有权和维护生命周期
+- `@iam/api-core` 通过显式子路径提供应用和路由装配、OpenAPI、请求上下文、响应、错误映射、中间件与 tRPC 接入
 - `@iam/contracts`：提供前后端共享枚举与稳定契约，避免在多个应用里重复定义状态码和业务枚举
 - `@iam/domain`：提供共享 DTO schema/type、审计 helper、脱敏规则和可复用业务错误
 - `@iam/jobs`：提供 BullMQ 连接、队列、worker 和默认 job options
 - `@iam/user-document`：提供用户档案读模型 producer、query service、Outbox producer 和 worker module
+
+其余能力与依赖方向见[仓库地图](docs/architecture/repository-map.md#共享-packages)和[后端架构](docs/architecture/backend-architecture.md#核心依赖方向)。
 
 ## 🛠️ 技术栈
 

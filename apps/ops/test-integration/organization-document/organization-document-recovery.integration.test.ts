@@ -1,12 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
-import { redisUrlString } from "@iam/api-core/redis/config";
-import {
-  runProcessCommandSmoke,
-  spawnOwnedProcessTree,
-  terminateProcessTree,
-} from "@iam/api-core/testing/process-smoke-harness";
-import { createUnitOfWork } from "@iam/api-core/uow";
 import { createJobQueue, DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
 import { createOrganizationDocumentInvalidation } from "@iam/organization-document/producer";
 import {
@@ -22,6 +15,13 @@ import {
   type OrganizationRebuildJobPayload,
   OrganizationRebuildJobPayloadSchema,
 } from "@iam/organization-document/worker";
+import { redisUrlString } from "@iam/runtime/redis/config";
+import {
+  runProcessCommandSmoke,
+  spawnOwnedProcessTree,
+  terminateProcessTree,
+} from "@iam/test-support/process-smoke-harness";
+import { createUnitOfWork } from "@iam/unit-of-work";
 import { createHangingRedisServer } from "../support/hanging-redis-server";
 import { createOpsPostgresTestHarness, reserveOpsPostgresConnection } from "../support/postgres-test-harness";
 import {

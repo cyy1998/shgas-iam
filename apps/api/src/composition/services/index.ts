@@ -13,29 +13,30 @@ import { createUserService } from "@api/services/user/user.service";
 import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.helper";
 import { createUserPasswordHelper } from "@api/services/user/user-password.helper";
 import { createUserDocumentSearchAdapter } from "@api/services/user-document-search/user-document-search.adapter";
-import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
-import { createClientSecretAuthenticator } from "@iam/api-core/client-snapshot/credentials";
-import { createLoginRestriction, createRedisLoginRestrictionStore } from "@iam/api-core/login-restriction";
-import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
-import {
-  createRedisSubjectAccessStore,
-  createSubjectAccessBarrier,
-  createSubjectAccessLifecycle,
-  createSubjectAccessOperations,
-  createUnifiedSubjectAccessSessionRevocation,
-  requireSubjectAccessOperation,
-} from "@iam/api-core/subject-access";
-import { mapUnitOfWork } from "@iam/api-core/uow";
+import { createClientSnapshots } from "@iam/client-snapshot/composition";
+import { createClientSecretAuthenticator } from "@iam/client-snapshot/credentials";
 import type { DbClient } from "@iam/db";
 import db from "@iam/db";
 import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
 import { createDelegationService } from "@iam/delegation";
+import { createLoginRestriction } from "@iam/login-restriction";
+import { createRedisLoginRestrictionStore } from "@iam/login-restriction/redis";
 import { createOidcClientAuthRateLimiter } from "@iam/oidc";
 import {
   createOrganizationDocumentQueryRepository,
   createOrganizationDocumentQueryService,
 } from "@iam/organization-document";
 import { createUnifiedSessionKernel } from "@iam/session-kernel";
+import type { SubjectAccessOperation } from "@iam/subject-access";
+import {
+  createSubjectAccessBarrier,
+  createSubjectAccessOperations,
+  requireSubjectAccessOperation,
+} from "@iam/subject-access";
+import { createSubjectAccessLifecycle } from "@iam/subject-access/lifecycle";
+import { createRedisSubjectAccessStore } from "@iam/subject-access/redis";
+import { createUnifiedSubjectAccessSessionRevocation } from "@iam/subject-access/session-kernel";
+import { mapUnitOfWork } from "@iam/unit-of-work";
 import {
   createInternalUserDocumentQueryRepository,
   createInternalUserDocumentQueryService,

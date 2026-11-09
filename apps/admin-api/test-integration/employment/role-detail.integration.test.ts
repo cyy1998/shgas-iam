@@ -5,8 +5,6 @@ import type { AdminEmploymentTransactionPorts } from "@admin-api/services/employ
 import { createEmploymentService } from "@admin-api/services/employment/employment.service";
 import type { AdminUserServiceDeps, AdminUserTransactionPorts } from "@admin-api/services/user/user.port";
 import { createUserService } from "@admin-api/services/user/user.service";
-import type { SubjectAccessMutationReceipt, SubjectAccessTransitionTarget } from "@iam/api-core/subject-access";
-import { mapUnitOfWork } from "@iam/api-core/uow";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -17,6 +15,8 @@ import {
 import { clients, employments, organizationClosures, organizations, positions, roles, users } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
+import type { SubjectAccessMutationReceipt, SubjectAccessTransitionTarget } from "@iam/subject-access";
+import { mapUnitOfWork } from "@iam/unit-of-work";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 
 let harness: Awaited<ReturnType<typeof createAdminApiPostgresTestHarness>>;

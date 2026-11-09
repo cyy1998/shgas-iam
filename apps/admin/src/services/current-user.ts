@@ -1,5 +1,6 @@
 import { API_PREFIX, SSO_CLIENT_CODE } from "@admin/constants/config";
 import { type CurrentAdminUser, mapCurrentAdminUser } from "@admin/lib/current-admin-user";
+import { UNAUTHORIZED } from "@iam/contracts/http";
 import { CustomSsoSubjectProjectionSchema } from "@iam/custom-sso/wire";
 import { z } from "zod";
 
@@ -15,7 +16,7 @@ export async function loadCurrentAdminUser(): Promise<CurrentAdminUserLoadResult
     credentials: "include",
     headers: { Client: SSO_CLIENT_CODE },
   });
-  if (response.status === 401) return { kind: "unauthenticated" };
+  if (response.status === UNAUTHORIZED) return { kind: "unauthenticated" };
   if (!response.ok) return { kind: "unavailable" };
   const body = CurrentUserResponseSchema.parse(await response.json());
   return { kind: "available", user: mapCurrentAdminUser(body.data) };

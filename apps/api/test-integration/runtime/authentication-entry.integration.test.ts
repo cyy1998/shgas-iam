@@ -1,41 +1,43 @@
 import { afterEach, expect, test } from "bun:test";
 import { createHash, createPublicKey, randomInt, randomUUID, verify } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
-import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
+import { createClientSnapshots } from "@iam/client-snapshot/composition";
 import {
-  createRedisSubjectAccessStore,
+  ApiErrorCode,
+  ClientSsoCallbackType,
+  ClientSsoProtocol,
+  ClientStatus,
+  createLoginCredential,
+  OidcClientType,
+  OidcScope,
+  SubjectClaim,
+} from "@iam/contracts";
+import { createUnifiedSessionKernel } from "@iam/session-kernel";
+import type { SubjectAccessOperation } from "@iam/subject-access";
+import {
   createSubjectAccessBarrier,
-  createSubjectAccessBootstrap,
   createSubjectAccessOperations,
-  createUnifiedSubjectAccessSessionRevocation,
   requireSubjectAccessOperation,
-} from "@iam/api-core/subject-access";
+} from "@iam/subject-access";
+import { createRedisSubjectAccessStore, createSubjectAccessBootstrap } from "@iam/subject-access/redis";
+import { createUnifiedSubjectAccessSessionRevocation } from "@iam/subject-access/session-kernel";
 import {
   parseDedicatedRedisTestUrl,
   requireDedicatedPostgresTestUrl,
   requireExternalTestUrl,
   runWithOwnedTestResources,
-} from "@iam/api-core/testing/external-test-resources";
+} from "@iam/test-support/external-test-resources";
 import {
   createBoundedProcessLogCapture,
   createProcessSmokeSuite,
   FatalReadinessError,
   PROCESS_SMOKE_TEST_TIMEOUT_MS,
   spawnOwnedProcessTree,
-} from "@iam/api-core/testing/process-smoke-harness";
-import {
-  ClientSsoCallbackType,
-  ClientSsoProtocol,
-  ClientStatus,
-  OidcClientType,
-  OidcScope,
-  SubjectClaim,
-} from "@iam/contracts";
-import { createUnifiedSessionKernel } from "@iam/session-kernel";
+} from "@iam/test-support/process-smoke-harness";
 import { createDocumentFactsCacheRecord } from "@iam/user-document/document";
 import { createSubjectFactsRedisCache } from "@iam/user-document/subject-facts";
 import Redis from "ioredis";
+import { sm2 } from "sm-crypto";
 import { createEntryEnvironment } from "../support/api-env.fixture";
 import { closeApiRedisConnection, ownApiTestExecutor, resetApiRedisTestDatabase } from "../support/fixture-lifecycle";
 import { createApiPostgresTestHarness } from "../support/postgres-test-harness";
@@ -80,6 +82,9 @@ test(
       ownApiTestExecutor(suite.cleanup);
       const subjectIdentifier = randomUUID();
       const userId = randomInt(100000000, 1000000000);
+      const username = "production194";
+      const phoneNumber = "17721462865";
+      const loginKeys = sm2.generateKeyPairHex();
       const namespace = `api194:${randomUUID()}`;
       const custom = `custom-${randomUUID()}`;
       const managed = `managed-${randomUUID()}`;
@@ -87,7 +92,7 @@ test(
       const redirectUri = "https://rp.example/complete";
       const secret = "original-secret";
       const rotatedSecret = "rotated-secret";
-      await sql`INSERT INTO "user" (id, subject_identifier, username, name) VALUES (${userId}, ${subjectIdentifier}, 'production194', 'Published Name')`;
+      await sql`INSERT INTO "user" (id, subject_identifier, username, name, mobile_phone) VALUES (${userId}, ${subjectIdentifier}, ${username}, 'Published Name', ${phoneNumber})`;
       const publication = await publishUserDocument(pg.db, userId);
       await sql`INSERT INTO user_document_rebuild_state (user_id, version, status, reason_codes, dirty_at, processed_at) VALUES (${userId}, 1, 'processed', '["user-updated"]'::jsonb, NOW(), NOW())`;
       const factsCache = createSubjectFactsRedisCache(redis);
@@ -162,6 +167,7 @@ test(
               IAM_API_CLIENT_SESSION_TTL_SECONDS: "3600",
               IAM_API_CUSTOM_SSO_TOKEN_TTL_SECONDS: "900",
               IAM_API_LOGIN_ENDPOINT: "/custom-entry",
+              IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON: JSON.stringify({ "entry-smoke": loginKeys.privateKey }),
             }),
           });
           capture = createBoundedProcessLogCapture(child, { maxBytes: 128 * 1024 });
@@ -223,6 +229,45 @@ test(
             const before = await operations.run((operation) =>
               kernel.forOperation(operation).resolveUserSession(browser.bearer),
             );
+            const submitLogin = (path: string, body: Record<string, string>) =>
+              request(path, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+              });
+            for (let attempt = 1; attempt <= 4; attempt += 1) {
+              const invalid = await submitLogin("/auth/login/password", {
+                credential: createLoginCredential({
+                  username,
+                  password: "invalid-password",
+                  kid: "entry-smoke",
+                  publicKey: loginKeys.publicKey,
+                  now: Date.now(),
+                  nonce: randomUUID(),
+                }),
+              });
+              expect(invalid.status).toBe(400);
+              const body = await invalid.json();
+              expect(body).toMatchObject({
+                code: ApiErrorCode.LoginFailed,
+                message: expect.stringContaining(`当前已连续失败 ${attempt} 次`),
+              });
+            }
+            const invalidSms = await submitLogin("/auth/login/mobile", { phoneNumber, code: "999999" });
+            expect(invalidSms.status).toBe(400);
+            const invalidSmsBody = await invalidSms.json();
+            expect(invalidSmsBody).toMatchObject({
+              code: ApiErrorCode.InvalidVerificationCode,
+              message: expect.stringContaining("当前已连续失败 5 次"),
+            });
+            const restricted = await submitLogin("/auth/login/mobile", { phoneNumber, code: "000000" });
+            expect(restricted.status).toBe(400);
+            expect(restricted.headers.getSetCookie()).toEqual([]);
+            const restrictedBody = await restricted.json();
+            expect(restrictedBody).toMatchObject({
+              code: ApiErrorCode.InvalidVerificationCode,
+              message: expect.stringContaining("最后触发方式：手机验证码"),
+            });
             const accepted = await authorize();
             const sessions = await operations.run((operation) =>
               kernel

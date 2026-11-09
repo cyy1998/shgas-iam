@@ -1,10 +1,10 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
 import { createAdminMutationResultSchema } from "@iam/contracts";
+import { HttpStatusCodes } from "@iam/contracts/http";
 import { DelegationSearchSchema, DelegationUpdateSchema } from "@iam/delegation";
 import {
   AdminDelegationCreateSchema,

@@ -1,10 +1,10 @@
 import type { AdminAuditContext, AuditLogInput } from "@admin-api/services/audit/audit.context";
 import type { OrganizationResponsibilityAssignmentWriteTarget } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.type";
-import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { EmploymentStatus } from "@iam/contracts";
 import type { Employment } from "@iam/domain/employment";
 import type { Organization } from "@iam/domain/organization";
 import type { Position } from "@iam/domain/position";
+import type { UnitOfWorkPort } from "@iam/unit-of-work";
 
 export interface EmploymentLifecycleContext {
   employment: Employment;

@@ -1,5 +1,5 @@
 import { parseArgs } from "node:util";
-import { runMaintenanceCommandWithLifecycle } from "@iam/api-core/maintenance";
+import { runMaintenanceCommandWithLifecycle } from "@iam/runtime/maintenance";
 import { parseDocumentCommandDeadline } from "../document-command-lifecycle";
 
 interface UserDocumentGateReport {
@@ -111,7 +111,7 @@ async function createReadinessLogger(env: {
   nodeEnv: string;
   log: { level: string; format: "auto" | "json" | "pretty" };
 }) {
-  const { createLogger, LoggerSourceApp } = await import("@iam/api-core/logger");
+  const { createLogger, LoggerSourceApp } = await import("@iam/runtime/logger");
   return createLogger({
     nodeEnv: env.nodeEnv,
     logLevel: env.log.level,

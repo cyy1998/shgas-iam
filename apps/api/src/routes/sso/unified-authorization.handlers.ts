@@ -1,11 +1,11 @@
 import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
 import { expireCustomSsoCookies } from "@api/services/sso/transport/custom-sso-cookie";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import * as resp from "@iam/api-core/http";
-import type { createSubjectAccessOperations } from "@iam/api-core/subject-access";
-import { createSubjectAccessHttpAdapter } from "@iam/api-core/subject-access";
+import { createSubjectAccessHttpAdapter } from "@iam/api-core/http/subject-access";
 import { appendNavigationParameters } from "@iam/contracts";
+import { HttpStatusCodes } from "@iam/contracts/http";
 import type { UnifiedCustomSsoAuthorization } from "@iam/custom-sso";
+import type { createSubjectAccessOperations } from "@iam/subject-access";
 import { getCookie, setCookie } from "hono/cookie";
 import type { SsoRouteHandler } from "./sso.type";
 

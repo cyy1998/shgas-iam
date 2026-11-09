@@ -36,11 +36,12 @@
   "dependencies": {
     "@bull-board/api": "^9.10.1",
     "@bull-board/hono": "^9.10.1",
-    "@iam/api-core": "workspace:*",
     "@iam/contracts": "workspace:*",
     "@iam/db": "workspace:*",
     "@iam/jobs": "workspace:*",
     "@iam/organization-document": "workspace:*",
+    "@iam/runtime": "workspace:*",
+    "@iam/subject-access": "workspace:*",
     "@iam/user-document": "workspace:*",
     "drizzle-orm": "1.0.0-rc.2",
     "hono": "^4.12.30",
@@ -49,6 +50,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@iam/test-support": "workspace:*",
+    "@iam/unit-of-work": "workspace:*",
     "@types/bun": "latest",
     "@typescript/native": "npm:typescript@7.0.2",
     "typescript": "npm:@typescript/typescript6@6.0.2",

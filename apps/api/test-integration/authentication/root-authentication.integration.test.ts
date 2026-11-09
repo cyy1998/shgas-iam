@@ -2,8 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { connect, createServer } from "node:net";
 import process from "node:process";
-import type { ClientSnapshotValue } from "@iam/api-core/client-snapshot";
-import { SubjectAccessUnavailableError } from "@iam/api-core/subject-access";
+import type { ClientSnapshotValue } from "@iam/client-snapshot";
 import type { SubjectFactsSnapshot } from "@iam/client-subject-projection";
 import {
   ClientSsoCallbackType,
@@ -16,6 +15,7 @@ import {
   SubjectClaim,
 } from "@iam/contracts";
 import { CustomSsoManagedFailure } from "@iam/custom-sso";
+import { SubjectAccessUnavailableError } from "@iam/subject-access";
 import Redis from "ioredis";
 import { cleanupAfterFixtureFailure, closeFixtureResources } from "../oidc/oidc.fixture";
 import { closeApiRedisConnection, ownApiTestExecutor, resetApiRedisTestDatabase } from "../support/fixture-lifecycle";

@@ -1,4 +1,5 @@
 import { ApiErrorCode, splitFirstPartySsoNavigation } from "@iam/contracts";
+import { UNAUTHORIZED } from "@iam/contracts/http";
 import { API_PREFIX, SSO_CLIENT_CODE } from "@sso/constants/config";
 import type { ApiEnvelope } from "@sso/types/api";
 import { currentSearchParams } from "@sso/utils/url";
@@ -88,12 +89,12 @@ export async function request<T>(path: string, init: RequestInitExt = {}): Promi
     },
   });
 
-  if (res.status === 401 && res.headers.get("forbidden-reason") === "maintenance") {
+  if (res.status === UNAUTHORIZED && res.headers.get("forbidden-reason") === "maintenance") {
     gotoMaintenance();
     return new Promise<T>(() => {});
   }
 
-  if (res.status === 401 && !init.skipAuthRedirect) {
+  if (res.status === UNAUTHORIZED && !init.skipAuthRedirect) {
     gotoLogin();
     return new Promise<T>(() => {});
   }

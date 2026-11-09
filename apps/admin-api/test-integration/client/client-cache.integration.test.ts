@@ -1,13 +1,13 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
+import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import {
   createProcessSmokeEnvironment,
   runProcessCommandSmoke,
   spawnOwnedProcessTree,
   withOwnedTemporaryDirectory,
-} from "@iam/api-core/testing/process-smoke-harness";
+} from "@iam/test-support/process-smoke-harness";
 import { createAdminApiRedisTestHarness } from "../support/redis-test-harness";
 
 const adminApiRoot = fileURLToPath(new URL("../../", import.meta.url));

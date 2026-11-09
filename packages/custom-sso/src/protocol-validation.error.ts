@@ -1,4 +1,4 @@
-import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
+import { AuthzUnauthorizedError } from "@iam/runtime/errors";
 
 /** A valid object submitted outside its intended request must remain recoverable. */
 export class CustomSsoRequestMismatchError extends AuthzUnauthorizedError {

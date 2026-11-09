@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
-import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/api-core/testing/process-smoke-harness";
 import { UserStatus } from "@iam/contracts";
+import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
 import { createCurrentUserDocumentProjectionBundle } from "@iam/user-document/worker";
 import { createOpsPostgresTestHarness } from "../support/postgres-test-harness";
 import { resolveOpsRedisTestUrl } from "../support/redis-test-harness";

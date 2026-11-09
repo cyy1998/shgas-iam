@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { createPublicHandlers } from "@api/routes/public/public.handlers";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import * as resp from "@iam/api-core/http";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import { ApiErrorCode } from "@iam/contracts";
+import { HttpStatusCodes } from "@iam/contracts/http";
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000001001";
 const userDetail = { id: 1001, username: "138550", name: "测试用户" };

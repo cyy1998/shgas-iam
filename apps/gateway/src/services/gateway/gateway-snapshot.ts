@@ -1,4 +1,4 @@
-import { BAD_GATEWAY } from "@iam/api-core/core/http-status-codes";
+import { BAD_GATEWAY } from "@iam/contracts/http";
 import { z } from "zod";
 import { isRecord } from "../../manifest";
 import { getDefinition, getResourceId } from "../../resources";

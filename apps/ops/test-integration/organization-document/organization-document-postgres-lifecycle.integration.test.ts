@@ -3,11 +3,11 @@ import { mkdtemp, rm, rmdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { redisUrlString } from "@iam/api-core/redis/config";
-import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
-import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/api-core/testing/process-smoke-harness";
 import { OrganizationStatus, OrganizationType } from "@iam/contracts";
 import { createJobQueue } from "@iam/jobs";
+import { redisUrlString } from "@iam/runtime/redis/config";
+import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
+import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
 import { createOpsPostgresTestHarness, reserveOpsPostgresConnection } from "../support/postgres-test-harness";
 import { resetOpsRedisTestDatabase, resolveOpsRedisTestUrl } from "../support/redis-test-harness";
 

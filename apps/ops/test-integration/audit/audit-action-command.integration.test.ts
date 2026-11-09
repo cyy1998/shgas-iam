@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/api-core/testing/process-smoke-harness";
+import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
 import { runAuditActionMaintenance } from "../../src/commands/audit-action-maintenance";
 import { createOpsPostgresTestHarness } from "../support/postgres-test-harness";
 

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
 import { relations } from "@iam/db/relations";
+import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";

@@ -1,8 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
-import { spawnOwnedProcessTree, terminateProcessTree } from "@iam/api-core/testing/process-smoke-harness";
+import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
+import { spawnOwnedProcessTree, terminateProcessTree } from "@iam/test-support/process-smoke-harness";
 import { withOidcConformanceLifecycle } from "../../src/testing/oidc-conformance-lifecycle.fixture";
 import { ownApiTestExecutor, resetApiRedisTestDatabase } from "../support/fixture-lifecycle";
 import { runManagedOidcSuite } from "./managed-api-resources.fixture";

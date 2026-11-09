@@ -2,7 +2,6 @@ import { createAdminMutation } from "@admin-api/services/admin-mutation/admin-mu
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildAdminClientAudit } from "@admin-api/services/audit/events/client.audit";
-import { BadRequestError } from "@iam/api-core/errors";
 import type { ClientStatus } from "@iam/contracts";
 import {
   ClientCodeExistsError,
@@ -12,6 +11,7 @@ import {
   toClientAdminListDto,
   toGenericClientRuntimeDto,
 } from "@iam/domain/client";
+import { BadRequestError } from "@iam/runtime/errors";
 import type { AdminClientServiceDeps, AdminClientTransactionPorts } from "./client.port";
 import type {
   ClientAdminListDto,

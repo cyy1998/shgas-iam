@@ -1,5 +1,5 @@
 import { parseArgs } from "node:util";
-import { runMaintenanceCommandWithLifecycle } from "@iam/api-core/maintenance";
+import { runMaintenanceCommandWithLifecycle } from "@iam/runtime/maintenance";
 import type { UserDocumentRepairOptions } from "@iam/user-document/maintenance";
 import { parseDocumentCommandDeadline } from "../document-command-lifecycle";
 
@@ -59,7 +59,7 @@ async function main(args: string[]) {
   const options = parseUserDocumentRepairArgs(args);
   const { parseUserDocumentCommandEnv } = await import("@ops/env");
   const env = parseUserDocumentCommandEnv(process.env);
-  const { createLogger, LoggerSourceApp } = await import("@iam/api-core/logger");
+  const { createLogger, LoggerSourceApp } = await import("@iam/runtime/logger");
   const logger = createLogger({
     nodeEnv: env.nodeEnv,
     logLevel: env.log.level,

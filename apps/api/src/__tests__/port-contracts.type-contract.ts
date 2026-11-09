@@ -39,7 +39,7 @@ import type {
 } from "@api/use-cases/internal/register-purveyor-contact/register-purveyor-contact.port";
 import type { ClientDelegationResolutionPort } from "@api/use-cases/internal/resolve-client-delegations/resolve-client-delegations.port";
 
-import type { LoginRestriction } from "@iam/api-core/login-restriction";
+import type { LoginRestriction } from "@iam/login-restriction";
 import type { UserDocumentQueryService } from "@iam/user-document/query";
 
 type PrincipalSessionAdapter = ReturnType<typeof createUserSessionAuthenticationAdapter>;

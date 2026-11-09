@@ -365,7 +365,7 @@ Cleanup 失败会非零退出并保留 descriptor，可使用同一目标重试�
 diagnostics 或 cleanup。命令名不表示已经接入 CI provider，也不授予 merge、发布或部署权限。Integration 资源与 Full-system
 E2E lifecycle 的详细契约分别由本页后续专用资源说明和 [测试编排架构](../architecture/testing-architecture.md) 持有。
 
-统一 Snapshot 通过 Core Redis、Admin composition 和 Ops CLI 验证；最终 schema/数据门禁分别使用 DB/Ops PostgreSQL。
+统一 Snapshot 通过 Client Snapshot Redis Integration、Admin composition 和 Ops CLI 验证；最终 schema/数据门禁分别使用 DB/Ops PostgreSQL。
 当前维护步骤见[统一维护手册](../releases/authentication-and-session.md)，旧工具操作见[历史数据维护工具](#历史数据维护工具)；测试不提供目标环境操作授权。
 
 聚合验证的证明边界见[验证结果与交付](testing.md#验证结果与交付)。
@@ -394,8 +394,8 @@ pnpm test:integration --workspace @iam/organization-document
 # Admin 事务和缓存；User Document 同时声明 PG/Redis
 pnpm test:integration --workspace @iam/admin-api --workspace @iam/user-document
 
-# 共享 Redis owners；Core 集合仍按其 manifest 提供完整资源需求
-pnpm test:integration --workspace @iam/session-kernel --workspace @iam/api-core --workspace @iam/oidc
+# 共享 Redis owners；单文件也使用所属 workspace 的完整资源声明
+pnpm test:integration --workspace @iam/session-kernel --workspace @iam/subject-access --workspace @iam/client-snapshot --workspace @iam/oidc --workspace @iam/runtime --workspace @iam/test-support --workspace @iam/login-restriction
 
 # 前端浏览器 Integration 不启动 PG/Redis
 pnpm test:integration --workspace @iam/admin --workspace @iam/sso
@@ -409,7 +409,7 @@ pnpm test:integration --workspace apps/gateway
 [专用资源与隔离](../architecture/testing-architecture.md#专用资源与隔离)。
 
 Ops targeted/full Snapshot repair 与独立 verify 共用本次 `IAM_OPS_TEST_REDIS_URL`，不新增 cleanup-specific env，
-也不跨其他可见环境推断 Redis identity。Core 的 full restore 使用本次 `IAM_API_CORE_TEST_REDIS_URL`，与 Ops 一样
+也不跨其他可见环境推断 Redis identity。Snapshot owner 的 full restore 使用本次 `IAM_CLIENT_SNAPSHOT_TEST_REDIS_URL`，与 Ops 一样
 由受管理独占 DB 和停止后 reset 保证用例干净起点。两者在 reset 前验证 non-owner sentinel 和旧 namespace 的保留、只读 verify 与
 生产部分失败重跑；随后停止本例执行者并整体重置独占 Redis DB，不再为 fixture 逐键登记或精确 UNLINK。
 
@@ -583,6 +583,13 @@ Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit�
 - API backend：`pnpm --filter @iam/api <dev|serve|lint|test|test:unit|typecheck>`
 - Admin API backend：`pnpm --filter @iam/admin-api <dev|serve|lint|test|test:unit|typecheck>`
 - Session Kernel：`pnpm --filter @iam/session-kernel <lint|test|test:unit|typecheck>`
+- Subject Access：`pnpm --filter @iam/subject-access <lint|test|test:unit|typecheck>`，真实 Redis 与 Session Kernel 接线使用根 Integration。
+- Login Restriction：`pnpm --filter @iam/login-restriction <lint|test|test:unit|typecheck>`，真实 Redis 使用根 Integration。
+- Runtime：`pnpm --filter @iam/runtime <lint|test|test:unit|typecheck>`，离线 Redis 与维护命令使用根 Integration。常驻与离线 Redis 连接的 ACL 接线使用
+  `pnpm test:integration --workspace @iam/runtime --file test-integration/redis/connection.integration.test.ts`。
+- Client Snapshot：`pnpm --filter @iam/client-snapshot <lint|test|test:unit|typecheck>`，Redis 缓存与维护库存使用根 Integration。
+- Test Support：`pnpm --filter @iam/test-support <lint|test|test:unit|typecheck>`，真实 Redis 与进程 smoke 使用根 Integration，Windows Job 在 Windows 上运行源码与 standalone launcher 用例。
+- UnitOfWork：`pnpm --filter @iam/unit-of-work <lint|test|test:unit|typecheck>`
 - API Core：`pnpm --filter @iam/api-core <lint|test|test:unit|typecheck>`
 - Custom SSO：`pnpm --filter @iam/custom-sso <lint|test|test:unit|typecheck>`；完整 HTTP/Redis 在 API collection。
 - Client Subject Projection：`pnpm --filter @iam/client-subject-projection <lint|test|test:unit|typecheck>`

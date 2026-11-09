@@ -1,6 +1,6 @@
 import { generateKeyPairSync } from "node:crypto";
-import type { ProcessSmokeAttemptContext } from "@iam/api-core/testing/process-smoke-harness";
-import { createProcessSmokeEnvironment } from "@iam/api-core/testing/process-smoke-harness";
+import type { ProcessSmokeAttemptContext } from "@iam/test-support/process-smoke-harness";
+import { createProcessSmokeEnvironment } from "@iam/test-support/process-smoke-harness";
 
 const loginCredentialPrivateKey = "319b4e59ca80d7b4cc35955b63da4edf1ed51772ec8f33c0a4f769dda7b9fc65";
 const previousKey = JSON.stringify({

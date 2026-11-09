@@ -11,8 +11,7 @@ import type {
   OrganizationTreeNodeDto,
   OrganizationUpdateDto,
 } from "@admin-api/services/organization/organization.type";
-import { BadRequestError } from "@iam/api-core/errors";
-import { paginate } from "@iam/api-core/utils";
+import { paginate } from "@iam/api-core/core/pagination/paginate";
 import { OrganizationLevel, OrganizationStatus, organizationStatusToString } from "@iam/contracts";
 import {
   OrganizationCodeExistsError,
@@ -21,6 +20,7 @@ import {
   OrganizationHasOpenDelegationError,
   OrganizationNotFoundError,
 } from "@iam/domain/organization";
+import { BadRequestError } from "@iam/runtime/errors";
 import type {
   AdminOrganizationDocumentChangedField,
   AdminOrganizationReadScope,

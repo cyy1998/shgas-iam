@@ -1,21 +1,15 @@
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
-import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
-import {
-  createSubjectAccessOperations,
-  createUnifiedSubjectAccessSessionRevocation,
-  requireSubjectAccessOperation,
-} from "@iam/api-core/subject-access";
-import {
-  resetExclusiveRedisTestDatabase,
-  runWithOwnedTestResources,
-} from "@iam/api-core/testing/external-test-resources";
 import { ClientSsoProtocol, ClientStatus, OidcClientType, OidcScope } from "@iam/contracts";
 import { createOidcAuthorization } from "@iam/oidc";
 import { createOidcInventory, createOidcMaintenance } from "@iam/oidc/maintenance";
 import { createOidcRedisTestScope } from "@iam/oidc/testing";
 import { createUnifiedSessionRedisTestScope } from "@iam/session-kernel/testing";
+import type { SubjectAccessOperation } from "@iam/subject-access";
+import { createSubjectAccessOperations, requireSubjectAccessOperation } from "@iam/subject-access";
+import { createUnifiedSubjectAccessSessionRevocation } from "@iam/subject-access/session-kernel";
+import { resetExclusiveRedisTestDatabase, runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import Redis from "ioredis";
 
 async function fixture() {

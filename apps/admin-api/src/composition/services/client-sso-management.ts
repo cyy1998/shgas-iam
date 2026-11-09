@@ -5,9 +5,9 @@ import { createAdminAuditService } from "@admin-api/services/audit/audit.service
 import type { ClientSsoServiceDeps } from "@admin-api/services/client-sso/client-sso.port";
 import { createClientSsoRepository } from "@admin-api/services/client-sso/client-sso.repository";
 import { createClientSsoService } from "@admin-api/services/client-sso/client-sso.service";
-import type { AfterCommitLoggerPort } from "@iam/api-core/uow";
-import { createUnitOfWork } from "@iam/api-core/uow";
 import type { DbClient } from "@iam/db";
+import type { AfterCommitLoggerPort } from "@iam/unit-of-work";
+import { createUnitOfWork } from "@iam/unit-of-work";
 
 export function createClientSsoManagement(options: {
   db: DbClient;

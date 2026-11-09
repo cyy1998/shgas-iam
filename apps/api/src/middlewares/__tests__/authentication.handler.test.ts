@@ -6,17 +6,13 @@ import {
   customSsoLocalSessionCookieName,
   encodeCustomSsoClientCode,
 } from "@api/services/sso/transport/custom-sso-client-code.transport";
-import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";
-import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
-import { createErrorHandler } from "@iam/api-core/middlewares/error-handler";
-import {
-  SubjectAccessDisabledError,
-  SubjectAccessSessionInvalidHttpError,
-  SubjectAccessUnavailableError,
-} from "@iam/api-core/subject-access";
+import { SubjectAccessSessionInvalidHttpError } from "@iam/api-core/http/subject-access";
+import { createErrorHandler } from "@iam/api-core/middlewares";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import { ApiErrorCode } from "@iam/contracts";
 import { CustomSsoClientDeliveryUnauthorizedError } from "@iam/custom-sso";
+import { AuthzMaintenanceError, AuthzUnauthorizedError } from "@iam/runtime/errors";
+import { SubjectAccessDisabledError, SubjectAccessUnavailableError } from "@iam/subject-access";
 import { Hono } from "hono";
 
 type AuthenticationHandlerDeps = Parameters<typeof createApiAuthenticationHandlersImpl>[0];

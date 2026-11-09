@@ -1,8 +1,8 @@
 import { describe, expect, mock, test } from "bun:test";
 import { createRegisterPurveyorContactUseCase } from "@api/use-cases/internal/register-purveyor-contact/register-purveyor-contact.use-case";
-import { CustomError } from "@iam/api-core/errors/CustomError";
-import type { SubjectAccessMutationReceipt } from "@iam/api-core/subject-access";
 import { OrganizationNotFoundError } from "@iam/domain/organization";
+import { CustomError } from "@iam/runtime/errors";
+import type { SubjectAccessMutationReceipt } from "@iam/subject-access";
 
 const input = {
   username: "zhangsan",

@@ -1,6 +1,6 @@
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
-import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { RoleAssignmentTargetType } from "@iam/contracts";
+import type { UnitOfWorkPort } from "@iam/unit-of-work";
 import type {
   AdminRoleAssignmentCreateRecord,
   AdminRoleAssignmentRecord,

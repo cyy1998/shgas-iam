@@ -1,24 +1,20 @@
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
-import type { ClientSnapshotReader } from "@iam/api-core/client-snapshot";
-import { ClientSnapshotUnavailableError } from "@iam/api-core/client-snapshot";
-import {
-  AuthzMaintenanceError,
-  AuthzUnauthorizedError,
-  BadRequestError,
-  InvalidSsoClientError,
-} from "@iam/api-core/errors";
-import { observabilityLogFields } from "@iam/api-core/observability";
-import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
-import { requireSubjectAccessOperation, SubjectAccessUnavailableError } from "@iam/api-core/subject-access";
+import type { ClientSnapshotReader } from "@iam/client-snapshot";
+import { ClientSnapshotUnavailableError } from "@iam/client-snapshot";
 import type { PermittedClientSubjectProjectionService } from "@iam/client-subject-projection";
 import { parseSubjectClaimSelection } from "@iam/client-subject-projection";
 import type { SubjectClaimName } from "@iam/contracts";
 import { ClientSsoCallbackType, ClientSsoProtocol, ClientStatus, SubjectClaim } from "@iam/contracts";
 import type { AuditRequestContext } from "@iam/domain/audit";
+import { AuthzMaintenanceError, AuthzUnauthorizedError, BadRequestError } from "@iam/runtime/errors";
+import { observabilityLogFields } from "@iam/runtime/observability";
 import type { ClientSessionObservation, RevocationResult, UnifiedSessionKernel } from "@iam/session-kernel";
 import { SessionStorageError } from "@iam/session-kernel";
+import type { SubjectAccessOperation } from "@iam/subject-access";
+import { requireSubjectAccessOperation, SubjectAccessUnavailableError } from "@iam/subject-access";
 import { z } from "zod";
+import { InvalidSsoClientError } from "../authorization.error";
 import type { CustomSsoAuditPort, CustomSsoLoggerPort } from "../custom-sso.port";
 import {
   buildGatewayLoginSuccessAudit,

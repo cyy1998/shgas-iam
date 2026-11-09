@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
-import { createUnitOfWork } from "@iam/api-core/uow";
 import type { UserDocumentJobName, UserDocumentJobPayload } from "@iam/contracts";
 import { OrganizationLevel, OrganizationType, UserDocumentWorkStatus, UserStatus } from "@iam/contracts";
 import type { db as database } from "@iam/db";
 import { organizations, positions } from "@iam/db/schema";
+import { createUnitOfWork } from "@iam/unit-of-work";
 import { eq } from "drizzle-orm";
 import { USER_DOCUMENT_SCHEMA_VERSION } from "../../src/index";
 import { createUserDocumentInvalidation, createUserDocumentJobProducer } from "../../src/producer";

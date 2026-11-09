@@ -10,7 +10,6 @@ import { createCreateEmploymentUseCase } from "@admin-api/use-cases/employment/c
 import { createEndEmploymentUseCase } from "@admin-api/use-cases/employment/end-employment/end-employment.use-case";
 import { createCreateOrganizationResponsibilityAssignmentUseCase } from "@admin-api/use-cases/organization-responsibility/create-assignment/create-assignment.use-case";
 import { createManageOrganizationResponsibilityAssignmentLifecycleUseCase } from "@admin-api/use-cases/organization-responsibility/manage-assignment-lifecycle/manage-assignment-lifecycle.use-case";
-import { mapUnitOfWork } from "@iam/api-core/uow";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -31,6 +30,7 @@ import {
   userDocumentRebuildStates,
   users,
 } from "@iam/db/schema";
+import { mapUnitOfWork } from "@iam/unit-of-work";
 import { createUserDocumentJobProducer } from "@iam/user-document/producer";
 import { createSubjectFactsReader } from "@iam/user-document/subject-facts";
 import { createUserDocumentWorkerModule } from "@iam/user-document/worker";

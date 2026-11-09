@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Socket } from "node:net";
 import { createServer } from "node:net";
-import { terminateProcessByPid } from "@iam/api-core/testing/process-smoke-harness";
+import { terminateProcessByPid } from "@iam/test-support/process-smoke-harness";
 import { captureCommand, runCommand } from "../../src/system-boundaries.ts";
 
 async function withinDeadline<T>(work: Promise<T>, timeoutMs: number, message: string): Promise<T> {

@@ -1,11 +1,8 @@
 import { randomUUID } from "node:crypto";
 import process from "node:process";
-import { redisUrlString } from "@iam/api-core/redis/config";
-import {
-  resetExclusiveRedisTestDatabase,
-  runWithOwnedTestResources,
-} from "@iam/api-core/testing/external-test-resources";
-import { createProcessSmokeEnvironment } from "@iam/api-core/testing/process-smoke-harness";
+import { redisUrlString } from "@iam/runtime/redis/config";
+import { resetExclusiveRedisTestDatabase, runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
+import { createProcessSmokeEnvironment } from "@iam/test-support/process-smoke-harness";
 import type { Redis as RedisType } from "ioredis";
 import Redis from "ioredis";
 

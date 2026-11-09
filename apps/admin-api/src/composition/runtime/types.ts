@@ -1,10 +1,10 @@
 import type { Env } from "@admin-api/env";
 import type { AdminClientCachePort } from "@admin-api/services/client/client.port";
+import type { AfterCommitLoggerPort } from "@iam/unit-of-work";
 import type Redis from "ioredis";
 import type { Logger } from "pino";
 
 export type LoggerPort = Pick<Logger, "debug" | "info" | "warn" | "error" | "child">;
-export type AfterCommitLoggerPort = Pick<Logger, "warn" | "error">;
 export type RedisPort = Redis;
 
 export interface PasswordHasherPort {

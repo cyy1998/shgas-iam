@@ -1,5 +1,3 @@
-import { SystemLogEvent } from "@iam/api-core/logger";
-import { observabilityLogFields } from "@iam/api-core/observability";
 import type { AuditRequestContext } from "@iam/domain/audit";
 import {
   matchRedirectUrlPattern,
@@ -7,6 +5,8 @@ import {
   RedirectUrlPatternFailureReasons,
   RedirectUrlPatternSyntaxError,
 } from "@iam/domain/client";
+import { SystemLogEvent } from "@iam/runtime/logger";
+import { observabilityLogFields } from "@iam/runtime/observability";
 import type { CustomSsoLoggerPort as LoggerPort } from "../custom-sso.port";
 
 export interface SsoRedirectUrlValidatorDeps {

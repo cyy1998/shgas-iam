@@ -1,6 +1,6 @@
 import type { SessionOrigin } from "@api/services/session/session-origin";
-import type { createSubjectAccessOperations, SubjectAccessOperation } from "@iam/api-core/subject-access";
 import type { UnifiedSessionKernel } from "@iam/session-kernel";
+import type { createSubjectAccessOperations, SubjectAccessOperation } from "@iam/subject-access";
 
 /** The credential use cases remain the only callers that supply authenticated identity. */
 export function createUserSessionAuthenticationAdapter(

@@ -3,15 +3,6 @@ import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-author
 import { createUserRepository } from "@admin-api/services/user/user.repository";
 import { createUserService } from "@admin-api/services/user/user.service";
 import { createFakePasswordHasher, createFakeRandom, createImmediateUnitOfWork } from "@admin-api/test/fakes";
-import type { SubjectAccessMutationReceipt } from "@iam/api-core/subject-access";
-import {
-  createSubjectAccessBarrier,
-  createSubjectAccessLifecycle,
-  createSubjectAccessOperations,
-  createSubjectAccessRepair,
-  SubjectAccessRecordSchema,
-} from "@iam/api-core/subject-access";
-import { createInMemorySubjectAccessStore } from "@iam/api-core/subject-access/testing";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -20,6 +11,15 @@ import {
   UserStatus,
   UserType,
 } from "@iam/contracts";
+import type { SubjectAccessMutationReceipt } from "@iam/subject-access";
+import {
+  createSubjectAccessBarrier,
+  createSubjectAccessOperations,
+  SubjectAccessRecordSchema,
+} from "@iam/subject-access";
+import { createSubjectAccessLifecycle } from "@iam/subject-access/lifecycle";
+import { createSubjectAccessRepair } from "@iam/subject-access/recovery";
+import { createInMemorySubjectAccessStore } from "@iam/subject-access/testing";
 import { createOpenEmploymentFixtureDb } from "../../../testing/drizzle-query-capture";
 
 async function captureFailure(action: () => Promise<unknown>) {

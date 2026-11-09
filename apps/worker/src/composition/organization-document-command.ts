@@ -1,7 +1,7 @@
-import { closeMaintenanceResources } from "@iam/api-core/maintenance";
 import { createMaintenancePostgresResources } from "@iam/db/maintenance";
 import { createOrganizationDocumentProcessor } from "@iam/organization-document/maintenance";
 import { createOrganizationDocumentWriteResources } from "@iam/organization-document/producer";
+import { closeMaintenanceResources } from "@iam/runtime/maintenance";
 import type { DocumentRepairInvocation } from "@worker/env";
 
 type OrganizationDocumentRepairEnv = Pick<

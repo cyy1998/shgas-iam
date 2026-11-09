@@ -5,10 +5,10 @@ import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import type { MobileVerificationCodeReservation } from "@api/services/mobile/mobile.type";
 import { createUserService } from "@api/services/user/user.service";
 import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.helper";
-import { mapUnitOfWork } from "@iam/api-core/uow";
 import { UserStatus } from "@iam/contracts";
 import { auditLogs, userDocumentOutboxEntries, users } from "@iam/db/schema";
 import { UserNotFoundError } from "@iam/domain/user";
+import { mapUnitOfWork } from "@iam/unit-of-work";
 import { createApiPostgresTestHarness } from "../support/postgres-test-harness";
 
 let pg: Awaited<ReturnType<typeof createApiPostgresTestHarness>>;

@@ -1,9 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { ApiErrorCode } from "@iam/contracts";
+import { BAD_REQUEST, NOT_FOUND } from "@iam/contracts/http";
+import { BadRequestError, CustomError } from "@iam/runtime/errors";
 import { TRPCError } from "@trpc/server";
-import { BAD_REQUEST, NOT_FOUND } from "../../core/http-status-codes";
-import { BadRequestError } from "../../errors/BadRequestError";
-import { CustomError } from "../../errors/CustomError";
 import { getApiRuntimeErrorFormatterData, mapCustomErrorToTRPCError } from "..";
 
 class DomainLikeBusinessError extends Error {

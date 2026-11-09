@@ -1,8 +1,8 @@
 import type { OrganizationResponsibilityReadScope } from "@admin-api/services/admin-authorization/admin-organization-responsibility-authorization.type";
 import type { AuditLogInput } from "@admin-api/services/audit/audit.context";
-import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { EmploymentStatus, OrganizationResponsibilityTypeCode, OrganizationStatus } from "@iam/contracts";
 import type { OrganizationResponsibilityAssignmentRecordCreate } from "@iam/domain/organization-responsibility";
+import type { UnitOfWorkPort } from "@iam/unit-of-work";
 
 export interface CreateOrganizationResponsibilityAssignmentTransactionPorts {
   assignmentStore: {

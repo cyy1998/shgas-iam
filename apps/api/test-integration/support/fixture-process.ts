@@ -1,7 +1,7 @@
 import { execSync, spawn } from "node:child_process";
 import process from "node:process";
-import type { ProcessSmokeChild } from "@iam/api-core/testing/process-smoke-harness";
-import { terminateProcessTree } from "@iam/api-core/testing/process-smoke-harness";
+import type { ProcessSmokeChild } from "@iam/test-support/process-smoke-harness";
+import { terminateProcessTree } from "@iam/test-support/process-smoke-harness";
 import { ownApiTestExecutor, resetApiRedisTestDatabase } from "./fixture-lifecycle";
 
 export function fixtureBunExecutable() {

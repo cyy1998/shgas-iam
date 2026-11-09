@@ -8,7 +8,6 @@ import { createCreateEmploymentUseCase } from "@admin-api/use-cases/employment/c
 import { createEndEmploymentUseCase } from "@admin-api/use-cases/employment/end-employment/end-employment.use-case";
 import { createManagePrimaryEmploymentUseCase } from "@admin-api/use-cases/employment/manage-primary-employment/manage-primary-employment.use-case";
 import { createTransferEmploymentUseCase } from "@admin-api/use-cases/employment/transfer-employment/transfer-employment.use-case";
-import { mapUnitOfWork } from "@iam/api-core/uow";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -32,6 +31,7 @@ import {
   users,
 } from "@iam/db/schema";
 import { EmploymentAlreadyExistsError, EmploymentNotFoundError } from "@iam/domain/employment";
+import { mapUnitOfWork } from "@iam/unit-of-work";
 import { asc, eq } from "drizzle-orm";
 import { createTestHrEmploymentAuthorization } from "../../src/testing/hr-employment-authorization";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";

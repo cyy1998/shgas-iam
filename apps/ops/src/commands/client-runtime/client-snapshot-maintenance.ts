@@ -1,10 +1,7 @@
 import { parseArgs } from "node:util";
-import {
-  createClientSnapshotMaintenance,
-  createClientSnapshotVerifier,
-} from "@iam/api-core/client-snapshot/maintenance";
-import { createOfflineMaintenanceRedis, runMaintenanceCommandWithLifecycle } from "@iam/api-core/maintenance";
+import { createClientSnapshotMaintenance, createClientSnapshotVerifier } from "@iam/client-snapshot/maintenance";
 import { ClientCodeSchema } from "@iam/contracts";
+import { createOfflineMaintenanceRedis, runMaintenanceCommandWithLifecycle } from "@iam/runtime/maintenance";
 import { parseOfflineMaintenanceEnv } from "@ops/env";
 import { z } from "zod";
 

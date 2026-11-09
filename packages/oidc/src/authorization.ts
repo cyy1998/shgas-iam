@@ -1,6 +1,4 @@
-import type { ClientSnapshotReader } from "@iam/api-core/client-snapshot";
-import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
-import { requireSubjectAccessOperation, SubjectAccessDisabledError } from "@iam/api-core/subject-access";
+import type { ClientSnapshotReader } from "@iam/client-snapshot";
 import {
   ClientCodeSchema,
   ClientSsoProtocol,
@@ -9,6 +7,8 @@ import {
   OIDC_SUPPORTED_SCOPES,
 } from "@iam/contracts";
 import type { UnifiedSessionKernel, UserSessionObservation } from "@iam/session-kernel";
+import type { SubjectAccessOperation } from "@iam/subject-access";
+import { requireSubjectAccessOperation, SubjectAccessDisabledError } from "@iam/subject-access";
 import { z } from "zod";
 import { OidcProtocolError } from "./errors";
 import type { AcceptedAuthorization, OidcContinuation, OidcStateRedis } from "./state";

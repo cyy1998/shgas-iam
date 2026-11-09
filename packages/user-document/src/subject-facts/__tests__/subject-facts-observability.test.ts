@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import { SystemLogEvent } from "@iam/api-core/logger";
+import { SystemLogEvent } from "@iam/runtime/logger";
 import { createSubjectFactsLoggerObservability } from "../../subject-facts";
 
 describe("Subject Facts observability", () => {

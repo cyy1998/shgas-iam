@@ -15,9 +15,6 @@ import { createResignUserUseCase } from "@admin-api/use-cases/employment/resign-
 import { createTransferEmploymentUseCase } from "@admin-api/use-cases/employment/transfer-employment/transfer-employment.use-case";
 import { createCreateOrganizationResponsibilityAssignmentUseCase } from "@admin-api/use-cases/organization-responsibility/create-assignment/create-assignment.use-case";
 import { createManageOrganizationResponsibilityAssignmentLifecycleUseCase } from "@admin-api/use-cases/organization-responsibility/manage-assignment-lifecycle/manage-assignment-lifecycle.use-case";
-import { createSubjectAccessBarrier, createSubjectAccessLifecycle } from "@iam/api-core/subject-access";
-import { createInMemorySubjectAccessStore } from "@iam/api-core/subject-access/testing";
-import { mapUnitOfWork } from "@iam/api-core/uow";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -54,6 +51,10 @@ import {
   OrganizationResponsibilityAssignmentUnmanageableConflictError,
 } from "@iam/domain/organization-responsibility";
 import { createRoleAssignmentResolver } from "@iam/role-assignment-resolution";
+import { createSubjectAccessBarrier } from "@iam/subject-access";
+import { createSubjectAccessLifecycle } from "@iam/subject-access/lifecycle";
+import { createInMemorySubjectAccessStore } from "@iam/subject-access/testing";
+import { mapUnitOfWork } from "@iam/unit-of-work";
 import { createSubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
 import { and, eq } from "drizzle-orm";
 import {

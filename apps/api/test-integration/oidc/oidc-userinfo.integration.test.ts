@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import type { ClientSnapshotValue } from "@iam/api-core/client-snapshot";
+import type { ClientSnapshotValue } from "@iam/client-snapshot";
 import type { SubjectFactsSnapshot } from "@iam/client-subject-projection";
 import {
   ClientSsoCallbackType,

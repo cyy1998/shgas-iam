@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
-import type { SubjectAccessRecord } from "@iam/api-core/subject-access";
 import { OrganizationResponsibilityIntegrityError } from "@iam/organization-responsibility-resolution";
+import type { SubjectAccessRecord } from "@iam/subject-access";
 import { ZodError } from "zod";
 import { UserDocumentSourceIntegrityError } from "../build/document-build.error";
 import type { DocumentBuildResult } from "../build/document-builder.service";

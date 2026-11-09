@@ -1,9 +1,9 @@
 import { createRoute } from "@hono/zod-openapi";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
 import { AdminCapabilitySummarySchema } from "@iam/contracts";
+import { HttpStatusCodes } from "@iam/contracts/http";
 
 export const capabilitySummary = createRoute({
   method: "get",

@@ -6,7 +6,7 @@ import {
   runProcessCommandSmoke,
   spawnOwnedProcessTree,
   withOwnedTemporaryDirectory,
-} from "@iam/api-core/testing/process-smoke-harness";
+} from "@iam/test-support/process-smoke-harness";
 import { createOpsPostgresTestHarness } from "../support/postgres-test-harness";
 
 let harness: Awaited<ReturnType<typeof createOpsPostgresTestHarness>>;

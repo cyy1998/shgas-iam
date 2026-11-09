@@ -2,9 +2,9 @@ import { createAdminMutation } from "@admin-api/services/admin-mutation/admin-mu
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildPositionAudit } from "@admin-api/services/audit/events/position.audit";
-import { BadRequestError } from "@iam/api-core/errors";
 import { PositionStatus } from "@iam/contracts";
 import { PositionHasEmploymentError, PositionNotFoundError } from "@iam/domain/position";
+import { BadRequestError } from "@iam/runtime/errors";
 import type { AdminPositionServiceDeps } from "./position.port";
 import {
   PositionCreateDtoSchema,

@@ -2,8 +2,8 @@ import { defineAdminApiMutationOperation, defineAdminApiQueryOperation } from "@
 import { getAdminAuthorizationContext } from "@admin-api/services/admin-authorization/admin-authorization.context";
 import { resolveAdminAuditContext } from "@admin-api/services/audit/audit.context";
 import type { SessionManagementService } from "@admin-api/services/session-management/session-management.service";
-import { AuthzUnauthorizedError } from "@iam/api-core/errors";
 import { router } from "@iam/api-core/trpc";
+import { AuthzUnauthorizedError } from "@iam/runtime/errors";
 import type { Context } from "hono";
 import type { z } from "zod";
 import {

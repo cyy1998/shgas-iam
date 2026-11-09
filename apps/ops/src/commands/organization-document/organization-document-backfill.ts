@@ -1,5 +1,5 @@
 import { parseArgs } from "node:util";
-import { runMaintenanceCommandWithLifecycle } from "@iam/api-core/maintenance";
+import { runMaintenanceCommandWithLifecycle } from "@iam/runtime/maintenance";
 import { parseDocumentCommandDeadline } from "../document-command-lifecycle";
 
 export interface OrganizationDocumentBackfillCommandDeps {
@@ -40,7 +40,7 @@ async function main(args: string[]) {
     values["batch-size"] === undefined ? env.organizationDocument.backfillBatchSize : Number(values["batch-size"]);
   if (!Number.isSafeInteger(batchSize) || batchSize <= 0)
     throw new RangeError("batchSize must be a positive safe integer");
-  const { createLogger, LoggerSourceApp } = await import("@iam/api-core/logger");
+  const { createLogger, LoggerSourceApp } = await import("@iam/runtime/logger");
   const logger = createLogger({
     nodeEnv: env.nodeEnv,
     logLevel: env.log.level,

@@ -1,12 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { ClientSnapshotReader, ClientSnapshotValue } from "@iam/api-core/client-snapshot";
-import type { createClientSecretAuthenticator } from "@iam/api-core/client-snapshot/credentials";
-import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
-import { requireSubjectAccessOperation, SubjectAccessDisabledError } from "@iam/api-core/subject-access";
+import type { ClientSnapshotReader, ClientSnapshotValue } from "@iam/client-snapshot";
+import type { createClientSecretAuthenticator } from "@iam/client-snapshot/credentials";
 import type { OptionalSubjectClaim, SubjectFactsSnapshot } from "@iam/client-subject-projection";
 import { createPermittedClientSubjectProjectionService } from "@iam/client-subject-projection";
 import { ClientCodeSchema, ClientSsoProtocol, ClientStatus, OidcClientType, SubjectClaim } from "@iam/contracts";
 import type { ClientSessionObservation, RevocationResult, UnifiedSessionKernel } from "@iam/session-kernel";
+import type { SubjectAccessOperation } from "@iam/subject-access";
+import { requireSubjectAccessOperation, SubjectAccessDisabledError } from "@iam/subject-access";
 import { z } from "zod";
 import type { OidcCodeConsumption } from "./errors";
 import { OidcExchangeFailure, OidcProtocolError, OidcStateUnavailableError } from "./errors";

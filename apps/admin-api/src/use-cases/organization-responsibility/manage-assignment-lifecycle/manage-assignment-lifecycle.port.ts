@@ -4,13 +4,13 @@ import type {
   OrganizationResponsibilityAssignmentLifecycleChange,
   OrganizationResponsibilityAssignmentWriteTarget,
 } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.type";
-import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type {
   EmploymentStatus,
   OrganizationResponsibilityAssignmentStatus,
   OrganizationResponsibilityTypeCode,
   OrganizationStatus,
 } from "@iam/contracts";
+import type { UnitOfWorkPort } from "@iam/unit-of-work";
 
 export interface OrganizationResponsibilityAssignmentLifecycleContext {
   assignment: {

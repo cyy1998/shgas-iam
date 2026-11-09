@@ -1,4 +1,5 @@
 import type { LoginPageGuardResult } from "@iam/contracts";
+import { UNAUTHORIZED } from "@iam/contracts/http";
 
 export type LoginPageGuardOutcome = "continue" | "login" | "invalid_request" | "unavailable";
 
@@ -20,7 +21,7 @@ function getProperty(value: unknown, property: string): unknown {
 }
 
 function classifyErrorStatus(status: number): LoginPageGuardOutcome {
-  if (status === 401) return "login";
+  if (status === UNAUTHORIZED) return "login";
   if (status >= 400 && status < 500) return "invalid_request";
   return "unavailable";
 }

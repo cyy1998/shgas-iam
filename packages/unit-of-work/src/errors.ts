@@ -1,0 +1,16 @@
+import { ApiErrorCode } from "@iam/contracts";
+import { INTERNAL_SERVER_ERROR } from "@iam/contracts/http";
+import type { ApiRuntimeError } from "@iam/runtime/errors";
+import type { AfterCommitTaskFailure } from "./after-commit";
+
+export class AfterCommitRequiredTaskError extends Error implements ApiRuntimeError {
+  public code = ApiErrorCode.InternalError;
+  public httpStatus = INTERNAL_SERVER_ERROR;
+  public readonly failures: readonly AfterCommitTaskFailure[];
+
+  constructor(failures: readonly AfterCommitTaskFailure[]) {
+    super("服务器内部错误");
+    this.name = "AfterCommitRequiredTaskError";
+    this.failures = failures;
+  }
+}

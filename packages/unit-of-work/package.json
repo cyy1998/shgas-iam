@@ -1,0 +1,28 @@
+{
+  "name": "@iam/unit-of-work",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "scripts": {
+    "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
+    "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
+    "test": "pnpm test:unit",
+    "test:unit": "bun test --max-concurrency=2 src",
+    "typecheck": "pnpm exec tsc --noEmit",
+    "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
+    "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check"
+  },
+  "dependencies": {
+    "@iam/contracts": "workspace:*",
+    "@iam/runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  }
+}

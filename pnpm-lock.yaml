@@ -184,9 +184,9 @@ importers:
       '@biomejs/biome':
         specifier: ^2.5.14
         version: 2.5.14
-      '@iam/api-core':
+      '@iam/runtime':
         specifier: workspace:*
-        version: link:packages/api-core
+        version: link:packages/runtime
       '@types/bun':
         specifier: 1.4.2
         version: 1.4.2
@@ -326,6 +326,9 @@ importers:
       '@iam/api-core':
         specifier: workspace:*
         version: link:../../packages/api-core
+      '@iam/client-snapshot':
+        specifier: workspace:*
+        version: link:../../packages/client-snapshot
       '@iam/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -344,6 +347,9 @@ importers:
       '@iam/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
+      '@iam/login-restriction':
+        specifier: workspace:*
+        version: link:../../packages/login-restriction
       '@iam/organization-document':
         specifier: workspace:*
         version: link:../../packages/organization-document
@@ -353,9 +359,18 @@ importers:
       '@iam/role-assignment-resolution':
         specifier: workspace:*
         version: link:../../packages/role-assignment-resolution
+      '@iam/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       '@iam/session-kernel':
         specifier: workspace:*
         version: link:../../packages/session-kernel
+      '@iam/subject-access':
+        specifier: workspace:*
+        version: link:../../packages/subject-access
+      '@iam/unit-of-work':
+        specifier: workspace:*
+        version: link:../../packages/unit-of-work
       '@iam/user-document':
         specifier: workspace:*
         version: link:../../packages/user-document
@@ -365,9 +380,6 @@ importers:
       '@trpc/server':
         specifier: ^11.18.0
         version: 11.18.0(@typescript/typescript6@6.0.2)
-      bcrypt-ts:
-        specifier: ^9.0.2
-        version: 9.0.2
       drizzle-orm:
         specifier: 1.0.0-rc.2
         version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
@@ -390,6 +402,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@iam/test-support':
+        specifier: workspace:*
+        version: link:../../packages/test-support
       '@types/bun':
         specifier: latest
         version: 1.4.4
@@ -411,6 +426,9 @@ importers:
       '@iam/api-core':
         specifier: workspace:*
         version: link:../../packages/api-core
+      '@iam/client-snapshot':
+        specifier: workspace:*
+        version: link:../../packages/client-snapshot
       '@iam/client-subject-projection':
         specifier: workspace:*
         version: link:../../packages/client-subject-projection
@@ -435,6 +453,9 @@ importers:
       '@iam/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
+      '@iam/login-restriction':
+        specifier: workspace:*
+        version: link:../../packages/login-restriction
       '@iam/oidc':
         specifier: workspace:*
         version: link:../../packages/oidc
@@ -447,9 +468,18 @@ importers:
       '@iam/role-assignment-resolution':
         specifier: workspace:*
         version: link:../../packages/role-assignment-resolution
+      '@iam/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       '@iam/session-kernel':
         specifier: workspace:*
         version: link:../../packages/session-kernel
+      '@iam/subject-access':
+        specifier: workspace:*
+        version: link:../../packages/subject-access
+      '@iam/unit-of-work':
+        specifier: workspace:*
+        version: link:../../packages/unit-of-work
       '@iam/user-document':
         specifier: workspace:*
         version: link:../../packages/user-document
@@ -462,9 +492,6 @@ importers:
       bcrypt:
         specifier: ^6.0.0
         version: 6.0.0
-      bcrypt-ts:
-        specifier: ^9.0.2
-        version: 9.0.2
       drizzle-orm:
         specifier: 1.0.0-rc.2
         version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
@@ -496,6 +523,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@iam/test-support':
+        specifier: workspace:*
+        version: link:../../packages/test-support
       '@playwright/test':
         specifier: ^1.61.1
         version: 1.61.1
@@ -532,6 +562,9 @@ importers:
       '@iam/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@iam/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       drizzle-orm:
         specifier: 1.0.0-rc.2
         version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
@@ -548,6 +581,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@iam/test-support':
+        specifier: workspace:*
+        version: link:../../packages/test-support
       '@types/bun':
         specifier: latest
         version: 1.4.4
@@ -560,9 +596,9 @@ importers:
 
   apps/ops:
     dependencies:
-      '@iam/api-core':
+      '@iam/client-snapshot':
         specifier: workspace:*
-        version: link:../../packages/api-core
+        version: link:../../packages/client-snapshot
       '@iam/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -581,9 +617,15 @@ importers:
       '@iam/organization-document':
         specifier: workspace:*
         version: link:../../packages/organization-document
+      '@iam/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       '@iam/session-kernel':
         specifier: workspace:*
         version: link:../../packages/session-kernel
+      '@iam/subject-access':
+        specifier: workspace:*
+        version: link:../../packages/subject-access
       '@iam/user-document':
         specifier: workspace:*
         version: link:../../packages/user-document
@@ -603,6 +645,12 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@iam/test-support':
+        specifier: workspace:*
+        version: link:../../packages/test-support
+      '@iam/unit-of-work':
+        specifier: workspace:*
+        version: link:../../packages/unit-of-work
       '@types/bun':
         specifier: latest
         version: 1.4.4
@@ -700,9 +748,6 @@ importers:
       '@bull-board/hono':
         specifier: ^9.10.1
         version: 9.10.1(@typescript/typescript6@6.0.2)(bullmq@6.3.8(ioredis@6.0.0(supports-color@10.2.2)))(hono@4.12.30)
-      '@iam/api-core':
-        specifier: workspace:*
-        version: link:../../packages/api-core
       '@iam/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -715,6 +760,12 @@ importers:
       '@iam/organization-document':
         specifier: workspace:*
         version: link:../../packages/organization-document
+      '@iam/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+      '@iam/subject-access':
+        specifier: workspace:*
+        version: link:../../packages/subject-access
       '@iam/user-document':
         specifier: workspace:*
         version: link:../../packages/user-document
@@ -734,6 +785,12 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@iam/test-support':
+        specifier: workspace:*
+        version: link:../../packages/test-support
+      '@iam/unit-of-work':
+        specifier: workspace:*
+        version: link:../../packages/unit-of-work
       '@types/bun':
         specifier: latest
         version: 1.4.4
@@ -749,9 +806,6 @@ importers:
 
   e2e/system:
     dependencies:
-      '@iam/api-core':
-        specifier: workspace:*
-        version: link:../../packages/api-core
       '@iam/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -764,6 +818,12 @@ importers:
       '@iam/role-assignment-resolution':
         specifier: workspace:*
         version: link:../../packages/role-assignment-resolution
+      '@iam/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+      '@iam/subject-access':
+        specifier: workspace:*
+        version: link:../../packages/subject-access
       '@iam/user-document':
         specifier: workspace:*
         version: link:../../packages/user-document
@@ -774,6 +834,9 @@ importers:
         specifier: ^6.0.0
         version: 6.0.0(supports-color@10.2.2)
     devDependencies:
+      '@iam/test-support':
+        specifier: workspace:*
+        version: link:../../packages/test-support
       '@playwright/test':
         specifier: ^1.61.1
         version: 1.61.1
@@ -795,36 +858,27 @@ importers:
       '@iam/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@iam/session-kernel':
+      '@iam/runtime':
         specifier: workspace:*
-        version: link:../session-kernel
+        version: link:../runtime
+      '@iam/subject-access':
+        specifier: workspace:*
+        version: link:../subject-access
       '@scalar/hono-api-reference':
         specifier: ^0.11.11
         version: 0.11.11(hono@4.12.30)
       '@trpc/server':
         specifier: ^11.18.0
         version: 11.18.0(@typescript/typescript6@6.0.2)
-      bcrypt-ts:
-        specifier: ^9.0.2
-        version: 9.0.2
       hono:
         specifier: ^4.12.30
         version: 4.12.30
       hono-pino:
         specifier: ^0.10.3
         version: 0.10.3(hono@4.12.30)(pino@10.3.1)
-      ioredis:
-        specifier: ^6.0.0
-        version: 6.0.0(supports-color@10.2.2)
       pino:
         specifier: ^10.3.1
         version: 10.3.1
-      pino-pretty:
-        specifier: ^13.1.3
-        version: 13.1.3
-      sm-crypto:
-        specifier: ^0.4.0
-        version: 0.4.0
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -832,12 +886,34 @@ importers:
       '@types/bun':
         specifier: latest
         version: 1.4.4
-      '@types/sm-crypto':
-        specifier: ^0.3.4
-        version: 0.3.4
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+
+  packages/client-snapshot:
+    dependencies:
+      '@iam/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@iam/test-support':
+        specifier: workspace:*
+        version: link:../test-support
+      '@types/bun':
+        specifier: latest
+        version: 1.4.4
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      ioredis:
+        specifier: ^6.0.0
+        version: 6.0.0(supports-color@10.2.2)
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -885,9 +961,9 @@ importers:
 
   packages/custom-sso:
     dependencies:
-      '@iam/api-core':
+      '@iam/client-snapshot':
         specifier: workspace:*
-        version: link:../api-core
+        version: link:../client-snapshot
       '@iam/client-subject-projection':
         specifier: workspace:*
         version: link:../client-subject-projection
@@ -897,9 +973,15 @@ importers:
       '@iam/domain':
         specifier: workspace:*
         version: link:../domain
+      '@iam/runtime':
+        specifier: workspace:*
+        version: link:../runtime
       '@iam/session-kernel':
         specifier: workspace:*
         version: link:../session-kernel
+      '@iam/subject-access':
+        specifier: workspace:*
+        version: link:../subject-access
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -1055,11 +1137,29 @@ importers:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
 
+  packages/login-restriction:
+    devDependencies:
+      '@iam/test-support':
+        specifier: workspace:*
+        version: link:../test-support
+      '@types/bun':
+        specifier: latest
+        version: 1.4.4
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      ioredis:
+        specifier: ^6.0.0
+        version: 6.0.0(supports-color@10.2.2)
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+
   packages/oidc:
     dependencies:
-      '@iam/api-core':
+      '@iam/client-snapshot':
         specifier: workspace:*
-        version: link:../api-core
+        version: link:../client-snapshot
       '@iam/client-subject-projection':
         specifier: workspace:*
         version: link:../client-subject-projection
@@ -1069,10 +1169,16 @@ importers:
       '@iam/session-kernel':
         specifier: workspace:*
         version: link:../session-kernel
+      '@iam/subject-access':
+        specifier: workspace:*
+        version: link:../subject-access
       zod:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@iam/test-support':
+        specifier: workspace:*
+        version: link:../test-support
       '@types/bun':
         specifier: latest
         version: 1.4.4
@@ -1088,9 +1194,6 @@ importers:
 
   packages/organization-document:
     dependencies:
-      '@iam/api-core':
-        specifier: workspace:*
-        version: link:../api-core
       '@iam/contracts':
         specifier: workspace:*
         version: link:../contracts
@@ -1116,6 +1219,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@iam/unit-of-work':
+        specifier: workspace:*
+        version: link:../unit-of-work
       '@types/bun':
         specifier: latest
         version: 1.4.4
@@ -1182,6 +1288,37 @@ importers:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
 
+  packages/runtime:
+    dependencies:
+      '@iam/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      bcrypt-ts:
+        specifier: ^9.0.2
+        version: 9.0.2
+      ioredis:
+        specifier: ^6.0.0
+        version: 6.0.0(supports-color@10.2.2)
+      pino:
+        specifier: ^10.3.1
+        version: 10.3.1
+      pino-pretty:
+        specifier: ^13.1.3
+        version: 13.1.3
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/bun':
+        specifier: latest
+        version: 1.4.4
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+
   packages/session-kernel:
     dependencies:
       zod:
@@ -1201,14 +1338,80 @@ importers:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
 
+  packages/subject-access:
+    dependencies:
+      '@iam/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@iam/session-kernel':
+        specifier: workspace:*
+        version: link:../session-kernel
+      '@iam/unit-of-work':
+        specifier: workspace:*
+        version: link:../unit-of-work
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@iam/test-support':
+        specifier: workspace:*
+        version: link:../test-support
+      '@types/bun':
+        specifier: latest
+        version: 1.4.4
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      ioredis:
+        specifier: ^6.0.0
+        version: 6.0.0(supports-color@10.2.2)
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+
+  packages/test-support:
+    dependencies:
+      '@iam/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      ioredis:
+        specifier: ^6.0.0
+        version: 6.0.0(supports-color@10.2.2)
+    devDependencies:
+      '@types/bun':
+        specifier: latest
+        version: 1.4.4
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+
+  packages/unit-of-work:
+    dependencies:
+      '@iam/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@iam/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+    devDependencies:
+      '@types/bun':
+        specifier: latest
+        version: 1.4.4
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+
   packages/user-document:
     dependencies:
       '@hono/zod-openapi':
         specifier: ^1.5.1
         version: 1.5.1(hono@4.12.30)(zod@4.4.3)
-      '@iam/api-core':
-        specifier: workspace:*
-        version: link:../api-core
       '@iam/client-subject-projection':
         specifier: workspace:*
         version: link:../client-subject-projection
@@ -1236,6 +1439,12 @@ importers:
       '@iam/role-assignment-resolution':
         specifier: workspace:*
         version: link:../role-assignment-resolution
+      '@iam/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      '@iam/subject-access':
+        specifier: workspace:*
+        version: link:../subject-access
       drizzle-orm:
         specifier: 1.0.0-rc.2
         version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
@@ -1243,6 +1452,12 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@iam/test-support':
+        specifier: workspace:*
+        version: link:../test-support
+      '@iam/unit-of-work':
+        specifier: workspace:*
+        version: link:../unit-of-work
       '@types/bun':
         specifier: latest
         version: 1.4.4

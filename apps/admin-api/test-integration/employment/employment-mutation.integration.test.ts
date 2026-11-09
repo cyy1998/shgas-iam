@@ -16,12 +16,7 @@ import { createManagePrimaryEmploymentUseCase } from "@admin-api/use-cases/emplo
 import { createResignUserUseCase } from "@admin-api/use-cases/employment/resign-user/resign-user.use-case";
 import { createTransferEmploymentUseCase } from "@admin-api/use-cases/employment/transfer-employment/transfer-employment.use-case";
 import { createManageOrganizationResponsibilityAssignmentLifecycleUseCase } from "@admin-api/use-cases/organization-responsibility/manage-assignment-lifecycle/manage-assignment-lifecycle.use-case";
-import { BadRequestError } from "@iam/api-core/errors";
 import { createErrorHandler } from "@iam/api-core/middlewares";
-import { createSubjectAccessBarrier, createSubjectAccessLifecycle } from "@iam/api-core/subject-access";
-import { createInMemorySubjectAccessStore } from "@iam/api-core/subject-access/testing";
-import type { TransactionContext } from "@iam/api-core/uow";
-import { mapUnitOfWork } from "@iam/api-core/uow";
 import {
   OrganizationResponsibilityAssignmentStatus as AssignmentStatus,
   EmploymentStatus,
@@ -47,6 +42,12 @@ import {
   users,
 } from "@iam/db/schema";
 import { EmploymentAlreadyExistsError, EmploymentNotEditableError } from "@iam/domain/employment";
+import { BadRequestError } from "@iam/runtime/errors";
+import { createSubjectAccessBarrier } from "@iam/subject-access";
+import { createSubjectAccessLifecycle } from "@iam/subject-access/lifecycle";
+import { createInMemorySubjectAccessStore } from "@iam/subject-access/testing";
+import type { TransactionContext } from "@iam/unit-of-work";
+import { mapUnitOfWork } from "@iam/unit-of-work";
 import { createSubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { eq } from "drizzle-orm";

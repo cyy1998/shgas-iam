@@ -6,13 +6,13 @@ import {
   PositionUpdateDtoSchema,
 } from "@admin-api/services/position/position.schema";
 import { createRoute, z } from "@hono/zod-openapi";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
 import { createPageResultSchema } from "@iam/api-core/core/pagination/schema";
 import { createAdminMutationResultSchema } from "@iam/contracts";
+import { HttpStatusCodes } from "@iam/contracts/http";
 import { PositionVoSchema } from "./position.schema";
 
 const tags = ["Admin/Position"];

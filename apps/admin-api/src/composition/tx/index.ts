@@ -1,21 +1,21 @@
 import type { AdminAuditService } from "@admin-api/services/audit/audit.service";
 import { createAdminAuditService } from "@admin-api/services/audit/audit.service";
 import { createOrganizationResponsibilityParentLifecycleParticipant } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.participant";
-import type { UnitOfWorkPort } from "@iam/api-core/uow";
-import { createUnitOfWork } from "@iam/api-core/uow";
 import type { DbClient } from "@iam/db";
 import {
   type CreateOrganizationDocumentInvalidationInput,
   createOrganizationDocumentInvalidation,
   type OrganizationDocumentInvalidation,
 } from "@iam/organization-document/producer";
+import type { AfterCommitLoggerPort, UnitOfWorkPort } from "@iam/unit-of-work";
+import { createUnitOfWork } from "@iam/unit-of-work";
 import type { CreateUserDocumentInvalidationDeps, UserDocumentInvalidation } from "@iam/user-document/producer";
 import { createUserDocumentInvalidation } from "@iam/user-document/producer";
 import type { SubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
 import { createSubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
 import type { AdminApiRepositories } from "../repositories";
 import { createAdminApiRepositories } from "../repositories";
-import type { AfterCommitLoggerPort, ClockPort } from "../runtime";
+import type { ClockPort } from "../runtime";
 
 export interface AdminApiTxPorts {
   repositories: AdminApiRepositories;
@@ -69,4 +69,4 @@ export function createAdminApiUnitOfWork(options: CreateAdminApiUnitOfWorkOption
   });
 }
 
-export type { UnitOfWorkPort } from "@iam/api-core/uow";
+export type { UnitOfWorkPort } from "@iam/unit-of-work";

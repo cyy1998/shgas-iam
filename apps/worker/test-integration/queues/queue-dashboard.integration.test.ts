@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
-import { redisUrlString } from "@iam/api-core/redis/config";
 import { createJobQueue, createJobWorker } from "@iam/jobs";
+import { redisUrlString } from "@iam/runtime/redis/config";
 import type { WorkerEnv } from "@worker/env";
 import { createWorkerHttpApp } from "@worker/http/server";
 import Redis from "ioredis";

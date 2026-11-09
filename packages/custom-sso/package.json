@@ -19,11 +19,13 @@
     "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check"
   },
   "dependencies": {
-    "@iam/api-core": "workspace:*",
+    "@iam/client-snapshot": "workspace:*",
     "@iam/client-subject-projection": "workspace:*",
     "@iam/contracts": "workspace:*",
     "@iam/domain": "workspace:*",
+    "@iam/runtime": "workspace:*",
     "@iam/session-kernel": "workspace:*",
+    "@iam/subject-access": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {

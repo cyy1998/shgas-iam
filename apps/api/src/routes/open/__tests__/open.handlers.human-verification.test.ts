@@ -3,7 +3,7 @@ import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import { createOpenHandlers } from "@api/routes/open/open.handlers";
 import { createOpenRoute } from "@api/routes/open/open.index";
 import { SmsCooldownError, SmsSendFailedError, SmsUnavailableError } from "@api/services/mobile/mobile.error";
-import { createErrorHandler } from "@iam/api-core/middlewares/error-handler";
+import { createErrorHandler } from "@iam/api-core/middlewares";
 import { ApiErrorCode } from "@iam/contracts";
 
 type ValidTarget = "json" | "query" | "param";

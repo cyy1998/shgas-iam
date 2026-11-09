@@ -6,18 +6,15 @@ import type { AdminSessionManagementServiceDeps } from "@admin-api/services/sess
 import { createSessionManagementService } from "@admin-api/services/session-management/session-management.service";
 import type { AdminUserServiceDeps } from "@admin-api/services/user/user.port";
 import { createUserService } from "@admin-api/services/user/user.service";
+import type { UnifiedSessionKernel } from "@iam/session-kernel";
+import { SessionStorageError } from "@iam/session-kernel";
 import type {
   SubjectAccessOperation,
   SubjectAccessOperationBarrierPort,
-  UnifiedSessionRevocationSummary,
-} from "@iam/api-core/subject-access";
-import {
-  createSubjectAccessOperations,
-  createUnifiedSubjectAccessSessionRevocation,
-  SubjectAccessUnavailableError,
-} from "@iam/api-core/subject-access";
-import type { UnifiedSessionKernel } from "@iam/session-kernel";
-import { SessionStorageError } from "@iam/session-kernel";
+  SubjectAccessRevocationSummary,
+} from "@iam/subject-access";
+import { createSubjectAccessOperations, SubjectAccessUnavailableError } from "@iam/subject-access";
+import { createUnifiedSubjectAccessSessionRevocation } from "@iam/subject-access/session-kernel";
 import { createUnifiedAdminLifecycleRevocation } from "./session/unified-lifecycle";
 
 export interface RootSecurityCompositionOptions {
@@ -36,7 +33,7 @@ export function createRootSecurityComposition(options: RootSecurityCompositionOp
   });
   operations = createSubjectAccessOperations({ barrier: options.barrier, revocation });
   const lifecycleRevocation = createUnifiedAdminLifecycleRevocation(revocation, options.sessions.logger);
-  function managementSummary(sessions: UnifiedSessionRevocationSummary) {
+  function managementSummary(sessions: SubjectAccessRevocationSummary) {
     return { sessions };
   }
   const sessionManagement = createSessionManagementService({

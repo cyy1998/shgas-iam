@@ -1,14 +1,14 @@
 import { createHash } from "node:crypto";
 import type { ClockPort } from "@api/composition/runtime";
-import { CustomError } from "@iam/api-core/errors/CustomError";
-import { InvalidLoginCredentialError } from "@iam/api-core/errors/InvalidLoginCredentialError";
 import {
   decryptLoginCredential,
   LOGIN_CREDENTIAL_TYPE,
   LOGIN_CREDENTIAL_VERSION,
   LoginCredentialError,
 } from "@iam/contracts";
+import { CustomError } from "@iam/runtime/errors";
 import { z } from "zod";
+import { InvalidLoginCredentialError } from "./login-credential.error";
 
 export type LoginPasswordCredential = {
   username: string;

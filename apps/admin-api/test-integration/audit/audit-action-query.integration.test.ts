@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { createAuditRepository } from "@admin-api/services/audit/audit.repository";
 import { AuditLogPaginationQueryDtoSchema } from "@admin-api/services/audit/audit.schema";
 import { createAdminAuditService } from "@admin-api/services/audit/audit.service";
-import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/api-core/testing/process-smoke-harness";
+import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 
 describe("Admin audit queries after historical action normalization", () => {

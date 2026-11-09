@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { createLogger, LoggerSourceApp } from "@iam/api-core/logger";
-import { redisUrlString } from "@iam/api-core/redis/config";
-import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/api-core/testing/process-smoke-harness";
 import { OrganizationStatus, OrganizationType } from "@iam/contracts";
 import { createJobQueue, DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
 import {
@@ -15,6 +12,9 @@ import {
   createOrganizationDocumentWorkerModule,
   ORGANIZATION_DOCUMENT_QUEUE_NAME,
 } from "@iam/organization-document/worker";
+import { createLogger, LoggerSourceApp } from "@iam/runtime/logger";
+import { redisUrlString } from "@iam/runtime/redis/config";
+import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
 import Redis from "ioredis";
 import { createOpsPostgresTestHarness } from "../support/postgres-test-harness";
 import { resetOpsRedisTestDatabase, resolveOpsRedisTestUrl } from "../support/redis-test-harness";

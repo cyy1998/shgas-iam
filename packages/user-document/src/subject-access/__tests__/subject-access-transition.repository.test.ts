@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import type { SubjectAccessMutationReceipt } from "@iam/api-core/subject-access";
+import type { SubjectAccessMutationReceipt } from "@iam/subject-access";
 import { createSubjectAccessTransitionRepository } from "../subject-access-transition.repository";
 
 const receipt: SubjectAccessMutationReceipt = {

@@ -1,6 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import process from "node:process";
-import { spawnOwnedProcessTree, waitForOwnedProcessTree } from "@iam/api-core/process";
+import { spawnOwnedProcessTree, waitForOwnedProcessTree } from "@iam/runtime/process";
 
 export async function runOwnedCommand(options) {
   options.signal?.throwIfAborted();

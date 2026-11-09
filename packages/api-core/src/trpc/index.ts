@@ -1,11 +1,11 @@
 import { ApiErrorCode } from "@iam/contracts";
+import { BAD_REQUEST, CONFLICT, FORBIDDEN, NOT_FOUND, UNAUTHORIZED } from "@iam/contracts/http";
+import { isApiRuntimeError } from "@iam/runtime/errors";
 import { initTRPC, TRPCError } from "@trpc/server";
 import type { Context as HonoContext } from "hono";
 import { ZodError } from "zod";
-import { BAD_REQUEST, CONFLICT, FORBIDDEN, NOT_FOUND, UNAUTHORIZED } from "../core/http-status-codes";
 import { getRequestId } from "../core/request-context";
-import { isApiRuntimeError } from "../errors/api-runtime-error";
-import { getInternalErrorMessage } from "../errors/internal-error-presentation";
+import { getInternalErrorMessage } from "../http/internal-error-presentation";
 
 export interface TRPCAppContext {
   hono: HonoContext;

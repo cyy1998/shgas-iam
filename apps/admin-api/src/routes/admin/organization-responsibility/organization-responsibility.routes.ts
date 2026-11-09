@@ -7,7 +7,6 @@ import {
   OrganizationResponsibilityAssignmentViewSchema,
 } from "@admin-api/services/organization-responsibility/organization-responsibility.schema";
 import { createRoute, z } from "@hono/zod-openapi";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
@@ -17,6 +16,7 @@ import {
   createAdminMutationResultSchema,
   ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLE_COMMANDS,
 } from "@iam/contracts";
+import { HttpStatusCodes } from "@iam/contracts/http";
 import { OrganizationResponsibilityTypeViewSchema } from "@iam/domain/organization-responsibility";
 
 const tags = ["Admin/Organization Responsibility"];

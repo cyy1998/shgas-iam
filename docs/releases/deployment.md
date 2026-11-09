@@ -16,7 +16,8 @@ Compose 解析时会校验所选文件的全部必填变量，即使只启动一
 Redis 客户端连接统一使用 `IAM_<APP>_REDIS_URL`；应用 Compose 将共享 `IAM_REDIS_URL` 传给 API、Admin API 和 Worker，
 一次性 Ops 使用独立的 `IAM_OPS_REDIS_URL`。格式为 `redis://[username:password@]host[:port][/db]`，省略端口和 DB 时分别为
 `6379`、`0`。只支持 `redis://`，不接受 query、fragment 或缺失的主机；用户名、密码中的特殊字符必须百分号编码。
-解析规则由[共享 Redis 配置](../../packages/api-core/src/redis/config.ts)维护，URL 不承载重试或关闭策略。
+解析规则由[共享 Redis 配置](../../packages/runtime/src/redis/config.ts)维护，常驻连接的重试策略由
+[连接 factory](../../packages/runtime/src/redis/connection.ts)维护。
 
 升级到当前版本时，先把已有私有配置中的 Redis host、port、username、password、db 合成对应 URL，并删除旧拆分字段；
 旧字段不再作为应用输入。目标主机、端口和 DB 须保持一致，避免连接到另一份状态。Redis 服务端仍由 data Compose 的

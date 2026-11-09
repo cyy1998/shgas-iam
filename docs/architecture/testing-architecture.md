@@ -68,7 +68,16 @@ AFK 使用同一根入口和每命令生命周期。外层须确认 sandbox 已�
 
 ### Fixture 与数据重置
 
-PostgreSQL 使用随机 schema、专用连接及整体删除，Admin 注入生产 UnitOfWork 的事务绑定连接，不回退全局数据库实例。
+测试代码通过 `@iam/test-support/external-test-resources` 读取专用地址、登记和关闭资源，并重置独占 Redis 数据库。
+该包使用 `@iam/runtime/redis/config` 校验生产连接配置形态，独立声明真实 Redis 测试资源。通用 Redis harness 管理连接和清理。
+Runtime 的 Redis Integration 通过常驻与离线连接的公开 factory 验证 ACL 和连接策略，使用本次资源声明与自身配置解析。
+Login Restriction 与 Subject Access 分别由 `@iam/login-restriction` 和 `@iam/subject-access` 收集 Unit 与 Redis Integration。
+各自声明专用 Redis 地址，其测试 fixture 持有业务构造、状态种入与观察。
+`@iam/test-support/process-smoke-harness` 管理 smoke 用例的端口、readiness、有界输出和清理，使用 `@iam/runtime/process` 启动所属进程。
+根 runner 与 E2E 执行器直接使用 Runtime 的进程所有权接口。
+
+Unit 用例通过 `@iam/unit-of-work/testing` 使用事务 fake，生产接线在消费方 Integration 中验证。
+PostgreSQL 使用随机 schema、专用连接及整体删除，Admin 始终注入生产 UnitOfWork 的事务绑定连接。
 Redis 完成业务观察后先停止本例全部 consumer、子进程和连接，再对本次独占 DB 执行 `FLUSHDB`，控制连接最后关闭。
 任一停止失败都禁止 reset，继续尝试其他收尾并汇总失败；禁止 `FLUSHALL`。
 

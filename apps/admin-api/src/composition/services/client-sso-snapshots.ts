@@ -1,11 +1,11 @@
 import type { AdminClientCachePort } from "@admin-api/services/client/client.port";
 import { createClientRepository } from "@admin-api/services/client/client.repository";
 import type { ClientSsoServiceDeps } from "@admin-api/services/client-sso/client-sso.port";
-import type { ClientSnapshotsOptions } from "@iam/api-core/client-snapshot/composition";
-import { createClientSnapshots } from "@iam/api-core/client-snapshot/composition";
-import type { AfterCommitLoggerPort } from "@iam/api-core/uow";
+import type { ClientSnapshotsOptions } from "@iam/client-snapshot/composition";
+import { createClientSnapshots } from "@iam/client-snapshot/composition";
 import type { DbClient } from "@iam/db";
 import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
+import type { AfterCommitLoggerPort } from "@iam/unit-of-work";
 import { createClientSsoManagement } from "./client-sso-management";
 
 export function createClientSsoSnapshotManagement(options: {

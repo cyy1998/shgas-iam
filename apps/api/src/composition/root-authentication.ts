@@ -29,18 +29,9 @@ import {
   CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_DEFINITION,
   CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME,
 } from "@api/services/sso/transport/custom-sso-delivery.security";
-import type { ClientSnapshotReader } from "@iam/api-core/client-snapshot";
 import { createRouter } from "@iam/api-core/core/create-router";
-import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
-import type { SubjectAccessOperation, SubjectAccessOperationBarrierPort } from "@iam/api-core/subject-access";
-import {
-  createSubjectAccessOperations,
-  createUnifiedSubjectAccessSessionRevocation,
-  requireSubjectAccessOperation,
-  SubjectAccessOperationDeniedError,
-  SubjectAccessUnavailableError,
-} from "@iam/api-core/subject-access";
 import type { PublicBindings } from "@iam/api-core/types";
+import type { ClientSnapshotReader } from "@iam/client-snapshot";
 import { createPermittedClientSubjectProjectionService } from "@iam/client-subject-projection";
 import type { UnifiedCustomSsoAuthorizationOptions, UnifiedCustomSsoOperationsOptions } from "@iam/custom-sso";
 import {
@@ -62,7 +53,16 @@ import {
   OidcProtocolError,
   OidcStateUnavailableError,
 } from "@iam/oidc";
+import { AuthzUnauthorizedError } from "@iam/runtime/errors";
 import type { UnifiedSessionKernel } from "@iam/session-kernel";
+import type { SubjectAccessOperation, SubjectAccessOperationBarrierPort } from "@iam/subject-access";
+import {
+  createSubjectAccessOperations,
+  requireSubjectAccessOperation,
+  SubjectAccessOperationDeniedError,
+  SubjectAccessUnavailableError,
+} from "@iam/subject-access";
+import { createUnifiedSubjectAccessSessionRevocation } from "@iam/subject-access/session-kernel";
 import { createAuthenticationUseCases } from "./use-cases/authentication";
 
 type AuthenticationOptions = Parameters<typeof createAuthenticationUseCases>[0];

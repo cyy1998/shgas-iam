@@ -1,13 +1,10 @@
 import type { OrganizationResponsibilityAssignmentWriteTarget } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.type";
-import type {
-  SubjectAccessLifecycleRunInput,
-  SubjectAccessMutationReceipt,
-  SubjectAccessTransitionTarget,
-} from "@iam/api-core/subject-access";
-import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { EmploymentStatus, UserStatus } from "@iam/contracts";
 import type { AuditActorType, AuditDetails, AuditOutcome } from "@iam/domain/audit";
 import type { Employment } from "@iam/domain/employment";
+import type { SubjectAccessMutationReceipt, SubjectAccessTransitionTarget } from "@iam/subject-access";
+import type { SubjectAccessLifecycleRunInput } from "@iam/subject-access/lifecycle";
+import type { UnitOfWorkPort } from "@iam/unit-of-work";
 import type { ResignUserOptions } from "./resign-user.type";
 
 export type ResignUserDocumentChange =

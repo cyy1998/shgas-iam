@@ -1,4 +1,4 @@
-import { CONFLICT, SERVICE_UNAVAILABLE } from "@iam/api-core/core/http-status-codes";
+import { CONFLICT, SERVICE_UNAVAILABLE } from "@iam/contracts/http";
 import { GatewayError } from "./gateway.error";
 
 /** A service instance owns one apply at a time, including all of its remote reads. */

@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { EmploymentStatus, OrganizationStatus, PositionStatus } from "@iam/contracts";
 import {
   PROCESS_SMOKE_TEST_TIMEOUT_MS,
   runProcessCommandSmoke,
   spawnOwnedProcessTree,
-} from "@iam/api-core/testing/process-smoke-harness";
-import { EmploymentStatus, OrganizationStatus, PositionStatus } from "@iam/contracts";
+} from "@iam/test-support/process-smoke-harness";
 import { createOpsPostgresTestHarness } from "../support/postgres-test-harness";
 
 const opsRoot = fileURLToPath(new URL("../../", import.meta.url));

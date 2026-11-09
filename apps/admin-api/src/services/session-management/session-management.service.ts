@@ -5,8 +5,8 @@ import {
   buildAdminSessionRevokeAudit,
   buildAdminSessionRevokeUserAudit,
 } from "@admin-api/services/audit/events/session-management.audit";
-import { SystemLogEvent } from "@iam/api-core/logger";
 import { UserStatus } from "@iam/contracts";
+import { SystemLogEvent } from "@iam/runtime/logger";
 import {
   AdminLoginStateAuditFailedAfterEffectError,
   AdminLoginStateAuditFailedError,

@@ -15,11 +15,6 @@ export type AuthenticatedSubjectVariables = {
   authenticatedClientCode: string;
 };
 
-export type InternalClientVariables<TClient = unknown> = {
-  clientCode: string;
-  clientDto: TClient;
-};
-
 export type BaseBindings = {
   Variables: BaseVariables;
 };
@@ -30,13 +25,5 @@ export type AuthenticatedBindings = {
 
 export type PublicBindings = AuthenticatedBindings;
 
-export type InternalBindings<TClient = unknown> = {
-  Variables: InternalClientVariables<TClient> & BaseVariables;
-};
-
 export type PublicRouteHandler<R extends HonoRouteConfig> = RouteHandler<R, PublicBindings>;
 export type BaseRouteHandler<R extends HonoRouteConfig> = RouteHandler<R, BaseBindings>;
-export type InternalRouteHandler<R extends HonoRouteConfig, TClient = unknown> = RouteHandler<
-  R,
-  InternalBindings<TClient>
->;

@@ -1,4 +1,4 @@
-import { SERVICE_UNAVAILABLE } from "@iam/api-core/core/http-status-codes";
+import { SERVICE_UNAVAILABLE } from "@iam/contracts/http";
 import { GatewayError } from "../services/gateway/gateway.error";
 
 export function createGatewayLifecycle() {

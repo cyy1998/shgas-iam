@@ -1,4 +1,5 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
+import { LoggerSourceApp } from "@iam/runtime/logger";
 import type { ApiReferenceConfiguration } from "@scalar/hono-api-reference";
 import { Scalar as ScalarHonoAPIReference } from "@scalar/hono-api-reference";
 import type { Context, MiddlewareHandler } from "hono";
@@ -7,7 +8,7 @@ import { except } from "hono/combine";
 import { requestId } from "hono/request-id";
 import { pinoLogger } from "hono-pino";
 import type { Logger } from "pino";
-import { buildHttpRequestLogFields, getStatusLogLevel, LoggerSourceApp } from "../logger";
+import { buildHttpRequestLogFields, getStatusLogLevel } from "../http/request-log";
 import { createErrorHandler } from "../middlewares/error-handler";
 import notFound from "../middlewares/not-found-handler";
 import { createRouter } from "./create-router";

@@ -27,6 +27,12 @@ COPY packages/client-subject-projection/package.json ./packages/client-subject-p
 COPY packages/contracts/package.json ./packages/contracts/
 COPY packages/db/package.json ./packages/db/
 COPY packages/api-core/package.json ./packages/api-core/
+COPY packages/subject-access/package.json ./packages/subject-access/
+COPY packages/unit-of-work/package.json ./packages/unit-of-work/
+COPY packages/client-snapshot/package.json ./packages/client-snapshot/
+COPY packages/login-restriction/package.json ./packages/login-restriction/
+COPY packages/runtime/package.json ./packages/runtime/
+COPY packages/test-support/package.json ./packages/test-support/
 COPY packages/session-kernel/package.json ./packages/session-kernel/
 COPY packages/custom-sso/package.json ./packages/custom-sso/
 COPY packages/domain/package.json ./packages/domain/
@@ -53,6 +59,11 @@ COPY packages/client-subject-projection/ ./packages/client-subject-projection/
 COPY packages/contracts/ ./packages/contracts/
 COPY packages/db/ ./packages/db/
 COPY packages/api-core/ ./packages/api-core/
+COPY packages/subject-access/ ./packages/subject-access/
+COPY packages/unit-of-work/ ./packages/unit-of-work/
+COPY packages/client-snapshot/ ./packages/client-snapshot/
+COPY packages/login-restriction/ ./packages/login-restriction/
+COPY packages/runtime/ ./packages/runtime/
 COPY packages/session-kernel/ ./packages/session-kernel/
 COPY packages/custom-sso/ ./packages/custom-sso/
 COPY packages/domain/ ./packages/domain/

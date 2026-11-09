@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { hash } from "bcrypt-ts";
+import { hashSecret } from "@iam/runtime/security/bcrypt";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
@@ -39,14 +39,11 @@ const manifestSchema = z.object({
 
 type LegacyOwners = Pick<typeof import("@iam/session-kernel"), "createUnifiedSessionKernel"> &
   Pick<
-    typeof import("@iam/api-core/subject-access"),
-    | "requireSubjectAccessOperation"
-    | "createSubjectAccessOperations"
-    | "createSubjectAccessBarrier"
-    | "createRedisSubjectAccessStore"
-    | "createSubjectAccessBootstrap"
-    | "createUnifiedSubjectAccessSessionRevocation"
+    typeof import("@iam/subject-access"),
+    "requireSubjectAccessOperation" | "createSubjectAccessOperations" | "createSubjectAccessBarrier"
   > &
+  Pick<typeof import("@iam/subject-access/redis"), "createRedisSubjectAccessStore" | "createSubjectAccessBootstrap"> &
+  Pick<typeof import("@iam/subject-access/session-kernel"), "createUnifiedSubjectAccessSessionRevocation"> &
   Pick<typeof import("@iam/custom-sso/testing"), "createUnifiedCustomSsoRedisTestScope"> &
   Pick<typeof import("@iam/oidc/testing"), "createOidcRedisTestScope"> & {
     BASELINE_SOURCE_COMMIT: string;
@@ -174,7 +171,7 @@ export const loginKeys = sm2.generateKeyPairHex();
 
 export async function seedSource(h: CutoverDatabase) {
   await h.sql`INSERT INTO "user" (id,username,name,status,is_delete,password)
-    VALUES (1,'alice','Alice',1,false,${await hash(password, 4)}),(2,'bob','Bob',1,false,NULL),
+    VALUES (1,'alice','Alice',1,false,${await hashSecret(password, 4)}),(2,'bob','Bob',1,false,NULL),
       (3,'disabled','Disabled',3,false,NULL),(4,'deleted','Deleted',3,true,NULL),(5,'paused','Paused',2,false,NULL)`;
   const claims = ["subjectIdentifier", "profile:username", "profile:name", "profile:employments", "iam:authorization"];
   for (const code of Object.values(clients)) {

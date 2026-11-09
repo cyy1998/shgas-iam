@@ -8,7 +8,7 @@ import {
 import type { AdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import type { AdminRestOperationSurface } from "@admin-api/services/admin-authorization/admin-rest-operation.surface";
 import type { CreateAppOptions } from "@iam/api-core/core/create-app";
-import type { createSubjectAccessOperations } from "@iam/api-core/subject-access";
+import type { createSubjectAccessOperations } from "@iam/subject-access";
 import type { AdminApiRuntimePorts } from "../runtime";
 import type { AdminApiServices } from "../services";
 

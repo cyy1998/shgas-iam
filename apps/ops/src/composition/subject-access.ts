@@ -1,9 +1,6 @@
 import { randomUUID } from "node:crypto";
-import {
-  createRedisSubjectAccessStore,
-  createSubjectAccessBarrier,
-  createSubjectAccessBootstrap,
-} from "@iam/api-core/subject-access";
+import { createSubjectAccessBarrier } from "@iam/subject-access";
+import { createRedisSubjectAccessStore, createSubjectAccessBootstrap } from "@iam/subject-access/redis";
 import type { OpsRuntime } from "./runtime";
 
 export function createOpsSubjectAccess(runtime: Pick<OpsRuntime, "clock" | "redis">) {

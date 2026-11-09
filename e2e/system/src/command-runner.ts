@@ -1,5 +1,5 @@
 import type { Buffer } from "node:buffer";
-import { type OwnedProcessTree, spawnOwnedProcessTree, waitForOwnedProcessTree } from "@iam/api-core/process";
+import { type OwnedProcessTree, spawnOwnedProcessTree, waitForOwnedProcessTree } from "@iam/runtime/process";
 import { createBoundedByteCapture, createBoundedLineCapture } from "./command-capture.ts";
 import type { CapturedCommandRunner, CommandRunner } from "./docker-infra.ts";
 

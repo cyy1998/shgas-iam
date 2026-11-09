@@ -3,9 +3,9 @@ import { createApiPasswordHasher } from "@api/composition/runtime/password-hashe
 import { createUserService } from "@api/services/user/user.service";
 import { createUserPasswordHelper } from "@api/services/user/user-password.helper";
 import { createImmediateUnitOfWork } from "@api/testing/fakes";
-import type { SubjectAccessMutationReceipt } from "@iam/api-core/subject-access";
 import { UserStatus } from "@iam/contracts";
 import { UserNotFoundError, UserPasswordUnchangedError } from "@iam/domain/user";
+import type { SubjectAccessMutationReceipt } from "@iam/subject-access";
 
 const EXISTING_BCRYPT_TS_8_HASH = "$2b$04$ZwwFh9CSK/owUc7IdLKdFOPiqfxmljguVbVqfGRZq8J9tkkdrcxH2";
 const subjectAccessMutationReceipt: SubjectAccessMutationReceipt = {

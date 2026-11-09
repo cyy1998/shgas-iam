@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { HumanVerificationAction } from "@api/enums/humanVerification.action";
-import { SystemLogEvent } from "@iam/api-core/logger";
-import { observabilityLogFields } from "@iam/api-core/observability";
+import { SystemLogEvent } from "@iam/runtime/logger";
+import { observabilityLogFields } from "@iam/runtime/observability";
 import { HumanVerificationRequiredError } from "./human-verification.error";
 import type { CapServiceDeps } from "./human-verification.port";
 import type { HumanVerificationContext } from "./human-verification.type";

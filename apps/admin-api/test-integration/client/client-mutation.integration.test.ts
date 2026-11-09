@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import { createAdminClientMutation } from "@admin-api/services/client/client-mutation";
-import { mapUnitOfWork } from "@iam/api-core/uow";
 import { ClientStatus } from "@iam/contracts";
 import { clients } from "@iam/db/schema";
+import { mapUnitOfWork } from "@iam/unit-of-work";
 import { eq } from "drizzle-orm";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 

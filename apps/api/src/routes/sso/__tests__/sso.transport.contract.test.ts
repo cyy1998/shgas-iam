@@ -8,11 +8,11 @@ import {
   encodeCustomSsoClientCode,
 } from "@api/services/sso/transport/custom-sso-client-code.transport";
 import { createRouter } from "@iam/api-core/core/create-router";
-import { BadRequestError } from "@iam/api-core/errors";
 import { createErrorHandler } from "@iam/api-core/middlewares";
-import { createSubjectAccessOperations, SubjectAccessUnavailableError } from "@iam/api-core/subject-access";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import type { CustomSsoExchangeResult } from "@iam/custom-sso";
+import { BadRequestError } from "@iam/runtime/errors";
+import { createSubjectAccessOperations, SubjectAccessUnavailableError } from "@iam/subject-access";
 import pino from "pino";
 
 type CustomSsoManagedResult = {

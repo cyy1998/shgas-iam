@@ -4,20 +4,21 @@ import { copyFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { createLogger, LoggerSourceApp } from "@iam/api-core/logger";
-import { createSubjectAccessBootstrap } from "@iam/api-core/subject-access";
-import { runWithOwnedTestResources } from "@iam/api-core/testing/external-test-resources";
+import { UserStatus } from "@iam/contracts";
+import { closeMaintenancePostgresInvocation, createMaintenancePostgresResources } from "@iam/db/maintenance";
+import { users } from "@iam/db/schema";
+import { createLogger, LoggerSourceApp } from "@iam/runtime/logger";
+import { createSubjectAccessBarrier } from "@iam/subject-access";
+import { createRedisSubjectAccessStore, createSubjectAccessBootstrap } from "@iam/subject-access/redis";
+import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import {
   createBoundedProcessLogCapture,
   runProcessCommandSmoke,
   runProcessSmoke,
   spawnOwnedProcessTree,
   withOwnedTemporaryDirectory,
-} from "@iam/api-core/testing/process-smoke-harness";
-import { createUnitOfWork } from "@iam/api-core/uow";
-import { UserStatus } from "@iam/contracts";
-import { closeMaintenancePostgresInvocation, createMaintenancePostgresResources } from "@iam/db/maintenance";
-import { users } from "@iam/db/schema";
+} from "@iam/test-support/process-smoke-harness";
+import { createUnitOfWork } from "@iam/unit-of-work";
 import { createSubjectFactsRedisCache, DocumentFactsCacheRecordSchema } from "@iam/user-document";
 import { createUserDocumentInvalidation } from "@iam/user-document/producer";
 import { createUserDocumentWorkerModule } from "@iam/user-document/worker";
@@ -36,10 +37,21 @@ const logger = createLogger({
 
 for (const standalone of [false, true])
   test.skipIf(standalone && process.platform !== "win32")(
-    `the production Worker automatically repairs a lost Outbox wake and publishes Document and Facts (${standalone ? "standalone" : "source"})`,
+    `the production Worker repairs a lost Outbox wake, publishes Document and Facts, and restores Subject Access (${standalone ? "standalone" : "source"})`,
     async () => {
       await withFixture(async (fixture) => {
         if (standalone) await fixture.buildStandalone();
+        const barrier = createSubjectAccessBarrier({
+          clock: { nowDate: () => new Date() },
+          random: { uuid: randomUUID },
+          store: createRedisSubjectAccessStore({ redis: fixture.redis.writer }),
+        });
+        const transition = await barrier.beginBlocking(fixture.subject);
+        await barrier.prepareRepair(transition, "enabled");
+        const bootstrap = createSubjectAccessBootstrap({
+          redis: fixture.redis.observer,
+          random: { uuid: randomUUID },
+        });
         const result = await runProcessSmoke({
           label: "scheduled User Document repair production entry",
           start: () => fixture.startEntry(),
@@ -48,13 +60,19 @@ for (const standalone of [false, true])
           cleanupTimeoutMs: 5_000,
           probe: async () => {
             const document = await fixture.published();
-            return document?.document_name === "Scheduled user" && document.post_publication_status === "processed"
+            if (document?.document_name !== "Scheduled user" || document.post_publication_status !== "processed")
+              return;
+            const [access] = await bootstrap.inspectMany([fixture.subject]);
+            return access?.status === "valid" &&
+              access.record.state === "enabled" &&
+              access.record.transitionId === transition.transitionId
               ? document
               : undefined;
           },
         });
         const storedFacts = await createSubjectFactsRedisCache(fixture.redis.observer).read(fixture.subject);
         const facts = storedFacts === null ? null : DocumentFactsCacheRecordSchema.parse(JSON.parse(storedFacts));
+        const [access] = await bootstrap.inspectMany([fixture.subject]);
         const [outbox] = await fixture.pg.sql`SELECT status FROM user_document_outbox`;
         expect(result.document_name).toBe("Scheduled user");
         expect(outbox?.status).toBe("processed");
@@ -64,7 +82,15 @@ for (const standalone of [false, true])
           sourceVersion: result.source_version,
           facts: { profile: { name: "Scheduled user" } },
         });
-      });
+        expect(access).toMatchObject({
+          status: "valid",
+          record: {
+            state: "enabled",
+            subjectIdentifier: fixture.subject,
+            transitionId: transition.transitionId,
+          },
+        });
+      }, "disabled");
     },
     30_000,
   );
@@ -316,7 +342,10 @@ test("the production Worker exits unsuccessfully when shutdown cannot cancel its
   });
 }, 25000);
 
-async function withFixture(work: (fixture: Awaited<ReturnType<typeof createFixture>>) => Promise<void>) {
+async function withFixture(
+  work: (fixture: Awaited<ReturnType<typeof createFixture>>) => Promise<void>,
+  initialAccessState: "enabled" | "disabled" = "enabled",
+) {
   await withOwnedTemporaryDirectory({
     prefix: "iam-user-document-repair-schedule-",
     cleanupTimeoutMs: 5_000,
@@ -326,13 +355,17 @@ async function withFixture(work: (fixture: Awaited<ReturnType<typeof createFixtu
         registerCleanup(async () => {
           if (stopExecutors.length) await resetWorkerRedisTestDatabase(stopExecutors);
         });
-        await work(await createFixture(temporaryDirectory, stopExecutors));
+        await work(await createFixture(temporaryDirectory, stopExecutors, initialAccessState));
       });
     },
   });
 }
 
-async function createFixture(temporaryDirectory: string, stopExecutors: Array<() => Promise<void> | void>) {
+async function createFixture(
+  temporaryDirectory: string,
+  stopExecutors: Array<() => Promise<void> | void>,
+  initialAccessState: "enabled" | "disabled",
+) {
   const pg = await createWorkerPostgresTestHarness();
   stopExecutors.push(pg.close);
   const redis = await createWorkerRedisTestHarness();
@@ -367,7 +400,7 @@ async function createFixture(temporaryDirectory: string, stopExecutors: Array<()
     await tx.invalidation.recordChanges([{ kind: "user", userId: 1 }]);
   });
   await createSubjectAccessBootstrap({ redis: redis.writer, random: { uuid: randomUUID } }).seedMany(
-    [{ subjectIdentifier: subject, state: "enabled" }],
+    [{ subjectIdentifier: subject, state: initialAccessState }],
     new Date(),
   );
   let standaloneExecutable: string | undefined;
@@ -399,7 +432,7 @@ async function createFixture(temporaryDirectory: string, stopExecutors: Array<()
       for (const [entry, output] of [
         [join(workerRoot, "src/index.ts"), standaloneExecutable],
         [
-          join(repositoryRoot, "packages/api-core/src/process/windows-job-launcher.mjs"),
+          join(repositoryRoot, "packages/runtime/src/process/windows-job-launcher.mjs"),
           join(temporaryDirectory, "windows-job-launcher.exe"),
         ],
       ]) {
@@ -427,7 +460,7 @@ async function createFixture(temporaryDirectory: string, stopExecutors: Array<()
         });
       }
       await copyFile(
-        join(repositoryRoot, "packages/api-core/src/process/windows-job-supervisor.ps1"),
+        join(repositoryRoot, "packages/runtime/src/process/windows-job-supervisor.ps1"),
         join(temporaryDirectory, "windows-job-supervisor.ps1"),
       );
     },

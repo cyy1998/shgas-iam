@@ -6,8 +6,8 @@ import {
   PositionUpdateDtoSchema,
 } from "@admin-api/services/position/position.schema";
 import type { PositionService } from "@admin-api/services/position/position.service";
+import { paginate } from "@iam/api-core/core/pagination/paginate";
 import { router } from "@iam/api-core/trpc";
-import { paginate } from "@iam/api-core/utils";
 import { PositionStatus } from "@iam/contracts";
 import { z } from "zod";
 import { toPositionMemberCountVo, toPositionVo } from "./position.schema";

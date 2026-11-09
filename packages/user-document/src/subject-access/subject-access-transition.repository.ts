@@ -1,12 +1,11 @@
-import type {
-  SubjectAccessMutationReceipt,
-  SubjectAccessTransitionRecoveryAuthority,
-  SubjectAccessTransitionResolution,
-  SubjectAccessTransitionTarget,
-} from "@iam/api-core/subject-access";
 import type { DbClient } from "@iam/db";
 import { firstRow } from "@iam/db/query-utils";
 import { subjectAccessTransitions } from "@iam/db/schema";
+import type { SubjectAccessMutationReceipt, SubjectAccessTransitionTarget } from "@iam/subject-access";
+import type {
+  SubjectAccessTransitionRecoveryAuthority,
+  SubjectAccessTransitionResolution,
+} from "@iam/subject-access/recovery";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 export function createSubjectAccessTransitionRepository(db: DbClient) {

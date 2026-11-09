@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
-import { BAD_GATEWAY, BAD_REQUEST, SERVICE_UNAVAILABLE, UNAUTHORIZED } from "@iam/api-core/core/http-status-codes";
 import { ClientStatus } from "@iam/contracts";
+import { BAD_GATEWAY, BAD_REQUEST, SERVICE_UNAVAILABLE, UNAUTHORIZED } from "@iam/contracts/http";
 import { parseDocument } from "yaml";
 import { ApisixReadError } from "../../apisix.error";
 import { renderEnvValue } from "../../env";

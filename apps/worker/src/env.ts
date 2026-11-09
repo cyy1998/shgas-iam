@@ -1,6 +1,6 @@
-import { type RedisConfig, redisUrlString } from "@iam/api-core/redis/config";
-import { booleanString, optionalNonEmptyString } from "@iam/api-core/utils/env-schema";
 import { DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
+import { booleanString, optionalNonEmptyString } from "@iam/runtime/env-schema";
+import { type RedisConfig, redisUrlString } from "@iam/runtime/redis/config";
 import { z } from "zod";
 
 const moduleKeySchema = z.string().trim().min(1);

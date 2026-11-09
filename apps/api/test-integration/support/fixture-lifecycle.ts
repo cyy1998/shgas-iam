@@ -1,7 +1,4 @@
-import {
-  resetExclusiveRedisTestDatabase,
-  runWithOwnedTestResources,
-} from "@iam/api-core/testing/external-test-resources";
+import { resetExclusiveRedisTestDatabase, runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import Redis from "ioredis";
 
 const executors: Array<() => Promise<void>> = [];

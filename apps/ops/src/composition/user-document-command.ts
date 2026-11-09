@@ -1,6 +1,6 @@
-import { closeMaintenanceResources, createOfflineMaintenanceRedis } from "@iam/api-core/maintenance";
-import { createSubjectAccessRepair, createSubjectAccessTransitionRecovery } from "@iam/api-core/subject-access";
 import { createMaintenancePostgresResources } from "@iam/db/maintenance";
+import { closeMaintenanceResources, createOfflineMaintenanceRedis } from "@iam/runtime/maintenance";
+import { createSubjectAccessRepair, createSubjectAccessTransitionRecovery } from "@iam/subject-access/recovery";
 import { createSubjectFactsRedisPublisher } from "@iam/user-document";
 import {
   createCurrentUserDocumentProjectionBundle,

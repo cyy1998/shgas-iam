@@ -8,8 +8,7 @@
 - Route handler 应返回来自 `@iam/api-core/http` 的共享 response envelope，例如成功 JSON response 使用
   `c.json(resp.ok(data))`，显式失败 envelope 使用 `resp.fail(...)`。
 - 当现有 error middleware 已能正确映射 domain/API error 时，优先 throw error。
-- 在 OpenAPI route definition 和显式非 200 response 中使用 `@iam/api-core/core/http-status-codes` 常量，而不是
-  numeric literal。
+- 在 OpenAPI route definition 和显式非 200 response 中使用 `@iam/contracts/http` 的状态常量。
 
 ## Admin 写入结果与失败恢复
 
@@ -75,6 +74,9 @@ SSO Secret 读取必须先确认独立审计提交，再交付原文；失败不
 - Application code 中避免使用 `console.log`、`console.warn` 和 `console.error`。
 - 可接受的 console 例外包括 env validation、singleton/process lifecycle code、tests、one-off scripts 和 centralized
   error handler。
+
+应用通过 `@iam/runtime/logger` 创建 logger，`@iam/runtime/observability` 按显式输入整理请求和追踪标识。
+HTTP 请求与错误的日志字段由 `@iam/api-core/http/request-log` 组装。
 
 系统日志使用结构化字段：`event`、`sourceApp`、`requestId`、`traceId`，以及适用的
 `method/path/route/statusCode/durationMs`、`clientIp/userAgent` 和 `errorName/errorCode/errorMessage/source`。

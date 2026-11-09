@@ -1,11 +1,11 @@
 import { describe, expect, mock, test } from "bun:test";
 import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
-import { ClientSnapshotUnavailableError } from "@iam/api-core/client-snapshot";
-import { AuthzMaintenanceError } from "@iam/api-core/errors/AuthzMaintenanceError";
-import { createErrorHandler } from "@iam/api-core/middlewares/error-handler";
+import { createErrorHandler } from "@iam/api-core/middlewares";
+import { ClientSnapshotUnavailableError } from "@iam/client-snapshot";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import { ApiErrorCode } from "@iam/contracts";
 import { CustomSsoTrafficGateUnavailableError } from "@iam/custom-sso";
+import { AuthzMaintenanceError } from "@iam/runtime/errors";
 import { Hono } from "hono";
 
 describe("Custom SSO retryable HTTP error adapter", () => {

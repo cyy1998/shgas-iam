@@ -1,4 +1,4 @@
-import { BadRequestError } from "@iam/api-core/errors/BadRequestError";
+import { BadRequestError } from "@iam/runtime/errors";
 
 export function requirePhoneNumber(phoneNumber?: string): string {
   if (!phoneNumber) {

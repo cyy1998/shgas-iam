@@ -1,5 +1,5 @@
 import { z } from "@hono/zod-openapi";
-import { ClientCredentialValueSchema } from "@iam/api-core/client-snapshot/credentials";
+import { ClientCredentialValueSchema } from "@iam/client-snapshot/credentials";
 import { ClientCodeSchema, createAdminMutationResultSchema } from "@iam/contracts";
 import {
   ClientSsoAdminDtoSchema,

@@ -1,4 +1,4 @@
-import { LoginRestrictionUnavailableError } from "@iam/api-core/login-restriction";
+import { LoginRestrictionUnavailableError } from "@iam/login-restriction";
 import { LoginProtectionUnavailableError } from "./login-protection.error";
 
 export async function runLoginProtectionOperation<T>(options: {

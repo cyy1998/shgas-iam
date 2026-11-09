@@ -11,7 +11,7 @@ import { createResignUserUseCase } from "@admin-api/use-cases/employment/resign-
 import { createTransferEmploymentUseCase } from "@admin-api/use-cases/employment/transfer-employment/transfer-employment.use-case";
 import { createCreateOrganizationResponsibilityAssignmentUseCase } from "@admin-api/use-cases/organization-responsibility/create-assignment/create-assignment.use-case";
 import { createManageOrganizationResponsibilityAssignmentLifecycleUseCase } from "@admin-api/use-cases/organization-responsibility/manage-assignment-lifecycle/manage-assignment-lifecycle.use-case";
-import { mapUnitOfWork } from "@iam/api-core/uow";
+import { mapUnitOfWork } from "@iam/unit-of-work";
 import type { createAdminApiUnitOfWork } from "../tx";
 
 type AdminApiUnitOfWork = ReturnType<typeof createAdminApiUnitOfWork>;

@@ -3,11 +3,11 @@ import { CustomSsoDeliveryRequestHeadersSchema } from "@api/services/sso/transpo
 import { createCustomSsoUnavailableResponse } from "@api/services/sso/transport/custom-sso-retryable.openapi";
 import { CustomSsoSubjectProjectionSchema } from "@api/services/sso/transport/custom-sso-subject.schema";
 import { createRoute, z } from "@hono/zod-openapi";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
+import { HttpStatusCodes } from "@iam/contracts/http";
 
 const routePrefix = "";
 const tags = ["Public"];

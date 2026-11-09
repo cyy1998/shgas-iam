@@ -2,9 +2,9 @@ import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryabl
 import { getApiAuditRequestContext } from "@api/services/audit/audit.context";
 import type { CustomSsoSubjectProjectionDto } from "@api/services/sso/transport/custom-sso-subject.schema";
 import type { UserService } from "@api/services/user/user.service";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
-import { AuthzUnauthorizedError } from "@iam/api-core/errors/AuthzUnauthorizedError";
 import * as resp from "@iam/api-core/http";
+import { HttpStatusCodes } from "@iam/contracts/http";
+import { AuthzUnauthorizedError } from "@iam/runtime/errors";
 import type { PublicRouteHandler } from "./public.type";
 
 export interface CreatePublicHandlersDeps {

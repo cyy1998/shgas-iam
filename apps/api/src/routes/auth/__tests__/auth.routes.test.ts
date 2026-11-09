@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { authz, internalAuthz, loginPassword } from "@api/routes/auth/auth.routes";
 import { capChallenge } from "@api/routes/open/open.routes";
 import { callback } from "@api/routes/sso/sso.routes";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { ApiErrorCode } from "@iam/contracts";
+import { HttpStatusCodes } from "@iam/contracts/http";
 
 const loginPasswordSchema = loginPassword.request.body.content["application/json"].schema;
 const authzSuccessSchema = getJsonSchema(authz, 200);

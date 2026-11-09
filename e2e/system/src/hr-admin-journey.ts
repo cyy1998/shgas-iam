@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { SystemLogEvent } from "@iam/api-core/logger";
+import { SystemLogEvent } from "@iam/runtime/logger";
 import { writeAtomicJsonFile } from "./atomic-json-file.ts";
 import { containsScalarValue } from "./concealment.ts";
 import type { CapturedCommandRunner } from "./docker-infra.ts";

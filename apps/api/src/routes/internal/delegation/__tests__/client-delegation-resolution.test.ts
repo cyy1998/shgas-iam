@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
+import { createInternalAuthenticationHandler } from "@api/middlewares/internal-client-authentication";
 import { createInternalMiddlewares } from "@api/routes/internal/_middleware";
 import { createDelegationHandlers } from "@api/routes/internal/delegation/delegation.handlers";
 import { createDelegationRoute } from "@api/routes/internal/delegation/delegation.index";
 import type { ClientDelegationResolutionPort } from "@api/use-cases/internal/resolve-client-delegations/resolve-client-delegations.port";
 import { createResolveClientDelegationsUseCase } from "@api/use-cases/internal/resolve-client-delegations/resolve-client-delegations.use-case";
 import createApp from "@iam/api-core/core/create-app";
-import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares";
 import { ClientStatus } from "@iam/contracts";
 import type { GenericClientRuntimeDto } from "@iam/domain/client";
 import pino, { type Logger } from "pino";

@@ -1,12 +1,11 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { createInternalUserQueryResource } from "@api/composition/internal-user-query";
+import { createInternalAuthenticationHandler } from "@api/middlewares/internal-client-authentication";
 import { createInternalMiddlewares } from "@api/routes/internal/_middleware";
 import { createUserHandlers } from "@api/routes/internal/user/user.handlers";
 import { createUserRoute } from "@api/routes/internal/user/user.index";
 import { createUserDocumentSearchAdapter } from "@api/services/user-document-search/user-document-search.adapter";
 import createApp from "@iam/api-core/core/create-app";
-import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares";
-import { createUnitOfWork } from "@iam/api-core/uow";
 import type { RebuildUserDocumentJobPayload, UserDocumentOutboxJobPayload } from "@iam/contracts";
 import {
   ClientStatus,
@@ -18,6 +17,7 @@ import {
 } from "@iam/contracts";
 import { userDocuments, users } from "@iam/db/schema";
 import type { GenericClientRuntimeDto } from "@iam/domain/client";
+import { createUnitOfWork } from "@iam/unit-of-work";
 import {
   createInternalUserDocumentQueryRepository,
   createInternalUserDocumentQueryService,

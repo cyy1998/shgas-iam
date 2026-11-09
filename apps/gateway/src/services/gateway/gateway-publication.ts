@@ -1,4 +1,4 @@
-import { BAD_GATEWAY, SERVICE_UNAVAILABLE } from "@iam/api-core/core/http-status-codes";
+import { BAD_GATEWAY, SERVICE_UNAVAILABLE } from "@iam/contracts/http";
 import { ApisixWriteError } from "../../apisix.error";
 import { serializePlan } from "../../output";
 import { sortChanges } from "../../planner";

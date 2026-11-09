@@ -1,6 +1,6 @@
-import { CONFLICT, INTERNAL_SERVER_ERROR, SERVICE_UNAVAILABLE } from "@iam/api-core/core/http-status-codes";
-import { CustomError } from "@iam/api-core/errors";
 import { ApiErrorCode } from "@iam/contracts";
+import { CONFLICT, INTERNAL_SERVER_ERROR, SERVICE_UNAVAILABLE } from "@iam/contracts/http";
+import { CustomError } from "@iam/runtime/errors";
 
 export class AdminLoginStateUnavailableError extends CustomError {
   constructor(cause?: unknown) {

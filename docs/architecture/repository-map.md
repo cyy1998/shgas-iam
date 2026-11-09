@@ -45,24 +45,30 @@ Apps 表用于定位入口；依赖方向、分层职责、命名和 wiring 统�
 
 ## 共享 Packages
 
-| 路径                                                  | 定位用途                                                                                                              |
-| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `packages/api-core/src`                               | 后端基础设施、UnitOfWork、LoginRestriction、Subject Access 与 `client-snapshot/`；`process/` 提供进程管理。           |
-| `packages/session-kernel/src`                         | 协议中性的 UserSession / ClientSession 生命周期、Redis 原子状态与管理观察。                                           |
-| `packages/custom-sso/src`                             | Custom SSO 授权、Code / Token、续接与交付；`/wire` 提供浏览器可加载契约。                                             |
-| `packages/oidc/src`                                   | OIDC 授权、Code / Token、续接、退出、UserInfo 与密钥；由 API HTTP adapter 消费。                                      |
-| `packages/client-subject-projection/src`              | 中性主体裁剪、Catalog 与责任任职投影。                                                                                |
-| `packages/delegation/src`                             | Client 委托；`/wire` 提供浏览器契约。                                                                                 |
-| `packages/contracts/src`                              | 跨端或跨 app/package 的稳定枚举、常量、schemas、类型与协议 helper。                                                   |
-| `packages/domain/src`                                 | 后端 DTO、mapper、纯业务规则、audit helper 与业务错误。                                                               |
-| `packages/db/src`                                     | Drizzle schema、relations、migrations、client 与 query helpers；领域为 `core`、`log`，列 helper 在 `schema/_shard/`。 |
-| `packages/jobs/src`                                   | BullMQ connection、queue、worker、producer 资源与有界唤醒、job ID 和默认选项。                                        |
-| `packages/organization-responsibility-resolution/src` | Organization Responsibility 的正反向解析与 `/parent-lifecycle` 共享父生命周期检查。                                   |
-| `packages/role-assignment-resolution/src`             | Effective Role 正向解析与受影响用户反向解析。                                                                         |
-| `packages/user-document/src`                          | User Document、User Search / Subject Facts 的失效、构建、发布、查询与维护。                                           |
-| `packages/organization-document/src`                  | 组织搜索文档的构建、发布、查询与维护。                                                                                |
-| `packages/document-update/src`                        | 文档 Outbox、事务内通知合并、批量重建编排、版本与所有权仲裁、原子发布和两阶段恢复的共享核心。                         |
-| `packages/filter-engine/src`                          | 共享 Filter 校验与 JSONB 查询编译。                                                                                   |
+| 路径                                                  | 定位用途                                                                                                                  |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `packages/runtime/src`                                | 后端共享日志、观测上下文、Redis 配置与连接、环境解析、bcrypt、通用错误、维护生命周期和进程所有权（含 Windows Job 附件）。 |
+| `packages/test-support/src`                           | 测试专用外部资源地址、连接、清理与进程 smoke harness。                                                                    |
+| `packages/api-core/src`                               | Hono、OpenAPI 和 tRPC 装配，HTTP 请求上下文、响应、错误映射、分页与 adapter。                                             |
+| `packages/unit-of-work/src`                           | 事务边界、提交后任务与回滚确认。                                                                                          |
+| `packages/client-snapshot/src`                        | Client 普通配置、敏感凭据认证、统一缓存失效与维护。                                                                       |
+| `packages/login-restriction/src`                      | 登录失败历史、临时限制、管理查询与解除，及 Redis 原子状态。                                                               |
+| `packages/subject-access/src`                         | 账号实时访问屏障、单次操作许可、代际、生命周期与恢复。                                                                    |
+| `packages/session-kernel/src`                         | 协议中性的 UserSession / ClientSession 生命周期、Redis 原子状态与管理观察。                                               |
+| `packages/custom-sso/src`                             | Custom SSO 授权、Code / Token、续接与交付；`/wire` 提供浏览器可加载契约。                                                 |
+| `packages/oidc/src`                                   | OIDC 授权、Code / Token、续接、退出、UserInfo 与密钥；由 API HTTP adapter 消费。                                          |
+| `packages/client-subject-projection/src`              | 中性主体裁剪、Catalog 与责任任职投影。                                                                                    |
+| `packages/delegation/src`                             | Client 委托；`/wire` 提供浏览器契约。                                                                                     |
+| `packages/contracts/src`                              | 跨端或跨 app/package 的稳定枚举、常量、schemas、类型与协议 helper。`http/` 提供静态 HTTP 状态码和短语。                   |
+| `packages/domain/src`                                 | 后端 DTO、mapper、纯业务规则、audit helper 与业务错误。                                                                   |
+| `packages/db/src`                                     | Drizzle schema、relations、migrations、client 与 query helpers；领域为 `core`、`log`，列 helper 在 `schema/_shard/`。     |
+| `packages/jobs/src`                                   | BullMQ connection、queue、worker、producer 资源与有界唤醒、job ID 和默认选项。                                            |
+| `packages/organization-responsibility-resolution/src` | Organization Responsibility 的正反向解析与 `/parent-lifecycle` 共享父生命周期检查。                                       |
+| `packages/role-assignment-resolution/src`             | Effective Role 正向解析与受影响用户反向解析。                                                                             |
+| `packages/user-document/src`                          | User Document、User Search / Subject Facts 的失效、构建、发布、查询与维护。                                               |
+| `packages/organization-document/src`                  | 组织搜索文档的构建、发布、查询与维护。                                                                                    |
+| `packages/document-update/src`                        | 文档 Outbox、事务内通知合并、批量重建编排、版本与所有权仲裁、原子发布和两阶段恢复的共享核心。                             |
+| `packages/filter-engine/src`                          | 共享 Filter 校验与 JSONB 查询编译。                                                                                       |
 
 使用或新增共享代码前，按[共享契约与数据库](contracts-and-database.md)核对运行环境、公开出口、DTO 与事务边界；
 模块语义见[后端架构](backend-architecture.md)。操作入口见[运维手册](../releases/README.md)。

@@ -1,7 +1,5 @@
 import type { ApiAuditLogWriter } from "@api/services/audit/audit.service";
 import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
-import type { UnitOfWorkPort } from "@iam/api-core/uow";
-import { createUnitOfWork } from "@iam/api-core/uow";
 import type { DbClient } from "@iam/db";
 import {
   type CreateOrganizationDocumentInvalidationInput,
@@ -13,13 +11,15 @@ import {
   createOrganizationResponsibilityParentLifecycleReader,
   type OrganizationResponsibilityParentLifecycleGuard,
 } from "@iam/organization-responsibility-resolution/parent-lifecycle";
+import type { AfterCommitLoggerPort, UnitOfWorkPort } from "@iam/unit-of-work";
+import { createUnitOfWork } from "@iam/unit-of-work";
 import type { CreateUserDocumentInvalidationDeps, UserDocumentInvalidation } from "@iam/user-document/producer";
 import { createUserDocumentInvalidation } from "@iam/user-document/producer";
 import type { SubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
 import { createSubjectAccessTransitionRepository } from "@iam/user-document/subject-access-transition";
 import type { ApiRepositories } from "../repositories";
 import { createApiRepositories } from "../repositories";
-import type { AfterCommitLoggerPort, ClockPort } from "../runtime";
+import type { ClockPort } from "../runtime";
 
 export interface ApiTxPorts {
   repositories: ApiRepositories;
@@ -68,4 +68,4 @@ export function createApiUnitOfWork(options: CreateApiUnitOfWorkOptions): UnitOf
   });
 }
 
-export type { UnitOfWorkPort } from "@iam/api-core/uow";
+export type { UnitOfWorkPort } from "@iam/unit-of-work";

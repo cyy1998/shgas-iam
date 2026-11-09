@@ -2,10 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { createRootAuthenticationComposition } from "@api/composition/root-authentication";
 import createApp from "@iam/api-core/core/create-app";
 import { defineConfig } from "@iam/api-core/core/define-config";
-import type { SubjectAccessOperation } from "@iam/api-core/subject-access";
-import { requireSubjectAccessOperation } from "@iam/api-core/subject-access";
 import { ApiErrorCode } from "@iam/contracts";
 import { createUnifiedSessionKernel } from "@iam/session-kernel";
+import type { SubjectAccessOperation } from "@iam/subject-access";
+import { requireSubjectAccessOperation } from "@iam/subject-access";
 import pino from "pino";
 
 const CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME = "CustomSsoSessionAuthorization";

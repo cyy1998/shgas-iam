@@ -1,4 +1,4 @@
-import type { UnitOfWorkPort } from "@iam/api-core/uow";
+import type { UnitOfWorkPort } from "@iam/unit-of-work";
 import type { Organization, OrganizationCreateDto, OrganizationUpdateDto } from "./organization.type";
 
 export interface OrganizationReaderPort {

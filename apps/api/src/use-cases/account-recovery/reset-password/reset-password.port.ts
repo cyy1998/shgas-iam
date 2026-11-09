@@ -1,5 +1,5 @@
 import type { AuditLogInput } from "@api/services/audit/audit.context";
-import type { UnitOfWorkPort } from "@iam/api-core/uow";
+import type { UnitOfWorkPort } from "@iam/unit-of-work";
 import type { AccountRecoveryUser, PasswordResetCodeReservation } from "./reset-password.type";
 
 export interface ResetPasswordAuditWriterPort {

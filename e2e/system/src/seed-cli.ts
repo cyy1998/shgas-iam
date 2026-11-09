@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { redisUrlString } from "@iam/api-core/redis/config";
 import db, { closeDb } from "@iam/db";
+import { redisUrlString } from "@iam/runtime/redis/config";
 import Redis from "ioredis";
 import { requireEnvironment } from "./environment.ts";
 import { seedE2EScenario } from "./seed.ts";

@@ -1,5 +1,5 @@
 import process from "node:process";
-import { createProcessSmokeEnvironment } from "@iam/api-core/testing/process-smoke-harness";
+import { createProcessSmokeEnvironment } from "@iam/test-support/process-smoke-harness";
 
 export function createUnavailableStorageCommandEnvironment(input: { databaseUrl: string; temporaryDirectory: string }) {
   return createProcessSmokeEnvironment({

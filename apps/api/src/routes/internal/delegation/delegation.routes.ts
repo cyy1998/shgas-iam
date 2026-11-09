@@ -3,12 +3,12 @@ import {
   CLIENT_DELEGATION_RESOLUTION_UNAVAILABLE_MESSAGE,
 } from "@api/use-cases/internal/resolve-client-delegations/resolve-client-delegations.error";
 import { createRoute, z } from "@hono/zod-openapi";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
 import { ApiErrorCode } from "@iam/contracts";
+import { HttpStatusCodes } from "@iam/contracts/http";
 import {
   DelegationCreateSchema,
   DelegationDetailSchema,

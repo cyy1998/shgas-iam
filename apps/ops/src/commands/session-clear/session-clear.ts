@@ -1,4 +1,4 @@
-import { createOfflineMaintenanceRedis, runMaintenanceCommandWithLifecycle } from "@iam/api-core/maintenance";
+import { createOfflineMaintenanceRedis, runMaintenanceCommandWithLifecycle } from "@iam/runtime/maintenance";
 import { createSessionClearMaintenance } from "@ops/composition/session-clear-maintenance";
 import { parseOfflineMaintenanceEnv } from "@ops/env";
 import { parseSessionClearArgs } from "./arguments";

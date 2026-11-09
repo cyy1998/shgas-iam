@@ -1,5 +1,5 @@
 import env from "@api/env";
-import { createLogger, LoggerSourceApp } from "@iam/api-core/logger";
+import { createLogger, LoggerSourceApp } from "@iam/runtime/logger";
 
 export const logger = createLogger({
   nodeEnv: env.nodeEnv,

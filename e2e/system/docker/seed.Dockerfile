@@ -15,7 +15,10 @@ ENV HUSKY=0
 COPY .npmrc pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY patches/ ./patches/
 COPY e2e/system/package.json ./e2e/system/package.json
-COPY packages/api-core/package.json ./packages/api-core/package.json
+COPY packages/subject-access/package.json ./packages/subject-access/package.json
+COPY packages/unit-of-work/package.json ./packages/unit-of-work/package.json
+COPY packages/runtime/package.json ./packages/runtime/package.json
+COPY packages/test-support/package.json ./packages/test-support/package.json
 COPY packages/session-kernel/package.json ./packages/session-kernel/package.json
 COPY packages/client-subject-projection/package.json ./packages/client-subject-projection/package.json
 COPY packages/contracts/package.json ./packages/contracts/package.json
@@ -32,7 +35,9 @@ RUN --mount=type=cache,id=iam-e2e-pnpm-v12,target=/pnpm/store \
 
 FROM deps AS builder
 COPY e2e/system ./e2e/system
-COPY packages/api-core ./packages/api-core
+COPY packages/subject-access ./packages/subject-access
+COPY packages/unit-of-work ./packages/unit-of-work
+COPY packages/runtime ./packages/runtime
 COPY packages/session-kernel ./packages/session-kernel
 COPY packages/client-subject-projection ./packages/client-subject-projection
 COPY packages/contracts ./packages/contracts

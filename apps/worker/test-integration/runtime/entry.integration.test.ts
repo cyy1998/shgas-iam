@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import type { ProcessSmokeAttemptContext } from "@iam/api-core/testing/process-smoke-harness";
+import type { ProcessSmokeAttemptContext } from "@iam/test-support/process-smoke-harness";
 import {
   createProcessSmokeEnvironment,
   createProcessSmokeSuite,
   PortCollisionError,
   PROCESS_SMOKE_TEST_TIMEOUT_MS,
   spawnOwnedProcessTree,
-} from "@iam/api-core/testing/process-smoke-harness";
+} from "@iam/test-support/process-smoke-harness";
 
 const workerRoot = fileURLToPath(new URL("../../", import.meta.url));
 const entrySmoke = createProcessSmokeSuite({

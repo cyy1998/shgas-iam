@@ -1,4 +1,4 @@
-import { OK, SERVICE_UNAVAILABLE } from "@iam/api-core/core/http-status-codes";
+import { OK, SERVICE_UNAVAILABLE } from "@iam/contracts/http";
 import type { WorkerEnv } from "@worker/env";
 import type { WorkerQueueRegistration } from "@worker/modules/registry";
 import type { Hono } from "hono";

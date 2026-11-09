@@ -3,8 +3,8 @@ import type {
   AdminClientMutationLoggerPort,
   AdminClientRuntimeInvalidationPort,
 } from "@admin-api/services/client/client.port";
-import type { UnitOfWorkPort } from "@iam/api-core/uow";
 import type { ClientSsoAdminDtoSchema } from "@iam/domain/client";
+import type { UnitOfWorkPort } from "@iam/unit-of-work";
 import type { z } from "zod";
 import type { ClientSsoRecord, ClientSsoStorageUpdate } from "./client-sso.type";
 

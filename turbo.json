@@ -22,8 +22,8 @@
         "$TURBO_ROOT$/scripts/**",
         "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/pnpm-lock.yaml",
-        "$TURBO_ROOT$/packages/api-core/package.json",
-        "$TURBO_ROOT$/packages/api-core/src/**"
+        "$TURBO_ROOT$/packages/runtime/package.json",
+        "$TURBO_ROOT$/packages/runtime/src/**"
       ]
     },
     "test:e2e": {

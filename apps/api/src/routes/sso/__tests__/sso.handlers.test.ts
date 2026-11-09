@@ -2,14 +2,11 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { createRootSsoHandlers, createSsoEndpointsHandler } from "@api/routes/sso/sso.handlers";
 import { createUnifiedAuthorizationHandlers } from "@api/routes/sso/unified-authorization.handlers";
 import type { LoginWithOaResult } from "@api/use-cases/authentication/login-with-oa/login-with-oa.type";
-import { ClientSnapshotUnavailableError } from "@iam/api-core/client-snapshot";
+import { SubjectAccessSessionInvalidHttpError } from "@iam/api-core/http/subject-access";
 import { createErrorHandler } from "@iam/api-core/middlewares";
-import {
-  createSubjectAccessOperations,
-  SubjectAccessSessionInvalidHttpError,
-  SubjectAccessUnavailableError,
-} from "@iam/api-core/subject-access";
+import { ClientSnapshotUnavailableError } from "@iam/client-snapshot";
 import { ApiErrorCode, LoginPageGuardDecision } from "@iam/contracts";
+import { createSubjectAccessOperations, SubjectAccessUnavailableError } from "@iam/subject-access";
 import { Hono } from "hono";
 
 const logger = {

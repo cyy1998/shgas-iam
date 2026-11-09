@@ -1,4 +1,4 @@
-import { createLogger } from "@iam/api-core/logger";
+import { createLogger } from "@iam/runtime/logger";
 import { parseGatewayEnv } from "./env";
 import { startGatewayRuntime } from "./runtime";
 

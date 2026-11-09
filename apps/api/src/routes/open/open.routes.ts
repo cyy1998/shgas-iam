@@ -1,12 +1,12 @@
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import { createRoute, z } from "@hono/zod-openapi";
-import * as HttpStatusCodes from "@iam/api-core/core/http-status-codes";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
 import { StandardErrorResponseSchema } from "@iam/api-core/core/openapi/schemas/error-response-schema";
 import { PublicClientStatusDtoSchema } from "@iam/contracts";
+import { HttpStatusCodes } from "@iam/contracts/http";
 import { MaskedMobileSchema } from "./open.schema";
 
 const routePrefix = "";

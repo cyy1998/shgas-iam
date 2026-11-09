@@ -2,13 +2,13 @@ import { afterEach, expect, test } from "bun:test";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { ClientStatus } from "@iam/contracts";
+import { clients } from "@iam/db/schema";
 import {
   createProcessSmokeEnvironment,
   createProcessSmokeSuite,
   spawnOwnedProcessTree,
-} from "@iam/api-core/testing/process-smoke-harness";
-import { ClientStatus } from "@iam/contracts";
-import { clients } from "@iam/db/schema";
+} from "@iam/test-support/process-smoke-harness";
 import { createGatewayPostgresTestHarness } from "../support/postgres-test-harness";
 
 const packageRoot = fileURLToPath(new URL("../../", import.meta.url));
