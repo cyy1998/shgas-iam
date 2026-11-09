@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { defineConfig } from "@umijs/max";
-import { getAdminRouteAccess } from "./src/admin-route-registry";
+import { getAdminRouteAccess, HR_MANUAL_PATH } from "./src/admin-route-registry";
 import { adminTheme } from "./src/theme";
 
 export default defineConfig({
@@ -27,6 +27,12 @@ export default defineConfig({
   },
   routes: [
     { path: "/", redirect: "/users" },
+    {
+      path: HR_MANUAL_PATH,
+      name: "HR 管理员使用说明书",
+      component: "./help/HrManualPage",
+      hideInMenu: true,
+    },
     {
       path: "/users",
       name: "用户管理",

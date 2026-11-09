@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { hrAdminCapabilitySummary } from "~admin/test/mocks/fixtures";
 import config from "../../.umirc";
 import access from "../access";
-import { ADMIN_MANAGEMENT_ROUTE_REGISTRY, getAdminRouteAccess } from "../admin-route-registry";
+import { ADMIN_MANAGEMENT_ROUTE_REGISTRY, getAdminRouteAccess, HR_MANUAL_PATH } from "../admin-route-registry";
 
 type Route = {
   path?: string;
@@ -17,7 +17,7 @@ function flatten(routes: Route[]): Route[] {
 describe("Admin route registry", () => {
   it("classifies every management route and default-denies unknown routes", () => {
     const routes = flatten((config.routes ?? []) as Route[]);
-    const supportPaths = new Set(["/", "/403", "*"]);
+    const supportPaths = new Set(["/", "/403", "*", HR_MANUAL_PATH]);
     const managementRoutes = routes.filter((route) => route.path && !supportPaths.has(route.path));
 
     for (const route of managementRoutes) {
@@ -68,5 +68,12 @@ describe("Admin route registry", () => {
   it("denies every protected route and collection action before capabilities are available", () => {
     const permissions = access({});
     expect(Object.values(permissions).every((allowed) => allowed === false)).toBe(true);
+  });
+
+  it("keeps the manual independent of management capabilities", () => {
+    const routes = flatten((config.routes ?? []) as Route[]);
+    const manual = routes.find((route) => route.path === HR_MANUAL_PATH);
+    expect(manual).toBeDefined();
+    expect(manual?.access).toBeUndefined();
   });
 });

@@ -223,6 +223,25 @@ textarea,
   box-shadow: none;
 }
 
+.iam-admin-help-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding-inline: 10px;
+  white-space: nowrap;
+  border-radius: 8px;
+
+  &:hover {
+    background: #edf0f3;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #182535;
+    outline-offset: 2px;
+  }
+}
+
 .ant-pro-layout .ant-pro-layout-content {
   padding-block: 24px 36px;
 }
@@ -504,6 +523,18 @@ textarea,
 }
 
 @media (max-width: 767px) {
+  .ant-pro-global-header .iam-admin-brand {
+    width: auto;
+  }
+
+  .ant-pro-global-header .iam-admin-brand-logo {
+    width: 80px;
+  }
+
+  .ant-pro-global-header .iam-admin-brand-title {
+    display: none;
+  }
+
   .iam-admin-list {
     .ant-pro-table-list-toolbar-left {
       flex-basis: 100%;

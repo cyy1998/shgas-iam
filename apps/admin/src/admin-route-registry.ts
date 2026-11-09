@@ -1,5 +1,8 @@
 import type { AdminModuleCode } from "@iam/contracts";
 
+// 阅读帮助只沿用登录要求，不绑定任何管理模块 capability。
+export const HR_MANUAL_PATH = "/help/hr-admin";
+
 export const ADMIN_MODULE_ACCESS_KEYS = {
   user: "canAccessUser",
   organization: "canAccessOrganization",
