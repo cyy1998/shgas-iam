@@ -93,7 +93,7 @@ dashboard-only 的 `IAM_WORKER_ENABLED_MODULES=none` 不消费重建任务。
 普通任务为 `expand-user-document-outbox` 与 `rebuild-user-documents-batch`，consumer 仍接受积压的单条
 `rebuild-user-document`。每次唤醒使用独立 UUID job ID；持久 Outbox 完成凭据与 Rebuild State 版本负责幂等和发布仲裁。
 consumer 展开及 Worker 周期 repair 的重建请求按 `IAM_WORKER_USER_DOCUMENT_REBUILD_BATCH_SIZE` 切块，
-人工 Ops 维护使用 `IAM_OPS_USER_DOCUMENT_REBUILD_BATCH_SIZE`。两者实际每批最多 100 个用户；
+人工 Ops backfill 和 repair 使用 `IAM_OPS_USER_DOCUMENT_REBUILD_BATCH_SIZE`。两者实际每批最多 100 个用户；
 consumer 并发配置限制活跃批次数。PG 发布另按约 1 MiB 候选文档数据切小组，超过该大小的单个文档独立处理；
 后处理在模块实例内共享最多 4 个主体的默认并发额度，多个任务不会各自再放大这份额度。
 repair 的 rebuilds.enqueued 仍按目标用户数报告，不能与 Bull Board 的 batch job 数直接比较。
@@ -150,9 +150,10 @@ reaper 失败时命令非零退出，不继续 Redis 恢复。
 pnpm --filter @iam/ops iam-ops user-document backfill
 ```
 
-`--batch-size` 或 `IAM_OPS_USER_DOCUMENT_BACKFILL_BATCH_SIZE` 控制每批登记数量。报告区分 registered 与 enqueued，
-登记后的唤醒失败保留 Outbox，由正式 repair 重试。Backfill 扫描全部源 User，包括 Enable、Pause、Disable 和 deleted，
-也会推进已经 processed 但内容陈旧的库存；只运行 repair 或只扫 failed 不能完成这项恢复。
+`--batch-size` 或 `IAM_OPS_USER_DOCUMENT_BACKFILL_BATCH_SIZE` 控制每页登记数量。每页在一个事务中为每个用户登记重建版本和已完成的 Outbox 凭据，
+提交后再按重建批大小入队。同一任务可以重建多个用户，报告中的 registered 和 enqueued 仍按用户计数。
+已提交的页若唤醒失败，由正式 repair 从 Rebuild State 重新入队；命令提前退出时，重跑 backfill 才能登记尚未扫描的用户。
+Backfill 扫描全部源 User，包括 Enable、Pause、Disable 和 deleted，也会推进已经 processed 但内容陈旧的库存。
 等待受控 consumer 发布当前完整 Document 或删除墓碑；缺行不能代替墓碑。完成状态、版本、Outbox 凭据与用户后续责任必须全部收敛。
 
 在独立命令中先 PostgreSQL、后 Redis 核验：

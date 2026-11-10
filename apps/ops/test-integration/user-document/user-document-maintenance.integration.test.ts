@@ -49,7 +49,7 @@ afterEach(async () => {
   if (stopExecutors.length) await resetOpsRedisTestDatabase(stopExecutors);
 });
 
-test("full Profile maintenance rebuilds every account before verification and repeats both gates after source smoke", async () => {
+test("full User Document maintenance rebuilds every account and repeats both gates after source smoke", async () => {
   const fixture = await createMaintenanceFixture();
   const { sql } = fixture.pg;
   const sourceBefore = await fixture.sourceInventory();
@@ -57,6 +57,9 @@ test("full Profile maintenance rebuilds every account before verification and re
     VALUES (1,${fixture.subjects[0]!},0,1,NOW(),'{}')`;
   await sql`INSERT INTO user_document_rebuild_state (user_id,version,status,reason_codes)
     SELECT id,1,'pending','["unrecognized-source-change"]'::jsonb FROM "user"`;
+  const legacyOutboxId = randomUUID();
+  await sql`INSERT INTO user_document_outbox (id,source)
+    VALUES (${legacyOutboxId},'{"change":{"kind":"user","userId":1}}'::jsonb)`;
 
   const initialPostgres = await fixture.command("verify-postgres", 1);
   expect(initialPostgres.output).toContain('"code":"document-version-mismatch"');
@@ -64,23 +67,28 @@ test("full Profile maintenance rebuilds every account before verification and re
   const initialRedis = await fixture.command("verify-redis", 1);
   expect(initialRedis.output).toContain('"code":"facts-missing"');
 
-  const backfill = await fixture.command("backfill", 0);
+  const backfill = await fixture.command("backfill", 0, ["--batch-size", "3"]);
+  expect(backfill.output).toContain('"registered":5');
   expect(backfill.output).toContain('"enqueued":5');
   expect(backfill.output).toContain('"publication":"not-verified"');
   const beforeConsumption = await fixture.run("verify-postgres", 1);
   expect(beforeConsumption.output).toContain('"status":"failed"');
-  // The durable backfill sources can be replayed, while the old incompatible rebuild metadata still fails explicitly.
-  const recovery = await fixture.command("repair", 1, [
+  expect(beforeConsumption.output).toContain('"code":"unprocessed-rebuild-state"');
+  // Repair still wakes legacy Outbox work alongside the registered backfill rebuilds.
+  const recovery = await fixture.command("repair", 0, [
     "--stale-before",
     new Date(Date.now() + 60_000).toISOString(),
     "--limit",
     "10",
   ]);
-  expect(recovery.output).toContain('"outbox":{"selected":5,"enqueued":5,"failed":0}');
-  expect(recovery.output).toContain('"rebuilds":{"selected":5,"enqueued":0,"failed":5}');
+  expect(recovery.output).toContain('"outbox":{"selected":1,"enqueued":1,"failed":0}');
+  expect(recovery.output).toContain('"rebuilds":{"selected":5,"enqueued":5,"failed":0}');
   await fixture.startConsumer();
   await fixture.converged();
   await fixture.completeGates();
+  const [legacyReceipt] =
+    await sql`SELECT status,rebuild_requests FROM user_document_outbox WHERE id=${legacyOutboxId}`;
+  expect(legacyReceipt).toEqual({ status: "processed", rebuild_requests: [{ targetId: 1, version: "3" }] });
 
   const profiles = await sql<{ user_id: number; status: number | null; is_delete: boolean }[]>`
     SELECT user_id,(document->>'status')::int AS status,document IS NULL AS is_delete FROM user_document ORDER BY user_id`;
@@ -340,7 +348,7 @@ async function createMaintenanceFixture() {
       subjectAccessRepair: repair,
       logger,
       clock,
-      config: { concurrency: 1, rebuildBatchSize: 1, backfillBatchSize: 1 },
+      config: { concurrency: 1, rebuildBatchSize: 3, backfillBatchSize: 1 },
     });
     module = next;
     stopExecutors.push(next.close);

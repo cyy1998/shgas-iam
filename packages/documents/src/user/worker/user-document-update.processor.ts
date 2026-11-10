@@ -1,20 +1,21 @@
+import { randomUUID } from "node:crypto";
 import {
   MAX_USER_DOCUMENT_REBUILD_BATCH_SIZE,
   type RebuildUserDocumentJobPayload,
   RebuildUserDocumentJobPayloadSchema,
   UserDocumentRebuildReason,
 } from "@iam/contracts";
-import type { db as database } from "@iam/db";
+import type { DbTransaction, db as database } from "@iam/db";
 import { userDocumentOutboxEntries, userDocumentRebuildStates } from "@iam/db/schema";
 import { eq, inArray, sql } from "drizzle-orm";
 import {
   createDocumentUpdateProcessor,
   type DocumentBuildResult,
+  type DocumentRebuildRequest,
   type DocumentRepairOptions,
   type PreparedDocumentPublication,
 } from "../../update";
 import type { PublishedUserDocument } from "../document";
-import { persistUserDocumentSources } from "../invalidation/user-document-invalidation";
 import type { UserDocumentJobProducer } from "../invalidation/user-document-job.producer";
 import {
   expandUserDocumentSource,
@@ -51,7 +52,7 @@ export function createUserDocumentUpdateProcessor<
   if (!Number.isSafeInteger(input.batchSize) || input.batchSize < 1)
     throw new RangeError("User Document rebuild requires a positive safe batch size");
   const batchSize = Math.min(input.batchSize, MAX_USER_DOCUMENT_REBUILD_BATCH_SIZE);
-  async function enqueueRebuilds(requests: Array<{ targetId: number; version: string }>) {
+  async function enqueueRebuilds(requests: DocumentRebuildRequest[]) {
     if (!requests.length) return { enqueued: 0 };
     const rows = new Map<number, typeof userDocumentRebuildStates.$inferSelect>();
     for (let offset = 0; offset < requests.length; offset += SQL_TARGET_BATCH_SIZE) {
@@ -81,6 +82,28 @@ export function createUserDocumentUpdateProcessor<
     );
   }
 
+  async function recordRebuildMetadata(
+    tx: DbTransaction,
+    requests: readonly DocumentRebuildRequest[],
+    metadata: { reason: UserDocumentRebuildReason; requestId?: string; traceId?: string },
+  ) {
+    for (let offset = 0; offset < requests.length; offset += SQL_TARGET_BATCH_SIZE) {
+      await tx
+        .update(userDocumentRebuildStates)
+        .set({
+          reasonCodes: [metadata.reason],
+          requestId: metadata.requestId ?? null,
+          traceId: metadata.traceId ?? null,
+        })
+        .where(
+          inArray(
+            userDocumentRebuildStates.userId,
+            requests.slice(offset, offset + SQL_TARGET_BATCH_SIZE).map(({ targetId }) => targetId),
+          ),
+        );
+    }
+  }
+
   const postPublication = createUserDocumentPostPublicationProcessor({
     db: input.db,
     projection: input.projection,
@@ -104,21 +127,11 @@ export function createUserDocumentUpdateProcessor<
     parseSource: (source) => UserDocumentOutboxSourceSchema.parse(source),
     expand: async (tx, source, observedAt) => await expandUserDocumentSource(tx, source.change, observedAt),
     async registered(tx, source, requests) {
-      for (let offset = 0; offset < requests.length; offset += SQL_TARGET_BATCH_SIZE) {
-        await tx
-          .update(userDocumentRebuildStates)
-          .set({
-            reasonCodes: [source.reason ?? userDocumentSourceReason(source.change.kind)],
-            requestId: source.requestId ?? null,
-            traceId: source.traceId ?? null,
-          })
-          .where(
-            inArray(
-              userDocumentRebuildStates.userId,
-              requests.slice(offset, offset + SQL_TARGET_BATCH_SIZE).map(({ targetId }) => targetId),
-            ),
-          );
-      }
+      await recordRebuildMetadata(tx, requests, {
+        reason: source.reason ?? userDocumentSourceReason(source.change.kind),
+        requestId: source.requestId,
+        traceId: source.traceId,
+      });
     },
     async build(userId, version) {
       const observedAt = input.clock.nowDate();
@@ -256,17 +269,32 @@ export function createUserDocumentUpdateProcessor<
         options.signal?.throwIfAborted();
         const ids = await source.scanUserIds({ afterUserId, limit: batchSize });
         if (!ids.length) break;
-        const jobs = await input.db.transaction(
-          async (tx) =>
-            await persistUserDocumentSources(
-              tx,
-              ids.map((userId) => ({ change: { kind: "user", userId }, reason: UserDocumentRebuildReason.Backfill })),
-              input.clock.nowDate(),
-            ),
-        );
-        registered += jobs.length;
+        const requests = await input.db.transaction(async (tx) => {
+          const observedAt = input.clock.nowDate();
+          const reason = UserDocumentRebuildReason.Backfill;
+          const requests = await processor.registerRebuilds(tx, ids, observedAt);
+          await recordRebuildMetadata(tx, requests, { reason });
+          // A backfill already knows the targets. Commit their versions and
+          // completed expansion receipts together before waking the worker.
+          for (let offset = 0; offset < requests.length; offset += SQL_TARGET_BATCH_SIZE) {
+            await tx.insert(userDocumentOutboxEntries).values(
+              requests.slice(offset, offset + SQL_TARGET_BATCH_SIZE).map((request) => ({
+                id: randomUUID(),
+                source: { change: { kind: "user", userId: request.targetId }, reason },
+                status: "processed" as const,
+                rebuildRequests: [request],
+                createdAt: observedAt,
+                processedAt: observedAt,
+                updatedAt: observedAt,
+              })),
+            );
+          }
+          options.signal?.throwIfAborted();
+          return requests;
+        });
+        registered += requests.length;
         options.signal?.throwIfAborted();
-        enqueued += (await input.jobProducer.enqueueOutboxEntries(jobs)).enqueued;
+        enqueued += (await enqueueRebuilds(requests)).enqueued;
         afterUserId = ids.at(-1);
         if (ids.length < batchSize) break;
       }

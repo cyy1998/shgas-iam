@@ -1,7 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
-import type { UserDocumentJobName, UserDocumentJobPayload } from "@iam/contracts";
-import { OrganizationLevel, OrganizationType, UserDocumentWorkStatus, UserStatus } from "@iam/contracts";
-import type { db as database } from "@iam/db";
+import {
+  OrganizationLevel,
+  OrganizationType,
+  UserDocumentJobName,
+  type UserDocumentJobPayload,
+  UserDocumentRebuildReason,
+  UserStatus,
+} from "@iam/contracts";
 import { organizations, positions } from "@iam/db/schema";
 import { createUnitOfWork } from "@iam/unit-of-work";
 import { eq } from "drizzle-orm";
@@ -150,13 +155,16 @@ describe("production User Document schema 1 Worker", () => {
     }
   }, 15_000);
 
-  test("consumes the existing backfill job and converges through the existing repair retry", async () => {
+  test("backfill queues bounded rebuild batches and repairs lost wakes and bad targets at the registered versions", async () => {
+    await harness.sql`INSERT INTO "user" (id, subject_identifier, username, name) VALUES
+      (2, '00000000-0000-4000-8000-000000000002', 'user-2', 'User 2'),
+      (3, '00000000-0000-4000-8000-000000000003', 'user-3', 'User 3')`;
     const jobs: Array<{
       id: string;
       name: UserDocumentJobName;
       data: UserDocumentJobPayload;
     }> = [];
-    let processJob: ((job: { id: string; name: string; data: unknown }) => Promise<unknown>) | undefined;
+    let processJob!: (job: { id: string; name: string; data: unknown }) => Promise<unknown>;
     const queue = {
       name: "user-document",
       async addBulk(
@@ -176,10 +184,11 @@ describe("production User Document schema 1 Worker", () => {
       },
       close: mock(async () => {}),
     };
+    const publish = mock(async () => 1);
     const module = createUserDocumentWorkerModule({
-      db: harness.db as typeof database,
+      db: harness.db,
       redis: { host: "localhost", port: 6379, db: 0 },
-      subjectFactsRedis: { eval: mock(async () => 1) },
+      subjectFactsRedis: { eval: publish },
       subjectAccessRepair: {
         repairSubject: mock(async () => ({ status: "stable" as const })),
       },
@@ -191,7 +200,7 @@ describe("production User Document schema 1 Worker", () => {
       clock: { nowDate: () => OBSERVED_AT },
       config: {
         concurrency: 1,
-        rebuildBatchSize: 10,
+        rebuildBatchSize: 2,
         backfillBatchSize: 10,
       },
       factories: {
@@ -205,67 +214,78 @@ describe("production User Document schema 1 Worker", () => {
         }) as never,
       },
     });
-    await module.startConsumers();
-
-    const backfill = await module.maintenance.backfillAllUsers();
-    expect(backfill).toEqual({ registered: 1, enqueued: 1 });
-    expect(jobs).toHaveLength(1);
-
-    await processJob!(jobs[0]!);
-    expect(jobs).toHaveLength(2);
-
-    let firstFailure: unknown;
     try {
-      await processJob!(jobs[1]!);
-    } catch (error) {
-      firstFailure = error;
+      await module.startConsumers();
+      const backfill = await module.maintenance.backfillAllUsers();
+      expect(backfill).toEqual({ registered: 3, enqueued: 3 });
+      const requested = [1, 2, 3].map((userId) => ({
+        userId,
+        version: "1",
+        reason: UserDocumentRebuildReason.Backfill,
+        requestedAt: OBSERVED_AT.toISOString(),
+      }));
+      const lostJobs = jobs.splice(0);
+      expect(lostJobs.map(({ name, data }) => ({ name, data }))).toEqual([
+        { name: UserDocumentJobName.RebuildUserDocumentsBatch, data: { requests: requested.slice(0, 2) } },
+        { name: UserDocumentJobName.RebuildUserDocumentsBatch, data: { requests: requested.slice(2) } },
+      ]);
+      const receipts = await harness.sql`SELECT source, status, rebuild_requests, processed_at IS NOT NULL AS completed
+        FROM user_document_outbox ORDER BY (source->'change'->>'userId')::int`;
+      expect([...receipts]).toEqual(
+        requested.map(({ userId, version, reason }) => ({
+          source: { change: { kind: "user", userId }, reason },
+          status: "processed",
+          rebuild_requests: [{ targetId: userId, version }],
+          completed: true,
+        })),
+      );
+
+      const recovered = await module.maintenance.repairFailedOrStale({ staleBefore: OBSERVED_AT, limit: 10 });
+      expect(recovered).toMatchObject({
+        outbox: { selected: 0 },
+        rebuilds: { selected: 3, enqueued: 3, failed: 0 },
+      });
+      expect(jobs.map(({ data }) => data)).toEqual(lostJobs.map(({ data }) => data));
+
+      const [firstBatch, lastBatch] = jobs.splice(0);
+      if (!firstBatch || !lastBatch) throw new Error("Repair did not recover both rebuild batches");
+      let firstFailure: unknown;
+      try {
+        await processJob(firstBatch);
+      } catch (error) {
+        firstFailure = error;
+      }
+      expect(firstFailure).toBeInstanceOf(AggregateError);
+      await processJob(lastBatch);
+      const partial = await harness.sql`SELECT user_id, version::text AS version, status
+        FROM user_document_rebuild_state ORDER BY user_id`;
+      expect([...partial]).toEqual([
+        { user_id: 1, version: "1", status: "failed" },
+        { user_id: 2, version: "1", status: "processed" },
+        { user_id: 3, version: "1", status: "processed" },
+      ]);
+      expect(publish).toHaveBeenCalledTimes(2);
+
+      await harness.sql`UPDATE "user" SET name = 'User 1' WHERE id = 1`;
+      const retry = await module.maintenance.repairFailedOrStale({ staleBefore: OBSERVED_AT, limit: 10 });
+      expect(retry).toMatchObject({ enqueued: 1, failed: 0 });
+      const [retryJob] = jobs;
+      if (!retryJob) throw new Error("Repair did not enqueue the failed target");
+      expect(retryJob.data).toEqual({ requests: requested.slice(0, 1) });
+      const result = await processJob(retryJob);
+      expect(result).toMatchObject({ status: "rebuilt", rebuilt: 1 });
+      expect(publish).toHaveBeenCalledTimes(3);
+
+      const projection = createCurrentUserDocumentProjectionBundle();
+      const gate = createUserDocumentPostgresGate({
+        schemaVersion: projection.schemaVersion,
+        repository: createUserDocumentReadinessRepository(harness.db, { projection, buildBatchSize: 10 }),
+        clock: { nowDate: () => OBSERVED_AT },
+      });
+      const report = await gate.verify({ batchSize: 10 });
+      expect(report).toMatchObject({ version: USER_DOCUMENT_SCHEMA_VERSION, status: "passed", failures: [] });
+    } finally {
+      await module.close();
     }
-    expect(firstFailure).toBeInstanceOf(Error);
-    expect(await readDirtyStatus(harness)).toBe(UserDocumentWorkStatus.Failed);
-
-    await harness.sql`
-      UPDATE "user"
-      SET name = 'User 1'
-      WHERE id = 1
-    `;
-    const repair = await module.maintenance.repairFailedOrStale({
-      staleBefore: new Date(OBSERVED_AT.getTime() + 1),
-      limit: 10,
-    });
-    expect(repair).toMatchObject({ enqueued: 1, failed: 0 });
-    expect(jobs).toHaveLength(3);
-    expect(jobs[2]!.data).toEqual(jobs[1]!.data);
-
-    const result = await processJob!(jobs[2]!);
-    expect(result).toMatchObject({
-      status: "rebuilt",
-    });
-
-    const projection = createCurrentUserDocumentProjectionBundle();
-    const gate = createUserDocumentPostgresGate({
-      schemaVersion: projection.schemaVersion,
-      repository: createUserDocumentReadinessRepository(harness.db as typeof database, {
-        projection,
-        buildBatchSize: 10,
-      }),
-      clock: { nowDate: () => OBSERVED_AT },
-    });
-    const report = await gate.verify({ batchSize: 10 });
-    expect(report).toMatchObject({
-      version: USER_DOCUMENT_SCHEMA_VERSION,
-      status: "passed",
-      failures: [],
-    });
-
-    await module.close();
   }, 15_000);
 });
-
-async function readDirtyStatus(harness: Awaited<ReturnType<typeof createPostgresTestHarness>>) {
-  const rows = await harness.sql<{ status: UserDocumentWorkStatus }[]>`
-    SELECT status
-    FROM user_document_rebuild_state
-    WHERE user_id = 1
-  `;
-  return rows[0]?.status;
-}

@@ -605,8 +605,8 @@ Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit�
   不执行 User Document maintenance。它会更新 PostgreSQL transition intent，不局限于 Redis indexed backlog；所需权限、
   stale threshold、调度与失败恢复见[Document 维护手册](../releases/data-maintenance.md#subject-access-恢复)。
 - User Document 全量重建与完整只读核验：先运行
-  `pnpm --filter @iam/ops iam-ops user-document backfill` 登记所有源用户的 Outbox（含 Pause、Disable 与 deleted）；批量大小通过
-  `IAM_OPS_USER_DOCUMENT_BACKFILL_BATCH_SIZE=<positive-integer>` 配置。
+  `pnpm --filter @iam/ops iam-ops user-document backfill` 分页登记所有源用户的重建要求及 Outbox 完成凭据（含 Pause、Disable 与 deleted），
+  提交后按批入队。登记页大小由 `IAM_OPS_USER_DOCUMENT_BACKFILL_BATCH_SIZE` 控制，入队批大小由 `IAM_OPS_USER_DOCUMENT_REBUILD_BATCH_SIZE` 控制。
   等待 Worker 收敛并按需运行 `iam-ops user-document repair` 后，依次运行
   `pnpm --filter @iam/ops iam-ops user-document verify-postgres -- [--batch-size <positive-integer>]` 和
   `pnpm --filter @iam/ops iam-ops user-document verify-redis -- [--batch-size <positive-integer>]`。Backfill 的 `enqueued`

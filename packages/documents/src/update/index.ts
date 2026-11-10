@@ -128,6 +128,28 @@ export function createDocumentUpdateProcessor<Source, Document>(input: {
   const targetName = sql.identifier(targetId.name);
   const requestedAtName = sql.identifier(requestedAt.name);
 
+  async function registerRebuilds(tx: DbTransaction, targetIds: readonly number[], observedAt: Date) {
+    const ids = [...new Set(targetIds)].sort((a, b) => a - b);
+    for (const id of ids) assertDocumentRebuildRequest({ targetId: id, version: "1" });
+    const registered: DocumentRebuildRequest[] = [];
+    for (let offset = 0; offset < ids.length; offset += SQL_TARGET_BATCH_SIZE) {
+      const batch = ids.slice(offset, offset + SQL_TARGET_BATCH_SIZE);
+      const rows = await tx.execute<{ targetId: number; version: string }>(sql`INSERT INTO ${rebuildState}
+        (${targetName}, ${requestedAtName}, updated_at) VALUES
+        ${sql.join(
+          batch.map((id) => sql`(${id}, ${observedAt.toISOString()}, ${observedAt.toISOString()})`),
+          sql`, `,
+        )}
+        ON CONFLICT (${targetName}) DO UPDATE SET
+          version=${rebuildState}.version+1, status='pending', processing_token=NULL,
+          processing_started_at=NULL, attempts=0, last_error=NULL,
+          ${requestedAtName}=EXCLUDED.${requestedAtName}, processed_at=NULL, updated_at=EXCLUDED.updated_at
+        RETURNING ${targetName} AS "targetId", version::text AS version`);
+      registered.push(...rows);
+    }
+    return registered.sort((a, b) => a.targetId - b.targetId).map(assertDocumentRebuildRequest);
+  }
+
   async function markOutboxFailed(outboxId: string, token: string, error: unknown) {
     await input.db.execute(sql`UPDATE ${outbox}
       SET status='failed', processing_token=NULL, processing_started_at=NULL,
@@ -164,25 +186,8 @@ export function createDocumentUpdateProcessor<Source, Document>(input: {
             if (current?.status !== "processing" || current.token !== token) return null;
             const observedAt = clock.nowDate();
             const source = input.parseSource(current.source);
-            const ids = [...new Set(await input.expand(tx, source, observedAt))].sort((a, b) => a - b);
-            for (const id of ids) assertDocumentRebuildRequest({ targetId: id, version: "1" });
-            const registered: DocumentRebuildRequest[] = [];
-            for (let offset = 0; offset < ids.length; offset += SQL_TARGET_BATCH_SIZE) {
-              const batch = ids.slice(offset, offset + SQL_TARGET_BATCH_SIZE);
-              const rows = await tx.execute<{ targetId: number; version: string }>(sql`INSERT INTO ${rebuildState}
-                (${targetName}, ${requestedAtName}, updated_at) VALUES
-                ${sql.join(
-                  batch.map((id) => sql`(${id}, ${observedAt.toISOString()}, ${observedAt.toISOString()})`),
-                  sql`, `,
-                )}
-                ON CONFLICT (${targetName}) DO UPDATE SET
-                  version=${rebuildState}.version+1, status='pending', processing_token=NULL,
-                  processing_started_at=NULL, attempts=0, last_error=NULL,
-                  ${requestedAtName}=EXCLUDED.${requestedAtName}, processed_at=NULL, updated_at=EXCLUDED.updated_at
-                RETURNING ${targetName} AS "targetId", version::text AS version`);
-              registered.push(...rows);
-            }
-            const result = registered.sort((a, b) => a.targetId - b.targetId).map(assertDocumentRebuildRequest);
+            const ids = await input.expand(tx, source, observedAt);
+            const result = await registerRebuilds(tx, ids, observedAt);
             await input.registered?.(tx, source, result);
             await tx.execute(sql`UPDATE ${outbox} SET status='processed',
             rebuild_requests=${JSON.stringify(result)}::jsonb, processing_token=NULL, processing_started_at=NULL,
@@ -608,6 +613,7 @@ export function createDocumentUpdateProcessor<Source, Document>(input: {
 
   return {
     processOutbox,
+    registerRebuilds,
     claimRebuilds,
     failRebuilds,
     prepareRebuild,

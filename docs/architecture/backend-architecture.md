@@ -296,6 +296,8 @@ Outbox processed 表示全部目标重建要求已经持久登记，不表示入
 
 普通重建将同次 Outbox 展开或 repair 唤醒的用户请求交给共享重建编排，有界批次内共享业务构建读取。
 批次不成为新的持久业务对象，各用户仍独立保存版本与处理结果，不跨独立 Outbox 等待凑批；旧单对象任务也经同一编排执行。
+人工全量 backfill 已从源库存得到目标，按页原子登记每个用户的重建要求与对应的 Outbox 完成凭据，提交后批量唤醒重建。
+丢失唤醒由 Rebuild State repair 恢复。
 构建与发布的批界可以不同；PG 发布按用户数和文档字节数再切成小组，单个大文档独立处理。
 接口见[更新处理器](../../packages/documents/src/user/worker/user-document-update.processor.ts)。
 
