@@ -8,7 +8,7 @@ import type { AdminClientTransactionPorts } from "@admin-api/services/client/cli
 import { createClientService } from "@admin-api/services/client/client.service";
 import { createRoleService } from "@admin-api/services/role/role.service";
 import { createErrorHandler } from "@iam/api-core/middlewares";
-import { ApiErrorCode, ClientStatus, RoleAssignmentTargetType, RoleStatus } from "@iam/contracts";
+import { ApiErrorCode, ClientStatus, RoleAssignmentTargetType, RoleStatus, RoleType } from "@iam/contracts";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import { auditLogs, clients, positions, roles, userDocumentRebuildStates } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
@@ -156,7 +156,7 @@ describe("Client commands through production PostgreSQL UnitOfWork", () => {
     },
   );
 
-  test("explicit Assignment and Role removal releases Client deletion while preserving Role history and other Clients' Roles", async () => {
+  test("explicit Assignment and Role removal releases Client deletion while preserving Role history and independent Roles", async () => {
     await seedClient();
     const other = await seedClient("other");
     const [otherRole] = await harness.db
@@ -173,6 +173,12 @@ describe("Client commands through production PostgreSQL UnitOfWork", () => {
       clientCode: "portal",
       roleCode: "portal:reader",
       roleName: "Reader",
+      status: RoleStatus.Enable,
+    });
+    await roleService.createRole({
+      roleType: RoleType.Global,
+      roleCode: "global:reader",
+      roleName: "Global reader",
       status: RoleStatus.Enable,
     });
     const assignment = await roleService.createAssignment("portal:reader", {
@@ -206,7 +212,12 @@ describe("Client commands through production PostgreSQL UnitOfWork", () => {
       { clientCode: "portal", isDelete: true },
       { clientCode: "other", isDelete: false },
     ]);
-    expect(rolesAfter).toEqual([otherRole!, { ...rolesBefore[1]!, isDelete: true, updateTime: expect.any(Date) }]);
+    expect(rolesAfter).toEqual([
+      otherRole!,
+      { ...rolesBefore[1]!, isDelete: true, updateTime: expect.any(Date) },
+      rolesBefore[2]!,
+    ]);
+    expect(rolesAfter[2]).toMatchObject({ roleCode: "global:reader", clientId: null, isDelete: false });
     expect(assignmentsAfter).toEqual([]);
     expect(after.audits.filter((audit) => audit.action === "admin.client.delete")).toMatchObject([
       { targetCode: "portal", details: { changed: true, deleted: true } },
@@ -270,6 +281,18 @@ describe("Client commands through production PostgreSQL UnitOfWork", () => {
       });
     }
   }
+
+  test("Client creation rejects the Global Role namespace without writing or invalidating", async () => {
+    const { service, invalidateClient } = createCommand();
+    for (const code of ["global", "global:reserved"]) {
+      const rejected = await failure(() => service.createClient(input(code)));
+      expect(rejected).toBeInstanceOf(BadRequestError);
+      const bypass = await failure(() => harness.db.insert(clients).values(input(code)));
+      expect(extractPostgresError(bypass)).toEqual({ code: "23514", constraint: "client_role_namespace_check" });
+    }
+    expect(await facts()).toMatchObject({ clients: [], audits: [] });
+    expect(invalidateClient).not.toHaveBeenCalled();
+  });
 
   test("create returns a DTO; profile no-op preserves facts and every successful command invalidates Snapshot", async () => {
     const { service, invalidateClient, enqueueRebuildJobs } = createCommand();

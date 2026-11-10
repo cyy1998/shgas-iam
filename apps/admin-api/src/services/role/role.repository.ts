@@ -45,12 +45,12 @@ export function createRoleRepository(db: DbClient) {
         .from(roles)
         .where(inArray(roles.id, ids));
     },
-    async lockRoleByCode(roleCode: string) {
+    async lockRoleByCode(roleCode: string, strength: "update" | "key share" = "update") {
       const rows = await db
         .select()
         .from(roles)
         .where(and(eq(roles.roleCode, roleCode), eq(roles.isDelete, false)))
-        .for("update");
+        .for(strength);
       return firstRow(await attachRoleContext(rows, db));
     },
     async lockAssignmentByIdForRole(roleId: number, assignmentId: number) {
@@ -94,6 +94,7 @@ export function createRoleRepository(db: DbClient) {
             .values({
               roleCode: data.roleCode,
               roleName: data.roleName,
+              roleType: data.roleType,
               clientId: data.clientId,
               status: data.status ?? RoleStatus.Enable,
               description: data.description ?? null,
@@ -132,11 +133,19 @@ export function createRoleRepository(db: DbClient) {
       return firstRow(rows)?.value ?? 0;
     },
 
-    async getClientByCode(clientCode: string) {
-      return (
-        (await db.query.clients.findFirst({
-          where: { clientCode, isDelete: false },
-        })) ?? null
+    async lockClientForRoleCreation(clientCode: string) {
+      // Client deletion locks this row before checking for undeleted Roles.
+      return firstRow(
+        await db
+          .select({
+            id: clients.id,
+            clientCode: clients.clientCode,
+            clientName: clients.clientName,
+            status: clients.status,
+          })
+          .from(clients)
+          .where(and(eq(clients.clientCode, clientCode), eq(clients.isDelete, false)))
+          .for("key share"),
       );
     },
 
@@ -268,6 +277,7 @@ function roleAdminWhere(input: RolePaginationQueryDto, tx: DbClient) {
           ilikeContainsIf(roles.roleName, fuzzyConditions.text),
         ),
     exactConditions.status === undefined ? undefined : eq(roles.status, exactConditions.status),
+    exactConditions.roleType === undefined ? undefined : eq(roles.roleType, exactConditions.roleType),
     exactConditions.clientCode === undefined
       ? undefined
       : exists(
@@ -357,18 +367,20 @@ async function attachRoleContext(rows: RoleRow[], tx: DbClient) {
   if (rows.length === 0) {
     return [];
   }
-  const clientIds = [...new Set(rows.map((row) => row.clientId))];
+  const clientIds = [...new Set(rows.flatMap((row) => (row.clientId === null ? [] : [row.clientId])))];
   const roleIds = rows.map((row) => row.id);
   const [clientRows, assignmentCountRows] = await Promise.all([
-    tx
-      .select({
-        id: clients.id,
-        clientCode: clients.clientCode,
-        clientName: clients.clientName,
-        status: clients.status,
-      })
-      .from(clients)
-      .where(inArray(clients.id, clientIds)),
+    clientIds.length === 0
+      ? Promise.resolve([])
+      : tx
+          .select({
+            id: clients.id,
+            clientCode: clients.clientCode,
+            clientName: clients.clientName,
+            status: clients.status,
+          })
+          .from(clients)
+          .where(inArray(clients.id, clientIds)),
     tx
       .select({
         roleId: roleAssignments.roleId,
@@ -380,20 +392,11 @@ async function attachRoleContext(rows: RoleRow[], tx: DbClient) {
   ]);
   const clientMap = new Map(clientRows.map((client) => [client.id, client]));
   const assignmentCountMap = new Map(assignmentCountRows.map((row) => [row.roleId, row.value]));
-  return rows
-    .map((row) => ({
-      ...row,
-      client: clientMap.get(row.clientId),
-      assignmentCount: assignmentCountMap.get(row.id) ?? 0,
-    }))
-    .filter(
-      (
-        row,
-      ): row is RoleRow & {
-        client: NonNullable<(typeof row)["client"]>;
-        assignmentCount: number;
-      } => row.client !== undefined,
-    );
+  return rows.map((row) => ({
+    ...row,
+    client: row.clientId === null ? null : (clientMap.get(row.clientId) ?? null),
+    assignmentCount: assignmentCountMap.get(row.id) ?? 0,
+  }));
 }
 
 async function attachAssignmentTargets(rows: RoleAssignmentRow[], tx: DbClient) {

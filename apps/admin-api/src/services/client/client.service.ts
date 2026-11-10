@@ -2,7 +2,7 @@ import { createAdminMutation } from "@admin-api/services/admin-mutation/admin-mu
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildAdminClientAudit } from "@admin-api/services/audit/events/client.audit";
-import type { ClientStatus } from "@iam/contracts";
+import { type ClientStatus, GLOBAL_ROLE_NAMESPACE, GLOBAL_ROLE_PREFIX } from "@iam/contracts";
 import {
   ClientCodeExistsError,
   ClientCodeImmutableError,
@@ -67,6 +67,9 @@ export function createClientService(deps: AdminClientServiceDeps) {
   }
 
   async function createClient(clientDto: ClientCreateDto, auditContext?: AdminAuditContext) {
+    if (clientDto.clientCode === GLOBAL_ROLE_NAMESPACE || clientDto.clientCode.startsWith(GLOBAL_ROLE_PREFIX)) {
+      throw new BadRequestError("应用编码不能占用全局角色命名空间");
+    }
     return await basicMutation.transaction(async (tx) => {
       const existing = await tx.clientRepository.getAnyClientByCode(clientDto.clientCode);
       if (existing !== null) throw new ClientCodeExistsError("客户端编码已存在");

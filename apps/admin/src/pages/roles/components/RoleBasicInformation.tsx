@@ -1,5 +1,6 @@
 import styles from "@admin/components/detail/DetailDrawer.module.less";
 import type { RoleDetailVo, RoleUpdateInput } from "@admin/services/role";
+import { roleTypeToString } from "@iam/contracts";
 import { Button, Descriptions, Space, Typography, theme } from "antd";
 import roleStyles from "./RoleDetailDrawer.module.less";
 import RoleProfileForm from "./RoleProfileForm";
@@ -16,10 +17,11 @@ type Props = {
 export default function RoleBasicInformation({ detail, editing, saving, onEdit, onCancel, onSave }: Props) {
   const { token } = theme.useToken();
   const codeItem = { key: "code", label: "角色编码", children: detail.roleCode };
+  const typeItem = { key: "type", label: "角色类型", children: roleTypeToString[detail.roleType] };
   const clientItem = {
     key: "client",
     label: "所属应用",
-    children: `${detail.client.clientName}（${detail.client.clientCode}）`,
+    children: detail.client ? `${detail.client.clientName}（${detail.client.clientCode}）` : "无",
   };
 
   return (
@@ -45,6 +47,10 @@ export default function RoleBasicInformation({ detail, editing, saving, onEdit, 
             <dd>{detail.roleCode}</dd>
           </div>
           <div>
+            <dt>{typeItem.label}</dt>
+            <dd>{typeItem.children}</dd>
+          </div>
+          <div>
             <dt>所属应用</dt>
             <dd>{clientItem.children}</dd>
           </div>
@@ -62,6 +68,7 @@ export default function RoleBasicInformation({ detail, editing, saving, onEdit, 
           items={[
             { key: "name", label: "角色名称", children: detail.roleName },
             codeItem,
+            typeItem,
             clientItem,
             { key: "count", label: "分配对象", children: `${detail.assignmentCount} 个` },
             {

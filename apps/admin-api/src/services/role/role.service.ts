@@ -2,7 +2,7 @@ import { createAdminMutation } from "@admin-api/services/admin-mutation/admin-mu
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildRoleAssignmentAudit, buildRoleAudit } from "@admin-api/services/audit/events/role.audit";
-import { RoleAssignmentTargetType, RoleStatus } from "@iam/contracts";
+import { RoleAssignmentTargetType, RoleStatus, RoleType } from "@iam/contracts";
 import { ClientNotFoundError } from "@iam/domain/client";
 import type { RoleAssignmentTargetSummaryDto } from "@iam/domain/role";
 import {
@@ -45,27 +45,24 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
 
   async function createRole(dto: RoleCreateDto, auditContext?: AdminAuditContext) {
     return await mutation.transaction(async (tx) => {
-      const client = await tx.roleRepository.getClientByCode(dto.clientCode);
-      if (client === null) {
+      const client =
+        dto.roleType === RoleType.Global ? null : await tx.roleRepository.lockClientForRoleCreation(dto.clientCode);
+      if (dto.roleType !== RoleType.Global && client === null) {
         throw new ClientNotFoundError("所属应用不存在");
       }
 
       const created = await tx.roleRepository.createRole({
         roleCode: dto.roleCode,
         roleName: dto.roleName,
-        clientId: client.id,
+        roleType: dto.roleType ?? RoleType.Client,
+        clientId: client?.id ?? null,
         status: dto.status ?? RoleStatus.Enable,
         description: dto.description ?? null,
       });
       if (created === null) throw new Error("Role insert returned no row");
       const detail = toRoleDetailDto({
         ...created,
-        client: {
-          id: client.id,
-          clientCode: client.clientCode,
-          clientName: client.clientName,
-          status: client.status,
-        },
+        client,
         assignmentCount: 0,
       });
 
@@ -74,7 +71,8 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
           "admin.role.create",
           detail,
           {
-            clientCode: client.clientCode,
+            roleType: detail.roleType,
+            clientCode: client?.clientCode ?? null,
             changed: true,
           },
           auditContext,
@@ -165,7 +163,8 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
 
   async function createAssignment(roleCode: string, dto: RoleAssignmentCreateDto, auditContext?: AdminAuditContext) {
     return await mutation.transaction(async (tx) => {
-      const role = await tx.roleRepository.getRoleByCode(roleCode);
+      // Coordinate with Role deletion while concurrent Assignment inserts still use the unique constraint.
+      const role = await tx.roleRepository.lockRoleByCode(roleCode, "key share");
       if (role === null) {
         throw new RoleNotFoundError();
       }

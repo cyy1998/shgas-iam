@@ -11,6 +11,11 @@ import { createPostgresTestHarness, type PostgresTestHarness } from "../support/
 const migrations = new URL("../../src/migrations/", import.meta.url);
 // Last migration in fixed Spec #283 baseline 95dc4871c62e36b63b26a3f71c5670ae449c79e2.
 const baselineEnd = "20261021120501_retire_privilege";
+const documentMigrations = [
+  "20261026080340_organization_document",
+  "20261026085339_user_document_updates",
+  "20261026100403_user_document_storage",
+];
 let harness: PostgresTestHarness;
 let baselineDirectory: string;
 beforeEach(async () => {
@@ -106,7 +111,8 @@ test("the fixed 95dc4871 inventory upgrades through the complete chain without c
   expect([...usersAfter]).toEqual([...users]);
   expect([...organizationsAfter]).toEqual([...organizations]);
   expect([...journalAfter].slice(0, journal.length)).toEqual([...journal]);
-  expect(journalAfter.length).toBe(journal.length + 4);
+  const appliedMigrations = journalAfter.slice(journal.length).map((entry) => entry.name);
+  expect(appliedMigrations.filter((name) => documentMigrations.includes(name))).toEqual(documentMigrations);
   expect([...states]).toEqual(
     [1, 2, 3, 4].map((userId) => ({
       user_id: userId,

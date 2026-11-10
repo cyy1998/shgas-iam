@@ -2,7 +2,20 @@ import { z } from "@hono/zod-openapi";
 import { selectClientSchema, selectRoleAssignmentSchema, selectRoleSchema } from "@iam/db/schema";
 
 const DbClientSchema = z.object(selectClientSchema.shape);
-const DbRoleSchema = z.object(selectRoleSchema.shape);
+const DbRoleSchema = z.object(
+  selectRoleSchema.pick({
+    id: true,
+    roleCode: true,
+    roleName: true,
+    roleType: true,
+    clientId: true,
+    status: true,
+    description: true,
+    isDelete: true,
+    createTime: true,
+    updateTime: true,
+  }).shape,
+);
 const DbRoleAssignmentSchema = z.object(selectRoleAssignmentSchema.shape);
 
 export const RoleClientSummaryDtoSchema = DbClientSchema.pick({
@@ -15,7 +28,7 @@ export const RoleClientSummaryDtoSchema = DbClientSchema.pick({
 export const RoleSchema = DbRoleSchema.openapi("Role");
 
 export const RoleDtoSchema = RoleSchema.extend({
-  client: RoleClientSummaryDtoSchema,
+  client: RoleClientSummaryDtoSchema.nullable(),
   assignmentCount: z.number().int().nonnegative().default(0),
 }).openapi("RoleDto");
 

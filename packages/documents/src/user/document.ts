@@ -1,20 +1,24 @@
-import { DocumentEmploymentSchema, DocumentUserSchema } from "@iam/contracts";
+import { DocumentEmploymentSchema, DocumentUserSchema, isGlobalRoleCode } from "@iam/contracts";
 import { z } from "zod";
 
 export const USER_DOCUMENT_SCHEMA_VERSION = 1;
 
 export const DocumentSourceVersionSchema = z.string().regex(/^[1-9]\d*$/u);
 
+const DocumentRoleSchema = z.object({ code: z.string().min(1) }).strict();
+const DocumentGlobalRoleSchema = DocumentRoleSchema.extend({ code: z.string().refine(isGlobalRoleCode) });
+
 export const DocumentClientAuthorizationSchema = z
   .object({
     clientCode: z.string().min(1),
-    roles: z.array(z.object({ code: z.string().min(1) }).strict()).min(1),
+    roles: z.array(DocumentRoleSchema).min(1),
   })
   .strict();
 
 export const StoredDocumentEmploymentSchema = DocumentEmploymentSchema.omit({ roles: true })
   .extend({
     clientAuthorizations: z.array(DocumentClientAuthorizationSchema),
+    globalRoles: z.array(DocumentGlobalRoleSchema).min(1).optional(),
   })
   .strict();
 

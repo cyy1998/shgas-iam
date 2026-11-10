@@ -28,6 +28,10 @@ export const clients = snakeCase.table(
     ssoSecretUpdatedAt: timestamp({ withTimezone: true, mode: "string" }),
   },
   (table) => [
+    check(
+      "client_role_namespace_check",
+      sql`${table.clientCode} <> 'global' AND NOT starts_with(${table.clientCode}, 'global:')`,
+    ),
     check("client_sso_enabled_config_check", sql`NOT ${table.ssoEnabled} OR ${table.ssoConfig} IS NOT NULL`),
     check(
       "client_sso_credential_check",

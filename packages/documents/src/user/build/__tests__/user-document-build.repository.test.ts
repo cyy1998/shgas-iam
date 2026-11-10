@@ -1,4 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
+import { RoleType } from "@iam/contracts";
 import { employments, organizationClosures, positions, roles, users } from "@iam/db/schema";
 import type { UserDocumentEffectiveRoleResolverPort } from "../user-document-build.repository";
 import { createUserDocumentBuildRepository } from "../user-document-build.repository";
@@ -27,6 +28,7 @@ function createBuildDb(rows: BuildQueryRows) {
           return query;
         }),
         innerJoin: mock(() => query),
+        leftJoin: mock(() => query),
         where: mock(async () => selectedRows ?? []),
       };
       return query;
@@ -51,8 +53,8 @@ describe("UserDocumentBuildRepository", () => {
         { descendantId: 1001, depth: 0, id: 1001, orgCode: "ORG1001" },
       ],
       roleClients: [
-        { roleId: 7, clientCode: "portal" },
-        { roleId: 8, clientCode: "backoffice" },
+        { roleId: 7, roleType: RoleType.Client, clientCode: "portal" },
+        { roleId: 8, roleType: RoleType.Client, clientCode: "backoffice" },
       ],
     });
     const resolveEffectiveRoles = mock(
@@ -77,9 +79,9 @@ describe("UserDocumentBuildRepository", () => {
 
     expect(resolveEffectiveRoles).toHaveBeenCalledWith({ employmentIds: [10, 11] });
     expect(dataset.roleRows).toEqual([
-      { employmentId: 10, roleId: 7, roleCode: "role-a", clientCode: "portal" },
-      { employmentId: 10, roleId: 8, roleCode: "role-b", clientCode: "backoffice" },
-      { employmentId: 11, roleId: 7, roleCode: "role-a", clientCode: "portal" },
+      { employmentId: 10, roleId: 7, roleCode: "role-a", roleType: RoleType.Client, clientCode: "portal" },
+      { employmentId: 10, roleId: 8, roleCode: "role-b", roleType: RoleType.Client, clientCode: "backoffice" },
+      { employmentId: 11, roleId: 7, roleCode: "role-a", roleType: RoleType.Client, clientCode: "portal" },
     ]);
   });
 });

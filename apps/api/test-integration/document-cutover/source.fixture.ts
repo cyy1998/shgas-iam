@@ -219,7 +219,7 @@ export async function sourceFingerprint(h: CutoverDatabase, auditUpperId = 21474
     'organizations',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM organization t),
     'closure',(SELECT jsonb_agg(to_jsonb(t) ORDER BY ancestor_id,descendant_id) FROM organization_closure t),
     'positions',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM position t),
-    'roles',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM role t),
+    'roles',(SELECT jsonb_agg(jsonb_build_object('role_type','client') || to_jsonb(t) ORDER BY id) FROM role t),
     'assignments',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM role_assignment t),
     'employments',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM employment t),
     'responsibilities',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM organization_responsibility_assignment t),

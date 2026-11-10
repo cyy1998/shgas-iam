@@ -24,8 +24,8 @@ export interface AdminRoleTransactionStorePort {
   getAssignableEmploymentById: (employmentId: number) => Promise<RoleAssignmentTargetSummaryDto | null>;
   getAssignableOrganizationByCode: (orgCode: string) => Promise<RoleAssignmentTargetSummaryDto | null>;
   getAssignablePositionByCode: (posCode: string) => Promise<RoleAssignmentTargetSummaryDto | null>;
-  getClientByCode: (clientCode: string) => Promise<RoleClientSummaryDto | null>;
-  lockRoleByCode: (roleCode: string) => Promise<RoleDetailDto | null>;
+  lockClientForRoleCreation: (clientCode: string) => Promise<RoleClientSummaryDto | null>;
+  lockRoleByCode: (roleCode: string, strength?: "update" | "key share") => Promise<RoleDetailDto | null>;
   getRoleByCode: (roleCode: string) => Promise<RoleDetailDto | null>;
   softDeleteRoleByCode: (roleCode: string) => Promise<Role | null>;
   updateAssignmentScope: (

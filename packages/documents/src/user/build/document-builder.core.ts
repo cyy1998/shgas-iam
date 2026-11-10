@@ -4,6 +4,7 @@ import {
   OrganizationReferenceSchema,
   OrganizationStatus,
   PositionStatus,
+  RoleType,
 } from "@iam/contracts";
 import type { Employment, User } from "@iam/db/schema";
 import { type PublishedUserDocument, PublishedUserDocumentSchema, USER_DOCUMENT_SCHEMA_VERSION } from "../document";
@@ -101,12 +102,15 @@ function createDocumentAssembler(
         if (!target || target.status !== OrganizationStatus.Enable || target.isDelete)
           throw new UserDocumentEmploymentIntegrityError(user.id, employment.id, "organization-not-effective");
         const organization = toOrganizationReference(path, employment.orgId);
-        const clientAuthorizations = [...groupItemsBy(roles.get(employment.id) ?? [], (row) => row.clientCode)]
+        const employmentRoles = roles.get(employment.id) ?? [];
+        const clientRoles = employmentRoles.filter((row) => row.roleType === RoleType.Client);
+        const clientAuthorizations = [...groupItemsBy(clientRoles, (row) => row.clientCode)]
           .sort(([left], [right]) => compareCodes(left, right))
           .map(([clientCode, rows]) => ({
             clientCode,
-            roles: [...new Set(rows.map(({ roleCode }) => roleCode))].sort(compareCodes).map((code) => ({ code })),
+            roles: toDocumentRoles(rows),
           }));
+        const globalRoles = toDocumentRoles(employmentRoles.filter((row) => row.roleType === RoleType.Global));
         const seen = new Set<string>();
         const responsibilityItems = (responsibilities.get(employment.id) ?? [])
           .map((row) => {
@@ -137,6 +141,7 @@ function createDocumentAssembler(
             position: { code: position.posCode, name: position.posName },
             responsibilities: responsibilityItems,
             clientAuthorizations,
+            ...(globalRoles.length > 0 ? { globalRoles } : {}),
           },
         };
       })
@@ -199,4 +204,8 @@ function toOrganizationReference(rows: UserDocumentBuildOrgPathRow[], targetId: 
       distanceToTarget: node.depth,
     })),
   });
+}
+
+function toDocumentRoles(rows: readonly { roleCode: string }[]) {
+  return [...new Set(rows.map(({ roleCode }) => roleCode))].sort(compareCodes).map((code) => ({ code }));
 }

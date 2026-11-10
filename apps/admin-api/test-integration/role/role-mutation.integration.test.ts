@@ -2,8 +2,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "b
 import { randomUUID } from "node:crypto";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
+import { createRoleAdapter } from "@admin-api/routes/admin/role/role.adapter";
+import { createRoleRoute } from "@admin-api/routes/admin/role/role.index";
 import type { AdminRoleTransactionPorts } from "@admin-api/services/role/role.port";
 import { createRoleService } from "@admin-api/services/role/role.service";
+import { createErrorHandler } from "@iam/api-core/middlewares";
 import { createRoleAssignmentResolver } from "@iam/assignment-resolution/role-assignment";
 import {
   EmploymentStatus,
@@ -44,7 +47,11 @@ import {
 } from "@iam/domain/role";
 import { BadRequestError } from "@iam/runtime/errors";
 import { mapUnitOfWork } from "@iam/unit-of-work";
+import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { eq } from "drizzle-orm";
+import { Hono } from "hono";
+import { z } from "zod";
+import { addTestAdminAuthorizationMiddleware } from "../../src/testing/admin-authorization";
 import type { AdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 import { createUserDocumentSourceConsumer } from "../support/user-document-workflow";
@@ -92,6 +99,126 @@ function createCommand(decorate: (tx: AdminRoleTransactionPorts) => AdminRoleTra
     }),
   };
 }
+
+test("Admin role transports manage Global Roles with an explicit type and no Client", async () => {
+  await seedRole("test-client:existing");
+  const adapter = createRoleAdapter({ roleService: createCommand().service });
+  const app = new Hono();
+  addTestAdminAuthorizationMiddleware(app);
+  app.onError(createErrorHandler({ error: mock(), warn: mock(), info: mock() }));
+  app.route("/admin", createRoleRoute(adapter));
+  app.all("/rpc/*", (c) =>
+    fetchRequestHandler({
+      endpoint: "/rpc",
+      req: c.req.raw,
+      router: adapter.roleAdminRouter,
+      createContext: () => ({ hono: c }),
+    }),
+  );
+  const request = (path: string, body: object, method = "POST") =>
+    app.request(path, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const global = { roleType: "global", roleCode: "global:reviewer", roleName: "Reviewer" };
+  const created = await request("/admin/roles", global);
+  expect(created.status).toBe(200);
+  expect(await created.json()).toMatchObject({
+    data: { changed: true, result: { roleType: "global", roleCode: "global:reviewer", clientId: null, client: null } },
+  });
+
+  const legacy = await request("/rpc/create", {
+    roleCode: "test-client:reader",
+    roleName: "Reader",
+    clientCode: "test-client",
+  });
+  expect(legacy.status).toBe(200);
+  expect(await legacy.json()).toMatchObject({
+    result: { data: { changed: true, result: { roleType: "client", client: { clientCode: "test-client" } } } },
+  });
+
+  for (const [path, body] of [
+    ["/rpc/create", { ...global, clientCode: "test-client" }],
+    ["/admin/roles", { ...global, roleType: undefined, clientCode: "test-client" }],
+    ["/admin/roles", { ...global, roleCode: "reviewer" }],
+    ["/rpc/create", { ...global, roleCode: "global: " }],
+  ] as const) {
+    const rejected = await request(path, body);
+    expect(rejected.status).toBe(path.startsWith("/rpc") ? 400 : 422);
+  }
+
+  for (const [exactConditions, expected] of [
+    [{}, ["test-client:existing", "global:reviewer", "test-client:reader"]],
+    [{ roleType: "global" }, ["global:reviewer"]],
+    [{ clientCode: "test-client" }, ["test-client:existing", "test-client:reader"]],
+  ] as const) {
+    const search = await request("/admin/roles/search", {
+      pageNum: 1,
+      pageSize: 10,
+      conditions: { fuzzyConditions: {}, exactConditions },
+    });
+    expect(search.status).toBe(200);
+    const { data } = z
+      .object({ data: z.object({ total: z.number(), result: z.array(z.object({ roleCode: z.string() })) }) })
+      .parse(await search.json());
+    expect(data.total).toBe(expected.length);
+    expect(data.result.map((role) => role.roleCode)).toEqual([...expected]);
+  }
+
+  const update = await request("/rpc/update", {
+    roleCode: "global:reviewer",
+    data: { roleName: "Updated", roleType: "client", clientCode: "test-client" },
+  });
+  expect(update.status).toBe(400);
+  const hrApp = new Hono();
+  addTestAdminAuthorizationMiddleware(hrApp, ["iam:hr-admin"]);
+  hrApp.onError(createErrorHandler({ error: mock(), warn: mock(), info: mock() }));
+  hrApp.route("/admin", createRoleRoute(adapter));
+  const denied = await hrApp.request("/admin/roles", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...global, roleCode: "global:blocked" }),
+  });
+  expect(denied.status).toBe(403);
+
+  const detail = await app.request("/admin/roles/global%3Areviewer");
+  expect(detail.status).toBe(200);
+  expect(await detail.json()).toMatchObject({ data: { roleName: "Reviewer", roleType: "global", client: null } });
+  const deleted = await app.request("/admin/roles/global%3Areviewer", { method: "DELETE" });
+  expect(deleted.status).toBe(200);
+  const occupied = await request("/rpc/create", global);
+  expect(occupied.status).toBe(409);
+});
+
+test("PostgreSQL rejects invalid Role ownership and reserved codes", async () => {
+  const clientRole = await seedRole("test-client:existing");
+  for (const [roleType, roleCode, clientId] of [
+    ["client", "test-client:missing", null],
+    ["client", "global:reserved", clientRole.clientId],
+    ["global", "global:owned", clientRole.clientId],
+    ["global", "missing-prefix", null],
+    ["global", "global:", null],
+    ["global", "global: \t\r\n", null],
+    ["global", "global:\uFEFF", null],
+    ["global", "global:\u00A0\uFEFF\u2028\u3000", null],
+    ["unknown", "unknown-type", null],
+  ] as const) {
+    const error = await failure(
+      () => harness.sql`
+      INSERT INTO role (role_type, role_code, role_name, client_id)
+      VALUES (${roleType}, ${roleCode}, 'Invalid role', ${clientId})`,
+    );
+    expect(extractPostgresError(error)).toEqual({ code: "23514", constraint: "role_type_ownership_check" });
+  }
+  const orphaned = await failure(
+    () => harness.sql`
+    INSERT INTO role (role_code, role_name, client_id)
+    VALUES ('missing:role', 'Missing owner', 99999)`,
+  );
+  expect(extractPostgresError(orphaned)).toEqual({ code: "23503", constraint: "role_client_id_fkey" });
+
+  const roleCode = "global:\uFEFFreviewer\u00A0";
+  const valid = await harness.sql`INSERT INTO role (role_type, role_code, role_name)
+    VALUES ('global', ${roleCode}, 'Reviewer') RETURNING role_code`;
+  expect([...valid]).toEqual([{ role_code: roleCode }]);
+});
 
 async function seedRole(roleCode = "ROLE") {
   let client = await harness.db.query.clients.findFirst({
@@ -411,6 +538,7 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
       const [stalePublished] = await harness.db.select().from(userDocuments);
       expect(stalePublished!.sourceVersion).toBe("2");
       const resolver = createRoleAssignmentResolver(harness.db);
+      if (role.clientId === null) throw new Error("Expected a Client Role");
       const effective = await resolver.resolveEffectiveRoles({
         employmentIds: [employment.id],
         clientId: role.clientId,
@@ -480,6 +608,76 @@ describe("Role mutations through production PostgreSQL UnitOfWork", () => {
     expect(await failure(() => service.deleteRole("ROLE"))).toBeInstanceOf(RoleNotFoundError);
     expect(await facts()).toEqual(afterDelete);
   });
+
+  test.each(["delete", "assign"] as const)(
+    "when %s holds the Role first, creation and deletion cannot both commit",
+    async (first) => {
+      const role = await seedRole();
+      const { employment, user } = await seedHolder(role.id);
+      await harness.db.delete(roleAssignments);
+      const ready = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      const firstService = createCommand((tx) => ({
+        ...tx,
+        roleRepository: {
+          ...tx.roleRepository,
+          async countAssignmentsByRoleId(roleId) {
+            const count = await tx.roleRepository.countAssignmentsByRoleId(roleId);
+            ready.resolve();
+            await release.promise;
+            return count;
+          },
+          async createAssignment(input) {
+            const assignment = await tx.roleRepository.createAssignment(input);
+            ready.resolve();
+            await release.promise;
+            return assignment;
+          },
+        },
+      })).service;
+      const secondService = createCommand().service;
+      const assignment = {
+        targetType: RoleAssignmentTargetType.Employment,
+        employmentId: employment.id,
+      };
+      const firstPending =
+        first === "delete"
+          ? firstService.deleteRole(role.roleCode)
+          : firstService.createAssignment(role.roleCode, assignment);
+      let secondResult: PromiseSettledResult<unknown> | undefined;
+      let competing: Promise<unknown> | undefined;
+      try {
+        await Promise.race([ready.promise, firstPending]);
+        competing =
+          first === "delete"
+            ? secondService.createAssignment(role.roleCode, assignment)
+            : secondService.deleteRole(role.roleCode);
+        const completed = Promise.allSettled([competing]);
+        // The competing command either waits on the Role or settles while the first transaction is open.
+        await Promise.race([waitForBlocked("role"), completed]);
+        release.resolve();
+        await firstPending;
+        [secondResult] = await completed;
+      } finally {
+        release.resolve();
+        await Promise.allSettled([firstPending, competing]);
+      }
+
+      const after = await facts();
+      expect(secondResult).toEqual({
+        status: "rejected",
+        reason: expect.any(first === "delete" ? RoleNotFoundError : RoleHasAssignmentError),
+      });
+      expect(after.roles[0]?.isDelete).toBe(first === "delete");
+      expect(after.assignments).toEqual(
+        first === "delete" ? [] : [expect.objectContaining({ roleId: role.id, targetId: employment.id })],
+      );
+      expect(after.audits).toMatchObject([
+        { action: first === "delete" ? "admin.role.delete" : "admin.role.assignment.create" },
+      ]);
+      expect(after.dirty).toMatchObject(first === "delete" ? [] : [{ userId: user.id, version: "1" }]);
+    },
+  );
 
   test("organization assignment scope no-op audits intent, change and delete each increment dirty once", async () => {
     const role = await seedRole();

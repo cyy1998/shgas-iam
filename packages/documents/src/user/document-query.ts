@@ -65,6 +65,10 @@ export function createClientUserDocumentSql(document: SQLWrapper, clientCode: st
           CROSS JOIN LATERAL jsonb_array_elements(document_authorization.value->'roles')
             WITH ORDINALITY AS document_role(value, ordinality)
           WHERE document_authorization.value->>'clientCode' = ${clientCode}
+        ), '[]'::jsonb) || COALESCE((
+          SELECT jsonb_agg(global_role.value->'code' ORDER BY global_role.ordinality)
+          FROM jsonb_array_elements(document_employment.value->'globalRoles')
+            WITH ORDINALITY AS global_role(value, ordinality)
         ), '[]'::jsonb)
       ) ORDER BY document_employment.ordinality)
       FROM jsonb_array_elements(${document}->'employments')
@@ -83,9 +87,12 @@ export function projectUserDocument(input: StoredUserDocument, clientCode: strin
       organization: employment.organization,
       position: employment.position,
       responsibilities: employment.responsibilities,
-      roles: employment.clientAuthorizations
-        .filter((authorization) => authorization.clientCode === clientCode)
-        .flatMap((authorization) => authorization.roles.map((role) => role.code)),
+      roles: [
+        ...employment.clientAuthorizations
+          .filter((authorization) => authorization.clientCode === clientCode)
+          .flatMap((authorization) => authorization.roles),
+        ...(employment.globalRoles ?? []),
+      ].map((role) => role.code),
     })),
   });
 }

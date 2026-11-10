@@ -1,6 +1,6 @@
 import RolesPage from "@admin/pages/roles";
-import type { RoleDetailVo } from "@admin/services/role";
-import { ApiErrorCode, ClientStatus, RoleAssignmentTargetType } from "@iam/contracts";
+import type { RoleDetailVo, RoleSearchParams } from "@admin/services/role";
+import { ApiErrorCode, ClientStatus, RoleAssignmentTargetType, RoleType } from "@iam/contracts";
 import { ConfigProvider, Modal, message } from "antd";
 import { HttpResponse, http } from "msw";
 import type { ComponentProps } from "react";
@@ -48,6 +48,7 @@ const role: RoleDetailVo = {
   description: null,
   status: 1,
   statusText: "正常",
+  roleType: RoleType.Client,
   clientId: 1,
   isDelete: false,
   client: { id: 1, clientCode: "iam-admin", clientName: "管理端", status: ClientStatus.Enable },
@@ -71,11 +72,12 @@ beforeEach(() => {
     read.mockReset();
   });
   server.use(
-    http.get("*/rpc/:procedures", ({ params }) =>
-      HttpResponse.json(
+    http.get("*/rpc/:procedures", ({ params, request }) => {
+      const inputs = JSON.parse(new URL(request.url).searchParams.get("input") ?? "{}");
+      return HttpResponse.json(
         String(params.procedures)
           .split(",")
-          .map((procedure) => {
+          .map((procedure, index) => {
             if (procedure === "admin.client.search")
               return {
                 result: {
@@ -86,12 +88,11 @@ beforeEach(() => {
                 },
               };
             if (procedure === "admin.role.detail") {
-              reads.detail();
-              return { result: { data: role } };
+              return { result: { data: reads.detail(inputs[index]) ?? role } };
             }
             if (procedure === "admin.role.search") {
-              reads.search();
-              return { result: { data: { result: [role], total: 1 } } };
+              const result = reads.search(inputs[index]) ?? [role];
+              return { result: { data: { result, total: result.length } } };
             }
             if (procedure === "admin.role.assignments.search") {
               reads.assignments();
@@ -99,8 +100,8 @@ beforeEach(() => {
             }
             return { result: { data: { result: [], total: 0 } } };
           }),
-      ),
-    ),
+      );
+    }),
   );
 });
 afterEach(async () => {
@@ -166,6 +167,41 @@ async function editRole() {
 function profile() {
   return within(screen.getByRole("region", { name: "基本信息" }));
 }
+
+it("lists Global Roles with no Client and filters by Role type", async () => {
+  const globalRole: RoleDetailVo = {
+    ...role,
+    id: 2,
+    roleCode: "global:reviewer",
+    roleName: "全局审核员",
+    roleType: RoleType.Global,
+    clientId: null,
+    client: null,
+  };
+  reads.search.mockImplementation((query: RoleSearchParams) =>
+    query.conditions.exactConditions.roleType === RoleType.Global ? [globalRole] : [role, globalRole],
+  );
+  reads.detail.mockImplementation(({ roleCode }: { roleCode: string }) =>
+    roleCode === globalRole.roleCode ? globalRole : role,
+  );
+  const { user } = await page();
+  const globalRow = await screen.findByRole("row", { name: /全局审核员/ });
+  expect(within(globalRow).getByRole("cell", { name: "全局角色" })).toBeVisible();
+  expect(within(globalRow).getByRole("cell", { name: "无" })).toBeVisible();
+
+  await user.click(screen.getByRole("combobox", { name: "角色类型" }));
+  await user.click(await screen.findByText("全局角色", { selector: ".ant-select-item-option-content" }));
+  await waitFor(() => expect(screen.queryByText(role.roleName)).not.toBeInTheDocument());
+  expect(reads.search).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      conditions: { fuzzyConditions: {}, exactConditions: { roleType: RoleType.Global } },
+    }),
+  );
+
+  await user.click(within(screen.getByRole("row", { name: /全局审核员/ })).getByRole("button", { name: "详情" }));
+  expect(await profile().findByText("全局角色")).toBeVisible();
+  expect(profile().getByText("无")).toBeVisible();
+});
 
 describe("RolesPage mutation results through the role service", () => {
   it.each([

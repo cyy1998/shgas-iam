@@ -6,6 +6,7 @@ import {
   OrganizationResponsibilityTypeCode,
   OrganizationStatus,
   OrganizationType,
+  RoleType,
   UserStatus,
   UserType,
 } from "@iam/contracts";
@@ -122,9 +123,9 @@ test("orders current employments and Client-owned roles while preserving complet
       org(2),
     ],
     roleRows: [
-      { employmentId: 1, roleId: 3, roleCode: "beta-looking", clientCode: "alpha" },
-      { employmentId: 1, roleId: 1, roleCode: "a", clientCode: "alpha" },
-      { employmentId: 1, roleId: 2, roleCode: "alpha-looking", clientCode: "beta" },
+      { employmentId: 1, roleId: 3, roleCode: "beta-looking", roleType: RoleType.Client, clientCode: "alpha" },
+      { employmentId: 1, roleId: 1, roleCode: "a", roleType: RoleType.Client, clientCode: "alpha" },
+      { employmentId: 1, roleId: 2, roleCode: "alpha-looking", roleType: RoleType.Client, clientCode: "beta" },
     ],
   });
   const result = await builder(source).buildOne({ userId: 1, sourceVersion: "9007199254740993" });

@@ -28,9 +28,9 @@ _Avoid_: User Profile Search Document, User Profile Base, protocol payload
 _Avoid_: Organization Search Document, organization source of truth, editable organization document
 
 **Internal Role Visibility**:
-已认证 Internal Client 在用户目录查询中可以筛选和读取的角色范围，仅由属于该 Client 的角色组成；
+已认证 Internal Client 在用户目录查询中可以筛选和读取的角色范围，由该 Client 的有效 Client Role 与各任职上的有效 Global Role 组成；
 这一范围同时约束全部过滤表达式、搜索返回和精确详情，不依赖是否启用 SSO 或 SSO 的声明披露选择。
-_Avoid_: global role search, caller-selected client, response-only role filtering
+_Avoid_: cross-Client private role search, caller-selected client, response-only role filtering
 
 **Internal Directory Detail**:
 按用户或组织的公开标识精确读取的目录事实，其公开文档与同一发布版本、同一披露上下文下未裁剪字段的搜索单项一致；
@@ -254,6 +254,15 @@ _Avoid_: Open Employment, enabled user employment
 对一条 Effective Employment 生效的启用角色；其角色分配目标和角色必须启用且未删除。Position 与所属 Organization 由 Employment Integrity 保证，User 账号状态不属于该概念并由使用方单独判断。
 _Avoid_: parsed role, assigned role
 
+角色类型与应用披露边界见 [ADR-0048](docs/adr/0048-model-global-roles-without-client-ownership.md)。
+
+**Client Role**:
+归属一个 Client 的角色。成为 Effective Role 后，只有所属 Client 可以在应用侧读取该角色事实。
+
+**Global Role**:
+由 IAM 统一管理、无 Client 归属的角色。通过任职、岗位或组织分配成为 Effective Role 后，各 Client 可在各自的披露范围内读取该任职上的角色事实。
+_Avoid_: global administrator, automatic grant
+
 **HR Administrator**:
 对至少一条 Effective Employment 具有 `iam:hr-admin` Effective Role 的管理员主体；`iam:hr-admin` 是绑定 `iam-admin` Client、沿用普通 Role 生命周期的角色，不是内置或受保护角色。该角色自身只授予限定管理能力，其组织范围只从承载该 Effective Role 的 Employment 推导，其他普通 Employment 不扩大范围；与其他角色组合时权限取并集，本角色不撤销其他角色授予的能力。
 _Avoid_: full administrator, global administrator, deny-override role
@@ -383,7 +392,7 @@ Client 被明确行政停用并拒绝在线协议流量的状态；配置和既�
 _Avoid_: Client Maintenance, configuration removal, protocol reset
 
 **Client Deletion**:
-在 Client 已不存在任何未删除 Role 后软删除该 Client 的管理操作；Role 处于 Enable、Pause 或 Disable 都会阻止删除，必须先按各自生命周期处理角色分配和 Role。它不通过删除 Client 隐式级联删除角色或角色分配，也不同于可恢复的 Client Disablement。
+在 Client 名下已不存在任何未删除 Client Role 后软删除该 Client 的管理操作；所属角色处于 Enable、Pause 或 Disable 都会阻止删除，必须先按各自生命周期处理角色分配和 Role。它不通过删除 Client 隐式级联删除角色或角色分配，也不同于可恢复的 Client Disablement。
 _Avoid_: Client Disablement, implicit role cascade, enabled-only role blocker
 
 **Client Maintenance Unavailable**:
@@ -423,7 +432,7 @@ IAM 按 Client 当前披露配置及适用协议规则确定的本次主体字�
 _Avoid_: ProjectionSpec, client configuration, protocol scope, requested HTTP fields
 
 **Subject Facts**:
-按 Subject Identifier 识别、供 IAM 内部投影使用的已发布协议中性主体事实，包含基础资料、发布版本中的 Effective Employment、组织及完整路径、岗位，以及按 Client 区分的 Effective Role；无角色的有效任职仍保留，无该 Client 角色时在投影中表达空角色。它由同一主体的全部 Client Subject Projection 共同消费，不包含账号可访问性或授权决策，允许落后于源业务事实，且不承诺固定时间内完成更新；取得合法已发布事实不等于确认其与当前源事实一致。
+按 Subject Identifier 识别、供 IAM 内部投影使用的已发布协议中性主体事实，包含基础资料、发布版本中的 Effective Employment、组织及完整路径、岗位，以及每条任职上生效的 Global Role 和按 Client 区分的 Client Role；无角色的有效任职仍保留。它由同一主体的全部 Client Subject Projection 共同消费，不包含账号可访问性或授权决策，允许落后于源业务事实，且不承诺固定时间内完成更新；取得合法已发布事实不等于确认其与当前源事实一致。
 _Avoid_: User Profile DTO cache, client projection cache, session payload, legacy detail document, live aggregate fallback, cached account status
 
 **Subject Facts Publication**:
@@ -443,7 +452,7 @@ _Avoid_: profile cache field, eventual account disable, protocol-specific blackl
 _Avoid_: request-wide boolean, persistent authorization, reusable access token
 
 **Client Authorization Claim**:
-`iam:authorization` 表达指定 Client 在已发布 Subject Facts 中可见的角色事实，包括有效任职及仅属于该 Client 的有效角色，不包含其他 Client 的角色、数据库标识或授权决策。两协议实际交付时均可使用落后于源事实的已发布角色，无法取得合法 Facts 时不能省略必要声明伪装成功，接入应用解释角色对应的业务操作权限，并负责其副本的刷新。
+`iam:authorization` 表达指定 Client 在已发布 Subject Facts 中可见的角色事实，包括有效任职、该 Client 的有效 Client Role 及任职上的有效 Global Role，公开结构排除数据库标识和授权决策。两协议实际交付时均可使用落后于源事实的已发布角色，无法取得合法 Facts 时不能省略必要声明伪装成功，接入应用解释角色对应的业务操作权限，并负责其副本的刷新。
 _Avoid_: global roles, global privileges, authorization decision, guaranteed current authorization
 
 **Employment Profile Claim**:

@@ -1,6 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import { createPageQuerySchema } from "@iam/api-core/core/pagination/schema";
-import { RoleAssignmentTargetType, RoleStatus } from "@iam/contracts";
+import { GLOBAL_ROLE_PREFIX, isGlobalRoleCode, RoleAssignmentTargetType, RoleStatus, RoleType } from "@iam/contracts";
 import { insertRoleSchema, updateRoleSchema } from "@iam/db/schema";
 
 export {
@@ -22,17 +22,34 @@ export const RolePaginationQueryDtoSchema = createPageQuerySchema(
     }),
     exactConditions: z.object({
       clientCode: z.string().optional().openapi({ example: "portal" }),
+      roleType: z.enum(RoleType).optional(),
       status: z.enum(RoleStatus).optional().openapi({ example: RoleStatus.Enable }),
     }),
   }),
 ).openapi("RolePaginationQueryDto");
 
+const RoleCreateFieldsSchema = z.object(
+  insertRoleSchema.pick({ roleCode: true, roleName: true, status: true, description: true }).shape,
+);
+
 export const RoleCreateDtoSchema = z
-  .object(insertRoleSchema.omit({ clientId: true }).shape)
-  .extend({
-    clientCode: z.string().min(1).max(64).openapi({ example: "portal" }),
-  })
-  .strict()
+  .union([
+    RoleCreateFieldsSchema.extend({
+      roleType: z.literal(RoleType.Client).optional(),
+      clientCode: z.string().min(1).max(64).openapi({ example: "portal" }),
+      roleCode: RoleCreateFieldsSchema.shape.roleCode.refine(
+        (code) => !code.startsWith(GLOBAL_ROLE_PREFIX),
+        "global: 前缀仅用于全局角色",
+      ),
+    }).strict(),
+    RoleCreateFieldsSchema.extend({
+      roleType: z.literal(RoleType.Global),
+      roleCode: RoleCreateFieldsSchema.shape.roleCode.refine(
+        isGlobalRoleCode,
+        "全局角色编码必须包含 global: 前缀和非空后缀",
+      ),
+    }).strict(),
+  ])
   .openapi("RoleCreateDto");
 
 export const RoleUpdateDtoSchema = z

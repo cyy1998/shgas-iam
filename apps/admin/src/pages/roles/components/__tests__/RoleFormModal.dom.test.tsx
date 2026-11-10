@@ -52,12 +52,33 @@ async function setup() {
 }
 
 describe("RoleFormModal application prefix", () => {
+  it("switches to a Global Role, hides the selected application and adds the prefix once", async () => {
+    const { user, dialog } = await setup();
+    await user.click(dialog.getByRole("combobox", { name: "角色类型" }));
+    await user.click(await screen.findByText("全局角色", { selector: ".ant-select-item-option-content" }));
+    expect(dialog.queryByRole("combobox", { name: "所属应用" })).not.toBeInTheDocument();
+    const code = dialog.getByRole("textbox", { name: "角色编码" });
+    await user.click(code);
+    await user.paste("global:reviewer");
+    await user.click(dialog.getByRole("button", { name: "确 定" }));
+    await waitFor(() =>
+      expect(createRole).toHaveBeenCalledWith({
+        roleType: "global",
+        roleCode: "global:reviewer",
+        roleName: "管理员",
+        status: 1,
+        description: null,
+      }),
+    );
+  });
+
   it("submits one application prefix and preserves the role name", async () => {
     const { user, dialog, onSuccess } = await setup();
     await user.type(dialog.getByRole("textbox", { name: "角色编码" }), "admin");
     await user.click(dialog.getByRole("button", { name: "确 定" }));
     await waitFor(() =>
       expect(createRole).toHaveBeenCalledWith({
+        roleType: "client",
         clientCode: "tender",
         roleCode: "tender:admin",
         roleName: "管理员",

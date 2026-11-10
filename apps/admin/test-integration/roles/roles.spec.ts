@@ -1,6 +1,6 @@
 // Browser Integration uses a mocked backend; this is not a full-system journey.
 import type { RoleDetailVo, RoleUpdateInput } from "@admin/services/role";
-import { ClientStatus, RoleStatus } from "@iam/contracts";
+import { ClientStatus, RoleStatus, RoleType } from "@iam/contracts";
 import { expect, test } from "@playwright/test";
 import { fulfillJson, fulfillTrpc, mockAdminApi, parseTrpcBatchInput } from "../fixtures";
 
@@ -13,6 +13,7 @@ test("edits a role inline alongside its assignments and preserves drafts across 
     description: "原角色描述",
     status: RoleStatus.Enable,
     statusText: "正常",
+    roleType: RoleType.Client,
     clientId: 1,
     isDelete: false,
     client: { id: 1, clientCode: "iam-admin", clientName: "管理端", status: ClientStatus.Enable },

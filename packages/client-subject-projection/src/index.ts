@@ -65,6 +65,7 @@ export interface SubjectFactsEmploymentBase {
   readonly organization: SubjectFactsOrganization;
   readonly position: SubjectPosition;
   readonly clientAuthorizations: readonly SubjectFactsClientAuthorization[];
+  readonly globalRoles?: readonly SubjectFactsRole[];
 }
 
 export interface SubjectFactsSnapshotBase {

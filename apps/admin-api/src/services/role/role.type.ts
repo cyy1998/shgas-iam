@@ -1,5 +1,5 @@
 import type { z } from "@hono/zod-openapi";
-import type { RoleAssignmentTargetType, RoleStatus } from "@iam/contracts";
+import type { RoleAssignmentTargetType, RoleStatus, RoleType } from "@iam/contracts";
 import type { RoleAssignmentDto } from "@iam/domain/role";
 import type {
   RoleAssignmentCreateDtoSchema,
@@ -30,7 +30,8 @@ export type AdminRoleAssignmentRecord = Omit<RoleAssignmentDto, "target">;
 export interface AdminRoleCreateRecord {
   roleCode: string;
   roleName: string;
-  clientId: number;
+  roleType: RoleType;
+  clientId: number | null;
   status?: RoleStatus;
   description?: string | null;
 }

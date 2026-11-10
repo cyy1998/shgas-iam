@@ -1,21 +1,34 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 import { createInternalUserQueryResource } from "@api/composition/internal-user-query";
 import { createInternalAuthenticationHandler } from "@api/middlewares/internal-client-authentication";
 import { createInternalMiddlewares } from "@api/routes/internal/_middleware";
 import { createUserHandlers } from "@api/routes/internal/user/user.handlers";
 import { createUserRoute } from "@api/routes/internal/user/user.index";
+import { createClientRepository } from "@api/services/client/client.repository";
+import { createClientService } from "@api/services/client/client.service";
 import { createUserDocumentSearchAdapter } from "@api/services/user-document-search/user-document-search.adapter";
 import createApp from "@iam/api-core/core/create-app";
-import type { RebuildUserDocumentJobPayload, UserDocumentOutboxJobPayload } from "@iam/contracts";
+import type { RebuildUserDocumentJobPayload } from "@iam/contracts";
 import {
   ClientStatus,
   OrganizationLevel,
   OrganizationType,
   UserDocumentSchema,
+  UserDocumentWorkStatus,
   UserStatus,
   UserType,
 } from "@iam/contracts";
-import { userDocuments, users } from "@iam/db/schema";
+import {
+  clients,
+  employments,
+  organizationClosures,
+  organizations,
+  positions,
+  userDocumentOutboxEntries,
+  userDocuments,
+  users,
+} from "@iam/db/schema";
 import {
   createInternalUserDocumentQueryRepository,
   createInternalUserDocumentQueryService,
@@ -27,6 +40,7 @@ import { createUserDocumentInvalidation } from "@iam/documents/user/producer";
 import {
   createSubjectFactsReader,
   createSubjectFactsRedisCache,
+  createSubjectFactsRedisInspector,
   createSubjectFactsRedisPublisher,
 } from "@iam/documents/user/subject-facts";
 import {
@@ -35,6 +49,7 @@ import {
   createUserDocumentUpdateProcessor,
 } from "@iam/documents/user/worker";
 import type { GenericClientRuntimeDto } from "@iam/domain/client";
+import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
 import { createUnitOfWork } from "@iam/unit-of-work";
 import { eq } from "drizzle-orm";
 import Redis from "ioredis";
@@ -44,17 +59,18 @@ import { closeApiRedisConnection, ownApiTestExecutor, resetApiRedisTestDatabase 
 import { type ApiPostgresTestHarness, createApiPostgresTestHarness } from "../support/postgres-test-harness";
 
 const now = new Date("2026-10-26T10:00:00Z");
+const adminRoot = fileURLToPath(new URL("../../../admin-api/", import.meta.url));
 let pg: ApiPostgresTestHarness;
 let query: ReturnType<typeof createInternalUserQueryResource>;
-let app: ReturnType<typeof createUserApp>;
+let request: ReturnType<typeof createUserRequest>;
 beforeAll(async () => {
   pg = await createApiPostgresTestHarness();
   query = createInternalUserQueryResource({ databaseUrl: pg.databaseUrl });
-  app = createUserApp();
+  request = createUserRequest();
 });
 beforeEach(async () => {
   await pg.reset();
-  await pg.sql`TRUNCATE user_document, user_document_rebuild_state, user_document_outbox`;
+  await pg.sql`TRUNCATE position, role_assignment RESTART IDENTITY`;
 });
 afterAll(async () => {
   await query?.close();
@@ -264,6 +280,11 @@ test("rejects malformed query controls and private or non-field selections throu
     { page: null },
     { filter: null },
     { filter: {} },
+    {
+      filter: {
+        exists: { path: "employments.globalRoles", where: { field: "code", op: "eq", value: "global:reviewer" } },
+      },
+    },
     { select: [] },
     { select: null },
     { select: "name" },
@@ -275,6 +296,7 @@ test("rejects malformed query controls and private or non-field selections throu
       "sourceVersion",
       "employments.clientAuthorizations",
       "employments.clientAuthorizations.clientCode",
+      "employments.globalRoles",
       "employments[0]",
       "employments.0.roles",
       "employments.roles[0:1]",
@@ -366,18 +388,16 @@ test("select preserves all employments, paths, nulls and empty arrays after Clie
   });
 });
 
-test("source commit, durable Outbox, formal processor, Redis Facts and authenticated HTTP converge to one document", async () => {
+function createPublicationFixture() {
   const redisUrl = process.env.IAM_API_TEST_REDIS_URL;
   if (!redisUrl) throw new Error("IAM_API_TEST_REDIS_URL is required");
   const redis = new Redis(redisUrl, { maxRetriesPerRequest: 0, retryStrategy: () => null });
   const close = ownApiTestExecutor(() => closeApiRedisConnection(redis));
   const logger = { info() {}, warn() {}, error() {} };
-  const outbox: UserDocumentOutboxJobPayload[] = [],
-    rebuilds: RebuildUserDocumentJobPayload[] = [];
+  const rebuilds: RebuildUserDocumentJobPayload[] = [];
   const jobProducer = {
-    async enqueueOutboxEntries(payloads: UserDocumentOutboxJobPayload[]) {
-      outbox.push(...payloads);
-      return { enqueued: payloads.length, jobIds: [] };
+    async enqueueOutboxEntries() {
+      return { enqueued: 0, jobIds: [] };
     },
     async enqueueRebuildJobs(payloads: RebuildUserDocumentJobPayload[]) {
       rebuilds.push(...payloads);
@@ -405,13 +425,23 @@ test("source commit, durable Outbox, formal processor, Redis Facts and authentic
     logger,
     batchSize: 10,
   });
+  async function drain() {
+    const pending = await pg.db
+      .select({ outboxId: userDocumentOutboxEntries.id })
+      .from(userDocumentOutboxEntries)
+      .where(eq(userDocumentOutboxEntries.status, UserDocumentWorkStatus.Pending))
+      .orderBy(userDocumentOutboxEntries.id);
+    for (const job of pending) await processor.processOutbox(job);
+    for (const job of rebuilds.splice(0)) await processor.process(job);
+  }
+  return { redis, close, uow, publisher, cache, drain };
+}
+
+test("source commit, durable Outbox, formal processor, Redis Facts and authenticated HTTP converge to one document", async () => {
+  const { close, uow, publisher, cache, drain } = createPublicationFixture();
   const authority = createSubjectAccessAuthorityRepository({ db: pg.db, subjectFactsPublisher: publisher });
   const facts = createSubjectFactsReader({ db: pg.db, cache });
   const subject = publication(1).subjectIdentifier;
-  async function drain() {
-    for (const job of outbox.splice(0)) await processor.processOutbox(job);
-    for (const job of rebuilds.splice(0)) await processor.process(job);
-  }
   try {
     await uow.transaction(async (tx) => {
       await tx.db
@@ -449,6 +479,141 @@ test("source commit, durable Outbox, formal processor, Redis Facts and authentic
   }
 });
 
+test("Admin role changes publish employment-scoped visibility to both authenticated Clients", async () => {
+  const { redis, close, drain } = createPublicationFixture();
+  const { subjectIdentifier } = publication(1);
+  const globalRole = "global:reviewer";
+  const inspector = createSubjectFactsRedisInspector(redis);
+  const clientService = createClientService({ clientRepository: createClientRepository(pg.db), redis });
+  const request = createUserRequest(clientService.getClientBySecret);
+  const searchPage = (client: string, filter: unknown, page = 1) =>
+    request("/search-dsl", { filter, paginate: true, page, pageSize: 1, select: ["employments.roles"] }, client);
+  const visible = [
+    {
+      client: "alpha",
+      own: "alpha:reader",
+      hidden: "beta:editor",
+      active: [["alpha:reader", globalRole], []],
+      revoked: [["alpha:reader"], []],
+    },
+    {
+      client: "beta",
+      own: "beta:editor",
+      hidden: "alpha:reader",
+      active: [[globalRole], ["beta:editor"]],
+      revoked: [[], ["beta:editor"]],
+    },
+  ];
+
+  async function readRedisFacts() {
+    const [cached] = await inspector.inspectMany([subjectIdentifier]);
+    if (cached?.status !== "valid" || cached.record.kind !== "document")
+      throw new Error("Expected published Redis Facts");
+    return cached.record;
+  }
+
+  try {
+    await pg.db.insert(clients).values(
+      visible.map(({ client }) => ({
+        clientCode: client,
+        clientName: client,
+        clientSecret: client,
+        extAttributes: {},
+      })),
+    );
+    await pg.db.insert(users).values({ id: 1, subjectIdentifier, username: "user-1", name: "Role holder" });
+    await pg.db.insert(organizations).values({
+      id: 1,
+      orgCode: "ORG",
+      orgName: "Organization",
+      path: "/1",
+      level: OrganizationLevel.One,
+      orgType: OrganizationType.Department,
+    });
+    await pg.db.insert(organizationClosures).values({ ancestorId: 1, descendantId: 1, depth: 0 });
+    await pg.db.insert(positions).values([
+      { id: 1, posCode: "PRIMARY", posName: "Primary" },
+      { id: 2, posCode: "SECONDARY", posName: "Secondary" },
+    ]);
+    const startTime = new Date("2026-10-01T00:00:00Z");
+    await pg.db.insert(employments).values([
+      { id: 1, userId: 1, orgId: 1, posId: 1, startTime, isPrimary: true },
+      { id: 2, userId: 1, orgId: 1, posId: 2, startTime },
+    ]);
+
+    await runAdminRoleWrite("grant", "1", "2");
+    const unpublished = await request("/user-1");
+    expect(unpublished.status).toBe(404);
+    await drain();
+    const published = await readRedisFacts();
+    expect(published.facts.employments.map((employment) => employment.globalRoles)).toEqual([
+      [{ code: globalRole }],
+      undefined,
+    ]);
+
+    for (const { client, own, hidden, active } of visible) {
+      const employments = active.map((roles) => ({ roles }));
+      const detail = await request("/user-1", undefined, client);
+      expect(detail).toMatchObject({ status: 200, body: { data: { employments } } });
+      const globalMatch = await searchPage(client, role(globalRole));
+      expect(globalMatch.status).toBe(200);
+      expect(globalMatch.body.data).toEqual({ items: [{ employments }], total: 1, page: 1, pageSize: 1 });
+      const emptyPage = await searchPage(client, role(globalRole), 2);
+      expect(emptyPage.body.data).toEqual({ items: [], total: 1, page: 2, pageSize: 1 });
+      const ownMatch = await searchPage(client, role(own));
+      expect(ownMatch.body.data).toEqual(globalMatch.body.data);
+      const hiddenMatch = await searchPage(client, role(hidden));
+      expect(hiddenMatch.body.data).toEqual({ items: [], total: 0, page: 1, pageSize: 1 });
+      const together = await searchPage(client, {
+        exists: { path: "employments", where: { field: "roles", op: "containsAll", value: [globalRole, own] } },
+      });
+      expect(together.body.data.total).toBe(client === "alpha" ? 1 : 0);
+    }
+
+    await runAdminRoleWrite("disable");
+    const stillPublished = await searchPage("alpha", role(globalRole));
+    expect(stillPublished.body.data.total).toBe(1);
+    await drain();
+    const republished = await readRedisFacts();
+    expect(BigInt(republished.sourceVersion)).toBeGreaterThan(BigInt(published.sourceVersion));
+    expect(republished.facts.employments.map((employment) => employment.globalRoles)).toEqual([undefined, undefined]);
+
+    for (const { client, own, revoked } of visible) {
+      const employments = revoked.map((roles) => ({ roles }));
+      const detail = await request("/user-1", undefined, client);
+      expect(detail).toMatchObject({ status: 200, body: { data: { employments } } });
+      const globalMatch = await searchPage(client, role(globalRole));
+      expect(globalMatch.body.data).toEqual({ items: [], total: 0, page: 1, pageSize: 1 });
+      const ownMatch = await searchPage(client, role(own));
+      expect(ownMatch.body.data).toEqual({ items: [{ employments }], total: 1, page: 1, pageSize: 1 });
+    }
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+async function runAdminRoleWrite(...args: string[]) {
+  await runProcessCommandSmoke({
+    label: "Admin role writes for User Document",
+    start: () =>
+      spawnOwnedProcessTree({
+        executable: process.execPath,
+        args: [
+          "--no-env-file",
+          "run",
+          "test-integration/role/user-document-role-writes.fixture.ts",
+          now.toISOString(),
+          ...args,
+        ],
+        cwd: adminRoot,
+        env: { ...process.env, NODE_ENV: "test", IAM_ADMIN_API_TEST_DATABASE_URL: pg.databaseUrl },
+      }),
+    expectedExitCode: 0,
+    completionTimeoutMs: 10_000,
+    cleanupTimeoutMs: 5_000,
+  });
+}
+
 test("authenticated Client controls both role matching and detail serialization", async () => {
   const row = publication(1);
   const organization = {
@@ -477,10 +642,14 @@ test("authenticated Client controls both role matching and detail serialization"
           { clientCode: "alpha", roles: [{ code: "beta-looking" }] },
           { clientCode: "beta", roles: [{ code: "alpha-looking" }] },
         ],
+        globalRoles: [{ code: "global:reviewer" }],
       },
     ],
   };
   await pg.db.insert(userDocuments).values({ ...row, document });
+  const shared = await request("/search-dsl", { paginate: true, filter: role("global:reviewer") });
+  expect(shared.status).toBe(200);
+  expect(shared.body.data.total).toBe(1);
   const own = await search(role("beta-looking"), "alpha");
   const other = await search(role("alpha-looking"), "alpha");
   const detail = await request("/user-1", undefined, "alpha", "beta");
@@ -488,11 +657,12 @@ test("authenticated Client controls both role matching and detail serialization"
   expect(own.body.data.items).toHaveLength(1);
   expect(other.body.data.items).toEqual([]);
   expect(detail.body.data).toEqual(own.body.data.items[0]);
-  expect(detail.body.data.employments[0].roles).toEqual(["beta-looking"]);
+  expect(detail.body.data.employments[0].roles).toEqual(["beta-looking", "global:reviewer"]);
   expect(JSON.stringify(detail.body)).not.toContain("clientAuthorizations");
+  expect(JSON.stringify(detail.body)).not.toContain("globalRoles");
   expect(JSON.stringify(detail.body)).not.toContain("sourceVersion");
   const opposite = await request("/user-1", undefined, "beta");
-  expect(opposite.body.data.employments[0].roles).toEqual(["alpha-looking"]);
+  expect(opposite.body.data.employments[0].roles).toEqual(["alpha-looking", "global:reviewer"]);
   const control = await request("/search-dsl", { filter: role("alpha-looking"), clientCode: "beta" });
   const internal = await search({
     exists: { path: "employments", where: { field: "clientAuthorizations.clientCode", op: "eq", value: "beta" } },
@@ -521,6 +691,7 @@ test("authenticated Client controls both role matching and detail serialization"
         filter: {
           and: [
             role(visible),
+            role("global:reviewer"),
             { not: role(secret === "alpha" ? "alpha-looking" : "beta-looking") },
             { or: [role(visible), { field: "username", op: "eq", value: "absent" }] },
           ],
@@ -531,7 +702,7 @@ test("authenticated Client controls both role matching and detail serialization"
     );
     expect(combined.status).toBe(200);
     expect(combined.body.data).toEqual({
-      items: [{ employments: [{ roles: [visible] }] }],
+      items: [{ employments: [{ roles: [visible, "global:reviewer"] }] }],
       total: 1,
       page: 1,
       pageSize: 50,
@@ -666,7 +837,7 @@ function publication(id: number, status = UserStatus.Enable) {
 function role(code: string) {
   return { exists: { path: "employments", where: { field: "roles", op: "containsAny", value: [code] } } };
 }
-function createUserApp() {
+function createUserRequest(getClientBySecret = getFixtureClientBySecret) {
   const search = createUserDocumentSearchService({ documentRepository: createUserDocumentSearchRepository(query.db) });
   const handlers = createUserHandlers({
     registerPurveyorContact: { execute: async () => true },
@@ -675,46 +846,45 @@ function createUserApp() {
       documentRepository: createInternalUserDocumentQueryRepository(query.db),
     }),
   });
-  return createApp(appConfig, {
+  const app = createApp(appConfig, {
     env: { NODE_ENV: "test" },
     logger: pino({ enabled: false }),
     routes: { "./src/routes/internal/user/user.index.ts": { default: createUserRoute(handlers) } },
     middlewares: {
       "./src/routes/internal/_middleware.ts": {
         default: createInternalMiddlewares({
-          internalAuthenticationHandler: createInternalAuthenticationHandler({
-            getClientBySecret: async (secret): Promise<GenericClientRuntimeDto | null> =>
-              ["alpha", "beta"].includes(secret)
-                ? {
-                    id: secret === "alpha" ? 1 : 2,
-                    clientCode: secret,
-                    clientName: secret,
-                    clientSecret: secret,
-                    status: ClientStatus.Enable,
-                    isDelete: false,
-                    description: null,
-                    extAttributes: {},
-                    url: null,
-                    createTime: now,
-                    updateTime: now,
-                  }
-                : null,
-          }),
+          internalAuthenticationHandler: createInternalAuthenticationHandler({ getClientBySecret }),
         }),
       },
     },
   });
+  return async (path: string, body?: unknown, secret = "alpha", claimedClient = secret) => {
+    const headers: Record<string, string> = { "content-type": "application/json", Client: claimedClient };
+    if (secret) headers.apikey = secret;
+    const response = await app.request(`http://localhost/internal/users${path}`, {
+      method: body === undefined ? "GET" : "POST",
+      headers,
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    return { status: response.status, body: await response.json() };
+  };
+}
+async function getFixtureClientBySecret(secret: string): Promise<GenericClientRuntimeDto | null> {
+  if (!["alpha", "beta"].includes(secret)) return null;
+  return {
+    id: secret === "alpha" ? 1 : 2,
+    clientCode: secret,
+    clientName: secret,
+    clientSecret: secret,
+    status: ClientStatus.Enable,
+    isDelete: false,
+    description: null,
+    extAttributes: {},
+    url: null,
+    createTime: now,
+    updateTime: now,
+  };
 }
 async function search(filter: unknown, secret = "alpha") {
   return await request("/search-dsl", { filter, select: Object.keys(UserDocumentSchema.shape) }, secret);
-}
-async function request(path: string, body?: unknown, secret = "alpha", claimedClient = secret) {
-  const headers: Record<string, string> = { "content-type": "application/json", Client: claimedClient };
-  if (secret) headers.apikey = secret;
-  const response = await app.request(`http://localhost/internal/users${path}`, {
-    method: body === undefined ? "GET" : "POST",
-    headers,
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
-  return { status: response.status, body: await response.json() };
 }

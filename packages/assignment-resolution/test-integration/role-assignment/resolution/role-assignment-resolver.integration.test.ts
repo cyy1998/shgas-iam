@@ -7,9 +7,10 @@ import {
   PositionStatus,
   RoleAssignmentTargetType,
   RoleStatus,
+  RoleType,
 } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
-import { employments, organizationClosures, organizations, positions, roles } from "@iam/db/schema";
+import { clients, employments, organizationClosures, organizations, positions, roles } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { eq, inArray } from "drizzle-orm";
 import type { RoleAssignmentResolver } from "../../../src/role-assignment/index.ts";
@@ -22,6 +23,10 @@ let resolver: RoleAssignmentResolver;
 
 beforeAll(async () => {
   harness = await createPostgresTestHarness();
+  await harness.db.insert(clients).values([
+    { id: 1, clientCode: "client-one", clientName: "Client one", clientSecret: "synthetic", extAttributes: {} },
+    { id: 2, clientCode: "client-two", clientName: "Client two", clientSecret: "synthetic", extAttributes: {} },
+  ]);
   resolver = createRoleAssignmentResolver(harness.db);
 });
 
@@ -86,6 +91,7 @@ describe("resolveEffectiveRoles", () => {
         activeRole({ id: 200, roleCode: "client-one-zeta", clientId: 1 }),
         activeRole({ id: 201, roleCode: "client-one-alpha", clientId: 1 }),
         activeRole({ id: 202, roleCode: "client-two", clientId: 2 }),
+        { id: 203, roleCode: "global:reviewer", roleName: "Reviewer", roleType: RoleType.Global },
       ]);
     await harness!.db
       .insert(roleAssignments)
@@ -93,11 +99,14 @@ describe("resolveEffectiveRoles", () => {
         assignment(200, RoleAssignmentTargetType.Employment, 100),
         assignment(201, RoleAssignmentTargetType.Position, 20),
         assignment(202, RoleAssignmentTargetType.Organization, 10, true),
+        assignment(203, RoleAssignmentTargetType.Position, 20),
       ]);
 
+    const unfiltered = await resolver.resolveEffectiveRoles({ employmentIds: [100] });
     const clientOne = await resolver.resolveEffectiveRoles({ employmentIds: [100], clientId: 1 });
     const clientTwo = await resolver.resolveEffectiveRoles({ employmentIds: [100], clientId: 2 });
 
+    expect(unfiltered.get(100)).toContainEqual({ id: 203, roleCode: "global:reviewer" });
     expect([...clientOne.entries()]).toEqual([
       [
         100,

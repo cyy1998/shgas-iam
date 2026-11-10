@@ -15,6 +15,8 @@ import {
   SubjectClaim,
 } from "@iam/contracts";
 import { CustomSsoManagedFailure } from "@iam/custom-sso";
+import { readDocumentFactsRecord } from "@iam/documents/user/document";
+import { createSubjectFactsRedisCache } from "@iam/documents/user/subject-facts";
 import { SubjectAccessUnavailableError } from "@iam/subject-access";
 import Redis from "ioredis";
 import { cleanupAfterFixtureFailure, closeFixtureResources } from "../oidc/oidc.fixture";
@@ -1121,7 +1123,7 @@ test.each(["", "#/djDesk/orgStruct?tab=1"])(
   },
 );
 
-test("Custom SSO exchange and existing Token deliver client-scoped role authorization", async () => {
+test("Custom SSO delivers published global and Client roles through V4 when currently disclosed", async () => {
   const employment = {
     isPrimary: true,
     organization: {
@@ -1144,31 +1146,49 @@ test("Custom SSO exchange and existing Token deliver client-scoped role authoriz
     },
   ];
   const secondaryEmployment = { ...employment, isPrimary: false, position: { code: "secondary", name: "副岗" } };
-  const f = await businessFixture(30, undefined, 45, {
-    async read(subjectIdentifier) {
-      return {
-        subjectIdentifier,
-        sourceVersion: "1",
+  const redisUrl = process.env.IAM_API_TEST_REDIS_URL;
+  if (!redisUrl) throw new Error("IAM_API_TEST_REDIS_URL is required");
+  const resources: Array<() => unknown | Promise<unknown>> = [];
+  const close = ownApiTestExecutor(() => closeFixtureResources(resources));
+  try {
+    const redis = new Redis(redisUrl);
+    resources.push(() => closeApiRedisConnection(redis));
+    const cache = createSubjectFactsRedisCache(redis);
+    const f = await businessFixture(30, undefined, 45, {
+      async read(subjectIdentifier) {
+        const published = readDocumentFactsRecord(await cache.read(subjectIdentifier));
+        return published.kind === "document" ? published.facts : null;
+      },
+    });
+    resources.push(f.close);
+    await cache.publish({
+      kind: "document",
+      userId: 1001,
+      schemaVersion: 1,
+      subjectIdentifier: f.subjectIdentifier,
+      publishedAt: new Date().toISOString(),
+      sourceVersion: "1",
+      facts: {
         profile: { username: "published", name: "已发布角色", phone: null },
         employments: [
           {
             ...employment,
             responsibilities,
             clientAuthorizations: [
-              { clientCode: "app", roles: [{ code: "viewer" }] },
+              { clientCode: f.businessClientCode, roles: [{ code: "viewer" }] },
               { clientCode: "other", roles: [{ code: "operator" }] },
             ],
+            globalRoles: [{ code: "global:reviewer" }, { code: "global:shared" }],
           },
           {
             ...secondaryEmployment,
             responsibilities: [],
             clientAuthorizations: [{ clientCode: "other", roles: [{ code: "app:misleading" }] }],
+            globalRoles: [{ code: "global:shared" }],
           },
         ],
-      };
-    },
-  });
-  try {
+      },
+    });
     const client = f.getClient();
     if (client.ssoConfig?.protocol !== ClientSsoProtocol.CustomSso) throw new Error("Expected Custom Client");
     f.setClient({
@@ -1192,10 +1212,10 @@ test("Custom SSO exchange and existing Token deliver client-scoped role authoriz
       },
       authorization: {
         employments: [
-          { ...employment, roles: ["viewer"] },
-          { ...secondaryEmployment, roles: [] },
+          { ...employment, roles: ["global:reviewer", "global:shared", "viewer"] },
+          { ...secondaryEmployment, roles: ["global:shared"] },
         ],
-        roles: ["viewer"],
+        roles: ["global:reviewer", "global:shared", "viewer"],
       },
     };
     expect(data.subject).toEqual(expected);
@@ -1203,10 +1223,31 @@ test("Custom SSO exchange and existing Token deliver client-scoped role authoriz
     const info = await f.use(data.sid);
     expect(info.status).toBe(200);
     expect((await info.json()).data).toEqual(expected);
+    const authz = await f.use(data.sid, f.businessClientCode, true);
+    expect(authz.status).toBe(200);
+    expect(JSON.parse(Buffer.from(authz.headers.get("X-User-Info")!, "base64").toString())).toEqual({
+      version: 1,
+      subjectIdentifier: f.subjectIdentifier,
+    });
+    f.setClient({
+      ...client,
+      ssoConfig: {
+        ...client.ssoConfig,
+        subjectClaims: [SubjectClaim.SubjectIdentifier, SubjectClaim.ProfileEmployments],
+      },
+    });
+    const trimmed = await f.use(data.sid);
+    expect(trimmed.status).toBe(200);
+    expect((await trimmed.json()).data).toEqual({
+      version: 4,
+      subjectIdentifier: f.subjectIdentifier,
+      profile: expected.profile,
+    });
     expect(await f.codes.inspectToken(data.sid)).toEqual(originalToken);
-  } finally {
-    await f.close();
+  } catch (failure) {
+    await cleanupAfterFixtureFailure(failure, close);
   }
+  await close();
 });
 
 test("SSO disablement pauses Token use and re-enablement restores the same Token", async () => {

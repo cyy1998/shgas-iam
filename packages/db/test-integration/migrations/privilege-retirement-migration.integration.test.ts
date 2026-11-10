@@ -74,7 +74,10 @@ async function retainedFacts() {
     closure: [...(await h.sql`SELECT * FROM organization_closure ORDER BY ancestor_id,descendant_id`)],
     positions: [...(await h.sql`SELECT * FROM position ORDER BY id`)],
     employments: [...(await h.sql`SELECT * FROM employment ORDER BY id`)],
-    roles: [...(await h.sql`SELECT * FROM role ORDER BY id`)],
+    roles: [
+      ...(await h.sql`SELECT id, role_code, role_name, client_id, status, description, is_delete, create_time, update_time
+      FROM role ORDER BY id`),
+    ],
     assignments: [...(await h.sql`SELECT * FROM role_assignment ORDER BY id`)],
     delegations: [...(await h.sql`SELECT * FROM client_delegation ORDER BY id`)],
     audits: [...(await h.sql`SELECT * FROM audit_log ORDER BY id`)],
@@ -105,6 +108,10 @@ test("formal retirement removes the populated permission source while preserving
   const journal = await h.sql`SELECT * FROM __drizzle_migrations ORDER BY id`;
   expect(inventory).toEqual({ privilege: null, role_privilege: null, privilege_index: null });
   expect(after).toEqual(before);
+  expect([...(await h.sql`SELECT role_type FROM role ORDER BY id`)]).toEqual([
+    { role_type: "client" },
+    { role_type: "client" },
+  ]);
   expect(journal.slice(0, previousJournal.length)).toEqual(previousJournal);
   expect(journal.filter((entry) => entry.name === retirement)).toHaveLength(1);
 

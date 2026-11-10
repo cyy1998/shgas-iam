@@ -6,7 +6,13 @@ import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
 import { deleteRole, type RoleVo, searchRoles, updateRoleStatus } from "@admin/services/role";
 import { PlusOutlined } from "@ant-design/icons";
 import { type ActionType, PageContainer, type ProColumns, ProFormSelect, ProTable } from "@ant-design/pro-components";
-import { getRoleStatusOptions, type RoleStatus } from "@iam/contracts";
+import {
+  getRoleStatusOptions,
+  type RoleStatus,
+  type RoleType,
+  roleTypeOptions,
+  roleTypeToString,
+} from "@iam/contracts";
 import { Alert, Button, Dropdown, Input, Modal, message, Select } from "antd";
 import { useRef, useState } from "react";
 
@@ -16,7 +22,12 @@ export default function RolesPage() {
   const [drawerRoleCode, setDrawerRoleCode] = useState<string | null>(null);
   const [drawerEditing, setDrawerEditing] = useState(false);
   const [searchText, setSearchText] = useState("");
-  const [filters, setFilters] = useState<{ text?: string; clientCode?: string; status?: RoleStatus }>({});
+  const [filters, setFilters] = useState<{
+    text?: string;
+    clientCode?: string;
+    roleType?: RoleType;
+    status?: RoleStatus;
+  }>({});
 
   const [committedWarning, setCommittedWarning] = useState<string>();
   const [detailReloadSeq, setDetailReloadSeq] = useState(0);
@@ -82,6 +93,13 @@ export default function RolesPage() {
     { title: "角色编码", dataIndex: "roleCode", width: 150, search: false },
     { title: "角色名称", dataIndex: "roleName", width: 160, search: false },
     {
+      title: "角色类型",
+      dataIndex: "roleType",
+      width: 100,
+      search: false,
+      renderText: (value: RoleType) => roleTypeToString[value],
+    },
+    {
       title: "所属应用",
       dataIndex: "clientCode",
       width: 180,
@@ -92,7 +110,7 @@ export default function RolesPage() {
         placeholder: "输入应用名称或编码搜索",
         showSearch: true,
       },
-      render: (_, row) => `${row.client.clientName}（${row.client.clientCode}）`,
+      render: (_, row) => (row.client ? `${row.client.clientName}（${row.client.clientCode}）` : "无"),
     },
     {
       title: "状态",
@@ -201,6 +219,14 @@ export default function RolesPage() {
                 }}
               />
               <Select
+                aria-label="角色类型"
+                placeholder="全部类型"
+                allowClear
+                value={filters.roleType}
+                options={roleTypeOptions}
+                onChange={(roleType) => setFilters((current) => ({ ...current, roleType }))}
+              />
+              <Select
                 aria-label="角色状态"
                 placeholder="全部状态"
                 allowClear
@@ -222,7 +248,7 @@ export default function RolesPage() {
             )}
           </div>
         }
-        scroll={{ x: 1040 }}
+        scroll={{ x: 1140 }}
         pagination={{ defaultPageSize: 20, hideOnSinglePage: true, showSizeChanger: true }}
         request={async (params) => {
           try {
@@ -231,12 +257,14 @@ export default function RolesPage() {
               pageSize = 20,
               text,
               clientCode,
+              roleType,
               status,
             } = params as {
               current?: number;
               pageSize?: number;
               text?: string;
               clientCode?: string;
+              roleType?: RoleType;
               status?: string | number;
             };
             const statusValue = status === undefined ? undefined : (Number(status) as RoleStatus);
@@ -247,6 +275,7 @@ export default function RolesPage() {
                 fuzzyConditions: text ? { text } : {},
                 exactConditions: {
                   clientCode: clientCode || undefined,
+                  roleType,
                   status: Number.isNaN(statusValue) ? undefined : statusValue,
                 },
               },

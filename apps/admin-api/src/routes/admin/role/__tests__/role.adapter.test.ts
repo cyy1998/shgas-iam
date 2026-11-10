@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { createRoleAdapter } from "@admin-api/routes/admin/role/role.adapter";
 import { createRoleRoute } from "@admin-api/routes/admin/role/role.index";
 import { createErrorHandler } from "@iam/api-core/middlewares";
-import { RoleAssignmentTargetType, RoleStatus } from "@iam/contracts";
+import { RoleAssignmentTargetType, RoleStatus, RoleType } from "@iam/contracts";
 import { RoleCodeExistsError, RoleNotFoundError } from "@iam/domain/role";
 import { BadRequestError } from "@iam/runtime/errors";
 import type { Context } from "hono";
@@ -19,6 +19,7 @@ function roleDto() {
     id: 1,
     roleCode: "portal-admin",
     roleName: "Portal Admin",
+    roleType: RoleType.Client,
     clientId: 10,
     status: RoleStatus.Enable,
     description: null,

@@ -10,6 +10,7 @@ import { createPostgresTestHarness, type PostgresTestHarness } from "../support/
 
 const migrations = new URL("../../src/migrations/", import.meta.url);
 const baselineEnd = "20261026100403_user_document_storage";
+const targetIndexMigration = "20261102135248_organization_responsibility_target_index";
 let harness: PostgresTestHarness;
 let baselineDirectory: string | undefined;
 
@@ -91,7 +92,7 @@ test("the target index migration preserves all assignment lifecycles and earlier
   const journalAfter = await harness.sql`SELECT * FROM __drizzle_migrations ORDER BY id`;
   expect([...assignmentsAfter]).toEqual([...assignments]);
   expect([...journalAfter].slice(0, journal.length)).toEqual([...journal]);
-  expect(journalAfter.length).toBe(journal.length + 1);
+  expect(journalAfter.slice(journal.length).filter((entry) => entry.name === targetIndexMigration)).toHaveLength(1);
 
   await migrateCurrent();
   await expectTargetIndex();

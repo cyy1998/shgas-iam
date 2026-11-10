@@ -1,4 +1,5 @@
 import type { EffectiveRole } from "@iam/assignment-resolution/role-assignment";
+import { RoleType } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import type { Employment, Organization, User } from "@iam/db/schema";
 import { clients, employments, organizationClosures, organizations, positions, roles, users } from "@iam/db/schema";
@@ -17,14 +18,14 @@ export type UserDocumentBuildOrgPathRow = Pick<
 
 export type UserDocumentBuildPosition = typeof positions.$inferSelect;
 
-export interface UserDocumentBuildRoleRow {
+interface ResolvedUserDocumentBuildRoleRow {
   employmentId: number;
   roleId: number;
   roleCode: string;
-  clientCode: string;
 }
 
-type ResolvedUserDocumentBuildRoleRow = Omit<UserDocumentBuildRoleRow, "clientCode">;
+export type UserDocumentBuildRoleRow = ResolvedUserDocumentBuildRoleRow &
+  ({ roleType: RoleType.Client; clientCode: string } | { roleType: RoleType.Global });
 
 export interface UserDocumentBuildDataset {
   users: User[];
@@ -76,9 +77,9 @@ export function createUserDocumentBuildRepository(
       ]);
       signal?.throwIfAborted();
       const roleIds = [...new Set(roleRows.map((row) => row.roleId))];
-      const roleClientRows = await loadRoleClients(db, roleIds);
+      const roleOwnershipRows = await loadRoleOwnership(db, roleIds);
       signal?.throwIfAborted();
-      const clientCodeByRoleId = new Map(roleClientRows.map((row) => [row.roleId, row.clientCode]));
+      const ownershipByRoleId = new Map(roleOwnershipRows.map((row) => [row.roleId, row]));
 
       return {
         users: userRows,
@@ -86,10 +87,12 @@ export function createUserDocumentBuildRepository(
         positions: positionRows,
         orgPathRows,
         roleRows: roleRows.map((row) => {
-          const clientCode = clientCodeByRoleId.get(row.roleId);
-          if (clientCode === undefined)
-            throw new UserDocumentSourceIntegrityError(`Effective Role ${row.roleId} has no client code`);
-          return { ...row, clientCode };
+          const ownership = ownershipByRoleId.get(row.roleId);
+          if (ownership?.roleType === RoleType.Global && ownership.clientCode === null)
+            return { ...row, roleType: RoleType.Global };
+          if (ownership?.roleType === RoleType.Client && ownership.clientCode !== null)
+            return { ...row, roleType: RoleType.Client, clientCode: ownership.clientCode };
+          throw new UserDocumentSourceIntegrityError(`Effective Role ${row.roleId} has invalid ownership`);
         }),
       };
     },
@@ -154,15 +157,16 @@ async function loadEmploymentRoles(
   );
 }
 
-async function loadRoleClients(db: DbClient, roleIds: number[]) {
+async function loadRoleOwnership(db: DbClient, roleIds: number[]) {
   if (roleIds.length === 0) return [];
 
   return await db
     .select({
       roleId: roles.id,
+      roleType: roles.roleType,
       clientCode: clients.clientCode,
     })
     .from(roles)
-    .innerJoin(clients, eq(roles.clientId, clients.id))
+    .leftJoin(clients, eq(roles.clientId, clients.id))
     .where(inArray(roles.id, roleIds));
 }

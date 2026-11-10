@@ -1,10 +1,12 @@
 import { afterEach, expect, test } from "bun:test";
+import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
-import { OidcScope, OrganizationLevel, OrganizationType, RoleAssignmentTargetType } from "@iam/contracts";
+import { OidcScope, OrganizationLevel, OrganizationType, RoleAssignmentTargetType, RoleType } from "@iam/contracts";
 import { relations } from "@iam/db/relations";
 import { clients, employments, organizationClosures, organizations, positions, roles, users } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
+import { createDocumentFactsCacheRecord } from "@iam/documents/user/document";
 import { createSubjectFactsReader, createSubjectFactsRedisCache } from "@iam/documents/user/subject-facts";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -54,7 +56,10 @@ test("UserInfo HTTP uses real published Facts cache, canonical PostgreSQL fallba
     });
     const f = await userInfoFixture(reader);
     resources.push(() => f.close());
+    const otherClientCode = "other-app";
+    f.addClient(otherClientCode);
     const issued = await f.issue();
+    const otherIssued = await f.issue("openid", otherClientCode);
     const [user] = await pg.db
       .insert(users)
       .values({
@@ -73,31 +78,31 @@ test("UserInfo HTTP uses real published Facts cache, canonical PostgreSQL fallba
         path: "org",
       })
       .returning({ id: organizations.id });
-    const [position] = await pg.db
+    const [position, secondaryPosition] = await pg.db
       .insert(positions)
-      .values({ posCode: "position", posName: "岗位" })
+      .values([
+        { posCode: "position", posName: "岗位" },
+        { posCode: "secondary", posName: "副岗" },
+      ])
       .returning({ id: positions.id });
-    const [client] = await pg.db
+    const [client, otherClient] = await pg.db
       .insert(clients)
-      .values({
-        clientCode: f.clientId,
-        clientName: "UserInfo",
-        clientSecret: "test-only",
-        extAttributes: {},
-      })
+      .values([
+        { clientCode: f.clientId, clientName: "UserInfo", clientSecret: "test-only", extAttributes: {} },
+        { clientCode: otherClientCode, clientName: "Other app", clientSecret: "other-test-only", extAttributes: {} },
+      ])
       .returning({ id: clients.id });
-    if (!user || !organization || !position || !client) throw new Error("UserInfo source fixture is missing");
+    if (!user || !organization || !position || !secondaryPosition || !client || !otherClient)
+      throw new Error("UserInfo source fixture is missing");
     await pg.db
       .insert(organizationClosures)
       .values({ ancestorId: organization.id, descendantId: organization.id, depth: 0 });
     const [employment] = await pg.db
       .insert(employments)
-      .values({
-        userId: user.id,
-        orgId: organization.id,
-        posId: position.id,
-        isPrimary: true,
-      })
+      .values([
+        { userId: user.id, orgId: organization.id, posId: position.id, isPrimary: true },
+        { userId: user.id, orgId: organization.id, posId: secondaryPosition.id, isPrimary: false },
+      ])
       .returning({ id: employments.id });
     const [role] = await pg.db
       .insert(roles)
@@ -118,7 +123,13 @@ test("UserInfo HTTP uses real published Facts cache, canonical PostgreSQL fallba
     expect(firstPayload).toMatchObject({
       sub: f.subjectIdentifier,
       name: "已发布旧资料",
-      "iam:authorization": { roles: ["published-role"] },
+      "iam:authorization": {
+        roles: ["published-role"],
+        employments: [
+          { position: { code: "position" }, roles: ["published-role"] },
+          { position: { code: "secondary" }, roles: [] },
+        ],
+      },
     });
     expect(firstPayload["iam:employments"][0].organization).toEqual({
       code: "org",
@@ -130,7 +141,23 @@ test("UserInfo HTTP uses real published Facts cache, canonical PostgreSQL fallba
     queries.length = 0;
     await pg.db.update(users).set({ name: "较新发布资料" }).where(eq(users.id, user.id));
     await pg.db.delete(roleAssignments).where(eq(roleAssignments.roleId, role.id));
-    await publishUserDocument(pg.db, user.id, "2");
+    const [nextRole, otherRole, reviewer, shared] = await pg.db
+      .insert(roles)
+      .values([
+        { roleCode: "app-role", roleName: "Current App Role", clientId: client.id },
+        { roleCode: "other-role", roleName: "Other App Role", clientId: otherClient.id },
+        { roleCode: "global:reviewer", roleName: "Reviewer", roleType: RoleType.Global },
+        { roleCode: "global:shared", roleName: "Shared Role", roleType: RoleType.Global },
+      ])
+      .returning({ id: roles.id });
+    if (!nextRole || !otherRole || !reviewer || !shared) throw new Error("UserInfo updated roles are missing");
+    await pg.db.insert(roleAssignments).values([
+      { roleId: nextRole.id, targetType: RoleAssignmentTargetType.Employment, targetId: employment.id },
+      { roleId: otherRole.id, targetType: RoleAssignmentTargetType.Employment, targetId: employment.id },
+      { roleId: reviewer.id, targetType: RoleAssignmentTargetType.Employment, targetId: employment.id },
+      { roleId: shared.id, targetType: RoleAssignmentTargetType.Organization, targetId: organization.id },
+    ]);
+    const published = await publishUserDocument(pg.db, user.id, "2");
     const warm = await f.me(issued.access_token);
     expect(await warm.json()).toMatchObject({
       name: "已发布旧资料",
@@ -138,14 +165,56 @@ test("UserInfo HTTP uses real published Facts cache, canonical PostgreSQL fallba
     });
     expect(queries).toHaveLength(0);
     expect(ownedKeys.size).toBe(1);
+    const updated = {
+      name: "较新发布资料",
+      "iam:authorization": {
+        roles: ["app-role", "global:reviewer", "global:shared"],
+        employments: [
+          { position: { code: "position" }, roles: ["app-role", "global:reviewer", "global:shared"] },
+          { position: { code: "secondary" }, roles: ["global:shared"] },
+        ],
+      },
+    };
+    await cache.publish(createDocumentFactsCacheRecord(published));
+    const refreshed = await f.me(issued.access_token);
+    expect(refreshed.status).toBe(200);
+    expect(await refreshed.json()).toMatchObject(updated);
+    const otherInfo = await f.me(otherIssued.access_token);
+    expect(otherInfo.status).toBe(200);
+    expect(await otherInfo.json()).toMatchObject({
+      "iam:authorization": {
+        roles: ["global:reviewer", "global:shared", "other-role"],
+        employments: [
+          { position: { code: "position" }, roles: ["global:reviewer", "global:shared", "other-role"] },
+          { position: { code: "secondary" }, roles: ["global:shared"] },
+        ],
+      },
+    });
+    expect(queries).toHaveLength(0);
+
+    const freshToken = await f.issue("openid profile iam:authorization");
+    expect(freshToken.access_token).toMatch(/^oa_[\w-]{43}$/u);
+    expect(freshToken).not.toHaveProperty("iam:authorization");
+    expect(freshToken).not.toHaveProperty("roles");
+    const claims = JSON.parse(Buffer.from(freshToken.id_token.split(".")[1]!, "base64url").toString());
+    expect(claims).toMatchObject({ sub: f.subjectIdentifier, name: "较新发布资料" });
+    expect(claims).not.toHaveProperty("iam:authorization");
+    expect(claims).not.toHaveProperty("roles");
+
+    await f.scopes([OidcScope.OpenId, OidcScope.Profile]);
+    const trimmed = await f.me(issued.access_token);
+    expect(trimmed.status).toBe(200);
+    expect(await trimmed.json()).toEqual({
+      sub: f.subjectIdentifier,
+      preferred_username: "published",
+      name: "较新发布资料",
+    });
+    await f.scopes([OidcScope.OpenId, OidcScope.Profile, OidcScope.IamAuthorization]);
     const key = [...ownedKeys][0]!;
     await cleanup.set(key, "{broken");
     const repaired = await f.me(issued.access_token);
     expect(repaired.status).toBe(200);
-    expect(await repaired.json()).toMatchObject({
-      name: "较新发布资料",
-      "iam:authorization": { roles: [] },
-    });
+    expect(await repaired.json()).toMatchObject(updated);
     expect(queries).toHaveLength(1);
     queries.length = 0;
     await cleanup.del(key);

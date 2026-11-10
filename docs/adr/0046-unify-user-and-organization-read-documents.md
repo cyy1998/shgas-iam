@@ -28,13 +28,12 @@ status: accepted
 - 两类 Internal 详情只读取已发布目录，接受与搜索相同的更新延迟，包含未删除的 Enable、Pause、Disable 对象。
   没有可读的当前条目返回 404，损坏文档或查询失败返回 503，不回源拼装另一份详情；404 只表示当前目录不可见，
   不保证源对象不存在。源账号查询、登录和账号恢复不受这一目录查询语义替代。
-- 搜索、详情和 SSO 统一业务字段语义及共用结构，SSO 保留按 Client 披露字段和仅交付该 Client 角色的规则，
-  OIDC 保留标准字段映射。登录和 SSO 的现有业务能力继续保留，内部读取和派生方式可以调整。
-- Internal 角色筛选、搜索返回和详情只能观察当前已认证 Client 的角色，所有组合与否定条件均在这个可见集合上解释。
-  Client 身份由认证固定，角色归属使用明确保存的关系，不依赖 code 前缀或调用方提供的 Client 参数。
-  有效 Internal Client 可以查询自己的角色，不新增 Internal 披露开关，也不要求启用 SSO 或配置 SSO 授权声明。
+- 搜索、详情和 SSO 统一业务字段语义及共用结构。SSO 按 Client 披露字段，OIDC 保留标准字段映射。
+  [ADR-0048](0048-model-global-roles-without-client-ownership.md) 将各入口的角色范围扩展为本应用和全局有效角色。
+- Internal 角色筛选、搜索返回和详情使用同一可见集合，所有组合与否定条件均在该集合上解释。
+  Client 身份由认证固定，角色归属使用明确保存的关系。Internal 可见范围独立于 SSO 启用状态和授权声明配置。
 - 用户文档的主体基本信息按下述根结构修订提升到根节点，与 `employments` 并列；角色放在每条有效任职的 `roles` 中。
-  没有本 Client 角色的任职仍保留，其 `roles` 为 `[]`。Internal 不重复返回另一组 `authorization.employments`；
+  没有可见角色的任职仍保留，其 `roles` 为 `[]`。Internal 不重复返回另一组 `authorization.employments`；
   SSO 按协议需要生成授权结构和用户级角色并集。
 - 用户任职、组织责任、独立组织文档和 SSO 共用组织基础结构 `code/name/type/path`，路径节点统一包含
   `code/name/type/level/distanceToTarget`。完整路径从根到目标且包含自身，根 level 为 1、自身 distanceToTarget 为 0；
@@ -115,7 +114,7 @@ User Document 除搜索与目录详情外，还为 Subject Facts 和 Subject Acc
 内部文档围绕当前公开用户资料、有效任职、组织与责任事实及明确的角色 Client 归属构建，
 不因为旧 DTO 曾包含某字段就继续保存。内部身份及发布版本属于技术元数据，不进入公开结构；
 公开 schema 与内部存储 schema 明确分离，公开结构驱动合法过滤路径，存储映射负责 Client 隔离和必要派生。
-不得将内部 Client 归属路径暴露为调用方可选择的过滤字段，也不得先按全局角色筛选再裁剪响应。
+调用方只能在自身可见角色集合上筛选。内部 Client 归属路径不属于可选择的过滤字段。
 
 同一文档的内容使用一致源快照和固定构建观察时点；公开投影与 Facts 消费该已发布结果，
 不在读取时重新按墙上时间解释任职或回源拼装关联。类型化查询列与索引按真实查询需求设计，

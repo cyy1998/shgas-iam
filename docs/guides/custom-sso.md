@@ -112,10 +112,10 @@ code={urlencoded_code}&redirect_uri={urlencoded_original_redirect_url}
 }
 ```
 
-subject 仅包含当前 Client 选择的字段，授权只含该 Client 的角色，不含数据库 ID 或兼容别名。
+subject 仅包含当前 Client 选择的字段，授权交付本 Client 的有效角色和任职上的有效全局角色，公开结构排除数据库 ID 和兼容别名。
 完整主体仅接受 wire v4，`authorization` 及其每条任职只交付角色。
 任职与责任目标的组织统一使用 `code/name/type/path`；路径从根到目标并包含自身，节点含 `level` 和
-`distanceToTarget`，根层级为 1、目标距离为 0。岗位使用 `code/name`，无当前 Client 角色的有效任职仍保留空角色数组。
+`distanceToTarget`，根层级为 1、目标距离为 0。岗位使用 `code/name`，无可见角色的有效任职仍保留空角色数组。
 `subjectClaims` 的名称和选项保持不变；接入方须适配新响应，并在恢复访问前清理或停用旧权限副本。
 业务后端自行建立本地会话、关联 sid、设置自己的 HttpOnly Cookie，再跳回原 redirectUrl；
 IAM 不建立或存储第三方自有 session。
