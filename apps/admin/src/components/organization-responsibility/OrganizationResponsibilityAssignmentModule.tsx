@@ -495,7 +495,7 @@ export default function OrganizationResponsibilityAssignmentModule({ host }: { h
     <>
       <ProTable<OrganizationResponsibilityAssignmentView, AssignmentFilterValues>
         className="iam-admin-list"
-        size="small"
+        defaultSize="small"
         rowKey="id"
         loading={loading}
         columns={assignmentColumns(openDetail)}

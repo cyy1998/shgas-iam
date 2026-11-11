@@ -10,20 +10,16 @@
     position: absolute;
     inset: 0;
     content: "";
+    // Paint the decorative ring inside the overlay to avoid creating extra scroll space.
     background:
+      radial-gradient(
+        circle at right calc(8vw + 171px) bottom 81px,
+        transparent 169.5px,
+        rgba(255, 255, 255, 18%) 170.5px,
+        transparent 171.5px
+      ),
       linear-gradient(105deg, rgba(8, 25, 49, 90%) 0%, rgba(15, 43, 78, 78%) 48%, rgba(238, 243, 247, 66%) 100%),
       radial-gradient(circle at 78% 18%, rgba(40, 116, 240, 20%), transparent 28%);
-  }
-
-  &::after {
-    position: absolute;
-    right: 8vw;
-    bottom: -90px;
-    width: 340px;
-    height: 340px;
-    content: "";
-    border: 1px solid rgba(255, 255, 255, 18%);
-    border-radius: 50%;
   }
 
   .maintenance-shell {

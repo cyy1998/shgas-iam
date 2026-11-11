@@ -163,7 +163,7 @@ export default function EmploymentsPage() {
       {committedWarning && <Alert type="warning" showIcon title={committedWarning} />}
       <ProTable<EmploymentVo>
         className="iam-admin-list"
-        size="small"
+        defaultSize="small"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

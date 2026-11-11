@@ -175,7 +175,8 @@ export default function AuditLogTable({ fixedConditions = {}, pageSize = 20, sea
       <ProTable<AuditLogTableRow>
         className="iam-admin-list"
         rowKey="id"
-        size={size}
+        size={search ? undefined : size}
+        defaultSize={size}
         columns={columns}
         search={false}
         params={filters}

@@ -76,7 +76,7 @@ export default function ClientsPage() {
     <PageContainer title={false} breadcrumbRender={false}>
       <ProTable<ClientVo>
         className="iam-admin-list"
-        size="small"
+        defaultSize="small"
         rowKey="clientCode"
         columns={columns}
         search={false}

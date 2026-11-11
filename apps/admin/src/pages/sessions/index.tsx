@@ -353,7 +353,7 @@ export default function SessionsPage() {
       ) : null}
       <ProTable<SessionListItem>
         className="iam-admin-list"
-        size="small"
+        defaultSize="small"
         actionRef={actionRef}
         params={{ userId: filterUserId }}
         headerTitle={

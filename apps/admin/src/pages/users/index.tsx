@@ -155,7 +155,7 @@ export default function UsersPage() {
           />
         )}
         <ProTable<UserVo>
-          size="small"
+          defaultSize="small"
           actionRef={actionRef}
           rowKey="username"
           columns={columns}

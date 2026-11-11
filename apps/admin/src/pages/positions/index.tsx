@@ -114,7 +114,7 @@ export default function PositionsPage() {
     <PageContainer title={false} breadcrumbRender={false}>
       <ProTable<PositionVo>
         className="iam-admin-list"
-        size="small"
+        defaultSize="small"
         actionRef={actionRef}
         rowKey="posCode"
         columns={columns}

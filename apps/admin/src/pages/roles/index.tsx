@@ -192,7 +192,7 @@ export default function RolesPage() {
       {committedWarning && drawerRoleCode === null && <Alert type="warning" showIcon title={committedWarning} />}
       <ProTable<RoleVo>
         className="iam-admin-list"
-        size="small"
+        defaultSize="small"
         actionRef={actionRef}
         rowKey="roleCode"
         columns={columns}

@@ -13,6 +13,36 @@ import {
 import { fulfillTrpc, mockAdminApi, parseTrpcBatchInput } from "../fixtures";
 import { collectMutationRequests, mockScopedManagementApi } from "../scoped-management.fixture";
 
+test("User list density changes the header and body row heights", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.goto("/iam-admin/users");
+  const density = page.getByRole("img", { name: "column-height" });
+  const header = page.getByRole("columnheader", { name: "用户", exact: true });
+  const row = page.getByRole("row").filter({ hasText: "张三" }).first();
+  const rowHeights = async () => ({
+    header: await header.evaluate((element) => element.getBoundingClientRect().height),
+    body: await row.evaluate((element) => element.getBoundingClientRect().height),
+  });
+  const selectDensity = async (name: string) => {
+    await density.click({ timeout: 5000 });
+    await page.getByRole("menuitem", { name, exact: true }).click({ timeout: 5000 });
+    return rowHeights();
+  };
+
+  await expect(row).toBeVisible();
+  const compact = await rowHeights();
+  const spacious = await selectDensity("宽松");
+  expect(spacious.header).toBeGreaterThan(compact.header);
+  expect(spacious.body).toBeGreaterThan(compact.body);
+
+  const medium = await selectDensity("中等");
+  expect(medium.header).toBeGreaterThan(compact.header);
+  expect(medium.body).toBeGreaterThan(compact.body);
+  expect(medium.header).toBeLessThan(spacious.header);
+  expect(medium.body).toBeLessThan(spacious.body);
+  expect(await selectDensity("紧凑")).toEqual(compact);
+});
+
 test("User filters query the server and clearing them restores the unfiltered first page", async ({ page }) => {
   await mockAdminApi(page);
   const searches: UserSearchParams[] = [];
