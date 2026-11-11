@@ -1,13 +1,13 @@
 import { buildAuthorizeUrl } from "@sso/lib/sso";
+import { useSso } from "@sso/models/sso-context";
 import { clientStatus } from "@sso/services/open";
 import { getQuery } from "@sso/utils/url";
-import { useModel } from "@umijs/max";
 import { message } from "antd";
 import { useCallback, useEffect, useState } from "react";
 import { isValidOidcReturnHandle } from "./oidc-return";
 
 export function useLoginRedirect() {
-  const { authConfig, authConfigStatus, loadAuthConfig } = useModel("sso");
+  const { authConfig, authConfigStatus, loadAuthConfig } = useSso();
   const client = getQuery("client");
   const oidcReturn = getQuery("oidcReturn") ?? "";
   const redirectUrl = getQuery("redirectUrl") ?? "";

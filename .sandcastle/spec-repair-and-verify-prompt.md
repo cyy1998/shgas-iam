@@ -22,7 +22,7 @@
 3. 在最终集成内容上执行一次 `pnpm verify`，并按完整 Spec 和 tickets 的风险、验收与测试决策，补齐必需
    Integration、E2E、Gateway 或其他检查；重复覆盖按范围去重。票级通过不能代替最终组合验证。
    真实资源检查通过根 `pnpm test:integration --workspace ... --file ...` 或 `pnpm test:e2e`，每条命令独立管理资源。
-   依赖、Umi 配置或路由变化后先运行 `sh scripts/sandcastle/prepare-workspace.sh`。遵守 Bun 真实 I/O await 规则。
+   修改依赖后运行 `sh scripts/sandcastle/prepare-workspace.sh`。遵守 Bun 真实 I/O await 规则。
 4. 正常会话内诊断和修复验证失败，提交后重跑因此失效的检查；仍有效的检查结果可复用。
    必需工作无法完成时保持未完成，不能通过删测试、缩小验收或忽略失败获得完成标记。
 5. 确认最终工作区干净、最终 HEAD 包含评审 candidate，记录两者关系、逐项 findings 处置、实际命令与结果、

@@ -5,9 +5,7 @@ import UserInfoPage from "@sso/pages/user-info";
 import { message } from "antd";
 import { HttpResponse, http } from "msw";
 import { expect, it, vi } from "vitest";
-import { currentUserInfo } from "~sso/test/mocks/fixtures";
 import { server } from "~sso/test/mocks/server";
-import { __setModel } from "~sso/test/mocks/umijs-max";
 import { fireEvent, render, screen, waitFor } from "~sso/test/render";
 import { registerMswLifecycle } from "~sso/test/setup-msw";
 
@@ -18,7 +16,7 @@ type Page = "login" | "resetPassword" | "bindPhone";
 async function openPage(page: Page) {
   if (page === "login") {
     window.history.pushState({}, "", "/portal/login?client=iam&redirectUrl=http%3A%2F%2Fexample.test");
-    const view = render(<LoginPage />);
+    const view = render(<LoginPage />, { withSso: true });
     fireEvent.click(await screen.findByRole("tab", { name: "手机登录" }));
     fireEvent.change(screen.getByPlaceholderText("请输入手机号"), {
       target: { value: "13800000000" },
@@ -26,15 +24,14 @@ async function openPage(page: Page) {
     return view;
   }
   if (page === "resetPassword") {
-    window.history.pushState({}, "", "/portal/resetPassword?username=zhangsan");
+    window.history.pushState({}, "", "/portal/reset-password?username=zhangsan");
     const view = render(<ResetPasswordPage />);
     fireEvent.click(screen.getByRole("button", { name: /下一步/ }));
     await screen.findByRole("button", { name: "获取验证码" });
     return view;
   }
-  __setModel("sso", { userInfo: currentUserInfo, userInfoStatus: "success", loadUserInfo: vi.fn() });
-  const view = render(<UserInfoPage />);
-  fireEvent.click(screen.getByRole("tab", { name: /绑定手机号/ }));
+  const view = render(<UserInfoPage />, { withSso: true });
+  fireEvent.click(await screen.findByRole("tab", { name: /绑定手机号/ }));
   fireEvent.change(screen.getByPlaceholderText("请输入手机号"), {
     target: { value: "13800000000" },
   });

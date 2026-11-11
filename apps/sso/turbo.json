@@ -1,0 +1,14 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "env": ["IAM_SSO_WEB_*", "!VITE_*"],
+      "inputs": ["$TURBO_DEFAULT$", ".env", ".env.*"]
+    },
+    "dev": {
+      "env": ["IAM_SSO_WEB_*", "!VITE_*"],
+      "passThroughEnv": ["PORT"]
+    }
+  }
+}

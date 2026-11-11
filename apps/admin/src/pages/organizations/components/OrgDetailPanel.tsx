@@ -1,3 +1,4 @@
+import { useAccess } from "@admin/admin-access";
 import AuthorizationActionButton from "@admin/components/AuthorizationActionButton";
 import AuthorizationActionDropdown from "@admin/components/AuthorizationActionDropdown";
 import StatusTag from "@admin/components/StatusTag";
@@ -11,7 +12,6 @@ import {
 } from "@admin/services/organization";
 import { ProDescriptions } from "@ant-design/pro-components";
 import { getOrganizationStatusOptions, OrganizationStatus } from "@iam/contracts";
-import { useAccess } from "@umijs/max";
 import { Button, Empty, Modal, message, Space, Table, Tabs } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import styles from "../OrganizationsPage.module.less";

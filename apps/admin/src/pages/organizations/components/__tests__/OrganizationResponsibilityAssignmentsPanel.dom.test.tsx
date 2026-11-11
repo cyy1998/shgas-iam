@@ -9,8 +9,7 @@ import {
 } from "@iam/contracts";
 import { ConfigProvider, Modal, message } from "antd";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { __setAccess } from "~admin/test/mocks/umijs-max";
-import { act, render, screen, waitFor, within } from "~admin/test/render";
+import { act, render, screen, setTestAccess, waitFor, within } from "~admin/test/render";
 
 const responsibilityService = vi.hoisted(() => ({
   createAssignment: vi.fn(),
@@ -74,7 +73,7 @@ const assignment = {
 
 describe("OrganizationResponsibilityAssignmentsPanel", () => {
   beforeEach(() => {
-    __setAccess({
+    setTestAccess({
       canAccessOrganizationResponsibility: true,
       canCreateOrganizationResponsibility: false,
       canAccessAudit: true,
@@ -167,7 +166,7 @@ describe("OrganizationResponsibilityAssignmentsPanel", () => {
   });
 
   it("creates an assignment with only the fixed organization, type and holder employment", async () => {
-    __setAccess({
+    setTestAccess({
       canAccessOrganizationResponsibility: true,
       canCreateOrganizationResponsibility: true,
       canAccessAudit: true,
@@ -221,7 +220,7 @@ describe("OrganizationResponsibilityAssignmentsPanel", () => {
   });
 
   it("refreshes the current authority scope after an uncertain Create failure without replaying it", async () => {
-    __setAccess({
+    setTestAccess({
       canAccessOrganizationResponsibility: true,
       canCreateOrganizationResponsibility: true,
       canAccessAudit: true,
@@ -450,7 +449,7 @@ describe("OrganizationResponsibilityAssignmentsPanel", () => {
   });
 
   it("hosts responsibility assignments in the selected Organization detail", async () => {
-    __setAccess({
+    setTestAccess({
       canAccessOrganizationResponsibility: true,
       canCreateOrganizationResponsibility: true,
       canAccessAudit: true,

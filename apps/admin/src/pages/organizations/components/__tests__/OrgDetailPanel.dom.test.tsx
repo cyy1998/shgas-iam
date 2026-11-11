@@ -2,8 +2,7 @@ import OrgDetailPanel from "@admin/pages/organizations/components/OrgDetailPanel
 import type { OrganizationDetailVo } from "@admin/services/organization";
 import { OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
 import { describe, expect, it, vi } from "vitest";
-import { __setAccess } from "~admin/test/mocks/umijs-max";
-import { render, screen } from "~admin/test/render";
+import { render, screen, setTestAccess } from "~admin/test/render";
 
 const mutations = vi.hoisted(() => ({
   deleteOrganization: vi.fn(),
@@ -57,7 +56,7 @@ function detail(allowedActions: OrganizationDetailVo["allowedActions"]): Organiz
 
 describe("OrgDetailPanel authorization actions", () => {
   it("keeps server-denied actions disabled without issuing mutations", async () => {
-    __setAccess({ canAccessOrganizationResponsibility: false });
+    setTestAccess({ canAccessOrganizationResponsibility: false });
     const onEdit = vi.fn();
     const onCreateChild = vi.fn();
     const integrityDenied = {
@@ -102,7 +101,7 @@ describe("OrgDetailPanel authorization actions", () => {
   });
 
   it("explains an unmanageable responsibility blocker without exposing its record", async () => {
-    __setAccess({ canAccessOrganizationResponsibility: true });
+    setTestAccess({ canAccessOrganizationResponsibility: true });
     const unmanageableDenied = {
       allowed: false,
       reason: "UNMANAGEABLE_RESPONSIBILITY_BLOCKED",

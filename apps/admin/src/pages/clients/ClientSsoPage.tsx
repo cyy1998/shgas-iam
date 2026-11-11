@@ -14,10 +14,11 @@ import {
   OidcScope,
   SUBJECT_CLAIMS,
 } from "@iam/contracts";
-import { history, useParams } from "@umijs/max";
 import { Alert, Button, Card, Form, Input, Modal, message, Select, Space, Spin, Typography } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useParams } from "react-router";
 import styles from "./ClientSettings.module.less";
+import { useClientDraftGuard } from "./useClientDraftGuard";
 
 type FormValues = {
   protocol: ClientSsoProtocol;
@@ -32,6 +33,17 @@ type FormValues = {
 };
 
 export default function ClientSsoPage() {
+  const [dirty, setDirty] = useState(false);
+  const [discardRevision, setDiscardRevision] = useState(0);
+  const shouldBlock = useCallback(() => dirty, [dirty]);
+  useClientDraftGuard(shouldBlock, () => {
+    setDirty(false);
+    setDiscardRevision((current) => current + 1);
+  });
+  return <ClientSsoSettings key={discardRevision} onDirtyChange={setDirty} />;
+}
+
+export function ClientSsoSettings({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const { clientCode = "" } = useParams<{ clientCode: string }>();
   const [client, setClient] = useState<ClientSsoDetail>();
   const [error, setError] = useState(false);
@@ -90,31 +102,7 @@ export default function ClientSsoPage() {
     };
   }, [refresh]);
 
-  useEffect(() => {
-    if (!dirty) return;
-    let confirmationOpen = false;
-    const unblock = history.block((transition) => {
-      if (confirmationOpen) return;
-      confirmationOpen = true;
-      Modal.confirm({
-        title: "放弃未保存的修改？",
-        content: "当前分区的修改不会自动保存或保留草稿。",
-        okText: "放弃修改",
-        okType: "danger",
-        onOk: () => {
-          unblock();
-          dirtyFieldsRef.current.clear();
-          setDirty(false);
-          setSecret(undefined);
-          transition.retry();
-        },
-        onCancel: () => {
-          confirmationOpen = false;
-        },
-      });
-    });
-    return unblock;
-  }, [dirty]);
+  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
 
   async function run(
     operation: () => ReturnType<typeof clientSsoService.save>,

@@ -1,12 +1,19 @@
 {
-  "extends": "./src/.umi/tsconfig.json",
   "compilerOptions": {
+    "target": "ESNext",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "module": "Preserve",
+    "moduleResolution": "bundler",
+    "types": ["node", "vite/client"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
     "paths": {
       "@sso/*": ["./src/*"],
-      "~sso/*": ["./*"],
-      "@@/*": ["./src/.umi/*"],
-      "@umijs/max": ["./node_modules/@umijs/max"],
-      "@umijs/max/typings": ["./src/.umi/typings"]
+      "~sso/*": ["./*"]
     }
-  }
+  },
+  "include": ["src", "test", "test-integration", "*.ts"]
 }

@@ -37,6 +37,18 @@ API/SSO 的登录公私钥和 kid 必须配对，内外网 origin、Gateway host
 Gateway 需要独立数据库只读账号及 APISIX Admin 凭据；首次发布还需准备 Enable、未删除的 `iam` Client 和 Internal Secret，
 详细配置见[网关管理](apisix-gateway-release.md)。不能依赖尚未发布的 IAM 路由来访问 Gateway 配置 API。
 
+### 前端构建输入
+
+升级前在部署环境、CI 构建参数及前端本地 env 文件中一次性替换下表前缀，沿用原值和字段后缀。必填规则和默认值见
+[生产环境模板](../../docker/.env.prod.example)及[生产 Compose](../../docker/compose.prod.apps.yaml)。
+
+| 应用          | 旧前缀           | 新前缀           | 字段后缀                                                                                                                                                             |
+| ------------- | ---------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Admin（6 项） | `UMI_APP_ADMIN_` | `IAM_ADMIN_WEB_` | `API_PREFIX`、`CLIENT_CODE`、`GRAFANA_URL`、`SSO_AUTHORIZE_URL`、`SSO_LOGOUT_URL`、`SYSTEM_LOG_ENV`                                                                  |
+| SSO（9 项）   | `UMI_APP_SSO_`   | `IAM_SSO_WEB_`   | `API_PREFIX`、`CLIENT_CODE`、`CAP_ENDPOINT`、`CAP_SITE_KEY`、`CAP_WASM_URL`、`CAP_PAKO_URL`、`LOGIN_CREDENTIAL_KID`、`LOGIN_CREDENTIAL_PUBLIC_KEY`、`WELL_KNOWN_URL` |
+
+新版本只读取新名称。构建时将公开值写入静态文件，配置变化需要重建对应镜像。API 登录凭证私钥等服务端配置保存在后端。
+
 ## 一次性 Ops 维护环境
 
 从 [Ops 部署模板](../../docker/.env.ops.example) 准备私有 `docker/.env.ops`。将 `IAM_OPS_IMAGE` 设为与目标应用同一发布版本的独立 Ops 镜像，
@@ -124,6 +136,24 @@ backfill、部分 repair 只登记或唤醒工作，仍须匹配版本的 consum
    ```
 
 5. 完成受影响检查后恢复流量与任务。检查或开放失败时停止继续开放，关闭不确定入口并按回退/修复流程处理。
+
+### 独立更新和回退前端
+
+Admin 和 SSO 分别使用 `IAM_ADMIN_IMAGE` 和 `IAM_SSO_IMAGE`。准备目标镜像与上一版本的镜像和部署配置，按常规更新步骤控制受影响入口。
+以下以 Admin 为例，更新 SSO 时使用服务名 `sso` 和相应镜像变量。
+
+```bash
+docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml config --quiet
+docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml pull admin
+docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml up -d --no-deps --no-build --force-recreate admin
+```
+
+从源码发布时，将 `pull admin` 换成 `build admin`，从同一版本源码的仓库根目录执行。经实际入口直接访问并刷新对应部署子路径下的深链接，
+检查登录回跳、HTML 的 `Cache-Control: no-store` 及带内容哈希资源的长期缓存，再恢复该入口。
+
+需要回退时，用上一版本保存的 Compose 和 env 文件恢复该服务的已构建镜像，执行同样的 `up -d --no-deps --no-build --force-recreate`，
+核对部署 project、旧版镜像与入口验证结果后再开放。必须重建旧镜像时，从该版本源码使用对应版本的构建输入和 Compose，升级前的源码使用
+表中旧前缀。
 
 ### 启用全局角色
 

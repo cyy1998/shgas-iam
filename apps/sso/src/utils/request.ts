@@ -2,8 +2,8 @@ import { ApiErrorCode, splitFirstPartySsoNavigation } from "@iam/contracts";
 import { UNAUTHORIZED } from "@iam/contracts/http";
 import { API_PREFIX, SSO_CLIENT_CODE } from "@sso/constants/config";
 import type { ApiEnvelope } from "@sso/types/api";
+import { replacePortalLocation } from "@sso/utils/navigation";
 import { currentSearchParams } from "@sso/utils/url";
-import { history } from "@umijs/max";
 import { message } from "antd";
 
 export class ServiceError extends Error {
@@ -54,11 +54,11 @@ function loginQuery(): string {
 }
 
 function gotoLogin() {
-  history.replace(`/login${loginQuery()}`);
+  replacePortalLocation(`/login${loginQuery()}`);
 }
 
 function gotoMaintenance() {
-  history.replace(`/systemMaintenance${preserveQuery()}`);
+  replacePortalLocation(`/systemMaintenance${preserveQuery()}`);
 }
 
 function isCode(body: Pick<ApiEnvelope<unknown>, "code">, code: ApiErrorCode) {

@@ -41,8 +41,8 @@ const envExampleChecks: EnvExampleCheck[] = [
   { file: "apps/worker/.env.example", allowedPrefixes: ["IAM_WORKER_"], allowedKeys: ["NODE_ENV"] },
   { file: "apps/ops/.env.example", allowedPrefixes: ["IAM_OPS_"], allowedKeys: ["NODE_ENV"] },
   { file: "apps/gateway/.env.example", allowedPrefixes: ["IAM_GATEWAY_"] },
-  { file: "apps/admin/.env.example", allowedPrefixes: ["UMI_APP_ADMIN_"], allowedKeys: ["PORT"] },
-  { file: "apps/sso/.env.example", allowedPrefixes: ["UMI_APP_SSO_"], allowedKeys: ["PORT"] },
+  { file: "apps/admin/.env.example", allowedPrefixes: ["IAM_ADMIN_WEB_"], allowedKeys: ["PORT"] },
+  { file: "apps/sso/.env.example", allowedPrefixes: ["IAM_SSO_WEB_"], allowedKeys: ["PORT"] },
 ];
 
 const frontendChecks: FrontendCheck[] = [
@@ -50,16 +50,17 @@ const frontendChecks: FrontendCheck[] = [
     appDir: "apps/admin/src",
     boundaryFile: "apps/admin/src/constants/config.ts",
     dockerfile: "apps/admin/Dockerfile",
-    prefix: "UMI_APP_ADMIN_",
+    prefix: "IAM_ADMIN_WEB_",
   },
   {
     appDir: "apps/sso/src",
     boundaryFile: "apps/sso/src/constants/config.ts",
     dockerfile: "apps/sso/Dockerfile",
-    prefix: "UMI_APP_SSO_",
+    prefix: "IAM_SSO_WEB_",
   },
 ];
 
+const viteBuiltInEnvKeys = new Set(["BASE_URL", "MODE", "DEV", "PROD", "SSR"]);
 const violations: Violation[] = [];
 
 for (const check of appEnvSchemaChecks) {
@@ -128,15 +129,21 @@ function checkEnvExample(check: EnvExampleCheck): void {
 function checkFrontendEnvReads(check: FrontendCheck): void {
   for (const file of listFiles(check.appDir, isTypeScriptFile)) {
     const text = read(file);
-    for (const match of text.matchAll(/process\.env\.([A-Z][A-Z0-9_]*)/g)) {
+    for (const match of text.matchAll(/\bprocess(?:\s*\.\s*env\b|\s*\[\s*["']env["']\s*\])/g)) {
+      add(file, lineNumber(text, match.index), "frontend source must read Vite env instead of process.env");
+    }
+
+    for (const match of text.matchAll(/\bimport\s*\.\s*meta\s*\.\s*env\b(?:\s*\.\s*([A-Z][A-Z0-9_]*)\b)?/g)) {
       const key = match[1];
+      if (key && viteBuiltInEnvKeys.has(key)) continue;
 
-      if (file !== check.boundaryFile) {
-        add(file, lineNumber(text, match.index), "frontend process.env reads must stay inside constants/config.ts");
-      }
-
-      if (key.startsWith("UMI_APP_") && !key.startsWith(check.prefix)) {
-        add(file, lineNumber(text, match.index), `${key} must use ${check.prefix}`);
+      const line = lineNumber(text, match.index);
+      if (!key) {
+        add(file, line, "frontend Vite env reads must name a static property");
+      } else if (file !== check.boundaryFile) {
+        add(file, line, "frontend build env reads must stay inside constants/config.ts");
+      } else if (!key.startsWith(check.prefix)) {
+        add(file, line, `${key} must use ${check.prefix}`);
       }
     }
   }
@@ -144,7 +151,7 @@ function checkFrontendEnvReads(check: FrontendCheck): void {
 
 function checkFrontendDockerfile(check: FrontendCheck): void {
   const text = read(check.dockerfile);
-  for (const match of text.matchAll(/\b(UMI_APP_[A-Z0-9_]+)\b/g)) {
+  for (const match of text.matchAll(/\b((?:IAM|UMI_APP)_[A-Z0-9_]+)\b/g)) {
     const key = match[1];
     if (!key.startsWith(check.prefix)) {
       add(check.dockerfile, lineNumber(text, match.index), `${key} must use ${check.prefix}`);
@@ -177,7 +184,7 @@ function listFiles(dir: string, predicate: (file: string) => boolean): string[] 
 
   const result: string[] = [];
   for (const entry of readdirSync(absoluteDir)) {
-    if (entry === "node_modules" || entry === "dist" || entry === ".umi" || entry === ".umi-production") continue;
+    if (entry === "node_modules" || entry === "dist") continue;
 
     const absolutePath = join(absoluteDir, entry);
     const relativePath = relative(repoRoot, absolutePath).replaceAll("\\", "/");

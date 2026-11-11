@@ -51,3 +51,20 @@ test("null mobile blocks sending codes and advancing to password reset", async (
   await expect(page.getByPlaceholder("请输入新密码")).toHaveCount(0);
   expect(recoveryRequests).toEqual([]);
 });
+
+test("keeps the login destination during the password recovery round trip", async ({ page }) => {
+  await mockSsoApi(page);
+  const redirectUrl = "https://business.example/callback?keep=yes";
+  const query = new URLSearchParams({ client: "iam-admin", redirectUrl, state: "opaque state" });
+  await page.goto(`/portal/login?${query}`);
+  await page.getByPlaceholder("请输入您的工号").fill("zhangsan");
+  await page.getByRole("button", { name: "忘记密码？" }).click();
+
+  await expect(page).toHaveURL(/\/portal\/reset-password\?/);
+  await expect(page.getByPlaceholder("请输入用户名")).toHaveValue("zhangsan");
+  expect(new URL(page.url()).searchParams.get("redirectUrl")).toBe(redirectUrl);
+
+  await page.getByRole("button", { name: "返回登录" }).click();
+  await expect(page).toHaveURL(`/portal/login?${query}`);
+  await expect(page.getByPlaceholder("请输入您的工号")).toBeVisible();
+});

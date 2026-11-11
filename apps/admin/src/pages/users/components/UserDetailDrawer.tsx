@@ -1,3 +1,4 @@
+import { useAccess } from "@admin/admin-access";
 import AuthorizationActionButton from "@admin/components/AuthorizationActionButton";
 import AuthorizationActionDropdown from "@admin/components/AuthorizationActionDropdown";
 import AuditLogTable from "@admin/components/audit/AuditLogTable";
@@ -14,7 +15,6 @@ import { resignUser } from "@admin/services/employment";
 import { deleteUser, getUser, type UserDetailVo, updateUser, updateUserStatus } from "@admin/services/user";
 import { DeleteOutlined, DownOutlined, EditOutlined, KeyOutlined, LogoutOutlined } from "@ant-design/icons";
 import { EmploymentStatus, getUserStatusOptions, UserStatus } from "@iam/contracts";
-import { history, Link, useAccess } from "@umijs/max";
 import {
   Alert,
   Button,
@@ -35,6 +35,7 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Link, useBlocker } from "react-router";
 import { confirmResetPassword } from "./ResetPasswordModal";
 import UserBasicInformation from "./UserBasicInformation";
 import userStyles from "./UserDetail.module.less";
@@ -94,8 +95,11 @@ function UserDetailDrawerContent({ open, username, onClose, onChanged }: Props) 
   );
 
   const confirmDiscard = useCallback(
-    (onDiscard: () => void) => {
-      if (savingProfile || discardConfirmationOpen.current) return;
+    (onDiscard: () => void, onCancel?: () => void) => {
+      if (savingProfile || discardConfirmationOpen.current) {
+        onCancel?.();
+        return;
+      }
       if (!profileDirty) {
         onDiscard();
         return;
@@ -114,6 +118,7 @@ function UserDetailDrawerContent({ open, username, onClose, onChanged }: Props) 
         },
         onCancel: () => {
           discardConfirmationOpen.current = false;
+          onCancel?.();
         },
       });
     },
@@ -127,17 +132,13 @@ function UserDetailDrawerContent({ open, username, onClose, onChanged }: Props) 
       event.returnValue = "";
     };
     window.addEventListener("beforeunload", beforeUnload);
-    const unblock = history.block((transition) => {
-      confirmDiscard(() => {
-        unblock();
-        transition.retry();
-      });
-    });
-    return () => {
-      window.removeEventListener("beforeunload", beforeUnload);
-      unblock();
-    };
-  }, [open, profileDirty, savingProfile, confirmDiscard]);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [open, profileDirty, savingProfile]);
+
+  const blocker = useBlocker(open && (profileDirty || savingProfile));
+  useEffect(() => {
+    if (blocker.state === "blocked") confirmDiscard(blocker.proceed, blocker.reset);
+  }, [blocker, confirmDiscard]);
 
   useEffect(() => {
     if (!open || !username) return;

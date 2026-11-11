@@ -93,12 +93,10 @@ agent 命令启动。各阶段统一使用容器独占的 `TURBO_CACHE_DIR=/tmp/
 Turbo 的 Browser/E2E tasks 窄透传该变量，使正式根命令使用镜像内 Chromium；不自动跳过实际用户的 browser preflight。
 Smoke 以实际非 root 用户执行原浏览器预检，并用 workspace 的 Playwright 启动 headless shell 和完整 Chromium、执行页面脚本后关闭；
 不设置 `PLAYWRIGHT_E2E_SKIP_PREFLIGHT`。版本、路径、权限或依赖不匹配都会使 smoke 失败。
-票级实施、票级验收和 Spec 最终会话 在 Codex CLI 启动前统一执行 `scripts/sandcastle/prepare-workspace.sh`：安装锁定依赖、清理前端生成目录内容、
-显式运行 Admin/SSO `setup`。初始化任一步非零退出即停止；不依赖 SDK ready hook 或 `postinstall` 隐式保证成功。
-每个执行器独立挂载两个前端的 `src/.umi`、`src/.umi-production`、`src/.umi-test`，结束后清理暂存目录，
-保留宿主已有生成文件；Linux 类型不会写回宿主生成目录。Planner 只读选票，不执行这套依赖初始化。
-容器内修改依赖、Umi 配置或路由后，再运行 `sh scripts/sandcastle/prepare-workspace.sh` 更新环境；普通业务改动无需重复初始化。
-Smoke 覆盖旧宿主生成文件隔离、两个前端类型检查，以及安装或 setup 失败时不启动 agent。
+票级实施、票级验收和 Spec 最终会话在 Codex CLI 启动前执行 `scripts/sandcastle/prepare-workspace.sh`，检查依赖卷并安装锁定依赖。
+初始化任一步非零退出即停止。Planner 只读选票，直接使用镜像中的工具。
+容器内修改依赖后运行 `sh scripts/sandcastle/prepare-workspace.sh` 更新安装。Smoke 验证依赖安装失败会阻止 agent 启动，
+并在安装后运行两个前端的类型检查。
 依赖安装保留 `HUSKY=0`，避免标准 Husky 安装改写可写挂载的宿主 Git 元数据。票级实施、票级验收和 Spec 最终会话 在同一执行 shell
 中启用容器私有 hook 启动器，通过追加进程级 `core.hooksPath` 复用仓库 `.husky/pre-commit`，保留既有进程级 Git 配置。
 必要工具或 hook 初始化失败会阻止 agent 启动；容器不写宿主 local Git 配置或 `.husky/_` 包装文件。
@@ -162,6 +160,20 @@ SDK 固定补丁只挂载目标 worktree 的 Linux Git 指针，Git 长路径配
 必需检查缺少运行条件时保留 ticket open，不能以基础 `pnpm verify` 通过代替。
 
 ## Workspace 命令
+
+Admin 和 SSO 在各自 workspace 通过 Vite 启动与构建。先安装依赖，再按各 app 的 `.env.example` 准备 `.env.local`。
+复用升级前的 checkout 时，先清理两个前端遗留的 `src/.umi`、`src/.umi-production` 和 `src/.umi-test` 本地输出。
+
+```bash
+pnpm --filter @iam/admin dev
+pnpm --filter @iam/sso dev
+pnpm --filter @iam/admin build
+pnpm --filter @iam/sso build
+```
+
+开发地址默认是 `http://localhost:8001/iam-admin/` 和 `http://localhost:8000/portal/`。各 app 的 `.env.local` 可覆盖开发端口。
+根 `pnpm dev` 和 `pnpm build` 通过 Turbo 向各前端传递本端的公开构建变量。对应变量值和 app 内 `.env`、`.env.*`
+的变化会使该前端的构建缓存失效。公开变量改名见[前端构建输入](../releases/deployment.md#前端构建输入)。
 
 Gateway API：`pnpm --filter @iam/gateway-apisix start`；开发监听使用 `dev`。启动前按
 [`apps/gateway/.env.example`](../../apps/gateway/.env.example) 提供 `IAM_GATEWAY_*` 配置。默认独立监听 30004，

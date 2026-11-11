@@ -1,8 +1,8 @@
 import { searchOrganizationResponsibilityAssignments } from "@admin/services/organization-responsibility";
 import { OrganizationResponsibilityAssignmentStatus } from "@iam/contracts";
-import { Link } from "@umijs/max";
 import { List, Skeleton, Space, Tag, Typography, theme } from "antd";
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import {
   formatOrganizationResponsibilityStatus,
   formatOrganizationResponsibilityType,

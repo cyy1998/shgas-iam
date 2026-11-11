@@ -1,3 +1,4 @@
+import { useAccess } from "@admin/admin-access";
 import StatusTag from "@admin/components/StatusTag";
 import UserDetailDrawer from "@admin/pages/users/components/UserDetailDrawer";
 import UserFormModal from "@admin/pages/users/components/UserFormModal";
@@ -5,7 +6,6 @@ import { searchUsers, type UserVo } from "@admin/services/user";
 import { FilterOutlined, PlusOutlined } from "@ant-design/icons";
 import { type ActionType, PageContainer, type ProColumns, ProTable } from "@ant-design/pro-components";
 import { getUserStatusOptions, getUserTypeOptions, type UserStatus, type UserType } from "@iam/contracts";
-import { useAccess } from "@umijs/max";
 import { Alert, Button, Empty, Grid, Input, Select } from "antd";
 import { useRef, useState } from "react";
 import styles from "./UsersPage.module.less";

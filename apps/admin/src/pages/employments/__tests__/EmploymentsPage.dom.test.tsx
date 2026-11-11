@@ -6,7 +6,6 @@ import { render, screen, within } from "~admin/test/render";
 
 const state = vi.hoisted(() => ({
   drawerProps: null as null | { employmentId: number | null; open: boolean },
-  locationSearch: "",
 }));
 
 const enabledEmployment = {
@@ -22,13 +21,6 @@ const enabledEmployment = {
   },
 };
 
-vi.mock("@umijs/max", () => ({
-  useAccess: () => ({
-    canAccessEmployment: true,
-    canCreateEmployment: true,
-  }),
-  useLocation: () => ({ search: state.locationSearch }),
-}));
 vi.mock("@admin/components/OrganizationTreeSelector", () => ({
   default: () => null,
 }));
@@ -74,7 +66,6 @@ vi.mock("@ant-design/pro-components", async (importOriginal) => {
 
 describe("EmploymentsPage scoped administration", () => {
   it("keeps row operations read-only and opens management in the detail drawer", async () => {
-    state.locationSearch = "";
     const { user } = render(<EmploymentsPage />);
     const enabled = within(screen.getByTestId("enabled-actions"));
     const ended = within(screen.getByTestId("ended-actions"));
@@ -89,8 +80,7 @@ describe("EmploymentsPage scoped administration", () => {
   });
 
   it("opens an in-scope Employment detail from a User-detail deep link", async () => {
-    state.locationSearch = "?employmentId=42";
-    render(<EmploymentsPage />);
+    render(<EmploymentsPage />, { initialEntry: "/employments?employmentId=42" });
 
     expect(await screen.findByText("employment-42")).toBeVisible();
     expect(state.drawerProps).toMatchObject({ employmentId: 42, open: true });

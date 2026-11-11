@@ -4,15 +4,12 @@ import { type ClientSearchParams, type ClientVo, searchClients } from "@admin/se
 import { PlusOutlined } from "@ant-design/icons";
 import { PageContainer, type ProColumns, ProTable } from "@ant-design/pro-components";
 import { ClientSsoProtocol, type ClientStatus, getClientStatusOptions } from "@iam/contracts";
-import { history, Link } from "@umijs/max";
 import { Button, Input, message, Select, Tag } from "antd";
 import { useState } from "react";
-
-function editClient(clientCode: string) {
-  history.push(`/clients/${encodeURIComponent(clientCode)}/edit?section=basic`);
-}
+import { Link, useNavigate } from "react-router";
 
 export default function ClientsPage() {
+  const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [filters, setFilters] = useState<{
@@ -188,11 +185,11 @@ export default function ClientsPage() {
         onOpenChange={setCreateOpen}
         onCommitted={(clientCode) => {
           setCreateOpen(false);
-          history.push(`/clients/${encodeURIComponent(clientCode)}/edit?section=basic&committed=1`);
+          void navigate(`/clients/${encodeURIComponent(clientCode)}/edit?section=basic&committed=1`);
         }}
         onSuccess={(client) => {
           setCreateOpen(false);
-          editClient(client.clientCode);
+          void navigate(`/clients/${encodeURIComponent(client.clientCode)}/edit?section=basic`);
         }}
       />
     </PageContainer>

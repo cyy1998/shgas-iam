@@ -23,7 +23,7 @@ export function restoreLoginRedirectState(
 }
 
 // 调用后端 /sso/logout：清 global_session cookie 与 Redis 会话，随后 302 回指定地址。
-// 回到 admin 后 getInitialState 会因 401 自动跳转到 SSO 登录页。
+// 回到 Admin 后，启动时的 401 会导向 SSO 登录页。
 export function buildLogoutRedirectUrl(
   location: Pick<Location, "origin" | "pathname"> = window.location,
   logoutUrl = SSO_LOGOUT_URL,

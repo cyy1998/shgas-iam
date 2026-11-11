@@ -1,16 +1,11 @@
 node_modules/
 dist/
 coverage/
-.umi/
-.umi-production/
-.umi-test/
 .cache/
 .turbo/
 out/
 playwright-report/
 test-results/
-src/.umi/
-src/.umi-production/
 .agents/skills/
 .codex/skills/
 .scratch/

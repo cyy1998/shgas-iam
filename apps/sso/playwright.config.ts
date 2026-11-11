@@ -19,9 +19,9 @@ export default defineConfig({
   },
   webServer: {
     command: "pnpm dev:e2e",
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 240_000,
-    url: `${baseURL}/portal`,
+    url: `${baseURL}/portal/`,
   },
   workers: 1,
   projects: [

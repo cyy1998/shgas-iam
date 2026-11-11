@@ -3,7 +3,7 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
-import { __resetUmiMaxMocks } from "./mocks/umijs-max";
+import { resetTestAccess } from "./render";
 
 class ResizeObserverMock {
   observe = vi.fn();
@@ -70,6 +70,6 @@ Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
 
 afterEach(() => {
   cleanup();
-  __resetUmiMaxMocks();
+  resetTestAccess();
   vi.clearAllMocks();
 });

@@ -18,7 +18,7 @@ export function assertCanonicalOriginComposeConfig(renderedConfig: unknown, cont
     ],
     ["services.gateway-sync.environment.IAM_SSO_EXTERNAL_HOST", authority],
     ["services.admin-api.environment.IAM_ADMIN_API_ADMIN_CLIENT_CODES", contract.adminClientCode],
-    ["services.admin.build.args.UMI_APP_ADMIN_CLIENT_CODE", contract.adminClientCode],
+    ["services.admin.build.args.IAM_ADMIN_WEB_CLIENT_CODE", contract.adminClientCode],
     ["services.seed.environment.IAM_E2E_RUN_ID", contract.runId],
     ["services.seed.environment.IAM_E2E_ORIGIN", contract.canonicalOrigin],
     ["services.seed.environment.IAM_E2E_SEED_RECEIPT_PATH", `/artifacts/${contract.runId}/seed-receipt.json`],

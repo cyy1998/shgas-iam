@@ -6,8 +6,8 @@ const TEST_PUBLIC_KEY =
 
 async function loadCredentialModule(env: { kid?: string; publicKey?: string }) {
   vi.resetModules();
-  vi.stubEnv("UMI_APP_SSO_LOGIN_CREDENTIAL_KID", env.kid ?? "");
-  vi.stubEnv("UMI_APP_SSO_LOGIN_CREDENTIAL_PUBLIC_KEY", env.publicKey ?? "");
+  vi.stubEnv("IAM_SSO_WEB_LOGIN_CREDENTIAL_KID", env.kid ?? "");
+  vi.stubEnv("IAM_SSO_WEB_LOGIN_CREDENTIAL_PUBLIC_KEY", env.publicKey ?? "");
   const createLoginCredential = vi.fn(() => `${LOGIN_CREDENTIAL_PREFIX}.opaque-token`);
   vi.doMock("@iam/contracts", () => ({
     createLoginCredential,

@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
+import { adminCapabilitySummary } from "~admin/test/mocks/fixtures";
 import { getAdminAuthorizationReasonText, getAdminCapabilitySummary } from "../authorization";
 
 const { capabilitySummaryQuery } = vi.hoisted(() => ({
@@ -20,13 +21,13 @@ beforeEach(() => {
 });
 
 it("hides the capability procedure path behind the authorization service", async () => {
-  const summary = { collectionActions: {}, visibleModules: [] };
+  const summary = adminCapabilitySummary;
   capabilitySummaryQuery.mockResolvedValue(summary);
 
   const result = await getAdminCapabilitySummary();
 
   expect(capabilitySummaryQuery).toHaveBeenCalledWith({});
-  expect(result).toBe(summary);
+  expect(result).toEqual(summary);
 });
 
 it("returns no explanation when no authorization reason is supplied", () => {

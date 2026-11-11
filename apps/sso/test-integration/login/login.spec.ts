@@ -212,3 +212,10 @@ test("completes first-party authorization and restores callback query and hash",
     "iam-first-party-navigation:v1:?tab=%E5%90%AF%E7%94%A8#profile",
   );
 });
+
+test("the portal root redirects to the login entry", async ({ page }) => {
+  await mockSsoApi(page);
+  await page.goto("/portal");
+  await expect(page).toHaveURL("/portal/login");
+  await expect(page.getByText("登录地址校验未通过")).toBeVisible();
+});

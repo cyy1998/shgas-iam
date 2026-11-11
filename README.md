@@ -47,8 +47,8 @@ iam-service/
 │   │   ├── src/components/          # 可复用 UI 组件
 │   │   ├── src/lib/api-client.ts    # tRPC client，类型来自 @iam/admin-api/trpc
 │   │   ├── src/services/            # 页面侧服务封装
-│   │   ├── src/models/              # Umi Max model
-│   │   ├── .umirc.ts                # 路由、base、proxy 配置
+│   │   ├── src/main.tsx             # 启动与 React Router 接线
+│   │   ├── vite.config.ts           # base、开发代理与构建输入
 │   │   └── .env.example
 │   ├── worker/                      # 后台任务 runtime（@iam/worker）
 │   ├── ops/                         # 一次性人工维护 CLI（@iam/ops）
@@ -67,7 +67,8 @@ iam-service/
 │       ├── src/assets/              # 登录页和密码页图片素材
 │       ├── src/lib/                 # 浏览器侧通用封装
 │       ├── src/utils/
-│       ├── .umirc.ts
+│       ├── src/main.tsx             # 启动与 React Router 接线
+│       ├── vite.config.ts           # base、开发代理与构建输入
 │       └── .env.example
 ├── packages/
 │   ├── api-core/                    # Hono/OpenAPI/tRPC HTTP 接入（@iam/api-core）
@@ -144,7 +145,7 @@ OIDC 由 API composition 装配 `@iam/oidc`，HTTP adapter 保持外部 `/oidc` 
 
 ### 前端（`apps/admin`、`apps/sso`）
 
-- **框架**：Umi Max + React 19
+- **框架**：Vite + React 19 + React Router
 - **UI**：Ant Design 6；Admin 使用与其兼容的 `@ant-design/pro-components` 3 beta，SSO 不依赖 ProComponents
 - **管理后台 API**：`@trpc/client` + `@iam/admin-api/trpc` 类型推导
 - **SSO 门户 API**：封装 `fetch`，统一处理 cookie、业务状态码和跳转
@@ -493,8 +494,8 @@ SSO 授权/登出 URL 和系统日志环境已有默认值，需要不同入口�
 源码构建未设置 Cap endpoint 时，按 API 前缀与 site key 派生；Docker 构建仍使用 Compose 的显式 build args。
 读取入口见 [SSO config](apps/sso/src/constants/config.ts)。
 
-Cap 资源随 `apps/sso/public/cap/` 一起构建。调整 `base` / `publicPath` 时，按实际路径覆盖
-`UMI_APP_SSO_CAP_WASM_URL` 和 `UMI_APP_SSO_CAP_PAKO_URL`。
+Cap 资源随 `apps/sso/public/cap/` 一起构建。使用独立资源地址时，设置
+`IAM_SSO_WEB_CAP_WASM_URL` 和 `IAM_SSO_WEB_CAP_PAKO_URL`。
 
 ### Ops 与 Gateway
 
@@ -549,7 +550,7 @@ pnpm --filter @iam/db db:migrate
 - 日志：`IAM_API_LOG_LEVEL`、`IAM_ADMIN_API_LOG_LEVEL` 控制 Pino 输出级别
 - API 调试：开发环境分别访问 <http://localhost:30000> 和 <http://localhost:30001>
 - 数据调试：Drizzle Kit 命令或直接连接本地 PostgreSQL
-- 前端代理：查看 `apps/admin/.umirc.ts` 和 `apps/sso/.umirc.ts`
+- 前端代理：查看 `apps/admin/vite.config.ts` 和 `apps/sso/vite.config.ts`
 - 测试：`pnpm test` 等价于 `pnpm test:unit`；Integration 按 workspace/file 选择，由根命令消费 workspace 执行器与服务声明；前端 Unit 使用 Vitest，真实浏览器通过根 `pnpm test:integration` 执行
 - 类型检查：`pnpm typecheck`
 

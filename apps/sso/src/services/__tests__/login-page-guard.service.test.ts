@@ -9,7 +9,7 @@ describe("login page guard service", () => {
   });
 
   it("keeps the Custom SSO protocol route outside the REST API prefix", async () => {
-    vi.stubEnv("UMI_APP_SSO_API_PREFIX", "/api/iam");
+    vi.stubEnv("IAM_SSO_WEB_API_PREFIX", "/api/iam");
     vi.resetModules();
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(

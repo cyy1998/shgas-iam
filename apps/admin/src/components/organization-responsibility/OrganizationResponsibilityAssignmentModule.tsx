@@ -1,3 +1,4 @@
+import { useAccess } from "@admin/admin-access";
 import AuditLogTable from "@admin/components/audit/AuditLogTable";
 import styles from "@admin/components/detail/DetailDrawer.module.less";
 import DetailHeaderActions from "@admin/components/detail/DetailHeaderActions";
@@ -21,7 +22,6 @@ import {
   type OrganizationResponsibilityTypeCode,
   OrganizationStatus,
 } from "@iam/contracts";
-import { useAccess } from "@umijs/max";
 import {
   Alert,
   Button,

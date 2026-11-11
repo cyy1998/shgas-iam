@@ -8,13 +8,12 @@ export const domTestOptions = {
 export default defineConfig({
   resolve: {
     alias: {
-      "@sso": resolve(__dirname, "src"),
-      "~sso": __dirname,
-      "@umijs/max": resolve(__dirname, "test/mocks/umijs-max.ts"),
+      "@sso": resolve(import.meta.dirname, "src"),
+      "~sso": import.meta.dirname,
     },
   },
   test: {
-    exclude: ["dist/**", "test-integration/**", "node_modules/**", "src/.umi/**", "src/.umi-production/**"],
+    exclude: ["dist/**", "test-integration/**", "node_modules/**"],
     maxWorkers: "25%",
     testTimeout: 10_000,
     coverage: {
@@ -22,7 +21,7 @@ export default defineConfig({
       reporter: ["text", "html", "lcov"],
       reportsDirectory: "./coverage",
       include: ["src/**/*.{ts,tsx}"],
-      exclude: ["src/**/*.d.ts", "src/.umi/**", "src/.umi-production/**", "src/assets/**"],
+      exclude: ["src/**/*.d.ts", "src/assets/**"],
     },
   },
 });

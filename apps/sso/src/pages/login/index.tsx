@@ -14,9 +14,9 @@ import { login, mobileLogin } from "@sso/services/auth";
 import { sendMessage } from "@sso/services/open";
 import { mobileSet } from "@sso/services/public";
 import { ServiceError } from "@sso/utils/request";
-import { history } from "@umijs/max";
 import { Button, Form, Modal, message, Tabs } from "antd";
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import { LoginGuardNotice } from "./_components/LoginGuardNotice";
 import { PasswordLoginForm, type PasswordLoginValues } from "./_components/PasswordLoginForm";
 import { SmsLoginForm, type SmsLoginValues } from "./_components/SmsLoginForm";
@@ -28,6 +28,7 @@ import "./index.less";
 type LoginMode = "PWD" | "SMS" | "BMN";
 
 export default function LoginPage() {
+  const navigate = useNavigate();
   const [mode, setMode] = useState<LoginMode>(() => {
     const loginType = new URLSearchParams(window.location.search).get("loginType");
     return loginType === "SMS" || loginType === "PWD" ? loginType : "PWD";
@@ -74,7 +75,7 @@ export default function LoginPage() {
     const params = new URLSearchParams(window.location.search);
     const username = pwdForm.getFieldValue("username");
     if (username) params.set("username", username);
-    history.push(`/reset-password?${params.toString()}`);
+    void navigate(`/reset-password?${params.toString()}`);
   };
 
   const handlePwdLogin = async (values: PasswordLoginValues) => {

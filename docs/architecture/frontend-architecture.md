@@ -7,10 +7,12 @@
 
 Admin 通过 app-local service 消费管理能力，SSO 通过 service 消费登录和本人操作能力。
 页面拥有筛选、选中记录、弹窗、提交状态及操作后的刷新；页面私有组件和 hook 就近放置，跨页面复用能力放公共目录。
-全局 model 只承载跨路由状态，Umi runtime 负责启动、布局和认证接线，业务流程留在页面与对应 hook/service。
+两个应用分别从 `src/main.tsx` 启动并装配 React Router、主题和会话相关状态。跨路由状态由应用持有，业务流程留在页面与对应 hook/service。
+Admin 在应用内装配管理布局和路由权限，SSO 在应用内装配认证入口和续接。
 
-构建公开环境变量使用 Umi 前缀和 app 专用 namespace，页面不散落部署变量名。
-Admin/SSO 的 Custom SSO 类型和预览消费 `/wire` 浏览器出口；Umi alias 与共享契约源码同路编译，避免预构建与源码模块混用。
+各自的 `vite.config.ts` 声明部署子路径、开发代理与公开构建输入。Admin 使用 `IAM_ADMIN_WEB_*`，SSO 使用 `IAM_SSO_WEB_*`。
+Vite 只注入配置中逐项列出的公开变量，浏览器代码在 `src/constants/config.ts` 统一读取并应用默认值。
+Admin/SSO 的 Custom SSO 类型和预览消费 `/wire` 浏览器出口，由 Vite 与应用源码一同构建。
 
 ## 请求、类型与错误的所有权
 
@@ -54,7 +56,7 @@ Service 解析协议结果，hook 管理超时、取消与过期响应，页面�
 续接替换历史记录，避免后退再次进入登录；首次登录证明由协议持有。
 找回密码不经过此守卫，新鲜认证要求由协议处理，见[OIDC 接入](../guides/oidc.md#兑换失败与重新登录)。
 
-## 测试与生成路径
+## 前端测试
 
 Service 验证请求和错误转换，页面验证输入、权限及状态驱动的结果，组件或浏览器覆盖路由、guard 和恢复交互。
 异步测试使用受控请求或时钟，不重复协议包算法与字段词典。通用规则见[测试规范](../development/testing.md)，

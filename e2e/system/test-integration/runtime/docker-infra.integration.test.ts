@@ -514,7 +514,7 @@ function renderedComposeContract() {
       admin: {
         build: {
           args: {
-            UMI_APP_ADMIN_CLIENT_CODE: "iam-admin",
+            IAM_ADMIN_WEB_CLIENT_CODE: "iam-admin",
           },
         },
       },

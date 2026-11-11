@@ -3,19 +3,17 @@
   "private": true,
   "author": "cyy",
   "scripts": {
-    "build": "max build",
-    "dev": "max dev",
-    "dev:e2e": "cross-env PORT=8000 UMI_APP_SSO_LOGIN_CREDENTIAL_KID=2026-05-primary UMI_APP_SSO_LOGIN_CREDENTIAL_PUBLIC_KEY=04112ddd8854e8262db2520bba112535844884c03348a45fcf4ee0f9a967979be52bd46caf43be697ae557ed2e4fa5b4dca8d2dbfa08c0f2f710c0f61591bb17dc max dev",
+    "build": "vite build",
+    "dev": "vite",
+    "dev:e2e": "cross-env IAM_SSO_WEB_LOGIN_CREDENTIAL_KID=2026-05-primary IAM_SSO_WEB_LOGIN_CREDENTIAL_PUBLIC_KEY=04112ddd8854e8262db2520bba112535844884c03348a45fcf4ee0f9a967979be52bd46caf43be697ae557ed2e4fa5b4dca8d2dbfa08c0f2f710c0f61591bb17dc vite --host 127.0.0.1 --port 8000 --strictPort",
     "e2e:install": "playwright install --with-deps chromium",
     "e2e:install:browsers": "playwright install chromium",
     "e2e:ui": "playwright test --ui",
     "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
-    "postinstall": "max setup",
     "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
     "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check",
     "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "typecheck": "pnpm exec tsc --noEmit",
-    "setup": "max setup",
     "start": "npm run dev",
     "test": "pnpm test:unit",
     "test:coverage": "vitest run --config vitest.unit.config.ts --coverage",
@@ -34,12 +32,12 @@
     "@iam/contracts": "workspace:*",
     "@iam/custom-sso": "workspace:*",
     "@iam/delegation": "workspace:*",
-    "@umijs/max": "^4.6.79",
     "antd": "^6.5.1",
     "cap-widget": "^0.1.57",
     "dayjs": "1.11.21",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "react-router": "7.18.5"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
@@ -47,14 +45,19 @@
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.1",
+    "@types/node": "25.9.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@typescript/native": "npm:typescript@7.0.2",
+    "@vitejs/plugin-react": "6.3.0",
     "@vitest/coverage-v8": "5.0.1",
     "cross-env": "^10.1.0",
     "jsdom": "^30.1.0",
+    "less": "4.6.7",
     "msw": "^2.15.0",
     "typescript": "npm:@typescript/typescript6@6.0.2",
+    "vite": "8.1.5",
     "vitest": "5.0.1"
-  }
+  },
+  "type": "module"
 }

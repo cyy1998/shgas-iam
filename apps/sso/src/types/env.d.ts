@@ -1,16 +1,19 @@
-// Declare Node.js process global for environment variables
-declare const process: {
-  env: {
-    NODE_ENV?: string;
-    UMI_APP_SSO_API_PREFIX?: string;
-    UMI_APP_SSO_CAP_ENDPOINT?: string;
-    UMI_APP_SSO_CAP_PAKO_URL?: string;
-    UMI_APP_SSO_CAP_SITE_KEY?: string;
-    UMI_APP_SSO_CAP_WASM_URL?: string;
-    UMI_APP_SSO_CLIENT_CODE?: string;
-    UMI_APP_SSO_LOGIN_CREDENTIAL_KID?: string;
-    UMI_APP_SSO_LOGIN_CREDENTIAL_PUBLIC_KEY?: string;
-    UMI_APP_SSO_WELL_KNOWN_URL?: string;
-    [key: string]: string | undefined;
-  };
-};
+interface ViteTypeOptions {
+  strictImportMetaEnv: unknown;
+}
+
+interface ImportMetaEnv {
+  readonly IAM_SSO_WEB_API_PREFIX?: string;
+  readonly IAM_SSO_WEB_CAP_ENDPOINT?: string;
+  readonly IAM_SSO_WEB_CAP_PAKO_URL?: string;
+  readonly IAM_SSO_WEB_CAP_SITE_KEY?: string;
+  readonly IAM_SSO_WEB_CAP_WASM_URL?: string;
+  readonly IAM_SSO_WEB_CLIENT_CODE?: string;
+  readonly IAM_SSO_WEB_LOGIN_CREDENTIAL_KID?: string;
+  readonly IAM_SSO_WEB_LOGIN_CREDENTIAL_PUBLIC_KEY?: string;
+  readonly IAM_SSO_WEB_WELL_KNOWN_URL?: string;
+}
+
+interface Window {
+  CAP_PAKO_URL?: string;
+}

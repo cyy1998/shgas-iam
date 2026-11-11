@@ -6,7 +6,7 @@ import { server } from "~sso/test/mocks/server";
 import { registerMswLifecycle } from "~sso/test/setup-msw";
 
 vi.hoisted(() => {
-  vi.stubEnv("UMI_APP_SSO_WELL_KNOWN_URL", "http://localhost/sso/.well-known/authentication-configuration");
+  vi.stubEnv("IAM_SSO_WEB_WELL_KNOWN_URL", "http://localhost/sso/.well-known/authentication-configuration");
 });
 
 afterAll(() => {

@@ -1,8 +1,8 @@
 import { HR_MANUAL_PATH } from "@admin/admin-route-registry";
 import { ArrowLeftOutlined, ArrowRightOutlined } from "@ant-design/icons";
-import { Link, useLocation } from "@umijs/max";
 import { Image } from "antd";
 import { useEffect, useRef } from "react";
+import { Link, useLocation } from "react-router";
 import styles from "./HrManualPage.module.less";
 import { hrManualSections, type ManualStep } from "./hr-manual-content";
 import { hrManualImages } from "./hr-manual-images";

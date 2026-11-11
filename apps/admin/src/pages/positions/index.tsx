@@ -1,10 +1,10 @@
+import { useAccess } from "@admin/admin-access";
 import StatusTag from "@admin/components/StatusTag";
 import PositionFormModal from "@admin/pages/positions/components/PositionFormModal";
 import { deletePosition, type PositionVo, searchPositions, updatePositionStatus } from "@admin/services/position";
 import { PlusOutlined } from "@ant-design/icons";
 import { type ActionType, PageContainer, type ProColumns, ProTable } from "@ant-design/pro-components";
 import { getPositionStatusOptions } from "@iam/contracts";
-import { useAccess } from "@umijs/max";
 import { Button, Dropdown, Input, Modal, message } from "antd";
 import { useRef, useState } from "react";
 

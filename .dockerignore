@@ -26,18 +26,6 @@ build
 **/.cache
 tmp
 .superpowers
-apps/admin/.umi
-apps/admin/.umi-production
-apps/admin/.umi-test
-apps/admin/src/.umi
-apps/admin/src/.umi-production
-apps/admin/src/.umi-test
-apps/sso/.umi
-apps/sso/.umi-production
-apps/sso/.umi-test
-apps/sso/src/.umi
-apps/sso/src/.umi-production
-apps/sso/src/.umi-test
 
 # Environment files
 .env

@@ -15,9 +15,9 @@ Next review: 2026-12-02
 | 位置         | 必须核对                                                                                                                   |
 | ------------ | -------------------------------------------------------------------------------------------------------------------------- |
 | API          | `IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID` 存在于 `IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON`，值为配对 SM2 私钥               |
-| SSO 构建     | `UMI_APP_SSO_LOGIN_CREDENTIAL_KID` 与 API active kid 一致，`UMI_APP_SSO_LOGIN_CREDENTIAL_PUBLIC_KEY` 为配对公钥            |
+| SSO 构建     | `IAM_SSO_WEB_LOGIN_CREDENTIAL_KID` 与 API active kid 一致，`IAM_SSO_WEB_LOGIN_CREDENTIAL_PUBLIC_KEY` 为配对公钥            |
 | 时间与防重放 | `IAM_API_LOGIN_CREDENTIAL_MAX_SKEW_MS` 为毫秒，`IAM_API_LOGIN_CREDENTIAL_NONCE_TTL_SECONDS` 为秒；逐副本核对配置和时钟     |
-| Cap          | 核对 SSO 的 `UMI_APP_SSO_CAP_ENDPOINT`、`UMI_APP_SSO_CAP_SITE_KEY`、`UMI_APP_SSO_CAP_WASM_URL`、`UMI_APP_SSO_CAP_PAKO_URL` |
+| Cap          | 核对 SSO 的 `IAM_SSO_WEB_CAP_ENDPOINT`、`IAM_SSO_WEB_CAP_SITE_KEY`、`IAM_SSO_WEB_CAP_WASM_URL`、`IAM_SSO_WEB_CAP_PAKO_URL` |
 
 当前默认偏移 300000 ms、nonce TTL 360 s 尚未覆盖完整接受期，env 没有交叉校验。
 需要完整防重放保证时，先解决并验证[时间窗口缺口](#凭证时间窗口与防重放限制)；

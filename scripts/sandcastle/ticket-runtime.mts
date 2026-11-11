@@ -9,7 +9,7 @@ import { configuredCodex } from "./codex-provider.mts";
 import { command } from "./commands.ts";
 import { githubRepo } from "./github.ts";
 import { ExecutorInfrastructureError, hasUnstoppedExecutor, withExecutorResources } from "./resources.ts";
-import { dockerSandbox, withDockerPreflight, withFrontendMounts, withWorkspacePreparation } from "./sandbox.mts";
+import { dockerSandbox, withDockerPreflight, withWorkspacePreparation } from "./sandbox.mts";
 import type { TicketRun } from "./tickets.ts";
 import { dependencyVolumeTargets } from "./workspace-dependencies.mts";
 
@@ -70,59 +70,53 @@ export function createWorkspaceExecutor(options: ExecutorOptions) {
     let sandboxCreated = false;
     try {
       const anonymousVolumes = await dependencyVolumeTargets(input.worktreePath);
-      return await withFrontendMounts(
-        (generatedMounts) =>
-          withExecutorResources(
-            { cwd, image, signal, anonymousVolumes, onUnsafeClose: options.onUnsafeClose },
-            async (resources) => {
-              await mkdir(join(cwd, ".sandcastle", "logs"), { recursive: true });
-              try {
-                // Bind the inspected checkout without SDK branch reuse or managed-directory pruning.
-                const sandbox = dockerSandbox({
-                  ...resources,
-                  imageName: image,
-                  anonymousVolumes,
-                  env: { ...options.githubCredentials, ...auth.env, ...resources.env },
-                  mounts: [...options.mounts, ...generatedMounts, ...resources.mounts],
-                });
-                const result = await (options.run ?? run)({
-                  cwd: input.worktreePath,
-                  branchStrategy: { type: "head" },
-                  sandbox: {
-                    ...sandbox,
-                    create: async (input) => {
-                      const handle = await sandbox.create(input);
-                      sandboxCreated = true;
-                      return handle;
-                    },
-                  },
-                  agent: withDockerPreflight(
-                    withWorkspacePreparation(
-                      options.agent?.(input) ?? configuredCodex(options.model, roles, input.role),
-                    ),
-                  ),
-                  name: input.name,
-                  promptFile: input.promptFile,
-                  promptArgs: input.promptArgs,
-                  maxIterations: 1,
-                  signal,
-                  logging: {
-                    type: "file",
-                    path: join(cwd, ".sandcastle", "logs", `${input.logName}-${Date.now()}.log`),
-                    verbose: true,
-                  },
-                });
-                return {
-                  completed: result.completionSignal === "<promise>COMPLETE</promise>",
-                  handoff: result.stdout.replaceAll("<promise>COMPLETE</promise>", "").trim(),
-                };
-              } catch (error) {
-                executionFailure = error;
-                throw error;
-              }
-            },
-          ),
-        options.canClose,
+      return await withExecutorResources(
+        { cwd, image, signal, anonymousVolumes, onUnsafeClose: options.onUnsafeClose },
+        async (resources) => {
+          await mkdir(join(cwd, ".sandcastle", "logs"), { recursive: true });
+          try {
+            // Bind the inspected checkout without SDK branch reuse or managed-directory pruning.
+            const sandbox = dockerSandbox({
+              ...resources,
+              imageName: image,
+              anonymousVolumes,
+              env: { ...options.githubCredentials, ...auth.env, ...resources.env },
+              mounts: [...options.mounts, ...resources.mounts],
+            });
+            const result = await (options.run ?? run)({
+              cwd: input.worktreePath,
+              branchStrategy: { type: "head" },
+              sandbox: {
+                ...sandbox,
+                create: async (input) => {
+                  const handle = await sandbox.create(input);
+                  sandboxCreated = true;
+                  return handle;
+                },
+              },
+              agent: withDockerPreflight(
+                withWorkspacePreparation(options.agent?.(input) ?? configuredCodex(options.model, roles, input.role)),
+              ),
+              name: input.name,
+              promptFile: input.promptFile,
+              promptArgs: input.promptArgs,
+              maxIterations: 1,
+              signal,
+              logging: {
+                type: "file",
+                path: join(cwd, ".sandcastle", "logs", `${input.logName}-${Date.now()}.log`),
+                verbose: true,
+              },
+            });
+            return {
+              completed: result.completionSignal === "<promise>COMPLETE</promise>",
+              handoff: result.stdout.replaceAll("<promise>COMPLETE</promise>", "").trim(),
+            };
+          } catch (error) {
+            executionFailure = error;
+            throw error;
+          }
+        },
       );
     } catch (error) {
       if (hasUnstoppedExecutor(error) || signal.aborted || (sandboxCreated && error === executionFailure)) throw error;

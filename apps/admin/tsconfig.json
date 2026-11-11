@@ -1,16 +1,22 @@
 {
-  "extends": "./src/.umi/tsconfig.json",
   "compilerOptions": {
+    "target": "ESNext",
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "types": ["vite/client", "node"],
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
     "paths": {
       "@admin/*": ["./src/*"],
       "~admin/*": ["./*"],
-      "@@/*": ["./src/.umi/*"],
       "@admin-api/*": ["../admin-api/src/*"],
       "~admin-api/*": ["../admin-api/*"],
       "@api/*": ["../api/src/*"],
-      "~api/*": ["../api/*"],
-      "@umijs/max": ["./node_modules/@umijs/max"],
-      "@umijs/max/typings": ["./src/.umi/typings"]
+      "~api/*": ["../api/*"]
     }
-  }
+  },
+  "include": ["src", "test", "test-integration", "scripts", "*.ts"]
 }

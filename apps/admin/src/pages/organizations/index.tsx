@@ -1,3 +1,4 @@
+import { useAccess } from "@admin/admin-access";
 import OrgDetailPanel from "@admin/pages/organizations/components/OrgDetailPanel";
 import OrgFormModal from "@admin/pages/organizations/components/OrgFormModal";
 import OrgSearchPanel from "@admin/pages/organizations/components/OrgSearchPanel";
@@ -12,7 +13,6 @@ import {
 } from "@admin/services/organization";
 import { PlusOutlined } from "@ant-design/icons";
 import { PageContainer } from "@ant-design/pro-components";
-import { useAccess } from "@umijs/max";
 import { Alert, Button, Card, Col, message, Row, Space } from "antd";
 import { useCallback, useEffect, useState } from "react";
 import styles from "./OrganizationsPage.module.less";

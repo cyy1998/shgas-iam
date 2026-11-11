@@ -53,18 +53,18 @@ RUN --mount=type=cache,id=iam-pnpm-v12,target=/pnpm/store \
     pnpm install --frozen-lockfile --ignore-scripts
 
 FROM deps AS builder
-ARG UMI_APP_ADMIN_API_PREFIX
-ARG UMI_APP_ADMIN_SSO_AUTHORIZE_URL
-ARG UMI_APP_ADMIN_SSO_LOGOUT_URL
-ARG UMI_APP_ADMIN_CLIENT_CODE
-ARG UMI_APP_ADMIN_GRAFANA_URL
-ARG UMI_APP_ADMIN_SYSTEM_LOG_ENV
-ENV UMI_APP_ADMIN_API_PREFIX=$UMI_APP_ADMIN_API_PREFIX
-ENV UMI_APP_ADMIN_SSO_AUTHORIZE_URL=$UMI_APP_ADMIN_SSO_AUTHORIZE_URL
-ENV UMI_APP_ADMIN_SSO_LOGOUT_URL=$UMI_APP_ADMIN_SSO_LOGOUT_URL
-ENV UMI_APP_ADMIN_CLIENT_CODE=$UMI_APP_ADMIN_CLIENT_CODE
-ENV UMI_APP_ADMIN_GRAFANA_URL=$UMI_APP_ADMIN_GRAFANA_URL
-ENV UMI_APP_ADMIN_SYSTEM_LOG_ENV=$UMI_APP_ADMIN_SYSTEM_LOG_ENV
+ARG IAM_ADMIN_WEB_API_PREFIX
+ARG IAM_ADMIN_WEB_SSO_AUTHORIZE_URL
+ARG IAM_ADMIN_WEB_SSO_LOGOUT_URL
+ARG IAM_ADMIN_WEB_CLIENT_CODE
+ARG IAM_ADMIN_WEB_GRAFANA_URL
+ARG IAM_ADMIN_WEB_SYSTEM_LOG_ENV
+ENV IAM_ADMIN_WEB_API_PREFIX=$IAM_ADMIN_WEB_API_PREFIX
+ENV IAM_ADMIN_WEB_SSO_AUTHORIZE_URL=$IAM_ADMIN_WEB_SSO_AUTHORIZE_URL
+ENV IAM_ADMIN_WEB_SSO_LOGOUT_URL=$IAM_ADMIN_WEB_SSO_LOGOUT_URL
+ENV IAM_ADMIN_WEB_CLIENT_CODE=$IAM_ADMIN_WEB_CLIENT_CODE
+ENV IAM_ADMIN_WEB_GRAFANA_URL=$IAM_ADMIN_WEB_GRAFANA_URL
+ENV IAM_ADMIN_WEB_SYSTEM_LOG_ENV=$IAM_ADMIN_WEB_SYSTEM_LOG_ENV
 COPY packages/client-subject-projection/ ./packages/client-subject-projection/
 COPY packages/custom-sso/ ./packages/custom-sso/
 COPY packages/contracts/ ./packages/contracts/
@@ -84,7 +84,7 @@ COPY packages/documents/ ./packages/documents/
 COPY packages/filter-engine/ ./packages/filter-engine/
 COPY apps/admin-api/ ./apps/admin-api/
 COPY apps/admin/ ./apps/admin/
-RUN pnpm rebuild && pnpm --filter @iam/admin run setup && pnpm --filter @iam/admin run build
+RUN pnpm --filter @iam/admin run build
 
 FROM docker.xuanyuan.run/nginx:1.27.5-alpine AS runner
 COPY apps/admin/nginx.conf /etc/nginx/conf.d/default.conf

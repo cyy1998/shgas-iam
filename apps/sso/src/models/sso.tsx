@@ -1,9 +1,10 @@
 import { fetchAuthenticationConfig } from "@sso/services/authentication-config";
 import { getCurrentUserInfo } from "@sso/services/public";
 import type { AuthConfig, UserInfo } from "@sso/types/api";
-import { useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { SsoContext } from "./sso-context";
 
-export default function useSsoModel() {
+function useSsoModel() {
   const [authConfig, setAuthConfig] = useState<AuthConfig | null>(null);
   const [authConfigStatus, setAuthConfigStatus] = useState<"loading" | "success" | "error">("loading");
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
@@ -40,4 +41,11 @@ export default function useSsoModel() {
     loadAuthConfig,
     loadUserInfo,
   };
+}
+
+export type SsoState = ReturnType<typeof useSsoModel>;
+
+export function SsoProvider({ children }: { children: ReactNode }) {
+  const model = useSsoModel();
+  return <SsoContext value={model}>{children}</SsoContext>;
 }

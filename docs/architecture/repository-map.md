@@ -35,8 +35,8 @@ APISIX 和可观测性配置属于仓库级运行和运维资产，不是 worksp
 | `apps/worker`    | Bun background job runtime（`@iam/worker`）          | `src/composition/`：runtime wiring；`src/modules/`：worker modules；`src/http/`：health 与 Bull Board；`src/maintenance/`：私有周期 repair 子进程；`src/env.ts`：环境校验                                                                    |
 | `apps/ops`       | Bun 一次性人工维护 CLI（`@iam/ops`）                 | `src/index.ts`：统一命令分派与帮助；`src/commands/`：六组维护入口；`src/composition/`：窄资源装配；`src/env.ts`：独立按需配置。                                                                                                              |
 | `apps/gateway`   | Bun + Hono Gateway 配置 API（`@iam/gateway-apisix`） | `src/main.ts` / `runtime.ts`：独立进程与关闭；`src/http/`：请求与 envelope；`src/composition/`：只读认证与 APISIX 接线；`src/services/gateway/`：认证、规划、发布与补偿；`src/repositories/`：Client 窄读取。                                |
-| `apps/admin`     | Umi Max + React 管理端                               | `src/pages/`：页面；`src/components/`：可复用 UI；`src/lib/api-client.ts`：tRPC client；`src/services/`：page-side API wrappers                                                                                                              |
-| `apps/sso`       | Umi Max + React SSO portal                           | `src/pages/`：页面；`src/assets/`：静态资源；`src/services/`：API wrappers；`src/lib/`、`src/utils/`：browser helpers                                                                                                                        |
+| `apps/admin`     | Vite + React 管理端                                  | `src/pages/`：页面；`src/components/`：可复用 UI；`src/lib/api-client.ts`：tRPC client；`src/services/`：page-side API wrappers                                                                                                              |
+| `apps/sso`       | Vite + React SSO portal                              | `src/pages/`：页面；`src/assets/`：静态资源；`src/services/`：API wrappers；`src/lib/`、`src/utils/`：browser helpers                                                                                                                        |
 
 ### 后端分层速查
 
@@ -111,8 +111,6 @@ Apps 表用于定位入口；依赖方向、分层职责、命名和 wiring 统�
 
 - dependency/cache output：`**/node_modules/`、`**/.turbo/`、`**/.cache/`、`**/.eslintcache`、`**/*.tsbuildinfo`；
 - build/test output：`**/dist/`、`**/out/`、`**/coverage/`、`**/test-results/`；
-- Umi generated source：`apps/admin/src/.umi/`、`apps/admin/src/.umi-production/`、`apps/sso/src/.umi/`、
-  `apps/sso/src/.umi-production/`。
 
 `apps/api/static/` 与 `apps/admin-api/static/` 包含 vendored API documentation assets。它们不是普通业务源码；
 除非任务明确针对这些 assets，否则不要修改。

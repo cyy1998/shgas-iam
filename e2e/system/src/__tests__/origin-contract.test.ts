@@ -42,7 +42,7 @@ function renderedComposeContract(input: { runId: string; canonicalOrigin: string
       admin: {
         build: {
           args: {
-            UMI_APP_ADMIN_CLIENT_CODE: input.adminClientCode,
+            IAM_ADMIN_WEB_CLIENT_CODE: input.adminClientCode,
           },
         },
       },

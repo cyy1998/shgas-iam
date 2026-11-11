@@ -1,6 +1,3 @@
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { AgentProvider } from "@ai-hero/sandcastle";
 import type { DockerOptions } from "@ai-hero/sandcastle/sandboxes/docker";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
@@ -36,43 +33,6 @@ export const dockerPreflight = `timeout --kill-after=5s 30s sh -c ${shellQuote(
     " && docker compose version && docker buildx version && " +
     `node -e ${shellQuote(hostNetworkProbe)}`,
 )}`;
-
-export const frontendGeneratedPaths = ["admin", "sso"].flatMap((app) =>
-  [".umi", ".umi-production", ".umi-test"].map((directory) => `apps/${app}/src/${directory}`),
-);
-
-/** One execution owns these mounts; neither host output nor another ticket is reused. */
-export async function withFrontendMounts<T>(
-  use: (mounts: NonNullable<DockerOptions["mounts"]>) => Promise<T>,
-  canClose: () => boolean = () => true,
-): Promise<T> {
-  const directory = await mkdtemp(join(tmpdir(), "iam-sandcastle-generated-"));
-  const failures: unknown[] = [];
-  let result: T | undefined;
-  try {
-    const mounts = await Promise.all(
-      frontendGeneratedPaths.map(async (path) => {
-        const hostPath = join(directory, path);
-        await mkdir(hostPath, { recursive: true });
-        return { hostPath, sandboxPath: `/home/agent/workspace/${path}` };
-      }),
-    );
-    result = await use(mounts);
-  } catch (error) {
-    failures.push(error);
-  } finally {
-    if (canClose()) {
-      try {
-        await rm(directory, { recursive: true, force: true });
-      } catch (error) {
-        failures.push(error);
-      }
-    } else console.error(`创建者 sandbox 尚未确认停止，保留前端挂载：${directory}`);
-  }
-  if (failures.length === 1) throw failures[0];
-  if (failures.length) throw new AggregateError(failures, "执行与前端挂载收尾同时失败。");
-  return result!;
-}
 
 export const workspacePreparation = `${cachePreflight} && sh scripts/sandcastle/prepare-workspace.sh </dev/null`;
 

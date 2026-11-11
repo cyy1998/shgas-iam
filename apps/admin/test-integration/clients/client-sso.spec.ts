@@ -33,6 +33,29 @@ function initial(): ClientSsoDetail {
   };
 }
 
+test("canceling a refresh preserves the SSO configuration draft", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.route("**/rpc/admin.clientSso.detail**", (route) => fulfillTrpc(route, initial()));
+  const editPath = "/iam-admin/clients/portal/sso";
+  await page.goto(editPath);
+
+  await page.getByLabel("SSO 协议", { exact: true }).click();
+  await page.getByTitle("OIDC", { exact: true }).click();
+  const redirectUri = page.getByLabel("登录Redirect URIs", { exact: true });
+  await redirectUri.fill("https://rp.example/cb");
+  await redirectUri.press("Enter");
+
+  const confirmation = page.waitForEvent("dialog", { timeout: 10_000 }).then(async (dialog) => {
+    await dialog.dismiss();
+    return dialog.type();
+  });
+  const [dialogType] = await Promise.all([confirmation, page.evaluate(() => window.location.reload())]);
+
+  expect(dialogType).toBe("beforeunload");
+  await expect(page).toHaveURL(editPath);
+  await expect(page.getByTitle("https://rp.example/cb", { exact: true })).toBeVisible();
+});
+
 test("audited Secret read handles lost responses and audit failure without replay or clearing propagation notice", async ({
   page,
 }) => {

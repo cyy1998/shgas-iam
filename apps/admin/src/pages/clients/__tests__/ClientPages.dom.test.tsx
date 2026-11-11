@@ -4,7 +4,6 @@ import ClientEditPage from "@admin/pages/clients/edit";
 import type { ClientSearchParams } from "@admin/services/client";
 import type { ClientSsoDetail } from "@admin/services/client-sso";
 import { ApiErrorCode, ClientSsoProtocol, ClientStatus } from "@iam/contracts";
-import { history } from "@umijs/max";
 import { ConfigProvider, Modal, message } from "antd";
 import { HttpResponse, http } from "msw";
 import type { ReactElement } from "react";
@@ -16,25 +15,16 @@ import { registerMswLifecycle } from "~admin/test/setup-msw";
 
 registerMswLifecycle();
 
-const route = vi.hoisted(() => ({ clientCode: "iam-admin", search: "?section=basic" }));
-
 vi.mock("@admin/constants/config", () => ({
   API_PREFIX: "http://localhost",
   SSO_CLIENT_CODE: "iam-admin",
 }));
 
-vi.mock("@umijs/max", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@umijs/max")>();
-  return {
-    ...actual,
-    useParams: () => ({ clientCode: route.clientCode }),
-    useLocation: () => ({ search: route.search }),
-    history: { ...actual.history, block: vi.fn(() => vi.fn()) },
-  };
-});
-
 function render(ui: ReactElement) {
-  return renderWithProviders(<ConfigProvider theme={{ token: { motion: false } }}>{ui}</ConfigProvider>);
+  return renderWithProviders(<ConfigProvider theme={{ token: { motion: false } }}>{ui}</ConfigProvider>, {
+    initialEntry: "/clients/iam-admin/edit?section=basic",
+    path: "/clients/:clientCode/edit",
+  });
 }
 
 function success(data: unknown) {
@@ -49,8 +39,6 @@ function failure(status: number, serviceCode?: string) {
 }
 
 beforeEach(() => {
-  route.clientCode = "iam-admin";
-  route.search = "?section=basic";
   sessionStorage.clear();
   ConfigProvider.config({
     holderRender: (children) => <ConfigProvider theme={{ token: { motion: false } }}>{children}</ConfigProvider>,
@@ -143,7 +131,7 @@ describe("Client pages through the real services", () => {
         return failure(status, status === 404 ? ApiErrorCode.ClientNotFound : undefined);
       }),
     );
-    const { user } = render(<ClientEditPage />);
+    const { user, router } = render(<ClientEditPage />);
     expect(await screen.findByText(title)).toBeVisible();
     expect(screen.queryByRole("tab", { name: "基础信息" })).not.toBeInTheDocument();
     expect(reads).toBe(1);
@@ -153,7 +141,7 @@ describe("Client pages through the real services", () => {
       expect(await screen.findByRole("tab", { name: "基础信息" })).toBeVisible();
     } else {
       await user.click(screen.getByRole("button", { name: "返回应用列表" }));
-      expect(history.push).toHaveBeenCalledWith("/clients");
+      await waitFor(() => expect(router.state.location.pathname).toBe("/clients"));
     }
   });
 
@@ -173,7 +161,7 @@ describe("Client pages through the real services", () => {
           return failure(500, ApiErrorCode.AdminMutationCommitted);
         }),
       );
-      const { user } = render(<ClientEditPage />);
+      const { user, router } = render(<ClientEditPage />);
       await screen.findByRole("tab", { name: "基础信息" });
       if (operation === "update") {
         await user.click(screen.getByRole("button", { name: "保存基础信息" }));
@@ -189,7 +177,7 @@ describe("Client pages through the real services", () => {
       expect(writes).toHaveLength(1);
       expect(writes[0]).toMatchObject({ "0": { clientCode: "iam-admin" } });
       expect(reads).toEqual([{ "0": { clientCode: "iam-admin" } }, { "0": { clientCode: "iam-admin" } }]);
-      expect(history.push).not.toHaveBeenCalled();
+      expect(router.state.location.pathname).toBe("/clients/iam-admin/edit");
     },
   );
 

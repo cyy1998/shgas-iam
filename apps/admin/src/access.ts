@@ -1,4 +1,4 @@
-import type { AdminCapabilitySummary } from "@iam/contracts";
+import type { AdminCapabilitySummary, AdminModuleCode } from "@iam/contracts";
 import { ADMIN_MODULE_ACCESS_KEYS } from "./admin-route-registry";
 
 export default function access(initialState: { capabilities?: AdminCapabilitySummary }) {
@@ -7,9 +7,12 @@ export default function access(initialState: { capabilities?: AdminCapabilitySum
 
   return {
     canCreateDelegation: capabilities?.collectionActions.delegation?.create.allowed ?? false,
-    ...Object.fromEntries(
-      Object.entries(ADMIN_MODULE_ACCESS_KEYS).map(([module, key]) => [key, visibleModules.has(module as never)]),
-    ),
+    ...(Object.fromEntries(
+      Object.entries(ADMIN_MODULE_ACCESS_KEYS).map(([module, key]) => [
+        key,
+        visibleModules.has(module as AdminModuleCode),
+      ]),
+    ) as Record<(typeof ADMIN_MODULE_ACCESS_KEYS)[AdminModuleCode], boolean>),
     canCreateUser: capabilities?.collectionActions.user.create.allowed ?? false,
     canCreateEmployment: capabilities?.collectionActions.employment.create.allowed ?? false,
     canCreateOrganizationRoot: capabilities?.collectionActions.organization.createRoot.allowed ?? false,

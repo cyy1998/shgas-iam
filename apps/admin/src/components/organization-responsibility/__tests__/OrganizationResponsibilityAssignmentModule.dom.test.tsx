@@ -11,8 +11,7 @@ import {
 import { ConfigProvider, Modal, message } from "antd";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { __setAccess } from "~admin/test/mocks/umijs-max";
-import { act, render, screen, waitFor, within } from "~admin/test/render";
+import { act, render, screen, setTestAccess, waitFor, within } from "~admin/test/render";
 
 const responsibilityService = vi.hoisted(() => ({
   createAssignment: vi.fn(),
@@ -129,7 +128,7 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
       holderRender: (children) => <ConfigProvider theme={{ token: { motion: false } }}>{children}</ConfigProvider>,
     });
     // Most scenarios exercise existing assignments and do not need the creation form mounted.
-    __setAccess({
+    setTestAccess({
       canAccessOrganizationResponsibility: true,
       canCreateOrganizationResponsibility: false,
       canAccessAudit: true,
@@ -137,7 +136,6 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
     Object.values(responsibilityService).forEach((mock) => {
       mock.mockReset();
     });
-    window.history.replaceState({}, "", "/iam-admin/organization-responsibilities/assignments");
     responsibilityService.searchAssignments.mockResolvedValue({
       items: [assignment],
       total: 1,
@@ -368,7 +366,7 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
   });
 
   it("offers scoped HR Create and server-owned lifecycle actions while keeping Audit hidden", async () => {
-    __setAccess({
+    setTestAccess({
       canAccessOrganizationResponsibility: true,
       canCreateOrganizationResponsibility: true,
       canAccessAudit: false,
@@ -421,7 +419,7 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
   });
 
   it("creates a global assignment from the table toolbar without exposing Employment IDs", async () => {
-    __setAccess({
+    setTestAccess({
       canAccessOrganizationResponsibility: true,
       canCreateOrganizationResponsibility: true,
       canAccessAudit: true,
@@ -515,13 +513,9 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
   });
 
   it("shows an explicit URL error instead of querying a different scope", async () => {
-    window.history.replaceState(
-      {},
-      "",
-      "/iam-admin/organization-responsibilities/assignments?employment=oops&assignment=0",
-    );
-
-    render(<OrganizationResponsibilityAssignmentsPage />);
+    render(<OrganizationResponsibilityAssignmentsPage />, {
+      initialEntry: "/organization-responsibilities/assignments?employment=oops&assignment=0",
+    });
 
     expect(await screen.findByText("责任任命链接参数无效")).toBeInTheDocument();
     await waitFor(() => {
@@ -539,7 +533,7 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
       ] as const)(
         `shows changed=${changed} for %s and refreshes HR actions`,
         async (method, label, successMessage, allowedActions) => {
-          __setAccess({
+          setTestAccess({
             canAccessOrganizationResponsibility: true,
             canCreateOrganizationResponsibility: false,
             canAccessAudit: false,
@@ -790,7 +784,7 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
   });
 
   it("removes stale detail and actions when HR scope is lost before a lifecycle retry", async () => {
-    __setAccess({
+    setTestAccess({
       canAccessOrganizationResponsibility: true,
       canCreateOrganizationResponsibility: false,
       canAccessAudit: false,

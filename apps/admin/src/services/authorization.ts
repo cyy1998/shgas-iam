@@ -1,5 +1,5 @@
 import { apiClient } from "@admin/lib/api-client";
-import type { AdminAuthorizationReasonCode } from "@iam/contracts";
+import { type AdminAuthorizationReasonCode, AdminCapabilitySummarySchema } from "@iam/contracts";
 
 const authorizationReasonText = {
   ACTION_NOT_GRANTED: "当前管理员角色未授予此操作",
@@ -13,8 +13,8 @@ const authorizationReasonText = {
   UNMANAGEABLE_RESPONSIBILITY_BLOCKED: "存在当前管理员不可管理的开放责任任命，请联系完整管理员处理",
 } as const satisfies Record<AdminAuthorizationReasonCode, string>;
 
-export function getAdminCapabilitySummary() {
-  return apiClient.admin.authorization.capabilitySummary.query({});
+export async function getAdminCapabilitySummary() {
+  return AdminCapabilitySummarySchema.parse(await apiClient.admin.authorization.capabilitySummary.query({}));
 }
 
 export function getAdminAuthorizationReasonText(reason: AdminAuthorizationReasonCode | null) {

@@ -32,7 +32,7 @@ describe("LoginPage", () => {
 
   it.each(["", `?ssoReturn=${"a".repeat(43)}`])("rejects a login entry without protocol context: %s", async (query) => {
     window.history.replaceState({}, "", `/portal/login${query}`);
-    render(<LoginPage />);
+    render(<LoginPage />, { withSso: true });
     expect(await screen.findByText("登录地址校验未通过")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("请输入您的工号")).not.toBeInTheDocument();
     expect(withHumanVerification).not.toHaveBeenCalled();
@@ -40,7 +40,7 @@ describe("LoginPage", () => {
 
   it("shows a strong failure prompt when password login is rejected", async () => {
     withHumanVerification.mockRejectedValue(new ServiceError("账号或密码错误", ApiErrorCode.LoginFailed));
-    render(<LoginPage />);
+    render(<LoginPage />, { withSso: true });
 
     const username = await screen.findByPlaceholderText("请输入您的工号");
     fireEvent.change(username, {
@@ -82,7 +82,7 @@ describe("LoginPage", () => {
       }),
     );
 
-    render(<LoginPage />);
+    render(<LoginPage />, { withSso: true });
 
     try {
       await act(async () => {
@@ -103,7 +103,7 @@ describe("LoginPage", () => {
       ),
     );
 
-    render(<LoginPage />);
+    render(<LoginPage />, { withSso: true });
 
     expect(await screen.findByText("登录请求已失效，请返回应用重新发起登录")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("请输入您的工号")).not.toBeInTheDocument();
@@ -125,7 +125,7 @@ describe("LoginPage", () => {
       }),
     );
 
-    render(<LoginPage />);
+    render(<LoginPage />, { withSso: true });
 
     expect(await screen.findByText("统一身份认证服务暂时不可用，请稍后重试")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("请输入您的工号")).not.toBeInTheDocument();
@@ -150,7 +150,7 @@ describe("LoginPage", () => {
       }),
     );
     try {
-      render(<LoginPage />);
+      render(<LoginPage />, { withSso: true });
 
       expect(screen.getByText("正在检查登录状态…")).toBeInTheDocument();
       await act(async () => {
@@ -180,7 +180,7 @@ describe("LoginPage", () => {
       }),
     );
 
-    const view = render(<LoginPage />);
+    const view = render(<LoginPage />, { withSso: true });
     await screen.findByPlaceholderText("请输入您的工号");
 
     window.history.pushState(

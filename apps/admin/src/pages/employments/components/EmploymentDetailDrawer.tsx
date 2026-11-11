@@ -1,3 +1,4 @@
+import { useAccess } from "@admin/admin-access";
 import AuthorizationActionButton from "@admin/components/AuthorizationActionButton";
 import AuditLogTable from "@admin/components/audit/AuditLogTable";
 import styles from "@admin/components/detail/DetailDrawer.module.less";
@@ -9,7 +10,6 @@ import StatusTag from "@admin/components/StatusTag";
 import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
 import { type EmploymentDetailVo, getEmployment, updateEmployment } from "@admin/services/employment";
 import { StopOutlined, SwapOutlined } from "@ant-design/icons";
-import { useAccess } from "@umijs/max";
 import { Alert, Descriptions, Drawer, Empty, message, Skeleton, Space, Tabs, Tag, Typography, theme } from "antd";
 import { useEffect, useState } from "react";
 import EmploymentDescriptionForm from "./EmploymentDescriptionForm";

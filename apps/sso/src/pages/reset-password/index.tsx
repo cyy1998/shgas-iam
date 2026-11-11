@@ -15,9 +15,9 @@ import { codeVerify, getMaskedMobile, passwordReset, sendMessage } from "@sso/se
 import { confirmPasswordRule, passwordRule } from "@sso/utils/form-check";
 import { ServiceError } from "@sso/utils/request";
 import { getQuery } from "@sso/utils/url";
-import { history } from "@umijs/max";
 import { Button, Form, Input, Modal, message, Spin } from "antd";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import "./index.less";
 
 function StepBar({ current }: { current: 0 | 1 | 2 }) {
@@ -63,6 +63,7 @@ type Step2 = { code: string };
 type Step3 = { newPassword: string; newPasswordCopy: string };
 
 export default function ResetPasswordPage() {
+  const navigate = useNavigate();
   const [current, setCurrent] = useState(0);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
@@ -161,7 +162,7 @@ export default function ResetPasswordPage() {
     const usp = new URLSearchParams(window.location.search);
     usp.delete("username");
     const query = usp.toString();
-    history.push(query ? `/login?${query}` : "/login");
+    void navigate(query ? `/login?${query}` : "/login");
   };
 
   return (

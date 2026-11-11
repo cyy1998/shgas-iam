@@ -35,6 +35,8 @@ export const ADMIN_MANAGEMENT_ROUTE_REGISTRY = {
   "/system-logs": "systemLog",
 } as const satisfies Record<string, AdminModuleCode>;
 
-export function getAdminRouteAccess(path: keyof typeof ADMIN_MANAGEMENT_ROUTE_REGISTRY) {
+export type AdminManagementPath = keyof typeof ADMIN_MANAGEMENT_ROUTE_REGISTRY;
+
+export function getAdminRouteAccess(path: AdminManagementPath) {
   return ADMIN_MODULE_ACCESS_KEYS[ADMIN_MANAGEMENT_ROUTE_REGISTRY[path]];
 }

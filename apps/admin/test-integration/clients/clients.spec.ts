@@ -67,6 +67,27 @@ test("basic editor guards unsaved Internal API credentials across tabs and histo
   await expect(page.getByLabel("通用应用密钥")).toHaveValue(adminClientDetail.clientSecret);
 });
 
+test("canceling cross-document back navigation preserves the Internal API credential draft", async ({ page }) => {
+  await mockAdminApi(page);
+  const editPath = "/iam-admin/clients/iam-admin/edit?section=basic";
+  await page.goto("/iam-admin/clients");
+  await page.goto(editPath);
+
+  const secret = page.getByLabel("通用应用密钥");
+  await secret.click();
+  await secret.fill("unsaved-secret");
+
+  const confirmation = page.waitForEvent("dialog", { timeout: 10_000 }).then(async (dialog) => {
+    await dialog.dismiss();
+    return dialog.type();
+  });
+  const [dialogType] = await Promise.all([confirmation, page.evaluate(() => window.history.back())]);
+
+  expect(dialogType).toBe("beforeunload");
+  await expect(page).toHaveURL(editPath);
+  await expect(secret).toHaveValue("unsaved-secret");
+});
+
 test("unknown section falls back to basic and delete returns to list", async ({ page }) => {
   await mockAdminApi(page);
   await page.goto("/iam-admin/clients/iam-admin/edit?section=unknown");

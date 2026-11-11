@@ -1,3 +1,4 @@
+import { useAccess } from "@admin/admin-access";
 import OrganizationTreeSelector from "@admin/components/OrganizationTreeSelector";
 import StatusTag from "@admin/components/StatusTag";
 import EmploymentDetailDrawer from "@admin/pages/employments/components/EmploymentDetailDrawer";
@@ -6,9 +7,9 @@ import { type EmploymentVo, searchEmployments } from "@admin/services/employment
 import { PlusOutlined } from "@ant-design/icons";
 import { type ActionType, PageContainer, type ProColumns, ProTable } from "@ant-design/pro-components";
 import { EmploymentStatus, getEmploymentStatusOptions } from "@iam/contracts";
-import { useAccess, useLocation } from "@umijs/max";
 import { Alert, Button, Input, message, Select, Tag } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router";
 
 type PresetFromUrl = {
   username?: string;

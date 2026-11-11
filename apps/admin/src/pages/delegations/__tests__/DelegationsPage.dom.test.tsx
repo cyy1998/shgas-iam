@@ -9,10 +9,6 @@ import { registerMswLifecycle } from "~admin/test/setup-msw";
 
 registerMswLifecycle();
 vi.mock("@admin/constants/config", () => ({ API_PREFIX: "http://localhost", SSO_CLIENT_CODE: "iam-admin" }));
-vi.mock("@umijs/max", async (original) => ({
-  ...(await original<typeof import("@umijs/max")>()),
-  useAccess: () => ({ canCreateDelegation: true }),
-}));
 
 const allowed = { allowed: true, reason: null } as const;
 const denied = { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" } as const;

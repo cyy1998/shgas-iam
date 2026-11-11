@@ -68,7 +68,7 @@ Root 的类型检查、格式与 lint、架构／文档等静态检查，以及�
 
 Admin/SSO 普通 Unit 使用 Node，确需浏览器全局或 React DOM 的用例使用 `*.dom.test.ts[x]` 并进入 jsdom。
 Node/DOM 是同一 Unit runner 内的环境，不增加公开层级或命令；只有 DOM 加载浏览器兼容 setup。
-各文件按需注册 MSW lifecycle，MSW 本身不决定环境。优先复用 app-local Testing Library、MSW 和 Umi mock。
+各文件按需注册 MSW lifecycle，MSW 本身不决定环境。优先复用 app-local Testing Library、MSW 和既有路由测试辅助代码。
 纯类型用例放入 typecheck 收集的 `*.type-contract.ts`，使用正向约束和必要的 `@ts-expect-error`，不构造恒真的运行时断言。
 
 ## 测试质量原则

@@ -2,8 +2,7 @@
 
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { afterEach, vi } from "vitest";
-import { __resetUmiMaxMocks } from "./mocks/umijs-max";
+import { afterEach, beforeEach, vi } from "vitest";
 
 class ResizeObserverMock {
   observe = vi.fn();
@@ -62,8 +61,9 @@ Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
   value: vi.fn(),
 });
 
+beforeEach(() => window.history.replaceState(null, "", "/portal/"));
+
 afterEach(() => {
   cleanup();
-  __resetUmiMaxMocks();
   vi.clearAllMocks();
 });

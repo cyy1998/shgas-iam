@@ -1,39 +1,21 @@
 import { LoginPageGuardDecision } from "@iam/contracts";
-import * as app from "@sso/app";
-import useSsoModel from "@sso/models/sso";
 import LoginPage from "@sso/pages/login";
 import UserInfoPage from "@sso/pages/user-info";
 import { HttpResponse, http } from "msw";
-import { createContext, type ReactNode, useContext } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { authenticationConfig, currentUserInfo } from "~sso/test/mocks/fixtures";
 import { server } from "~sso/test/mocks/server";
-import { history } from "~sso/test/mocks/umijs-max";
 import { fireEvent, render, screen, waitFor } from "~sso/test/render";
 import { registerMswLifecycle } from "~sso/test/setup-msw";
-
-const ModelContext = createContext<ReturnType<typeof useSsoModel> | null>(null);
-vi.mock("@umijs/max", async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  useModel: () => {
-    const model = useContext(ModelContext);
-    if (!model) throw new Error("SSO model provider missing");
-    return model;
-  },
-}));
-
-function SsoRuntime({ children }: { children: ReactNode }) {
-  const model = useSsoModel();
-  return <ModelContext.Provider value={model}>{children}</ModelContext.Provider>;
-}
 
 registerMswLifecycle();
 
 describe("SSO loading and recovery", () => {
   const replace = vi.fn();
+  const browserWindow = window;
+  const browserLocation = () => browserWindow.location.pathname + browserWindow.location.search;
 
   beforeEach(() => {
-    const browserWindow = window;
     window.history.replaceState({}, "", "/portal/userInfo");
     vi.stubGlobal(
       "window",
@@ -47,7 +29,8 @@ describe("SSO loading and recovery", () => {
               replace,
             };
           }
-          return Reflect.get(target, property, target);
+          const value = Reflect.get(target, property, target);
+          return typeof value === "function" ? value.bind(target) : value;
         },
       }),
     );
@@ -71,11 +54,7 @@ describe("SSO loading and recovery", () => {
         }),
       );
 
-      render(
-        <SsoRuntime>
-          <UserInfoPage />
-        </SsoRuntime>,
-      );
+      render(<UserInfoPage />, { withSso: true });
 
       expect(await screen.findByRole("alert")).toHaveTextContent("个人信息加载失败");
       expect(screen.queryByRole("button", { name: /保存设置/ })).not.toBeInTheDocument();
@@ -90,20 +69,16 @@ describe("SSO loading and recovery", () => {
 
   it("keeps the existing authentication redirect when user info returns 401", async () => {
     server.use(http.get("*/public/user-info", () => new HttpResponse(null, { status: 401 })));
-    render(
-      <SsoRuntime>
-        <UserInfoPage />
-      </SsoRuntime>,
-    );
+    render(<UserInfoPage />, { withSso: true });
     await waitFor(() =>
-      expect(history.replace).toHaveBeenCalledWith(
-        "/login?client=iam&redirectUrl=http%3A%2F%2Flocalhost%3A3000%2Fportal%2FuserInfo",
+      expect(browserLocation()).toBe(
+        "/portal/login?client=iam&redirectUrl=http%3A%2F%2Flocalhost%3A3000%2Fportal%2FuserInfo",
       ),
     );
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("initializes discovery once across runtime bootstrap and the shared model", async () => {
+  it("initializes authentication discovery once when the login page opens", async () => {
     let requests = 0;
     server.use(
       http.get("*/sso/.well-known/authentication-configuration", () => {
@@ -112,13 +87,7 @@ describe("SSO loading and recovery", () => {
       }),
     );
     window.history.replaceState({}, "", "/portal/login?client=iam&redirectUrl=https%3A%2F%2Fapp.example%2Fhome");
-    const bootstrap = Reflect.get(app, "getInitialState");
-    if (typeof bootstrap === "function") await bootstrap();
-    render(
-      <SsoRuntime>
-        <LoginPage />
-      </SsoRuntime>,
-    );
+    render(<LoginPage />, { withSso: true });
     await screen.findByPlaceholderText("请输入您的工号");
     expect(requests).toBe(1);
   });
@@ -141,11 +110,7 @@ describe("SSO loading and recovery", () => {
         }),
       );
       window.history.replaceState({}, "", "/portal/login?client=iam&redirectUrl=https%3A%2F%2Fapp.example%2Fhome");
-      render(
-        <SsoRuntime>
-          <LoginPage />
-        </SsoRuntime>,
-      );
+      render(<LoginPage />, { withSso: true });
 
       await screen.findByText("统一身份认证服务暂时不可用，请稍后重试");
       await waitFor(() => expect(guardRequests).toBe(1));
@@ -175,11 +140,7 @@ describe("SSO loading and recovery", () => {
       http.get("*/oidc/login-guard", () => HttpResponse.json({ decision: LoginPageGuardDecision.Continue })),
     );
     window.history.replaceState({}, "", `/portal/login?oidcReturn=${handle}`);
-    render(
-      <SsoRuntime>
-        <LoginPage />
-      </SsoRuntime>,
-    );
+    render(<LoginPage />, { withSso: true });
     await waitFor(() => expect(replace).toHaveBeenCalledWith(`/oidc/resume?oidcReturn=${handle}`));
     expect(screen.queryByPlaceholderText("请输入您的工号")).not.toBeInTheDocument();
   });
@@ -213,11 +174,7 @@ describe("SSO loading and recovery", () => {
       }),
     );
     window.history.replaceState({}, "", "/portal/login?client=iam&redirectUrl=https%3A%2F%2Fapp.example%2Fhome");
-    render(
-      <SsoRuntime>
-        <LoginPage />
-      </SsoRuntime>,
-    );
+    render(<LoginPage />, { withSso: true });
     await screen.findByText("统一身份认证服务暂时不可用，请稍后重试");
     await waitFor(() => expect(guardRequests).toBe(1));
     fireEvent.click(screen.getByRole("button", { name: /重\s*试/ }));

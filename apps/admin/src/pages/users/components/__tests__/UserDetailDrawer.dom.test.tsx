@@ -11,8 +11,7 @@ import {
 import { ConfigProvider, Modal, message } from "antd";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHrEmploymentAllowedActions } from "~admin/test/mocks/fixtures";
-import { __setAccess, history } from "~admin/test/mocks/umijs-max";
-import { act, render, screen, waitFor, within } from "~admin/test/render";
+import { act, render, screen, setTestAccess, waitFor, within } from "~admin/test/render";
 
 const lifecycle = vi.hoisted(() => ({
   clearPrimaryEmployment: vi.fn(),
@@ -164,7 +163,7 @@ describe("UserDetailDrawer Employment lifecycle actions", () => {
   it.each([UserStatus.Enable, UserStatus.Pause, UserStatus.Disable])(
     "gates new Employment by User status %s",
     async (status) => {
-      __setAccess({ canAccessEmployment: true, canCreateEmployment: true });
+      setTestAccess({ canAccessEmployment: true, canCreateEmployment: true });
       lifecycle.getUser.mockResolvedValue({
         ...detail(EmploymentStatus.Enable),
         status,
@@ -288,19 +287,16 @@ describe("UserDetailDrawer Employment lifecycle actions", () => {
     });
 
     it("blocks browser unloading and route navigation until explicit discard", async () => {
-      const { user, name } = await editProfile();
+      const { user, name, router } = await editProfile();
       await user.clear(name);
       await user.type(name, "新姓名");
       const event = new Event("beforeunload", { cancelable: true });
       window.dispatchEvent(event);
       expect(event.defaultPrevented).toBe(true);
-      const retry = vi.fn();
-      const blockNavigation = history.block.mock.lastCall?.[0];
-      expect(blockNavigation).toBeDefined();
-      await act(async () => blockNavigation?.({ retry }));
-      expect(retry).not.toHaveBeenCalled();
+      await act(async () => router.navigate("/employments"));
+      expect(router.state.location.pathname).toBe("/");
       await user.click((await discardDialog()).getByRole("button", { name: "放弃修改" }));
-      await waitFor(() => expect(retry).toHaveBeenCalledOnce());
+      await waitFor(() => expect(router.state.location.pathname).toBe("/employments"));
     });
 
     it("clears the dirty state after saving and prevents closing during submission", async () => {
@@ -342,7 +338,7 @@ describe("UserDetailDrawer Employment lifecycle actions", () => {
     }
 
     async function submitResignation(role: "Full Admin" | "HR" = "Full Admin") {
-      __setAccess({
+      setTestAccess({
         canAccessUser: true,
         canAccessEmployment: true,
         canAccessOrganizationResponsibility: false,
@@ -513,7 +509,7 @@ describe("UserDetailDrawer Employment lifecycle actions", () => {
   });
 
   it("keeps an HR User detail informative while every unavailable action stays inert", async () => {
-    __setAccess({
+    setTestAccess({
       canAccessUser: true,
       canAccessPosition: true,
       canAccessEmployment: true,
@@ -586,7 +582,7 @@ describe("UserDetailDrawer Employment lifecycle actions", () => {
   });
 
   it("disables Transfer for a disabled User while retaining the other granted Employment actions", async () => {
-    __setAccess({
+    setTestAccess({
       canAccessUser: true,
       canAccessEmployment: true,
       canAccessOrganizationResponsibility: false,
@@ -620,7 +616,7 @@ describe("UserDetailDrawer Employment lifecycle actions", () => {
   });
 
   it("runs Employment actions directly from the User detail row", async () => {
-    __setAccess({
+    setTestAccess({
       canAccessUser: true,
       canAccessPosition: true,
       canAccessEmployment: true,

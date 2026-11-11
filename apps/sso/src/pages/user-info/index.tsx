@@ -10,15 +10,16 @@ import {
 import { VerificationCodeInput } from "@sso/components/VerificationCodeInput";
 import { useSmsCodeCountdown } from "@sso/hooks/useSmsCodeCountdown";
 import { withHumanVerification } from "@sso/lib/human-verification";
+import { useSso } from "@sso/models/sso-context";
 import { selfMobileSendMsg } from "@sso/services/open";
 import { mobileSet, passwordChange } from "@sso/services/public";
 import type { Employment } from "@sso/types/api";
 import { confirmPasswordRule, passwordRule, phoneRule } from "@sso/utils/form-check";
 import { ServiceError } from "@sso/utils/request";
 import { getQuery } from "@sso/utils/url";
-import { history, useModel } from "@umijs/max";
 import { Alert, Button, Form, Input, message, Spin, Table, Tabs } from "antd";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import DelegationSettings from "./_components/DelegationSettings";
 import TopBar from "./_components/TopBar";
 import "./index.less";
@@ -31,7 +32,8 @@ import {
 type TabKey = "password" | "mobile";
 
 export default function UserInfoPage() {
-  const { userInfo, userInfoStatus, loadUserInfo } = useModel("sso");
+  const navigate = useNavigate();
+  const { userInfo, userInfoStatus, loadUserInfo } = useSso();
   const [activeKey, setActiveKey] = useState<TabKey>("password");
   const [submitting, setSubmitting] = useState(false);
   const [smsSending, setSmsSending] = useState(false);
@@ -105,7 +107,7 @@ export default function UserInfoPage() {
     if (redirectUrl) {
       window.location.href = redirectUrl;
     } else {
-      history.back();
+      void navigate(-1);
     }
   };
 

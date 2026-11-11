@@ -1,3 +1,4 @@
+import { useAccess } from "@admin/admin-access";
 import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
 import {
   createDelegation,
@@ -10,7 +11,6 @@ import {
 import { FilterOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import { PageContainer } from "@ant-design/pro-components";
 import { ClientDelegationStatus } from "@iam/contracts";
-import { useAccess } from "@umijs/max";
 import {
   Alert,
   Button,

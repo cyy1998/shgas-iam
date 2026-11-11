@@ -1,12 +1,12 @@
 import { LogoutOutlined } from "@ant-design/icons";
 import logo from "@sso/assets/logo.png";
 import { buildLogoutUrl } from "@sso/lib/sso";
+import { useSso } from "@sso/models/sso-context";
 import { getQuery } from "@sso/utils/url";
-import { useModel } from "@umijs/max";
 import { Avatar, Dropdown, message } from "antd";
 
 export default function TopBar() {
-  const { authConfig, userInfo } = useModel("sso");
+  const { authConfig, userInfo } = useSso();
 
   const handleLogout = () => {
     const client = getQuery("client") ?? "";

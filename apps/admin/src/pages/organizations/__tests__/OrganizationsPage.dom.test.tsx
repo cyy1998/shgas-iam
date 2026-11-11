@@ -5,8 +5,7 @@ import { HttpResponse, http } from "msw";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { server } from "~admin/test/mocks/server";
-import { __setAccess } from "~admin/test/mocks/umijs-max";
-import { cleanup, render, screen, waitFor, within } from "~admin/test/render";
+import { cleanup, render, screen, setTestAccess, waitFor, within } from "~admin/test/render";
 import { registerMswLifecycle } from "~admin/test/setup-msw";
 
 registerMswLifecycle();
@@ -67,7 +66,7 @@ const reads = { detail: vi.fn(), children: vi.fn() };
 let fullPath: { orgCode: string; orgName: string }[];
 beforeEach(() => {
   fullPath = [organization];
-  __setAccess({
+  setTestAccess({
     canCreateOrganizationRoot: true,
     canAccessOrganizationResponsibility: false,
   });

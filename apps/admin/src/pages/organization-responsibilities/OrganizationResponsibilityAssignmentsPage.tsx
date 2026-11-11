@@ -4,8 +4,8 @@ import OrganizationResponsibilityAssignmentModule, {
 import { ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_LIFECYCLES } from "@admin/services/organization-responsibility";
 import { PageContainer } from "@ant-design/pro-components";
 import { ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG, type OrganizationResponsibilityTypeCode } from "@iam/contracts";
-import { history, useLocation } from "@umijs/max";
 import { Alert } from "antd";
+import { useLocation, useNavigate } from "react-router";
 
 const assignmentPath = "/organization-responsibilities/assignments";
 const typeCodes = new Set<string>(ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG.map((type) => type.code));
@@ -74,6 +74,7 @@ function serializeState(state: OrganizationResponsibilityAssignmentState) {
 
 export default function OrganizationResponsibilityAssignmentsPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const state = parseOrganizationResponsibilityAssignmentState(location.search);
 
   return (
@@ -87,7 +88,7 @@ export default function OrganizationResponsibilityAssignmentsPage() {
             kind: "global",
             state,
             onStateChange: (nextState) => {
-              history.replace(serializeState(nextState));
+              void navigate(serializeState(nextState), { replace: true });
             },
           }}
         />

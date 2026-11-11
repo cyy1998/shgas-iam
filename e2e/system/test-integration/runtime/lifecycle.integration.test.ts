@@ -30,7 +30,7 @@ function renderedComposeContract() {
       },
       "gateway-sync": { environment: { IAM_SSO_INTERNAL_HOST: authority, IAM_SSO_EXTERNAL_HOST: authority } },
       "admin-api": { environment: { IAM_ADMIN_API_ADMIN_CLIENT_CODES: "iam-admin" } },
-      admin: { build: { args: { UMI_APP_ADMIN_CLIENT_CODE: "iam-admin" } } },
+      admin: { build: { args: { IAM_ADMIN_WEB_CLIENT_CODE: "iam-admin" } } },
       seed: {
         environment: {
           IAM_E2E_RUN_ID: descriptor.runId,

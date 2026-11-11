@@ -15,7 +15,7 @@ GitHub 仓库：`{{REPO}}`；父 Spec：#{{SPEC_NUMBER}}；ticket：#{{ISSUE_NUM
    `.agents/skills/resolving-merge-conflicts/SKILL.md` 处理，不能丢弃任一方意图。
 3. 用 `gh issue edit {{ISSUE_NUMBER}} --repo {{REPO}} --add-assignee '@me'` 认领。
    从父 Spec 和 ticket 恢复已确认的 seam，按仓库 `tdd` skill red→green 完成本票。
-   容器已安装依赖和生成前端类型；依赖、Umi 配置或路由变化后重新运行 `sh scripts/sandcastle/prepare-workspace.sh`。
+   容器已安装锁定依赖。修改依赖后运行 `sh scripts/sandcastle/prepare-workspace.sh`。
 4. 运行本票完整受影响范围的行为测试、typecheck 和适用文档检查，执行 `git diff --check`。
    真实资源测试从根 `pnpm test:integration --workspace ... --file ...` 或 `pnpm test:e2e` 进入，每条命令独立管理资源。
    真实 I/O 先普通 await 再同步断言。缺失的必需检查须报告，不得宣称完成。

@@ -1,13 +1,14 @@
 import StatusTag from "@admin/components/StatusTag";
-import ClientSsoPage from "@admin/pages/clients/ClientSsoPage";
+import { ClientSsoSettings } from "@admin/pages/clients/ClientSsoPage";
 import BasicSettings from "@admin/pages/clients/components/BasicSettings";
 import { ClientDetailError, ClientDetailErrorKind, type ClientDetailVo, getClient } from "@admin/services/client";
 import { ArrowLeftOutlined } from "@ant-design/icons";
 import { PageContainer } from "@ant-design/pro-components";
-import { history, useLocation, useParams } from "@umijs/max";
-import { Alert, Button, Card, Modal, message, Result, Space, Tabs, Typography } from "antd";
+import { Alert, Button, Card, message, Result, Space, Tabs, Typography } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router";
 import styles from "./ClientSettings.module.less";
+import { useClientDraftGuard } from "./useClientDraftGuard";
 
 type ClientSection = "basic" | "sso";
 
@@ -27,6 +28,7 @@ function parseSection(search: string): ClientSection {
 export default function ClientEditPage() {
   const params = useParams<{ clientCode: string }>();
   const location = useLocation();
+  const navigate = useNavigate();
   const clientCode = params.clientCode ?? "";
   const section = parseSection(location.search);
   const [repairMessage, setRepairMessage] = useState<string | null>(() =>
@@ -37,9 +39,9 @@ export default function ClientEditPage() {
   const [loadState, setLoadState] = useState<LoadState>({
     status: "loading",
   });
-  const [basicDirty, setBasicDirty] = useState(false);
-  const [basicDiscardRevision, setBasicDiscardRevision] = useState(0);
-  const unblockRef = useRef<null | (() => void)>(null);
+  const [dirty, setDirty] = useState(false);
+  const [discardRevision, setDiscardRevision] = useState(0);
+  const deleted = useRef(false);
 
   const loadClient = useCallback(async () => {
     try {
@@ -76,57 +78,26 @@ export default function ClientEditPage() {
   useEffect(() => {
     const requested = new URLSearchParams(location.search).get("section");
     if (!sections.has(requested as ClientSection)) {
-      history.replace(`/clients/${encodeURIComponent(clientCode)}/edit?section=basic`);
+      void navigate(`/clients/${encodeURIComponent(clientCode)}/edit?section=basic`, { replace: true });
     }
-  }, [clientCode, location.search]);
+  }, [clientCode, location.search, navigate]);
 
-  useEffect(() => {
-    if (!basicDirty) return;
-    let confirmationOpen = false;
-    const unblock = history.block((transition) => {
-      if (confirmationOpen) return;
-      confirmationOpen = true;
-      Modal.confirm({
-        title: "放弃未保存的修改？",
-        content: "当前分区的修改不会自动保存或保留草稿。",
-        okText: "放弃修改",
-        okType: "danger",
-        onOk: () => {
-          confirmationOpen = false;
-          if (unblockRef.current === unblock) {
-            unblockRef.current = null;
-          }
-          unblock();
-          setBasicDirty(false);
-          setBasicDiscardRevision((current) => current + 1);
-          transition.retry();
-        },
-        onCancel: () => {
-          confirmationOpen = false;
-        },
-      });
-    });
-    unblockRef.current = unblock;
-    return () => {
-      if (unblockRef.current === unblock) {
-        unblockRef.current = null;
-      }
-      unblock();
-    };
-  }, [basicDirty]);
+  const shouldBlock = useCallback(() => dirty && !deleted.current, [dirty]);
+  useClientDraftGuard(shouldBlock, () => {
+    setDirty(false);
+    setDiscardRevision((current) => current + 1);
+  });
 
   const goToSection = (nextSection: ClientSection) => {
     if (nextSection === section) return;
-    history.push(`/clients/${encodeURIComponent(clientCode)}/edit?section=${nextSection}`);
+    void navigate(`/clients/${encodeURIComponent(clientCode)}/edit?section=${nextSection}`);
   };
 
-  const goBack = () => history.push("/clients");
+  const goBack = () => void navigate("/clients");
 
   const leaveAfterDelete = () => {
-    unblockRef.current?.();
-    unblockRef.current = null;
-    setBasicDirty(false);
-    history.push("/clients");
+    deleted.current = true;
+    void navigate("/clients");
   };
 
   if (loadState.status === "loading") {
@@ -146,7 +117,7 @@ export default function ClientEditPage() {
           title="应用不存在"
           subTitle={`找不到应用 ${clientCode}，它可能已被删除。`}
           extra={
-            <Button type="primary" onClick={() => history.push("/clients")}>
+            <Button type="primary" onClick={() => void navigate("/clients")}>
               返回应用列表
             </Button>
           }
@@ -165,7 +136,7 @@ export default function ClientEditPage() {
           subTitle="请检查网络后重试。"
           extra={
             <Space>
-              <Button onClick={() => history.push("/clients")}>返回应用列表</Button>
+              <Button onClick={() => void navigate("/clients")}>返回应用列表</Button>
               <Button type="primary" onClick={() => void loadClient()}>
                 重试
               </Button>
@@ -206,9 +177,9 @@ export default function ClientEditPage() {
             label: "基础信息",
             children: (
               <BasicSettings
-                key={`basic-${basicDiscardRevision}`}
+                key={discardRevision}
                 client={client}
-                onDirtyChange={setBasicDirty}
+                onDirtyChange={setDirty}
                 onCommitted={handleCommitted}
                 onMutated={refreshClient}
                 onDeleted={leaveAfterDelete}
@@ -218,7 +189,7 @@ export default function ClientEditPage() {
           {
             key: "sso",
             label: "SSO 配置",
-            children: <ClientSsoPage />,
+            children: <ClientSsoSettings key={discardRevision} onDirtyChange={setDirty} />,
           },
         ]}
       />
