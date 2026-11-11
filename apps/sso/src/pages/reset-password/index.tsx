@@ -9,8 +9,8 @@ import {
 } from "@ant-design/icons";
 import logoColorfulTextWhite from "@sso/assets/logo-colorful-text-white.png";
 import { VerificationCodeInput } from "@sso/components/VerificationCodeInput";
+import { useHumanVerification } from "@sso/hooks/useHumanVerification";
 import { useSmsCodeCountdown } from "@sso/hooks/useSmsCodeCountdown";
-import { withHumanVerification } from "@sso/lib/human-verification";
 import { codeVerify, getMaskedMobile, passwordReset, sendMessage } from "@sso/services/open";
 import { confirmPasswordRule, passwordRule } from "@sso/utils/form-check";
 import { ServiceError } from "@sso/utils/request";
@@ -63,6 +63,7 @@ type Step2 = { code: string };
 type Step3 = { newPassword: string; newPasswordCopy: string };
 
 export default function ResetPasswordPage() {
+  const { verify: withHumanVerification, captcha, cancel: cancelVerification } = useHumanVerification();
   const navigate = useNavigate();
   const [current, setCurrent] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -79,13 +80,14 @@ export default function ResetPasswordPage() {
   }, [form1]);
 
   const handleNext = async () => {
+    if (loading) return;
     setLoading(true);
     try {
       if (current === 0) {
         const v = await form1.validateFields();
         const body = { username: v.username };
-        const data = await withHumanVerification("openUserInfoLookup", (capToken) =>
-          getMaskedMobile({ ...body, capToken }),
+        const data = await withHumanVerification("openUserInfoLookup", (capToken, imageCaptchaProof) =>
+          getMaskedMobile({ ...body, capToken }, imageCaptchaProof),
         );
         setMaskedMobile(data.mobile);
         setCurrent(1);
@@ -128,6 +130,7 @@ export default function ResetPasswordPage() {
   };
 
   const handlePrev = () => {
+    cancelVerification();
     if (current === 1) setCurrent(0);
     else if (current === 2) {
       setCurrent(1);
@@ -140,7 +143,7 @@ export default function ResetPasswordPage() {
       message.warning("无法获取绑定手机号");
       return;
     }
-    if (isCounting) return;
+    if (isCounting || loading) return;
     setLoading(true);
     try {
       const body = {
@@ -148,7 +151,9 @@ export default function ResetPasswordPage() {
         phoneNumber: maskedMobile,
         usage: "resetPassword",
       } as const;
-      await withHumanVerification("sendSmsCode", (capToken) => sendMessage({ ...body, capToken }));
+      await withHumanVerification("sendSmsCode", (capToken, imageCaptchaProof) =>
+        sendMessage({ ...body, capToken }, imageCaptchaProof),
+      );
       startCountdown();
     } catch (e) {
       restoreCountdown(e);
@@ -184,7 +189,7 @@ export default function ResetPasswordPage() {
           </div>
         </section>
 
-        <Spin spinning={loading}>
+        <Spin spinning={loading && !captcha}>
           <div className="reset-card">
             <div className="reset-card-header">
               <div>
@@ -206,10 +211,11 @@ export default function ResetPasswordPage() {
 
             <div className="reset-form">
               {current === 0 && (
-                <Form form={form1} layout="vertical">
+                <Form form={form1} layout="vertical" onValuesChange={cancelVerification}>
                   <Form.Item label="用户名" name="username" rules={[{ required: true, message: "请输入用户名" }]}>
                     <Input size="large" placeholder="请输入用户名" prefix={<UserOutlined />} allowClear />
                   </Form.Item>
+                  {captcha}
                 </Form>
               )}
 
@@ -226,11 +232,12 @@ export default function ResetPasswordPage() {
                     <VerificationCodeInput
                       placeholder="请输入验证码"
                       prefix={<LockOutlined />}
-                      buttonDisabled={isCounting}
+                      buttonDisabled={isCounting || loading}
                       buttonText={countdown <= 0 ? "获取验证码" : `${countdown} 秒后重试`}
                       onSendCode={sendCode}
                     />
                   </Form.Item>
+                  {captcha}
                 </Form>
               )}
 
@@ -258,12 +265,12 @@ export default function ResetPasswordPage() {
                 </Button>
               )}
               {current < 2 && (
-                <Button type="primary" size="large" onClick={handleNext}>
+                <Button type="primary" size="large" onClick={handleNext} disabled={loading}>
                   下一步
                 </Button>
               )}
               {current === 2 && (
-                <Button type="primary" size="large" onClick={handleNext}>
+                <Button type="primary" size="large" onClick={handleNext} disabled={loading}>
                   确定
                 </Button>
               )}

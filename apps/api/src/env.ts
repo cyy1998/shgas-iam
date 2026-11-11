@@ -72,6 +72,7 @@ const RawEnvSchema = z
     IAM_API_LOG_LEVEL: z.string().default("info"),
     IAM_API_LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
     IAM_API_CAP_ENABLED: booleanString(false),
+    IAM_API_IMAGE_CAPTCHA_ENABLED: booleanString(true),
     IAM_API_CAP_SITE_KEY: z.string().default("iam-sso"),
     IAM_API_CAP_SECRET: z.string().default("dev-cap-secret-change-me"),
     IAM_API_CAP_CHALLENGE_TTL_MS: z.coerce
@@ -164,6 +165,7 @@ export interface Env extends Record<string, unknown> {
     tokenTtlSeconds: number;
   };
   humanVerification: {
+    imageCaptchaEnabled: boolean;
     windowSeconds: number;
     loginFailureThreshold: number;
     lookupThreshold: number;
@@ -235,6 +237,7 @@ function toApiEnv(raw: RawEnv): Env {
       tokenTtlSeconds: raw.IAM_API_CAP_TOKEN_TTL_SECONDS,
     },
     humanVerification: {
+      imageCaptchaEnabled: raw.IAM_API_IMAGE_CAPTCHA_ENABLED,
       windowSeconds: raw.IAM_API_HUMAN_VERIFICATION_WINDOW_SECONDS,
       loginFailureThreshold: raw.IAM_API_HUMAN_VERIFICATION_LOGIN_FAILURE_THRESHOLD,
       lookupThreshold: raw.IAM_API_HUMAN_VERIFICATION_LOOKUP_THRESHOLD,

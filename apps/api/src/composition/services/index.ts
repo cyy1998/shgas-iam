@@ -6,6 +6,7 @@ import { createLoginCredentialParser } from "@api/services/authentication/login-
 import { createClientService } from "@api/services/client/client.service";
 import { createCapService } from "@api/services/human-verification/cap.service";
 import { createHumanRiskService } from "@api/services/human-verification/human-risk.service";
+import { createImageCaptchaService } from "@api/services/human-verification/image-captcha.service";
 import { createMobileService } from "@api/services/mobile/mobile.service";
 import { createMobileCodeCooldown } from "@api/services/mobile/mobile-code-cooldown";
 import { createOrganizationService } from "@api/services/organization/organization.service";
@@ -137,8 +138,15 @@ export function createApiServices(options: CreateApiServicesOptions) {
     },
   });
 
+  const imageCaptcha = createImageCaptchaService({
+    redis: runtime.redis,
+    clock: runtime.clock,
+    enabled: runtime.config.cap.enabled && runtime.config.humanVerification.imageCaptchaEnabled,
+    secret: runtime.config.cap.secret,
+  });
   const capService = createCapService({
     capClient: runtime.integrations.cap,
+    imageCaptcha,
     redis: runtime.redis,
     logger: runtime.logger,
     riskService: humanRiskService,
@@ -241,6 +249,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
   const services = {
     accountRecovery: accountRecoveryService,
     cap: capService,
+    imageCaptcha,
     client: clientService,
     subjectAccessOperations,
     humanRisk: humanRiskService,

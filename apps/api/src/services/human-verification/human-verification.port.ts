@@ -40,6 +40,10 @@ export interface CapChallengePort {
 
 export interface CapServiceDeps {
   capClient: CapChallengePort;
+  imageCaptcha?: {
+    issueTicket: (action: HumanVerificationAction, context: HumanVerificationContext) => string | undefined;
+    verifyProof: (action: HumanVerificationAction, context: HumanVerificationContext) => Promise<boolean>;
+  };
   redis: Pick<RedisPort, "get" | "set" | "del">;
   logger: LoggerPort;
   riskService: Pick<HumanRiskServicePort, "shouldRequireVerification">;

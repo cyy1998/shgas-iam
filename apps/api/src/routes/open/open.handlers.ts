@@ -1,5 +1,6 @@
 import { HumanVerificationAction } from "@api/enums/humanVerification.action";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
+import { exposeImageCaptchaTicket } from "@api/middlewares/image-captcha-response";
 import { getApiAuditRequestContext, withApiRequestContext } from "@api/services/audit/audit.context";
 import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
 import { buildSmsCodeSendAudit, buildSmsCodeVerifyAudit } from "@api/services/audit/events/auth.audit";
@@ -14,7 +15,7 @@ import type { RequestPasswordResetCodeUseCase } from "@api/use-cases/account-rec
 import type { ResetPasswordUseCase } from "@api/use-cases/account-recovery/reset-password/reset-password.use-case";
 import type { VerifyPasswordResetCodeUseCase } from "@api/use-cases/account-recovery/verify-password-reset-code/verify-password-reset-code.use-case";
 import * as resp from "@iam/api-core/http";
-import { PublicClientStatusDtoSchema } from "@iam/contracts";
+import { IMAGE_CAPTCHA_PROOF_HEADER, PublicClientStatusDtoSchema } from "@iam/contracts";
 import { OK } from "@iam/contracts/http";
 import { maskMobile } from "./open.presenter";
 import type { OpenRouteHandler } from "./open.type";
@@ -47,7 +48,14 @@ export function createOpenHandlers(deps: CreateOpenHandlersDeps) {
     const { capToken } = c.req.valid("query");
     const requestContext = getApiAuditRequestContext(c);
     const context = createHumanVerificationContext(requestContext, username);
-    await deps.humanVerification.ensureActionAllowed(HumanVerificationAction.OpenUserInfoLookup, capToken, context);
+    const proof = c.req.header(IMAGE_CAPTCHA_PROOF_HEADER);
+    if (proof) {
+      context.imageCaptchaProof = proof;
+      c.header("Cache-Control", "no-store");
+    }
+    await deps.humanVerification
+      .ensureActionAllowed(HumanVerificationAction.OpenUserInfoLookup, capToken, context)
+      .catch((error: unknown) => exposeImageCaptchaTicket(c, error));
     await deps.humanRiskService.recordOpenUserInfoLookup(username, context);
     const mobile = await deps.userService.getUserMobileByUsername(username);
     return c.json(
@@ -61,11 +69,13 @@ export function createOpenHandlers(deps: CreateOpenHandlersDeps) {
   const codeSend: OpenRouteHandler<"codeSend"> = async (c) => {
     const { phoneNumber, username, usage, capToken } = c.req.valid("json");
     const requestContext = getApiAuditRequestContext(c);
-    await deps.humanVerification.ensureActionAllowed(
-      HumanVerificationAction.SendSmsCode,
-      capToken,
-      createHumanVerificationContext(requestContext, phoneNumber ?? username),
-    );
+    const context = createHumanVerificationContext(requestContext, phoneNumber ?? username);
+    const proof = c.req.header(IMAGE_CAPTCHA_PROOF_HEADER);
+    if (proof) context.imageCaptchaProof = proof;
+    context.sms = { usage, username, phoneNumber };
+    await deps.humanVerification
+      .ensureActionAllowed(HumanVerificationAction.SendSmsCode, capToken, context)
+      .catch((error: unknown) => exposeImageCaptchaTicket(c, error));
     if (usage === VerificationCodeUsage.ResetPassword) {
       const data = await deps.accountRecovery.requestPasswordResetCode.execute(
         { username, phoneNumber },

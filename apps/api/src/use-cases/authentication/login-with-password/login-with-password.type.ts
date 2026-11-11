@@ -4,6 +4,7 @@ export interface LoginWithPasswordInput {
   username: string;
   password: string;
   capToken?: string;
+  imageCaptchaProof?: string;
 }
 
 export interface LoginWithPasswordOptions {

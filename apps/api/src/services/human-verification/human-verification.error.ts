@@ -13,12 +13,19 @@ export class InvalidHumanVerificationSiteError extends CustomError {
 }
 
 export class HumanVerificationRequiredError extends CustomError {
-  constructor(message: string = "需要人机校验") {
+  readonly #imageCaptchaTicket?: string;
+
+  constructor(message: string = "需要人机校验", imageCaptchaTicket?: string) {
     super(message, {
       code: ApiErrorCode.HumanVerificationRequired,
       httpStatus: BAD_REQUEST,
     });
     this.name = "HumanVerificationRequiredError";
+    this.#imageCaptchaTicket = imageCaptchaTicket;
+  }
+
+  get imageCaptchaTicket() {
+    return this.#imageCaptchaTicket;
   }
 }
 

@@ -4,6 +4,7 @@ export interface LoginWithMobileInput {
   phoneNumber: string;
   code: string;
   capToken?: string;
+  imageCaptchaProof?: string;
 }
 
 export interface LoginWithMobileOptions {

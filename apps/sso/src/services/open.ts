@@ -1,19 +1,24 @@
 import type { ClientStatusResult, MaskedMobile, SmsUsage } from "@sso/types/api";
 import { request } from "@sso/utils/request";
 import { toQueryString } from "@sso/utils/url";
+import { imageCaptchaProofOptions } from "./image-captcha";
 
-export function sendMessage(body: { phoneNumber?: string; username?: string; usage: SmsUsage; capToken?: string }) {
+export function sendMessage(
+  body: { phoneNumber?: string; username?: string; usage: SmsUsage; capToken?: string },
+  imageCaptchaProof?: string,
+) {
   return request<void>("/open/code/send", {
+    ...imageCaptchaProofOptions(imageCaptchaProof),
     method: "POST",
     body: JSON.stringify(body),
   });
 }
 
-export function selfMobileSendMsg(body: { phoneNumber: string; usage: SmsUsage; capToken?: string }) {
-  return request<void>("/open/code/send", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+export function selfMobileSendMsg(
+  body: { phoneNumber: string; usage: SmsUsage; capToken?: string },
+  imageCaptchaProof?: string,
+) {
+  return sendMessage(body, imageCaptchaProof);
 }
 
 export function codeVerify(body: { phoneNumber?: string; username?: string; usage: SmsUsage; code: string }) {
@@ -37,11 +42,12 @@ export function clientStatus(params: { clientCode: string }) {
   });
 }
 
-export function getMaskedMobile(params: { username: string; capToken?: string }) {
+export function getMaskedMobile(params: { username: string; capToken?: string }, imageCaptchaProof?: string) {
   const qs = toQueryString({ capToken: params.capToken });
   // The inner encoding preserves opaque usernames, including URL dot segments.
-  const username = encodeURIComponent(encodeURIComponent(params.username).replaceAll(".", "%2E"));
+  const username = encodeURIComponent(encodeURIComponent(params.username).replace(/\./g, "%2E"));
   return request<MaskedMobile>(`/open/users/${username}/masked-mobile?${qs}`, {
+    ...imageCaptchaProofOptions(imageCaptchaProof),
     skipAuthRedirect: true,
   });
 }

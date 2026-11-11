@@ -15,6 +15,7 @@ export function createLoginWithMobileUseCase(deps: LoginWithMobileDeps) {
   async function execute(input: LoginWithMobileInput, options: LoginWithMobileOptions = {}) {
     const requestContext = options.requestContext;
     const context = createHumanVerificationContext(requestContext, input.phoneNumber);
+    if (input.imageCaptchaProof) context.imageCaptchaProof = input.imageCaptchaProof;
     await deps.humanVerification.ensureActionAllowed(HumanVerificationAction.MobileLogin, input.capToken, context);
 
     const activeUser = await deps.users.getActiveUserByMobile(input.phoneNumber);

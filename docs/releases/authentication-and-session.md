@@ -49,6 +49,18 @@ Redis 异常先恢复依赖；`login-credential-nonce:<digest>` 不能批量清�
 仅调大 TTL、通过环境校验或拒绝即时重放，尚不足以确认缺口已解决。
 本限制不改变现有凭证拒绝与登录失败计数规则。
 
+## 图片验证码
+
+启用 `IAM_API_CAP_ENABLED` 时，图片验证码默认可用。将 `IAM_API_IMAGE_CAPTCHA_ENABLED` 设为 `false` 并按
+[常规更新](deployment.md#常规更新)重建 API 实例，可以单独关闭图片方式。部署使用独立的高熵 `IAM_API_CAP_SECRET`，所有 API 副本使用同一值。
+
+SSO 使用同源 API 前缀，例如 `/api/iam`。经实际网关进入 SSO，在测试浏览器中阻止 Cap 求解，确认页面自动显示图片，答错后可重试，
+换图后上一张失效，答对后原操作只重试一次。短时间重复取图或提交时检查 API 的 `429` 与 `Retry-After`。
+部署配置限制图片来源时，需允许验证码区域显示 API 返回的 PNG data URL。
+
+取图和换图共用额度，同一操作和目标每分钟 10 次，同一来源 IP 每分钟 120 次。提交答案按同一操作和目标每秒 1 次、同一来源 IP 每分钟
+180 次限流。来源 IP 取自[可信代理配置](apisix-gateway-release.md)。原操作的领图票据有效期为 5 分钟，答对后的凭证有效期为 1 分钟。
+
 ## OIDC 双入口配置
 
 用于发布或调整内外网 OIDC 入口。API、Gateway、SSO 与接入应用的 origin/issuer 必须匹配：

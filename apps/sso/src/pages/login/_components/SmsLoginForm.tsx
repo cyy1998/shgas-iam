@@ -13,9 +13,11 @@ type SmsLoginFormProps = {
   isCounting: boolean;
   smsSending: boolean;
   submitting: boolean;
+  captcha?: ReactNode;
   submitIcon: ReactNode;
   submitText: string;
   onSendCode: (phoneNumber: string | undefined) => void | Promise<void>;
+  onValuesChange: () => void;
   onSubmit: (values: SmsLoginValues) => void | Promise<void>;
 };
 
@@ -24,15 +26,17 @@ export function SmsLoginForm({
   isCounting,
   smsSending,
   submitting,
+  captcha,
   submitIcon,
   submitText,
   onSendCode,
+  onValuesChange,
   onSubmit,
 }: SmsLoginFormProps) {
   const [form] = Form.useForm<SmsLoginValues>();
 
   return (
-    <Form form={form} layout="vertical" onFinish={onSubmit} requiredMark={false}>
+    <Form form={form} layout="vertical" onFinish={onSubmit} onValuesChange={onValuesChange} requiredMark={false}>
       <Form.Item
         label="手机号"
         name="phoneNumber"
@@ -50,20 +54,22 @@ export function SmsLoginForm({
         <VerificationCodeInput
           placeholder="验证码"
           prefix={<LockOutlined />}
-          buttonDisabled={isCounting || smsSending}
-          buttonText={smsSending ? "发送中" : countdown <= 0 ? "获取验证码" : `${countdown} s`}
+          buttonDisabled={isCounting || smsSending || submitting}
+          buttonText={smsSending && !captcha ? "发送中" : countdown <= 0 ? "获取验证码" : `${countdown} s`}
           onSendCode={() => {
             void onSendCode(form.getFieldValue("phoneNumber"));
           }}
         />
       </Form.Item>
+      {captcha}
       <Button
         className="login-submit"
         type="primary"
         size="large"
         htmlType="submit"
         icon={submitIcon}
-        loading={submitting}
+        loading={submitting && !captcha}
+        disabled={smsSending || submitting}
       >
         {submitText}
       </Button>

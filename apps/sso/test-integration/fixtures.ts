@@ -1,4 +1,4 @@
-import { ApiErrorCode, ClientStatus, LoginPageGuardDecision } from "@iam/contracts";
+import { ApiErrorCode, ClientStatus, IMAGE_CAPTCHA_TICKET_HEADER, LoginPageGuardDecision } from "@iam/contracts";
 // Mock-backend fixtures owned by the browser Integration collection.
 import type { Page, Route } from "@playwright/test";
 import { authenticationConfig, resetPasswordMaskedMobile } from "../test/mocks/fixtures";
@@ -18,6 +18,37 @@ async function fulfillJson(route: Route, data: unknown, status = 200) {
     json: data,
     status,
   });
+}
+
+export function requireImageCaptcha(route: Route) {
+  return route.fulfill({
+    status: 400,
+    headers: { [IMAGE_CAPTCHA_TICKET_HEADER]: "test-ticket" },
+    json: { code: ApiErrorCode.HumanVerificationRequired, message: "需要人机校验", data: null },
+  });
+}
+
+export async function mockImageCaptchaFallback(page: Page) {
+  await page.route("**/open/cap/*/challenge", (route) => route.fulfill({ status: 503, json: {} }));
+  await page.route("**/open/image-captcha/challenge", (route) =>
+    fulfillJson(
+      route,
+      ok({
+        challengeId: "test-challenge",
+        imageBase64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4AWP4DwQACfsD/c8LaHIAAAAASUVORK5CYII=",
+      }),
+    ),
+  );
+  await page.route("**/open/image-captcha/answer", (route) =>
+    fulfillJson(
+      route,
+      ok(
+        route.request().postDataJSON().answer === "AC9TV3"
+          ? { result: "verified", proof: "test-proof" }
+          : { result: "incorrect" },
+      ),
+    ),
+  );
 }
 
 export async function mockSsoApi(page: Page, options: SsoMockOptions = {}) {

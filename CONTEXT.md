@@ -511,6 +511,10 @@ _Avoid_: post-login homepage, new login attempt, generic redirect, force-login q
 OIDC Client 对当前授权请求提出、并由 OIDC 验证和绑定到 Authentication Continuation 的新鲜身份验证要求；没有有效会话时它可通过首次登录满足，已有有效 UserSession 时 IAM 不再次执行身份验证，而以 `login_required` 终止本次授权。任意登录页 query 或 Custom SSO 参数不构成该要求。
 _Avoid_: force-login query, repeated login, session refresh
 
+**Image CAPTCHA Proof**:
+IAM 确认图片验证码已答对后授予的一次性人机校验证明。它只适用于原操作及其目标，短信发送还受原短信用途约束。
+_Avoid_: SMS verification code, login credential, session token
+
 **Temporary Login Restriction**:
 用户在统计窗口内登录失败次数过多后受到的用户级临时登录限制；它只阻止新的认证，不撤销已有会话，也不是账号禁用或永久黑名单。
 _Avoid_: blacklist, 黑名单, disabled account

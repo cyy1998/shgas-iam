@@ -1,5 +1,6 @@
 import type { LoggerPort } from "@api/composition/runtime";
 import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
+import { exposeImageCaptchaTicket } from "@api/middlewares/image-captcha-response";
 import { verifyInternalClient } from "@api/middlewares/internal-client-authentication";
 import { getApiAuditRequestContext } from "@api/services/audit/audit.context";
 import type { LoginCredentialParser } from "@api/services/authentication/login-credential.parser";
@@ -13,7 +14,7 @@ import type { LoginWithMobileUseCase } from "@api/use-cases/authentication/login
 import type { LoginWithPasswordUseCase } from "@api/use-cases/authentication/login-with-password/login-with-password.use-case";
 import * as resp from "@iam/api-core/http";
 import { createSubjectAccessHttpAdapter } from "@iam/api-core/http/subject-access";
-import { ClientCodeSchema } from "@iam/contracts";
+import { ClientCodeSchema, IMAGE_CAPTCHA_PROOF_HEADER } from "@iam/contracts";
 import { HttpStatusCodes } from "@iam/contracts/http";
 import { CustomSsoRequestMismatchError } from "@iam/custom-sso";
 import { AuthzUnauthorizedError } from "@iam/runtime/errors";
@@ -120,10 +121,10 @@ export function createRootAuthHandlers(
     const { credential, capToken } = c.req.valid("json");
     const { username, password } = await deps.loginCredentialParser.parseLoginPasswordCredential(credential);
     const requestContext = getApiAuditRequestContext(c);
-    const data = await deps.authentication.loginWithPassword.execute(
-      { capToken, password, username },
-      { requestContext },
-    );
+    const imageCaptchaProof = c.req.header(IMAGE_CAPTCHA_PROOF_HEADER);
+    const data = await deps.authentication.loginWithPassword
+      .execute({ capToken, password, username, ...(imageCaptchaProof && { imageCaptchaProof }) }, { requestContext })
+      .catch((error: unknown) => exposeImageCaptchaTicket(c, error));
     setCookie(c, "global_session", data.token, {
       httpOnly: true,
       sameSite: "Lax",
@@ -136,7 +137,10 @@ export function createRootAuthHandlers(
   const loginMobile: AuthRouteHandler<"loginMobile"> = async (c) => {
     const { code, phoneNumber, capToken } = c.req.valid("json");
     const requestContext = getApiAuditRequestContext(c);
-    const data = await deps.authentication.loginWithMobile.execute({ capToken, code, phoneNumber }, { requestContext });
+    const imageCaptchaProof = c.req.header(IMAGE_CAPTCHA_PROOF_HEADER);
+    const data = await deps.authentication.loginWithMobile
+      .execute({ capToken, code, phoneNumber, ...(imageCaptchaProof && { imageCaptchaProof }) }, { requestContext })
+      .catch((error: unknown) => exposeImageCaptchaTicket(c, error));
     setCookie(c, "global_session", data.token, {
       httpOnly: true,
       sameSite: "Lax",

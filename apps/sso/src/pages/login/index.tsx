@@ -8,8 +8,9 @@ import {
 import { ApiErrorCode } from "@iam/contracts";
 import logo from "@sso/assets/logo.png";
 import logoColorfulTextWhite from "@sso/assets/logo-colorful-text-white.png";
+import { useHumanVerification } from "@sso/hooks/useHumanVerification";
 import { useSmsCodeCountdown } from "@sso/hooks/useSmsCodeCountdown";
-import { withHumanVerification } from "@sso/lib/human-verification";
+import { HumanVerificationCancelled } from "@sso/lib/human-verification";
 import { login, mobileLogin } from "@sso/services/auth";
 import { sendMessage } from "@sso/services/open";
 import { mobileSet } from "@sso/services/public";
@@ -28,6 +29,7 @@ import "./index.less";
 type LoginMode = "PWD" | "SMS" | "BMN";
 
 export default function LoginPage() {
+  const { verify: withHumanVerification, captcha, cancel: cancelVerification } = useHumanVerification();
   const navigate = useNavigate();
   const [mode, setMode] = useState<LoginMode>(() => {
     const loginType = new URLSearchParams(window.location.search).get("loginType");
@@ -86,8 +88,8 @@ export default function LoginPage() {
         username: values.username.trim(),
         password: values.password.trim(),
       };
-      const data = await withHumanVerification("passwordLogin", (capToken) =>
-        login({ ...body, capToken }, { suppressErrorMessage: true }),
+      const data = await withHumanVerification("passwordLogin", (capToken, imageCaptchaProof) =>
+        login({ ...body, capToken }, { suppressErrorMessage: true, imageCaptchaProof }),
       );
       if (!data.isMobileSet) {
         setMode("BMN");
@@ -95,6 +97,7 @@ export default function LoginPage() {
       }
       redirectAfterLogin();
     } catch (e) {
+      if (e instanceof HumanVerificationCancelled) return;
       if (!(e instanceof ServiceError)) throw e;
       if (e.code === ApiErrorCode.LoginFailed || e.code === ApiErrorCode.InvalidLoginCredential) {
         showLoginFailureModal(e.message);
@@ -114,11 +117,12 @@ export default function LoginPage() {
         phoneNumber: values.phoneNumber.trim(),
         code: values.code.trim(),
       };
-      await withHumanVerification("mobileLogin", (capToken) =>
-        mobileLogin({ ...body, capToken }, { suppressErrorMessage: true }),
+      await withHumanVerification("mobileLogin", (capToken, imageCaptchaProof) =>
+        mobileLogin({ ...body, capToken }, { suppressErrorMessage: true, imageCaptchaProof }),
       );
       redirectAfterLogin();
     } catch (e) {
+      if (e instanceof HumanVerificationCancelled) return;
       if (!(e instanceof ServiceError)) throw e;
       if (
         e.code === ApiErrorCode.InvalidVerificationCode ||
@@ -151,12 +155,13 @@ export default function LoginPage() {
   };
 
   const handleSmsSubmit = (values: SmsLoginValues) => {
+    if (smsSending) return;
     if (mode === "SMS") return handleSmsLogin(values);
     return handleBindMobile(values);
   };
 
   const sendSms = async (phoneNumber?: string) => {
-    if (isCounting) return;
+    if (isCounting || submitting || smsSending) return;
     if (!phoneNumber || !/^1\d{10}$/.test(phoneNumber)) {
       message.error("请填写正确的手机号");
       return;
@@ -167,7 +172,9 @@ export default function LoginPage() {
         phoneNumber: phoneNumber.trim(),
         usage: mode === "BMN" ? "bindPhone" : "login",
       } as const;
-      await withHumanVerification("sendSmsCode", (capToken) => sendMessage({ ...body, capToken }));
+      await withHumanVerification("sendSmsCode", (capToken, imageCaptchaProof) =>
+        sendMessage({ ...body, capToken }, imageCaptchaProof),
+      );
       startCountdown();
     } catch (e) {
       restoreCountdown(e);
@@ -254,7 +261,10 @@ export default function LoginPage() {
           {mode !== "BMN" && (
             <Tabs
               activeKey={mode}
-              onChange={(key) => setMode(key as LoginMode)}
+              onChange={(key) => {
+                cancelVerification();
+                setMode(key as LoginMode);
+              }}
               centered
               items={[
                 { key: "PWD", label: "密码登录" },
@@ -267,6 +277,8 @@ export default function LoginPage() {
             <PasswordLoginForm
               form={pwdForm}
               submitting={submitting}
+              captcha={captcha}
+              onValuesChange={cancelVerification}
               onForgotPassword={handleForgotPassword}
               onSubmit={handlePwdLogin}
             />
@@ -279,6 +291,8 @@ export default function LoginPage() {
               isCounting={isCounting}
               smsSending={smsSending}
               submitting={submitting}
+              captcha={captcha}
+              onValuesChange={cancelVerification}
               submitIcon={mode === "BMN" ? <MobileOutlined /> : <LoginOutlined />}
               submitText={mode === "BMN" ? "绑定手机号" : "安全登录"}
               onSendCode={sendSms}

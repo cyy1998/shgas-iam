@@ -1,8 +1,8 @@
 // Browser Integration uses a mocked backend; this is not a full-system journey.
-import { ApiErrorCode, LoginPageGuardDecision } from "@iam/contracts";
+import { ApiErrorCode, IMAGE_CAPTCHA_PROOF_HEADER, LoginPageGuardDecision } from "@iam/contracts";
 import { expect, test } from "@playwright/test";
 import { currentUserInfo } from "../../test/mocks/fixtures";
-import { mockSsoApi } from "../fixtures";
+import { mockImageCaptchaFallback, mockSsoApi, requireImageCaptcha } from "../fixtures";
 
 test("Custom continuation uses same-entry discovery navigation and retains business parameters", async ({ page }) => {
   await mockSsoApi(page, { loginGuard: "continue" });
@@ -47,6 +47,59 @@ test("login page opens and shows mocked password login failure", async ({ page }
   const dialog = page.getByRole("dialog", { name: "登录失败" });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText("账号或密码错误")).toBeVisible();
+});
+
+test("shows an inline image below the password and retries login only after a verified answer", async ({ page }) => {
+  await mockSsoApi(page);
+  await mockImageCaptchaFallback(page);
+  const attempts: Array<{ credential: string; proof: string | undefined }> = [];
+  await page.route("**/auth/login/password", async (route) => {
+    const request = route.request();
+    const proof = request.headers()[IMAGE_CAPTCHA_PROOF_HEADER.toLowerCase()];
+    attempts.push({ credential: request.postDataJSON().credential, proof });
+    if (!proof) {
+      await requireImageCaptcha(route);
+    } else {
+      await route.fulfill({
+        status: 400,
+        json: { code: ApiErrorCode.LoginFailed, message: "账号或密码错误", data: null },
+      });
+    }
+  });
+  await page.goto("/portal/login?client=iam-admin&redirectUrl=http%3A%2F%2Fexample.test%2Fiam-admin");
+  await page.getByPlaceholder("请输入您的工号").fill("zhangsan");
+  const password = page.getByPlaceholder("请输入登录密码");
+  await password.fill("secret123");
+  const loginButton = page.getByRole("button", { name: /安全登录/ });
+  await loginButton.click();
+  const form = page.locator("form").filter({ has: password });
+  const captcha = form.getByRole("group", { name: "图片验证码" });
+  await expect(captcha.getByAltText("图片验证码")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(loginButton).toBeDisabled();
+  const passwordBox = await password.boundingBox();
+  const captchaBox = await captcha.boundingBox();
+  if (!passwordBox || !captchaBox) throw new Error("Expected visible password and captcha fields");
+  expect(captchaBox.y).toBeGreaterThanOrEqual(passwordBox.y + passwordBox.height);
+  const answer = captcha.getByLabel("图片验证码");
+  await answer.fill("WRONG");
+  await answer.press("Enter");
+  await expect(captcha.getByRole("status")).toHaveText("验证码不正确，请重新输入");
+  expect(attempts).toHaveLength(1);
+  await expect(captcha.getByAltText("图片验证码")).toBeVisible();
+
+  await password.fill("updated-secret123");
+  await expect(captcha).toHaveCount(0);
+  expect(attempts).toHaveLength(1);
+  await loginButton.click();
+
+  await answer.fill("AC9TV3");
+  await captcha.getByRole("button", { name: /^验\s*证$/ }).click();
+  await expect(page.getByRole("dialog", { name: "登录失败" })).toBeVisible();
+  expect(attempts).toHaveLength(3);
+  expect(attempts[1]?.proof).toBeUndefined();
+  expect(attempts[2]?.proof).toBe("test-proof");
+  expect(attempts[2]?.credential).not.toBe(attempts[1]?.credential);
 });
 
 test("continues an existing session without form flash and replaces login history", async ({ page }) => {

@@ -122,6 +122,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [ADR-0047](adr/0047-separate-operations-cli-from-worker.md)                                | decision | Current | 2026-11-02    | 2026-12-02  | 人工维护命令直接切换至 Ops CLI、独立配置、同版本镜像及维护 Compose；共享 owner 能力，Worker 保留自动恢复。 |
 | [ADR-0048](adr/0048-model-global-roles-without-client-ownership.md)                        | decision | Current | 2026-11-10    | 2026-12-10  | 已确认的全局角色归属、编码命名空间与应用披露边界。                                                         |
 | [ADR-0049](adr/0049-compose-roles-across-clients.md)                                       | decision | Current | 2026-11-10    | 2026-12-10  | 组合角色授予、应用披露、管理生命周期与发布边界。                                                           |
+| [ADR-0050](adr/0050-bind-image-captcha-to-the-required-operation.md)                       | decision | Current | 2026-11-11    | 2026-12-11  | Cap 求解失败时使用图片验证码，并将证明绑定原操作。                                                         |
 
 </details>
 

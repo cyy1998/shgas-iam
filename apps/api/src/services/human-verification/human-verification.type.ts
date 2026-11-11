@@ -1,7 +1,10 @@
+import type { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import type { ApiRequestContext } from "@api/services/audit/audit.context";
 
 export type HumanVerificationContext = {
   subject?: string;
+  imageCaptchaProof?: string;
+  sms?: { usage: VerificationCodeUsage; username?: string; phoneNumber?: string };
   ip?: string;
   requestId?: string | null;
   traceId?: string | null;

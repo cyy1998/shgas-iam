@@ -1,6 +1,7 @@
 export * from "./admin-authorization";
 export * from "./admin-mutation";
 export * from "./audit/actions";
+export * from "./auth/image-captcha";
 export * from "./auth/login-credential";
 export * from "./auth/login-page-guard";
 export * from "./auth/navigation";

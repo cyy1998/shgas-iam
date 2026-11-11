@@ -1,6 +1,7 @@
 import { createPasswordLoginCredential } from "@sso/lib/login-credential";
 import type { LoginPasswordResult } from "@sso/types/api";
 import { request } from "@sso/utils/request";
+import { imageCaptchaProofOptions } from "./image-captcha";
 
 export function login(
   body: {
@@ -8,9 +9,10 @@ export function login(
     password: string;
     capToken?: string;
   },
-  options: { suppressErrorMessage?: boolean } = {},
+  options: { suppressErrorMessage?: boolean; imageCaptchaProof?: string } = {},
 ) {
   return request<LoginPasswordResult>("/auth/login/password", {
+    ...imageCaptchaProofOptions(options.imageCaptchaProof),
     method: "POST",
     suppressErrorMessage: options.suppressErrorMessage,
     body: JSON.stringify({
@@ -29,9 +31,10 @@ export function mobileLogin(
     code: string;
     capToken?: string;
   },
-  options: { suppressErrorMessage?: boolean } = {},
+  options: { suppressErrorMessage?: boolean; imageCaptchaProof?: string } = {},
 ) {
   return request<LoginPasswordResult>("/auth/login/mobile", {
+    ...imageCaptchaProofOptions(options.imageCaptchaProof),
     method: "POST",
     suppressErrorMessage: options.suppressErrorMessage,
     body: JSON.stringify(body),

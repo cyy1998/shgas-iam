@@ -38,6 +38,7 @@ export interface ApiRuntimeConfig {
     tokenTtlSeconds: number;
   };
   humanVerification: {
+    imageCaptchaEnabled: boolean;
     windowSeconds: number;
     loginFailureThreshold: number;
     lookupThreshold: number;

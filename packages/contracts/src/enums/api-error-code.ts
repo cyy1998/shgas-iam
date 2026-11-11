@@ -22,6 +22,8 @@ export enum ApiErrorCode {
   AdminMutationCommitted = "ADMIN_MUTATION_COMMITTED",
 
   InvalidHumanVerificationSite = "HUMAN_VERIFICATION.INVALID_SITE",
+  ImageCaptchaCooldown = "HUMAN_VERIFICATION.IMAGE_COOLDOWN",
+  ImageCaptchaTicketExpired = "HUMAN_VERIFICATION.IMAGE_TICKET_EXPIRED",
 
   SmsCooldown = "SMS.COOLDOWN",
   SmsSendFailed = "SMS.SEND_FAILED",

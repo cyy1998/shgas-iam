@@ -1,4 +1,4 @@
-import { ApiErrorCode, splitFirstPartySsoNavigation } from "@iam/contracts";
+import { ApiErrorCode, IMAGE_CAPTCHA_TICKET_HEADER, splitFirstPartySsoNavigation } from "@iam/contracts";
 import { UNAUTHORIZED } from "@iam/contracts/http";
 import { API_PREFIX, SSO_CLIENT_CODE } from "@sso/constants/config";
 import type { ApiEnvelope } from "@sso/types/api";
@@ -12,6 +12,7 @@ export class ServiceError extends Error {
     msg: string,
     code: ApiErrorCode | number | string,
     public readonly retryAfterSeconds?: number,
+    public readonly imageCaptchaTicket?: string,
   ) {
     super(msg);
     this.name = "ServiceError";
@@ -107,7 +108,7 @@ export async function request<T>(path: string, init: RequestInitExt = {}): Promi
     }
     const msg = errorBody?.message || `网络错误 (${res.status})`;
     if (errorBody && isCode(errorBody, ApiErrorCode.HumanVerificationRequired)) {
-      throw new ServiceError(msg, errorBody.code);
+      throw new ServiceError(msg, errorBody.code, undefined, res.headers.get(IMAGE_CAPTCHA_TICKET_HEADER) ?? undefined);
     }
     if (!init.suppressErrorMessage) message.error(msg);
     throw new ServiceError(msg, errorBody?.code ?? res.status, readRetryAfter(res));
@@ -123,7 +124,7 @@ export async function request<T>(path: string, init: RequestInitExt = {}): Promi
   if (body.code !== 200) {
     const msg = body.message || "请求失败";
     if (isCode(body, ApiErrorCode.HumanVerificationRequired)) {
-      throw new ServiceError(msg, body.code);
+      throw new ServiceError(msg, body.code, undefined, res.headers.get(IMAGE_CAPTCHA_TICKET_HEADER) ?? undefined);
     }
     if (!init.suppressErrorMessage) message.error(msg);
     throw new ServiceError(msg, body.code);

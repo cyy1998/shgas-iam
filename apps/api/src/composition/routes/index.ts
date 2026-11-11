@@ -4,6 +4,7 @@ import { createOrganizationHandlers } from "@api/routes/internal/organization/or
 import { createOrganizationRoute } from "@api/routes/internal/organization/organization.index";
 import { createUserHandlers } from "@api/routes/internal/user/user.handlers";
 import { createUserRoute } from "@api/routes/internal/user/user.index";
+import { createImageCaptchaRoutes } from "@api/routes/open/image-captcha.routes";
 import { createOpenHandlers } from "@api/routes/open/open.handlers";
 import { createOpenRoute } from "@api/routes/open/open.index";
 import type { ApiAuditLogWriter } from "@api/services/audit/audit.service";
@@ -87,7 +88,9 @@ export async function createApiRoutes(options: CreateApiRoutesOptions): Promise<
     "./src/routes/internal/user/user.index.ts": {
       default: createUserRoute(userHandlers),
     },
-    "./src/routes/open/open.index.ts": { default: createOpenRoute(openHandlers) },
+    "./src/routes/open/open.index.ts": {
+      default: createOpenRoute(openHandlers).route("/", createImageCaptchaRoutes(services.imageCaptcha)),
+    },
     "./src/routes/public/public.index.ts": { default: services.authentication.routers.public },
     "./src/routes/sso/sso.index.ts": { default: services.authentication.routers.sso },
   };

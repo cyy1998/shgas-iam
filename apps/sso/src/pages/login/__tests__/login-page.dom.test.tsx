@@ -14,7 +14,8 @@ const modalError = vi.spyOn(Modal, "error").mockReturnValue({
   update: vi.fn(),
 });
 
-vi.mock("@sso/lib/human-verification", () => ({
+vi.mock("@sso/lib/human-verification", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@sso/lib/human-verification")>()),
   withHumanVerification,
 }));
 

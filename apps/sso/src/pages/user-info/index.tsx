@@ -8,8 +8,8 @@ import {
   UserOutlined,
 } from "@ant-design/icons";
 import { VerificationCodeInput } from "@sso/components/VerificationCodeInput";
+import { useHumanVerification } from "@sso/hooks/useHumanVerification";
 import { useSmsCodeCountdown } from "@sso/hooks/useSmsCodeCountdown";
-import { withHumanVerification } from "@sso/lib/human-verification";
 import { useSso } from "@sso/models/sso-context";
 import { selfMobileSendMsg } from "@sso/services/open";
 import { mobileSet, passwordChange } from "@sso/services/public";
@@ -32,6 +32,7 @@ import {
 type TabKey = "password" | "mobile";
 
 export default function UserInfoPage() {
+  const { verify: withHumanVerification, captcha, cancel: cancelVerification } = useHumanVerification();
   const navigate = useNavigate();
   const { userInfo, userInfoStatus, loadUserInfo } = useSso();
   const [activeKey, setActiveKey] = useState<TabKey>("password");
@@ -51,11 +52,13 @@ export default function UserInfoPage() {
       message.error("请填写手机号");
       return;
     }
-    if (isCounting) return;
+    if (isCounting || smsSending || submitting) return;
     try {
       setSmsSending(true);
       const body = { phoneNumber, usage: "bindPhone" } as const;
-      await withHumanVerification("sendSmsCode", (capToken) => selfMobileSendMsg({ ...body, capToken }));
+      await withHumanVerification("sendSmsCode", (capToken, imageCaptchaProof) =>
+        selfMobileSendMsg({ ...body, capToken }, imageCaptchaProof),
+      );
       startCountdown();
     } catch (e) {
       restoreCountdown(e);
@@ -170,6 +173,7 @@ export default function UserInfoPage() {
                 <Tabs
                   className="settings-tabs"
                   defaultActiveKey="security"
+                  onChange={cancelVerification}
                   items={[
                     {
                       key: "security",
@@ -223,7 +227,10 @@ export default function UserInfoPage() {
 
                             <Tabs
                               activeKey={activeKey}
-                              onChange={(k) => setActiveKey(k as TabKey)}
+                              onChange={(k) => {
+                                cancelVerification();
+                                setActiveKey(k as TabKey);
+                              }}
                               items={[
                                 {
                                   key: "password",
@@ -274,7 +281,14 @@ export default function UserInfoPage() {
                             )}
 
                             {activeKey === "mobile" && (
-                              <Form form={mobileForm} layout="vertical" requiredMark={false}>
+                              <Form
+                                form={mobileForm}
+                                layout="vertical"
+                                requiredMark={false}
+                                onValuesChange={(changed) => {
+                                  if ("phoneNumber" in changed) cancelVerification();
+                                }}
+                              >
                                 <div className="current-mobile">
                                   <span>当前手机号</span>
                                   <strong>{userInfo?.profile?.phone || "-"}</strong>
@@ -290,18 +304,29 @@ export default function UserInfoPage() {
                                   <VerificationCodeInput
                                     placeholder="请输入验证码"
                                     prefix={<LockOutlined />}
-                                    buttonDisabled={isCounting || smsSending}
+                                    buttonDisabled={isCounting || smsSending || submitting}
                                     buttonText={
-                                      smsSending ? "发送中" : countdown <= 0 ? "获取验证码" : `${countdown} s`
+                                      smsSending && !captcha
+                                        ? "发送中"
+                                        : countdown <= 0
+                                          ? "获取验证码"
+                                          : `${countdown} s`
                                     }
                                     onSendCode={sendCode}
                                   />
                                 </Form.Item>
+                                {captcha}
                               </Form>
                             )}
 
                             <div className="submit-row">
-                              <Button type="primary" size="large" loading={submitting} onClick={handleSubmit}>
+                              <Button
+                                type="primary"
+                                size="large"
+                                loading={submitting}
+                                disabled={activeKey === "mobile" && smsSending}
+                                onClick={handleSubmit}
+                              >
                                 保存设置
                               </Button>
                             </div>

@@ -56,6 +56,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions = {}): ApiRunt
         tokenTtlSeconds: runtimeEnv.cap.tokenTtlSeconds,
       },
       humanVerification: {
+        imageCaptchaEnabled: runtimeEnv.humanVerification.imageCaptchaEnabled,
         windowSeconds: runtimeEnv.humanVerification.windowSeconds,
         loginFailureThreshold: runtimeEnv.humanVerification.loginFailureThreshold,
         lookupThreshold: runtimeEnv.humanVerification.lookupThreshold,

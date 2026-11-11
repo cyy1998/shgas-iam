@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import { createOpenHandlers } from "@api/routes/open/open.handlers";
 import { createOpenRoute } from "@api/routes/open/open.index";
+import { HumanVerificationRequiredError } from "@api/services/human-verification/human-verification.error";
 import { SmsCooldownError, SmsSendFailedError, SmsUnavailableError } from "@api/services/mobile/mobile.error";
 import { createErrorHandler } from "@iam/api-core/middlewares";
-import { ApiErrorCode } from "@iam/contracts";
+import { ApiErrorCode, IMAGE_CAPTCHA_PROOF_HEADER, IMAGE_CAPTCHA_TICKET_HEADER } from "@iam/contracts";
 
 type ValidTarget = "json" | "query" | "param";
 
@@ -87,6 +88,29 @@ beforeEach(() => {
 });
 
 describe("createOpenHandlers human verification", () => {
+  test("returns the image ticket alongside the existing verification error and reads the proof from a header", async () => {
+    ensureActionAllowed.mockRejectedValueOnce(new HumanVerificationRequiredError(undefined, "image-ticket"));
+    const app = createOpenRoute(createHandlers());
+    app.onError(createErrorHandler({ info() {}, warn() {}, error() {} }));
+    const path = "/users/zhangsan/masked-mobile";
+    const required = await app.request(path);
+    const error = await required.json();
+    expect(required.status).toBe(400);
+    expect(error).toMatchObject({ code: ApiErrorCode.HumanVerificationRequired });
+    expect(required.headers.get(IMAGE_CAPTCHA_TICKET_HEADER)).toBe("image-ticket");
+    expect(required.headers.get("Cache-Control")).toBe("no-store");
+    expect(getUserMobileByUsername).not.toHaveBeenCalled();
+
+    const verified = await app.request(path, { headers: { [IMAGE_CAPTCHA_PROOF_HEADER]: "image-proof" } });
+    expect(verified.status).toBe(200);
+    expect(verified.headers.get("Cache-Control")).toBe("no-store");
+    expect(ensureActionAllowed).toHaveBeenLastCalledWith(
+      "openUserInfoLookup",
+      undefined,
+      expect.objectContaining({ subject: "zhangsan", imageCaptchaProof: "image-proof" }),
+    );
+  });
+
   test.each([
     [new SmsCooldownError(37), 429, "37"],
     [new SmsSendFailedError(50), 500, "50"],

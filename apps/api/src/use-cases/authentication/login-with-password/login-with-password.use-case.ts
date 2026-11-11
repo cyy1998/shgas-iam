@@ -15,6 +15,7 @@ export function createLoginWithPasswordUseCase(deps: LoginWithPasswordDeps) {
   async function execute(input: LoginWithPasswordInput, options: LoginWithPasswordOptions = {}) {
     const requestContext = options.requestContext;
     const context = createHumanVerificationContext(requestContext, input.username);
+    if (input.imageCaptchaProof) context.imageCaptchaProof = input.imageCaptchaProof;
     await deps.humanVerification.ensureActionAllowed(HumanVerificationAction.PasswordLogin, input.capToken, context);
 
     let activeUser = null;

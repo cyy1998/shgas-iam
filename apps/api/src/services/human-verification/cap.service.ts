@@ -58,6 +58,10 @@ export function createCapService(deps: CapServiceDeps) {
     return Object.values(HumanVerificationAction).includes(value as HumanVerificationAction);
   }
 
+  function verificationRequired(action: HumanVerificationAction, context?: HumanVerificationContext) {
+    return new HumanVerificationRequiredError(undefined, context && deps.imageCaptcha?.issueTicket(action, context));
+  }
+
   async function verifyTokenForAction(
     action: HumanVerificationAction,
     token?: string,
@@ -66,12 +70,26 @@ export function createCapService(deps: CapServiceDeps) {
     if (!deps.config.capEnabled) {
       return;
     }
+    if (context?.imageCaptchaProof) {
+      if (await deps.imageCaptcha?.verifyProof(action, context)) {
+        deps.logger.info(
+          verificationLogFields(SystemLogEvent.HumanVerificationValidated, action, context),
+          "image captcha proof validated",
+        );
+        return;
+      }
+      deps.logger.warn(
+        verificationLogFields(SystemLogEvent.HumanVerificationFailed, action, context),
+        "image captcha proof rejected",
+      );
+      throw verificationRequired(action, context);
+    }
     if (!token) {
       deps.logger.warn(
         verificationLogFields(SystemLogEvent.HumanVerificationMissing, action, context),
         "human verification token missing",
       );
-      throw new HumanVerificationRequiredError();
+      throw verificationRequired(action, context);
     }
 
     const actionKey = tokenActionKey(deps.config.secret, token);
@@ -85,7 +103,7 @@ export function createCapService(deps: CapServiceDeps) {
         },
         "human verification token action mismatch",
       );
-      throw new HumanVerificationRequiredError();
+      throw verificationRequired(action, context);
     }
 
     const result = await deps.capClient.validateToken(token);
@@ -95,7 +113,7 @@ export function createCapService(deps: CapServiceDeps) {
         verificationLogFields(SystemLogEvent.HumanVerificationFailed, action, context),
         "human verification token validation failed",
       );
-      throw new HumanVerificationRequiredError();
+      throw verificationRequired(action, context);
     }
     deps.logger.info(
       verificationLogFields(SystemLogEvent.HumanVerificationValidated, action, context),
@@ -108,14 +126,17 @@ export function createCapService(deps: CapServiceDeps) {
     token: string | undefined,
     context: HumanVerificationContext,
   ) {
-    if (await deps.riskService.shouldRequireVerification(action, context)) {
+    const required = await deps.riskService.shouldRequireVerification(action, context);
+    if (required) {
       deps.logger.info(
         {
           ...verificationLogFields(SystemLogEvent.HumanVerificationRequired, action, context),
-          hasToken: token !== undefined,
+          hasToken: token !== undefined || context.imageCaptchaProof !== undefined,
         },
         "human verification required for action",
       );
+    }
+    if (required || context.imageCaptchaProof) {
       await verifyTokenForAction(action, token, context);
     }
   }

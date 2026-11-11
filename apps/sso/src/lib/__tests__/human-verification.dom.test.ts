@@ -70,4 +70,56 @@ describe("withHumanVerification", () => {
     expect(message.error).toHaveBeenCalledWith("安全校验失败，请重试");
     expect(operation).toHaveBeenCalledTimes(1);
   });
+
+  it("retries the original operation once with the proof when Cap fails", async () => {
+    const operation = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new ServiceError("需要安全校验", ApiErrorCode.HumanVerificationRequired, undefined, "ticket"),
+      )
+      .mockResolvedValueOnce("verified");
+    capSolve.mockResolvedValue({ success: false });
+    const promptImageCaptcha = vi.fn().mockResolvedValue("image-proof");
+
+    await expect(withHumanVerification("passwordLogin", operation, { promptImageCaptcha })).resolves.toBe("verified");
+    expect(promptImageCaptcha).toHaveBeenCalledExactlyOnceWith("ticket");
+    expect(operation.mock.calls).toEqual([[], [undefined, "image-proof"]]);
+  });
+
+  it("switches after ten seconds and releases the Cap fetch override", async () => {
+    vi.useFakeTimers();
+    try {
+      const operation = vi
+        .fn()
+        .mockRejectedValueOnce(
+          new ServiceError("需要安全校验", ApiErrorCode.HumanVerificationRequired, undefined, "ticket"),
+        )
+        .mockResolvedValueOnce("verified");
+      capSolve.mockReturnValue(new Promise(() => {}));
+      const promptImageCaptcha = vi.fn().mockResolvedValue("image-proof");
+      const verification = withHumanVerification("sendSmsCode", operation, { promptImageCaptcha });
+      await vi.advanceTimersByTimeAsync(9_999);
+      expect(promptImageCaptcha).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(verification).resolves.toBe("verified");
+      expect(promptImageCaptcha).toHaveBeenCalledExactlyOnceWith("ticket");
+      expect(window.CAP_CUSTOM_FETCH).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not resubmit the operation after the image prompt is cancelled", async () => {
+    const operation = vi
+      .fn()
+      .mockRejectedValue(new ServiceError("需要安全校验", ApiErrorCode.HumanVerificationRequired, undefined, "ticket"));
+    capSolve.mockResolvedValue({ success: false });
+    const promptImageCaptcha = vi.fn().mockResolvedValue(undefined);
+
+    await expect(withHumanVerification("mobileLogin", operation, { promptImageCaptcha })).rejects.toMatchObject({
+      name: "ServiceError",
+      message: "已取消安全校验",
+    });
+    expect(operation).toHaveBeenCalledTimes(1);
+  });
 });
