@@ -150,6 +150,34 @@ export const auditActionCatalog = [
     label: "轮换 Custom SSO 密钥",
   },
   {
+    action: "admin.role.create",
+    label: "创建角色",
+  },
+  {
+    action: "admin.role.update",
+    label: "更新角色",
+  },
+  {
+    action: "admin.role.status_update",
+    label: "更新角色状态",
+  },
+  {
+    action: "admin.role.delete",
+    label: "删除角色",
+  },
+  {
+    action: "admin.role.assignment.create",
+    label: "新增角色分配",
+  },
+  {
+    action: "admin.role.assignment.update_scope",
+    label: "更新角色分配范围",
+  },
+  {
+    action: "admin.role.assignment.delete",
+    label: "删除角色分配",
+  },
+  {
     action: "admin.organization.create",
     label: "创建组织",
   },
@@ -196,6 +224,18 @@ export const auditActionCatalog = [
   {
     action: "admin.employment.delete",
     label: "删除任职",
+  },
+  {
+    action: "admin.employment.pause",
+    label: "暂停任职",
+  },
+  {
+    action: "admin.employment.resume",
+    label: "恢复任职",
+  },
+  {
+    action: "admin.employment.end",
+    label: "结束任职",
   },
   {
     action: "admin.employment.transfer",
