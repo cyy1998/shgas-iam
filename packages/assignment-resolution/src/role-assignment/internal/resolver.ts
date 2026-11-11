@@ -6,15 +6,13 @@ import {
   RoleStatus,
 } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
-import { employments, organizationClosures, organizations, positions, roles } from "@iam/db/schema";
+import { employments, organizationClosures, organizations, positions, roleInclusions, roles } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
-import { and, eq, gt, inArray, or } from "drizzle-orm";
+import { and, eq, gt, inArray, or, type SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { EffectiveRole, RoleAssignmentResolver } from "../index.ts";
 
-interface EmploymentRoleRow extends EffectiveRole {
-  employmentId: number;
-}
+type EmploymentRoleRow = { employmentId: number; id: number; roleCode: string };
 
 const assignmentOrganization = alias(organizations, "role_resolution_assignment_organization");
 
@@ -25,32 +23,49 @@ export function createResolver(db: DbClient): RoleAssignmentResolver {
       const result = new Map<number, EffectiveRole[]>(employmentIds.map((id) => [id, []]));
       if (employmentIds.length === 0) return result;
 
-      const [employmentRows, positionRows, organizationRows] = await Promise.all([
-        loadEmploymentAssignmentRoles(db, employmentIds, input.clientId),
-        loadPositionAssignmentRoles(db, employmentIds, input.clientId),
-        loadOrganizationAssignmentRoles(db, employmentIds, input.clientId),
-      ]);
-      mergeRoleRows(result, [...employmentRows, ...positionRows, ...organizationRows]);
+      const rows = await loadEffectiveRoles(db, employmentIds, input.clientId);
+      for (const { employmentId, id, roleCode } of rows) {
+        result.get(employmentId)?.push({ id, roleCode });
+      }
+      for (const roles of result.values()) roles.sort(compareEffectiveRoles);
       return result;
     },
     async resolveAffectedUserIds(input) {
       const roleIds = unique(input.roleIds);
       if (roleIds.length === 0) return [];
 
-      const [employmentRows, positionRows, organizationRows] = await Promise.all([
-        loadUsersAffectedByEmploymentAssignments(db, roleIds),
-        loadUsersAffectedByPositionAssignments(db, roleIds),
-        loadUsersAffectedByOrganizationAssignments(db, roleIds),
-      ]);
-      return unique([...employmentRows, ...positionRows, ...organizationRows].map((row) => row.userId)).sort(
-        (left, right) => left - right,
-      );
+      const rows = await loadAffectedUsers(db, roleIds);
+      return rows.map(({ userId }) => userId);
     },
   };
 }
 
-async function loadUsersAffectedByEmploymentAssignments(db: DbClient, roleIds: number[]) {
-  return await db
+// Reverse impact includes inactive Roles and assignment targets so a status change
+// still reaches users who may hold the old published grant.
+async function loadAffectedUsers(db: DbClient, roleIds: number[]) {
+  const affectedRoleIds = sql`(select role_id from affected_roles)`;
+  return await db.execute<{ userId: number }>(sql`
+    with recursive affected_roles(role_id) as (
+      select unnest(${sql.param(roleIds)}::integer[])
+      union
+      select ${roleInclusions.containerRoleId}
+      from affected_roles
+      join ${roleInclusions} on ${roleInclusions.memberRoleId} = affected_roles.role_id
+    )
+    select user_id as "userId"
+    from (
+      ${selectUsersAffectedByEmploymentAssignments(db, affectedRoleIds)}
+      union
+      ${selectUsersAffectedByPositionAssignments(db, affectedRoleIds)}
+      union
+      ${selectUsersAffectedByOrganizationAssignments(db, affectedRoleIds)}
+    ) as affected_users(user_id)
+    order by user_id
+  `);
+}
+
+function selectUsersAffectedByEmploymentAssignments(db: DbClient, roleIds: SQL) {
+  return db
     .select({ userId: employments.userId })
     .from(roleAssignments)
     .innerJoin(employments, eq(employments.id, roleAssignments.targetId))
@@ -63,8 +78,8 @@ async function loadUsersAffectedByEmploymentAssignments(db: DbClient, roleIds: n
     );
 }
 
-async function loadUsersAffectedByPositionAssignments(db: DbClient, roleIds: number[]) {
-  return await db
+function selectUsersAffectedByPositionAssignments(db: DbClient, roleIds: SQL) {
+  return db
     .select({ userId: employments.userId })
     .from(roleAssignments)
     .innerJoin(employments, eq(employments.posId, roleAssignments.targetId))
@@ -77,8 +92,8 @@ async function loadUsersAffectedByPositionAssignments(db: DbClient, roleIds: num
     );
 }
 
-async function loadUsersAffectedByOrganizationAssignments(db: DbClient, roleIds: number[]) {
-  return await db
+function selectUsersAffectedByOrganizationAssignments(db: DbClient, roleIds: SQL) {
+  return db
     .select({ userId: employments.userId })
     .from(roleAssignments)
     .innerJoin(organizationClosures, eq(organizationClosures.ancestorId, roleAssignments.targetId))
@@ -100,9 +115,34 @@ function activeEmploymentWhere() {
   return and(eq(employments.status, EmploymentStatus.Enable), eq(employments.isDelete, false));
 }
 
-async function loadEmploymentAssignmentRoles(db: DbClient, employmentIds: number[], clientId?: number) {
-  return await db
-    .select(roleSelection())
+// Read the assignments and the graph in one statement snapshot. UNION deduplicates by
+// employment and role at each recursive step, including where different assignment sources meet.
+async function loadEffectiveRoles(db: DbClient, employmentIds: number[], clientId?: number) {
+  return await db.execute<EmploymentRoleRow>(sql`
+    with recursive effective(employment_id, role_id) as (
+      (
+        ${selectEmploymentAssignmentRoles(db, employmentIds)}
+        union
+        ${selectPositionAssignmentRoles(db, employmentIds)}
+        union
+        ${selectOrganizationAssignmentRoles(db, employmentIds)}
+      )
+      union
+      select effective.employment_id, ${roleInclusions.memberRoleId}
+      from effective
+      join ${roleInclusions} on ${roleInclusions.containerRoleId} = effective.role_id
+      join ${roles} on ${roles.id} = ${roleInclusions.memberRoleId} and ${activeRoleWhere()}
+    )
+    select effective.employment_id as "employmentId", ${roles.id}, ${roles.roleCode} as "roleCode"
+    from effective
+    join ${roles} on ${roles.id} = effective.role_id
+    ${clientId === undefined ? sql.empty() : sql`where ${eq(roles.clientId, clientId)}`}
+  `);
+}
+
+function selectEmploymentAssignmentRoles(db: DbClient, employmentIds: number[]) {
+  return db
+    .select(rootRoleSelection())
     .from(employments)
     .innerJoin(
       roleAssignments,
@@ -114,12 +154,12 @@ async function loadEmploymentAssignmentRoles(db: DbClient, employmentIds: number
     .innerJoin(positions, eq(positions.id, employments.posId))
     .innerJoin(organizations, eq(organizations.id, employments.orgId))
     .innerJoin(roles, eq(roles.id, roleAssignments.roleId))
-    .where(and(inArray(employments.id, employmentIds), activeEmploymentWhere(), activeRoleWhere(clientId)));
+    .where(and(inArray(employments.id, employmentIds), activeEmploymentWhere(), activeRoleWhere()));
 }
 
-async function loadPositionAssignmentRoles(db: DbClient, employmentIds: number[], clientId?: number) {
-  return await db
-    .select(roleSelection())
+function selectPositionAssignmentRoles(db: DbClient, employmentIds: number[]) {
+  return db
+    .select(rootRoleSelection())
     .from(employments)
     .innerJoin(
       roleAssignments,
@@ -136,14 +176,14 @@ async function loadPositionAssignmentRoles(db: DbClient, employmentIds: number[]
         inArray(employments.id, employmentIds),
         activeEmploymentWhere(),
         activePositionAssignmentTargetWhere(),
-        activeRoleWhere(clientId),
+        activeRoleWhere(),
       ),
     );
 }
 
-async function loadOrganizationAssignmentRoles(db: DbClient, employmentIds: number[], clientId?: number) {
-  return await db
-    .select(roleSelection())
+function selectOrganizationAssignmentRoles(db: DbClient, employmentIds: number[]) {
+  return db
+    .select(rootRoleSelection())
     .from(employments)
     .innerJoin(positions, eq(positions.id, employments.posId))
     .innerJoin(organizations, eq(organizations.id, employments.orgId))
@@ -163,7 +203,7 @@ async function loadOrganizationAssignmentRoles(db: DbClient, employmentIds: numb
         activeEmploymentWhere(),
         eq(assignmentOrganization.status, OrganizationStatus.Enable),
         eq(assignmentOrganization.isDelete, false),
-        activeRoleWhere(clientId),
+        activeRoleWhere(),
         or(
           eq(organizationClosures.depth, 0),
           and(gt(organizationClosures.depth, 0), eq(roleAssignments.includeDescendants, true)),
@@ -172,38 +212,16 @@ async function loadOrganizationAssignmentRoles(db: DbClient, employmentIds: numb
     );
 }
 
-function activeRoleWhere(clientId: number | undefined) {
-  return and(
-    eq(roles.status, RoleStatus.Enable),
-    eq(roles.isDelete, false),
-    clientId === undefined ? undefined : eq(roles.clientId, clientId),
-  );
+function activeRoleWhere() {
+  return and(eq(roles.status, RoleStatus.Enable), eq(roles.isDelete, false));
 }
 
 function activePositionAssignmentTargetWhere() {
   return and(eq(positions.status, PositionStatus.Enable), eq(positions.isDelete, false));
 }
 
-function roleSelection() {
-  return {
-    employmentId: employments.id,
-    id: roles.id,
-    roleCode: roles.roleCode,
-  };
-}
-
-function mergeRoleRows(result: Map<number, EffectiveRole[]>, rows: EmploymentRoleRow[]) {
-  const seenByEmployment = new Map<number, Set<number>>();
-  for (const row of rows) {
-    const seenRoleIds = seenByEmployment.get(row.employmentId) ?? new Set<number>();
-    if (!seenRoleIds.has(row.id)) {
-      result.get(row.employmentId)?.push({ id: row.id, roleCode: row.roleCode });
-      seenRoleIds.add(row.id);
-      seenByEmployment.set(row.employmentId, seenRoleIds);
-    }
-  }
-
-  for (const effectiveRoles of result.values()) effectiveRoles.sort(compareEffectiveRoles);
+function rootRoleSelection() {
+  return { employmentId: employments.id, roleId: roles.id };
 }
 
 function compareEffectiveRoles(left: EffectiveRole, right: EffectiveRole) {

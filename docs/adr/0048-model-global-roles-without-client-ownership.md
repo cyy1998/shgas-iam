@@ -20,7 +20,8 @@ status: accepted
 ## 管理与编码命名空间
 
 - 角色类型、编码和所属应用在创建后固定。将 Client Role 的业务职责推广到所有应用时，创建独立的 Global Role，
-  再显式建立所需分配。这样现有 Client Role 的分配只会在原应用的范围内生效。
+  再显式建立所需授予。Client Role 本身的角色事实继续按所属应用披露。跨应用组合授予见
+  [ADR-0049](0049-compose-roles-across-clients.md)。
 - 完整管理员可以创建、编辑、启停、删除和分配 Global Role。HR 管理员可在现有授权范围内的用户和任职详情中读取
   角色事实。IAM 管理权限由 [Admin Authorization Policy](0017-centralize-admin-role-policy-with-request-time-scope.md) 决定。
 - Admin 角色列表默认展示两类角色，支持按类型筛选。按所属应用筛选时仅匹配归属该 Client 的角色。

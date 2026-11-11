@@ -119,12 +119,12 @@ function RoleDetailDrawerContent({
       try {
         await load();
       } catch (error) {
-        message.error(`基本信息已保存，但详情刷新失败：${error instanceof Error ? error.message : "请稍后重试"}`);
+        message.error(`角色已保存，但详情刷新失败：${error instanceof Error ? error.message : "请稍后重试"}`);
       }
       try {
         await onChanged();
       } catch (error) {
-        message.error(`基本信息已保存，但列表刷新失败：${error instanceof Error ? error.message : "请稍后重试"}`);
+        message.error(`角色已保存，但列表刷新失败：${error instanceof Error ? error.message : "请稍后重试"}`);
       }
       return true;
     } finally {

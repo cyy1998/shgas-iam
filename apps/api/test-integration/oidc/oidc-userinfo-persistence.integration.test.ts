@@ -2,9 +2,25 @@ import { afterEach, expect, test } from "bun:test";
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
-import { OidcScope, OrganizationLevel, OrganizationType, RoleAssignmentTargetType, RoleType } from "@iam/contracts";
+import {
+  OidcScope,
+  OrganizationLevel,
+  OrganizationType,
+  RoleAssignmentTargetType,
+  RoleKind,
+  RoleType,
+} from "@iam/contracts";
 import { relations } from "@iam/db/relations";
-import { clients, employments, organizationClosures, organizations, positions, roles, users } from "@iam/db/schema";
+import {
+  clients,
+  employments,
+  organizationClosures,
+  organizations,
+  positions,
+  roleInclusions,
+  roles,
+  users,
+} from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { createDocumentFactsCacheRecord } from "@iam/documents/user/document";
 import { createSubjectFactsReader, createSubjectFactsRedisCache } from "@iam/documents/user/subject-facts";
@@ -141,20 +157,30 @@ test("UserInfo HTTP uses real published Facts cache, canonical PostgreSQL fallba
     queries.length = 0;
     await pg.db.update(users).set({ name: "较新发布资料" }).where(eq(users.id, user.id));
     await pg.db.delete(roleAssignments).where(eq(roleAssignments.roleId, role.id));
-    const [nextRole, otherRole, reviewer, shared] = await pg.db
+    const [nextRole, otherRole, bridge, reviewer, shared] = await pg.db
       .insert(roles)
       .values([
         { roleCode: "app-role", roleName: "Current App Role", clientId: client.id },
-        { roleCode: "other-role", roleName: "Other App Role", clientId: otherClient.id },
+        { roleCode: "other-role", roleName: "Other App Role", clientId: otherClient.id, roleKind: RoleKind.Composite },
+        {
+          roleCode: "other-bridge",
+          roleName: "Other App Bridge",
+          clientId: otherClient.id,
+          roleKind: RoleKind.Composite,
+        },
         { roleCode: "global:reviewer", roleName: "Reviewer", roleType: RoleType.Global },
         { roleCode: "global:shared", roleName: "Shared Role", roleType: RoleType.Global },
       ])
       .returning({ id: roles.id });
-    if (!nextRole || !otherRole || !reviewer || !shared) throw new Error("UserInfo updated roles are missing");
+    if (!nextRole || !otherRole || !bridge || !reviewer || !shared)
+      throw new Error("UserInfo updated roles are missing");
+    await pg.db.insert(roleInclusions).values([
+      { containerRoleId: otherRole.id, memberRoleId: bridge.id },
+      { containerRoleId: bridge.id, memberRoleId: nextRole.id },
+      { containerRoleId: bridge.id, memberRoleId: reviewer.id },
+    ]);
     await pg.db.insert(roleAssignments).values([
-      { roleId: nextRole.id, targetType: RoleAssignmentTargetType.Employment, targetId: employment.id },
       { roleId: otherRole.id, targetType: RoleAssignmentTargetType.Employment, targetId: employment.id },
-      { roleId: reviewer.id, targetType: RoleAssignmentTargetType.Employment, targetId: employment.id },
       { roleId: shared.id, targetType: RoleAssignmentTargetType.Organization, targetId: organization.id },
     ]);
     const published = await publishUserDocument(pg.db, user.id, "2");
@@ -183,9 +209,9 @@ test("UserInfo HTTP uses real published Facts cache, canonical PostgreSQL fallba
     expect(otherInfo.status).toBe(200);
     expect(await otherInfo.json()).toMatchObject({
       "iam:authorization": {
-        roles: ["global:reviewer", "global:shared", "other-role"],
+        roles: ["global:reviewer", "global:shared", "other-bridge", "other-role"],
         employments: [
-          { position: { code: "position" }, roles: ["global:reviewer", "global:shared", "other-role"] },
+          { position: { code: "position" }, roles: ["global:reviewer", "global:shared", "other-bridge", "other-role"] },
           { position: { code: "secondary" }, roles: ["global:shared"] },
         ],
       },

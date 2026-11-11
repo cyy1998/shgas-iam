@@ -13,6 +13,7 @@ import {
   OrganizationLevel,
   OrganizationType,
   RoleAssignmentTargetType,
+  RoleKind,
   RoleStatus,
   UserDocumentRebuildReason,
   UserDocumentWorkStatus,
@@ -26,7 +27,9 @@ import {
   organizationClosures,
   organizations,
   positions,
+  roleInclusions,
   roles,
+  userDocumentOutboxEntries,
   userDocumentRebuildStates,
   userDocuments,
   users,
@@ -100,11 +103,10 @@ function createCommand(decorate: (tx: AdminRoleTransactionPorts) => AdminRoleTra
   };
 }
 
-test("Admin role transports manage Global Roles with an explicit type and no Client", async () => {
-  await seedRole("test-client:existing");
+function createRoleSurface(actorRoles?: string[]) {
   const adapter = createRoleAdapter({ roleService: createCommand().service });
   const app = new Hono();
-  addTestAdminAuthorizationMiddleware(app);
+  addTestAdminAuthorizationMiddleware(app, actorRoles);
   app.onError(createErrorHandler({ error: mock(), warn: mock(), info: mock() }));
   app.route("/admin", createRoleRoute(adapter));
   app.all("/rpc/*", (c) =>
@@ -115,8 +117,18 @@ test("Admin role transports manage Global Roles with an explicit type and no Cli
       createContext: () => ({ hono: c }),
     }),
   );
-  const request = (path: string, body: object, method = "POST") =>
+  return app;
+}
+
+function createJsonRequester(app: ReturnType<typeof createRoleSurface>) {
+  return (path: string, body: object, method = "POST") =>
     app.request(path, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+}
+
+test("Admin role transports manage Global Roles with an explicit type and no Client", async () => {
+  await seedRole("test-client:existing");
+  const app = createRoleSurface();
+  const request = createJsonRequester(app);
   const global = { roleType: "global", roleCode: "global:reviewer", roleName: "Reviewer" };
   const created = await request("/admin/roles", global);
   expect(created.status).toBe(200);
@@ -170,7 +182,7 @@ test("Admin role transports manage Global Roles with an explicit type and no Cli
   const hrApp = new Hono();
   addTestAdminAuthorizationMiddleware(hrApp, ["iam:hr-admin"]);
   hrApp.onError(createErrorHandler({ error: mock(), warn: mock(), info: mock() }));
-  hrApp.route("/admin", createRoleRoute(adapter));
+  hrApp.route("/admin", createRoleRoute(createRoleAdapter({ roleService: createCommand().service })));
   const denied = await hrApp.request("/admin/roles", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -185,6 +197,164 @@ test("Admin role transports manage Global Roles with an explicit type and no Cli
   expect(deleted.status).toBe(200);
   const occupied = await request("/rpc/create", global);
   expect(occupied.status).toBe(409);
+});
+
+test("Admin creates and reads Basic and explicit Composite Roles under either ownership", async () => {
+  await seedRole("test-client:existing");
+  const app = createRoleSurface();
+  const request = createJsonRequester(app);
+
+  const creations = [
+    { roleCode: "test-client:legacy", roleName: "Legacy", clientCode: "test-client" },
+    { roleCode: "test-client:basic", roleName: "Basic", clientCode: "test-client", roleKind: "basic" },
+    { roleCode: "global:basic", roleName: "Basic", roleType: "global", roleKind: "basic" },
+    { roleCode: "test-client:composite", roleName: "Composite", clientCode: "test-client", roleKind: "composite" },
+    { roleCode: "global:composite", roleName: "Composite", roleType: "global", roleKind: "composite" },
+  ];
+  for (const input of creations) {
+    const expected = {
+      roleCode: input.roleCode,
+      roleKind: input.roleKind ?? "basic",
+      roleType: input.roleType ?? "client",
+      client: input.clientCode ? { clientCode: input.clientCode } : null,
+      assignmentCount: 0,
+    };
+    const response = await request("/admin/roles", input);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ data: { changed: true, result: expected } });
+
+    const detail = await app.request(`/admin/roles/${encodeURIComponent(input.roleCode)}`);
+    expect(detail.status).toBe(200);
+    expect(await detail.json()).toMatchObject({ data: expected });
+  }
+
+  const composite = creations[4]!;
+  const rejected = await request("/rpc/update", { roleCode: composite.roleCode, data: { roleKind: "basic" } });
+  expect(rejected.status).toBe(400);
+  const invalid = await request("/admin/roles", { ...composite, roleCode: "global:invalid", roleKind: "unknown" });
+  expect(invalid.status).toBe(422);
+
+  const search = await request("/admin/roles/search", {
+    pageNum: 1,
+    pageSize: 10,
+    conditions: { fuzzyConditions: {}, exactConditions: {} },
+  });
+  expect(search.status).toBe(200);
+  expect(await search.json()).toMatchObject({
+    data: {
+      total: 6,
+      result: [
+        { roleCode: "test-client:existing", roleKind: "basic", roleType: "client" },
+        { roleCode: "test-client:legacy", roleKind: "basic", roleType: "client" },
+        { roleCode: "test-client:basic", roleKind: "basic", roleType: "client" },
+        { roleCode: "global:basic", roleKind: "basic", roleType: "global" },
+        { roleCode: "test-client:composite", roleKind: "composite", roleType: "client" },
+        { roleCode: "global:composite", roleKind: "composite", roleType: "global" },
+      ],
+    },
+  });
+});
+
+test("Admin saves a cross-Client Role Inclusion and reads both ends", async () => {
+  const app = createRoleSurface();
+  const request = createJsonRequester(app);
+  const root = await request("/admin/roles", {
+    roleCode: "global:duty",
+    roleName: "Duty",
+    roleType: "global",
+    roleKind: "composite",
+  });
+  expect(root.status).toBe(200);
+  const child = await seedRole("test-client:reader");
+  const saved = await request(
+    "/admin/roles/global%3Aduty",
+    { inclusions: { addRoleIds: [child.id], removeRoleIds: [] } },
+    "PUT",
+  );
+  expect(saved.status).toBe(200);
+  const parentDetail = await (await app.request("/admin/roles/global%3Aduty")).json();
+  const childDetail = await (await app.request("/admin/roles/test-client%3Areader")).json();
+  expect(parentDetail).toMatchObject({
+    data: {
+      members: [{ id: child.id, roleCode: child.roleCode, client: { clientCode: "test-client" } }],
+      containers: [],
+    },
+  });
+  expect(childDetail).toMatchObject({
+    data: { members: [], containers: [{ roleCode: "global:duty", client: null }] },
+  });
+});
+
+test("Admin Role deletion removes both sides of the graph and keeps the emptied composite assignable", async () => {
+  const emptyAfterDeletion = await seedRole("emptied", RoleKind.Composite);
+  const otherContainer = await seedRole("other-container", RoleKind.Composite);
+  const removed = await seedRole("removed", RoleKind.Composite);
+  const leaf = await seedRole("leaf");
+  const { employment } = await seedEmployment();
+  const { service } = createCommand();
+  for (const [container, member] of [
+    [emptyAfterDeletion, removed],
+    [otherContainer, removed],
+    [removed, leaf],
+    [otherContainer, leaf],
+  ] as const) {
+    await service.updateRole(container.roleCode, { inclusions: { addRoleIds: [member.id], removeRoleIds: [] } });
+  }
+  const before = await facts();
+  const app = createRoleSurface();
+  const response = await app.request("/admin/roles/removed", { method: "DELETE" });
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ data: { changed: true, result: null } });
+
+  const absent = await app.request("/admin/roles/removed");
+  expect(absent.status).toBe(404);
+  const emptied = await app.request("/admin/roles/emptied");
+  expect(await emptied.json()).toMatchObject({
+    data: { id: emptyAfterDeletion.id, roleKind: RoleKind.Composite, members: [] },
+  });
+  const other = await app.request("/admin/roles/other-container");
+  expect(await other.json()).toMatchObject({ data: { members: [{ id: leaf.id }] } });
+  const surviving = await app.request("/admin/roles/leaf");
+  expect(await surviving.json()).toMatchObject({ data: { containers: [{ id: otherContainer.id }] } });
+
+  const after = await facts();
+  expect(after.roles.find(({ id }) => id === removed.id)?.isDelete).toBe(true);
+  expect(after.inclusions).toEqual([{ containerRoleId: otherContainer.id, memberRoleId: leaf.id }]);
+  expect(after.audits.slice(before.audits.length)).toMatchObject([
+    {
+      action: "admin.role.delete",
+      targetId: removed.id,
+      details: {
+        deleted: true,
+        changed: true,
+        inclusions: {
+          removedContainerRoleIds: [emptyAfterDeletion.id, otherContainer.id],
+          removedMemberRoleIds: [leaf.id],
+        },
+      },
+    },
+  ]);
+  const previousOutboxIds = new Set(before.outbox.map(({ id }) => id));
+  const deletionSources = after.outbox.filter(({ id }) => !previousOutboxIds.has(id)).map(({ source }) => source);
+  expect(deletionSources).toHaveLength(3);
+  expect(deletionSources).toEqual(
+    expect.arrayContaining(
+      [removed.id, emptyAfterDeletion.id, otherContainer.id].map((roleId) =>
+        expect.objectContaining({ change: { kind: "role", roleId } }),
+      ),
+    ),
+  );
+
+  const assigned = await app.request("/admin/roles/emptied/assignments", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ targetType: RoleAssignmentTargetType.Employment, employmentId: employment.id }),
+  });
+  expect(assigned.status).toBe(200);
+  const effective = await createRoleAssignmentResolver(harness.db).resolveEffectiveRoles({
+    employmentIds: [employment.id],
+  });
+  expect(effective.get(employment.id)).toEqual([{ id: emptyAfterDeletion.id, roleCode: emptyAfterDeletion.roleCode }]);
 });
 
 test("PostgreSQL rejects invalid Role ownership and reserved codes", async () => {
@@ -220,7 +390,7 @@ test("PostgreSQL rejects invalid Role ownership and reserved codes", async () =>
   expect([...valid]).toEqual([{ role_code: roleCode }]);
 });
 
-async function seedRole(roleCode = "ROLE") {
+async function seedRole(roleCode = "ROLE", roleKind = RoleKind.Basic, status = RoleStatus.Enable) {
   let client = await harness.db.query.clients.findFirst({
     where: { clientCode: "test-client" },
   });
@@ -237,7 +407,7 @@ async function seedRole(roleCode = "ROLE") {
   }
   const [role] = await harness.db
     .insert(roles)
-    .values({ roleCode, roleName: roleCode, clientId: client!.id })
+    .values({ roleCode, roleName: roleCode, clientId: client!.id, roleKind, status })
     .returning();
   return role!;
 }
@@ -258,7 +428,7 @@ test("loads names only for the requested role identities, including duplicate na
   expect(empty).toEqual([]);
 });
 
-async function seedHolder(roleId: number, targetType = RoleAssignmentTargetType.Employment) {
+async function seedEmployment() {
   const [user] = await harness.db
     .insert(users)
     .values({ username: "holder", name: "Holder", userType: UserType.Formal })
@@ -292,27 +462,115 @@ async function seedHolder(roleId: number, targetType = RoleAssignmentTargetType.
       startTime: new Date("2026-08-01T00:00:00Z"),
     })
     .returning();
+  return { user: user!, employment: employment!, organization: organization!, position: position! };
+}
+
+async function seedHolder(roleId: number, targetType = RoleAssignmentTargetType.Employment) {
+  const holder = await seedEmployment();
   const [assignment] = await harness.db
     .insert(roleAssignments)
     .values({
       roleId,
       targetType,
-      targetId: targetType === RoleAssignmentTargetType.Organization ? organization!.id : employment!.id,
+      targetId: targetType === RoleAssignmentTargetType.Organization ? holder.organization.id : holder.employment.id,
       includeDescendants: false,
     })
     .returning();
-  return {
-    user: user!,
-    employment: employment!,
-    assignment: assignment!,
-    organization: organization!,
-  };
+  return { ...holder, assignment: assignment! };
 }
+
+test("assigns an empty Composite Role to an employment, a position and an organization with subtree scope", async () => {
+  const { user, employment, position, organization } = await seedEmployment();
+  const [childOrganization] = await harness.db
+    .insert(organizations)
+    .values({
+      orgCode: "CHILD",
+      orgName: "Child",
+      parentId: organization.id,
+      path: `${organization.path}/2`,
+      level: OrganizationLevel.Two,
+      orgType: OrganizationType.Department,
+    })
+    .returning();
+  await harness.db.insert(organizationClosures).values([
+    { ancestorId: organization.id, descendantId: childOrganization!.id, depth: 1 },
+    { ancestorId: childOrganization!.id, descendantId: childOrganization!.id, depth: 0 },
+  ]);
+  const [childPosition] = await harness.db.insert(positions).values({ posCode: "CHILD", posName: "Child" }).returning();
+  const [child] = await harness.db
+    .insert(employments)
+    .values({
+      userId: user.id,
+      orgId: childOrganization!.id,
+      posId: childPosition!.id,
+      status: EmploymentStatus.Enable,
+      startTime: employment.startTime,
+    })
+    .returning();
+  const app = createRoleSurface();
+  const request = createJsonRequester(app);
+  const roleCode = "global:composite";
+  const roleUrl = `/admin/roles/${encodeURIComponent(roleCode)}`;
+  const assignmentUrl = `${roleUrl}/assignments`;
+  const created = await request("/admin/roles", {
+    roleCode,
+    roleName: "Composite",
+    roleType: "global",
+    roleKind: "composite",
+  });
+  expect(created.status).toBe(200);
+
+  const resolver = createRoleAssignmentResolver(harness.db);
+  const employmentIds = [employment.id, child!.id];
+  const effectiveCodes = async () => {
+    const result = await resolver.resolveEffectiveRoles({ employmentIds });
+    return employmentIds.map((id) => result.get(id)?.map((role) => role.roleCode));
+  };
+  const searchBody = { pageNum: 1, pageSize: 10, conditions: { fuzzyConditions: {}, exactConditions: {} } };
+  for (const { input, targetId } of [
+    { input: { targetType: "employment", employmentId: employment.id }, targetId: employment.id },
+    { input: { targetType: "position", posCode: position.posCode }, targetId: position.id },
+    {
+      input: { targetType: "organization", orgCode: organization.orgCode, includeDescendants: false },
+      targetId: organization.id,
+    },
+  ]) {
+    const assigned = await request(assignmentUrl, input);
+    expect(assigned.status).toBe(200);
+    const { data } = z
+      .object({ data: z.object({ changed: z.literal(true), result: z.object({ id: z.number() }) }) })
+      .parse(await assigned.json());
+    const expected = { id: data.result.id, targetType: input.targetType, targetId, includeDescendants: false };
+    const page = await request(`${assignmentUrl}/search`, searchBody);
+    expect(page.status).toBe(200);
+    expect(await page.json()).toMatchObject({ data: { total: 1, result: [expected] } });
+    expect(await effectiveCodes()).toEqual([[roleCode], []]);
+
+    const assignmentPath = `${assignmentUrl}/${data.result.id}`;
+    if (input.targetType === "organization") {
+      const changed = await request(`${assignmentPath}/scope`, { includeDescendants: true }, "PATCH");
+      expect(changed.status).toBe(200);
+      const expandedPage = await request(`${assignmentUrl}/search`, searchBody);
+      expect(await expandedPage.json()).toMatchObject({
+        data: { total: 1, result: [{ ...expected, includeDescendants: true }] },
+      });
+      expect(await effectiveCodes()).toEqual([[roleCode], [roleCode]]);
+    }
+    const removed = await app.request(assignmentPath, { method: "DELETE" });
+    expect(removed.status).toBe(200);
+    expect(await effectiveCodes()).toEqual([[], []]);
+  }
+});
 
 async function facts() {
   return {
     roles: await harness.db.select().from(roles).orderBy(roles.id),
     assignments: await harness.db.select().from(roleAssignments).orderBy(roleAssignments.id),
+    inclusions: await harness.db
+      .select()
+      .from(roleInclusions)
+      .orderBy(roleInclusions.containerRoleId, roleInclusions.memberRoleId),
+    outbox: await harness.db.select().from(userDocumentOutboxEntries).orderBy(userDocumentOutboxEntries.id),
     audits: await harness.db.select().from(auditLogs).orderBy(auditLogs.id),
     dirty: await harness.db.select().from(userDocumentRebuildStates),
   };
@@ -351,12 +609,13 @@ async function failure(operation: () => Promise<unknown>) {
   throw new Error("Expected command failure");
 }
 
-async function waitForBlocked(table: "role" | "role_assignment", count = 1) {
+async function waitForBlocked(table: "role" | "role_assignment" | "role-inclusion-graph", count = 1) {
+  const pattern = table === "role-inclusion-graph" ? "%pg_advisory_xact_lock%role-inclusion-graph%" : `%"${table}"%`;
   const deadline = Date.now() + 3000;
   while (Date.now() < deadline) {
     const [row] = await harness.sql<{ blocked: boolean }[]>`
       select (select count(*) from pg_stat_activity
-        where wait_event_type = 'Lock' and query like ${`%"${table}"%`}
+        where wait_event_type = 'Lock' and query like ${pattern}
         and application_name = current_setting('application_name') and pid <> pg_backend_pid()) >= ${count} as blocked
     `;
     if (row!.blocked) return;
@@ -392,6 +651,271 @@ async function publish(userId: number, version: string) {
 }
 
 describe("Role mutations through production PostgreSQL UnitOfWork", () => {
+  test("rejects forbidden or invalid Role Inclusion edits without changing facts", async () => {
+    const container = await seedRole("container", RoleKind.Composite);
+    const disabled = await seedRole("disabled", RoleKind.Composite, RoleStatus.Disable);
+    const basic = await seedRole("basic");
+    const deleted = await seedRole("deleted");
+    const { service } = createCommand();
+    const include = (id: number, removeRoleIds: number[] = []) => ({ addRoleIds: [id], removeRoleIds });
+    await service.deleteRole(deleted.roleCode);
+    await service.updateRole(container.roleCode, { inclusions: include(disabled.id) });
+    const before = await facts();
+
+    for (const [roleCode, data, errorType] of [
+      [basic.roleCode, { inclusions: include(container.id) }, BadRequestError],
+      [container.roleCode, { inclusions: include(container.id) }, BadRequestError],
+      [disabled.roleCode, { inclusions: include(container.id) }, BadRequestError],
+      [
+        container.roleCode,
+        { inclusions: include(deleted.id, [disabled.id]), roleName: "Partial update" },
+        RoleNotFoundError,
+      ],
+    ] as const) {
+      const rejected = await failure(() => service.updateRole(roleCode, data));
+      expect(rejected).toBeInstanceOf(errorType);
+    }
+
+    const hr = createRoleSurface(["iam:hr-admin"]);
+    const denied = await hr.request("/admin/roles/container", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ inclusions: include(basic.id, [disabled.id]) }),
+    });
+    expect(denied.status).toBe(403);
+    expect(await facts()).toEqual(before);
+  });
+
+  test("audits explicit Role Inclusion intent and the actual delta without duplicate publication work", async () => {
+    const container = await seedRole("container", RoleKind.Composite);
+    const retained = await seedRole("retained");
+    const added = await seedRole("added");
+    const absent = await seedRole("absent");
+    const { user } = await seedHolder(container.id);
+    const { service, enqueueRebuildJobs } = createCommand();
+    await service.updateRole(container.roleCode, { inclusions: { addRoleIds: [retained.id], removeRoleIds: [] } });
+
+    const intent = { addRoleIds: [retained.id, added.id], removeRoleIds: [absent.id] };
+    const beforeChange = await facts();
+    const changed = await service.updateRole(container.roleCode, { inclusions: intent });
+    expect(changed).toEqual({ changed: true, result: null });
+    const afterChange = await facts();
+    expect(afterChange.outbox).toHaveLength(beforeChange.outbox.length + 1);
+    expect(afterChange.dirty).toMatchObject([{ userId: user.id, version: "2" }]);
+    expect(afterChange.audits.at(-1)).toMatchObject({
+      details: { changed: true, inclusionIntent: intent, inclusions: { addRoleIds: [added.id], removeRoleIds: [] } },
+    });
+
+    enqueueRebuildJobs.mockClear();
+    const replay = await service.updateRole(container.roleCode, { inclusions: intent });
+    expect(replay).toEqual({ changed: false, result: null });
+    const afterReplay = await facts();
+    expect(afterReplay.roles).toEqual(afterChange.roles);
+    expect(afterReplay.audits).toHaveLength(afterChange.audits.length + 1);
+    expect(afterReplay.audits.at(-1)).toMatchObject({
+      details: { changed: false, inclusionIntent: intent, inclusions: { addRoleIds: [], removeRoleIds: [] } },
+    });
+
+    const renamed = await service.updateRole(container.roleCode, { roleName: "Renamed", inclusions: intent });
+    expect(renamed).toEqual({ changed: true, result: null });
+    const afterRename = await facts();
+    expect(afterRename.audits).toHaveLength(afterReplay.audits.length + 1);
+    expect(afterRename.audits.at(-1)).toMatchObject({
+      details: {
+        changed: true,
+        patch: { roleName: "Renamed" },
+        inclusionIntent: intent,
+        inclusions: { addRoleIds: [], removeRoleIds: [] },
+      },
+    });
+    expect(afterRename.inclusions).toEqual(afterChange.inclusions);
+    expect(afterRename.outbox).toEqual(afterChange.outbox);
+    expect(afterRename.dirty).toEqual(afterChange.dirty);
+    expect(enqueueRebuildJobs).not.toHaveBeenCalled();
+  });
+
+  test("rolls back the Role Inclusion when a required transaction participant fails", async () => {
+    const container = await seedRole("container", RoleKind.Composite);
+    const member = await seedRole("member");
+    const error = new Error("source invalidation failed");
+    const { service } = createCommand((tx) => ({
+      ...tx,
+      userDocumentInvalidation: {
+        async recordChanges(changes) {
+          await tx.userDocumentInvalidation.recordChanges(changes);
+          throw error;
+        },
+      },
+    }));
+    const before = await facts();
+    const rejected = await failure(() =>
+      service.updateRole(container.roleCode, {
+        inclusions: { addRoleIds: [member.id], removeRoleIds: [] },
+      }),
+    );
+    expect(rejected).toBe(error);
+    expect(await facts()).toEqual(before);
+  });
+
+  test.each([
+    RoleAssignmentTargetType.Employment,
+    RoleAssignmentTargetType.Position,
+    RoleAssignmentTargetType.Organization,
+  ])("a direct %s assignment blocks deletion before either inclusion edge is removed", async (targetType) => {
+    const container = await seedRole("container", RoleKind.Composite);
+    const removed = await seedRole("blocked", RoleKind.Composite);
+    const leaf = await seedRole("leaf");
+    const { employment, position, organization } = await seedEmployment();
+    const { service } = createCommand();
+    await service.updateRole(container.roleCode, { inclusions: { addRoleIds: [removed.id], removeRoleIds: [] } });
+    await service.updateRole(removed.roleCode, { inclusions: { addRoleIds: [leaf.id], removeRoleIds: [] } });
+    await service.createAssignment(removed.roleCode, {
+      targetType,
+      employmentId: employment.id,
+      posCode: position.posCode,
+      orgCode: organization.orgCode,
+    });
+
+    const before = await facts();
+    const error = await failure(() => service.deleteRole(removed.roleCode));
+    expect(error).toBeInstanceOf(RoleHasAssignmentError);
+    expect(await facts()).toEqual(before);
+  });
+
+  test("rolls back the soft delete, both edges, and audit when recording the deletion Outbox fails", async () => {
+    const container = await seedRole("container", RoleKind.Composite);
+    const removed = await seedRole("removed", RoleKind.Composite);
+    const leaf = await seedRole("leaf");
+    await seedHolder(container.id);
+    const { service } = createCommand();
+    await service.updateRole(container.roleCode, { inclusions: { addRoleIds: [removed.id], removeRoleIds: [] } });
+    await service.updateRole(removed.roleCode, { inclusions: { addRoleIds: [leaf.id], removeRoleIds: [] } });
+    const before = await facts();
+
+    const error = new Error("deletion Outbox failed");
+    const failing = createCommand((tx) => ({
+      ...tx,
+      userDocumentInvalidation: {
+        async recordChanges(changes) {
+          await tx.userDocumentInvalidation.recordChanges(changes);
+          throw error;
+        },
+      },
+    }));
+    const rejected = await failure(() => failing.service.deleteRole(removed.roleCode));
+    expect(rejected).toBe(error);
+    expect(await facts()).toEqual(before);
+    expect(failing.enqueueRebuildJobs).not.toHaveBeenCalled();
+  });
+
+  test.each(["delete", "add"] as const)(
+    "when %s locks the graph first, no edge to a deleted Role survives",
+    async (first) => {
+      const container = await seedRole("container", RoleKind.Composite);
+      const member = await seedRole("member");
+      const ready = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      const paused = createCommand((tx) => ({
+        ...tx,
+        auditService: {
+          ...tx.auditService,
+          async recordAuditLog(input) {
+            await tx.auditService.recordAuditLog(input);
+            ready.resolve();
+            await release.promise;
+          },
+        },
+      })).service;
+      const concurrent = createCommand().service;
+      const add = (service: typeof paused) =>
+        service.updateRole(container.roleCode, { inclusions: { addRoleIds: [member.id], removeRoleIds: [] } });
+      const remove = (service: typeof paused) => service.deleteRole(member.roleCode);
+      const firstPending = (first === "delete" ? remove : add)(paused);
+      let secondPending: Promise<unknown> | undefined;
+      try {
+        await Promise.race([ready.promise, firstPending]);
+        secondPending = (first === "delete" ? add : remove)(concurrent);
+        const completed = Promise.allSettled([secondPending]);
+        await Promise.race([
+          waitForBlocked("role-inclusion-graph"),
+          completed.then(() => {
+            throw new Error("The second graph write settled before the first committed");
+          }),
+        ]);
+        release.resolve();
+        expect(await firstPending).toMatchObject({ changed: true });
+        const [second] = await completed;
+        expect(second).toMatchObject(
+          first === "delete"
+            ? { status: "rejected", reason: expect.any(RoleNotFoundError) }
+            : { status: "fulfilled", value: { changed: true } },
+        );
+      } finally {
+        release.resolve();
+        await Promise.allSettled([firstPending, secondPending]);
+      }
+
+      const after = await facts();
+      expect(after.roles.find(({ id }) => id === member.id)?.isDelete).toBe(true);
+      expect(after.inclusions).toEqual([]);
+      expect(after.audits.map(({ action }) => action)).toEqual(
+        first === "delete" ? ["admin.role.delete"] : ["admin.role.update", "admin.role.delete"],
+      );
+      expect(after.outbox).toHaveLength(first === "delete" ? 1 : 3);
+    },
+  );
+
+  test("serializes disjoint graph edits so only one side of a concurrent cycle commits", async () => {
+    const a = await seedRole("a", RoleKind.Composite);
+    const b = await seedRole("b", RoleKind.Composite, RoleStatus.Pause);
+    const c = await seedRole("c", RoleKind.Composite);
+    const d = await seedRole("d", RoleKind.Composite, RoleStatus.Disable);
+    const include = (id: number) => ({ inclusions: { addRoleIds: [id], removeRoleIds: [] } });
+    const { service } = createCommand();
+    await service.updateRole(b.roleCode, include(c.id));
+    await service.updateRole(d.roleCode, include(a.id));
+    const before = await facts();
+    const audited = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const first = createCommand((tx) => ({
+      ...tx,
+      auditService: {
+        ...tx.auditService,
+        async recordAuditLog(input) {
+          await tx.auditService.recordAuditLog(input);
+          audited.resolve();
+          await release.promise;
+        },
+      },
+    })).service;
+    const winner = first.updateRole(a.roleCode, include(b.id));
+    await Promise.race([audited.promise, winner]);
+    const contender = service.updateRole(c.roleCode, include(d.id)).catch((error: unknown) => error);
+    try {
+      await waitForBlocked("role-inclusion-graph");
+    } finally {
+      release.resolve();
+    }
+    const result = await winner;
+    expect(result.changed).toBe(true);
+    expect(await contender).toBeInstanceOf(BadRequestError);
+
+    const after = await facts();
+    expect(after.inclusions).toEqual([{ containerRoleId: a.id, memberRoleId: b.id }, ...before.inclusions]);
+    expect(after.audits).toHaveLength(before.audits.length + 1);
+    expect(after.audits.at(-1)).toMatchObject({
+      action: "admin.role.update",
+      targetId: a.id,
+      details: { inclusions: { addRoleIds: [b.id], removeRoleIds: [] } },
+    });
+    expect(after.outbox).toHaveLength(before.outbox.length + 1);
+    expect(after.outbox.map(({ source }) => source)).toContainEqual(
+      expect.objectContaining({
+        change: { kind: "role", roleId: a.id },
+      }),
+    );
+  });
+
   for (const entry of ["status", "profile"] as const) {
     test(`a waiting ${entry} observes Pause without resetting status or duplicating dirty`, async () => {
       const role = await seedRole();

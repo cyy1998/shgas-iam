@@ -2,7 +2,15 @@ import { requestClientOptions } from "@admin/pages/roles/role-selectors";
 import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
 import { createRole } from "@admin/services/role";
 import { ModalForm, ProFormSelect, ProFormText, ProFormTextArea } from "@ant-design/pro-components";
-import { GLOBAL_ROLE_PREFIX, getRoleStatusOptions, RoleStatus, RoleType, roleTypeOptions } from "@iam/contracts";
+import {
+  GLOBAL_ROLE_PREFIX,
+  getRoleStatusOptions,
+  RoleKind,
+  RoleStatus,
+  RoleType,
+  roleKindOptions,
+  roleTypeOptions,
+} from "@iam/contracts";
 import { Form, message } from "antd";
 import { useEffect } from "react";
 
@@ -14,6 +22,7 @@ type Props = {
 };
 
 type RoleFormValues = {
+  roleKind: RoleKind;
   roleType: RoleType;
   clientCode: string;
   roleCode: string;
@@ -49,7 +58,7 @@ export default function RoleFormModal({ open, onOpenChange, onSuccess, onCommitt
         mask: { closable: false },
         okText: "确定",
       }}
-      initialValues={{ roleType: RoleType.Client, status: RoleStatus.Enable }}
+      initialValues={{ roleKind: RoleKind.Basic, roleType: RoleType.Client, status: RoleStatus.Enable }}
       onOpenChange={onOpenChange}
       onFinish={async (values) => {
         const ownership =
@@ -61,6 +70,7 @@ export default function RoleFormModal({ open, onOpenChange, onSuccess, onCommitt
         try {
           const outcome = await createRole({
             ...ownership,
+            roleKind: values.roleKind,
             roleCode,
             roleName: values.roleName,
             description: values.description ?? null,
@@ -80,10 +90,17 @@ export default function RoleFormModal({ open, onOpenChange, onSuccess, onCommitt
       }}
     >
       <ProFormSelect
+        name="roleKind"
+        label="角色形态"
+        options={roleKindOptions}
+        rules={[{ required: true, message: "请选择角色形态" }]}
+        fieldProps={{ allowClear: false }}
+      />
+      <ProFormSelect
         name="roleType"
-        label="角色类型"
+        label="角色归属"
         options={roleTypeOptions}
-        rules={[{ required: true, message: "请选择角色类型" }]}
+        rules={[{ required: true, message: "请选择角色归属" }]}
         fieldProps={{ allowClear: false }}
       />
       {!isGlobal && (

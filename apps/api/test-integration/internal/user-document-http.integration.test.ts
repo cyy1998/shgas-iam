@@ -9,7 +9,7 @@ import { createClientRepository } from "@api/services/client/client.repository";
 import { createClientService } from "@api/services/client/client.service";
 import { createUserDocumentSearchAdapter } from "@api/services/user-document-search/user-document-search.adapter";
 import createApp from "@iam/api-core/core/create-app";
-import type { RebuildUserDocumentJobPayload } from "@iam/contracts";
+import type { RebuildUserDocumentJobPayload, UserDocumentOutboxJobPayload } from "@iam/contracts";
 import {
   ClientStatus,
   OrganizationLevel,
@@ -394,10 +394,12 @@ function createPublicationFixture() {
   const redis = new Redis(redisUrl, { maxRetriesPerRequest: 0, retryStrategy: () => null });
   const close = ownApiTestExecutor(() => closeApiRedisConnection(redis));
   const logger = { info() {}, warn() {}, error() {} };
+  const outboxJobs: UserDocumentOutboxJobPayload[] = [];
   const rebuilds: RebuildUserDocumentJobPayload[] = [];
   const jobProducer = {
-    async enqueueOutboxEntries() {
-      return { enqueued: 0, jobIds: [] };
+    async enqueueOutboxEntries(payloads: UserDocumentOutboxJobPayload[]) {
+      outboxJobs.push(...payloads);
+      return { enqueued: payloads.length, jobIds: [] };
     },
     async enqueueRebuildJobs(payloads: RebuildUserDocumentJobPayload[]) {
       rebuilds.push(...payloads);
@@ -425,16 +427,33 @@ function createPublicationFixture() {
     logger,
     batchSize: 10,
   });
-  async function drain() {
+  async function expandPending() {
+    outboxJobs.length = 0;
     const pending = await pg.db
       .select({ outboxId: userDocumentOutboxEntries.id })
       .from(userDocumentOutboxEntries)
       .where(eq(userDocumentOutboxEntries.status, UserDocumentWorkStatus.Pending))
       .orderBy(userDocumentOutboxEntries.id);
     for (const job of pending) await processor.processOutbox(job);
+  }
+  async function drain() {
+    await expandPending();
     for (const job of rebuilds.splice(0)) await processor.process(job);
   }
-  return { redis, close, uow, publisher, cache, drain };
+  async function recoverOutbox() {
+    const report = await processor.repairFailedOrStale({ staleBefore: now, limit: 10 });
+    expect(report.failed).toBe(0);
+    return outboxJobs.splice(0);
+  }
+  async function preparePendingRebuild() {
+    await expandPending();
+    const [job] = rebuilds.splice(0);
+    if (!job) throw new Error("Expected a pending User Document rebuild");
+    const prepared = await processor.prepareRebuild({ targetId: job.userId, version: job.version });
+    if (!prepared) throw new Error("Expected a prepared User Document");
+    return prepared;
+  }
+  return { redis, close, uow, publisher, cache, drain, recoverOutbox, preparePendingRebuild, processor };
 }
 
 test("source commit, durable Outbox, formal processor, Redis Facts and authenticated HTTP converge to one document", async () => {
@@ -479,31 +498,20 @@ test("source commit, durable Outbox, formal processor, Redis Facts and authentic
   }
 });
 
-test("Admin role changes publish employment-scoped visibility to both authenticated Clients", async () => {
-  const { redis, close, drain } = createPublicationFixture();
+const globalRole = "global:reviewer";
+const alphaInheritedRoles = ["alpha:approver", "alpha:reader", globalRole];
+
+function createCompositeRolePublicationFixture() {
+  const fixture = createPublicationFixture();
   const { subjectIdentifier } = publication(1);
-  const globalRole = "global:reviewer";
-  const inspector = createSubjectFactsRedisInspector(redis);
-  const clientService = createClientService({ clientRepository: createClientRepository(pg.db), redis });
+  const inspector = createSubjectFactsRedisInspector(fixture.redis);
+  const clientService = createClientService({
+    clientRepository: createClientRepository(pg.db),
+    redis: fixture.redis,
+  });
   const request = createUserRequest(clientService.getClientBySecret);
   const searchPage = (client: string, filter: unknown, page = 1) =>
     request("/search-dsl", { filter, paginate: true, page, pageSize: 1, select: ["employments.roles"] }, client);
-  const visible = [
-    {
-      client: "alpha",
-      own: "alpha:reader",
-      hidden: "beta:editor",
-      active: [["alpha:reader", globalRole], []],
-      revoked: [["alpha:reader"], []],
-    },
-    {
-      client: "beta",
-      own: "beta:editor",
-      hidden: "alpha:reader",
-      active: [[globalRole], ["beta:editor"]],
-      revoked: [[], ["beta:editor"]],
-    },
-  ];
 
   async function readRedisFacts() {
     const [cached] = await inspector.inspectMany([subjectIdentifier]);
@@ -512,9 +520,9 @@ test("Admin role changes publish employment-scoped visibility to both authentica
     return cached.record;
   }
 
-  try {
+  async function seed() {
     await pg.db.insert(clients).values(
-      visible.map(({ client }) => ({
+      ["alpha", "beta"].map((client) => ({
         clientCode: client,
         clientName: client,
         clientSecret: client,
@@ -522,30 +530,77 @@ test("Admin role changes publish employment-scoped visibility to both authentica
       })),
     );
     await pg.db.insert(users).values({ id: 1, subjectIdentifier, username: "user-1", name: "Role holder" });
-    await pg.db.insert(organizations).values({
-      id: 1,
-      orgCode: "ORG",
-      orgName: "Organization",
-      path: "/1",
-      level: OrganizationLevel.One,
-      orgType: OrganizationType.Department,
-    });
-    await pg.db.insert(organizationClosures).values({ ancestorId: 1, descendantId: 1, depth: 0 });
+    await pg.db.insert(organizations).values([
+      {
+        id: 1,
+        orgCode: "ORG",
+        orgName: "Organization",
+        path: "/1",
+        level: OrganizationLevel.One,
+        orgType: OrganizationType.Department,
+      },
+      {
+        id: 2,
+        parentId: 1,
+        orgCode: "CHILD",
+        orgName: "Child",
+        path: "/1/2",
+        level: OrganizationLevel.Two,
+        orgType: OrganizationType.Department,
+      },
+    ]);
+    await pg.db.insert(organizationClosures).values([
+      { ancestorId: 1, descendantId: 1, depth: 0 },
+      { ancestorId: 1, descendantId: 2, depth: 1 },
+      { ancestorId: 2, descendantId: 2, depth: 0 },
+    ]);
     await pg.db.insert(positions).values([
       { id: 1, posCode: "PRIMARY", posName: "Primary" },
       { id: 2, posCode: "SECONDARY", posName: "Secondary" },
     ]);
     const startTime = new Date("2026-10-01T00:00:00Z");
     await pg.db.insert(employments).values([
-      { id: 1, userId: 1, orgId: 1, posId: 1, startTime, isPrimary: true },
+      { id: 1, userId: 1, orgId: 2, posId: 1, startTime, isPrimary: true },
       { id: 2, userId: 1, orgId: 1, posId: 2, startTime },
     ]);
 
     await runAdminRoleWrite("grant", "1", "2");
+  }
+
+  return { ...fixture, request, searchPage, readRedisFacts, seed };
+}
+
+test("Admin changes to nested Roles publish employment-scoped visibility to both authenticated Clients", async () => {
+  const { close, drain, request, searchPage, readRedisFacts, seed } = createCompositeRolePublicationFixture();
+  const visible = [
+    {
+      client: "alpha",
+      own: "alpha:reader",
+      hidden: "beta:editor",
+      active: [alphaInheritedRoles, []],
+      revoked: [["alpha:reader"], []],
+    },
+    {
+      client: "beta",
+      own: "beta:editor",
+      hidden: "alpha:approver",
+      active: [["beta:bridge", "beta:root", globalRole], ["beta:editor"]],
+      revoked: [["beta:root"], ["beta:editor"]],
+    },
+  ];
+
+  try {
+    await seed();
     const unpublished = await request("/user-1");
     expect(unpublished.status).toBe(404);
     await drain();
+    const baseline = await readRedisFacts();
+    await runAdminRoleWrite("inclusions", "beta:bridge", "add", ...alphaInheritedRoles);
+    const beforeAdd = await searchPage("alpha", role(globalRole));
+    expect(beforeAdd.body.data.total).toBe(0);
+    await drain();
     const published = await readRedisFacts();
+    expect(BigInt(published.sourceVersion)).toBeGreaterThan(BigInt(baseline.sourceVersion));
     expect(published.facts.employments.map((employment) => employment.globalRoles)).toEqual([
       [{ code: globalRole }],
       undefined,
@@ -564,13 +619,15 @@ test("Admin role changes publish employment-scoped visibility to both authentica
       expect(ownMatch.body.data).toEqual(globalMatch.body.data);
       const hiddenMatch = await searchPage(client, role(hidden));
       expect(hiddenMatch.body.data).toEqual({ items: [], total: 0, page: 1, pageSize: 1 });
+      const visibleDespiteHiddenRole = await searchPage(client, { and: [role(globalRole), { not: role(hidden) }] });
+      expect(visibleDespiteHiddenRole.body.data).toEqual(globalMatch.body.data);
       const together = await searchPage(client, {
         exists: { path: "employments", where: { field: "roles", op: "containsAll", value: [globalRole, own] } },
       });
       expect(together.body.data.total).toBe(client === "alpha" ? 1 : 0);
     }
 
-    await runAdminRoleWrite("disable");
+    await runAdminRoleWrite("status", "beta:bridge", "pause");
     const stillPublished = await searchPage("alpha", role(globalRole));
     expect(stillPublished.body.data.total).toBe(1);
     await drain();
@@ -587,6 +644,125 @@ test("Admin role changes publish employment-scoped visibility to both authentica
       const ownMatch = await searchPage(client, role(own));
       expect(ownMatch.body.data).toEqual({ items: [{ employments }], total: 1, page: 1, pageSize: 1 });
     }
+
+    await runAdminRoleWrite("status", "beta:bridge", "enable");
+    await drain();
+    const restored = await searchPage("alpha", role(globalRole));
+    expect(restored.body.data.items).toEqual([{ employments: [{ roles: alphaInheritedRoles }, { roles: [] }] }]);
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test("recovered, replayed and late Role Inclusion work converges to the newer published facts", async () => {
+  const { close, drain, recoverOutbox, preparePendingRebuild, processor, searchPage, readRedisFacts, seed } =
+    createCompositeRolePublicationFixture();
+  try {
+    await seed();
+    await runAdminRoleWrite("inclusions", "beta:bridge", "add", ...alphaInheritedRoles);
+    await drain();
+    const inherited = await searchPage("alpha", role(globalRole));
+    expect(inherited.body.data.items).toEqual([{ employments: [{ roles: alphaInheritedRoles }, { roles: [] }] }]);
+
+    // This rebuild still holds the inherited grants when the later removals commit.
+    await runAdminRoleWrite("inclusions", "beta:bridge", "remove", "alpha:reader");
+    const olderDocument = await preparePendingRebuild();
+    await runAdminRoleWrite("inclusions", "beta:bridge", "remove", globalRole, "alpha:approver");
+    const [memberRemoval] = await recoverOutbox();
+    if (!memberRemoval) throw new Error("Repair did not recover the member removal");
+    await runAdminRoleWrite("inclusions", "beta:root", "remove", "beta:bridge");
+    const [rootRemoval] = (await recoverOutbox()).filter(({ outboxId }) => outboxId !== memberRemoval.outboxId);
+    if (!rootRemoval) throw new Error("Repair did not recover the root removal");
+    await processor.processOutbox(rootRemoval);
+    await processor.processOutbox(memberRemoval);
+    await drain();
+    const afterRemoval = await searchPage("alpha", role(globalRole));
+    expect(afterRemoval.body.data.total).toBe(0);
+    const independent = await searchPage("alpha", role("alpha:reader"));
+    expect(independent.body.data.items).toEqual([{ employments: [{ roles: ["alpha:reader"] }, { roles: [] }] }]);
+    const removedFacts = await readRedisFacts();
+    const late = await processor.publishPrepared(olderDocument);
+    expect(late.status).toBe("stale");
+    await processor.processOutbox(rootRemoval);
+    await processor.processOutbox(memberRemoval);
+    await drain();
+    expect(await readRedisFacts()).toEqual(removedFacts);
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test("narrowing and revoking an organization Role Assignment publishes the remaining grants", async () => {
+  const { close, drain, searchPage, seed } = createCompositeRolePublicationFixture();
+  try {
+    await seed();
+    await runAdminRoleWrite("inclusions", "beta:bridge", "add", ...alphaInheritedRoles);
+    await runAdminRoleWrite("assign-organization");
+    await runAdminRoleWrite("revoke-employment");
+    await drain();
+    const subtree = await searchPage("alpha", role(globalRole));
+    expect(subtree.body.data.items).toEqual([
+      { employments: [{ roles: alphaInheritedRoles }, { roles: alphaInheritedRoles }] },
+    ]);
+
+    await runAdminRoleWrite("narrow-organization");
+    await drain();
+    const narrowed = await searchPage("alpha", role(globalRole));
+    expect(narrowed.body.data.items).toEqual([
+      { employments: [{ roles: ["alpha:reader"] }, { roles: alphaInheritedRoles }] },
+    ]);
+    await runAdminRoleWrite("revoke-organization");
+    await drain();
+    const revoked = await searchPage("alpha", role(globalRole));
+    expect(revoked.body.data.total).toBe(0);
+  } finally {
+    await close();
+  }
+}, 30_000);
+
+test("deleting a nested bridge Role withdraws its published grants and retains alternate paths", async () => {
+  const { close, drain, request, searchPage, readRedisFacts, seed } = createCompositeRolePublicationFixture();
+  try {
+    await seed();
+    await runAdminRoleWrite("inclusions", "beta:bridge", "add", ...alphaInheritedRoles);
+    await runAdminRoleWrite("inclusions", "beta:root", "remove", "beta:bridge");
+    await runAdminRoleWrite("inclusions", "beta:root", "add", "beta:ancestor");
+    await runAdminRoleWrite("inclusions", "beta:ancestor", "add", "beta:bridge", "alpha:approver");
+    await runAdminRoleWrite("assign-organization");
+    await runAdminRoleWrite("revoke-employment");
+    await drain();
+    const beforeDeletion = await searchPage("alpha", role(globalRole));
+    expect(beforeDeletion.body.data.items).toEqual([
+      { employments: [{ roles: alphaInheritedRoles }, { roles: alphaInheritedRoles }] },
+    ]);
+    const factsBeforeDeletion = await readRedisFacts();
+
+    await runAdminRoleWrite("delete-role", "beta:bridge");
+    const whilePending = await searchPage("alpha", role(globalRole));
+    expect(whilePending.body.data).toEqual(beforeDeletion.body.data);
+    await drain();
+
+    const afterDeletion = await searchPage("alpha", role(globalRole));
+    expect(afterDeletion.body.data.total).toBe(0);
+    const throughAlternatePath = await searchPage("alpha", role("alpha:approver"));
+    expect(throughAlternatePath.body.data.items).toEqual([
+      { employments: [{ roles: ["alpha:approver", "alpha:reader"] }, { roles: ["alpha:approver"] }] },
+    ]);
+    const beta = await request("/user-1", undefined, "beta");
+    expect(beta).toMatchObject({
+      status: 200,
+      body: {
+        data: {
+          employments: [
+            { roles: ["beta:ancestor", "beta:root"] },
+            { roles: ["beta:ancestor", "beta:editor", "beta:root"] },
+          ],
+        },
+      },
+    });
+    const factsAfterDeletion = await readRedisFacts();
+    expect(BigInt(factsAfterDeletion.sourceVersion)).toBeGreaterThan(BigInt(factsBeforeDeletion.sourceVersion));
+    expect(factsAfterDeletion.facts.employments.map(({ globalRoles }) => globalRoles)).toEqual([undefined, undefined]);
   } finally {
     await close();
   }

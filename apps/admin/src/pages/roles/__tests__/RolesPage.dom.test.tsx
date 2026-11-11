@@ -1,6 +1,6 @@
 import RolesPage from "@admin/pages/roles";
 import type { RoleDetailVo, RoleSearchParams } from "@admin/services/role";
-import { ApiErrorCode, ClientStatus, RoleAssignmentTargetType, RoleType } from "@iam/contracts";
+import { ApiErrorCode, ClientStatus, RoleAssignmentTargetType, RoleKind, RoleType } from "@iam/contracts";
 import { ConfigProvider, Modal, message } from "antd";
 import { HttpResponse, http } from "msw";
 import type { ComponentProps } from "react";
@@ -48,11 +48,14 @@ const role: RoleDetailVo = {
   description: null,
   status: 1,
   statusText: "正常",
+  roleKind: RoleKind.Basic,
   roleType: RoleType.Client,
   clientId: 1,
   isDelete: false,
   client: { id: 1, clientCode: "iam-admin", clientName: "管理端", status: ClientStatus.Enable },
   assignmentCount: 1,
+  members: [],
+  containers: [],
   createTime: "2026-01-01T00:00:00Z",
   updateTime: "2026-01-01T00:00:00Z",
 };
@@ -189,7 +192,7 @@ it("lists Global Roles with no Client and filters by Role type", async () => {
   expect(within(globalRow).getByRole("cell", { name: "全局角色" })).toBeVisible();
   expect(within(globalRow).getByRole("cell", { name: "无" })).toBeVisible();
 
-  await user.click(screen.getByRole("combobox", { name: "角色类型" }));
+  await user.click(screen.getByRole("combobox", { name: "角色归属" }));
   await user.click(await screen.findByText("全局角色", { selector: ".ant-select-item-option-content" }));
   await waitFor(() => expect(screen.queryByText(role.roleName)).not.toBeInTheDocument());
   expect(reads.search).toHaveBeenLastCalledWith(
@@ -464,7 +467,7 @@ describe("Role inline profile through the role service", () => {
     );
     await user.type(profile().getByRole("textbox", { name: "角色名称" }), "修改");
     await user.click(profile().getByRole("button", { name: /保\s*存/ }));
-    expect(await screen.findByText(/基本信息已保存，但详情刷新失败/)).toBeVisible();
+    expect(await screen.findByText(/角色已保存，但详情刷新失败/)).toBeVisible();
     expect(profile().queryByRole("textbox", { name: "角色名称" })).not.toBeInTheDocument();
     await waitFor(() => expect(reads.search.mock.calls.length).toBeGreaterThan(searchesBefore));
     expect(requests).toHaveLength(1);

@@ -7,6 +7,7 @@ export * from "./organization-responsibility-assignments";
 export * from "./organizations";
 export * from "./positions";
 export * from "./role-assignments";
+export * from "./role-inclusions";
 export * from "./roles";
 export * from "./subject-access-transitions";
 export * from "./user-document-rebuild-state";

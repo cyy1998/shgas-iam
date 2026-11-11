@@ -10,17 +10,38 @@ import {
   ClientStatus,
   OidcClientType,
   OidcScope,
+  OrganizationLevel,
+  OrganizationResponsibilityAssignmentStatus,
   OrganizationResponsibilityTypeCode,
   OrganizationType,
+  RoleAssignmentTargetType,
+  RoleKind,
+  RoleStatus,
+  RoleType,
   SubjectClaim,
 } from "@iam/contracts";
 import { CustomSsoManagedFailure } from "@iam/custom-sso";
-import { readDocumentFactsRecord } from "@iam/documents/user/document";
-import { createSubjectFactsRedisCache } from "@iam/documents/user/subject-facts";
+import {
+  clients,
+  employments,
+  organizationClosures,
+  organizationResponsibilityAssignments,
+  organizations,
+  positions,
+  roleInclusions,
+  roles,
+  users,
+} from "@iam/db/schema";
+import { roleAssignments } from "@iam/db/schema/role-assignments";
+import { createDocumentFactsCacheRecord } from "@iam/documents/user/document";
+import { createSubjectFactsReader, createSubjectFactsRedisCache } from "@iam/documents/user/subject-facts";
 import { SubjectAccessUnavailableError } from "@iam/subject-access";
+import { eq } from "drizzle-orm";
 import Redis from "ioredis";
 import { cleanupAfterFixtureFailure, closeFixtureResources } from "../oidc/oidc.fixture";
 import { closeApiRedisConnection, ownApiTestExecutor, resetApiRedisTestDatabase } from "../support/fixture-lifecycle";
+import { createApiPostgresTestHarness } from "../support/postgres-test-harness";
+import { publishUserDocument } from "../support/user-document.fixture";
 import { fixture } from "./root-authentication.fixture";
 
 afterEach(resetApiRedisTestDatabase);
@@ -1123,7 +1144,7 @@ test.each(["", "#/djDesk/orgStruct?tab=1"])(
   },
 );
 
-test("Custom SSO delivers published global and Client roles through V4 when currently disclosed", async () => {
+test("Custom SSO delivers published nested Roles through V4 and refreshes an existing Token", async () => {
   const employment = {
     isPrimary: true,
     organization: {
@@ -1154,41 +1175,72 @@ test("Custom SSO delivers published global and Client roles through V4 when curr
     const redis = new Redis(redisUrl);
     resources.push(() => closeApiRedisConnection(redis));
     const cache = createSubjectFactsRedisCache(redis);
-    const f = await businessFixture(30, undefined, 45, {
-      async read(subjectIdentifier) {
-        const published = readDocumentFactsRecord(await cache.read(subjectIdentifier));
-        return published.kind === "document" ? published.facts : null;
-      },
-    });
+    const { db } = await createApiPostgresTestHarness((close) => resources.push(close));
+    const reader = createSubjectFactsReader({ db, cache });
+    const f = await businessFixture(30, undefined, 45, reader);
     resources.push(f.close);
-    await cache.publish({
-      kind: "document",
-      userId: 1001,
-      schemaVersion: 1,
+    await db.insert(users).values({
+      id: 1,
       subjectIdentifier: f.subjectIdentifier,
-      publishedAt: new Date().toISOString(),
-      sourceVersion: "1",
-      facts: {
-        profile: { username: "published", name: "已发布角色", phone: null },
-        employments: [
-          {
-            ...employment,
-            responsibilities,
-            clientAuthorizations: [
-              { clientCode: f.businessClientCode, roles: [{ code: "viewer" }] },
-              { clientCode: "other", roles: [{ code: "operator" }] },
-            ],
-            globalRoles: [{ code: "global:reviewer" }, { code: "global:shared" }],
-          },
-          {
-            ...secondaryEmployment,
-            responsibilities: [],
-            clientAuthorizations: [{ clientCode: "other", roles: [{ code: "app:misleading" }] }],
-            globalRoles: [{ code: "global:shared" }],
-          },
-        ],
-      },
+      username: "published",
+      name: "已发布角色",
     });
+    await db.insert(organizations).values({
+      id: 1,
+      orgCode: "org",
+      orgName: "组织",
+      orgType: OrganizationType.Department,
+      level: OrganizationLevel.One,
+      path: "/1",
+    });
+    await db.insert(organizationClosures).values({ ancestorId: 1, descendantId: 1, depth: 0 });
+    await db.insert(positions).values([
+      { id: 1, posCode: "position", posName: "岗位" },
+      { id: 2, posCode: "secondary", posName: "副岗" },
+    ]);
+    const startTime = new Date("2026-01-01T00:00:00Z");
+    await db.insert(employments).values([
+      { id: 1, userId: 1, orgId: 1, posId: 1, startTime, isPrimary: true },
+      { id: 2, userId: 1, orgId: 1, posId: 2, startTime },
+    ]);
+    await db.insert(organizationResponsibilityAssignments).values({
+      employmentId: 1,
+      targetOrganizationId: 1,
+      typeCode: OrganizationResponsibilityTypeCode.Head,
+      status: OrganizationResponsibilityAssignmentStatus.Enable,
+      startTime,
+    });
+    await db.insert(clients).values([
+      {
+        id: 1,
+        clientCode: f.businessClientCode,
+        clientName: "Business",
+        clientSecret: "business-secret",
+        extAttributes: {},
+      },
+      { id: 2, clientCode: "other", clientName: "Other", clientSecret: "other-secret", extAttributes: {} },
+    ]);
+    await db.insert(roles).values([
+      { id: 1, roleCode: "operator", roleName: "Operator", roleKind: RoleKind.Composite, clientId: 2 },
+      { id: 2, roleCode: "other:bridge", roleName: "Bridge", roleKind: RoleKind.Composite, clientId: 2 },
+      { id: 3, roleCode: "viewer", roleName: "Viewer", clientId: 1 },
+      { id: 4, roleCode: "global:reviewer", roleName: "Reviewer", roleType: RoleType.Global },
+      { id: 5, roleCode: "global:shared", roleName: "Shared", roleType: RoleType.Global },
+    ]);
+    await db.insert(roleInclusions).values([
+      { containerRoleId: 1, memberRoleId: 2 },
+      { containerRoleId: 2, memberRoleId: 3 },
+      { containerRoleId: 2, memberRoleId: 4 },
+    ]);
+    await db.insert(roleAssignments).values([
+      { roleId: 1, targetType: RoleAssignmentTargetType.Employment, targetId: 1 },
+      { roleId: 5, targetType: RoleAssignmentTargetType.Organization, targetId: 1 },
+    ]);
+    async function publish(version: string) {
+      const document = await publishUserDocument(db, 1, version);
+      await cache.publish(createDocumentFactsCacheRecord(document));
+    }
+    await publish("1");
     const client = f.getClient();
     if (client.ssoConfig?.protocol !== ClientSsoProtocol.CustomSso) throw new Error("Expected Custom Client");
     f.setClient({
@@ -1229,6 +1281,28 @@ test("Custom SSO delivers published global and Client roles through V4 when curr
       version: 1,
       subjectIdentifier: f.subjectIdentifier,
     });
+    await db.update(roles).set({ status: RoleStatus.Pause }).where(eq(roles.id, 2));
+    const beforePublication = await f.use(data.sid);
+    expect(beforePublication.status).toBe(200);
+    expect((await beforePublication.json()).data).toEqual(expected);
+    await publish("2");
+    const revoked = await f.use(data.sid);
+    expect(revoked.status).toBe(200);
+    expect((await revoked.json()).data).toEqual({
+      ...expected,
+      authorization: {
+        employments: [
+          { ...employment, roles: ["global:shared"] },
+          { ...secondaryEmployment, roles: ["global:shared"] },
+        ],
+        roles: ["global:shared"],
+      },
+    });
+    await db.update(roles).set({ status: RoleStatus.Enable }).where(eq(roles.id, 2));
+    await publish("3");
+    const restored = await f.use(data.sid);
+    expect(restored.status).toBe(200);
+    expect((await restored.json()).data).toEqual(expected);
     f.setClient({
       ...client,
       ssoConfig: {

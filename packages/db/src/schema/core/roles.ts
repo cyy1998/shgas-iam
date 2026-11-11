@@ -1,10 +1,12 @@
-import { RoleStatus, RoleType } from "@iam/contracts";
+import { RoleKind, RoleStatus, RoleType } from "@iam/contracts";
 import { sql } from "drizzle-orm";
-import { check, foreignKey, index, integer, snakeCase, varchar } from "drizzle-orm/pg-core";
+import { check, foreignKey, index, integer, pgEnum, snakeCase, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "zod";
 import { baseColumns } from "../_shard/base-columns";
 import { clients } from "./clients";
+
+export const roleKindEnum = pgEnum("role_kind", [RoleKind.Basic, RoleKind.Composite]);
 
 export const roles = snakeCase.table(
   "role",
@@ -12,6 +14,7 @@ export const roles = snakeCase.table(
     id: baseColumns.id,
     roleCode: varchar({ length: 64 }).notNull().unique(),
     roleName: varchar({ length: 128 }).notNull(),
+    roleKind: roleKindEnum().notNull().default(RoleKind.Basic),
     roleType: varchar({ length: 16 }).$type<RoleType>().notNull().default(RoleType.Client),
     clientId: integer(),
     status: integer().$type<RoleStatus>().notNull().default(RoleStatus.Enable),
@@ -55,4 +58,4 @@ export const insertRoleSchema = createInsertSchema(roles, {
 export const updateRoleSchema = createUpdateSchema(roles, {
   roleType: () => z.enum(RoleType),
   status: () => z.enum(RoleStatus),
-}).omit({ id: true, createTime: true, updateTime: true, isDelete: true });
+}).omit({ id: true, roleKind: true, createTime: true, updateTime: true, isDelete: true });

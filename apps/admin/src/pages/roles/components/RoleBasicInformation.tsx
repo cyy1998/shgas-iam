@@ -1,8 +1,9 @@
 import styles from "@admin/components/detail/DetailDrawer.module.less";
 import type { RoleDetailVo, RoleUpdateInput } from "@admin/services/role";
-import { roleTypeToString } from "@iam/contracts";
+import { RoleKind, roleKindToString, roleTypeToString } from "@iam/contracts";
 import { Button, Descriptions, Space, Typography, theme } from "antd";
 import roleStyles from "./RoleDetailDrawer.module.less";
+import { RoleInclusionList } from "./RoleInclusions";
 import RoleProfileForm from "./RoleProfileForm";
 
 type Props = {
@@ -17,7 +18,8 @@ type Props = {
 export default function RoleBasicInformation({ detail, editing, saving, onEdit, onCancel, onSave }: Props) {
   const { token } = theme.useToken();
   const codeItem = { key: "code", label: "角色编码", children: detail.roleCode };
-  const typeItem = { key: "type", label: "角色类型", children: roleTypeToString[detail.roleType] };
+  const kindItem = { key: "kind", label: "角色形态", children: roleKindToString[detail.roleKind] };
+  const typeItem = { key: "type", label: "角色归属", children: roleTypeToString[detail.roleType] };
   const clientItem = {
     key: "client",
     label: "所属应用",
@@ -42,18 +44,12 @@ export default function RoleBasicInformation({ detail, editing, saving, onEdit, 
       </div>
       {editing ? (
         <dl className={roleStyles["edit-identity"]}>
-          <div>
-            <dt>角色编码</dt>
-            <dd>{detail.roleCode}</dd>
-          </div>
-          <div>
-            <dt>{typeItem.label}</dt>
-            <dd>{typeItem.children}</dd>
-          </div>
-          <div>
-            <dt>所属应用</dt>
-            <dd>{clientItem.children}</dd>
-          </div>
+          {[codeItem, kindItem, typeItem, clientItem].map(({ key, label, children }) => (
+            <div key={key}>
+              <dt>{label}</dt>
+              <dd>{children}</dd>
+            </div>
+          ))}
         </dl>
       ) : (
         <Descriptions
@@ -68,6 +64,7 @@ export default function RoleBasicInformation({ detail, editing, saving, onEdit, 
           items={[
             { key: "name", label: "角色名称", children: detail.roleName },
             codeItem,
+            kindItem,
             typeItem,
             clientItem,
             { key: "count", label: "分配对象", children: `${detail.assignmentCount} 个` },
@@ -81,6 +78,16 @@ export default function RoleBasicInformation({ detail, editing, saving, onEdit, 
         />
       )}
       {editing && <RoleProfileForm detail={detail} saving={saving} onCancel={onCancel} onSave={onSave} />}
+      {!editing && detail.roleKind === RoleKind.Composite && (
+        <section aria-label="直接成员">
+          <Typography.Title level={5}>直接成员</Typography.Title>
+          <RoleInclusionList endpoints={detail.members} />
+        </section>
+      )}
+      <section aria-label="直接包含方">
+        <Typography.Title level={5}>直接包含方</Typography.Title>
+        <RoleInclusionList endpoints={detail.containers} />
+      </section>
       <Space
         className={`${styles.metadata} ${roleStyles["basic-metadata"]}`}
         size={[editing ? 24 : 0, 4]}

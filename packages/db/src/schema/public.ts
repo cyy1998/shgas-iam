@@ -11,6 +11,7 @@ export {
   selectRoleAssignmentSchema,
   updateRoleAssignmentSchema,
 } from "./core/role-assignments";
+export * from "./core/role-inclusions";
 export * from "./core/roles";
 export * from "./core/subject-access-transitions";
 export * from "./core/user-document-rebuild-state";

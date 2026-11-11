@@ -1,4 +1,4 @@
-import { RoleAssignmentDtoSchema, RoleDetailDtoSchema, RoleDtoSchema } from "@admin-api/services/role/role.schema";
+import { AdminRoleDetailDtoSchema, RoleAssignmentDtoSchema, RoleDtoSchema } from "@admin-api/services/role/role.schema";
 import { z } from "@hono/zod-openapi";
 import type { RoleStatus } from "@iam/contracts";
 import { RoleAssignmentTargetType, roleStatusToString } from "@iam/contracts";
@@ -15,12 +15,12 @@ export function toRoleVo(input: unknown) {
   });
 }
 
-export const RoleDetailVoSchema = RoleDetailDtoSchema.extend({
+export const RoleDetailVoSchema = AdminRoleDetailDtoSchema.extend({
   statusText: z.string().openapi({ example: "正常" }),
 }).openapi("RoleDetailVo");
 
 export function toRoleDetailVo(input: unknown) {
-  const dto = RoleDetailDtoSchema.parse(input);
+  const dto = AdminRoleDetailDtoSchema.parse(input);
   return RoleDetailVoSchema.parse({
     ...dto,
     statusText: roleStatusToString[dto.status as RoleStatus],

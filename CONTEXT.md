@@ -250,9 +250,25 @@ _Avoid_: implicit employment pause, downstream parent-state filtering
 当前时刻位于 Employment Period 内且生命周期状态为启用的 Employment。Primary Employment 标记和 User 账号状态不参与该判定；Position 与所属 Organization 的有效性由 Employment Integrity 保证，不作为运行时开关。
 _Avoid_: Open Employment, enabled user employment
 
+涉及组合继承的定义描述 [ADR-0049](docs/adr/0049-compose-roles-across-clients.md) 中已确认的目标模型。
+
 **Effective Role**:
-对一条 Effective Employment 生效的启用角色；其角色分配目标和角色必须启用且未删除。Position 与所属 Organization 由 Employment Integrity 保证，User 账号状态不属于该概念并由使用方单独判断。
+对一条 Effective Employment 生效的启用且未删除的角色，来自有效的角色分配或组合继承。源分配目标必须启用且未删除。
+组合继承须经过一条所有角色均启用且未删除的路径。Position 与所属 Organization 由 Employment Integrity 保证，User 账号状态由使用方单独判断。
 _Avoid_: parsed role, assigned role
+
+**Basic Role**:
+仅授予自身的角色，可通过角色分配或组合继承在任职上生效。基本形态在创建时确定，与角色归属独立。
+
+**Composite Role**:
+显式创建、允许包含其他角色的角色，组合形态在创建时确定，与角色归属独立。它生效时授予自身及同一任职上的有效成员，
+空组合仍可分配并授予自身。
+_Avoid_: assignment template
+
+**Role Inclusion**:
+一个 Composite Role 包含另一个角色的有向授予关系，允许跨 Client 且可多层嵌套，禁止自引用与循环。
+同一任职通过多条有效路径获得同一个 Role 时，该角色只计一次。
+_Avoid_: Role Assignment, Client Delegation
 
 角色类型与应用披露边界见 [ADR-0048](docs/adr/0048-model-global-roles-without-client-ownership.md)。
 
@@ -260,7 +276,7 @@ _Avoid_: parsed role, assigned role
 归属一个 Client 的角色。成为 Effective Role 后，只有所属 Client 可以在应用侧读取该角色事实。
 
 **Global Role**:
-由 IAM 统一管理、无 Client 归属的角色。通过任职、岗位或组织分配成为 Effective Role 后，各 Client 可在各自的披露范围内读取该任职上的角色事实。
+由 IAM 统一管理、无 Client 归属的角色。成为 Effective Role 后，各 Client 可在各自的披露范围内读取该任职上的角色事实。
 _Avoid_: global administrator, automatic grant
 
 **HR Administrator**:
@@ -272,7 +288,7 @@ IAM Admin 服务端把当前有效管理角色映射为模块、动作与数据�
 _Avoid_: UI access flag, admin admission allowlist, role-privilege policy, caller-declared scope
 
 **HR Administration Scope Root**:
-HR Administrator 的某条角色承载任职所属 Organization Path 中首个一级 Organization；`iam:hr-admin` 通过任职、Position 或 Organization 分配成为该任职的 Effective Role 时口径相同，角色分配目标和路径中的 Company 节点都不替代该结构根。
+HR Administrator 的某条角色承载任职所属 Organization Path 中首个一级 Organization；`iam:hr-admin` 通过角色分配或组合继承成为该任职的 Effective Role 时口径相同，角色分配目标和路径中的 Company 节点都不替代该结构根。
 _Avoid_: nearest Company, role assignment target, ordinary-employment root
 
 **HR Administration Scope**:

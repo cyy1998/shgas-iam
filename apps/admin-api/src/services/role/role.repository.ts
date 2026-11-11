@@ -8,7 +8,7 @@ import {
 import type { DbClient } from "@iam/db";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import { compactUpdate, firstRow, ilikeContainsIf } from "@iam/db/query-utils";
-import { clients, employments, organizations, positions, roles, users } from "@iam/db/schema";
+import { clients, employments, organizations, positions, roleInclusions, roles, users } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
 import type { RoleAssignmentTargetSummaryDto } from "@iam/domain/role";
 import { RoleAssignmentExistsError, RoleCodeExistsError } from "@iam/domain/role";
@@ -18,8 +18,10 @@ import type {
   AdminRoleAssignmentCreateRecord,
   AdminRoleCreateRecord,
   RoleAssignmentPaginationQueryDto,
+  RoleInclusionEndpointDto,
+  RoleInclusionPatch,
   RolePaginationQueryDto,
-  RoleUpdateDto,
+  RoleProfileUpdateDto,
 } from "./role.type";
 
 export function createRoleRepository(db: DbClient) {
@@ -68,6 +70,107 @@ export function createRoleRepository(db: DbClient) {
       return firstRow(await attachRoleContext(row === undefined ? [] : [row], db)) ?? null;
     },
 
+    async getRoleInclusions(roleId: number) {
+      const rows = await db
+        .select({
+          containerRoleId: roleInclusions.containerRoleId,
+          endpoint: {
+            id: roles.id,
+            roleCode: roles.roleCode,
+            roleName: roles.roleName,
+            roleType: roles.roleType,
+            status: roles.status,
+          },
+          client: {
+            id: clients.id,
+            clientCode: clients.clientCode,
+            clientName: clients.clientName,
+            status: clients.status,
+          },
+        })
+        .from(roleInclusions)
+        .innerJoin(
+          roles,
+          sql`${roles.id} = case when ${roleInclusions.containerRoleId} = ${roleId}
+            then ${roleInclusions.memberRoleId} else ${roleInclusions.containerRoleId} end`,
+        )
+        .leftJoin(clients, eq(clients.id, roles.clientId))
+        .where(and(involvesRole(roleId), eq(roles.isDelete, false)))
+        .orderBy(roles.roleCode);
+      const members: RoleInclusionEndpointDto[] = [];
+      const containers: RoleInclusionEndpointDto[] = [];
+      for (const { containerRoleId, endpoint, client } of rows) {
+        const target = containerRoleId === roleId ? members : containers;
+        target.push({ ...endpoint, client });
+      }
+      return { members, containers };
+    },
+
+    async lockRoleInclusionGraph() {
+      // Called first in the mutation transaction, before acquiring any Role row lock.
+      // A separate read-committed statement sees changes by the previous lock holder.
+      await db.execute(sql`set transaction isolation level read committed`);
+      await db.execute(sql`select pg_advisory_xact_lock(hashtextextended('iam:role-inclusion-graph', 0))`);
+    },
+
+    async deleteRoleInclusions(roleId: number) {
+      return db.delete(roleInclusions).where(involvesRole(roleId)).returning({
+        containerRoleId: roleInclusions.containerRoleId,
+        memberRoleId: roleInclusions.memberRoleId,
+      });
+    },
+
+    async getUndeletedRoleIds(ids: number[]) {
+      if (ids.length === 0) return [];
+      const rows = await db
+        .select({ id: roles.id })
+        .from(roles)
+        .where(and(inArray(roles.id, ids), eq(roles.isDelete, false)));
+      return rows.map(({ id }) => id);
+    },
+
+    async wouldCreateRoleInclusionCycle(containerRoleId: number, memberRoleIds: number[]) {
+      if (memberRoleIds.length === 0) return false;
+      const [result] = await db.execute<{ cyclic: boolean }>(sql`
+        with recursive descendants(role_id) as (
+          select ${roles.id} from ${roles} where ${inArray(roles.id, memberRoleIds)}
+          union
+          select ${roleInclusions.memberRoleId}
+          from descendants
+          join ${roleInclusions} on ${roleInclusions.containerRoleId} = descendants.role_id
+        )
+        select exists (select 1 from descendants where role_id = ${containerRoleId}) as cyclic
+      `);
+      return result!.cyclic;
+    },
+
+    async applyRoleInclusionPatch(containerRoleId: number, patch: RoleInclusionPatch) {
+      const removed =
+        patch.removeRoleIds.length === 0
+          ? []
+          : await db
+              .delete(roleInclusions)
+              .where(
+                and(
+                  eq(roleInclusions.containerRoleId, containerRoleId),
+                  inArray(roleInclusions.memberRoleId, patch.removeRoleIds),
+                ),
+              )
+              .returning({ id: roleInclusions.memberRoleId });
+      const added =
+        patch.addRoleIds.length === 0
+          ? []
+          : await db
+              .insert(roleInclusions)
+              .values(patch.addRoleIds.map((memberRoleId) => ({ containerRoleId, memberRoleId })))
+              .onConflictDoNothing({ target: [roleInclusions.containerRoleId, roleInclusions.memberRoleId] })
+              .returning({ id: roleInclusions.memberRoleId });
+      return {
+        addRoleIds: added.map(({ id }) => id).sort((left, right) => left - right),
+        removeRoleIds: removed.map(({ id }) => id).sort((left, right) => left - right),
+      };
+    },
+
     async searchRolesPaged(input: RolePaginationQueryDto) {
       const where = roleAdminWhere(input, db);
       const [rows, totalRows] = await Promise.all([
@@ -94,6 +197,7 @@ export function createRoleRepository(db: DbClient) {
             .values({
               roleCode: data.roleCode,
               roleName: data.roleName,
+              roleKind: data.roleKind,
               roleType: data.roleType,
               clientId: data.clientId,
               status: data.status ?? RoleStatus.Enable,
@@ -104,7 +208,7 @@ export function createRoleRepository(db: DbClient) {
       );
     },
 
-    async updateRoleByCode(roleCode: string, data: RoleUpdateDto) {
+    async updateRoleByCode(roleCode: string, data: RoleProfileUpdateDto) {
       return (
         firstRow(
           await db
@@ -262,6 +366,10 @@ export function createRoleRepository(db: DbClient) {
 }
 
 export type RoleRepository = ReturnType<typeof createRoleRepository>;
+
+function involvesRole(roleId: number) {
+  return or(eq(roleInclusions.containerRoleId, roleId), eq(roleInclusions.memberRoleId, roleId));
+}
 
 type RoleRow = typeof roles.$inferSelect;
 type RoleAssignmentRow = typeof roleAssignments.$inferSelect;

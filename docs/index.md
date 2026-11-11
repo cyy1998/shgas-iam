@@ -121,6 +121,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [ADR-0046](adr/0046-unify-user-and-organization-read-documents.md)                         | decision | Current | 2026-11-03    | 2026-12-03  | 统一文档见 Spec #283；根结构及周期 repair 已接受；搜索结果控制修订见 Spec #310。                           |
 | [ADR-0047](adr/0047-separate-operations-cli-from-worker.md)                                | decision | Current | 2026-11-02    | 2026-12-02  | 人工维护命令直接切换至 Ops CLI、独立配置、同版本镜像及维护 Compose；共享 owner 能力，Worker 保留自动恢复。 |
 | [ADR-0048](adr/0048-model-global-roles-without-client-ownership.md)                        | decision | Current | 2026-11-10    | 2026-12-10  | 已确认的全局角色归属、编码命名空间与应用披露边界。                                                         |
+| [ADR-0049](adr/0049-compose-roles-across-clients.md)                                       | decision | Current | 2026-11-10    | 2026-12-10  | 组合角色授予、应用披露、管理生命周期与发布边界。                                                           |
 
 </details>
 

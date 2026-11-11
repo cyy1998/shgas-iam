@@ -1,7 +1,9 @@
 import type { RoleDetailVo, RoleUpdateInput } from "@admin/services/role";
-import { getRoleStatusOptions } from "@iam/contracts";
+import { getRoleStatusOptions, RoleKind } from "@iam/contracts";
 import { Button, Col, ConfigProvider, Form, Input, message, Row, Select, Space } from "antd";
+import { useState } from "react";
 import styles from "./RoleDetailDrawer.module.less";
+import { RoleInclusionEditor } from "./RoleInclusions";
 
 type Props = {
   detail: RoleDetailVo;
@@ -14,6 +16,8 @@ type ProfileValues = Pick<RoleDetailVo, "roleName" | "status"> & { description: 
 
 export default function RoleProfileForm({ detail, saving, onCancel, onSave }: Props) {
   const [form] = Form.useForm<ProfileValues>();
+  const [originalMembers] = useState(detail.members);
+  const [members, setMembers] = useState(originalMembers);
 
   return (
     <ConfigProvider theme={{ components: { Form: { itemMarginBottom: 16, labelFontSize: 13 } } }}>
@@ -30,6 +34,13 @@ export default function RoleProfileForm({ detail, saving, onCancel, onSave }: Pr
           if (form.isFieldTouched("roleName")) data.roleName = values.roleName.trim();
           if (form.isFieldTouched("description")) data.description = values.description || null;
           if (form.isFieldTouched("status") && values.status !== detail.status) data.status = values.status;
+          if (detail.roleKind === RoleKind.Composite) {
+            const originalIds = new Set(originalMembers.map(({ id }) => id));
+            const currentIds = new Set(members.map(({ id }) => id));
+            const addRoleIds = [...currentIds].filter((id) => !originalIds.has(id));
+            const removeRoleIds = [...originalIds].filter((id) => !currentIds.has(id));
+            if (addRoleIds.length || removeRoleIds.length) data.inclusions = { addRoleIds, removeRoleIds };
+          }
           if (Object.keys(data).length === 0) {
             message.info("请先编辑需要保存的字段");
             return;
@@ -63,6 +74,9 @@ export default function RoleProfileForm({ detail, saving, onCancel, onSave }: Pr
             </Form.Item>
           </Col>
         </Row>
+        {detail.roleKind === RoleKind.Composite && (
+          <RoleInclusionEditor containerId={detail.id} members={members} onChange={setMembers} />
+        )}
         <Space size={8} className={styles["profile-actions"]}>
           <Button onClick={onCancel} disabled={saving}>
             取消

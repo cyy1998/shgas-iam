@@ -18,6 +18,7 @@ export * from "./enums/organization.level";
 export * from "./enums/organization.status";
 export * from "./enums/organization.type";
 export * from "./enums/position.status";
+export * from "./enums/role.kind";
 export * from "./enums/role.status";
 export * from "./enums/role.type";
 export * from "./enums/role-assignment-target-type";

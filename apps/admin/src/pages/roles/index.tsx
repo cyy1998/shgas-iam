@@ -8,8 +8,10 @@ import { PlusOutlined } from "@ant-design/icons";
 import { type ActionType, PageContainer, type ProColumns, ProFormSelect, ProTable } from "@ant-design/pro-components";
 import {
   getRoleStatusOptions,
+  type RoleKind,
   type RoleStatus,
   type RoleType,
+  roleKindToString,
   roleTypeOptions,
   roleTypeToString,
 } from "@iam/contracts";
@@ -93,7 +95,14 @@ export default function RolesPage() {
     { title: "角色编码", dataIndex: "roleCode", width: 150, search: false },
     { title: "角色名称", dataIndex: "roleName", width: 160, search: false },
     {
-      title: "角色类型",
+      title: "角色形态",
+      dataIndex: "roleKind",
+      width: 100,
+      search: false,
+      renderText: (value: RoleKind) => roleKindToString[value],
+    },
+    {
+      title: "角色归属",
       dataIndex: "roleType",
       width: 100,
       search: false,
@@ -219,8 +228,8 @@ export default function RolesPage() {
                 }}
               />
               <Select
-                aria-label="角色类型"
-                placeholder="全部类型"
+                aria-label="角色归属"
+                placeholder="全部归属"
                 allowClear
                 value={filters.roleType}
                 options={roleTypeOptions}
@@ -248,7 +257,7 @@ export default function RolesPage() {
             )}
           </div>
         }
-        scroll={{ x: 1140 }}
+        scroll={{ x: 1240 }}
         pagination={{ defaultPageSize: 20, hideOnSinglePage: true, showSizeChanger: true }}
         request={async (params) => {
           try {

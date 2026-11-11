@@ -1,16 +1,26 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import {
+  ClientStatus,
   EmploymentStatus,
   OrganizationLevel,
   OrganizationStatus,
   OrganizationType,
   PositionStatus,
   RoleAssignmentTargetType,
+  RoleKind,
   RoleStatus,
   RoleType,
 } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
-import { clients, employments, organizationClosures, organizations, positions, roles } from "@iam/db/schema";
+import {
+  clients,
+  employments,
+  organizationClosures,
+  organizations,
+  positions,
+  roleInclusions,
+  roles,
+} from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { eq, inArray } from "drizzle-orm";
 import type { RoleAssignmentResolver } from "../../../src/role-assignment/index.ts";
@@ -119,6 +129,65 @@ describe("resolveEffectiveRoles", () => {
     expect([...clientTwo.entries()]).toEqual([[100, [{ id: 202, roleCode: "client-two" }]]]);
   });
 
+  test("expands nested mixed ownership from every source before applying client filtering", async () => {
+    const db = harness!.db;
+    await seedActiveEmploymentGraph(db);
+    await db.insert(roles).values([
+      { ...activeRole({ id: 200, roleCode: "org-duties", clientId: 2 }), roleKind: RoleKind.Composite },
+      { ...activeRole({ id: 201, roleCode: "position-duties", clientId: 2 }), roleKind: RoleKind.Composite },
+      {
+        id: 202,
+        roleCode: "global:employment-duties",
+        roleName: "Employment duties",
+        roleType: RoleType.Global,
+        roleKind: RoleKind.Composite,
+      },
+      activeRole({ id: 203, roleCode: "reader", clientId: 1 }),
+      activeRole({ id: 204, roleCode: "approver", clientId: 1 }),
+    ]);
+    await db
+      .insert(roleAssignments)
+      .values([
+        assignment(200, RoleAssignmentTargetType.Organization, 10, true),
+        assignment(201, RoleAssignmentTargetType.Position, 20),
+        assignment(202, RoleAssignmentTargetType.Employment, 100),
+        assignment(203, RoleAssignmentTargetType.Employment, 100),
+      ]);
+    await db.insert(roleInclusions).values([
+      { containerRoleId: 200, memberRoleId: 201 },
+      { containerRoleId: 200, memberRoleId: 202 },
+      { containerRoleId: 201, memberRoleId: 203 },
+      { containerRoleId: 202, memberRoleId: 203 },
+      { containerRoleId: 201, memberRoleId: 204 },
+      { containerRoleId: 202, memberRoleId: 204 },
+    ]);
+    // Traffic suspension for the owning Client does not deactivate its Roles.
+    await db.update(clients).set({ status: ClientStatus.Disable }).where(eq(clients.id, 2));
+    try {
+      const effectiveCodes = async (clientId?: number) => {
+        const resolved = await resolver.resolveEffectiveRoles({ employmentIds: [100], clientId });
+        return resolved.get(100)?.map(({ roleCode }) => roleCode);
+      };
+      expect(await effectiveCodes()).toEqual([
+        "approver",
+        "global:employment-duties",
+        "org-duties",
+        "position-duties",
+        "reader",
+      ]);
+      expect(await effectiveCodes(1)).toEqual(["approver", "reader"]);
+
+      await db.update(roles).set({ status: RoleStatus.Pause }).where(eq(roles.id, 201));
+      expect(await effectiveCodes(1)).toEqual(["approver", "reader"]);
+      await db.update(roles).set({ status: RoleStatus.Disable }).where(eq(roles.id, 202));
+      expect(await effectiveCodes(1)).toEqual(["reader"]);
+      await db.update(roles).set({ status: RoleStatus.Enable }).where(eq(roles.id, 201));
+      expect(await effectiveCodes(1)).toEqual(["approver", "reader"]);
+    } finally {
+      await db.update(clients).set({ status: ClientStatus.Enable }).where(eq(clients.id, 2));
+    }
+  });
+
   for (const source of getForwardAssignmentSources()) {
     for (const invalidation of getCommonStrictValidityInvalidations()) {
       test(`${source.name} excludes roles when ${invalidation.name}`, async () => {
@@ -191,14 +260,22 @@ describe("resolveEffectiveRoles", () => {
 
 describe("resolveAffectedUserIds", () => {
   for (const source of getReverseAssignmentSources()) {
-    test(`${source.name} remains conservative when the role, position, and organizations are inactive`, async () => {
+    test(`${source.name} on an ancestor remains in scope through inactive roles and targets`, async () => {
       await seedActiveEmploymentGraph(harness!.db);
-      await harness!.db.insert(roles).values({
-        ...activeRole({ id: 300, roleCode: "retired-role", clientId: 1 }),
-        status: RoleStatus.Disable,
-        isDelete: true,
-      });
-      await harness!.db.insert(roleAssignments).values(source.createAssignment(300));
+      await harness!.db.insert(roles).values([
+        { ...activeRole({ id: 300, roleCode: "retired-role", clientId: 1 }), status: RoleStatus.Disable },
+        {
+          ...activeRole({ id: 301, roleCode: "middle", clientId: 1 }),
+          roleKind: RoleKind.Composite,
+          status: RoleStatus.Pause,
+        },
+        { ...activeRole({ id: 302, roleCode: "root", clientId: 1 }), roleKind: RoleKind.Composite },
+      ]);
+      await harness!.db.insert(roleInclusions).values([
+        { containerRoleId: 301, memberRoleId: 300 },
+        { containerRoleId: 302, memberRoleId: 301 },
+      ]);
+      await harness!.db.insert(roleAssignments).values(source.createAssignment(302));
       await retirePositionAndOrganizations(harness!.db);
 
       const result = await resolver.resolveAffectedUserIds({ roleIds: [300] });

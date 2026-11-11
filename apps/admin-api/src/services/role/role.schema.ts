@@ -2,12 +2,12 @@ import { z } from "@hono/zod-openapi";
 import { createPageQuerySchema } from "@iam/api-core/core/pagination/schema";
 import { GLOBAL_ROLE_PREFIX, isGlobalRoleCode, RoleAssignmentTargetType, RoleStatus, RoleType } from "@iam/contracts";
 import { insertRoleSchema, updateRoleSchema } from "@iam/db/schema";
+import { RoleClientSummaryDtoSchema, RoleDetailDtoSchema, RoleDtoSchema } from "@iam/domain/role";
 
 export {
   RoleAssignmentDtoSchema,
   RoleAssignmentTargetSummaryDtoSchema,
   RoleClientSummaryDtoSchema,
-  RoleDetailDtoSchema,
   RoleDtoSchema,
   RoleSchema,
   toRoleAssignmentDto,
@@ -29,7 +29,7 @@ export const RolePaginationQueryDtoSchema = createPageQuerySchema(
 ).openapi("RolePaginationQueryDto");
 
 const RoleCreateFieldsSchema = z.object(
-  insertRoleSchema.pick({ roleCode: true, roleName: true, status: true, description: true }).shape,
+  insertRoleSchema.pick({ roleCode: true, roleName: true, roleKind: true, status: true, description: true }).shape,
 );
 
 export const RoleCreateDtoSchema = z
@@ -52,6 +52,29 @@ export const RoleCreateDtoSchema = z
   ])
   .openapi("RoleCreateDto");
 
+export const RoleInclusionEndpointDtoSchema = RoleDtoSchema.pick({
+  id: true,
+  roleCode: true,
+  roleName: true,
+  roleType: true,
+  status: true,
+}).extend({ client: RoleClientSummaryDtoSchema.nullable() });
+
+export const AdminRoleDetailDtoSchema = RoleDetailDtoSchema.extend({
+  members: z.array(RoleInclusionEndpointDtoSchema),
+  containers: z.array(RoleInclusionEndpointDtoSchema),
+}).openapi("AdminRoleDetailDto");
+
+const RoleInclusionPatchSchema = z
+  .strictObject({
+    addRoleIds: z.array(z.int32().positive()),
+    removeRoleIds: z.array(z.int32().positive()),
+  })
+  .refine(({ addRoleIds, removeRoleIds }) => {
+    const removed = new Set(removeRoleIds);
+    return !addRoleIds.some((id) => removed.has(id));
+  }, "同一角色不能同时加入和移除");
+
 export const RoleUpdateDtoSchema = z
   .object(
     updateRoleSchema.pick({
@@ -60,6 +83,7 @@ export const RoleUpdateDtoSchema = z
       status: true,
     }).shape,
   )
+  .extend({ inclusions: RoleInclusionPatchSchema.optional() })
   .strict()
   .openapi("RoleUpdateDto");
 

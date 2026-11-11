@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 import { createRoleService } from "@admin-api/services/role/role.service";
 import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
-import { RoleAssignmentTargetType, RoleStatus, RoleType } from "@iam/contracts";
+import { RoleAssignmentTargetType, RoleKind, RoleStatus, RoleType } from "@iam/contracts";
 import { RoleAssignmentExistsError } from "@iam/domain/role";
 
 const now = new Date("2026-01-01T00:00:00Z");
@@ -11,6 +11,7 @@ function role(overrides: Record<string, unknown> = {}) {
     id: 1,
     roleCode: "portal-admin",
     roleName: "Portal Admin",
+    roleKind: RoleKind.Basic,
     roleType: RoleType.Client,
     clientId: 10,
     status: RoleStatus.Enable,
@@ -57,6 +58,8 @@ function createService() {
     },
     roleRepository: {
       countAssignmentsByRoleId: mock(async () => 0),
+      lockRoleInclusionGraph: mock(async () => undefined),
+      deleteRoleInclusions: mock(async () => []),
       createAssignment: mock(async () => ({ ...assignment(), target: undefined })),
       createRole: mock(async () => role()),
       deleteAssignment: mock(async () => assignment()),

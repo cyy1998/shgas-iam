@@ -2,7 +2,7 @@ import { createAdminMutation } from "@admin-api/services/admin-mutation/admin-mu
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildRoleAssignmentAudit, buildRoleAudit } from "@admin-api/services/audit/events/role.audit";
-import { RoleAssignmentTargetType, RoleStatus, RoleType } from "@iam/contracts";
+import { RoleAssignmentTargetType, RoleKind, RoleStatus, RoleType } from "@iam/contracts";
 import { ClientNotFoundError } from "@iam/domain/client";
 import type { RoleAssignmentTargetSummaryDto } from "@iam/domain/role";
 import {
@@ -20,6 +20,7 @@ import type {
   RoleAssignmentCreateDto,
   RoleAssignmentPaginationQueryDto,
   RoleCreateDto,
+  RoleInclusionPatch,
   RolePaginationQueryDto,
   RoleUpdateDto,
 } from "./role.type";
@@ -40,7 +41,7 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
     if (role === null) {
       throw new RoleNotFoundError();
     }
-    return toRoleDetailDto(role);
+    return { ...toRoleDetailDto(role), ...(await deps.roleRepository.getRoleInclusions(role.id)) };
   }
 
   async function createRole(dto: RoleCreateDto, auditContext?: AdminAuditContext) {
@@ -54,6 +55,7 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
       const created = await tx.roleRepository.createRole({
         roleCode: dto.roleCode,
         roleName: dto.roleName,
+        roleKind: dto.roleKind ?? RoleKind.Basic,
         roleType: dto.roleType ?? RoleType.Client,
         clientId: client?.id ?? null,
         status: dto.status ?? RoleStatus.Enable,
@@ -71,6 +73,7 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
           "admin.role.create",
           detail,
           {
+            roleKind: detail.roleKind,
             roleType: detail.roleType,
             clientCode: client?.clientCode ?? null,
             changed: true,
@@ -78,7 +81,7 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
           auditContext,
         ),
       );
-      return { changed: true, result: detail };
+      return { changed: true, result: { ...detail, members: [], containers: [] } };
     }, adminAuditTransactionOptions(auditContext));
   }
 
@@ -88,25 +91,51 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
     auditContext?: AdminAuditContext,
     action = "admin.role.update",
   ) {
+    const { inclusions, ...profile } = data;
     if (!Object.values(data).some((value) => value !== undefined))
       throw new BadRequestError("至少提交一个角色更新字段");
     return await mutation.locked(
-      (tx) => tx.roleRepository.lockRoleByCode(roleCode),
+      async (tx) => {
+        if (inclusions !== undefined) await tx.roleRepository.lockRoleInclusionGraph();
+        return tx.roleRepository.lockRoleByCode(roleCode);
+      },
       () => new RoleNotFoundError(),
       async (tx, existing) => {
-        const changed =
-          (data.roleName !== undefined && data.roleName !== existing.roleName) ||
-          (data.description !== undefined && data.description !== existing.description) ||
-          (data.status !== undefined && data.status !== existing.status);
-        if (!changed && data.status === undefined) return { changed: false, result: null };
+        const statusChanged = profile.status !== undefined && profile.status !== existing.status;
+        const profileChanged =
+          (profile.roleName !== undefined && profile.roleName !== existing.roleName) ||
+          (profile.description !== undefined && profile.description !== existing.description) ||
+          statusChanged;
+        const inclusionChanges =
+          inclusions === undefined ? undefined : await updateInclusions(tx, existing, inclusions);
+        const inclusionsChanged =
+          inclusionChanges !== undefined &&
+          (inclusionChanges.addRoleIds.length > 0 || inclusionChanges.removeRoleIds.length > 0);
+        const changed = profileChanged || inclusionsChanged;
+        if (!changed && profile.status === undefined && inclusions === undefined) {
+          return { changed: false, result: null };
+        }
+
         let current = existing;
-        if (changed) {
-          const updated = await tx.roleRepository.updateRoleByCode(roleCode, data);
+        if (profileChanged) {
+          const updated = await tx.roleRepository.updateRoleByCode(roleCode, profile);
           if (updated === null) throw new Error("Locked Role update returned no row");
           current = { ...updated, client: existing.client, assignmentCount: existing.assignmentCount };
         }
-        await tx.auditService.recordAuditLog(buildRoleAudit(action, current, { patch: data, changed }, auditContext));
-        if (data.status !== undefined && data.status !== existing.status) {
+        await tx.auditService.recordAuditLog(
+          buildRoleAudit(
+            action,
+            current,
+            {
+              patch: profile,
+              ...(inclusionChanges !== undefined ? { inclusionIntent: inclusions, inclusions: inclusionChanges } : {}),
+              changed,
+            },
+            auditContext,
+          ),
+        );
+        if (statusChanged || inclusionsChanged) {
+          // The container is the stable impact anchor even after removing one of its outgoing edges.
           await tx.userDocumentInvalidation.recordChanges([{ kind: "role", roleId: existing.id }]);
         }
         return { changed, result: null };
@@ -121,7 +150,10 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
 
   async function deleteRole(roleCode: string, auditContext?: AdminAuditContext) {
     return await mutation.locked(
-      (tx) => tx.roleRepository.lockRoleByCode(roleCode),
+      async (tx) => {
+        await tx.roleRepository.lockRoleInclusionGraph();
+        return tx.roleRepository.lockRoleByCode(roleCode);
+      },
       () => new RoleNotFoundError(),
       async (tx, existing) => {
         const assignmentCount = await tx.roleRepository.countAssignmentsByRoleId(existing.id);
@@ -130,6 +162,15 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
         }
         const deleted = await tx.roleRepository.softDeleteRoleByCode(roleCode);
         if (deleted === null) throw new Error("Locked Role delete returned no row");
+        const removedInclusions = await tx.roleRepository.deleteRoleInclusions(deleted.id);
+        const removedContainerRoleIds = removedInclusions
+          .filter(({ memberRoleId }) => memberRoleId === deleted.id)
+          .map(({ containerRoleId }) => containerRoleId)
+          .sort((left, right) => left - right);
+        const removedMemberRoleIds = removedInclusions
+          .filter(({ containerRoleId }) => containerRoleId === deleted.id)
+          .map(({ memberRoleId }) => memberRoleId)
+          .sort((left, right) => left - right);
         await tx.auditService.recordAuditLog(
           buildRoleAudit(
             "admin.role.delete",
@@ -137,11 +178,17 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
             {
               deleted: true,
               changed: true,
+              ...(removedInclusions.length > 0
+                ? { inclusions: { removedContainerRoleIds, removedMemberRoleIds } }
+                : {}),
             },
             auditContext,
           ),
         );
-        await tx.userDocumentInvalidation.recordChanges([{ kind: "role", roleId: deleted.id }]);
+        // After detaching the deleted Role, the former containers can still reach their upstream assignments.
+        await tx.userDocumentInvalidation.recordChanges(
+          [deleted.id, ...removedContainerRoleIds].map((roleId) => ({ kind: "role", roleId })),
+        );
         return { changed: true, result: null };
       },
       adminAuditTransactionOptions(auditContext),
@@ -293,6 +340,22 @@ export function createRoleService(deps: AdminRoleServiceDeps) {
 }
 
 export type RoleService = ReturnType<typeof createRoleService>;
+
+async function updateInclusions(
+  tx: AdminRoleTransactionPorts,
+  container: { id: number; roleKind: RoleKind },
+  patch: RoleInclusionPatch,
+) {
+  if (container.roleKind !== RoleKind.Composite) throw new BadRequestError("仅组合角色允许维护直接成员");
+  const addRoleIds = [...new Set(patch.addRoleIds)];
+  const removeRoleIds = [...new Set(patch.removeRoleIds)];
+  const undeleted = await tx.roleRepository.getUndeletedRoleIds(addRoleIds);
+  if (undeleted.length !== addRoleIds.length) throw new RoleNotFoundError("成员角色不存在或已删除");
+  if (await tx.roleRepository.wouldCreateRoleInclusionCycle(container.id, addRoleIds)) {
+    throw new BadRequestError("角色包含关系不能形成循环");
+  }
+  return tx.roleRepository.applyRoleInclusionPatch(container.id, { addRoleIds, removeRoleIds });
+}
 
 interface ResolvedRoleAssignmentTarget {
   target: RoleAssignmentTargetSummaryDto;

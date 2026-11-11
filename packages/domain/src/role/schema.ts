@@ -7,6 +7,7 @@ const DbRoleSchema = z.object(
     id: true,
     roleCode: true,
     roleName: true,
+    roleKind: true,
     roleType: true,
     clientId: true,
     status: true,
