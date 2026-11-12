@@ -4,227 +4,56 @@ status: accepted
 
 # 统一用户与组织的文档模型和搜索契约
 
-原用户搜索按 Search Document 匹配，却从类型化列返回摘要，详情与 Facts 又有独立持久副本；组织搜索直接返回完整文档。
-本决定统一为单份规范业务 Document，并同时解决可靠更新与 Client 角色隔离，减少平行事实的维护成本。
+用户与组织各自以一份已发布 Document 提供 Internal 搜索和详情。User Document 同时提供 Subject Facts 的持久来源。
+统一前，用户筛选、摘要、详情与 Facts 分别持有事实，可能在同一次读取中给出不同结论。
+选择从同版本内部 Document 派生各个公开视图，接受响应契约切换与协调升级的成本。
+原决定见 [Spec #283](https://github.com/cyy1998/shgas-iam/issues/283)，搜索结果控制修订见 [Spec #310](https://github.com/cyy1998/shgas-iam/issues/310)。
 
-本决定记录当前统一模型与取舍；代码验收与目标环境发布分别判断。
-原统一模型的实施要求与验收状态由 [Spec #283](https://github.com/cyy1998/shgas-iam/issues/283) 跟踪；
-下述文档根结构与过滤语法修订是后续已接受的调整，不代表 #283 已包含该目标。
+## 事实来源与发布边界
 
-## 已确认的方向
+- 组织关系与生命周期仍由源表拥有。将完整路径放入可重建的 Organization Document，可以避免查询时反复组装层级，
+  代价是增加存储和传输体积。这是设计意图，实际性能需独立验证。
+- 详情和搜索从同一发布版本生成公开内容，接受新建暂不可见、删除延迟退出和不同组织版本并存。合法旧文档可继续服务。
+  按对象异步发布使祖先变更无需在源事务内同步重建整棵树。两类目录共用更新核心，各自发布和恢复。
+  回源拼装详情会重现副本间的不一致，目录是否可见只以已发布事实判断。
+- PostgreSQL 保存规范业务文档，Redis Facts 是同版本派生缓存。删除采用版本化墓碑，以免迟到任务重新写回已删除事实。
+  用户发布还承担 Facts 与 Subject Access 恢复责任。Admin 管理模型、登录和账号恢复继续由各自权威来源负责。
+- 源事务持久登记变化，提交后再展开受影响对象。只在源事务里展开可能漏掉并发新增的关联（见 [#239](https://github.com/cyy1998/shgas-iam/issues/239)），
+  删除或结束的旧关联也可能在展开时消失，因此消息保留必要的变更前目标。两阶段持久状态用于恢复，队列负责唤醒。
+  采用这一方案的代价是多维护一类可靠处理记录。
 
-- 用户与组织文档的统一名称为 User Document、Organization Document，搜索与详情共用这些名称，
-  不再各自引入 Profile Search Document 或 Organization Search Document 作为另一种文档概念。
-  内部存储 schema 与公开 schema 仍明确区分，命名统一不意味着把内部事实全部交付调用方。
-- 用户搜索以完整匹配文档为公开资料基础，不再维护独立的五字段 User Profile Base 副本。
-  搜索的默认字段与显式裁剪按下述搜索结果控制修订，接受调用方适配成本。
-- 收敛范围覆盖整个 User Profile 的底层存储，不限于另建纯搜索文档；目标是以一个 `document` 字段承载业务事实，
-  每项业务事实只保存一次，详情、搜索和 Subject Facts 按需派生，不持久化三个平行副本。
-  主键、版本、发布时间等技术元数据继续独立成列；索引由当前查询需要决定，不构成应用维护的第二份事实。
-- 内部完整事实文档与公开搜索文档分离。公开搜索文档从同一版本的内部事实派生，不另存一份副本；
-  内部新增字段不自动获得公开搜索或返回资格。
-- Internal 用户与组织详情纳入契约修改范围，去除数据库主键等内部字段；精确详情与搜索裁剪前的单项使用相同公开文档，
-  在同一发布版本及同一披露上下文下得到相同内容。Admin 保留实时管理专属模型、历史资料及操作引用。
-- 两类 Internal 详情只读取已发布目录，接受与搜索相同的更新延迟，包含未删除的 Enable、Pause、Disable 对象。
-  没有可读的当前条目返回 404，损坏文档或查询失败返回 503，不回源拼装另一份详情；404 只表示当前目录不可见，
-  不保证源对象不存在。源账号查询、登录和账号恢复不受这一目录查询语义替代。
-- 搜索、详情和 SSO 统一业务字段语义及共用结构。SSO 按 Client 披露字段，OIDC 保留标准字段映射。
-  [ADR-0048](0048-model-global-roles-without-client-ownership.md) 将各入口的角色范围扩展为本应用和全局有效角色。
-- Internal 角色筛选、搜索返回和详情使用同一可见集合，所有组合与否定条件均在该集合上解释。
-  Client 身份由认证固定，角色归属使用明确保存的关系。Internal 可见范围独立于 SSO 启用状态和授权声明配置。
-- 用户文档的主体基本信息按下述根结构修订提升到根节点，与 `employments` 并列；角色放在每条有效任职的 `roles` 中。
-  没有可见角色的任职仍保留，其 `roles` 为 `[]`。Internal 不重复返回另一组 `authorization.employments`；
-  SSO 按协议需要生成授权结构和用户级角色并集。
-- 用户任职、组织责任、独立组织文档和 SSO 共用组织基础结构 `code/name/type/path`，路径节点统一包含
-  `code/name/type/level/distanceToTarget`。完整路径从根到目标且包含自身，根 level 为 1、自身 distanceToTarget 为 0；
-  层级与距离可从路径位置派生，无需保存平行数组。独立组织根额外包含 status、isVirtual、isEntity 等自身属性，
-  不自动向每个组织引用扩张这些属性；OIDC 保留协议字段映射。
-- PostgreSQL 只保存规范业务文档，保留供 SSO 使用的派生 Redis Facts 缓存，其内容只能由同版本 document 和技术元数据生成，
-  不拥有独立业务事实或写入口。缓存可丢弃、重建并执行版本校验；搜索和详情直接查询 PostgreSQL，不新增文档缓存。
-- 用户与组织仅在已删除时发布 `document = null` 的墓碑，保留必要身份、schema、源版本、发布时间与处理记录。
-  未删除的 Pause、Disable 对象仍发布完整目录文档。删除后停止重造完整 Facts，Redis 使用带版本的墓碑防止旧任务回填；
-  不能用直接删除缓存替代版本协调。全部对象仍参与完整核验，缺行不等于墓碑，deleted 用户的访问屏障必须保持禁用。
-  重新启用未删除账号仍须通过完整 Facts 发布门禁，这些变化不清除有效会话或凭据。
-- 用户与组织共用源变化登记、任务领取、关联展开、版本仲裁和失败恢复的核心实现，各自提供构建与关联规则，
-  分别拥有文档、版本和处理进度。一类构建失败不阻断另一类，不要求跨对象或跨类型原子发布；
-  用户仍承担 Facts 缓存和 Subject Access 恢复责任。
-- 可靠更新覆盖全部需要展开关联用户的源变化，包括组织、岗位、角色、角色分配和组织责任，逐项审计登记、
-  展开与恢复责任，不限于 #239 已证实的组织变更路径；未经验证的并发交错不预先宣称为已复现缺陷。
-- 采用维护窗口内的单代硬切换：停止并排空受影响读写与旧 Worker，迁移结构、全量重建并完整核验，
-  再由新调用方与新服务共同恢复，不增加旧详情或旧响应兼容层。全量重建同时修复已有 processed 但内容陈旧的档案。
-  保留有效会话和凭据，不清会话或推进 session/protocol 代际；Custom SSO 输出协调升级为 wire 4，Catalog 3 与 OIDC 标准映射保持；回退依赖匹配旧制品与备份。
+[文档发布与恢复](../../packages/documents/README.md#共享发布与恢复) · [Subject Facts 披露决定](0032-consume-published-subject-facts-for-authorization.md)
 
-## 文档根结构与过滤语法修订（2026-10-27 已接受）
+## 搜索与可见范围
 
-原候选实现的 User Document 使用 `{ user: { ... }, employments }`，Organization Document 使用
-`{ organization: { ... } }`。两类文档的结果根已经明确主体，继续包裹自身基本信息增加了返回结构和查询路径的层级。
-本次决定将 `user`、`organization` 内的全部自身字段提升到各自 Document 根节点，用户的 `employments` 仍与基本信息并列。
+- 服务间用户与组织搜索收口为 Internal Filter DSL。旧 Public 搜索和 Internal 非 DSL 入口采用一次切换，
+  接受旧调用方升级的成本，免于长期兼容和转发。Admin 搜索与 Internal 详情继续提供，委托仍独立解析。
+  从搜索结果再查委托时，两次调用各自观察事实。[旧入口退役记录](0043-retire-public-and-legacy-internal-directory-search.md)
+- 公开 schema 驱动合法路径和操作符。逐字段白名单会与 schema、校验和编译器重复维护。
+  新增可比较公开字段也是数据暴露决定，内部字段与任意 JSON path 保持在公开语言之外。
+- 过滤、计数与响应使用同一认证 Client 可见的角色集合，包括本应用有效角色和有效全局角色。
+  组合角色先展开，再按结果角色的归属披露。过滤复用同元素作用域，响应裁剪保留文档结构。
+  [全局角色](0048-model-global-roles-without-client-ownership.md) · [组合角色](0049-compose-roles-across-clients.md)
+- 2026-10-27 的修订将主体基本字段提升至 Document 根，降低返回和过滤路径的嵌套层级。
+  子树匹配统一使用完整路径上的通用集合条件，减少专用操作符。改写会消耗更多表达式预算。
+  当时上一候选尚未部署，因此沿用同一 schema 版本直接调整，免于维护未发布的中间结构。
+- 2026-11-03 的修订采用可选页码分页和精确总数，以支持业务列表直接跳页。
+  每页和总数使用同一数据库快照，各页独立读取，接受翻页时的重复或漏看。
+  字段选择独立于匹配条件，在本次返回文档完成校验后执行。精确计数和深页仍受期限约束，失败整体返回。
 
-内部持久化文档、公开 schema、Internal 搜索与详情，以及由公开结构派生的 Filter DSL 路径整体调整；
-例如 `user.username` 改为 `username`，独立组织文档的 `organization.path` 改为 `path`。
-任职内的 `organization` 和责任内的 `targetOrganization` 表达关联对象，保留其结构；Custom SSO 的 `profile`
-与 OIDC 标准映射仍由协议拥有，本次只适配 Document 到 Subject Facts 的派生输入。
+[查询参数、默认字段与失败处理](../guides/search.md) · [目录查询实现](../../packages/documents/README.md#internal-搜索与详情)
 
-同时整体移除 `withinSubtreeOf`，覆盖独立组织文档、任职所属组织和责任目标组织。子树条件统一使用
-`exists` 进入相应组织的完整 `path`，再以 `code eq` 匹配目标组织；扁平化后的独立组织使用 `path`，
-任职元素内使用 `organization.path`，责任元素内使用 `targetOrganization.path`。完整路径包含自身，
-因此替代后仍匹配目标组织自身及后代。组合条件保留原任职、责任和 `not` 的作用范围。
+## 恢复与切换
 
-该操作符没有独有的匹配语义，移除后减少 DSL 的组织专用规则，不新增根对象专用语法或兼容别名。
-旧操作符按非法查询返回 422。沿用现有查询预算，每处替换增加一个 AST 节点并使该分支深度增加一层；
-接受部分接近预算上限的旧查询改写后须进一步简化，不因移除语法糖扩大查询预算，也不将此调整视为性能提升。
+2026-11-02 的修订将自动 repair 交给对应 consumer 的 Worker，降低漏配外部调度导致待处理工作长期积压的风险。
+独立进程和连接增加启动成本，换取清晰的取消与清理边界。人工入口与 Worker 复用同一维护能力，
+清理失败停止后续该类轮次，多实例依靠持久领取和版本仲裁。[Ops 与 Worker 分工](0047-separate-operations-cli-from-worker.md)
 
-带根包装的上一版候选尚未实际部署，本次直接修正未发布契约，两类 Document 与派生 Facts 的 schema 版本保持 1，
-不新增版本、数据库迁移或旧候选到新候选的升级流程。响应、过滤路径、操作符和持久化布局整体调整，
-不保留旧包装、旧路径别名、双读或逐对象回退；调用方按最终契约接入。
-首次部署仍沿用本决定原有的完整构建与核验要求，保留有效会话与凭据。
-这避免仅在响应上去层、内部长期保留另一种根结构的维护成本，也避免为未发布的中间形状维护版本切换。
+不兼容布局采用维护窗口内的单代切换，全量重建并独立核验后开放匹配版本的应用和调用方。
+这接受协调升级成本，避免并行发布、双读和逐对象回退。有效登录态与凭据沿用原生命周期。
+候选验收由对应 Spec 记录，现场切换按匹配来源的运维流程执行。
 
-## 已知约束与取舍
+[Worker 周期 repair](../../apps/worker/README.md#周期-repair) · [数据维护与硬切换](../releases/data-maintenance.md#统一-document-硬切换)
 
-User Document 除搜索与目录详情外，还为 Subject Facts 和 Subject Access 恢复提供已发布事实。
-单一持久化文档必须承接这些消费方所需事实；公开搜索响应只包含有意公开的结构，不等于完整内部文档。
-接口适配和披露边界仍须显式定义，不能仅把现有三个文档嵌套到新字段就视为已消除重复事实。
-旧公开 Search Document 丢弃角色所属 Client，因此不能作为 Facts 的唯一输入；内部 Document 显式保存 Client 归属。
-旧详情退出后，剩余登录、审计和账号恢复所需的内部用户 ID 可来自行级元数据或已有源账号解析器；
-没有发现继续保存任职内部 ID、期间、描述、排序和审计字段的剩余业务消费需求。
-文档可围绕公开用户资料、有效任职、组织责任和角色 Client 归属收敛，旧查询方法和核验器须随模型调整，
-不能将它们的旧实现当作保留重复详情的理由。登录与恢复仍保留各自的源账号检查和失败语义。
-
-[#239](https://github.com/cyy1998/shgas-iam/issues/239) 已记录组织变更与新增任职并发时遗漏用户 dirty 的复现。
-缺口发生在源事务内过早展开受影响用户，不是文档列数造成的；统一存储本身不能修复该问题。
-两类 Document 使用共享 Outbox 核心，在提交后展开并原子登记目标重建要求与消息完成凭据。
-用户发布还承担 Subject Facts 缓存和 Subject Access 恢复责任，不能直接以组织搜索发布器替换。
-
-全关联审计还确认：角色分配会物理删除，持久变化必须保留删除前的关联目标；任职或责任结束必须保留已知用户，
-不能期待提交后从当前有效关联中重新找到。生产端登记还须核对实际修改对象与各 mutation 的覆盖，
-不能只搬运已有失效调用。相关入口见[失效模块](../../packages/documents/src/user/invalidation/user-document-invalidation.ts)
-与[角色管理](../../apps/admin-api/src/services/role/role.service.ts)。除 #239 外的并发窗口仍需运行验证。
-
-本决定修订 [ADR-0015](0015-adopt-schema-driven-user-profile-filter-dsl.md) 的固定摘要与跨副本一致性取舍，
-以及全部 Internal Client 共用角色搜索事实的既有边界；同时修订
-[ADR-0043](0043-retire-public-and-legacy-internal-directory-search.md) 保留的详情契约与用户响应边界。
-涉及 Subject Facts 存储和读取方式时，需保持 [ADR-0032](0032-consume-published-subject-facts-for-authorization.md)
-的协议中性投影、已发布事实和 Client 披露约束；内部持久化来源和删除后的缓存表示按本决定调整。
-组织精确详情读取改为已发布文档，修订 [ADR-0042](0042-search-organizations-with-published-documents.md) 中保留旧详情的边界，
-继续保留按对象异步发布和独立恢复的取舍。
-
-## 落实本决定的约束
-
-内部文档围绕当前公开用户资料、有效任职、组织与责任事实及明确的角色 Client 归属构建，
-不因为旧 DTO 曾包含某字段就继续保存。内部身份及发布版本属于技术元数据，不进入公开结构；
-公开 schema 与内部存储 schema 明确分离，公开结构驱动合法过滤路径，存储映射负责 Client 隔离和必要派生。
-调用方只能在自身可见角色集合上筛选。内部 Client 归属路径不属于可选择的过滤字段。
-
-同一文档的内容使用一致源快照和固定构建观察时点；公开投影与 Facts 消费该已发布结果，
-不在读取时重新按墙上时间解释任职或回源拼装关联。类型化查询列与索引按真实查询需求设计，
-不重新引入由应用分别维护的基础资料或搜索副本。
-
-源变化与持久处理义务同事务提交，提交后在一致观察下展开依赖；保留已知直接用户和删除前的关联目标，
-采用保守覆盖避免遗漏旧范围。展开产生的重建要求 与消费完成凭据原子提交，重复投递复用已登记工作，
-任务重领更换处理所有权，旧 owner 不能完成或覆盖新工作。发布文档或墓碑与 processed 原子提交；
-PostgreSQL 提交后才发布 Redis，并保留可恢复的缓存与访问屏障后续责任。
-
-源事件和重建两阶段都须能恢复失败、丢失唤醒与过期处理，队列仅负责唤醒。User Document 与 Organization Document 的周期 repair
-按下述修订由 Worker 承担。不将查询请求变为修复入口；责任类型 Catalog 仍由代码发布管理，不为统一失效新增运行时管理接口。
-
-搜索的操作符按上述修订收敛，继续保持同元素作用域、精确值语义、结构预算和超时保护；
-结果范围、排序及返回字段按下述搜索结果控制修订。非法或超预算查询整体返回 422，无匹配返回空列表，
-损坏或查询失败整体返回 503，不截断或拼成部分成功。
-详情语义不替代登录、账号恢复和脱敏手机号接口各自的源账号判断与失败处理。
-
-实施验收须证明真实 PostgreSQL 下关联变更的并发交错、两阶段恢复与版本仲裁，以及 Client 隔离同时作用于过滤和响应。
-Redis 验收覆盖墓碑、旧任务迟到、缓存回填与重新启用门禁；正式入口还须覆盖详情与搜索一致、SSO 披露和协议映射。
-切换验收完整检查所有文档或墓碑、持久工作、Facts 缓存和访问屏障，不能因删除对象不再有完整 Facts 而跳过它们。
-完整验收状态由 Spec 与固定候选证据记录；目标环境停流、备份和恢复另按发布流程执行。
-
-## 搜索结果控制修订（2026-11-03 已接受）
-
-两个 Internal `search-dsl` 接口扩展分页、排序和返回字段选择，以需要显示总数、跳转指定页的业务列表为主要使用场景。
-分页使用布尔开关 `paginate`，默认 `false`。关闭时一次返回全部匹配项，最多 500 条，超过则整体返回 422；
-排序、字段选择、已确认的默认字段及统一响应对象仍生效，开关只控制分页，不恢复旧数组响应或完整字段默认值。
-关闭时显式传入 `page` 或 `pageSize` 返回 422，避免未开启分页却静默忽略调用方的分页意图。
-开启时采用页码分页并返回精确总数，允许跳转指定页。`page` 从 1 开始且默认 1，`pageSize` 默认 50、最大 500；
-分页模式下原先的 500 条总结果上限改为单页上限，总匹配超过 500 条不再整体拒绝。越过末页返回空列表及真实总数。
-允许省略 `filter` 浏览全部可见文档；显式提供的过滤表达式仍须合法且非空。
-Filter DSL 继续只决定文档是否匹配；返回字段选择使用与 `filter` 并列的 `select`，不能把响应裁剪解释为过滤语言的职责。
-这些方向修订了本决定原先固定返回完整公开文档，以及分页模式下总匹配数上限的限制。
-
-排序限于公开文档根级标量，支持最多三个字段依次升序或降序，并追加内部唯一 ID 确定同值结果的顺序；
-省略时沿用内部 ID 升序。任职、角色和路径等数组不提供唯一排序值，首版不引入数组排序或聚合规则。
-按字段原始类型比较，字符串采用固定、区分大小写的字节序，不采用中文拼音排序；空值在升降序中均置于末尾，
-同值追加的内部 ID 固定升序。
-
-`select` 支持嵌套公开路径并保留原有对象和数组结构，不支持别名、计算字段或内部字段。
-用户搜索省略 `select` 时仅返回 `subjectIdentifier`、`username`，取代此前省略时返回完整文档的方向；
-显式选择时严格返回所选字段，不自动补充身份字段。选择父对象返回其完整公开子树，重复路径合并、父路径覆盖子路径；
-空 `select`、非法路径及通配符整体返回 422。组织搜索省略 `select` 时仅返回 `code`、`name`。
-`filter` 只决定根对象是否入选，`select` 只裁剪字段，不根据命中条件删减数组元素；数组的顺序、空数组和空值均保留。
-过滤与排序可以使用没有选入响应的公开字段；字段选择不缩小合法的过滤或排序范围。
-这仍是同一公开文档的读取控制，不新增业务事实副本，不扩大 Internal Client 的角色可见范围。
-
-一次响应中的本页结果与精确总数必须来自同一数据库快照，避免读到互相矛盾的页数据与计数。
-不同分页请求各自读取当时的已发布数据，不固定整轮查询快照，接受翻页期间更新造成的重复或漏看；
-这一选择面向普通业务列表，不承诺全量遍历的一致导出。
-
-保留现有两个搜索 URL，请求与响应采用协调升级的直接切换。成功响应的 `data` 从文档数组改为统一的查询结果对象，
-包含 `items`、`total`、`page`、`pageSize`，外层继续使用既有 `code`、`message`。
-未分页时 `page`、`pageSize` 均为 `null`，成功响应的 `total` 等于 `items.length`；分页时返回实际分页值。
-接受调用方适配成本，不保留旧数组响应的兼容分支。
-
-原过滤复杂度预算保留，分页参数须为正安全整数，计算后的偏移量也须可安全表示；`select` 去重后最多 64 个路径。
-分页模式不新增总匹配数或最大页码限制，继续使用数据库语句 2 秒、HTTP 5 秒的期限；精确计数或深页查询超时整体返回 503，
-不退化为估算计数或部分成功。
-
-分页后只对本页完整文档进行校验，再执行字段选择；本页任一文档损坏整体返回 503，即使损坏字段没有被选择。
-`total` 统计满足可见性和过滤条件的行数，不为计数逐项解析所有匹配文档，也不主动检查其他页是否损坏。
-这修订了原总结果有界时校验全部匹配文档的范围，避免每次分页都进行全量文档核验；完整性核验仍由维护流程承担。
-本节记录已接受的修改目标，不表示现有代码已支持这些查询选项。
-本次扩展的实施与验收由 [Spec #310](https://github.com/cyy1998/shgas-iam/issues/310) 跟踪。
-
-## Document 周期恢复修订（2026-11-02 已接受）
-
-User Document 与 Organization Document 的自动恢复分别由启用对应 consumer 的 Worker 持有专用周期任务，
-各自通过环境变量控制开关、轮次间隔、限额和截止时间。这取代两类文档原先仅依赖部署侧调度的决定，
-减少漏配外部任务导致持久 Outbox 长期不被重新唤醒的风险。两类调度共用实现并独立运行，手动 repair 仍可独立执行。
-
-每轮通过 Worker 自有的 repair 执行入口，复用与人工维护入口相同的完整恢复能力，使用独立子进程和连接；
-上一轮结束且资源清理确认后才安排下一轮。人工命令与共享执行能力的归属按
-[ADR-0047](0047-separate-operations-cli-from-worker.md) 调整，当前实现仍沿[Worker 运行与维护](../architecture/backend-architecture.md#worker-运行与维护)核对。
-代价是每轮创建进程和连接，收益是正常消费与补偿恢复的取消边界清晰，超时和停机可以停止本轮，不关闭消费者的共享资源。
-清理失败时停止后续自动轮次并记录错误，避免在旧执行者状态不明时叠加新轮次。
-多实例允许重复唤醒，持久工作仍由现有领取、版本和 token 仲裁，不为该周期任务新增全局锁或通用调度平台。
-该决定不扩大每个发布版本的后处理自动尝试预算，超限仍由人工显式重试。
-
-## 命名收敛
-
-统一使用 User Document 与 Organization Document 作为文档概念和模块命名基础；User Search 与 Organization Search
-是它们提供的查询能力。User Profile 继续表示领域中的用户档案，不再作为用户文档实现的命名前缀。
-文档表名为 `user_document`、`organization_document`。源变化处理记录与每文档重建状态的命名按实际职责收敛，
-不继续沿用含义不充分的 `_change`、`_dirty`。采用下面的完整命名组合：
-
-| 职责                                 | 用户                          | 组织                                  |
-| ------------------------------------ | ----------------------------- | ------------------------------------- |
-| 已发布文档或删除墓碑                 | `user_document`               | `organization_document`               |
-| 随源事务登记的待处理文档更新消息     | `user_document_outbox`        | `organization_document_outbox`        |
-| 每个目标文档最新的重建要求与处理状态 | `user_document_rebuild_state` | `organization_document_rebuild_state` |
-
-Outbox 表示随源业务事务持久登记、由后台可靠处理的文档更新消息；消息包含变化来源及必要的原关联信息，
-后台负责展开受影响对象并登记重建要求。它不表示立刻隐藏已有合法文档，完成条件是目标重建要求及消费完成凭据
-已经原子提交，不以队列投递成功或全部目标发布完成为准。Rebuild State 按目标文档保存最新要求和处理状态，
-不是一条队列 job 对应一行；完成后仍保留状态，用于和已发布版本比较。用户的 Outbox 表是本次新增阶段，不能误记为已有表改名。
-
-两类文档通过 `@iam/documents/user`、`@iam/documents/organization` 各自公开接口，更新核心由包内共享。TypeScript 表符号对应
-`userDocuments` / `organizationDocuments`、`userDocumentOutboxEntries` / `organizationDocumentOutboxEntries`、
-`userDocumentRebuildStates` / `organizationDocumentRebuildStates`；类型、schema、repository、Worker、维护命令与可观测事件
-统一沿用同一职责词汇。队列 job 单独表达展开失效与重建文档，不把状态表称为 job。
-内部存储类型与公开类型通过明确限定或模块边界区分，不另造一份业务文档；这种区分不构成第二份持久化事实。
-
-选择 Outbox 强调事务性登记和可靠处理，Invalidation 仍可描述使文档需要重建的动作，不作为该消息表的实体名称。
-表名不限定必须使用外部消息总线，具体消费义务由上述完成条件定义。Rebuild State 保留独立名称，不能将其混称为 Outbox、
-队列 job 或 Checkpoint；它保存的是每个文档的当前重建要求，没有连续日志消费位置。
-既有两类 `search-dsl` 路径及精确详情路径本来已经对称，保留路径并通过硬切换更新响应契约。
-具体共享核心的文件布局、索引和 SQL 选择由实施设计落实，不能改变上述语义与所有权约束。
-
-当前实现入口见[后端架构](../architecture/backend-architecture.md#user-document-subject-facts-publication)
-与[组织搜索发布](../architecture/backend-architecture.md#organization-search-发布与核验)。
+历史来源：[ADR-0015 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0015-adopt-schema-driven-user-profile-filter-dsl.md)、[ADR-0019 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0019-return-user-profile-base-from-internal-filter-dsl.md)、[ADR-0042 原文](https://github.com/cyy1998/shgas-iam/blob/95dc4871c62e36b63b26a3f71c5670ae449c79e2/docs/adr/0042-search-organizations-with-published-documents.md)、
+[合并前 ADR-0015](https://github.com/cyy1998/shgas-iam/blob/cbfd4aa60fd6000662026b68576f1aa1409b6ce4/docs/adr/0015-adopt-schema-driven-user-profile-filter-dsl.md)、[合并前 ADR-0042](https://github.com/cyy1998/shgas-iam/blob/cbfd4aa60fd6000662026b68576f1aa1409b6ce4/docs/adr/0042-search-organizations-with-published-documents.md)、[整理前 ADR-0046](https://github.com/cyy1998/shgas-iam/blob/cbfd4aa60fd6000662026b68576f1aa1409b6ce4/docs/adr/0046-unify-user-and-organization-read-documents.md)。

@@ -71,7 +71,7 @@ SSO 使用同源 API 前缀，例如 `/api/iam`。经实际网关进入 SSO，�
 - Gateway 保留 `/oidc` 路径并按可信 host 覆盖 `X-IAM-Entry-Network`；dev 核对含端口的 authority，prod 核对 host。
   API 不应被外部直连绕过。`IAM_API_OIDC_TRUST_PROXY` 只控制客户端 IP：true 时取 `X-Forwarded-For` 首项，false 或无头取连接地址。
 - Client 选择 OIDC，登记 redirect/post-logout URI、scope 与 Public/Confidential 类型；Public 使用 PKCE S256，Confidential 使用 Basic 与 PKCE。
-  Secret 通过[授权读取](../features/admin/client-sso-configuration.md)取得，不使用普通详情响应。
+  Secret 通过[授权读取](../features/application-integration.md#查看和轮换凭据)取得，不使用普通详情响应。
 
 按[部署与发布](deployment.md)更新配对配置，再按[网关发布](apisix-gateway-release.md)更新路由。
 公共入口保持关闭，仅开放受限验证；`/health`、`/oidc/health` 检查 Redis，`/ready` 检查 PostgreSQL/Redis，不能代替以下业务检查。
@@ -127,12 +127,12 @@ IAM 允许过期 ID Token 作退出 hint，未用 exp 限制其使用期限。�
 
 ## 选择会话维护任务
 
-| 目标                                      | 操作                                                                                     |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------- |
-| 查询、撤销指定用户/根/应用关系            | 使用[会话管理](../features/sso/login-and-session.md#查看和终止会话)，不做 namespace 全清 |
-| 清空当前 namespace 中全部会话或协议 owner | 按下节 inventory、clear、verify；不能按 Client 筛选                                      |
-| Client 提交后 Snapshot 传播失败           | 使用定向 repair，不重放数据库写入                                                        |
-| Redis 备份恢复后的 Snapshot 修复          | 停流执行全量 repair 和独立 verify                                                        |
+| 目标                                      | 操作                                                                   |
+| ----------------------------------------- | ---------------------------------------------------------------------- |
+| 查询、撤销指定用户/根/应用关系            | 使用[会话管理](../guides/admin.md#会话与登录限制)，不做 namespace 全清 |
+| 清空当前 namespace 中全部会话或协议 owner | 按下节 inventory、clear、verify；不能按 Client 筛选                    |
+| Client 提交后 Snapshot 传播失败           | 使用定向 repair，不重放数据库写入                                      |
+| Redis 备份恢复后的 Snapshot 修复          | 停流执行全量 repair 和独立 verify                                      |
 
 ## 会话清理
 
@@ -177,7 +177,7 @@ pnpm --filter @iam/ops iam-ops client-snapshot repair -- --client-code alpha
 ```
 
 成功后通过正式入口确认当前 Client 状态/配置和凭据生效。repair 同时失效普通与敏感 payload，不重放 mutation、轮换 Secret 或撤销会话。
-失败先恢复 Redis 等依赖，再重跑同一目标；传播失败前后业务写入是否已提交按[写入结果契约](../development/backend-implementation.md#admin-写入结果与失败恢复)判断。
+失败先恢复 Redis 等依赖，再重跑同一目标；传播失败前后业务写入是否已提交按[写入结果契约](../engineering/backend-architecture.md#admin-写入结果与失败恢复)判断。
 
 **全量恢复**用于 Redis restore 后：关闭使用 Snapshot 的协议和管理入口，冻结 Client mutation 及所有 acquisition，排空在途请求和任务后执行：
 
@@ -195,6 +195,6 @@ verify 须独立完整扫描、退出 0 且 matching=0，且发生在 reader 回
 
 - 账号与 Subject Access 恢复使用[数据维护](data-maintenance.md)，不能通过清会话或手工写 Redis 把不确定 Barrier 变成 enabled。
 - 精确会话撤销失败时仅重试原捕获集合；集合丢失重新查询发起操作，已终止的根不恢复。
-- 作用后审计失败不回滚已生效动作，也不为补审计重放 mutation；按[写入结果契约](../development/backend-implementation.md#admin-写入结果与失败恢复)处理。
+- 作用后审计失败不回滚已生效动作，也不为补审计重放 mutation；按[写入结果契约](../engineering/backend-architecture.md#admin-写入结果与失败恢复)处理。
 - Redis 实时登录态以服务端时间为准；主从时钟异常先处理时钟与 failover，不能靠续期或恢复登录态备份补偿。
 - 入口开放失败或状态未知时，停止继续开放，关闭不确定入口并排空，完成该操作所需核验后再恢复。

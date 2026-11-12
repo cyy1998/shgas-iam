@@ -32,8 +32,19 @@ Redis URL 使用 `redis://[username:password@]host[:port][/db]`，未写端口�
 Document backfill／部分 repair 只登记或重新唤醒持久工作，仍需匹配版本的 Worker 收敛，再执行独立完整 gate。
 Subject Access-only 会写 PostgreSQL transition intent，不是 Redis-only 操作。人工强制或定向重试不改变自动尝试预算和版本/token 仲裁。
 
-操作前阅读[Document 与 Subject Access 维护](../../docs/releases/data-maintenance.md)、[会话与 Snapshot 维护](../../docs/releases/authentication-and-session.md)及[历史审计维护](../../docs/development/commands.md#历史数据维护工具)。
+操作前阅读[Document 与 Subject Access 维护](../../docs/releases/data-maintenance.md)、[会话与 Snapshot 维护](../../docs/releases/authentication-and-session.md)及[历史审计维护](../../docs/releases/README.md#历史审计规范化)。
 数据库迁移继续通过 `@iam/db db:migrate`，Gateway 发布继续使用 HTTP API。
 
 独立镜像和生产维护 Compose 使用相同的分组、操作与参数，见[一次性 Ops 维护环境](../../docs/releases/deployment.md#一次性-ops-维护环境)。
 镜像须与目标应用匹配发布版本；不依赖宿主源码、pnpm 或运行中的 Worker 容器。
+
+## 任职只读诊断
+
+`iam-ops employment verify` 在 PostgreSQL 只读事务核对任职状态、父岗位与组织、任职期和结束时间、未来开始的开放任职、
+重复开放任职及多个开放主职。报告 `passed` 时退出 0，发现阻断项时退出 1，并按类别列出任职 ID。
+历史墓碑单独计数，缺少可信结束时间不阻断。按真实业务通过管理入口修正后重新核验。
+
+## 审计规范化
+
+显式提供 `IAM_OPS_DATABASE_URL`，使用 `pnpm --filter @iam/ops iam-ops audit-action <inventory|apply|verify>`。
+`apply` 要求停写并提供 `--writers-stopped`，操作和恢复顺序见[历史审计规范化](../../docs/releases/README.md#历史审计规范化)。

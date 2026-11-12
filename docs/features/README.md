@@ -1,20 +1,16 @@
-# 功能说明
+# 功能与业务规则
 
-这里介绍 IAM 的功能、使用条件、主要流程和业务规则。接口字段、协议处理顺序和内部实现另行查阅。
+开发者和 AI 按本次改动选一个主题，先确认参与角色、业务范围、状态变化和失败后的已生效作用。
+领域术语见 [CONTEXT.md](../../CONTEXT.md)，决策与理由见[已接受 ADR](../index.md#架构决策)。
+核对当前行为时沿文档定位实现与测试，判断依据见[当前事实与修改目标](../index.md#当前事实与修改目标)。
 
-| 想了解什么                           | 功能说明                                                  |
-| ------------------------------------ | --------------------------------------------------------- |
-| 登录、找回密码、查看会话与下线       | [登录与会话](sso/login-and-session.md)                    |
-| 应用如何使用统一登录                 | [应用单点登录](sso/single-sign-on.md)                     |
-| 管理应用的协议、地址与凭据           | [应用接入配置](admin/client-sso-configuration.md)         |
-| 应用能取得哪些用户资料，更新是否及时 | [用户信息共享](sso/subject-delivery.md)                   |
-| 为应用业务指定代办人                 | [应用委托](delegation/client-delegation.md)               |
-| 管理组织责任与 HR 范围               | [组织责任管理](organization-responsibility/management.md) |
-| 按资料、任职和组织条件查找用户       | [用户搜索](search/user-search.md)                         |
-| 按属性和层级查找组织                 | [组织搜索](search/organization-search.md)                 |
-| 校验、预览和发布网关配置             | [网关配置发布](gateway/gateway-configuration.md)          |
-| 查询安全操作及其结果                 | [审计日志](audit/audit-logging.md)                        |
+| 功能                                               | 业务规则                                       |
+| -------------------------------------------------- | ---------------------------------------------- |
+| [用户、组织与任职](directory-management.md)        | 用户档案、任职、离职、组织责任与目录搜索。     |
+| [角色、管理授权与审计](roles-and-authorization.md) | 角色授予与披露、Admin 授权、HR 范围和审计。    |
+| [登录与会话](login-and-session.md)                 | 身份验证、找回密码、改密、登录限制与会话撤销。 |
+| [应用接入](application-integration.md)             | 应用配置与凭据、单点登录、资料披露与网关发布。 |
+| [应用委托](client-delegation.md)                   | 委托范围、期间冲突、生命周期与直接代办人解析。 |
 
-实际接入见[接入指南](../guides/README.md)，字段、错误码和接口定义沿指南查代码。
-部署、维护和迁移见[运维入口](../releases/README.md)，实现机制见[架构文档](../index.md#工程架构)。
-文档状态以[总索引](../index.md)为准。
+管理界面和应用调用步骤见[使用与接入指南](../guides/README.md)。部署与数据恢复见[运维入口](../releases/README.md)，
+代码位置与实现机制见[工程文档](../index.md#工程文档)。

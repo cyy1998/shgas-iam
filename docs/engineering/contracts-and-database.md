@@ -31,7 +31,7 @@
 - HTTP 状态码和短语通过浏览器可加载的 `@iam/contracts/http` 出口共享。`@iam/runtime/errors` 定义通用错误及
   结构识别，业务错误归所属能力或 app。Hono 与 tRPC 的错误映射和安全响应呈现由 `@iam/api-core` 维护。
 - Admin 的 tRPC 类型推断集中在 app-local service/client，通过后端公开入口 type-only 导入，不复制一套 DTO。
-- 已有 runtime schema 时由它派生类型，解析和 mapper 共用 shape；协议入口只补元数据，不重写 wire。
+- 已有 runtime schema 时由它派生类型，例如用 `z.infer<typeof Schema>` 派生 Zod 类型。解析和 mapper 共用 shape，协议入口只补协议元数据。
 - 协议 helper 仅实现编码、解码和续接等协议能力；平台适配通过窄接口传入，不绑定 app 实例或承载业务流程。
 
 `contracts` 的 credential 加解密出口使用密码库、时间、随机数和 Web API，并非纯规则。
@@ -49,18 +49,23 @@ Schema 必须在实际解析或输出边界生效，只声明类型不证明字�
 不能共存时采用对应主题的协调切换，不为此建立通用双版本框架。
 
 部分既有 Client、Role DTO 仍从整表派生。修改其形状或来源字段时收敛到显式字段集合，无关改动不触发批量迁移。
-验证方式见[验证选择](../development/testing.md#验证选择)：类型兼容、浏览器可加载和运行时字段裁剪分别验证。
+验证方式见[验证选择](testing.md#验证选择)：类型兼容、浏览器可加载和运行时字段裁剪分别验证。
 
 ## Repository 与数据库
 
 Repository 通过 factory 接收 root 或 transaction `DbClient`；事务由调用方的 UnitOfWork 统一拥有。
 数据库事实、审计和文档 Outbox 的原子关系，以及提交后作用，遵守[事务边界](backend-architecture.md#transactions-与-aftercommit)。
 
-数据库约束保护存储完整性，应用 schema 保护输入输出，两者不能互相代替。特定读模型的版本、发布与核验规则
-集中在[User Document](backend-architecture.md#user-document-subject-facts-publication)和
-[组织搜索](backend-architecture.md#organization-search-发布与核验)。
+数据库约束保护存储完整性，应用 schema 保护输入输出，两者各自承担校验责任。版本、发布与核验规则由读模型维护。
+[Documents 发布与恢复](../../packages/documents/README.md#共享发布与恢复)
 
 修改 PostgreSQL schema、索引、约束或 Drizzle 派生 schema 前使用
 [db-schema skill](../../.codex/skills/db-schema/SKILL.md)；涉及 Relations v2 或 RQB v2 时另用
-[drizzle-v1 skill](../../.codex/skills/drizzle-v1/SKILL.md)。目录与命名见
-[数据库文件约定](../development/backend-implementation.md#数据库文件约定)，操作命令见[命令入口](../development/commands.md#workspace-入口)。
+[drizzle-v1 skill](../../.codex/skills/drizzle-v1/SKILL.md)。操作命令见[命令入口](commands.md#workspace-命令)。
+
+### 数据库文件约定
+
+- 表定义放 `packages/db/src/schema/<domain>/`，关系定义放 `relations/<domain>/`，迁移放 `migrations/`。
+- 领域和顶层 schema/relations 出口同步维护。
+- 使用 `snakeCase.table` / `snakeCase.schema`，TypeScript 属性 camelCase，数据库表列 snake_case。
+- 表派生 Zod schema 使用 `drizzle-orm/zod`，关联表显式定义主键、索引和唯一约束。

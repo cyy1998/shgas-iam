@@ -1,9 +1,9 @@
 # 前端架构
 
-本文说明 Admin 与 SSO 的页面、请求、权限和状态职责。编码规则见[开发规范](../development/coding-style.md)，
+本文说明 Admin 与 SSO 的页面、请求、权限和状态职责。编码规则见[开发规范](coding-style.md)，
 共享类型与浏览器依赖见[共享契约](contracts-and-database.md#公开接口与运行环境)。
 
-## App 与状态边界
+## 页面与路由
 
 Admin 通过 app-local service 消费管理能力，SSO 通过 service 消费登录和本人操作能力。
 页面拥有筛选、选中记录、弹窗、提交状态及操作后的刷新；页面私有组件和 hook 就近放置，跨页面复用能力放公共目录。
@@ -14,7 +14,7 @@ Admin 在应用内装配管理布局和路由权限，SSO 在应用内装配认�
 Vite 只注入配置中逐项列出的公开变量，浏览器代码在 `src/constants/config.ts` 统一读取并应用默认值。
 Admin/SSO 的 Custom SSO 类型和预览消费 `/wire` 浏览器出口，由 Vite 与应用源码一同构建。
 
-## 请求、类型与错误的所有权
+## 请求与类型
 
 新增请求统一经 app-local service。Service 拥有端点、选项、响应解析和必要的错误归一化，页面消费它公开的方法与类型。
 Admin 在这一层推断 tRPC 输入输出；SSO 在这一层处理 REST envelope 和认证跳转。
@@ -23,7 +23,9 @@ Admin 在这一层推断 tRPC 输入输出；SSO 在这一层处理 REST envelop
 公共请求和浏览器机制放 `lib/utils`，特殊协议 service 可直接使用 fetch。页面可以消费公共错误类型，但不解析传输协议。
 优先复用 schema 派生类型或 service 推断类型，避免复制字段和枚举；type-only 导入不代表后端代码能在浏览器执行。
 
-## 管理路由与权限
+## 权限与失败恢复
+
+### 管理路由与权限
 
 新路由登记到 `admin-route-registry`，复用模块 access key 与拒绝访问路径。
 模块和集合操作使用服务端 capability，资源操作使用 `allowedActions`；前端不复制角色或组织范围策略。
@@ -31,12 +33,12 @@ Admin 在这一层推断 tRPC 输入输出；SSO 在这一层处理 REST envelop
 
 操作后刷新数据和能力，区分已修改、无需修改、明确拒绝、暂态故障与结果未知。
 已提交或作用后失败时重读事实、保留修复提示，不自动重放写入。返回值与通用恢复统一见
-[Admin 写入结果](../development/backend-implementation.md#admin-写入结果与失败恢复)。
+[Admin 写入结果](backend-architecture.md#admin-写入结果与失败恢复)。
 
 会话记录存在不代表账号当前可访问；前端不复制访问屏障或代际判断。
 页面与选择器使用服务端返回的可见数据，阻塞只展示安全说明，不推断隐藏记录；写入时仍由后端重新授权。
-具体操作、历史展示和审计可见性见[会话](../features/sso/login-and-session.md)和
-[组织责任](../features/organization-responsibility/management.md)。
+具体操作、历史展示和审计可见性见[会话](../features/login-and-session.md)和
+[组织责任](../features/directory-management.md#组织责任管理)。
 
 ### 会话与配置恢复
 
@@ -46,7 +48,7 @@ Admin 在这一层推断 tRPC 输入输出；SSO 在这一层处理 REST envelop
 Secret 原文仅存组件内存，刷新或离开即清除。Client 传播修复提示按 Client 保存在 sessionStorage；
 重读、后续成功或合法 no-op 不清除，只有修复流程可以确认恢复。
 
-## SSO 登录守卫
+### SSO 登录守卫
 
 Service 解析协议结果，hook 管理超时、取消与过期响应，页面呈现互斥状态。
 登录流程先验证目标、续接和浏览器绑定，再探测根会话；guard 明确允许后才显示表单。
@@ -59,8 +61,7 @@ Service 解析协议结果，hook 管理超时、取消与过期响应，页面�
 ## 前端测试
 
 Service 验证请求和错误转换，页面验证输入、权限及状态驱动的结果，组件或浏览器覆盖路由、guard 和恢复交互。
-异步测试使用受控请求或时钟，不重复协议包算法与字段词典。通用规则见[测试规范](../development/testing.md)，
-资源编排见[测试架构](testing-architecture.md)，生成目录的编辑限制见[仓库地图](repository-map.md#生成目录与-vendored-资源)。
+异步测试使用受控请求或时钟，协议算法由所属协议模块验证。通用规则见[测试与验证](testing.md#测试质量原则)。
 
 ## 现存差距与收敛时机
 

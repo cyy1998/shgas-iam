@@ -208,7 +208,7 @@ docker compose --env-file docker/.env -f docker/compose.dev.yaml up -d
 
 源码运行使用 `pnpm --filter @iam/api serve`、`pnpm --filter @iam/admin-api serve`、`pnpm --filter @iam/worker serve`。
 前端分别执行 `pnpm --filter @iam/admin build` 与 `pnpm --filter @iam/sso build`，产物在各 app 的 `dist`，base 为 `/iam-admin` 和 `/portal`。
-路由及 rewrite 以[系统入口表](../architecture/system-architecture.md#请求入口与后台任务)和环境 manifest 为准。
+路由及 rewrite 以[系统入口表](../engineering/system-architecture.md#请求入口与后台任务)和环境 manifest 为准。
 
 ## 定向停止
 

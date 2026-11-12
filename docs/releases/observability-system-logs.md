@@ -7,7 +7,7 @@ Next review: 2026-11-25
 
 系统日志经 Docker stdout/stderr → Alloy → Loki → Grafana，采集带 `shgas-iam.logs.enabled=true` 的容器。
 当前包括 API、Admin API、两个 Worker、Worker dashboard 与 APISIX；Admin/SSO 前端未启用采集。
-PostgreSQL 业务审计独立保留。应用字段与脱敏规则见[Logging](../development/backend-implementation.md#logging)。
+PostgreSQL 业务审计独立保留。应用字段与脱敏规则见[系统日志](../engineering/backend-architecture.md#系统日志)。
 
 ## 日志栈部署
 
@@ -50,7 +50,7 @@ Loki 默认保留期 30 天（`720h`）；当前 Compose 未透传 `LOKI_RETENTI
 通过现有 Client 管理流程创建 `grafana` confidential OIDC Client：
 
 - Redirect URI 为 `${GRAFANA_ROOT_URL}/login/generic_oauth`，scope 为 `openid profile`。
-- 经[授权读取](../features/admin/client-sso-configuration.md)取得 SSO Secret，注入 `GRAFANA_OIDC_CLIENT_SECRET`。
+- 经[授权读取](../features/application-integration.md#查看和轮换凭据)取得 SSO Secret，注入 `GRAFANA_OIDC_CLIENT_SECRET`。
 - 设置 `GRAFANA_OIDC_ENABLED=true`、`GRAFANA_AUTH_ANONYMOUS_ENABLED=false`。
 - `GRAFANA_OIDC_AUTH_URL`、`GRAFANA_OIDC_TOKEN_URL`、`GRAFANA_OIDC_USERINFO_URL` 分别指向同一 issuer 的 `/auth`、`/token`、`/me`。
   浏览器与 Grafana 容器都须可达该入口，可使用不同 DNS 解析，但请求 authority 必须命中同一 Gateway issuer。
@@ -98,7 +98,7 @@ APISIX access log 应包含 traceId、spanId、traceparent；配置与 Gateway �
 4. 不带 traceparent 再请求 Gateway，确认 APISIX 创建上下文并传给上游；在 Request Drilldown 查看完整网关/后端时间线。
 
 缺失时检查 plugin metadata、日志格式、OTLP 网络与 Alloy receiver，再重验。
-直接绕过 APISIX 且无 trace header 的后端请求可以没有 traceId，后端不应随机补造；上下文规则见[后端架构](../architecture/backend-architecture.md#请求审计与可观测上下文)。
+直接绕过 APISIX 且无 trace header 的后端请求可以没有 traceId，后端不应随机补造；上下文规则见[后端架构](../engineering/backend-architecture.md#请求审计与可观测上下文)。
 
 ## 采集故障与恢复
 

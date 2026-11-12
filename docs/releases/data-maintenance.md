@@ -14,7 +14,7 @@ Next review: 2026-12-03
 命令使用显式 `IAM_OPS_DATABASE_URL`，需要 Redis 的命令还使用 `IAM_OPS_REDIS_*`。
 脚本默认读取 `apps/ops/.env`，进程环境优先；核对实例、DB、queue 和 prefix 与生产者/consumer 一致。
 命令不启动 consumer、业务 HTTP 或 Bull Board，重建必须有启用对应模块的 Worker。
-配置见[Ops 示例](../../apps/ops/.env.example)，恢复机制见[后端架构](../architecture/backend-architecture.md#subject-access-barrier)。
+配置见[Ops 示例](../../apps/ops/.env.example)，恢复机制见[Subject Access 恢复与重新启用](../../packages/subject-access/README.md#恢复与重新启用)。
 
 | 问题                                               | 选择                   |
 | -------------------------------------------------- | ---------------------- |
@@ -41,6 +41,22 @@ Custom SSO 调用方同时适配 wire 4；Catalog 保持 3，OIDC 标准字段�
 
 不得清空共享 Redis、清会话或借切换撤销有效凭据。失败时保留停流和持久恢复义务，按正式 repair/管理入口恢复后重新完整核验；需要回退时使用相互匹配的旧制品、配置与备份，不能混跑新旧 reader/writer 或依赖逐对象回退。
 本地迁移、恢复和跨制品演练只证明固定候选，目标环境实际停流、备份与放流由部署操作者完成。
+
+### 本地跨制品验收
+
+本地验收入口由 `@iam/api` 持有，配置、制品来源、固定候选与结果沿 [Ticket #294](https://github.com/cyy1998/shgas-iam/issues/294) 查阅。
+2026-11-26 前复核临时资产是否仍需保留。此场景显式运行，适用 Windows x64，复用本次 managed resources 和 process-smoke harness。
+在干净的固定候选上，从 `apps/api` 执行，参数路径使用绝对路径：
+
+```powershell
+bun --no-env-file run test-integration/document-cutover/build.fixture.ts <candidate-full-sha> <new-external-artifact-directory>
+bun --no-env-file run test-integration/document-cutover/cutover.fixture.ts <external-config.json>
+```
+
+配置包括 `candidate`、`baselineManifest`、`candidateManifest` 和 `outputDirectory`。
+候选须匹配 HEAD，旧来源、制品哈希、配置与完整验收顺序见[固定复现说明](https://github.com/cyy1998/shgas-iam/blob/cbfd4aa60fd6000662026b68576f1aa1409b6ce4/docs/development/commands.md#统一-document-一次性跨制品验收)。
+报告保存在 `outputDirectory`，资源记录在 `test-results/integration/<run-id>/run.json`。
+候选或制品变化后重建并重跑，目标环境的放流按上节步骤核验。
 
 ## User Document 日常修复
 
@@ -219,7 +235,7 @@ backfill/repair/verify 都支持 `--deadline-ms <1..300000>`，默认 30000；de
    ```
 
    同一一致只读快照覆盖源事实、文档/墓碑、schema、路径、版本、完成凭据和持久工作；仅 `status=passed` 且退出 0 通过。
-   完整检查范围见[组织发布与核验](../architecture/backend-architecture.md#organization-search-发布与核验)。
+   完整检查范围见[组织发布与核验](../../packages/documents/README.md#organization-search-发布与核验)。
 
 4. 保持公共流量关闭，仅开放受控入口，检查新建、祖先改名、状态与删除最终反映到 DSL 完整响应，并核对受影响的组织详情等功能。
 5. 关闭临时入口并排空，等待验证和清理产生的变化、Rebuild State、文档发布收敛，再运行完整 verify。

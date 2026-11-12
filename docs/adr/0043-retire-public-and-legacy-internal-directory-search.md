@@ -4,6 +4,8 @@ status: accepted
 
 # 将组织与用户搜索收口为 Internal Filter DSL
 
+本文作为 Historical 记录保留旧入口退役范围与代价。当前查询规则见[目录读模型决定](0046-unify-user-and-organization-read-documents.md#搜索与可见范围)和[搜索接入](../guides/search.md)。
+
 [ADR-0046](0046-unify-user-and-organization-read-documents.md) 已修订原用户摘要与 Internal 详情契约：两类目录返回完整 Document，用户角色过滤与返回限于认证 Client。
 本页旧搜索退役、保留现有 Internal DSL 路径和独立委托能力的决定继续适用。
 
@@ -46,4 +48,4 @@ status: accepted
 
 Internal 用户与组织详情只读已发布目录，不保留旧 `user_profile.detail` 副本或源表 OrganizationDto 作为回退。登录与账号恢复使用各自必要的窄事实；Admin 管理 DTO、组织闭包和源事实继续由实际业务消费者拥有。
 
-本决定保留 [ADR-0015](0015-adopt-schema-driven-user-profile-filter-dsl.md) 与 [ADR-0042](0042-search-organizations-with-published-documents.md) 的有界 DSL 和异步发布取舍；原详情保留范围见[固定历史版本](https://github.com/cyy1998/shgas-iam/blob/95dc4871c62e36b63b26a3f71c5670ae449c79e2/docs/adr/0043-retire-public-and-legacy-internal-directory-search.md)。
+本决定保留 [ADR-0015](https://github.com/cyy1998/shgas-iam/blob/cbfd4aa60fd6000662026b68576f1aa1409b6ce4/docs/adr/0015-adopt-schema-driven-user-profile-filter-dsl.md) 与 [ADR-0042](https://github.com/cyy1998/shgas-iam/blob/cbfd4aa60fd6000662026b68576f1aa1409b6ce4/docs/adr/0042-search-organizations-with-published-documents.md) 的有界 DSL 和异步发布取舍；原详情保留范围见[固定历史版本](https://github.com/cyy1998/shgas-iam/blob/95dc4871c62e36b63b26a3f71c5670ae449c79e2/docs/adr/0043-retire-public-and-legacy-internal-directory-search.md)。

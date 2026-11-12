@@ -35,9 +35,9 @@ Catalog 变更不恢复旧配置 epoch 撤销方案。
 
 ## 当前契约与历史
 
-事实读取与交付失败见[Published Facts 契约](../features/sso/subject-delivery.md)，
+事实读取与交付失败见[Published Facts 契约](../features/application-integration.md#用户信息共享)，
 独立操作许可见 [ADR-0029](0029-check-subject-access-once-per-business-operation.md)，
-发布原子性见[后端架构](../architecture/backend-architecture.md#user-document-subject-facts-publication)。
+发布原子性见[用户文档与 Facts 发布](../../packages/documents/README.md#user-document-与-subject-facts-发布)。
 协议输出分别见[Custom SSO](../guides/custom-sso.md)和[OIDC](../guides/oidc.md)。
 
 历史来源：[ADR-0008 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0008-adopt-client-subject-projection.md)、[ADR-0016 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0016-own-subject-claim-catalog-version-server-side.md)、[ADR-0032 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0032-consume-published-subject-facts-for-authorization.md)、[ADR-0035 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0035-unify-user-and-client-session-lifecycles.md)。原始决定与后续修订按各版本追溯。

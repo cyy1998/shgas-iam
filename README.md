@@ -89,7 +89,7 @@ iam-service/
 文档的稳定入口是 [docs/index.md](docs/index.md)。判断当前行为时应对照代码、可执行测试和索引中标记为
 `Current` 的文档；`Historical`、`Stale` 及冻结的 OpenSpec 记录只用于追溯，不应单独作为实现依据。
 
-了解 IAM 的能力和使用规则，先读[功能说明](docs/features/README.md)；实际对接见[接入指南](docs/guides/README.md)，字段与响应沿指南查代码定义。
+开发时从[功能与业务规则](docs/features/README.md)定位相关领域。管理操作和应用接入见[使用与接入指南](docs/guides/README.md)，接口定义沿指南查代码。
 
 ### 后端装配模型
 
@@ -124,7 +124,7 @@ OIDC 由 API composition 装配 `@iam/oidc`，HTTP adapter 保持外部 `/oidc` 
 - `@iam/assignment-resolution` 提供角色分配、组织责任解析和组织责任的父生命周期检查
 - `@iam/documents` 提供用户与组织文档的失效、查询、发布和修复，两类文档共用包内更新核心
 
-其余能力与依赖方向见[仓库地图](docs/architecture/repository-map.md#共享-packages)和[后端架构](docs/architecture/backend-architecture.md#核心依赖方向)。
+其余能力与依赖方向见[仓库地图](docs/engineering/repository-map.md#共享-packages)和[后端架构](docs/engineering/backend-architecture.md#核心依赖方向)。
 
 ## 🛠️ 技术栈
 
@@ -270,7 +270,7 @@ pnpm --filter @iam/sso dev
 
 以下是可按需调用的命令参考。普通提交自动处理暂存文件的格式与 lint，聚合验证自动进行全仓只读检查，
 日常内循环无需手动重复执行。统一的 `format`、`format:check`、`lint`、`lint:fix` 契约见
-[命令入口](docs/development/commands.md#workspace-命令)，暂存保护与失败恢复见[提交 Hook](docs/development/commands.md#commit-前检查)。
+[命令入口](docs/engineering/commands.md#workspace-命令)，暂存保护与失败恢复见[提交 Hook](docs/engineering/commands.md#commit-前检查)。
 
 ### 根目录
 

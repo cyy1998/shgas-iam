@@ -1,8 +1,7 @@
 # 第三方 Custom SSO 接入指南
 
-本文介绍统一登录、Code 兑换、托管回调、用户信息、网关鉴权和退出的接入方式。
-Custom SSO 是自定义协议；标准 OIDC 接入见[OIDC 指南](oidc.md)。
-业务流程见[应用单点登录](../features/sso/single-sign-on.md)。
+先按[应用与凭据](README.md#应用与凭据)准备 Client，再选择下方回调类型。
+业务流程见[应用单点登录](../features/application-integration.md#单点登录)，标准协议见[OIDC 指南](oidc.md)。
 
 ## 选择接入方式
 
@@ -31,18 +30,16 @@ authorizationEndpoint、logoutEndpoint、thirdPartyOAEndpoint；内外入口各�
 
 管理员为目标业务 Client 配置：
 
-| 字段              | 接入含义                                                                                   |
-| ----------------- | ------------------------------------------------------------------------------------------ |
-| clientCode        | 不可变业务编码，授权 query 中使用 client。                                                 |
-| ssoSecret         | business 兑换用的 SSO 专用凭据，与第三方可信登录的通用 clientSecret 独立；只保存在服务端。 |
-| validRedirectUrls | 最终落地地址允许列表；支持 origin、一级子域 wildcard 和 path 末尾 /*。                     |
-| subjectClaims     | 获准接收的主体字段，必须包含 Subject Identifier。                                          |
-| callbackType      | managed 或 business，显式决定交付方式。                                                    |
-| callbackEndpoint  | managed 禁止；business 必填固定完整回调，允许 query。                                      |
+| 字段              | 接入含义                                                               |
+| ----------------- | ---------------------------------------------------------------------- |
+| clientCode        | 不可变业务编码，授权 query 中使用 client。                             |
+| ssoSecret         | business 兑换用的 [SSO Secret](README.md#应用与凭据)。                 |
+| validRedirectUrls | 最终落地地址允许列表；支持 origin、一级子域 wildcard 和 path 末尾 /*。 |
+| subjectClaims     | 获准接收的主体字段，必须包含 Subject Identifier。                      |
+| callbackType      | managed 或 business，显式决定交付方式。                                |
+| callbackEndpoint  | managed 禁止；business 必填固定完整回调，允许 query。                  |
 
-目标 Client 必须可通行、启用 SSO 并选择 Custom 协议。
-生成或轮换后，管理员须另行读取 Secret；读取需要授权并记录审计，
-详见[Client 配置](../features/admin/client-sso-configuration.md)。
+目标 Client 须可通行、启用 SSO 并选择 Custom 协议。业务限制见[应用接入配置](../features/application-integration.md#应用配置)。
 
 ## Client Code 与地址编码
 
@@ -114,13 +111,12 @@ code={urlencoded_code}&redirect_uri={urlencoded_original_redirect_url}
 
 subject 仅包含当前 Client 选择的字段，授权交付本 Client 的有效角色和任职上的有效全局角色，公开结构排除数据库 ID 和兼容别名。
 完整主体仅接受 wire v4，`authorization` 及其每条任职只交付角色。
-任职与责任目标的组织统一使用 `code/name/type/path`；路径从根到目标并包含自身，节点含 `level` 和
-`distanceToTarget`，根层级为 1、目标距离为 0。岗位使用 `code/name`，无可见角色的有效任职仍保留空角色数组。
+任职与责任目标的组织使用[共用资料结构](README.md#单点登录的共同处理)。
 `subjectClaims` 的名称和选项保持不变；接入方须适配新响应，并在恢复访问前清理或停用旧权限副本。
 业务后端自行建立本地会话、关联 sid、设置自己的 HttpOnly Cookie，再跳回原 redirectUrl；
 IAM 不建立或存储第三方自有 session。
 
-遇 500、503 或响应结果未知时，放弃旧 Code，按 Retry-After 等待后重新授权，不重放 token 请求。
+遇 500、503 或响应结果未知时，按[共同处理流程](README.md#单点登录的共同处理)重新授权。
 认证、参数或配置错误应先修正。认证并定位会话后发生的拒绝，即使是消费前的 Maintenance，也会尝试终止原 ClientSession。
 旧应用 Token 可能因此失效，有效根仍可重新授权。
 诊断 Header 分别报告 Code 消费、会话撤销和 Token 补偿结果；失败后仍须重新授权。
@@ -159,7 +155,7 @@ Authorization 直接使用 sid，不加 Bearer 前缀。服务端优先读取该
 
 响应 data 是当前 Client 获准接收的 V4 主体。旧 Token 同样采用当前 subjectClaims；
 主体资料可能落后于源事实，接入方负责自己副本的刷新；根、原实例或账号失效仍独立阻止访问。
-共有披露与时效保证见[主体信息交付](../features/sso/subject-delivery.md)。
+共有披露与时效保证见[主体信息交付](../features/application-integration.md#用户信息共享)。
 
 网关请求：
 
@@ -233,10 +229,9 @@ OA 同主体有效根复用原 Token/剩余期限；不同主体有效根先退�
 
 浏览器请求 `/sso/logout?redirectUrl={encoded_after_logout_url}`，优先使用 global_session；
 兼容 token 参数接受根 Token，也可用 Custom 应用 Token 定位原根。退出无需账号访问许可，仅终止该根。
-第三方自有 session 和离线 ID Token 须由接入方处理，IAM 不发送后台退出通知。
+应用按[共同退出责任](README.md#单点登录的共同处理)清理本地状态。Custom SSO 沿前台退出流程完成 IAM 侧处理，无后台退出通知。
 business 应先清理自己的 Cookie/session，再退出 IAM；单独清应用 Token 不等于清理整个第三方登录态。
 
-SSO Secret 与通用 clientSecret 不混用、不下发前端；日志不记录明文 Token/Code/Secret。
 sid 保存在业务服务端，浏览器使用业务自己的 HttpOnly Cookie。
 IAM 侧状态维护见[统一维护手册](../releases/authentication-and-session.md)，
 代理配置及现场检查见[Gateway 发布手册](../releases/apisix-gateway-release.md)。

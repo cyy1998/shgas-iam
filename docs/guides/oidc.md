@@ -1,7 +1,6 @@
 # OIDC 接入指南
 
-先完成 Client 配置，再使用同一 issuer 的 Discovery 端点完成授权、兑换和退出。
-配置与凭据管理见[应用接入配置](../features/admin/client-sso-configuration.md)。
+先按[应用与凭据](README.md#应用与凭据)完成 Client 配置，再使用同一 issuer 的 Discovery 端点完成授权、兑换和退出。
 
 ## 接入与端点
 
@@ -18,7 +17,7 @@ Client 使用现有 IAM Client 记录，`client_id` 为不可变 clientCode。
 | Client 类型  | Token 认证                                                                     |
 | ------------ | ------------------------------------------------------------------------------ |
 | Public       | `token_endpoint_auth_method=none`，强制 S256。                                 |
-| Confidential | `client_secret_basic` 与 S256；SSO Secret 通过授权读取能力交付，保存在服务端。 |
+| Confidential | `client_secret_basic` 与 S256；使用[应用的 SSO Secret](README.md#应用与凭据)。 |
 
 授权 GET/form POST 要求 `response_type=code`、含 openid 的允许 scope、非空 state、code_challenge 和
 `code_challenge_method=S256`。nonce 可省略，提供时绑定并回传。
@@ -72,10 +71,7 @@ Authorization: Bearer {access_token}
 ```
 
 Public Client 省略 Basic，在 Token form 中提交 `client_id`，仍必须使用 S256。
-Code 兑换失败或结果未知时放弃旧 Code，修正原因后重新授权；不要自动重放 Token 请求。
-已认证且定位原实例后的失败可能终止已有应用会话，见[失败作用](oidc.md#兑换失败与重新登录)。
-退出使用 Discovery 的 end-session 端点；提供 `id_token_hint` 和已登记的 `post_logout_redirect_uri`，
-由 IAM 确认页完成退出。第三方仍负责清除自己的本地会话，详细规则见[退出确认与取消](oidc.md#退出确认与取消)。
+兑换异常和退出分别按[兑换失败与重新登录](#兑换失败与重新登录)及[退出确认与取消](#退出确认与取消)处理。
 
 ## Redirect、参数与浏览器导航
 
@@ -105,14 +101,12 @@ Portal 对发现的完整端点先验证属于当前入口，再构造相对导�
 | iam:employments   | 仅 UserInfo 的有效任职与 responsibility；不进入 ID Token。  |
 | iam:authorization | 仅 UserInfo，交付本 Client 的已发布有效角色和有效全局角色。 |
 
-自定义任职响应包含 `isPrimary`、`organization` 和 `position`。组织与责任目标共用 `code/name/type/path`，
-路径节点含 `level` 和 `distanceToTarget`，从根的层级 1 到目标自身的距离 0；岗位使用 `code/name`。
-角色去重并稳定排序，无可见角色的有效任职保留空角色数组。
+自定义任职响应包含 `isPrimary`、`organization` 和 `position`，组织与责任目标采用[共用资料结构](README.md#单点登录的共同处理)。角色去重并稳定排序。
 `iam:authorization` 的顶层和各任职仅含角色；不再返回权限点字段或空数组占位。Scope 名称和 allowedScopes 保持不变，无角色时返回空数组。接入应用须适配新响应，并清理或停用旧权限副本。
 不返回数据库 ID、密码、状态、软删除字段或时间戳，也不混入 Custom wire。
 UserInfo 按 Client 当前 allowedScopes 返回字段，范围变化也适用于旧 Token；原请求 scope 和调用方传入的 scope 均不改变该范围。ID Token 内容在签名后固定：显式映射 iss/aud/sub/iat/exp/auth_time、可选 nonce 及
 profile/phone；仅 sub 或 IAM 扩展 scope 不读取完整 Facts。没有 Claims Snapshot。
-可以返回已发布的旧角色；必要 Facts 缺失时整次交付失败。详见[事实契约](../features/sso/subject-delivery.md)。
+可以返回已发布的旧角色；必要 Facts 缺失时整次交付失败。详见[事实契约](../features/application-integration.md#用户信息共享)。
 
 ID Token 使用 RS256，JWKS 仅公开 kty/kid/alg/use/n/e，不交付私钥。
 
@@ -136,7 +130,7 @@ Discovery、JWKS、health 与退出不被 Client Maintenance 阻断；离线 ID 
 
 ## 兑换失败与重新登录
 
-Code 仅能消费一次，失败或结果未知后重新授权，不重放兑换请求。
+Code 兑换失败或结果未知时，按[共同处理流程](README.md#单点登录的共同处理)重新授权。
 Client 认证未通过或无法可靠定位原应用会话时，不消费 Code，也不撤销会话。
 认证并定位后，参数、Maintenance、协议、PKCE、issuer、期限等检查失败均可能终止原应用会话，Code 尚未消费也不例外。
 Public Client 的撤销门槛不要求先通过 PKCE；因此错误兑换也可能使同一应用会话的其他 Token 失效。
@@ -154,5 +148,5 @@ post_logout_redirect_uri 必须同时携带合法 hint，并精确匹配登记�
 
 确认退出终止的是提交时的当前 IAM 根登录；若确认页打开后更换了登录，退出的是新登录。
 取消只关闭本次确认，保留登录和 Token；重复提交确认会失败。依赖故障或撤销结果未知时保留 Cookie，不能据此认定退出成功。
-跨标签页操作不作协调，第三方仍须清除本地会话；离线 ID Token 不随在线退出失效。
+各标签页独立处理退出。接入方按[共同退出责任](README.md#单点登录的共同处理)处理本地会话与离线 ID Token。
 密钥轮换及过期 hint 的兼容限制见[运维手册](../releases/authentication-and-session.md#签名密钥兼容边界)。

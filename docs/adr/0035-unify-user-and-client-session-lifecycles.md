@@ -4,73 +4,55 @@ status: accepted
 
 # 以两类会话统一关系、配置与协议生命周期
 
-UserSession 表示根登录，ClientSession 表示固定根与 Client 的应用关系；协议独占 Code、Token 和续接状态。
-本页汇总统一会话及被其修订的现行决定，替代原讨论分项与重复的旧对象设计。首次升级与旧模型只通过历史版本追溯。
+UserSession 表示固定期限的根登录，ClientSession 表示该根与 Client 的应用关系。
+Kernel 持有关系、期限与精确撤销，协议持有 Code、Token 和续接。两类生命周期分开使同一关系可以跨协议复用，
+同时保留协议产物的原用途和确切实例绑定。
 
 ## 两类关系与精确终止
 
-UserSession 使用环境配置的固定期限，不滑动续根。授权可复用同一有效 ClientSession 并单调延长其期限，但不超过原根；
-Token 在签发时裁剪到自身、根和应用关系的期限，后续不随关系延长而续期。
-在线 Token 使用重新验证原根和原实例，根终止后拒绝新访问不依赖逐个子 Token 清理。
+根期限固定。授权可单调延长同一有效应用关系，期限受原根限制。签发时裁剪 Token 期限，后续延长应用关系时原 Token 的期限保持固定。
+在线访问观察原根与原实例，根终止即可阻止后续在线访问。已终止关系无法重开或让旧产物改绑新实例。
 
-同一有效应用关系可跨协议复用，protocol 是最近授权使用的标记，不是每枚产物的不可变用途。
-Code/Token 仍绑定原根、Client 和确切实例，已终止关系不能重开，未修改的旧 Code 不能按关系槽改绑后来创建的实例。
-中性生命周期与协议归属分开，避免误投对象或旧请求伤及其他主体和新实例。
-
-显式批量撤销先固定捕获集合，重试只处理该集合未完成的原实例；不宣称全局快照、不自动重扫纳入新会话，也不建立持久
-撤销任务。本人全部下线和本人改密保留当前根，但处理其应用关系，不豁免整棵子树。IAM 终止不保证第三方自建会话退出。
+显式批量撤销先固定原实例集合，重试只处理原批次未完成的实例。
+接受有界索引观察与部分结果，避免自动重扫波及新实例，也无需持久撤销任务。
+本人全部下线和改密保留当前根，该根的应用关系仍在终止范围内。
+第三方本地会话与已签离线 ID Token 仍遵守各自有效期和退出规则。
+[会话与可信观察](../../packages/session-kernel/README.md#会话与可信观察) · [列表与撤销](../../packages/session-kernel/README.md#列表与撤销)
 
 ## 配置维护与凭据
 
-Client 只选择一种 SSO 协议，SSO 启用意图与整体状态、Internal API 凭据分离；不把协议配置塞进通用扩展字段。
-启停、普通配置编辑、Secret 轮换和直接协议切换不自动永久撤销。切回后原期限内、未撤销且仍满足规则的旧访问可能恢复；
-想永久终止必须显式撤销，不能依靠配置版本比较。
+Client 只选择一种 SSO 协议，SSO 启用意图、Client 整体状态和 Internal 凭据分别维护。
+Maintenance 暂停后续通行，保留配置、关系和原绝对期限，恢复通行时继续使用仍有效的原关系。
+退出和显式撤销仍可执行，discovery、JWKS 和健康检查独立于在线通行门禁。在线门禁没有维护绕过参数。
+普通配置编辑、轮换、启停或协议切换保留既有关系，永久终止使用显式撤销。
+普通在线访问遇维护暂拒时保留可恢复 Cookie，已接受的在途观察可继续。接受传播窗口和期限继续流逝的代价。
+[Snapshot 获取与失效](0021-bind-protocol-runtime-cache-consistency-to-snapshot-acquisition.md)
 
-配置和凭据按本操作接受的观察使用，传播失败窗口由
-[ADR-0021](0021-bind-protocol-runtime-cache-consistency-to-snapshot-acquisition.md) 拥有。
-Secret 不主动保留新旧重叠期，但旧缓存仍可能被接受；两者不能混淆。
-
-当前 SSO Secret 直接保存可读取原文，`iam:admin` 可经独立授权及成功提交审计后读取，普通 DTO、日志和审计正文不包含原文。
-拒绝仅 hash 保存和新增恢复密文/专用加密 owner，接受数据库字段或备份读取者能取得凭据的代价。
-读取响应丢失可以主动重读，不要求重新轮换；读取本身不触发 Snapshot 失效。
-普通允许列表编辑不重新审核原 Code/续接已接受的授权事实，当前披露与固定 ID Token 内容由
-[ADR-0032](0032-consume-published-subject-facts-for-authorization.md) 拥有。
+SSO Secret 保存可读取原文，`iam:admin` 经窄授权且读取审计成功提交后可读取。
+选择可审计重读，省去专用恢复密文与加密 owner，接受具有数据库字段或备份读取权限者可取得凭据的代价。
+不设置主动重叠期，传播失败仍可能使旧缓存被接受。普通允许列表修改保留原 Code 与续接的授权事实，
+实际披露由 [ADR-0032](0032-consume-published-subject-facts-for-authorization.md) 决定。
+[应用配置与凭据](../features/application-integration.md#应用配置)
 
 ## 一次消费与失败作用
 
-Code 只消费一次。协议保留各自校验顺序，消费后失败或结果未知须重新授权，不恢复 Code、不重放成功结果。
-Custom SSO 选择这一边界以退出 reservation、lease、heartbeat、release 和持久恢复机制，接受响应丢失、未知外部作用及
-未交付对象；只对本次已知 Token 同步尽力补偿。OIDC 不增加 Token 补偿，失败时按下述规则尝试撤销原 ClientSession。
-这些策略不承诺最终自动回收。原 ORCAS 外部作用已按
-[ADR-0040](0040-retire-orcas-custom-sso-integration.md) 从 Custom SSO 退役。
+Code 只消费一次。失败或结果未知后重新授权，接受响应丢失和未交付作用，省去 reservation、lease 与持久恢复。
+OIDC 与 Custom 业务兑换完成适用认证并可靠定位原 ClientSession 后，后续失败有界尝试撤销原实例，
+覆盖 Code 缺失、校验或依赖失败，以及消费前遇到 Maintenance。撤销失败或未知按原结果报告，
+可能影响引用该实例的其他 Token，作用范围始终限于原实例。
 
-OIDC 与 Custom 业务兑换在适用 Client 认证通过并可靠定位原 ClientSession 后，后续失败在本请求内有界尝试撤销原实例。
-这包括明确缺失 Code、校验失败和暂态失败；普通在线访问遇 Maintenance 的可恢复拒绝不能豁免该兑换作用。
-尝试失败或未知不算撤销成功，也不扩张到其他根、其他 Client 或后来创建的实例。失败可能同时影响引用原实例的其他 Token。
+两协议分别维护认证、绑定和消费顺序。定位用于限定失败作用，定位成功本身无法证明 Code 曾签发。
+OIDC Public 的撤销资格取决于原归属定位，PKCE 仍用于兑换校验。
+Custom SSO 对本次已知 Token 尽力补偿，OIDC 的失败补偿按原 ClientSession 撤销处理。
+Custom 托管回调按自身的会话与用途绑定处理，保留共享 ClientSession。
+回调信任见 [ADR-0038](0038-derive-managed-sso-callback-from-redirect-origin.md)，ORCAS 外部作用见[退役历史](0040-retire-orcas-custom-sso-integration.md)。
 
-两协议 Code 使用无签名的三段定位，无消费墓碑。Custom 业务先通过 Secret 认证；OIDC Public 沿原 Client/根/实例归属门槛，
-不以前置 PKCE 成功作为撤销资格。接受掌握合法定位并满足适用认证者用不存在的 Code 触发原实例终止尝试的代价，
-不以“能定位”证明 Code 曾签发；格式、目标或归属不可信时只拒绝，不能猜测撤销范围。
-OIDC 取删后再做绑定校验的顺序与 Custom 的原消费前保护不能机械统一。
-
-Custom 托管交付保持独立策略：从 Code 绑定定位并验证原会话关系及用途，失败不撤销共享 ClientSession，已知本次 Token
-才做尽力补偿。它不增加浏览器根 Cookie 匹配门槛，IAM 内部取得 Secret 也不等于外部调用者通过了业务兑换认证；回调信任见
-[ADR-0038](0038-derive-managed-sso-callback-from-redirect-origin.md)。
-
-随机高熵 Token 使用摘要直接定位状态，内部 Token ID 与 bearer 分离，避免为额外正向 lookup 增加状态和请求成本。
-每次签发在写入前生成新的随机身份，不由外部指定或复用历史身份；结果未知时沿既定失败策略处理本次作用，不换身份重新签发。
-接受随机唯一性，不建立永久历史去重；活跃记录仍须防覆盖。
-SHA-256 适用于此类随机 bearer，不是密码哈希方案，也不承诺整个 Redis 泄露后的保密性。
-
-## 明确接受的限制
-
-不恢复旧模型在线双读，不引入强化的跨标签页/Cookie 响应仲裁或通用可靠清理执行器。
-在线关系失效不改写已经签发的离线 ID Token。官方套件有明确适用范围与偏离，不能包装为完整认证或本次测试已通过。
-
-对象、期限及观察见[Kernel 契约](../architecture/backend-architecture.md#session-runtime-与跨-app-边界)，固定批次见
-[Kernel 列表与撤销](../architecture/backend-architecture.md#kernel-列表与撤销)，调用方失败处理见
-[Custom SSO](../guides/custom-sso.md)与[OIDC](../guides/oidc.md)。
-复现入口见[命令页](../development/commands.md#oidc-协议套件)，维护责任见
-[统一维护手册](../releases/authentication-and-session.md)。
+使用随机 bearer 的摘要直接定位 Token 状态，内部 Token ID 与 bearer 分开。
+这省去正向 lookup，接受随机唯一性和活跃记录防覆盖的边界。未知结果按原签发处理，避免换身份重放。
+[Custom SSO](../guides/custom-sso.md) · [OIDC](../guides/oidc.md) · [协议验证入口](../engineering/commands.md#oidc-协议套件)
 
 历史来源：[ADR-0007 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0007-separate-versioned-custom-sso-client-configuration.md)、[ADR-0010 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0010-narrow-client-binding-to-oidc-lifecycle.md)、[ADR-0030 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0030-separate-protocol-validation-from-kernel-lifecycle.md)、[ADR-0031 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0031-consume-custom-sso-grants-before-issuance.md)、[ADR-0033 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0033-trust-issued-credentials-without-principal-session-revalidation.md)、[ADR-0034 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0034-locate-token-state-records-directly.md)、[ADR-0035 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0035-unify-user-and-client-session-lifecycles.md)。原始决定与后续修订按各版本追溯。
+
+通行与撤销的历史来源：[ADR-0012 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0012-model-client-maintenance-as-reversible-protocol-traffic-suspension.md)、[合并前 ADR-0012](https://github.com/cyy1998/shgas-iam/blob/cbfd4aa60fd6000662026b68576f1aa1409b6ce4/docs/adr/0012-model-client-maintenance-as-reversible-protocol-traffic-suspension.md)。
+
+固定历史版本：[整理前 ADR-0035](https://github.com/cyy1998/shgas-iam/blob/cbfd4aa60fd6000662026b68576f1aa1409b6ce4/docs/adr/0035-unify-user-and-client-session-lifecycles.md)。

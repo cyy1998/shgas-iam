@@ -62,14 +62,14 @@ flowchart LR
 Gateway 去除 `/api/iam` 前缀后转发。IAM 自身路由不统一使用 forward-auth；接入业务是否使用它，以各自 manifest 为准。
 经过 Gateway 不代表完成认证或授权。
 
-Worker 消费队列并承担周期恢复；其 HTTP 仅用于健康状态及可选 Bull Board。
-Ops 提供一次性 `iam-ops` 人工重建、修复和核验，按命令独立连接 PostgreSQL/Redis；需要重新唤醒的工作仍由匹配版本 consumer 收敛。
-Gateway 配置 API 是独立入口，首次发布可直连，通过固定 APISIX Admin API 目标发布配置；HTTP health 只表示服务就绪。
+Worker 承担队列消费与周期恢复，Ops 承担一次性人工维护，唤醒后的持久工作仍由匹配版本 consumer 收敛。
+两者的装配和关闭责任见[后端架构](backend-architecture.md#worker-运行与维护)。
+Gateway 配置 API 通过固定 APISIX Admin API 发布配置，首次发布可直连。
 
 ## 信任边界
 
 - **浏览器与后端**：按钮和菜单只是服务端权限的呈现，每次请求仍由后端授权。HR 范围按请求时数据库事实决定，
-  已获授权请求可能在并发撤权后完成，见[后端授权边界](backend-architecture.md#organization-responsibility-解析)。
+  已获授权请求可能在并发撤权后完成，见[后端授权边界](backend-architecture.md#管理授权)。
   页面如何使用授权结果见[前端权限呈现](frontend-architecture.md#管理路由与权限)。
 - **代理与服务**：host/path、真实 IP 和 header 的可信性依赖部署的代理、CIDR 和网络隔离，须按
   [Gateway 手册](../releases/apisix-gateway-release.md)核验，不能单凭转发头建立信任。
@@ -99,15 +99,15 @@ Facts 可以重建，登录态不能重造，访问屏障缺失时拒绝访问�
 
 ## 一致性边界
 
-| 场景               | 必须理解的边界                                                 | 详细规则                                                           |
-| ------------------ | -------------------------------------------------------------- | ------------------------------------------------------------------ |
-| 业务写入与后续传播 | 数据库提交后传播失败不代表回滚，不能自动重放写入               | [事务](backend-architecture.md#transactions-与-aftercommit)        |
-| 账号访问           | 每个业务操作固定一次许可，新操作重新检查；重启用不恢复旧代     | [Subject Access](backend-architecture.md#subject-access-barrier)   |
-| Client 配置        | 一次获取固定一份配置；传播成功影响后续获取，失败须显式修复     | [Snapshot](backend-architecture.md#client-snapshot)                |
-| 资料与授权披露     | 使用已发布事实，可能滞后；实际交付按当前披露范围裁剪           | [主体投影](backend-architecture.md#client-subject-projection)      |
-| 组织搜索           | 独立按组织发布，允许新建或删除延迟，不在每次查询核验覆盖率     | [组织发布](backend-architecture.md#organization-search-发布与核验) |
-| 会话与协议         | 根期限固定，子关系受根约束；撤销针对精确实例                   | [会话](backend-architecture.md#session-runtime-与跨-app-边界)      |
-| Gateway 发布       | 实例内串行、有界补偿，允许部分生效；无跨实例事务或崩溃自动恢复 | [Gateway](backend-architecture.md#网关配置发布)                    |
+| 场景               | 必须理解的边界                                                 | 详细规则                                                                            |
+| ------------------ | -------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| 业务写入与后续传播 | 数据库提交后传播失败不代表回滚，不能自动重放写入               | [事务](backend-architecture.md#transactions-与-aftercommit)                         |
+| 账号访问           | 每个业务操作固定一次许可，新操作重新检查；重启用不恢复旧代     | [Subject Access](../../packages/subject-access/README.md#单次操作许可)              |
+| Client 配置        | 一次获取固定一份配置；传播成功影响后续获取，失败须显式修复     | [Snapshot](../../packages/client-snapshot/README.md#读取与失效)                     |
+| 资料与授权披露     | 使用已发布事实，可能滞后；实际交付按当前披露范围裁剪           | [主体投影](../../packages/client-subject-projection/README.md#已发布-facts-与披露)  |
+| 组织搜索           | 独立按组织发布，允许新建或删除延迟，不在每次查询核验覆盖率     | [组织发布与核验](../../packages/documents/README.md#organization-search-发布与核验) |
+| 会话与协议         | 根期限固定，子关系受根约束；撤销针对精确实例                   | [会话](../../packages/session-kernel/README.md#会话与可信观察)                      |
+| Gateway 发布       | 实例内串行、有界补偿，允许部分生效；无跨实例事务或崩溃自动恢复 | [Gateway 发布与恢复](../../apps/gateway/README.md#故障与验证)                       |
 
 新增跨服务流程时明确事实归属、观察时点、失败前已生效作用和恢复负责人，再选择接口与验证方式。
 
@@ -115,8 +115,8 @@ Facts 可以重建，登录态不能重造，访问屏障缺失时拒绝访问�
 
 生产 Compose 分为 data、apps、gateway 和 observability。数据、应用与 Gateway 使用相同 project，观测独立；
 服务选择和现场检查见[部署手册](../releases/deployment.md)。本地验证不替代目标环境的停流、排空、恢复和放流。
-旧来源升级须使用匹配版本的流程，入口见[历史工具](../development/commands.md#历史数据维护工具)。
+旧来源升级须使用匹配版本的流程，入口见[历史工具](../releases/README.md#一次性迁移与旧版本)。
 
 应用日志经 Alloy 写入 Loki，Grafana 提供查询。APISIX OTLP 当前使用 debug exporter，尚不能作为持久化 trace backend。
 采集与排障见[日志手册](../releases/observability-system-logs.md)，字段和脱敏见
-[Logging](../development/backend-implementation.md#logging)。
+[系统日志](backend-architecture.md#系统日志)。

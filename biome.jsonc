@@ -15,7 +15,6 @@
       "!!apps/admin-api/static",
       "!!apps/api/static",
       "!!apps/sso/public/cap",
-      "!!docs/reviews",
       "!!openspec",
       "!!packages/db/src/migrations",
       "!!**/.cache",

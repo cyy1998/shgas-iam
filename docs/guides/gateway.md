@@ -1,11 +1,11 @@
 # 网关配置接入
 
-调用方保管完整 YAML，通过 Gateway API 校验、预览和发布。部署与人工恢复见[网关手册](../releases/apisix-gateway-release.md)。
+调用方保管完整 YAML，通过 Gateway API 校验、预览和发布。业务边界见[网关配置发布](../features/application-integration.md#网关配置发布)，部署与人工恢复见[网关手册](../releases/apisix-gateway-release.md)。
 
 ## 准备配置和凭据
 
 `scope` 使用 `<env>:<app>`，app 为 IAM Client code；两段以小写字母或数字开头，其余仅限小写字母、数字、连字符。
-Client 须启用且未删除，以其 Internal API Secret 作为 `apikey`。SSO Secret 和 APISIX Admin Key 不能替代。
+按 [Internal API 认证](README.md#internal-api-认证)准备凭据和服务地址。
 首次发布 `prod:iam` 需要 iam Client 的凭据，不能使用 iam-admin。
 
 scope 只匹配应用身份，环境仍由部署目标校验；当前没有域名/路径配额、插件审批或完整多租户隔离。

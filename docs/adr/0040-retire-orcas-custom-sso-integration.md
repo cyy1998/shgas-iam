@@ -4,10 +4,8 @@ status: accepted
 
 # 完整退役 Custom SSO 的 ORCAS 集成
 
-Type: decision
-Status: Current
-Last verified: 2026-10-10
-Next review: 2026-10-31
+本文作为 Historical 记录保留当时的退役边界及取舍。旧环境切换按匹配来源的[固定版本流程](../releases/README.md#一次性迁移与旧版本)执行。
+[整理前决策快照](https://github.com/cyy1998/shgas-iam/blob/cbfd4aa60fd6000662026b68576f1aa1409b6ce4/docs/adr/0040-retire-orcas-custom-sso-integration.md)
 
 本决定记录维护者已确认的退役边界。作出决定时，托管 Custom SSO 回调会在消费 Code 后按 Client 配置调用 ORCAS，
 并将外部身份引用保存到托管 Token；该背景解释本次收缩范围，不表示目标环境已经切换。

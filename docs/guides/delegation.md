@@ -1,11 +1,9 @@
 # 应用委托接入
 
-接入应用用自己的 Internal API Secret，通过 `apikey` 请求头管理和解析本应用的委托。
-业务规则见[应用委托](../features/delegation/client-delegation.md)。委托仅确定直接代办人，业务系统仍须检查其登录和操作权限。
+按 [Internal API 认证](README.md#internal-api-认证)准备凭据和访问路径，再管理和解析本应用的委托。
+业务规则见[应用委托](../features/client-delegation.md)。委托仅确定直接代办人，业务系统仍须检查其登录和操作权限。
 
 ## 解析代办人
-
-以下为 API 服务路径，经标准 Gateway 访问时加 `/api/iam` 前缀：
 
 ```http
 POST /internal/delegations/resolve

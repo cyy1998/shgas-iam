@@ -23,7 +23,7 @@ Repository ground rules:
 2. Treat implementation and executable tests as primary evidence. Use documents
    marked Current in docs/index.md as maintained guidance, then verify material
    behavior against code.
-3. Use docs/architecture/repository-map.md and the relevant Current architecture
+3. Use docs/engineering/repository-map.md and the relevant Current architecture
    document to identify the intended ownership and composition boundaries.
 4. Treat openspec/ and Historical or Stale documents only as historical clues,
    never as current facts.

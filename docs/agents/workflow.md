@@ -36,7 +36,7 @@ AFK 的逐轮复审要求由 [AFK 工作流](sandcastle-afk.md#双轴评审子�
 
 - 实施中按改动运行相关测试、受影响 workspace 的 typecheck；文档变化运行 `pnpm check:docs` 和 `git diff --check`。
   显式调用 `implement` 时，其中的完整测试指当前任务的完整受影响范围。
-- 格式与 lint 修复由[提交 Hook](../development/commands.md#commit-前检查)处理暂存文件；核对修复 diff，
+- 格式与 lint 修复由[提交 Hook](../engineering/commands.md#commit-前检查)处理暂存文件；核对修复 diff，
   按实际变化重跑失效的类型或行为检查。
 - 手动 tickets 不逐票要求 `verify:static`。最终集成内容交付前运行一次 `pnpm verify`，并按 Spec 和改动风险
   补齐相关 Integration、E2E、Gateway 等检查。小任务在准备本地合入时执行同样的最终验证。
@@ -45,8 +45,8 @@ AFK 的逐轮复审要求由 [AFK 工作流](sandcastle-afk.md#双轴评审子�
 - 必需检查失败或未执行时保持工作未完成。认定基线失败需在固定基线、可比环境复现并记录证据；
   维护者明确接受后才可作为例外，创建 issue 本身不构成豁免。
 
-命令见[命令入口](../development/commands.md)，验证的证明范围见[验证结果与交付](../development/testing.md#验证结果与交付)，
-临时 PostgreSQL/Redis 的创建与清理见[专用资源与隔离](../architecture/testing-architecture.md#专用资源与隔离)。
+命令见[命令入口](../engineering/commands.md)，验证的证明范围见[验证结果与交付](../engineering/testing.md#验证结果与交付)，
+临时 PostgreSQL/Redis 的创建与清理见[专用资源与隔离](../engineering/testing.md#专用资源与隔离)。
 
 ## 子代理与工作树收尾
 

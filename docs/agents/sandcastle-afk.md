@@ -4,6 +4,66 @@
 维护者运行 `pnpm sandcastle` 或明确要求启动该路径，即授权本次运行处理全仓 `ready-for-agent` backlog、
 在调用分支本地合入、评论及关闭已验收 tickets 和完成的父 Spec；配置执行器本身不等于启动它。
 
+## 启动与诊断
+
+宿主准备仓库工具链、Git、GitHub CLI 和运行中的 Docker。首次按 [环境模板](../../.sandcastle/.env.example)
+创建未跟踪的 `.sandcastle/.env`，填写 `GH_TOKEN`，选择作为交付目标的调用分支。GitHub 仓库固定为 `cyy1998/shgas-iam`。
+
+```bash
+pnpm sandcastle:build
+pnpm sandcastle:check
+pnpm sandcastle --smoke-docker
+pnpm sandcastle:smoke
+pnpm sandcastle
+pnpm sandcastle --iterations 2 --parallel 2 --model <model>
+```
+
+- `sandcastle:check` 预检工具、镜像和认证配置。Registry 配置通过预检后仍需实际拉取确认认证。
+- `--smoke-docker` 用两个 UID 1000 sandbox 验证共享 daemon、Compose/Buildx、host networking、浏览器、文件传输和准确清理。结果保存在 `.sandcastle/resources/docker-smoke-<run-id>/`。
+- `sandcastle:smoke` 先执行 Docker smoke，再用临时仓库和受控模型/GitHub 验证编排、真实提交 Hook、资源隔离、并行任务、交付与清理。工作流报告在 `.sandcastle/resources/workflow-smoke-<run-id>/`。Smoke 证明编排和接线，真实模型和 backlog 由实际 Spec 运行观察。
+- 默认尝试 1 个 Spec，同一 Spec 最多并行实施 4 张 ticket。`--iterations` / `SANDCASTLE_ITERATIONS` 与
+  `--parallel` / `SANDCASTLE_PARALLEL` 接受正整数，CLI 优先，恢复也计一次 Spec 额度。
+  `--model` / `SANDCASTLE_MODEL` 只覆盖 Planner 和最终评审协调者，CLI 优先。角色自身的模型和思考程度见 `.codex/agents/`。
+
+### 认证与宿主资源
+
+默认先执行 `codex login` 并使用文件凭据存储。`CODEX_AUTH_FILE` 可指定来源；使用 API 计费时设置 `CODEX_AUTH=api-key`
+与 `CODEX_API_KEY`。Runner 将本次 `auth.json` 复制到私有临时目录再挂载，退出前写回刷新结果。来源登录已变化或写回失败时保留来源并报告恢复目录。运行期间保持同一份宿主登录稳定，强制退出后核对启动时打印的恢复目录。
+
+私有 `docker.xuanyuan.run` 镜像使用显式 `SANDCASTLE_DOCKER_CONFIG_FILE`。相对路径从调用仓库根解析。
+配置仅接受顶层 `auths`、单一该 registry 以及非空 `auth`、`identitytoken` 或 `registrytoken`，
+宿主配置和 credential helper 不参与。每个执行器重验来源，创建私有副本，只读挂载到 `/home/agent/.docker/config.json`。
+调用者保管并保持源文件可读，runner 只回收自己的副本。来源路径及认证内容不写入日志、记录或错误。
+
+需要 Linux Docker Engine，或 Docker Desktop 4.34+ 开启 host networking 并关闭 Enhanced Container Isolation。
+共享 daemon 和 host network 提供宿主 Docker 管理与网络访问能力，project 名用于资源归属。
+运行前以实际执行用户检查 socket、Docker 工具和宿主 loopback，条件不满足时退出。
+测试走正式根入口，每条命令独立创建环境、使用动态端口并清理。资源规则见[专用资源与隔离](../engineering/testing.md#专用资源与隔离)。
+
+每个执行器以独占匿名卷保存 Linux root/workspace `node_modules`。宿主从 checkout 外的已知 pnpm 入口读取清单。
+容器验证卷和 workspace 覆盖后安装锁定依赖；新增 workspace 未覆盖时保留改动，在新执行器重新准备。
+容器内变更依赖后执行 `sh scripts/sandcastle/prepare-workspace.sh`。独占 Turbo cache 可写性在启动模型前验证。
+容器保留 `HUSKY=0` 安装并通过进程级 Git 配置复用仓库 Hook。浏览器与 [.sandcastle/Dockerfile](../../.sandcastle/Dockerfile)
+中的 Playwright 版本匹配，升级时重建镜像并复跑 smoke。依赖和 Hook 接线见[安装脚本](../../scripts/sandcastle/prepare-workspace.sh)
+与 [Hook 启动器](../../scripts/sandcastle/enable-git-hooks.sh)。
+
+### 恢复执行器资源
+
+普通失败或 Ctrl+C 先停止并等待准确的创建者 sandbox，再按其 registry 有界清理。无法确认停止时保留挂载、锁、
+私有认证副本和恢复记录。强杀或清理失败时使用准确执行器记录：
+
+```bash
+pnpm sandcastle --recover-executor .sandcastle/resources/executor-<run-id>/executor.json
+```
+
+执行器恢复覆盖 sandbox 及其登记资源，遵守显式 keep。需要清理单个保留环境时按其 `run.json` 执行
+`pnpm test:resources:cleanup --record <repo-relative-run.json>`。容器已移除时只按预先登记且核验归属的匿名卷 ID 回收，
+在用或归属未知时保留。旧 `run.lock` 仅在确认旧进程结束后移除。
+
+Docker smoke 异常后按对应报告里的准确 `project` 和 `composePath` 执行
+`docker compose --project-name <project> --file <composePath> down --volumes --remove-orphans --rmi local`，
+随后清理同一报告中的准确 `sandboxName`。按[Spec 交付与清理](#spec-交付与清理)另行恢复 Git 与 issue 进度。
+
 ## 分支与工作区
 
 AFK 在启动时固定调用分支，每个 Spec 使用独立集成分支与 worktree；每张 ticket 在自己的分支与 worktree 中，
@@ -87,8 +147,6 @@ GitHub Issues 保存需求、协作状态与恢复说明，Git 提交保存实�
 允许采用其他协作者的真实交付记录，不依赖清理后可能已被回收的实施提交对象。closed 状态本身不构成交付证明。
 未完成工作的恢复仍按当前 runner 作者、认领和严格 Git 对象核验保护归属，不因读取他人的交付事实而接管其工作树。
 
-运行环境、命令和当前资源限制见 [Sandcastle AFK 命令](../development/commands.md#sandcastle-afk)。
-
 ## 验证节奏
 
 通用的聚焦验证、提交 Hook、修复后的结果复用和基线失败处理按[工作流补充](workflow.md#验证节奏)执行。
@@ -98,14 +156,3 @@ GitHub Issues 保存需求、协作状态与恢复说明，Git 提交保存实�
   已确认测试决策补齐所需 Integration、E2E、Gateway 等检查；重复覆盖按范围去重。各票分支结果不替代最终组合验证。
 - 后续修复重跑失效检查，仍有效的通过证据可复用。普通交接记录实际命令、结果、对应候选与未执行项；必需检查失败或
   未执行、findings 尚未解决时保持未完成。本轮不通过反复新开会话重试，也不以清理成功或进程正常退出代替验收。
-
-专用测试资源遵守[资源隔离](../architecture/testing-architecture.md#专用资源与隔离)；
-AFK sandbox 通过共享宿主 daemon 和 host networking 调用正式根测试入口；每条命令使用动态 loopback 端口和独立 project。
-执行器只管理 Docker 接入、稳定运行记录与异常恢复，不预建或跨命令复用 PostgreSQL/Redis。
-外层先停止并等待准确的创建者 sandbox，再按本执行器 registry 复用公共清理入口，尊重显式 keep，最后关闭 worktree 与配置。
-无法确认创建者已停止时保留挂载和恢复记录，不先清理仍可能创建资源的执行器环境。恢复命令见[命令页](../development/commands.md#sandcastle-afk)。
-Linux 依赖通过每执行器匿名磁盘卷隔离，实际 workspace 的安装覆盖和版本检查见命令页。
-卷 ID 只记资源归属，在模型命令前保存；确认创建者停止后按准确容器和 ID 回收，不作为实施进度来源。
-私有 registry 的认证由调用者显式提供受支持的配置；执行器只读挂载私有副本，不自动继承宿主凭据。
-副本同样等创建者停止后回收；停止未确认时与其他恢复材料一起保留，使用同一准确执行器恢复入口。
-配置格式、源文件责任和回收边界统一见[AFK 命令](../development/commands.md#sandcastle-afk)。

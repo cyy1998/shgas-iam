@@ -40,7 +40,9 @@ APISIX 和可观测性配置属于仓库级运行和运维资产，不是 worksp
 
 ### 后端分层速查
 
-Apps 表用于定位入口；依赖方向、分层职责、命名和 wiring 统一见[后端架构](backend-architecture.md#核心依赖方向)，
+依赖方向、分层职责和装配写法见[后端架构与实现约定](backend-architecture.md#运行时分层与装配)。
+API 的 runtime、repositories、tx、services、use-cases、routes 与 middlewares 位于[装配入口](../../apps/api/src/composition/)。
+Use case 由 root 的 `useCases` 交给路由。Admin API 的入口与审计实现见 [Admin API README](../../apps/admin-api/README.md)。
 页面与请求边界见[前端架构](frontend-architecture.md)。
 
 ## 共享 Packages
@@ -68,34 +70,36 @@ Apps 表用于定位入口；依赖方向、分层职责、命名和 wiring 统�
 | `packages/filter-engine/src`             | 共享 Filter 校验与 JSONB 查询编译。                                                                                       |
 
 使用或新增共享代码前，按[共享契约与数据库](contracts-and-database.md)核对运行环境、公开出口、DTO 与事务边界；
-模块语义见[后端架构](backend-architecture.md)。操作入口见[运维手册](../releases/README.md)。
+跨模块规则见[后端架构](backend-architecture.md)。模块机制见
+[Documents](../../packages/documents/README.md)、[Delegation](../../packages/delegation/README.md)、[Filter](../../packages/filter-engine/README.md)、
+[Worker](../../apps/worker/README.md)和[Gateway](../../apps/gateway/README.md)。操作入口见[运维手册](../releases/README.md)。
 
 ## Root-owned Full-system E2E Workspace
 
 `e2e/system` 拥有完整系统测试的 Compose、镜像、seed、旅程和恢复工具。生成产物位于 `test-results/`，不提交。
-资源生命周期见[测试架构](testing-architecture.md#full-system-e2e)，命令见[开发命令](../development/commands.md#full-system-e2e)。
+资源生命周期见[测试架构](testing.md#full-system-e2e)，命令见[开发命令](commands.md#full-system-e2e)。
 
 ## 基础设施与仓库工具
 
-| 路径                         | 职责                                                                                                                                                          |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/gateway/`              | 独立 Gateway 配置 API 与应用镜像构建；常规配置发布经 HTTP。                                                                                                   |
-| `docker/`                    | 统一开发入口 `compose.dev.yaml`；生产按 data、apps、gateway、observability 与独立一次性 ops 编排，其中 apps 包含 Gateway API。                                |
-| `tmp/gateway-config/apisix/` | APISIX dev/prod config template 与 `manifests/<env>/<app>.yaml`；manifest 是调用方持有的 HTTP 发布输入。                                                      |
-| `docker/observability/`      | Alloy 日志/OTLP pipeline、Loki 配置、Grafana datasource/dashboard/alert provisioning，以及版本化 dashboards。                                                 |
-| `scripts/`                   | 文档和架构守卫、测试编排、验证入口及 tooling performance helpers。                                                                                            |
-| `scripts/sandcastle/`        | AFK runner、宿主预检与临时测试资源编排。                                                                                                                      |
-| `.sandcastle/`               | Sandcastle 规划、票级实施与验收、Spec 最终评审与修复 prompts、Dockerfile 和 `.env.example`；运行命令见[命令入口](../development/commands.md#sandcastle-afk)。 |
-| `.codex/agents/`             | Codex 调查角色、手动与 AFK 共用的三档实施者、Standards/Spec 只读评审角色；AFK runner 配置容器内 Spec 最终评审。                                               |
-| `.husky/`                    | Git hooks 与安装脚本。                                                                                                                                        |
-| `patches/`                   | pnpm 管理的固定依赖补丁；Sandcastle signal 适配允许宿主 runner 等待中断清理。                                                                                 |
+| 路径                         | 职责                                                                                                                                                       |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/gateway/`              | 独立 Gateway 配置 API 与应用镜像构建；常规配置发布经 HTTP。                                                                                                |
+| `docker/`                    | 统一开发入口 `compose.dev.yaml`；生产按 data、apps、gateway、observability 与独立一次性 ops 编排，其中 apps 包含 Gateway API。                             |
+| `tmp/gateway-config/apisix/` | APISIX dev/prod config template 与 `manifests/<env>/<app>.yaml`；manifest 是调用方持有的 HTTP 发布输入。                                                   |
+| `docker/observability/`      | Alloy 日志/OTLP pipeline、Loki 配置、Grafana datasource/dashboard/alert provisioning，以及版本化 dashboards。                                              |
+| `scripts/`                   | 文档和架构守卫、测试编排、验证入口及 tooling performance helpers。                                                                                         |
+| `scripts/sandcastle/`        | AFK runner、宿主预检与临时测试资源编排。                                                                                                                   |
+| `.sandcastle/`               | Sandcastle 规划、票级实施与验收、Spec 最终评审与修复 prompts、Dockerfile 和 `.env.example`；运行命令见[命令入口](../agents/sandcastle-afk.md#启动与诊断)。 |
+| `.codex/agents/`             | Codex 调查角色、手动与 AFK 共用的三档实施者、Standards/Spec 只读评审角色；AFK runner 配置容器内 Spec 最终评审。                                            |
+| `.husky/`                    | Git hooks 与安装脚本。                                                                                                                                     |
+| `patches/`                   | pnpm 管理的固定依赖补丁；Sandcastle signal 适配允许宿主 runner 等待中断清理。                                                                              |
 
 ## 文档与 Agent 工作流
 
 - `AGENTS.md`：仓库级指引入口；详细规则通过它链接到 `docs/`。
-- `docs/features/`：面向使用者的功能说明与业务规则。
-- `docs/guides/`：面向接入方的配置、调用示例与失败处理；字段和接口定义直接链接代码。
-- `docs/architecture/`、`docs/development/`：内部设计与工程约定；`docs/releases/`：运维操作。
+- `docs/features/` 供开发者和 AI 按功能查业务规则。
+- `docs/guides/` 供管理员和接入方查操作步骤、配置、调用示例与失败处理。
+- `docs/engineering/` 保存系统与模块设计、工程约定和验证入口。`docs/releases/` 保存运维操作。
   其他工作流、ADR 和历史记录以及文档状态见[文档索引](../index.md)。
 - `CONTEXT.md`：IAM 的稳定领域语言；长期架构决策位于 `docs/adr/`。
 - GitHub Issues：新建 spec、tickets 与跨会话状态的 tracker。仓库与操作约定见

@@ -8,4 +8,4 @@ SSO 遇到 Cap 无法启动、求解出错或超时时，用同源图片验证�
 
 图片验证通过后，凭证绑定原操作和目标，发短信时还绑定用途。服务端一次性消费凭证，业务操作继续执行既有认证和限流规则。采用请求频率限制，让用户在图片有效期内可以反复作答。图片方式可以独立停用，减少其故障对 Cap 的影响。
 
-用户行为见[登录与会话](../features/sso/login-and-session.md#登录与找回密码)，启停和现场检查见[登录与会话运维](../releases/authentication-and-session.md#图片验证码)。
+用户行为见[登录与会话](../features/login-and-session.md#登录与找回密码)，启停和现场检查见[登录与会话运维](../releases/authentication-and-session.md#图片验证码)。

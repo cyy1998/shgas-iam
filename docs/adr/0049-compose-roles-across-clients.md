@@ -16,7 +16,7 @@ status: accepted
 开始递归展开，保留组合角色自身，同一角色通过多条有效路径获得时合并为一个 Effective Role。
 
 暂停或停用角色保留包含关系，切断经过该角色的授予路径。其他有效路径继续授予其所达角色，重新启用后恢复该路径。
-所属 Client 的维护或停用继续按 [ADR-0012](0012-model-client-maintenance-as-reversible-protocol-traffic-suspension.md)
+所属 Client 的维护或停用继续按 [会话与 Client 通行决定](0035-unify-user-and-client-session-lifecycles.md#配置维护与凭据)
 控制应用通行，跨应用继承沿角色自身的状态计算。
 
 先对任职完整展开，再按每个结果角色的归属披露。中间角色对调用方不可见时，仍可通过它获得最终可见的角色。

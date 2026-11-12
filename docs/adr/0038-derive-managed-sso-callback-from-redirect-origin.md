@@ -34,15 +34,15 @@ IAM 代理路由的责任。
 
 ## 当前契约与历史
 
-配置、Secret 与类型变更见[Client 配置](../features/admin/client-sso-configuration.md)，
+配置、Secret 与类型变更见[Client 配置](../features/application-integration.md#应用配置)，
 接入步骤见[第三方指南](../guides/custom-sso.md)，授权和回调规则见
 [Custom SSO 接入](../guides/custom-sso.md)。
 
 同代转换与跨代升级的源识别、原凭据及非目标数据保护、失败恢复和人工发布责任仍按匹配版本历史流程执行，不能把
-任意旧来源套到当前维护。入口见[历史维护命令](../development/commands.md#历史数据维护工具)；
+任意旧来源套到当前维护。入口见[历史维护命令](../releases/README.md#一次性迁移与旧版本)；
 删除升级正文不表示对应工具退役或环境已经升级。
 
-ORCAS 不再参与 managed/business 配置区分；完整退役决定见
+ORCAS 不再参与 managed/business 配置区分；完整退役历史见
 [ADR-0040](0040-retire-orcas-custom-sso-integration.md)。
 
 历史来源：[ADR-0007 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0007-separate-versioned-custom-sso-client-configuration.md)、[ADR-0037 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0037-classify-managed-sso-callbacks-by-path.md)、[ADR-0038 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0038-derive-managed-sso-callback-from-redirect-origin.md)。原始决定与后续修订按各版本追溯。

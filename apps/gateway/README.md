@@ -157,6 +157,8 @@ apply 从 fresh read 到发布或补偿结束持有本实例执行权，重叠�
 客户端断连后原操作继续，不自动重试；没有收到结果时不能自动重发。
 人工先确认在途与迟到写入结束，核对并修复 APISIX，再重启 Gateway 并明确提交新请求。
 重启只清除阻断，不证明恢复完成；多实例和外部写者不受本实例串行控制。
+正常关闭在关闭预算内等待在途发布或补偿，超时强制关闭时结果可能未知。
+[运行时关闭](src/runtime.ts) · [发布生命周期测试](test-integration/runtime/publication-lifecycle.integration.test.ts)
 
 ```bash
 pnpm --filter @iam/gateway-apisix test:unit

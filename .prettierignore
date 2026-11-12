@@ -17,7 +17,6 @@ test-results/
 .sandcastle/resources/
 .sandcastle/worktrees/
 openspec/
-docs/reviews/
 packages/db/src/migrations/
 apps/sso/public/cap/
 apps/api/static/
