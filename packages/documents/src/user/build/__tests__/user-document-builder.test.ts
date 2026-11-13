@@ -70,23 +70,24 @@ test("builds one canonical document without management or duplicated business fi
   });
 });
 
-test("freezes effective employments at the half-open period and retains unavailable account documents", async () => {
+test("selects effective employments by status and retains unavailable account documents", async () => {
   const source = dataset({
     users: [user(1, { status: UserStatus.Disable })],
     positions: [position()],
     orgPathRows: [org()],
     employments: [
       employment(1, { isPrimary: true }),
-      employment(2, { startTime: new Date(at.getTime() + 1) }),
-      employment(3, { endTime: at }),
+      employment(2, { startTime: "2027-01-01" }),
+      employment(3, { endTime: "2026-04-01" }),
       employment(4, { status: EmploymentStatus.Pause }),
       employment(5, { status: EmploymentStatus.Disable }),
       employment(6, { isDelete: true }),
+      employment(7, { status: EmploymentStatus.Pending, startTime: "2027-01-01" }),
     ],
   });
   const result = await builder(source).buildOne({ userId: 1, sourceVersion: "7" });
   expect(result?.document?.status).toBe(UserStatus.Disable);
-  expect(result?.document?.employments).toHaveLength(1);
+  expect(result?.document?.employments).toHaveLength(3);
   expect(result?.document?.employments[0]).toMatchObject({ isPrimary: true, clientAuthorizations: [] });
 });
 
@@ -104,7 +105,7 @@ test.each([
     dataset({
       positions: [...positions],
       orgPathRows: [...orgPathRows],
-      employments: [employment(1, { status: EmploymentStatus.Pause })],
+      employments: [employment(1, { status: EmploymentStatus.Pending })],
     }),
   )
     .buildOne({ userId: 1, sourceVersion: "7" })

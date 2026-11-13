@@ -33,7 +33,7 @@ function employment(overrides: Record<string, unknown> = {}) {
     orgId: 2,
     isPrimary: true,
     status: EmploymentStatus.Enable,
-    startTime,
+    startTime: "2025-01-01",
     endTime: null,
     description: null,
     isDelete: false,
@@ -164,7 +164,8 @@ describe("Employment Lifecycle Transfer", () => {
     expect(clock.nowDate).toHaveBeenCalledTimes(1);
     expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledWith(4, {
       status: EmploymentStatus.Disable,
-      endTime: transactionTime,
+      startTime: "2025-01-01",
+      endTime: "2026-01-01",
       isPrimary: false,
     });
     expect(tx.employmentStore.createEmploymentRecord).toHaveBeenCalledWith({
@@ -172,7 +173,7 @@ describe("Employment Lifecycle Transfer", () => {
       orgId: 20,
       posId: 30,
       isPrimary: false,
-      startTime: transactionTime,
+      startTime: "2026-01-01",
       endTime: null,
       description: "transferred",
       status: EmploymentStatus.Enable,
@@ -185,8 +186,8 @@ describe("Employment Lifecycle Transfer", () => {
         details: expect.objectContaining({
           changed: true,
           newEmploymentId: 10,
-          endTime: transactionTime,
-          startTime: transactionTime,
+          endTime: "2026-01-01",
+          startTime: "2026-01-01",
           newIsPrimary: false,
           username: "zhangsan",
           orgCode: "SOURCE_ORG",
@@ -241,7 +242,7 @@ describe("Employment Lifecycle Transfer", () => {
     tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([
       employment({
         status: EmploymentStatus.Disable,
-        endTime: transactionTime,
+        endTime: "2026-01-01",
         isPrimary: false,
       }),
       employment({ id: 9 }),
@@ -469,7 +470,7 @@ describe("Employment Lifecycle Transfer", () => {
     const { tx, useCase } = createLifecycle();
     tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([
       employment(),
-      employment({ id: 9, isPrimary: true, status: EmploymentStatus.Disable, endTime: transactionTime }),
+      employment({ id: 9, isPrimary: true, status: EmploymentStatus.Disable, endTime: "2026-01-01" }),
     ]);
 
     const result = await useCase.execute({
@@ -522,7 +523,7 @@ describe("Employment Lifecycle Transfer", () => {
     const failure = new Error("dirty write failed");
     const committed = {
       sourceStatus: EmploymentStatus.Enable,
-      sourceEndTime: null as Date | null,
+      sourceEndTime: null as string | null,
       sourceIsPrimary: true,
       newEmploymentIds: [] as number[],
       auditActions: [] as string[],
@@ -547,7 +548,7 @@ describe("Employment Lifecycle Transfer", () => {
                 _id: number,
                 patch: {
                   status: EmploymentStatus.Disable;
-                  endTime: Date;
+                  endTime: string;
                   isPrimary: false;
                 },
               ) {

@@ -90,8 +90,8 @@ const historicalEmployment = {
   organization: { assignedOrg: rootB, fullOrgPath: [rootB], companyNodes: [rootB] },
   position: operationsPosition,
   status: EmploymentStatus.Disable,
-  startTime: "2025-10-01T08:00:00.000Z",
-  endTime: "2025-12-31T08:00:00.000Z",
+  startTime: "2025-10-01",
+  endTime: "2025-12-31",
   managementPath: "/employments?employmentId=43",
   allowedActions: createHrEmploymentAllowedActions(EmploymentStatus.Disable, false),
 };
@@ -105,7 +105,7 @@ const assignment = {
     position: financePosition,
   },
   status: OrganizationResponsibilityAssignmentStatus.Enable,
-  startTime: "2026-01-06T08:00:00.000Z",
+  startTime: "2026-01-06",
   endTime: null,
   allowedActions: {
     pause: allowed,
@@ -148,7 +148,7 @@ export async function mockHrManualApi(context: BrowserContext, origin: string) {
     ...employments[0],
     isPrimary,
     status: employmentStatus,
-    endTime: employmentStatus === EmploymentStatus.Disable ? endTime : null,
+    endTime: employmentStatus === EmploymentStatus.Disable ? "2026-01-08" : null,
     allowedActions: createHrEmploymentAllowedActions(employmentStatus, isPrimary),
   });
   const addedEmployments = () => [

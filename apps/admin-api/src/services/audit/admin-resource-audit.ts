@@ -21,9 +21,11 @@ export function buildAdminResourceAudit(
   target: AdminAuditTarget,
   details: AuditLogInput["details"],
   auditContext?: AdminAuditContext,
+  eventTime?: Date,
 ): AuditLogInput {
   return {
     ...resolveAuditContext(auditContext),
+    ...(eventTime !== undefined && { eventTime }),
     action,
     outcome: "success",
     targetType: target.type,

@@ -4,7 +4,6 @@ import type { ClientRepository } from "@admin-api/services/client/client.reposit
 import type {
   AdminEmploymentEffectiveRoleResolverPort,
   AdminEmploymentReaderPort,
-  AdminEmploymentStorePort,
 } from "@admin-api/services/employment/employment.port";
 import type { EmploymentRepository } from "@admin-api/services/employment/employment.repository";
 import type {
@@ -37,8 +36,11 @@ import type {
   ResignUserSessionRevocationPort,
   ResignUserTransactionPorts,
 } from "@admin-api/use-cases/employment/resign-user/resign-user.port";
+import type { UpdateEmploymentTransactionPorts } from "@admin-api/use-cases/employment/update-employment/update-employment.port";
 import type { CreateOrganizationResponsibilityAssignmentTransactionPorts } from "@admin-api/use-cases/organization-responsibility/create-assignment/create-assignment.port";
 import type { ManageOrganizationResponsibilityAssignmentLifecycleTransactionPorts } from "@admin-api/use-cases/organization-responsibility/manage-assignment-lifecycle/manage-assignment-lifecycle.port";
+import type { LockedEmploymentEndStorePort } from "@iam/assignment-resolution/employment-lifecycle";
+import type { LockedAssignmentEndStorePort } from "@iam/assignment-resolution/organization-responsibility/assignment-lifecycle";
 import type { RoleAssignmentResolver } from "@iam/assignment-resolution/role-assignment";
 import type { LoginRestriction } from "@iam/login-restriction";
 
@@ -58,7 +60,15 @@ type _AdminClientReaderPort = AssertAssignable<AdminClientReaderPort, ClientRepo
 type _AdminClientTransactionStorePort = AssertAssignable<AdminClientTransactionStorePort, ClientRepository>;
 
 type _AdminEmploymentReaderPort = AssertAssignable<AdminEmploymentReaderPort, EmploymentRepository>;
-type _AdminEmploymentStorePort = AssertAssignable<AdminEmploymentStorePort, EmploymentRepository>;
+type _UpdateEmploymentStorePort = AssertAssignable<
+  UpdateEmploymentTransactionPorts["employmentStore"],
+  EmploymentRepository
+>;
+type _LockedEmploymentEndStorePort = AssertAssignable<LockedEmploymentEndStorePort, EmploymentRepository>;
+type _LockedAssignmentEndStorePort = AssertAssignable<
+  LockedAssignmentEndStorePort,
+  OrganizationResponsibilityRepository
+>;
 type _AdminEmploymentEffectiveRoleResolverPort = AssertAssignable<
   AdminEmploymentEffectiveRoleResolverPort,
   RoleAssignmentResolver

@@ -8,6 +8,7 @@ import { ModalForm, ProForm, ProFormRadio, ProFormSelect, ProFormTextArea } from
 import { PositionStatus } from "@iam/contracts";
 import { Alert, Descriptions, message } from "antd";
 import { useRef } from "react";
+import EmploymentDateFields from "./EmploymentDateFields";
 
 type EmploymentTransferSource = Pick<
   EmploymentDetailVo,
@@ -68,6 +69,7 @@ export default function TransferModal({ open, employment, onOpenChange, onSucces
             newPosCode: values.newPosCode,
             isPrimary: values.isPrimary,
             description: values.description || null,
+            endTime: values.endTime || null,
           });
           if (outcome.changed) message.success("转岗成功");
           else message.info("无需修改");
@@ -147,6 +149,7 @@ export default function TransferModal({ open, employment, onOpenChange, onSucces
           { label: "非主任职", value: false },
         ]}
       />
+      <EmploymentDateFields transfer />
       <ProFormTextArea name="description" label="备注" />
     </ModalForm>
   );

@@ -7,7 +7,6 @@ import { createUserAdapter } from "@admin-api/routes/admin/user/user.adapter";
 import { createUserRoute } from "@admin-api/routes/admin/user/user.index";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import { createHrAdministrationScopeResolver } from "@admin-api/services/admin-authorization/hr-administration-scope.resolver";
-import type { AdminEmploymentTransactionPorts } from "@admin-api/services/employment/employment.port";
 import { createEmploymentService } from "@admin-api/services/employment/employment.service";
 import { createRoleService } from "@admin-api/services/role/role.service";
 import type { AdminUserServiceDeps, AdminUserTransactionPorts } from "@admin-api/services/user/user.port";
@@ -119,7 +118,7 @@ test("inherited Admin roles change later requests and HR scope follows only the 
       userId: hr!.id,
       orgId: organizationId,
       posId: positionId,
-      startTime: new Date("2026-01-01T00:00:00Z"),
+      startTime: "2026-01-01",
     })
     .returning({ id: employments.id });
   const [otherOrg] = await harness.db
@@ -141,7 +140,7 @@ test("inherited Admin roles change later requests and HR scope follows only the 
     userId: hr!.id,
     orgId: otherOrg!.id,
     posId: positionId,
-    startTime: new Date("2026-01-01T00:00:00Z"),
+    startTime: "2026-01-01",
   });
   const [hrRole, fullRole] = await harness.db
     .insert(roles)
@@ -271,16 +270,6 @@ function createSubjects() {
     employmentRepository: repositories.employment,
     roleAssignmentResolver,
     roleRepository: repositories.role,
-
-    uow: mapUnitOfWork(
-      unitOfWork,
-      (tx) =>
-        ({
-          employmentRepository: tx.repositories.employment,
-          auditService: tx.auditService,
-          userDocumentInvalidation: tx.userDocumentInvalidation,
-        }) satisfies AdminEmploymentTransactionPorts,
-    ),
   });
   const subjectAccessLifecycle: AdminUserServiceDeps["subjectAccessLifecycle"] = {
     async run() {
@@ -379,7 +368,7 @@ async function seedRoleDetailGraph(assignReviewer = true) {
       orgId: organization!.id,
       posId: position!.id,
       status: EmploymentStatus.Enable,
-      startTime: new Date("2026-01-01T00:00:00Z"),
+      startTime: "2026-01-01",
     })
     .returning();
   const seededRoles = await harness.db

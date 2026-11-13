@@ -5,7 +5,7 @@ import { createEmploymentRepository, createEmploymentVerifier } from "../../../s
 import { createPostgresTestHarness } from "../support/postgres-test-harness";
 
 const NOW = new Date("2026-08-11T12:00:00.000Z");
-const START = new Date("2026-08-01T00:00:00.000Z");
+const START = "2026-08-01";
 
 describe("Employment verifier PostgreSQL contract", () => {
   let harness: Awaited<ReturnType<typeof createPostgresTestHarness>>;
@@ -25,7 +25,7 @@ describe("Employment verifier PostgreSQL contract", () => {
   });
 
   test("returns success for a valid dataset", async () => {
-    await insertEmployment({ id: 1 });
+    await insertEmployment({ id: 1, status: EmploymentStatus.Pending, startTime: "2026-08-12", endTime: "2026-08-15" });
     const verifier = createVerifier();
 
     const report = await verifier.verify();
@@ -46,14 +46,9 @@ describe("Employment verifier PostgreSQL contract", () => {
     await insertEmployment({ id: 1 });
     await insertEmployment({ id: 2, status: 99, isDelete: true });
     await insertEmployment({ id: 3, status: 99 });
-    await insertEmployment({ id: 4, positionId: 21 });
+    await insertEmployment({ id: 4, positionId: 21, status: EmploymentStatus.Pending });
     await insertEmployment({ id: 5, organizationId: 31 });
-    await insertEmployment({ id: 6, endTime: new Date("2026-08-10T00:00:00.000Z") });
     await insertEmployment({ id: 7, status: EmploymentStatus.Disable });
-    await insertEmployment({ id: 8, status: EmploymentStatus.Disable, endTime: START });
-    await insertEmployment({ id: 9, startTime: new Date("2026-08-12T00:00:00.000Z") });
-    await insertEmployment({ id: 10, userId: 10 });
-    await insertEmployment({ id: 11, userId: 10, status: EmploymentStatus.Pause });
     await insertEmployment({ id: 12, userId: 11, isPrimary: true });
     await insertEmployment({
       id: 13,
@@ -61,7 +56,7 @@ describe("Employment verifier PostgreSQL contract", () => {
       positionId: 22,
       organizationId: 32,
       isPrimary: true,
-      status: EmploymentStatus.Pause,
+      status: EmploymentStatus.Pending,
     });
     const before = await readAllowedTables();
 
@@ -70,9 +65,9 @@ describe("Employment verifier PostgreSQL contract", () => {
     expect(report).toMatchObject({
       status: "failed",
       counts: {
-        employments: 13,
+        employments: 8,
         legacyTombstones: 1,
-        blockingEmployments: 11,
+        blockingEmployments: 6,
       },
     });
     expect(report.failures).toEqual([
@@ -92,29 +87,9 @@ describe("Employment verifier PostgreSQL contract", () => {
         employmentIds: [5],
       },
       {
-        code: "invalid-employment-period",
-        count: 1,
-        employmentIds: [8],
-      },
-      {
-        code: "open-employment-has-end-time",
-        count: 1,
-        employmentIds: [6],
-      },
-      {
         code: "ended-employment-missing-end-time",
         count: 1,
         employmentIds: [7],
-      },
-      {
-        code: "future-open-start-time",
-        count: 1,
-        employmentIds: [9],
-      },
-      {
-        code: "duplicate-open-employment",
-        count: 2,
-        employmentIds: [10, 11],
       },
       {
         code: "multiple-open-primary-employments",
@@ -165,8 +140,8 @@ describe("Employment verifier PostgreSQL contract", () => {
     organizationId?: number;
     isPrimary?: boolean;
     status?: number;
-    startTime?: Date;
-    endTime?: Date | null;
+    startTime?: string;
+    endTime?: string | null;
     isDelete?: boolean;
   }) {
     await harness.sql`
@@ -181,8 +156,8 @@ describe("Employment verifier PostgreSQL contract", () => {
         ${input.organizationId ?? 30},
         ${input.isPrimary ?? false},
         ${input.status ?? EmploymentStatus.Enable},
-        ${(input.startTime ?? START).toISOString()},
-        ${input.endTime?.toISOString() ?? null},
+        ${input.startTime ?? START},
+        ${input.endTime ?? null},
         ${input.isDelete ?? false}
       )
     `;

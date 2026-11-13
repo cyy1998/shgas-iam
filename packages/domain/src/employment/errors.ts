@@ -37,6 +37,15 @@ export class EmploymentOrganizationScopeMismatchError extends DomainBusinessErro
   }
 }
 
+export class EmploymentInvalidPeriodError extends DomainBusinessError {
+  constructor(message: string) {
+    super(message, {
+      code: ApiErrorCode.BadRequest,
+      httpStatus: DomainHttpStatus.BadRequest,
+    });
+  }
+}
+
 export class EmploymentUserDisabledError extends DomainBusinessError {
   constructor() {
     super("用户已停用，不能新增任职或转岗", {

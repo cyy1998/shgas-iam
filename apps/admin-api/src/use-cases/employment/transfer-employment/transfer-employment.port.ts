@@ -1,5 +1,9 @@
 import type { AdminAuditContext, AuditLogInput } from "@admin-api/services/audit/audit.context";
-import type { OrganizationResponsibilityAssignmentWriteTarget } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.type";
+import type {
+  EmploymentLifecycleDocumentChange,
+  LockedEmploymentEndStorePort,
+} from "@iam/assignment-resolution/employment-lifecycle";
+import type { OrganizationResponsibilityAssignmentWriteTarget } from "@iam/assignment-resolution/organization-responsibility/assignment-lifecycle";
 import type { EmploymentStatus } from "@iam/contracts";
 import type { Employment } from "@iam/domain/employment";
 import type { Organization } from "@iam/domain/organization";
@@ -13,8 +17,8 @@ export interface TransferEmploymentStorePort {
     posId: number;
     orgId: number;
     isPrimary: boolean;
-    startTime: Date;
-    endTime: Date | null;
+    startTime: string | null;
+    endTime: string | null;
     description: string | null;
     status: EmploymentStatus;
   }) => Promise<Employment>;
@@ -33,11 +37,7 @@ export interface TransferEmploymentStorePort {
   lockEmploymentsByIds: (ids: readonly number[]) => Promise<Employment[]>;
   updateEmploymentRecord: (
     id: number,
-    patch: {
-      status?: EmploymentStatus.Disable;
-      endTime?: Date;
-      isPrimary: false;
-    },
+    patch: Parameters<LockedEmploymentEndStorePort["updateEmploymentRecord"]>[1] | { isPrimary: false },
   ) => Promise<Employment>;
 }
 
@@ -70,18 +70,7 @@ export interface TransferEmploymentTransactionPorts {
     }) => Promise<boolean>;
   };
   userDocumentInvalidation: {
-    recordChanges: (
-      changes: readonly (
-        | {
-            readonly kind: "employment";
-            readonly userId: number;
-          }
-        | {
-            readonly kind: "organization-responsibility-assignment";
-            readonly userId: number;
-          }
-      )[],
-    ) => Promise<void>;
+    recordChanges: (changes: readonly EmploymentLifecycleDocumentChange[]) => Promise<void>;
   };
 }
 

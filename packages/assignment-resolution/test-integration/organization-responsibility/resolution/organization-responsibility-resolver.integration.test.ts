@@ -38,11 +38,12 @@ afterAll(async () => {
 });
 
 describe("OrganizationResponsibilityResolver", () => {
-  test("resolves stable Effective responsibilities and cross-tree reverse holders", async () => {
+  test("resolves effective responsibilities and cross-tree reverse holders after the Employment cutoff", async () => {
     await seedOrganizationTree(harness!.db);
     await harness!.db
       .insert(employments)
       .values([employment({ id: 100, userId: 900, orgId: 12 }), employment({ id: 101, userId: 901, orgId: 11 })]);
+    await harness!.db.update(employments).set({ endTime: "2026-08-19" }).where(eq(employments.id, 100));
     await harness!.db.insert(organizationResponsibilityAssignments).values([
       assignment({
         employmentId: 100,
@@ -430,7 +431,7 @@ describe("OrganizationResponsibilityResolver", () => {
       .values([employment({ id: 100, userId: 900, orgId: 12 }), employment({ id: 101, userId: 901, orgId: 12 })]);
     await harness!.db
       .update(employments)
-      .set({ status: EmploymentStatus.Disable, endTime: new Date("2026-08-19T00:00:00.000Z") })
+      .set({ status: EmploymentStatus.Disable, endTime: "2026-08-19" })
       .where(eq(employments.id, 101));
     await harness!.db.insert(organizationResponsibilityAssignments).values([
       assignment({
@@ -459,6 +460,16 @@ describe("OrganizationResponsibilityResolver", () => {
       name: "OrganizationResponsibilityIntegrityError",
       reason: "holder-employment-not-open",
     });
+
+    await harness!.db
+      .update(employments)
+      .set({ status: EmploymentStatus.Pending, startTime: "2026-08-20", endTime: null })
+      .where(eq(employments.id, 101));
+    const reverse = await resolver.resolveHolderEmploymentIds({
+      targetOrganizationIds: [20],
+      at,
+    });
+    expect(reverse).toEqual([100]);
   });
 
   test.each([OrganizationResponsibilityAssignmentStatus.Enable, OrganizationResponsibilityAssignmentStatus.Pause])(
@@ -569,7 +580,7 @@ function employment(input: { id: number; userId: number; orgId: number }) {
     ...input,
     posId: input.id,
     status: EmploymentStatus.Enable,
-    startTime: new Date("2026-01-01T00:00:00.000Z"),
+    startTime: "2026-01-01",
   };
 }
 

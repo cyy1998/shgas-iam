@@ -14,7 +14,7 @@ function employment(overrides: Record<string, unknown> = {}) {
     orgId: 2,
     isPrimary: true,
     status: EmploymentStatus.Enable,
-    startTime,
+    startTime: "2025-01-01",
     endTime: null,
     description: null,
     isDelete: false,
@@ -59,7 +59,8 @@ describe("Employment Lifecycle End", () => {
 
     expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledWith(4, {
       status: EmploymentStatus.Disable,
-      endTime: transactionTime,
+      startTime: "2025-01-01",
+      endTime: "2026-01-01",
       isPrimary: false,
     });
     expect(tx.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(
@@ -67,7 +68,7 @@ describe("Employment Lifecycle End", () => {
         action: "admin.employment.end",
         targetId: 4,
         details: expect.objectContaining({
-          endTime: transactionTime,
+          endTime: "2026-01-01",
           fromStatus: EmploymentStatus.Enable,
           toStatus: EmploymentStatus.Disable,
         }),
@@ -96,14 +97,15 @@ describe("Employment Lifecycle End", () => {
 
     expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledWith(4, {
       status: EmploymentStatus.Disable,
-      endTime: transactionTime,
+      startTime: "2025-01-01",
+      endTime: "2026-01-01",
       isPrimary: false,
     });
   });
 
   test("treats an already ended Employment as an idempotent success", async () => {
     const { tx, useCase } = createLifecycle();
-    const originalEndTime = new Date("2025-12-01T00:00:00.000Z");
+    const originalEndTime = "2025-12-01";
     tx.employmentStore.lockEmploymentLifecycleContextById.mockResolvedValueOnce({
       employment: employment({
         status: EmploymentStatus.Disable,
@@ -129,7 +131,7 @@ describe("Employment Lifecycle End", () => {
     const failure = new Error("dirty write failed");
     const committed = {
       status: EmploymentStatus.Enable,
-      endTime: null as Date | null,
+      endTime: null as string | null,
       isPrimary: true,
       auditActions: [] as string[],
       dirtyUserIds: [] as number[],
@@ -151,7 +153,7 @@ describe("Employment Lifecycle End", () => {
                 _id: number,
                 patch: {
                   status: EmploymentStatus.Disable;
-                  endTime: Date;
+                  endTime: string;
                   isPrimary: false;
                 },
               ) {

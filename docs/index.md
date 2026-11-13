@@ -97,7 +97,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [ADR-0005](adr/0005-keep-live-login-state-in-redis.md)                                  | decision | Current    | 2026-09-21    | 2026-10-31  | Redis 实时状态与生命周期时间权威。                                                                         |
 | [ADR-0006](adr/0006-elevate-user-subject-identifier.md)                                 | decision | Current    | 2026-09-21    | 2026-10-31  | 跨协议稳定 Subject Identifier 归属 IAM 身份域。                                                            |
 | [ADR-0009](adr/0009-adopt-canonical-test-collections.md)                                | decision | Current    | 2026-10-29    | 2026-11-29  | 按真实资源归类、workspace 声明与临时环境；root 工具链改用一次性验证。                                      |
-| [ADR-0011](adr/0011-model-employment-as-an-immutable-tenure-lifecycle.md)               | decision | Current    | 2026-09-21    | 2026-10-31  | 不可重开的任职期、父完整性与全库诊断。                                                                     |
+| [ADR-0011](adr/0011-model-employment-as-an-immutable-tenure-lifecycle.md)               | decision | Current    | 2026-11-13    | 2026-12-13  | 按日有效期、未启用状态、自动启停、日期修正、责任联动与旧数据迁移。                                         |
 | [ADR-0013](adr/0013-guard-login-page-reentry-with-authentication-continuation.md)       | decision | Current    | 2026-09-21    | 2026-10-31  | 认证续接、已有根复用与新鲜认证边界。                                                                       |
 | [ADR-0014](adr/0014-model-organization-responsibility-as-employment-bound-fact.md)      | decision | Current    | 2026-10-21    | 2026-11-21  | 任职绑定的非授权责任事实与并发边界。                                                                       |
 | [ADR-0017](adr/0017-centralize-admin-role-policy-with-request-time-scope.md)            | decision | Current    | 2026-09-21    | 2026-10-31  | Admin 请求时授权与 HR 双端范围。                                                                           |
@@ -183,14 +183,14 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 
 面向开发者与 AI，按功能快速查找权限、生命周期、跨功能影响和失败语义。
 
-| Document                                                    | Type    | Status  | Last verified | Next review | Notes                                          |
-| ----------------------------------------------------------- | ------- | ------- | ------------- | ----------- | ---------------------------------------------- |
-| [功能与业务规则入口](features/README.md)                    | feature | Current | 2026-10-26    | 2026-11-26  | 按业务功能定位规则与操作指南。                 |
-| [用户、组织与任职](features/directory-management.md)        | feature | Current | 2026-10-25    | 2026-11-25  | 用户档案、任职、离职、组织责任与目录搜索。     |
-| [角色、管理授权与审计](features/roles-and-authorization.md) | feature | Current | 2026-10-25    | 2026-11-25  | 角色授予与披露、Admin 授权、HR 范围和审计。    |
-| [登录与会话](features/login-and-session.md)                 | feature | Current | 2026-10-25    | 2026-11-25  | 身份验证、找回密码、改密、登录限制与会话撤销。 |
-| [应用接入](features/application-integration.md)             | feature | Current | 2026-10-25    | 2026-11-25  | 应用配置与凭据、单点登录、资料披露与网关发布。 |
-| [应用委托](features/client-delegation.md)                   | feature | Current | 2026-10-25    | 2026-11-25  | 委托范围、期间冲突、生命周期与直接代办人解析。 |
+| Document                                                    | Type    | Status  | Last verified | Next review | Notes                                                |
+| ----------------------------------------------------------- | ------- | ------- | ------------- | ----------- | ---------------------------------------------------- |
+| [功能与业务规则入口](features/README.md)                    | feature | Current | 2026-10-26    | 2026-11-26  | 按业务功能定位规则与操作指南。                       |
+| [用户、组织与任职](features/directory-management.md)        | feature | Current | 2026-11-13    | 2026-12-13  | 用户档案、按日任职有效期、离职、组织责任与目录搜索。 |
+| [角色、管理授权与审计](features/roles-and-authorization.md) | feature | Current | 2026-10-25    | 2026-11-25  | 角色授予与披露、Admin 授权、HR 范围和审计。          |
+| [登录与会话](features/login-and-session.md)                 | feature | Current | 2026-10-25    | 2026-11-25  | 身份验证、找回密码、改密、登录限制与会话撤销。       |
+| [应用接入](features/application-integration.md)             | feature | Current | 2026-10-25    | 2026-11-25  | 应用配置与凭据、单点登录、资料披露与网关发布。       |
+| [应用委托](features/client-delegation.md)                   | feature | Current | 2026-10-25    | 2026-11-25  | 委托范围、期间冲突、生命周期与直接代办人解析。       |
 
 </details>
 
@@ -232,13 +232,13 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 
 从操作入口选择任务，核对必要前提、完成标准和失败处理；接口定义见代码，实现边界见架构文档。
 
-| Document                                             | Type    | Status  | Last verified | Next review | Notes                                                               |
-| ---------------------------------------------------- | ------- | ------- | ------------- | ----------- | ------------------------------------------------------------------- |
-| [运维操作入口](releases/README.md)                   | runbook | Current | 2026-10-26    | 2026-11-26  | 任务导航、简短通用约定、独立迁移与历史版本入口。                    |
-| [网关管理](releases/apisix-gateway-release.md)       | runbook | Current | 2026-10-25    | 2026-11-25  | 首次配置、HTTP 发布、数据面检查和失败恢复。                         |
-| [登录与会话](releases/authentication-and-session.md) | runbook | Current | 2026-11-02    | 2026-12-02  | 密码配置、OIDC 双入口与密钥、会话清理和 Snapshot 恢复。             |
-| [数据维护](releases/data-maintenance.md)             | runbook | Current | 2026-11-03    | 2026-12-03  | Document、Subject Access 的两阶段修复、全量重建及完整核验。         |
-| [部署与发布](releases/deployment.md)                 | runbook | Current | 2026-11-06    | 2026-12-06  | 首次部署、常规更新、正式迁移、一次性 Ops 制品、兼容回退与定向停止。 |
-| [日志与排障](releases/observability-system-logs.md)  | runbook | Current | 2026-10-25    | 2026-11-25  | 日志栈、Grafana、Trace 关联、告警与采集恢复。                       |
+| Document                                             | Type    | Status  | Last verified | Next review | Notes                                                           |
+| ---------------------------------------------------- | ------- | ------- | ------------- | ----------- | --------------------------------------------------------------- |
+| [运维操作入口](releases/README.md)                   | runbook | Current | 2026-11-13    | 2026-12-13  | 任务导航、简短通用约定、独立迁移与历史版本入口。                |
+| [网关管理](releases/apisix-gateway-release.md)       | runbook | Current | 2026-10-25    | 2026-11-25  | 首次配置、HTTP 发布、数据面检查和失败恢复。                     |
+| [登录与会话](releases/authentication-and-session.md) | runbook | Current | 2026-11-02    | 2026-12-02  | 密码配置、OIDC 双入口与密钥、会话清理和 Snapshot 恢复。         |
+| [数据维护](releases/data-maintenance.md)             | runbook | Current | 2026-11-03    | 2026-12-03  | Document、Subject Access 的两阶段修复、全量重建及完整核验。     |
+| [部署与发布](releases/deployment.md)                 | runbook | Current | 2026-11-13    | 2026-12-13  | 首次部署、常规更新、任职有效期协调发布、一次性 Ops 制品与回退。 |
+| [日志与排障](releases/observability-system-logs.md)  | runbook | Current | 2026-10-25    | 2026-11-25  | 日志栈、Grafana、Trace 关联、告警与采集恢复。                   |
 
 </details>

@@ -666,6 +666,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     const expected = new Error("parent audit unavailable");
     const parentPause = createChangeEmploymentAvailabilityUseCase({
+      clock: { nowDate: () => fixture.now },
       uow: mapUnitOfWork(createUnitOfWork(fixture.now, enqueueRebuildJobs), (tx) => ({
         employmentStore: tx.repositories.employment,
         organizationReader: tx.repositories.organization,
@@ -818,7 +819,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         .select({ endTime: employments.endTime, status: employments.status })
         .from(employments)
         .where(eq(employments.id, fixture.employmentId)),
-    ).toEqual([{ endTime: fixture.now, status: EmploymentStatus.Disable }]);
+    ).toEqual([{ endTime: "2026-08-20", status: EmploymentStatus.Disable }]);
     expect(
       await harness!.db
         .select({
@@ -935,7 +936,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         orgId: fixture.targetOrganizationId,
         posId: outsidePosition!.id,
         status: EmploymentStatus.Enable,
-        startTime: fixture.now,
+        startTime: "2026-08-19",
       })
       .returning({ id: employments.id });
     const enqueueRebuildJobs = mock(async () => ({
@@ -1006,14 +1007,14 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     await harness!.db
       .update(employments)
       .set({
-        endTime: fixture.now,
+        endTime: "2026-08-20",
         status: EmploymentStatus.Disable,
       })
       .where(eq(employments.id, fixture.employmentId));
     await harness!.db
       .update(employments)
       .set({
-        endTime: fixture.now,
+        endTime: "2026-08-20",
         orgId: fixture.targetOrganizationId,
         status: EmploymentStatus.Disable,
       })
@@ -1088,7 +1089,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         orgId: fixture.holderRootOrganizationId,
         posId: secondResignationPosition!.id,
         status: EmploymentStatus.Enable,
-        startTime: fixture.now,
+        startTime: "2026-08-20",
       })
       .returning({ id: employments.id });
     const enqueueRebuildJobs = mock(async () => ({
@@ -1182,12 +1183,12 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         .orderBy(employments.id),
     ).toEqual([
       {
-        endTime: fixture.now,
+        endTime: "2026-08-20",
         isPrimary: false,
         status: EmploymentStatus.Disable,
       },
       {
-        endTime: fixture.now,
+        endTime: "2026-08-20",
         isPrimary: false,
         status: EmploymentStatus.Disable,
       },
@@ -1476,6 +1477,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     const releaseParent = deferred<void>();
     const parentUnitOfWork = createUnitOfWork(fixture.now, enqueueRebuildJobs);
     const parentPause = createChangeEmploymentAvailabilityUseCase({
+      clock: { nowDate: () => fixture.now },
       uow: mapUnitOfWork(parentUnitOfWork, (tx) => ({
         employmentStore: tx.repositories.employment,
         organizationReader: tx.repositories.organization,
@@ -2023,7 +2025,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         orgId: fixture.holderRootOrganizationId,
         posId: outsidePosition!.id,
         status: EmploymentStatus.Enable,
-        startTime: fixture.now,
+        startTime: "2026-08-20",
       })
       .returning();
     const [visibleCrossRoot, holderOnly, targetOnly, visibleHead, outside, ended] = await harness!.db
@@ -2429,7 +2431,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
           orgId: fixture.holderRootOrganizationId,
           posId: actorPosition!.id,
           status: EmploymentStatus.Enable,
-          startTime: new Date("2020-01-01T00:00:00Z"),
+          startTime: "2020-01-01",
         })
         .returning();
       const [client] = await harness!.db
@@ -2676,7 +2678,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
 
     await harness!.db
       .update(employments)
-      .set({ status: EmploymentStatus.Pause })
+      .set({ status: EmploymentStatus.Pending })
       .where(eq(employments.id, fixture.employmentId));
     await expectAssignmentReadsToFailClosed(service, created.result.id, "parent lifecycle is invalid");
 
@@ -2940,6 +2942,7 @@ function createEmploymentAvailabilityUseCase(
 ) {
   const unitOfWork = createUnitOfWork(now, enqueueRebuildJobs);
   return createChangeEmploymentAvailabilityUseCase({
+    clock: { nowDate: () => now },
     uow: mapUnitOfWork(unitOfWork, (tx) => ({
       employmentStore: tx.repositories.employment,
       organizationReader: tx.repositories.organization,
@@ -3126,14 +3129,14 @@ async function seedScenario() {
         orgId: holderOrganization!.id,
         posId: position!.id,
         status: EmploymentStatus.Enable,
-        startTime: now,
+        startTime: "2026-08-19",
       },
       {
         userId: secondUser!.id,
         orgId: holderOrganization!.id,
         posId: secondPosition!.id,
         status: EmploymentStatus.Enable,
-        startTime: now,
+        startTime: "2026-08-19",
       },
     ])
     .returning();
@@ -3252,7 +3255,7 @@ async function seedOutsideEmployment(now: Date) {
       orgId: outsideOrganization!.id,
       posId: outsidePosition!.id,
       status: EmploymentStatus.Enable,
-      startTime: now,
+      startTime: "2026-08-19",
     })
     .returning();
   return {

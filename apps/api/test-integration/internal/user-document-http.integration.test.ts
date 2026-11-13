@@ -558,7 +558,7 @@ function createCompositeRolePublicationFixture() {
       { id: 1, posCode: "PRIMARY", posName: "Primary" },
       { id: 2, posCode: "SECONDARY", posName: "Secondary" },
     ]);
-    const startTime = new Date("2026-10-01T00:00:00Z");
+    const startTime = "2026-10-01";
     await pg.db.insert(employments).values([
       { id: 1, userId: 1, orgId: 2, posId: 1, startTime, isPrimary: true },
       { id: 2, userId: 1, orgId: 1, posId: 2, startTime },

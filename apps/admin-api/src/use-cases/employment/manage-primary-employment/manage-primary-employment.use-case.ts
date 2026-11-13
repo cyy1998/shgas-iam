@@ -1,7 +1,7 @@
 import { createAdminMutation } from "@admin-api/services/admin-mutation/admin-mutation";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildEmploymentAudit } from "@admin-api/services/audit/events/employment.audit";
-import { EmploymentStatus } from "@iam/contracts";
+import { isOpenEmploymentStatus } from "@iam/contracts";
 import { EmploymentNotEditableError, EmploymentNotFoundError } from "@iam/domain/employment";
 import type { ManagePrimaryEmploymentUseCaseDeps } from "./manage-primary-employment.port";
 import type { ManagePrimaryEmploymentInput, ManagePrimaryEmploymentOptions } from "./manage-primary-employment.type";
@@ -37,7 +37,7 @@ export function createManagePrimaryEmploymentUseCase(deps: ManagePrimaryEmployme
       if (employment === undefined || employment.isDelete) throw notFound();
       if (authorization?.kind === "scoped" && !authorization.organizationIds.includes(employment.orgId))
         throw notFound();
-      if (employment.status !== EmploymentStatus.Enable && employment.status !== EmploymentStatus.Pause) {
+      if (!isOpenEmploymentStatus(employment.status)) {
         throw new EmploymentNotEditableError("已结束任职不能调整主任职");
       }
 
@@ -46,12 +46,7 @@ export function createManagePrimaryEmploymentUseCase(deps: ManagePrimaryEmployme
       const clearedPrimaryEmploymentIds: number[] = [];
       if (changed && nextPrimary) {
         for (const row of selected) {
-          if (
-            row.id === employment.id ||
-            row.isDelete ||
-            !row.isPrimary ||
-            (row.status !== EmploymentStatus.Enable && row.status !== EmploymentStatus.Pause)
-          ) {
+          if (row.id === employment.id || row.isDelete || !row.isPrimary || !isOpenEmploymentStatus(row.status)) {
             continue;
           }
           const updated = await tx.employmentStore.updateEmploymentRecord(row.id, { isPrimary: false });

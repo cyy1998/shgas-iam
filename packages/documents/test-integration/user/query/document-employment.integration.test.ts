@@ -24,7 +24,7 @@ import {
   users,
 } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import {
   createUserDocumentSearchRepository,
   createUserDocumentSearchService,
@@ -62,8 +62,12 @@ afterAll(async () => {
 });
 
 describe("User Document v4 Employment tracer", () => {
-  test("publishes only strict Effective Employment facts without internal identity or period fields", async () => {
+  test("publishes Effective Employment by status even after the cutoff, with no identity or period fields", async () => {
     await seedEmploymentProjectionGraph();
+    await harness!.db
+      .update(employments)
+      .set({ status: EmploymentStatus.Enable })
+      .where(inArray(employments.id, [103, 104]));
     const { builder } = createTracer();
 
     const candidate = await builder.buildOne({ userId: 1, sourceVersion: "1" });
@@ -105,6 +109,46 @@ describe("User Document v4 Employment tracer", () => {
             name: "Position effective",
           },
           clientAuthorizations: [{ clientCode: "profile-client", roles: [{ code: "role-effective" }] }],
+          responsibilities: [],
+        },
+        {
+          isPrimary: false,
+          organization: {
+            code: "org-3",
+            name: "Organization 3",
+            type: OrganizationType.Department,
+            path: [
+              {
+                code: "org-3",
+                name: "Organization 3",
+                type: OrganizationType.Department,
+                level: OrganizationLevel.One,
+                distanceToTarget: 0,
+              },
+            ],
+          },
+          position: { code: "position-3", name: "Position 3" },
+          clientAuthorizations: [],
+          responsibilities: [],
+        },
+        {
+          isPrimary: false,
+          organization: {
+            code: "org-4",
+            name: "Organization 4",
+            type: OrganizationType.Department,
+            path: [
+              {
+                code: "org-4",
+                name: "Organization 4",
+                type: OrganizationType.Department,
+                level: OrganizationLevel.One,
+                distanceToTarget: 0,
+              },
+            ],
+          },
+          position: { code: "position-4", name: "Position 4" },
+          clientAuthorizations: [],
           responsibilities: [],
         },
         {
@@ -636,9 +680,9 @@ async function seedEmploymentProjectionGraph() {
       employment({ id: 100, offset: 0, isPrimary: true }),
       employment({ id: 101, offset: 1, status: EmploymentStatus.Pause }),
       employment({ id: 102, offset: 2, status: EmploymentStatus.Disable }),
-      employment({ id: 103, offset: 3, startTime: new Date("2026-08-23T00:00:00.000Z") }),
-      employment({ id: 104, offset: 4, endTime: new Date("2026-08-21T00:00:00.000Z") }),
-      employment({ id: 105, offset: 5, endTime: new Date("2026-08-23T00:00:00.000Z") }),
+      employment({ id: 103, offset: 3, status: EmploymentStatus.Pause, startTime: "2026-08-23" }),
+      employment({ id: 104, offset: 4, status: EmploymentStatus.Pause, endTime: "2026-08-21" }),
+      employment({ id: 105, offset: 5, endTime: "2026-08-23" }),
       employment({ id: 106, offset: 6, isDelete: true }),
     ]);
   await harness!.db.insert(clients).values({
@@ -734,8 +778,8 @@ function employment(input: {
   offset: number;
   status?: EmploymentStatus;
   isPrimary?: boolean;
-  startTime?: Date;
-  endTime?: Date;
+  startTime?: string;
+  endTime?: string;
   isDelete?: boolean;
 }) {
   return {
@@ -745,7 +789,7 @@ function employment(input: {
     orgId: 20 + input.offset,
     status: input.status ?? EmploymentStatus.Enable,
     isPrimary: input.isPrimary ?? false,
-    startTime: input.startTime ?? new Date("2026-08-21T00:00:00.000Z"),
+    startTime: input.startTime ?? "2026-08-01",
     endTime: input.endTime ?? null,
     isDelete: input.isDelete ?? false,
   };

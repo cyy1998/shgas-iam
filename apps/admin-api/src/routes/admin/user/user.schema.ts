@@ -17,6 +17,7 @@ const resourceOutOfScopeDecision = {
 
 const outOfScopeEmploymentAllowedActions = {
   editDescription: resourceOutOfScopeDecision,
+  editPeriod: resourceOutOfScopeDecision,
   pause: resourceOutOfScopeDecision,
   resume: resourceOutOfScopeDecision,
   end: resourceOutOfScopeDecision,

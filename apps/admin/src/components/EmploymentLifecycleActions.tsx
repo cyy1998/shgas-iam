@@ -38,7 +38,7 @@ export default function EmploymentLifecycleActions({
   if (employment.status === EmploymentStatus.Disable) return null;
 
   const availabilityAction =
-    employment.status === EmploymentStatus.Enable ? (
+    employment.status !== EmploymentStatus.Pause ? (
       <AuthorizationActionButton
         decision={decisions.pause}
         onClick={() => {
@@ -71,7 +71,7 @@ export default function EmploymentLifecycleActions({
             employment.organization.companyNodes.at(-1)?.orgCode ?? employment.organization.assignedOrg.orgCode;
           try {
             const outcome = await resumeEmployment(employment.id, expectedAncestorOrgCode);
-            if (outcome.changed) message.success("已恢复任职；责任任命不会自动恢复，请在组织责任中逐条确认后恢复");
+            if (outcome.changed) message.success("已按有效期处理恢复，请查看任职状态。责任任命须单独恢复。");
             else message.info("无需修改");
             await onSuccess();
           } catch (error) {

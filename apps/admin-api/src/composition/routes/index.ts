@@ -66,6 +66,7 @@ export function createAdminApiRouteComposition(options: CreateAdminApiRoutesOpti
     managePrimaryEmployment: useCases.employment.managePrimaryEmployment,
     resignUser: useCases.employment.resignUser,
     transferEmployment: useCases.employment.transferEmployment,
+    updateEmployment: useCases.employment.updateEmployment,
   });
   const organizationAdapter = createOrganizationAdapter({
     organizationService: services.organization,

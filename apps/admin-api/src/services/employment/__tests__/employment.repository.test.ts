@@ -12,7 +12,7 @@ function uniqueViolation() {
 }
 
 describe("createEmploymentRepository", () => {
-  test("finds duplicate open employments across enabled and paused states", async () => {
+  test("finds duplicate open employments across all three open states", async () => {
     const findFirst = mock(async () => undefined);
     const repository = createEmploymentRepository({
       query: { employments: { findFirst } },
@@ -25,7 +25,7 @@ describe("createEmploymentRepository", () => {
         userId: 1,
         orgId: 2,
         posId: 3,
-        status: { in: [EmploymentStatus.Enable, EmploymentStatus.Pause] },
+        status: { in: [EmploymentStatus.Enable, EmploymentStatus.Pause, EmploymentStatus.Pending] },
         isDelete: false,
       },
     });
@@ -45,7 +45,7 @@ describe("createEmploymentRepository", () => {
         orgId: 2,
         posId: 3,
         id: { ne: 4 },
-        status: { in: [EmploymentStatus.Enable, EmploymentStatus.Pause] },
+        status: { in: [EmploymentStatus.Enable, EmploymentStatus.Pause, EmploymentStatus.Pending] },
         isDelete: false,
       },
     });
@@ -64,8 +64,15 @@ describe("createEmploymentRepository", () => {
     expect(query.sql).toContain('"employment"."user_id" = $1');
     expect(query.sql).toContain('"employment"."is_primary" = $2');
     expect(query.sql).toContain('"employment"."is_delete" = $3');
-    expect(query.sql).toContain('"employment"."status" in ($4, $5)');
-    expect(query.params).toEqual([1, true, false, EmploymentStatus.Enable, EmploymentStatus.Pause]);
+    expect(query.sql).toContain('"employment"."status" in ($4, $5, $6)');
+    expect(query.params).toEqual([
+      1,
+      true,
+      false,
+      EmploymentStatus.Enable,
+      EmploymentStatus.Pause,
+      EmploymentStatus.Pending,
+    ]);
   });
 
   test("selects only Open Employment IDs without writing their lifecycle facts", async () => {
@@ -78,8 +85,8 @@ describe("createEmploymentRepository", () => {
     const query = renderQuery(where.mock.calls[0]?.[0]);
     expect(query.sql).toContain('"employment"."user_id" = $1');
     expect(query.sql).toContain('"employment"."is_delete" = $2');
-    expect(query.sql).toContain('"employment"."status" in ($3, $4)');
-    expect(query.params).toEqual([1, false, EmploymentStatus.Enable, EmploymentStatus.Pause]);
+    expect(query.sql).toContain('"employment"."status" in ($3, $4, $5)');
+    expect(query.params).toEqual([1, false, EmploymentStatus.Enable, EmploymentStatus.Pause, EmploymentStatus.Pending]);
   });
 
   test("maps active relationship unique violations to employment already exists", async () => {
@@ -96,7 +103,7 @@ describe("createEmploymentRepository", () => {
         orgId: 2,
         posId: 3,
         isPrimary: false,
-        startTime: new Date("2026-01-01T00:00:00.000Z"),
+        startTime: "2026-01-01",
         endTime: null,
         description: null,
         status: EmploymentStatus.Enable,

@@ -7,6 +7,8 @@ export interface CreateEmploymentInput {
   expectedAncestorOrgCode?: string;
   posCode: string;
   isPrimary?: boolean;
+  startTime?: string | null;
+  endTime?: string | null;
   description?: string | null;
 }
 

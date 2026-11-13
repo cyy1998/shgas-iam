@@ -66,7 +66,7 @@ const employment = {
   orgId: 3,
   isPrimary: true,
   status: EmploymentStatus.Enable,
-  startTime: now,
+  startTime: "2026-08-20",
   endTime: null,
   description: null,
   isDelete: false,
@@ -122,7 +122,7 @@ const assignment = {
     position: { id: 8, posCode: "OPS-LEAD", posName: "运营负责人" },
   },
   status: OrganizationResponsibilityAssignmentStatus.Pause,
-  startTime: now,
+  startTime: "2026-08-20",
   endTime: null,
 };
 

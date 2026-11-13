@@ -2,13 +2,21 @@ import { createAdminMutation } from "@admin-api/services/admin-mutation/admin-mu
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildEmploymentAudit } from "@admin-api/services/audit/events/employment.audit";
 import { assertEmploymentOrganizationScope } from "@admin-api/services/employment/employment-organization-scope";
-import { EmploymentStatus, OrganizationStatus, PositionStatus, UserStatus } from "@iam/contracts";
+import { endLockedEmployments } from "@iam/assignment-resolution/employment-lifecycle";
+import {
+  EmploymentStatus,
+  isOpenEmploymentStatus,
+  OrganizationStatus,
+  PositionStatus,
+  UserStatus,
+} from "@iam/contracts";
 import {
   EmploymentAlreadyExistsError,
   EmploymentNotEditableError,
   EmploymentNotFoundError,
   EmploymentUserDisabledError,
 } from "@iam/domain/employment";
+import { assertValidEmploymentPeriod, getEmploymentDate } from "@iam/domain/employment/employment-date";
 import { OrganizationNotFoundError } from "@iam/domain/organization";
 import { PositionNotFoundError } from "@iam/domain/position";
 import { UserNotFoundError } from "@iam/domain/user";
@@ -47,7 +55,7 @@ export function createTransferEmploymentUseCase(deps: TransferEmploymentUseCaseD
         employmentId: employment.id,
         command: "end",
       });
-      if (employment.status !== EmploymentStatus.Enable && employment.status !== EmploymentStatus.Pause) {
+      if (!isOpenEmploymentStatus(employment.status)) {
         throw new EmploymentNotEditableError("当前任职状态不允许转岗");
       }
       const [user, organization, position] = await Promise.all([
@@ -95,28 +103,30 @@ export function createTransferEmploymentUseCase(deps: TransferEmploymentUseCaseD
       }
 
       const transactionTime = deps.clock.nowDate();
-      const updated = await tx.employmentStore.updateEmploymentRecord(employment.id, {
-        status: EmploymentStatus.Disable,
-        endTime: transactionTime,
-        isPrimary: false,
+      const operationDate = getEmploymentDate(transactionTime);
+      const newPeriod = { startTime: operationDate, endTime: input.endTime ?? null };
+      assertValidEmploymentPeriod(newPeriod);
+      const {
+        documentChanges,
+        endedEmployments: [ended],
+      } = await endLockedEmployments(tx.employmentStore, {
+        userId: employment.userId,
+        employments: [employment],
+        operationDate,
+        endSelectedAssignments: () =>
+          tx.responsibilityParentLifecycle.endOpenAssignmentsForEmployment({
+            action: "transfer",
+            selectedAssignments,
+            auditContext,
+            employmentId: employment.id,
+            endTime: transactionTime,
+          }),
       });
-      if (updated == null) throw new Error("Locked Employment transfer returned no row");
-      const assignmentChanged = await tx.responsibilityParentLifecycle.endOpenAssignmentsForEmployment({
-        action: "transfer",
-        selectedAssignments,
-        auditContext,
-        employmentId: employment.id,
-        endTime: transactionTime,
-      });
+      if (!ended) throw new Error("Locked Employment transfer did not end the selected row");
       const clearedPrimaryEmploymentIds: number[] = [];
       if (input.isPrimary) {
         for (const row of selected) {
-          if (
-            row.id === employment.id ||
-            row.isDelete ||
-            !row.isPrimary ||
-            (row.status !== EmploymentStatus.Enable && row.status !== EmploymentStatus.Pause)
-          ) {
+          if (row.id === employment.id || row.isDelete || !row.isPrimary || !isOpenEmploymentStatus(row.status)) {
             continue;
           }
           const cleared = await tx.employmentStore.updateEmploymentRecord(row.id, { isPrimary: false });
@@ -129,8 +139,7 @@ export function createTransferEmploymentUseCase(deps: TransferEmploymentUseCaseD
         posId: position.id,
         orgId: organization.id,
         isPrimary: input.isPrimary,
-        startTime: transactionTime,
-        endTime: null,
+        ...newPeriod,
         description: input.description ?? null,
         status: EmploymentStatus.Enable,
       });
@@ -165,23 +174,19 @@ export function createTransferEmploymentUseCase(deps: TransferEmploymentUseCaseD
             newOrgCode: organization.orgCode,
             newPosCode: position.posCode,
             newIsPrimary: input.isPrimary,
-            endTime: transactionTime,
-            startTime: transactionTime,
+            fromStatus: ended.fromStatus,
+            toStatus: ended.toStatus,
+            previousPeriod: ended.previousPeriod,
+            finalPeriod: ended.finalPeriod,
+            newPeriod,
+            endTime: operationDate,
+            startTime: operationDate,
           },
           auditContext,
+          transactionTime,
         ),
       );
-      await tx.userDocumentInvalidation.recordChanges([
-        { kind: "employment", userId: employment.userId },
-        ...(assignmentChanged
-          ? [
-              {
-                kind: "organization-responsibility-assignment" as const,
-                userId: employment.userId,
-              },
-            ]
-          : []),
-      ]);
+      await tx.userDocumentInvalidation.recordChanges(documentChanges);
       return { changed: true, result: { id: created.id } };
     }, adminAuditTransactionOptions(auditContext));
   }

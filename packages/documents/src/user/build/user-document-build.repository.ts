@@ -1,9 +1,8 @@
 import type { EffectiveRole } from "@iam/assignment-resolution/role-assignment";
-import { RoleType } from "@iam/contracts";
+import { OPEN_EMPLOYMENT_STATUSES, RoleType } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import type { Employment, Organization, User } from "@iam/db/schema";
 import { clients, employments, organizationClosures, organizations, positions, roles, users } from "@iam/db/schema";
-import { OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
 import { and, eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { UserDocumentSourceIntegrityError } from "./document-build.error";

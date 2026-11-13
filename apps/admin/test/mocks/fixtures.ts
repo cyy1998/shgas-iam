@@ -196,7 +196,7 @@ export const adminEmployments = [
     },
     isPrimary: true,
     status: EmploymentStatus.Enable,
-    startTime: "2026-01-05T08:00:00.000Z",
+    startTime: "2026-01-05",
     endTime: null,
     description: null,
     createTime: "2026-01-05T08:00:00.000Z",
@@ -216,7 +216,11 @@ export function createHrEmploymentAllowedActions(
   const isOpen = status !== EmploymentStatus.Disable;
   return {
     editDescription: status === EmploymentStatus.Disable ? stateNotActionableAction : allowedAction,
-    pause: status === EmploymentStatus.Enable ? allowedAction : stateNotActionableAction,
+    editPeriod: status === EmploymentStatus.Disable ? stateNotActionableAction : allowedAction,
+    pause:
+      status === EmploymentStatus.Enable || status === EmploymentStatus.Pending
+        ? allowedAction
+        : stateNotActionableAction,
     resume: status === EmploymentStatus.Pause ? allowedAction : stateNotActionableAction,
     end: status === EmploymentStatus.Disable ? stateNotActionableAction : allowedAction,
     transfer: isOpen ? allowedAction : stateNotActionableAction,
@@ -229,6 +233,7 @@ export const hrEmploymentAllowedActions = createHrEmploymentAllowedActions(Emplo
 
 export const adminEmploymentAllowedActions = {
   editDescription: allowedAction,
+  editPeriod: allowedAction,
   pause: allowedAction,
   resume: {
     allowed: false,

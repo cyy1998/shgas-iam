@@ -43,7 +43,7 @@ function employmentRecord() {
     orgId: 10,
     isPrimary: true,
     status: EmploymentStatus.Enable,
-    startTime: createdAt,
+    startTime: "2026-01-01",
     endTime: null,
     description: null,
   };
@@ -161,6 +161,7 @@ describe("admin route VO mappers", () => {
         },
         {
           editDescription: { allowed: true, reason: null },
+          editPeriod: { allowed: true, reason: null },
           pause: { allowed: true, reason: null },
           resume: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
           end: { allowed: true, reason: null },

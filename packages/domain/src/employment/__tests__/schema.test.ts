@@ -57,7 +57,7 @@ function employmentInput(
     orgId: assignedOrg.id,
     isPrimary: true,
     status: EmploymentStatus.Enable,
-    startTime: now,
+    startTime: "2026-01-01",
     endTime: null,
     description: null,
     user: {
@@ -116,7 +116,7 @@ describe("toEmploymentDto", () => {
       orgId: 3,
       isPrimary: true,
       status: EmploymentStatus.Enable,
-      startTime: now,
+      startTime: "2026-01-01",
       endTime: null,
       description: null,
       user: { id: 100, username: "u001", name: "用户", mobile: "13800000000", wxId: null },

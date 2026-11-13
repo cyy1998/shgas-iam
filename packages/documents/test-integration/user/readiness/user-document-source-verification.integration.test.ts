@@ -88,7 +88,7 @@ describe("User Document source verification", () => {
         orgId: 20,
         posId: 100 + id,
         status: EmploymentStatus.Enable,
-        startTime: new Date("2026-01-01T00:00:00.000Z"),
+        startTime: "2026-01-01",
       })),
     );
   }

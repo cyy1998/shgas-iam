@@ -1,10 +1,8 @@
 import { Buffer } from "node:buffer";
 import { randomBytes } from "node:crypto";
-import type { APIRequestContext, Page } from "@playwright/test";
+import type { APIRequestContext } from "@playwright/test";
 import { expect } from "@playwright/test";
 import {
-  expectRpcMutationResult,
-  isSuccessfulRpcResponse,
   loginToAdmin,
   openClientSection,
   readClientSsoDetail,
@@ -12,17 +10,11 @@ import {
   saveUnchangedClientProtocolConfiguration,
   updateClientStatus,
 } from "./src/admin-client-journey.ts";
+import { exerciseDatedEmployment } from "./src/employment-journey.ts";
 import { requireEnvironment } from "./src/environment.ts";
 import { test } from "./src/gateway-test.ts";
 import { createPkceS256Pair, receiveOidcAuthorizationCallback } from "./src/oidc-rp.ts";
-import {
-  createHeadResponsibility,
-  oidcUserInfoHasResponsibility,
-  readInternalResponsibility,
-  waitForInternalResponsibility,
-} from "./src/responsibility-journey.ts";
 import { exerciseUnifiedSession } from "./src/unified-session-journey.ts";
-import { waitForEmploymentSearchVisibility } from "./src/user-document-search-journey.ts";
 
 test("public RP observes reversible Maintenance and permanent logout through real Admin control", async ({
   browser,
@@ -35,8 +27,8 @@ test("public RP observes reversible Maintenance and permanent logout through rea
   const clientId = requireEnvironment("IAM_E2E_OIDC_CLIENT_CODE");
   const redirectUri = requireEnvironment("IAM_E2E_OIDC_REDIRECT_URI");
   const internalApiKey = requireEnvironment("IAM_E2E_INTERNAL_API_KEY");
-  const responsibilityTargetOrganizationCode = requireEnvironment("IAM_E2E_RESPONSIBILITY_TARGET_ORGANIZATION_CODE");
-  const responsibilityHolderPositionCode = requireEnvironment("IAM_E2E_RESPONSIBILITY_HOLDER_POSITION_CODE");
+  const organizationCode = requireEnvironment("IAM_E2E_ORGANIZATION_CODE");
+  const positionCode = requireEnvironment("IAM_E2E_GLOBAL_POSITION_CODE");
   const adminContext = await browser.newContext({ baseURL: origin });
   const adminPage = await adminContext.newPage();
   await loginToAdmin({
@@ -50,15 +42,6 @@ test("public RP observes reversible Maintenance and permanent logout through rea
   await runClientProtocolLifecycleAction(adminPage, "禁用");
   await runClientProtocolLifecycleAction(adminPage, "启用");
   expect(await readClientSsoDetail(adminPage, clientId)).toMatchObject({ ssoEnabled: true });
-  await ensureHeadResponsibility({
-    adminPage,
-    adminUsername,
-    internalApiKey,
-    origin,
-    request,
-    positionCode: responsibilityHolderPositionCode,
-    targetOrganizationCode: responsibilityTargetOrganizationCode,
-  });
 
   const pkce = createPkceS256Pair();
   const state = randomBytes(24).toString("base64url");
@@ -122,43 +105,6 @@ test("public RP observes reversible Maintenance and permanent logout through rea
 
   await saveUnchangedClientProtocolConfiguration(adminPage, clientId, "oidc", true);
 
-  await pauseEmploymentWithResponsibilityCascade(adminPage, adminUsername, responsibilityHolderPositionCode);
-  await waitForInternalResponsibility({
-    adminUsername,
-    expected: false,
-    internalApiKey,
-    origin,
-    positionCode: responsibilityHolderPositionCode,
-    request,
-    targetOrganizationCode: responsibilityTargetOrganizationCode,
-  });
-  await waitForEmploymentSearchVisibility({
-    adminUsername,
-    expected: false,
-    internalApiKey,
-    origin,
-    positionCode: responsibilityHolderPositionCode,
-    request,
-  });
-  await resumeEmployment(adminPage, adminUsername, responsibilityHolderPositionCode);
-  await waitForEmploymentSearchVisibility({
-    adminUsername,
-    expected: true,
-    internalApiKey,
-    origin,
-    positionCode: responsibilityHolderPositionCode,
-    request,
-  });
-  await endEmployment(adminPage, adminUsername, responsibilityHolderPositionCode);
-  await waitForEmploymentSearchVisibility({
-    adminUsername,
-    expected: false,
-    internalApiKey,
-    origin,
-    positionCode: responsibilityHolderPositionCode,
-    request,
-  });
-
   const tokenForm = {
     client_id: clientId,
     code,
@@ -208,12 +154,18 @@ test("public RP observes reversible Maintenance and permanent logout through rea
   expect(userInfoResponse.status()).toBe(200);
   const userInfo = (await userInfoResponse.json()) as Record<string, unknown>;
   expect(userInfo).toMatchObject({ preferred_username: adminUsername });
-  expect(
-    oidcUserInfoHasResponsibility(userInfo, {
-      positionCode: responsibilityHolderPositionCode,
-      targetOrganizationCode: responsibilityTargetOrganizationCode,
-    }),
-  ).toBe(false);
+  await test.step("Publish dated Employment and its responsibility through Internal and UserInfo", async () => {
+    await exerciseDatedEmployment({
+      adminPage,
+      adminUsername,
+      internalApiKey,
+      origin,
+      request,
+      organizationCode,
+      positionCode,
+      accessToken: String(tokens.access_token),
+    });
+  });
   expect(userInfo.sub).toEqual(expect.any(String));
   const idToken = readJwtClaims(String(tokens.id_token));
   expect(idToken).toMatchObject({
@@ -331,78 +283,4 @@ function readJwtClaims(token: string) {
   const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Record<string, unknown>;
   if (typeof claims.sub !== "string") throw new Error("OIDC ID Token did not contain a subject");
   return claims;
-}
-
-async function ensureHeadResponsibility(input: {
-  adminPage: Page;
-  adminUsername: string;
-  internalApiKey: string;
-  origin: string;
-  positionCode: string;
-  request: APIRequestContext;
-  targetOrganizationCode: string;
-}) {
-  if (await readInternalResponsibility(input)) return;
-  await createHeadResponsibility({
-    adminUsername: input.adminUsername,
-    origin: input.origin,
-    page: input.adminPage,
-    positionCode: input.positionCode,
-    targetOrganizationCode: input.targetOrganizationCode,
-  });
-  await waitForInternalResponsibility({ ...input, expected: true });
-}
-
-async function pauseEmploymentWithResponsibilityCascade(
-  adminPage: Page,
-  adminUsername: string,
-  responsibilityHolderPositionCode: string,
-) {
-  await adminPage.goto("/iam-admin/employments");
-  const row = findEmploymentRow(adminPage, adminUsername, responsibilityHolderPositionCode);
-  const drawer = await openEmploymentDrawer(adminPage, row, adminUsername, responsibilityHolderPositionCode);
-  await drawer.getByRole("button", { name: /暂\s*停/u }).click();
-  const confirmation = adminPage.getByRole("dialog", {
-    name: "确认暂停该任职？",
-  });
-  const paused = adminPage.waitForResponse((response) => isSuccessfulRpcResponse(response, "admin.employment.pause"));
-  await confirmation.getByRole("button", { name: "暂停任职" }).click();
-  await expectRpcMutationResult(await paused, "admin.employment.pause", true, null);
-}
-
-async function resumeEmployment(adminPage: Page, adminUsername: string, positionCode: string) {
-  await adminPage.goto("/iam-admin/employments");
-  const row = findEmploymentRow(adminPage, adminUsername, positionCode);
-  const drawer = await openEmploymentDrawer(adminPage, row, adminUsername, positionCode);
-  const resumed = adminPage.waitForResponse((response) => isSuccessfulRpcResponse(response, "admin.employment.resume"));
-  await drawer.getByRole("button", { name: /恢\s*复/u }).click();
-  await expectRpcMutationResult(await resumed, "admin.employment.resume", true, null);
-}
-
-async function endEmployment(adminPage: Page, adminUsername: string, positionCode: string) {
-  await adminPage.goto("/iam-admin/employments");
-  const row = findEmploymentRow(adminPage, adminUsername, positionCode);
-  const drawer = await openEmploymentDrawer(adminPage, row, adminUsername, positionCode);
-  await drawer.getByRole("button", { name: /结\s*束/u }).click();
-  const confirmation = adminPage.getByRole("dialog", {
-    name: "确认结束该任职？",
-  });
-  const ended = adminPage.waitForResponse((response) => isSuccessfulRpcResponse(response, "admin.employment.end"));
-  await confirmation.getByRole("button", { name: "结束任职" }).click();
-  await expectRpcMutationResult(await ended, "admin.employment.end", true, null);
-}
-
-function findEmploymentRow(adminPage: Page, username: string, positionCode: string) {
-  return adminPage.getByRole("row").filter({ hasText: username }).filter({ hasText: positionCode });
-}
-
-async function openEmploymentDrawer(
-  adminPage: Page,
-  row: ReturnType<Page["getByRole"]>,
-  username: string,
-  positionCode: string,
-) {
-  await row.getByText("查看", { exact: true }).click();
-  const drawer = adminPage.getByRole("dialog").filter({ hasText: username }).filter({ hasText: positionCode });
-  return drawer;
 }

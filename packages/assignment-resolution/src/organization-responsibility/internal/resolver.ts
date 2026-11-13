@@ -1,5 +1,6 @@
 import {
   EmploymentStatus,
+  OPEN_EMPLOYMENT_STATUSES,
   ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG,
   OrganizationResponsibilityAssignmentStatus,
   OrganizationStatus,
@@ -21,11 +22,7 @@ import { OrganizationResponsibilityIntegrityError } from "../index.ts";
 
 const QUERY_ID_BATCH_SIZE = 1000;
 
-const KNOWN_EMPLOYMENT_STATUSES = new Set<EmploymentStatus>([
-  EmploymentStatus.Enable,
-  EmploymentStatus.Pause,
-  EmploymentStatus.Disable,
-]);
+const KNOWN_EMPLOYMENT_STATUSES = new Set<EmploymentStatus>([...OPEN_EMPLOYMENT_STATUSES, EmploymentStatus.Disable]);
 const KNOWN_ORGANIZATION_STATUSES = new Set<OrganizationStatus>([
   OrganizationStatus.Enable,
   OrganizationStatus.Pause,
@@ -48,8 +45,6 @@ interface AssignmentRow {
   assignmentEndTime: Date | null;
   holderEmploymentId: number | null;
   holderEmploymentStatus: EmploymentStatus | null;
-  holderEmploymentStartTime: Date | null;
-  holderEmploymentEndTime: Date | null;
   holderEmploymentIsDelete: boolean | null;
   targetOrganizationRecordId: number | null;
   targetOrganizationStatus: OrganizationStatus | null;
@@ -154,8 +149,6 @@ function currentAssignmentQuery(db: DbClient, predicate: SQL) {
       assignmentEndTime: organizationResponsibilityAssignments.endTime,
       holderEmploymentId: employments.id,
       holderEmploymentStatus: employments.status,
-      holderEmploymentStartTime: employments.startTime,
-      holderEmploymentEndTime: employments.endTime,
       holderEmploymentIsDelete: employments.isDelete,
       targetOrganizationRecordId: organizations.id,
       targetOrganizationStatus: organizations.status,
@@ -223,10 +216,7 @@ function assertAssignmentIntegrity(row: AssignmentRow, at: Date) {
   if (row.assignmentStartTime.getTime() > at.getTime()) {
     throw new OrganizationResponsibilityIntegrityError("assignment-period-outside-observation");
   }
-  if (
-    row.assignmentStatus === OrganizationResponsibilityAssignmentStatus.Enable &&
-    !isHolderEmploymentEffective(row, at)
-  ) {
+  if (row.assignmentStatus === OrganizationResponsibilityAssignmentStatus.Enable && !isHolderEmploymentEffective(row)) {
     throw new OrganizationResponsibilityIntegrityError("enabled-assignment-without-effective-employment");
   }
 }
@@ -268,7 +258,7 @@ function isEffective(row: AssignmentRow, at: Date) {
     row.assignmentStatus === OrganizationResponsibilityAssignmentStatus.Enable &&
     row.assignmentStartTime.getTime() <= at.getTime() &&
     (row.assignmentEndTime === null || at.getTime() < row.assignmentEndTime.getTime()) &&
-    isHolderEmploymentEffective(row, at) &&
+    isHolderEmploymentEffective(row) &&
     row.targetOrganizationStatus === OrganizationStatus.Enable &&
     row.targetOrganizationIsDelete === false
   );
@@ -281,14 +271,8 @@ function isOpenAssignment(row: AssignmentRow) {
   );
 }
 
-function isHolderEmploymentEffective(row: AssignmentRow, at: Date) {
-  return (
-    row.holderEmploymentStatus === EmploymentStatus.Enable &&
-    row.holderEmploymentStartTime !== null &&
-    row.holderEmploymentStartTime.getTime() <= at.getTime() &&
-    (row.holderEmploymentEndTime === null || at.getTime() < row.holderEmploymentEndTime.getTime()) &&
-    row.holderEmploymentIsDelete === false
-  );
+function isHolderEmploymentEffective(row: AssignmentRow) {
+  return row.holderEmploymentStatus === EmploymentStatus.Enable && row.holderEmploymentIsDelete === false;
 }
 
 function compareResponsibilities(

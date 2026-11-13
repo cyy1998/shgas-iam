@@ -40,7 +40,7 @@ Subject Access-only 会写 PostgreSQL transition intent，不是 Redis-only 操�
 
 ## 任职只读诊断
 
-`iam-ops employment verify` 在 PostgreSQL 只读事务核对任职状态、父岗位与组织、任职期和结束时间、未来开始的开放任职、
+`iam-ops employment verify` 在 PostgreSQL 只读事务核对任职状态、父岗位与组织、任职日期区间、已结束任职的截止日、
 重复开放任职及多个开放主职。报告 `passed` 时退出 0，发现阻断项时退出 1，并按类别列出任职 ID。
 历史墓碑单独计数，缺少可信结束时间不阻断。按真实业务通过管理入口修正后重新核验。
 

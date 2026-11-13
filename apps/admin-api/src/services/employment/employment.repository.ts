@@ -1,10 +1,10 @@
-import { EmploymentStatus, OrganizationType } from "@iam/contracts";
+import { EmploymentStatus, OPEN_EMPLOYMENT_STATUSES, OrganizationType } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
 import type { Employment, Organization, User } from "@iam/db/schema";
 import { employments, organizationClosures, organizations, positions, users } from "@iam/db/schema";
-import { EmploymentAlreadyExistsError, OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
+import { EmploymentAlreadyExistsError } from "@iam/domain/employment";
 import type { SQLWrapper } from "drizzle-orm";
 import { and, asc, count, desc, eq, exists, inArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";

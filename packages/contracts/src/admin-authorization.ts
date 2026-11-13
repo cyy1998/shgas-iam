@@ -100,6 +100,7 @@ export const AdminOrganizationAllowedActionsSchema = z
 export const AdminEmploymentAllowedActionsSchema = z
   .object({
     editDescription: AdminAuthorizationDecisionSchema,
+    editPeriod: AdminAuthorizationDecisionSchema,
     pause: AdminAuthorizationDecisionSchema,
     resume: AdminAuthorizationDecisionSchema,
     end: AdminAuthorizationDecisionSchema,

@@ -1,4 +1,5 @@
 import type { AdminAuditContext, AuditLogInput } from "@admin-api/services/audit/audit.context";
+import type { EndedEmployment } from "@iam/assignment-resolution/employment-lifecycle";
 import type { EmploymentStatus } from "@iam/contracts";
 import { buildAdminResourceAudit } from "../admin-resource-audit";
 
@@ -19,6 +20,7 @@ export function buildEmploymentAudit(
   target: EmploymentAuditTarget,
   details: Record<string, unknown>,
   auditContext?: AdminAuditContext,
+  eventTime?: Date,
 ): AuditLogInput {
   return buildAdminResourceAudit(
     action,
@@ -42,6 +44,7 @@ export function buildEmploymentAudit(
       ...details,
     },
     auditContext,
+    eventTime,
   );
 }
 
@@ -49,6 +52,8 @@ export function buildEmploymentResignUserAudit(
   user: { id: number; username: string; name?: string | null },
   auditContext: AdminAuditContext | undefined,
   changed: boolean,
+  endedEmployments: readonly EndedEmployment[],
+  eventTime?: Date,
 ): AuditLogInput {
   return buildAdminResourceAudit(
     "admin.employment.resign_user",
@@ -61,7 +66,9 @@ export function buildEmploymentResignUserAudit(
       username: user.username,
       resigned: true,
       changed,
+      endedEmployments,
     },
     auditContext,
+    eventTime,
   );
 }

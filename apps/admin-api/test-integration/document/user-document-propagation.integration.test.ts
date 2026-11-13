@@ -88,7 +88,7 @@ beforeEach(async () => {
     userId: 1,
     orgId: 10,
     posId: 20,
-    startTime: new Date("2026-10-01T00:00:00Z"),
+    startTime: "2026-10-01",
   });
 });
 afterAll(async () => {
@@ -163,6 +163,7 @@ function runtime(
     })),
   });
   const availability = createChangeEmploymentAvailabilityUseCase({
+    clock: runtimeClock,
     uow: mapUnitOfWork(uow, (tx) => ({
       employmentStore: tx.repositories.employment,
       organizationReader: tx.repositories.organization,
@@ -318,7 +319,7 @@ async function seedDescendantHolder() {
     userId: 2,
     orgId: 10,
     posId: 20,
-    startTime: new Date("2026-10-01T00:00:00Z"),
+    startTime: "2026-10-01",
   });
 }
 
@@ -595,8 +596,8 @@ test.each([
     await pg.db.insert(positions).values({ id: 21, posCode: "OTHER", posName: "Other position" });
     await pg.db.insert(users).values({ id: 2, username: "unaffected", name: "Unaffected" });
     await pg.db.insert(employments).values([
-      { id: 31, userId: 1, orgId: 11, posId: 21, startTime: new Date("2026-10-01T00:00:00Z") },
-      { id: 32, userId: 2, orgId: 11, posId: 21, startTime: new Date("2026-10-01T00:00:00Z") },
+      { id: 31, userId: 1, orgId: 11, posId: 21, startTime: "2026-10-01" },
+      { id: 32, userId: 2, orgId: 11, posId: 21, startTime: "2026-10-01" },
     ]);
     const app = new Hono();
     addTestAdminAuthorizationMiddleware(app);

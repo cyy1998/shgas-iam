@@ -6,7 +6,7 @@ import EmploymentFormModal from "@admin/pages/employments/components/EmploymentF
 import { type EmploymentVo, searchEmployments } from "@admin/services/employment";
 import { PlusOutlined } from "@ant-design/icons";
 import { type ActionType, PageContainer, type ProColumns, ProTable } from "@ant-design/pro-components";
-import { EmploymentStatus, getEmploymentStatusOptions } from "@iam/contracts";
+import { type EmploymentStatus, getEmploymentStatusOptions, OPEN_EMPLOYMENT_STATUSES } from "@iam/contracts";
 import { Alert, Button, Input, message, Select, Tag } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router";
@@ -134,15 +134,15 @@ export default function EmploymentsPage() {
       render: (_, r) => <StatusTag domain="employment" status={r.status} />,
     },
     {
-      title: "起止时间",
+      title: "任职有效期",
       dataIndex: "startTime",
       width: 200,
       search: false,
       render: (_, r) => (
         <span>
-          {new Date(r.startTime).toLocaleDateString()}
+          {r.startTime ?? "—"}
           {" ~ "}
-          {r.endTime ? new Date(r.endTime).toLocaleDateString() : "—"}
+          {r.endTime ?? "—"}
         </span>
       ),
     },
@@ -208,7 +208,7 @@ export default function EmploymentsPage() {
               />
               <Select
                 aria-label="雇佣状态"
-                placeholder="在职与暂停"
+                placeholder="开放任职"
                 allowClear
                 value={filters.status}
                 options={getEmploymentStatusOptions()}
@@ -262,7 +262,7 @@ export default function EmploymentsPage() {
               conditions: {
                 fuzzyConditions: text ? { userText: text } : {},
                 exactConditions: {
-                  statuses: statusNum !== undefined ? [statusNum] : [EmploymentStatus.Enable, EmploymentStatus.Pause],
+                  statuses: statusNum !== undefined ? [statusNum] : [...OPEN_EMPLOYMENT_STATUSES],
                   isPrimary: isPrimaryBool,
                   organization: organizationOrgCode
                     ? { orgCodes: [organizationOrgCode], matchMode: "subtree" }

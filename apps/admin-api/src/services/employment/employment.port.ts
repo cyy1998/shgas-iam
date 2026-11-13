@@ -1,22 +1,8 @@
-import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
-import type { UnitOfWorkPort } from "@iam/unit-of-work";
 import type {
   AdminEmploymentAuthorizationFacts,
-  AdminEmploymentRecordUpdate,
-  Employment,
   EmploymentAdminPaginationQueryDto,
   EmploymentDetail,
 } from "./employment.type";
-
-export interface AdminEmploymentProfileChange {
-  readonly kind: "employment";
-  readonly userId: number;
-}
-
-export interface AdminEmploymentStorePort {
-  lockEmploymentByIdForAdmin: (id: number) => Promise<EmploymentDetail | null>;
-  updateEmploymentRecord: (id: number, input: AdminEmploymentRecordUpdate) => Promise<Employment>;
-}
 
 export interface AdminEmploymentReadScope {
   organizationIds: readonly number[];
@@ -46,19 +32,8 @@ export interface AdminEmploymentEffectiveRoleResolverPort {
   >;
 }
 
-export interface AdminEmploymentTransactionPorts {
-  employmentRepository: AdminEmploymentStorePort;
-  auditService: AuditLogWriterPort;
-  userDocumentInvalidation: {
-    recordChanges: (changes: readonly AdminEmploymentProfileChange[]) => Promise<void>;
-  };
-}
-
-export type AdminEmploymentUnitOfWorkPort = UnitOfWorkPort<AdminEmploymentTransactionPorts>;
-
 export interface AdminEmploymentServiceDeps {
   employmentRepository: AdminEmploymentReaderPort;
   roleAssignmentResolver: AdminEmploymentEffectiveRoleResolverPort;
   roleRepository: { getRoleNamesByIds: (ids: number[]) => Promise<Array<{ roleCode: string; roleName: string }>> };
-  uow: AdminEmploymentUnitOfWorkPort;
 }

@@ -254,6 +254,14 @@ export const auditActionCatalog = [
     label: "办理离职",
   },
   {
+    action: "worker.employment.enable",
+    label: "自动启用任职",
+  },
+  {
+    action: "worker.employment.end",
+    label: "自动结束任职",
+  },
+  {
     action: "admin.organization_responsibility_assignment.create",
     label: "创建组织责任任命",
   },

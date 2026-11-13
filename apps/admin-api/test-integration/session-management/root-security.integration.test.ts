@@ -1043,7 +1043,7 @@ test.each(["pause", "resume", "end", "setPrimary", "clearPrimary", "transfer"] a
           userId: f.account.id,
           orgId: organization.id,
           posId: position.id,
-          startTime: new Date(Date.now() - 60_000),
+          startTime: null,
           status: command === "resume" ? EmploymentStatus.Pause : EmploymentStatus.Enable,
           isPrimary: command === "clearPrimary",
         })
@@ -1097,7 +1097,11 @@ test.each(["pause", "resume", "end", "setPrimary", "clearPrimary", "transfer"] a
         expect(result.result).toEqual({ id: expect.any(Number) });
         expect(persisted).toEqual(
           expect.arrayContaining([
-            expect.objectContaining({ id: employment.id, status: EmploymentStatus.Disable, endTime: expect.any(Date) }),
+            expect.objectContaining({
+              id: employment.id,
+              status: EmploymentStatus.Disable,
+              endTime: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/u),
+            }),
             expect.objectContaining({
               ...result.result,
               posId: destination.id,
@@ -1117,7 +1121,7 @@ test.each(["pause", "resume", "end", "setPrimary", "clearPrimary", "transfer"] a
                   ? EmploymentStatus.Disable
                   : EmploymentStatus.Enable,
             isPrimary: command === "setPrimary",
-            endTime: command === "end" ? expect.any(Date) : null,
+            endTime: command === "end" ? expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/u) : null,
           },
         ]);
       }

@@ -7,6 +7,7 @@ export interface TransferEmploymentInput {
   expectedAncestorOrgCode?: string;
   newPosCode: string;
   isPrimary: boolean;
+  endTime?: string | null;
   description?: string | null;
 }
 

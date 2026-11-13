@@ -15,8 +15,8 @@ export function createOidcJourneyOperations(options: CreateOidcJourneyOperations
       IAM_E2E_BUSINESS_CLIENT_CODE: `${scenario.customSsoClientCode}-business`,
       IAM_E2E_OIDC_REDIRECT_URI: `${descriptor.origin}/e2e/oidc/callback`,
       IAM_E2E_INTERNAL_API_KEY: createE2EScenarioInternalApiKey(descriptor.runId),
-      IAM_E2E_RESPONSIBILITY_TARGET_ORGANIZATION_CODE: scenario.responsibilityTargetOrganizationCode,
-      IAM_E2E_RESPONSIBILITY_HOLDER_POSITION_CODE: scenario.responsibilityHolderPositionCode,
+      IAM_E2E_ORGANIZATION_CODE: scenario.organizationCode,
+      IAM_E2E_GLOBAL_POSITION_CODE: scenario.globalPositionCode,
     }),
   });
 }

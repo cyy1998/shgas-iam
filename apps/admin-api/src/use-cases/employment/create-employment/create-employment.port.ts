@@ -12,8 +12,8 @@ export interface CreateEmploymentStorePort {
     posId: number;
     orgId: number;
     isPrimary: boolean;
-    startTime: Date;
-    endTime: Date | null;
+    startTime: string | null;
+    endTime: string | null;
     description: string | null;
     status: EmploymentStatus;
   }) => Promise<Employment>;
@@ -48,11 +48,7 @@ export interface CreateEmploymentTransactionPorts {
   };
 }
 
-export interface CreateEmploymentClockPort {
-  nowDate: () => Date;
-}
-
 export interface CreateEmploymentUseCaseDeps {
-  clock: CreateEmploymentClockPort;
+  clock: { nowDate: () => Date };
   uow: UnitOfWorkPort<CreateEmploymentTransactionPorts>;
 }

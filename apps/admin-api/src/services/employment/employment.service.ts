@@ -1,15 +1,10 @@
 import type { AdminEmploymentAuthorization } from "@admin-api/services/admin-authorization/admin-employment-authorization.type";
 import type { AdminOperationId } from "@admin-api/services/admin-authorization/admin-operation.registry";
-import { createAdminMutation } from "@admin-api/services/admin-mutation/admin-mutation";
-import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
-import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
-import { buildEmploymentAudit } from "@admin-api/services/audit/events/employment.audit";
 import { EmploymentDetailDtoSchema, toEmploymentDto } from "@admin-api/services/employment/employment.schema";
-import { EmploymentStatus } from "@iam/contracts";
-import { EmploymentNotEditableError, EmploymentNotFoundError } from "@iam/domain/employment";
-import { BadRequestError } from "@iam/runtime/errors";
+import { OPEN_EMPLOYMENT_STATUSES } from "@iam/contracts";
+import { EmploymentNotFoundError } from "@iam/domain/employment";
 import type { AdminEmploymentServiceDeps } from "./employment.port";
-import type { EmploymentAdminPaginationQueryDto, EmploymentUpdateDto } from "./employment.type";
+import type { EmploymentAdminPaginationQueryDto } from "./employment.type";
 
 const GUARDED_EMPLOYMENT_ACTION_BY_OPERATION = {
   "admin.employment.pause": "pause",
@@ -21,7 +16,6 @@ const GUARDED_EMPLOYMENT_ACTION_BY_OPERATION = {
 } as const satisfies Partial<Record<AdminOperationId, string>>;
 
 export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
-  const mutation = createAdminMutation(deps.uow);
   function readScope(authorization?: AdminEmploymentAuthorization) {
     return authorization?.kind === "scoped" ? { organizationIds: authorization.organizationIds } : undefined;
   }
@@ -58,7 +52,7 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
               ...dto.conditions,
               exactConditions: {
                 ...dto.conditions.exactConditions,
-                statuses: [EmploymentStatus.Enable, EmploymentStatus.Pause],
+                statuses: [...OPEN_EMPLOYMENT_STATUSES],
               },
             },
           }
@@ -76,50 +70,6 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
       pageSize: scopedDto.pageSize,
       pages,
     };
-  }
-
-  async function updateEmployment(
-    id: number,
-    dto: EmploymentUpdateDto,
-    auditContext?: AdminAuditContext,
-    authorization?: AdminEmploymentAuthorization,
-  ) {
-    if (dto.description === undefined) throw new BadRequestError("至少提交一个任职更新字段");
-    return await mutation.locked(
-      (tx) => tx.employmentRepository.lockEmploymentByIdForAdmin(id),
-      () => new EmploymentNotFoundError(),
-      async (tx, existing) => {
-        if (authorization?.kind === "scoped" && !authorization.organizationIds.includes(existing.orgId)) {
-          authorization.denyMutation({
-            operationId: "admin.employment.update",
-            resourceIdentifier: id,
-            reason: "RESOURCE_OUT_OF_SCOPE",
-            concealExistence: true,
-          });
-        }
-        if (existing.status === EmploymentStatus.Disable) throw new EmploymentNotEditableError();
-
-        if (existing.description === dto.description) return { changed: false, result: null };
-        const updated = await tx.employmentRepository.updateEmploymentRecord(id, {
-          description: dto.description,
-        });
-        if (updated == null) throw new Error("Locked Employment update returned no row");
-        await tx.auditService.recordAuditLog(
-          buildEmploymentAudit(
-            "admin.employment.update",
-            existing,
-            {
-              changed: true,
-              patch: dto,
-            },
-            auditContext,
-          ),
-        );
-        await tx.userDocumentInvalidation.recordChanges([{ kind: "employment", userId: existing.userId }]);
-        return { changed: true, result: null };
-      },
-      adminAuditTransactionOptions(auditContext),
-    );
   }
 
   async function guardEmploymentMutationForAdmin(
@@ -155,7 +105,6 @@ export function createEmploymentService(deps: AdminEmploymentServiceDeps) {
     getEmploymentDetailByIdForAdmin,
     guardEmploymentMutationForAdmin,
     searchEmploymentsFuzzyForAdmin,
-    updateEmployment,
   };
 }
 

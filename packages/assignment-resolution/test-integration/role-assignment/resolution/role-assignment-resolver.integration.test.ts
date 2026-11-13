@@ -49,8 +49,9 @@ afterAll(async () => {
 });
 
 describe("resolveEffectiveRoles", () => {
-  test("merges every assignment source into complete, deduplicated, sorted employment results", async () => {
+  test("merges every assignment source for enabled Employment even after its cutoff", async () => {
     await seedActiveEmploymentGraph(harness!.db);
+    await harness!.db.update(employments).set({ endTime: "2000-01-02" }).where(eq(employments.id, 100));
     await seedUnassignedEmployment(harness!.db);
     await harness!.db
       .insert(roles)
@@ -186,6 +187,19 @@ describe("resolveEffectiveRoles", () => {
     } finally {
       await db.update(clients).set({ status: ClientStatus.Enable }).where(eq(clients.id, 2));
     }
+  });
+
+  test("does not resolve a role for a Pending Employment even after its start date", async () => {
+    await seedActiveEmploymentGraph(harness!.db);
+    await harness!.db.insert(roles).values(activeRole({ id: 200, roleCode: "effective", clientId: 1 }));
+    await harness!.db.insert(roleAssignments).values(assignment(200, RoleAssignmentTargetType.Employment, 100));
+    await harness!.db
+      .update(employments)
+      .set({ status: EmploymentStatus.Pending, startTime: "2000-01-01" })
+      .where(eq(employments.id, 100));
+
+    const result = await resolver.resolveEffectiveRoles({ employmentIds: [100] });
+    expect(result.get(100)).toEqual([]);
   });
 
   for (const source of getForwardAssignmentSources()) {

@@ -109,7 +109,7 @@ function employment(id: number, status: EmploymentStatus) {
     orgId: 2,
     isPrimary: false,
     status,
-    startTime: now,
+    startTime: "2026-01-01",
     endTime: null,
     description: null,
     isDelete: false,

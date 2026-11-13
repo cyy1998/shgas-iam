@@ -1,15 +1,18 @@
+import { buildAdminResourceAudit } from "@admin-api/services/audit/admin-resource-audit";
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
-import { buildOrganizationResponsibilityAssignmentLifecycleAudit } from "@admin-api/services/audit/events/organization-responsibility-assignment.audit";
+import {
+  buildResponsibilityAssignmentCascadeAuditDetails,
+  endLockedResponsibilityAssignments,
+  type OrganizationResponsibilityAssignmentLifecycleChange,
+  type OrganizationResponsibilityAssignmentWriteTarget,
+  type ResponsibilityAssignmentCascadeCause,
+} from "@iam/assignment-resolution/organization-responsibility/assignment-lifecycle";
 import { createOrganizationResponsibilityParentLifecycleGuard } from "@iam/assignment-resolution/organization-responsibility/parent-lifecycle";
 import {
   ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_AUDIT_ACTIONS,
   OrganizationResponsibilityAssignmentStatus,
 } from "@iam/contracts";
-import type {
-  OrganizationResponsibilityAssignmentLifecycleChange,
-  OrganizationResponsibilityAssignmentWriteTarget,
-} from "./organization-responsibility-parent-lifecycle.type";
 
 export interface CreateOrganizationResponsibilityParentLifecycleParticipantDeps {
   assignmentStore: {
@@ -35,72 +38,59 @@ export function createOrganizationResponsibilityParentLifecycleParticipant(
   deps: CreateOrganizationResponsibilityParentLifecycleParticipantDeps,
 ) {
   const organizationGuard = createOrganizationResponsibilityParentLifecycleGuard(deps.assignmentStore);
-  async function pauseEnabledAssignmentsForEmployment(input: {
-    employmentId: number;
-    selectedAssignments: readonly OrganizationResponsibilityAssignmentWriteTarget[];
-    auditContext?: AdminAuditContext;
-  }) {
-    const changes = await applySelectedAssignments(input.selectedAssignments, input.employmentId, "pause", null);
+  async function recordCascade(
+    changes: readonly OrganizationResponsibilityAssignmentLifecycleChange[],
+    action: (typeof ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_AUDIT_ACTIONS)["pause" | "end"],
+    cause: ResponsibilityAssignmentCascadeCause,
+    auditContext?: AdminAuditContext,
+    eventTime?: Date,
+  ) {
     for (const change of changes) {
       await deps.auditLogWriter.recordAuditLog(
-        buildOrganizationResponsibilityAssignmentLifecycleAudit({
-          action: ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_AUDIT_ACTIONS.pause,
-          assignment: change,
-          before: {
-            status: change.beforeStatus,
-            startTime: change.startTime,
-            endTime: change.beforeEndTime,
-          },
-          after: {
-            status: change.afterStatus,
-            startTime: change.startTime,
-            endTime: change.afterEndTime,
-          },
-          cause: {
-            kind: "employment",
-            action: "pause",
-            employmentId: input.employmentId,
-          },
-          auditContext: input.auditContext,
-        }),
+        buildAdminResourceAudit(
+          action,
+          { type: "organization_responsibility_assignment", id: change.id },
+          buildResponsibilityAssignmentCascadeAuditDetails(change, cause),
+          auditContext,
+          eventTime,
+        ),
       );
     }
     return changes.length > 0;
   }
 
+  async function pauseEnabledAssignmentsForEmployment(input: {
+    action?: "editPeriod";
+    employmentId: number;
+    selectedAssignments: readonly OrganizationResponsibilityAssignmentWriteTarget[];
+    auditContext?: AdminAuditContext;
+    eventTime?: Date;
+  }) {
+    const changes = await pauseSelectedAssignments(input.selectedAssignments, input.employmentId);
+    return await recordCascade(
+      changes,
+      ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_AUDIT_ACTIONS.pause,
+      { kind: "employment", action: input.action ?? "pause", employmentId: input.employmentId },
+      input.auditContext,
+      input.eventTime,
+    );
+  }
+
   async function endOpenAssignmentsForEmployment(input: {
-    action: "end" | "transfer";
+    action: "end" | "transfer" | "resume" | "editPeriod";
     employmentId: number;
     selectedAssignments: readonly OrganizationResponsibilityAssignmentWriteTarget[];
     endTime: Date;
     auditContext?: AdminAuditContext;
   }) {
-    const changes = await applySelectedAssignments(input.selectedAssignments, input.employmentId, "end", input.endTime);
-    for (const change of changes) {
-      await deps.auditLogWriter.recordAuditLog(
-        buildOrganizationResponsibilityAssignmentLifecycleAudit({
-          action: ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_AUDIT_ACTIONS.end,
-          assignment: change,
-          before: {
-            status: change.beforeStatus,
-            startTime: change.startTime,
-            endTime: change.beforeEndTime,
-          },
-          after: {
-            status: change.afterStatus,
-            startTime: change.startTime,
-            endTime: change.afterEndTime,
-          },
-          cause: {
-            kind: "employment",
-            action: input.action,
-            employmentId: input.employmentId,
-          },
-          auditContext: input.auditContext,
-        }),
-      );
-    }
-    return changes.length > 0;
+    const changes = await endLockedResponsibilityAssignments(deps.assignmentStore, input);
+    return await recordCascade(
+      changes,
+      ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_AUDIT_ACTIONS.end,
+      { kind: "employment", action: input.action, employmentId: input.employmentId },
+      input.auditContext,
+      input.endTime,
+    );
   }
 
   async function endOpenAssignmentsForUserResignation(input: {
@@ -109,61 +99,30 @@ export function createOrganizationResponsibilityParentLifecycleParticipant(
     endTime: Date;
     auditContext?: AdminAuditContext;
   }) {
-    const changes: OrganizationResponsibilityAssignmentLifecycleChange[] = [];
-    for (const assignment of input.selectedAssignments) {
-      changes.push(...(await applySelectedAssignments([assignment], assignment.employmentId, "end", input.endTime)));
-    }
-    for (const change of changes) {
-      await deps.auditLogWriter.recordAuditLog(
-        buildOrganizationResponsibilityAssignmentLifecycleAudit({
-          action: ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_AUDIT_ACTIONS.end,
-          assignment: change,
-          before: {
-            status: change.beforeStatus,
-            startTime: change.startTime,
-            endTime: change.beforeEndTime,
-          },
-          after: {
-            status: change.afterStatus,
-            startTime: change.startTime,
-            endTime: change.afterEndTime,
-          },
-          cause: {
-            kind: "user",
-            action: "resignation",
-            userId: input.userId,
-          },
-          auditContext: input.auditContext,
-        }),
-      );
-    }
-    return changes.length > 0;
+    const changes = await endLockedResponsibilityAssignments(deps.assignmentStore, input);
+    return await recordCascade(
+      changes,
+      ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_AUDIT_ACTIONS.end,
+      { kind: "user", action: "resignation", userId: input.userId },
+      input.auditContext,
+      input.endTime,
+    );
   }
 
-  async function applySelectedAssignments(
+  async function pauseSelectedAssignments(
     assignments: readonly OrganizationResponsibilityAssignmentWriteTarget[],
     employmentId: number,
-    command: "pause" | "end",
-    endTime: Date | null,
   ) {
     const changes: OrganizationResponsibilityAssignmentLifecycleChange[] = [];
     for (const assignment of assignments) {
       if (assignment.employmentId !== employmentId)
         throw new Error("Locked Assignment does not belong to the selected Employment");
-      const applicable =
-        command === "pause"
-          ? assignment.status === OrganizationResponsibilityAssignmentStatus.Enable
-          : assignment.status === OrganizationResponsibilityAssignmentStatus.Enable ||
-            assignment.status === OrganizationResponsibilityAssignmentStatus.Pause;
-      if (!applicable) continue;
+      if (assignment.status !== OrganizationResponsibilityAssignmentStatus.Enable) continue;
       changes.push(
         await deps.assignmentStore.updateLockedAssignmentLifecycle({
           assignment,
-          status:
-            command === "pause"
-              ? OrganizationResponsibilityAssignmentStatus.Pause
-              : OrganizationResponsibilityAssignmentStatus.Disable,
-          endTime: command === "pause" ? assignment.endTime : endTime,
+          status: OrganizationResponsibilityAssignmentStatus.Pause,
+          endTime: assignment.endTime,
         }),
       );
     }

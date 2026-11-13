@@ -14,7 +14,7 @@ function employment(overrides: Record<string, unknown> = {}) {
     orgId: 2,
     isPrimary: false,
     status: EmploymentStatus.Enable,
-    startTime: now,
+    startTime: "2025-01-01",
     endTime: null,
     description: null,
     isDelete: false,
@@ -135,7 +135,7 @@ describe("Employment Lifecycle Primary", () => {
     tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([
       employment({
         status: EmploymentStatus.Disable,
-        endTime: now,
+        endTime: "2026-01-01",
       }),
     ]);
 
@@ -164,7 +164,7 @@ describe("Employment Lifecycle Primary", () => {
     const { tx, useCase } = createLifecycle();
     tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([
       employment(),
-      employment({ id: 9, isPrimary: true, status: EmploymentStatus.Disable, endTime: now }),
+      employment({ id: 9, isPrimary: true, status: EmploymentStatus.Disable, endTime: "2026-01-01" }),
     ]);
 
     const result = await useCase.execute({ command: "set", employmentId: 4 });

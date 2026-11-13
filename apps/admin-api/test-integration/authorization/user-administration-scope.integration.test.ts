@@ -449,7 +449,7 @@ function employment(userId: number, posId: number, orgId: number, status: Employ
     orgId,
     status,
     isPrimary: false,
-    startTime: new Date("2026-01-01T00:00:00Z"),
-    endTime: status === EmploymentStatus.Disable ? new Date("2026-02-01T00:00:00Z") : null,
+    startTime: "2026-01-01",
+    endTime: status === EmploymentStatus.Disable ? "2026-02-01" : null,
   };
 }

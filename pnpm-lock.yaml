@@ -759,6 +759,9 @@ importers:
       '@bull-board/hono':
         specifier: ^9.10.1
         version: 9.10.1(@typescript/typescript6@6.0.2)(bullmq@6.3.8(ioredis@6.0.0(supports-color@10.2.2)))(hono@4.12.30)
+      '@iam/assignment-resolution':
+        specifier: workspace:*
+        version: link:../../packages/assignment-resolution
       '@iam/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -768,6 +771,9 @@ importers:
       '@iam/documents':
         specifier: workspace:*
         version: link:../../packages/documents
+      '@iam/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@iam/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
@@ -777,6 +783,9 @@ importers:
       '@iam/subject-access':
         specifier: workspace:*
         version: link:../../packages/subject-access
+      '@iam/unit-of-work':
+        specifier: workspace:*
+        version: link:../../packages/unit-of-work
       drizzle-orm:
         specifier: 1.0.0-rc.2
         version: 1.0.0-rc.2(bun-types@1.4.2)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.4.3)
@@ -793,12 +802,12 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@iam/session-kernel':
+        specifier: workspace:*
+        version: link:../../packages/session-kernel
       '@iam/test-support':
         specifier: workspace:*
         version: link:../../packages/test-support
-      '@iam/unit-of-work':
-        specifier: workspace:*
-        version: link:../../packages/unit-of-work
       '@types/bun':
         specifier: latest
         version: 1.4.4

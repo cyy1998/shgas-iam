@@ -3,7 +3,7 @@ import type { AuditLogInput } from "@admin-api/services/audit/audit.context";
 import type {
   OrganizationResponsibilityAssignmentLifecycleChange,
   OrganizationResponsibilityAssignmentWriteTarget,
-} from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.type";
+} from "@iam/assignment-resolution/organization-responsibility/assignment-lifecycle";
 import type {
   EmploymentStatus,
   OrganizationResponsibilityAssignmentStatus,

@@ -123,6 +123,8 @@ describe("EmploymentFormModal", () => {
           posCode: "DEV",
           isPrimary: false,
           description: null,
+          startTime: null,
+          endTime: null,
         },
       ]);
     });
@@ -197,6 +199,8 @@ describe("EmploymentFormModal", () => {
           posCode: "DEV",
           isPrimary: false,
           description: null,
+          startTime: null,
+          endTime: null,
         },
       ]);
     });

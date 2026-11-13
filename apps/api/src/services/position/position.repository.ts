@@ -1,3 +1,4 @@
+import { PositionStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 
 export function createPositionRepository(db: DbClient) {
@@ -5,7 +6,7 @@ export function createPositionRepository(db: DbClient) {
     async getPositionByCode(posCode: string) {
       return (
         (await db.query.positions.findFirst({
-          where: { posCode, isDelete: false },
+          where: { posCode, status: PositionStatus.Enable, isDelete: false },
         })) ?? null
       );
     },

@@ -15,6 +15,7 @@ import { createEndEmploymentUseCase } from "@admin-api/use-cases/employment/end-
 import { createManagePrimaryEmploymentUseCase } from "@admin-api/use-cases/employment/manage-primary-employment/manage-primary-employment.use-case";
 import { createResignUserUseCase } from "@admin-api/use-cases/employment/resign-user/resign-user.use-case";
 import { createTransferEmploymentUseCase } from "@admin-api/use-cases/employment/transfer-employment/transfer-employment.use-case";
+import { createUpdateEmploymentUseCase } from "@admin-api/use-cases/employment/update-employment/update-employment.use-case";
 import { createManageOrganizationResponsibilityAssignmentLifecycleUseCase } from "@admin-api/use-cases/organization-responsibility/manage-assignment-lifecycle/manage-assignment-lifecycle.use-case";
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import {
@@ -61,7 +62,8 @@ import {
 } from "../support/user-document-workflow";
 
 let harness: AdminApiPostgresTestHarness;
-const now = new Date("2026-09-07T00:00:00Z");
+const now = new Date("2026-09-06T16:00:00Z");
+const today = "2026-09-07";
 beforeAll(async () => {
   harness = await createAdminApiPostgresTestHarness();
 });
@@ -77,9 +79,9 @@ function commands(
   prepareRepairError?: Error,
   revocationError?: Error,
   initialSubjectIdentifier?: string,
+  clock = { nowDate: () => now },
 ) {
   const enqueueRebuildJobs = mock(async () => ({ enqueued: 1, jobIds: ["employment-job"] }));
-  const clock = { nowDate: () => now };
   const uow = mapUnitOfWork(
     createAdminApiUnitOfWork({
       db: harness.db,
@@ -168,7 +170,7 @@ function commands(
         userDocumentInvalidation: tx.userDocumentInvalidation,
       })),
     }),
-    availability: createChangeEmploymentAvailabilityUseCase({ uow: lifecycle }),
+    availability: createChangeEmploymentAvailabilityUseCase({ clock, uow: lifecycle }),
     end: createEndEmploymentUseCase({ clock, uow: lifecycle }),
     create: createCreateEmploymentUseCase({
       clock,
@@ -186,12 +188,8 @@ function commands(
       roleRepository: repositories.role,
 
       roleAssignmentResolver: { resolveEffectiveRoles: async () => new Map() },
-      uow: mapUnitOfWork(uow, (tx) => ({
-        employmentRepository: tx.repositories.employment,
-        auditService: tx.auditService,
-        userDocumentInvalidation: tx.userDocumentInvalidation,
-      })),
     }),
+    update: createUpdateEmploymentUseCase({ clock, uow: lifecycle }),
     assignment: withTestFullOrganizationResponsibilityAuthorization(
       createManageOrganizationResponsibilityAssignmentLifecycleUseCase({
         clock,
@@ -203,6 +201,59 @@ function commands(
       }),
     ),
   };
+}
+
+function employmentApp(subject: ReturnType<typeof commands>, actorUserId: number, scopedOrganizationId?: number) {
+  const adapter = createEmploymentAdapter({
+    employmentService: subject.profile,
+    createEmployment: subject.create,
+    transferEmployment: subject.transfer,
+    updateEmployment: subject.update,
+    changeEmploymentAvailability: subject.availability,
+    endEmployment: subject.end,
+    managePrimaryEmployment: subject.primary,
+    resignUser: subject.resign,
+  });
+  const app = new Hono<{
+    Variables: {
+      adminAuthorizationPolicy: ReturnType<typeof createAdminAuthorizationPolicy>;
+      userId: number;
+      username: string;
+      userDetailDto: { roles: string[] };
+    };
+  }>();
+  app.use("*", async (context, next) => {
+    context.set("userId", actorUserId);
+    context.set("username", "actor");
+    context.set("userDetailDto", { roles: [scopedOrganizationId === undefined ? "iam:admin" : "iam:hr-admin"] });
+    context.set(
+      "adminAuthorizationPolicy",
+      createAdminAuthorizationPolicy({
+        logger: { warn: mock() },
+        hrAdministrationScopeResolver: {
+          resolveForActor: async () =>
+            scopedOrganizationId === undefined
+              ? null
+              : {
+                  rootOrganizationIds: [scopedOrganizationId],
+                  organizationIds: [scopedOrganizationId],
+                },
+        },
+      }),
+    );
+    await next();
+  });
+  app.onError(createErrorHandler({ error: mock(), warn: mock(), info: mock() }));
+  app.route("/admin", createEmploymentRoute(adapter));
+  app.all("/rpc/*", (context) =>
+    fetchRequestHandler({
+      endpoint: "/rpc",
+      req: context.req.raw,
+      router: adapter.employmentAdminRouter,
+      createContext: () => ({ hono: context }),
+    }),
+  );
+  return app;
 }
 
 async function employmentAuthorization(organizationId: number, scoped: boolean) {
@@ -242,7 +293,7 @@ async function seed(withEmployment = true) {
     userId: user!.id,
     orgId: org!.id,
     posId: position!.id,
-    startTime: new Date("2026-01-01T00:00:00Z"),
+    startTime: "2026-01-01",
     status: EmploymentStatus.Enable,
   };
   const employment = withEmployment ? (await harness.db.insert(employments).values(value).returning())[0]! : undefined;
@@ -395,7 +446,700 @@ describe("Employment lifecycle reads through production PostgreSQL", () => {
   });
 });
 
+function updateThroughProtocol(
+  app: ReturnType<typeof employmentApp>,
+  protocol: "REST" | "tRPC",
+  id: number,
+  data: Record<string, unknown>,
+) {
+  return app.request(protocol === "REST" ? `/admin/employments/${id}` : "/rpc/update", {
+    method: protocol === "REST" ? "PUT" : "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(protocol === "REST" ? data : { id, data }),
+  });
+}
+
+async function expectEmploymentDetail(
+  app: ReturnType<typeof employmentApp>,
+  protocol: "REST" | "tRPC",
+  id: number,
+  detail: Record<string, unknown>,
+) {
+  const path =
+    protocol === "REST"
+      ? `/admin/employments/${id}`
+      : `/rpc/detail?input=${encodeURIComponent(JSON.stringify({ id }))}`;
+  const response = await app.request(path);
+  expect(response.status).toBe(200);
+  const payload = await response.json();
+  expect(payload).toMatchObject(protocol === "REST" ? { data: detail } : { result: { data: detail } });
+}
+
+describe("Employment period edits through production PostgreSQL UnitOfWork", () => {
+  for (const protocol of ["REST", "tRPC"] as const) {
+    test.each([
+      { input: { startTime: "2026-09-08", endTime: "2026-09-10" }, calculated: EmploymentStatus.Pending },
+      { input: { startTime: today, endTime: "2026-09-08" }, calculated: EmploymentStatus.Enable },
+      { input: { startTime: "2026-09-01", endTime: today }, calculated: EmploymentStatus.Disable },
+    ])(`${protocol} calculates state for every open Employment with period %#`, async ({ input, calculated }) => {
+      const fixture = await seed();
+      const app = employmentApp(commands(), fixture.user.id);
+      for (const status of [EmploymentStatus.Enable, EmploymentStatus.Pending, EmploymentStatus.Pause] as const) {
+        const [position] = await harness.db
+          .insert(positions)
+          .values({
+            posCode: `EDIT-${status}`,
+            posName: "Date edit",
+          })
+          .returning();
+        const [employment] = await harness.db
+          .insert(employments)
+          .values({
+            ...fixture.value,
+            posId: position!.id,
+            startTime: status === EmploymentStatus.Pending ? "2026-10-01" : "2026-01-01",
+            status,
+          })
+          .returning();
+        const response = await updateThroughProtocol(app, protocol, employment!.id, input);
+        expect(response.status).toBe(200);
+        const expectedStatus =
+          status === EmploymentStatus.Pause && calculated !== EmploymentStatus.Disable
+            ? EmploymentStatus.Pause
+            : calculated;
+        await expectEmploymentDetail(app, protocol, employment!.id, { ...input, status: expectedStatus });
+      }
+    });
+
+    test(`${protocol} rejects invalid, concealed, and ended period updates before side effects`, async () => {
+      const fixture = await seed();
+      const id = fixture.employment!.id;
+      const subject = commands();
+      const full = employmentApp(subject, fixture.user.id);
+      const outside = employmentApp(subject, fixture.user.id, fixture.org.id + 100);
+      await seedAssignments(id, fixture.org.id);
+      const before = await facts();
+      for (const [input, schemaRejected] of [
+        [{ startTime: "2026-02-30" }, true],
+        [{ startTime: "2026-09-02", endTime: "2026-09-02" }, false],
+        [{ startTime: "2026-09-03", endTime: "2026-09-02" }, false],
+        [{ endTime: fixture.employment!.startTime }, false],
+      ] as const) {
+        const invalid = await updateThroughProtocol(full, protocol, id, { ...input, description: "Do not write" });
+        expect(invalid.status).toBe(protocol === "REST" && schemaRejected ? 422 : 400);
+      }
+      for (const attemptedId of [id, id + 100]) {
+        const denied = await updateThroughProtocol(outside, protocol, attemptedId, { endTime: today });
+        expect(denied.status).toBe(404);
+      }
+      const afterDenials = await facts();
+      expect(afterDenials).toEqual(before);
+      await subject.end.execute({ employmentId: id });
+      const ended = await facts();
+      const response = await updateThroughProtocol(full, protocol, id, { startTime: null, endTime: null });
+      expect(response.status).toBe(409);
+      const after = await facts();
+      expect(after).toEqual(ended);
+    });
+
+    test(`${protocol} clears dates and never restores a responsibility paused by a date edit`, async () => {
+      const fixture = await seed();
+      const id = fixture.employment!.id;
+      const [outside] = await harness.db
+        .insert(organizations)
+        .values({
+          orgCode: "OUTSIDE",
+          orgName: "Outside HR",
+          path: "/OUTSIDE",
+          level: OrganizationLevel.One,
+          orgType: OrganizationType.Department,
+        })
+        .returning();
+      const children = await seedAssignments(id, outside!.id);
+      await harness.db
+        .update(assignments)
+        .set({ status: AssignmentStatus.Pause })
+        .where(eq(assignments.id, children[1]!.id));
+      const app = employmentApp(commands(), fixture.user.id, fixture.org.id);
+      const future = await updateThroughProtocol(app, protocol, id, { startTime: "2026-09-08", endTime: "2026-09-09" });
+      expect(future.status).toBe(200);
+      await expectEmploymentDetail(app, protocol, id, { status: EmploymentStatus.Pending });
+      const deferred = await facts();
+      expect(deferred.assignments.map(({ status }) => status)).toEqual([
+        AssignmentStatus.Pause,
+        AssignmentStatus.Pause,
+      ]);
+      expect(deferred.audits.map(({ action, targetId, eventTime }) => ({ action, targetId, eventTime }))).toEqual([
+        { action: "admin.organization_responsibility_assignment.pause", targetId: children[0]!.id, eventTime: now },
+        { action: "admin.employment.update", targetId: id, eventTime: now },
+      ]);
+      await expectCompletedUserDocumentSources(harness.db, fixture.user.id, [
+        "employment",
+        "organization-responsibility-assignment",
+      ]);
+
+      const clearEnd = await updateThroughProtocol(app, protocol, id, { endTime: null });
+      expect(clearEnd.status).toBe(200);
+      await expectEmploymentDetail(app, protocol, id, {
+        startTime: "2026-09-08",
+        endTime: null,
+        status: EmploymentStatus.Pending,
+      });
+      const clearStart = await updateThroughProtocol(app, protocol, id, { startTime: null });
+      expect(clearStart.status).toBe(200);
+      await expectEmploymentDetail(app, protocol, id, {
+        startTime: null,
+        endTime: null,
+        status: EmploymentStatus.Enable,
+      });
+      const after = await facts();
+      expect(after.assignments).toEqual(deferred.assignments);
+      const noop = await updateThroughProtocol(app, protocol, id, { startTime: null, endTime: null });
+      expect(noop.status).toBe(200);
+      const result = { changed: false, result: null };
+      const payload = await noop.json();
+      expect(payload).toMatchObject(protocol === "REST" ? { data: result } : { result: { data: result } });
+      const afterNoop = await facts();
+      expect(afterNoop).toEqual(after);
+    });
+
+    test(`${protocol} HR edit ends an in-scope Employment and uses the submitted start and actual cutoff day`, async () => {
+      const fixture = await seed();
+      const id = fixture.employment!.id;
+      await harness.db.update(employments).set({ isPrimary: true }).where(eq(employments.id, id));
+      const children = await seedAssignments(id, fixture.org.id);
+      await harness.db
+        .update(assignments)
+        .set({ status: AssignmentStatus.Pause })
+        .where(eq(assignments.id, children[1]!.id));
+      const app = employmentApp(commands(), fixture.user.id, fixture.org.id);
+
+      const response = await updateThroughProtocol(app, protocol, id, {
+        startTime: "2026-08-30",
+        endTime: "2026-09-03",
+        description: "Final note",
+      });
+      expect(response.status).toBe(200);
+      const payload = await response.json();
+      const result = { changed: true, result: null };
+      expect(payload).toMatchObject(protocol === "REST" ? { data: result } : { result: { data: result } });
+      await expectEmploymentDetail(app, protocol, id, {
+        status: EmploymentStatus.Disable,
+        isPrimary: false,
+        startTime: "2026-08-30",
+        endTime: today,
+        description: "Final note",
+        allowedActions: { editPeriod: { allowed: false } },
+      });
+      const after = await facts();
+      expect(after.assignments.map(({ status, endTime }) => ({ status, endTime }))).toEqual([
+        { status: AssignmentStatus.Disable, endTime: now },
+        { status: AssignmentStatus.Disable, endTime: now },
+      ]);
+      expect(after.audits.find(({ action }) => action === "admin.employment.update")).toMatchObject({
+        actorUserId: fixture.user.id,
+        actorUsername: "actor",
+        details: {
+          fromStatus: EmploymentStatus.Enable,
+          toStatus: EmploymentStatus.Disable,
+          previousPeriod: { startTime: fixture.employment!.startTime, endTime: null },
+          finalPeriod: { startTime: "2026-08-30", endTime: today },
+        },
+      });
+      await expectCompletedUserDocumentSources(harness.db, fixture.user.id, [
+        "employment",
+        "organization-responsibility-assignment",
+      ]);
+    });
+  }
+  test("A note edit leaves an overdue Enable Employment and its responsibilities unchanged", async () => {
+    const fixture = await seed();
+    const id = fixture.employment!.id;
+    await harness.db.update(employments).set({ endTime: today }).where(eq(employments.id, id));
+    await seedAssignments(id, fixture.org.id);
+    const app = employmentApp(commands(), fixture.user.id);
+    const before = await facts();
+
+    const note = await updateThroughProtocol(app, "REST", id, { description: "Overdue note" });
+    expect(note.status).toBe(200);
+    await expectEmploymentDetail(app, "REST", id, {
+      status: EmploymentStatus.Enable,
+      endTime: today,
+      description: "Overdue note",
+    });
+    const after = await facts();
+    expect(after.assignments).toEqual(before.assignments);
+    expect(after.audits).toMatchObject([{ details: { patch: { description: "Overdue note" } } }]);
+
+    const samePeriod = await updateThroughProtocol(app, "REST", id, { endTime: today });
+    expect(samePeriod.status).toBe(200);
+    const samePeriodBody = await samePeriod.json();
+    expect(samePeriodBody).toMatchObject({ data: { changed: false, result: null } });
+    expect(await facts()).toEqual(after);
+
+    const changedPeriod = await updateThroughProtocol(app, "REST", id, { startTime: "2026-09-01", endTime: today });
+    expect(changedPeriod.status).toBe(200);
+    await expectEmploymentDetail(app, "REST", id, { status: EmploymentStatus.Disable, endTime: today });
+  });
+
+  for (const stage of ["cascade", "audit", "outbox"] as const) {
+    test(`Period edit rolls back Employment, selected responsibilities and publication on ${stage} failure`, async () => {
+      const fixture = await seed();
+      const id = fixture.employment!.id;
+      const children = await seedAssignments(id, fixture.org.id);
+      const before = await facts();
+      const sentinel = new Error(`period ${stage} failure`);
+      const subject = commands((tx) => ({
+        ...tx,
+        responsibilityParentLifecycle: {
+          ...tx.responsibilityParentLifecycle,
+          endOpenAssignmentsForEmployment: async (input) => {
+            if (stage !== "cascade")
+              return await tx.responsibilityParentLifecycle.endOpenAssignmentsForEmployment(input);
+            await tx.responsibilityParentLifecycle.endOpenAssignmentsForEmployment({
+              ...input,
+              selectedAssignments: input.selectedAssignments.filter(({ id }) => id === children[0]!.id),
+            });
+            throw sentinel;
+          },
+        },
+        auditService: {
+          ...tx.auditService,
+          recordAuditLog: async (input) => {
+            await tx.auditService.recordAuditLog(input);
+            if (stage === "audit" && input.action === "admin.employment.update") throw sentinel;
+          },
+        },
+        userDocumentInvalidation: {
+          ...tx.userDocumentInvalidation,
+          recordChanges: async (changes) => {
+            await tx.userDocumentInvalidation.recordChanges(changes);
+            if (stage === "outbox") throw sentinel;
+          },
+        },
+      }));
+
+      const error = await failure(() =>
+        subject.update.execute({ employmentId: id, endTime: today, description: "Abort" }),
+      );
+      expect(error).toBe(sentinel);
+      const after = await facts();
+      expect(after).toEqual(before);
+      expect(subject.enqueueRebuildJobs).not.toHaveBeenCalled();
+    });
+  }
+
+  for (const command of ["pause", "end"] as const) {
+    test(`A concurrent period edit rechecks Employment after ${command} commits`, async () => {
+      const fixture = await seed();
+      const id = fixture.employment!.id;
+      await seedAssignments(id, fixture.org.id);
+      const entered = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      const first = commands((tx) => ({
+        ...tx,
+        auditService: {
+          ...tx.auditService,
+          recordAuditLog: async (input) => {
+            entered.resolve();
+            await release.promise;
+            await tx.auditService.recordAuditLog(input);
+          },
+        },
+      }));
+      const firstPending =
+        command === "pause"
+          ? first.availability.execute({ employmentId: id, command: "pause" })
+          : first.end.execute({ employmentId: id });
+      await Promise.race([entered.promise, firstPending]);
+      const app = employmentApp(commands(), fixture.user.id);
+      const secondPending = updateThroughProtocol(app, "REST", id, { startTime: today, endTime: null });
+      try {
+        await waitForLock("employment");
+      } finally {
+        release.resolve();
+        await Promise.allSettled([firstPending, secondPending]);
+      }
+      await firstPending;
+      const response = await secondPending;
+      expect(response.status).toBe(command === "pause" ? 200 : 409);
+      await expectEmploymentDetail(
+        app,
+        "REST",
+        id,
+        command === "pause"
+          ? { status: EmploymentStatus.Pause, startTime: today, endTime: null }
+          : { status: EmploymentStatus.Disable, startTime: fixture.employment!.startTime, endTime: today },
+      );
+      const after = await facts();
+      expect(after.assignments.map(({ status }) => status)).toEqual(
+        Array(2).fill(command === "pause" ? AssignmentStatus.Pause : AssignmentStatus.Disable),
+      );
+      expect(after.audits.filter(({ action }) => action === "admin.employment.update")).toHaveLength(
+        command === "pause" ? 1 : 0,
+      );
+    });
+  }
+
+  test.each(["expired edit", "initially future edit", "resume"] as const)(
+    "%s ends using the instant after acquiring the selected responsibility locks",
+    async (command) => {
+      const fixture = await seed();
+      const id = fixture.employment!.id;
+      const children = await seedAssignments(id, fixture.org.id);
+      if (command === "resume") {
+        await harness.db
+          .update(employments)
+          .set({ status: EmploymentStatus.Pause, endTime: today })
+          .where(eq(employments.id, id));
+      }
+      await harness.db
+        .update(assignments)
+        .set({ status: AssignmentStatus.Pause })
+        .where(eq(assignments.id, children[0]!.id));
+      const locked = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      let instant = new Date("2026-09-07T15:59:59Z");
+      const clock = { nowDate: () => instant };
+      const subject = commands(undefined, undefined, undefined, undefined, clock);
+      const app = employmentApp(subject, fixture.user.id);
+      const otherTransaction = harness.sql.begin(async (tx) => {
+        await tx`select id from organization_responsibility_assignment where id = ${children[1]!.id} for update`;
+        locked.resolve();
+        await release.promise;
+        if (command === "resume")
+          await tx`update organization_responsibility_assignment set start_time = ${instant.toISOString()} where id = ${children[1]!.id}`;
+      });
+      await Promise.race([locked.promise, otherTransaction]);
+      const pending =
+        command === "resume"
+          ? app.request(`/admin/employments/${id}/resume`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ expectedAncestorOrgCode: "ORG" }),
+            })
+          : updateThroughProtocol(
+              app,
+              "REST",
+              id,
+              command === "initially future edit"
+                ? { startTime: "2026-09-08", endTime: "2026-09-09" }
+                : { endTime: today },
+            );
+      try {
+        await waitForLock("organization_responsibility_assignment");
+        const lockedEmployment = await failure(() =>
+          harness.sql.begin(async (tx) => {
+            await tx`select id from employment where id = ${id} for update nowait`;
+          }),
+        );
+        expect(extractPostgresError(lockedEmployment)?.code).toBe("55P03");
+        instant = new Date(command === "initially future edit" ? "2026-09-08T16:00:00Z" : "2026-09-07T16:00:00Z");
+      } finally {
+        release.resolve();
+        await Promise.allSettled([otherTransaction, pending]);
+      }
+      await otherTransaction;
+      const response = await pending;
+      expect(response.status).toBe(200);
+      await expectEmploymentDetail(app, "REST", id, {
+        status: EmploymentStatus.Disable,
+        endTime: command === "initially future edit" ? "2026-09-09" : "2026-09-08",
+      });
+      const after = await facts();
+      expect(after.assignments.map(({ status, endTime }) => ({ status, endTime }))).toEqual(
+        Array(2).fill({ status: AssignmentStatus.Disable, endTime: instant }),
+      );
+      expect(after.audits.map(({ action, eventTime }) => ({ action, eventTime }))).toEqual([
+        ...Array(2).fill({ action: "admin.organization_responsibility_assignment.end", eventTime: instant }),
+        { action: command === "resume" ? "admin.employment.resume" : "admin.employment.update", eventTime: instant },
+      ]);
+    },
+  );
+
+  test("Period edit exposes required after-commit failure with the committed facts still readable", async () => {
+    const fixture = await seed();
+    const id = fixture.employment!.id;
+    const subject = commands((tx) => {
+      tx.afterCommit.required("employment-edit-required", () => {
+        throw new Error("required propagation failure");
+      });
+      return tx;
+    });
+    const app = employmentApp(subject, fixture.user.id);
+    const response = await updateThroughProtocol(app, "tRPC", id, { startTime: "2026-09-09" });
+    expect(response.status).toBe(500);
+    const payload = await response.json();
+    expect(payload).toMatchObject({ error: { data: { serviceCode: "ADMIN_MUTATION_COMMITTED" } } });
+    await expectEmploymentDetail(app, "tRPC", id, { status: EmploymentStatus.Pending, startTime: "2026-09-09" });
+    const after = await facts();
+    expect(after.audits).toMatchObject([{ action: "admin.employment.update", details: { changed: true } }]);
+    await expectCompletedUserDocumentSources(harness.db, fixture.user.id);
+  });
+});
 describe("Employment mutations through production PostgreSQL UnitOfWork", () => {
+  for (const protocol of ["REST", "tRPC"] as const) {
+    const createPath = protocol === "REST" ? "/admin/employments" : "/rpc/create";
+    const createInput = { username: "holder", orgCode: "ORG", posCode: "POS" };
+    const tomorrow = "2026-09-08";
+
+    async function command(
+      app: ReturnType<typeof employmentApp>,
+      operation: "pause" | "resume" | "end" | "transfer" | "setPrimary",
+      id: number,
+      data: Record<string, unknown> = {},
+    ) {
+      const restOperation = operation === "setPrimary" ? "set-primary" : operation;
+      const path = protocol === "REST" ? "/admin/employments/" + id + "/" + restOperation : "/rpc/" + operation;
+      const body = protocol === "REST" ? data : operation === "transfer" ? { id, data } : { id, ...data };
+      const response = await app.request(path, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      return { status: response.status, body: await response.json() };
+    }
+
+    test.each([
+      { startTime: tomorrow, endTime: null, target: EmploymentStatus.Pending },
+      { startTime: today, endTime: tomorrow, target: EmploymentStatus.Enable },
+      { startTime: "2026-09-01", endTime: today, target: EmploymentStatus.Disable },
+    ])(
+      protocol + " pauses an open Employment and resumes it to state $target",
+      async ({ startTime, endTime, target }) => {
+        const fixture = await seed(false);
+        const initiallyPending = target === EmploymentStatus.Pending;
+        const [row] = await harness.db
+          .insert(employments)
+          .values({
+            ...fixture.value,
+            startTime,
+            endTime,
+            isPrimary: true,
+            status: initiallyPending ? EmploymentStatus.Pending : EmploymentStatus.Enable,
+          })
+          .returning();
+        const id = row!.id;
+        if (!initiallyPending) await seedAssignments(id, fixture.org.id);
+        const app = employmentApp(commands(), fixture.user.id, fixture.org.id);
+        if (initiallyPending) {
+          const before = await facts();
+          const rejected = await command(app, "resume", id, { expectedAncestorOrgCode: "ORG" });
+          expect(rejected.status).toBe(409);
+          expect(await facts()).toEqual(before);
+        }
+
+        const paused = await command(app, "pause", id);
+        expect(paused.status).toBe(200);
+        const afterPause = await facts();
+        expect(afterPause.employments[0]).toMatchObject({
+          status: EmploymentStatus.Pause,
+          startTime,
+          endTime,
+          isPrimary: true,
+        });
+        expect(afterPause.assignments.every((item) => item.status === AssignmentStatus.Pause)).toBe(true);
+
+        const resumed = await command(app, "resume", id, { expectedAncestorOrgCode: "ORG" });
+        expect(resumed.status).toBe(200);
+        const after = await facts();
+        const ended = target === EmploymentStatus.Disable;
+        expect(after.employments[0]).toMatchObject({ status: target, startTime, endTime, isPrimary: !ended });
+        expect(
+          after.assignments.every(
+            (item) => item.status === (ended ? AssignmentStatus.Disable : AssignmentStatus.Pause),
+          ),
+        ).toBe(true);
+        expect(after.audits.find((item) => item.action === "admin.employment.resume")?.details).toMatchObject({
+          changed: true,
+          fromStatus: EmploymentStatus.Pause,
+          toStatus: target,
+          previousPeriod: { startTime, endTime },
+          finalPeriod: { startTime, endTime },
+        });
+        if (ended) {
+          expect(after.audits).toContainEqual(
+            expect.objectContaining({
+              details: expect.objectContaining({ cause: { kind: "employment", action: "resume", employmentId: id } }),
+            }),
+          );
+        }
+        if (initiallyPending) {
+          const end = await command(app, "end", id);
+          expect(end.status).toBe(200);
+          expect((await facts()).employments[0]).toMatchObject({
+            status: EmploymentStatus.Disable,
+            startTime: null,
+            endTime: today,
+            isPrimary: false,
+          });
+        }
+      },
+    );
+
+    test(protocol + " transfers a Pending Employment immediately with an independent cutoff date", async () => {
+      const fixture = await seed(false);
+      const [row] = await harness.db
+        .insert(employments)
+        .values({
+          ...fixture.value,
+          startTime: tomorrow,
+          endTime: "2026-09-15",
+          isPrimary: true,
+          status: EmploymentStatus.Pending,
+        })
+        .returning();
+      await harness.db.insert(positions).values({ posCode: "DEST", posName: "Destination" });
+      const app = employmentApp(commands(), fixture.user.id);
+      const data = { newOrgCode: "ORG", newPosCode: "DEST", isPrimary: false };
+      const before = await facts();
+      for (const endTime of [today, "2026-09-06"]) {
+        const invalid = await command(app, "transfer", row!.id, { ...data, endTime });
+        expect(invalid.status).toBe(400);
+        expect(await facts()).toEqual(before);
+      }
+      const transferred = await command(app, "transfer", row!.id, { ...data, endTime: tomorrow });
+      expect(transferred.status).toBe(200);
+      const after = await facts();
+      expect(after.employments).toMatchObject([
+        { id: row!.id, status: EmploymentStatus.Disable, startTime: null, endTime: today, isPrimary: false },
+        { status: EmploymentStatus.Enable, startTime: today, endTime: tomorrow, isPrimary: false },
+      ]);
+    });
+
+    test(protocol + " lets HR set an in-scope Pending Primary and includes it in resignation", async () => {
+      const fixture = await seed();
+      const [position] = await harness.db
+        .insert(positions)
+        .values({ posCode: "SECOND", posName: "Second" })
+        .returning();
+      await harness.db.update(employments).set({ isPrimary: true }).where(eq(employments.id, fixture.employment!.id));
+      const [pending] = await harness.db
+        .insert(employments)
+        .values({
+          ...fixture.value,
+          posId: position!.id,
+          startTime: tomorrow,
+          status: EmploymentStatus.Pending,
+        })
+        .returning();
+      const subject = commands();
+      const app = employmentApp(subject, fixture.user.id, fixture.org.id);
+      const result = await command(app, "setPrimary", pending!.id);
+      expect(result.status).toBe(200);
+      expect((await facts()).employments.map(({ isPrimary }) => isPrimary)).toEqual([false, true]);
+
+      const resigned = await app.request(
+        protocol === "REST" ? "/admin/employments/users/holder/resign" : "/rpc/resignUser",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ username: "holder" }),
+        },
+      );
+      expect(resigned.status).toBe(200);
+      const after = await facts();
+      expect(after.employments).toMatchObject([
+        { status: EmploymentStatus.Disable, isPrimary: false, endTime: today },
+        { status: EmploymentStatus.Disable, isPrimary: false, startTime: null, endTime: today },
+      ]);
+      expect(after.users[0]?.status).toBe(UserStatus.Disable);
+    });
+
+    test(protocol + " conceals a Pending Employment outside HR scope without writing", async () => {
+      const fixture = await seed(false);
+      const [row] = await harness.db
+        .insert(employments)
+        .values({
+          ...fixture.value,
+          startTime: tomorrow,
+          status: EmploymentStatus.Pending,
+        })
+        .returning();
+      const app = employmentApp(commands(), fixture.user.id, fixture.org.id + 100);
+      const before = await facts();
+      const denied = await command(app, "pause", row!.id);
+      expect(denied.status).toBe(404);
+      expect(await facts()).toEqual(before);
+    });
+    const periods = [
+      { input: {}, startTime: null, endTime: null, status: EmploymentStatus.Enable },
+      { input: { startTime: today }, startTime: today, endTime: null, status: EmploymentStatus.Enable },
+      {
+        input: { startTime: "2026-09-06", endTime: "2026-09-08" },
+        startTime: "2026-09-06",
+        endTime: "2026-09-08",
+        status: EmploymentStatus.Enable,
+      },
+      {
+        input: { startTime: "2026-09-08", endTime: null },
+        startTime: "2026-09-08",
+        endTime: null,
+        status: EmploymentStatus.Pending,
+      },
+      {
+        input: { startTime: null, endTime: "2026-09-08" },
+        startTime: null,
+        endTime: "2026-09-08",
+        status: EmploymentStatus.Enable,
+      },
+    ];
+    test.each(periods)(
+      protocol + " creates and reads the committed period %#",
+      async ({ input, startTime, endTime, status }) => {
+        const fixture = await seed(false);
+        const app = employmentApp(commands(), fixture.user.id);
+        const response = await app.request(createPath, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ...createInput, ...input }),
+        });
+        const created = await response.json();
+        expect(response.status).toBe(200);
+        const [row] = (await facts()).employments;
+        const id = row!.id;
+        const result = { changed: true, result: { id } };
+        expect(created).toMatchObject(protocol === "REST" ? { data: result } : { result: { data: result } });
+        const detailPath =
+          protocol === "REST"
+            ? "/admin/employments/" + id
+            : "/rpc/detail?input=" + encodeURIComponent(JSON.stringify({ id }));
+        const detailResponse = await app.request(detailPath);
+        const detail = await detailResponse.json();
+        expect(detailResponse.status).toBe(200);
+        const dates = { startTime, endTime, status };
+        expect(detail).toMatchObject(protocol === "REST" ? { data: dates } : { result: { data: dates } });
+        expect(row).toMatchObject(dates);
+      },
+    );
+
+    test.each([
+      { startTime: "2026-02-30" },
+      { startTime: "0000-01-01" },
+      { startTime: "2026-09-07T00:00:00Z" },
+      { startTime: today, endTime: today },
+      { startTime: "2026-09-08", endTime: today },
+      { endTime: today },
+      { endTime: "2026-09-06" },
+    ])(protocol + " rejects an invalid or expired creation period %#", async (period) => {
+      const fixture = await seed(false);
+      const app = employmentApp(commands(), fixture.user.id);
+      const before = await facts();
+      const response = await app.request(createPath, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...createInput, ...period, isPrimary: true }),
+      });
+      const schemaRejected =
+        period.startTime === "2026-02-30" ||
+        period.startTime === "0000-01-01" ||
+        period.startTime === "2026-09-07T00:00:00Z";
+      expect(response.status).toBe(protocol === "REST" && schemaRejected ? 422 : 400);
+      const after = await facts();
+      expect(after).toEqual(before);
+    });
+  }
+
   for (const scoped of [false, true]) {
     for (const status of [UserStatus.Enable, UserStatus.Pause, UserStatus.Disable]) {
       test(`New tenures by ${scoped ? "HR" : "Full"} respect User status ${status}`, async () => {
@@ -443,7 +1187,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
           const afterTransfer = await facts();
           expect(afterTransfer.users).toEqual(before.users);
           expect(afterTransfer.employments).toMatchObject([
-            { id: result.result.id, status: EmploymentStatus.Disable, endTime: now, isPrimary: false },
+            { id: result.result.id, status: EmploymentStatus.Disable, endTime: today, isPrimary: false },
             { id: transferred.result.id, status: EmploymentStatus.Enable, endTime: null, isPrimary: true },
           ]);
         }
@@ -487,11 +1231,9 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
       await harness.db.update(users).set({ status: UserStatus.Disable }).where(eq(users.id, fixture.user.id));
       const authorization = await employmentAuthorization(fixture.org.id, scoped);
       const subject = commands();
-      const edit = await subject.profile.updateEmployment(
-        id,
-        { description: "Maintained while disabled" },
-        undefined,
-        authorization,
+      const edit = await subject.update.execute(
+        { employmentId: id, description: "Maintained while disabled" },
+        { authorization },
       );
       expect(edit.changed).toBe(true);
       const pause = await subject.availability.execute({ employmentId: id, command: "pause" }, { authorization });
@@ -512,7 +1254,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
       expect(before.employments[0]).toMatchObject({
         description: "Maintained while disabled",
         status: EmploymentStatus.Disable,
-        endTime: now,
+        endTime: today,
         isPrimary: false,
       });
       expect(before.assignments.every((row) => row.status === AssignmentStatus.Disable)).toBe(true);
@@ -529,51 +1271,140 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
   }
 
   for (const protocol of ["REST", "tRPC"] as const) {
+    test(`${protocol} ends, transfers and resigns using the same Beijing date and retains original dates in audit`, async () => {
+      const fixture = await seed();
+      const original = fixture.employment;
+      const [secondPosition] = await harness.db
+        .insert(positions)
+        .values([
+          { posCode: "SECOND", posName: "Second" },
+          { posCode: "DEST", posName: "Destination" },
+        ])
+        .returning();
+      if (!original || !secondPosition) throw new Error("Missing Employment fixture");
+      const [second] = await harness.db
+        .insert(employments)
+        .values({ ...fixture.value, posId: secondPosition.id, isPrimary: true, startTime: today })
+        .returning();
+      if (!second) throw new Error("Missing second Employment fixture");
+      await harness.db
+        .update(employments)
+        .set({ startTime: "2026-10-01", endTime: "2026-10-31" })
+        .where(eq(employments.id, original.id));
+      await seedAssignments(original.id, fixture.org.id);
+      const subject = commands(undefined, undefined, undefined, fixture.user.subjectIdentifier);
+      const app = employmentApp(subject, fixture.user.id);
+      const detailPath =
+        protocol === "REST"
+          ? `/admin/employments/${original.id}`
+          : `/rpc/detail?input=${encodeURIComponent(JSON.stringify({ id: original.id }))}`;
+      async function expectPeriod(startTime: string | null, endTime: string | null, status: EmploymentStatus) {
+        const response = await app.request(detailPath);
+        const detail = await response.json();
+        expect(response.status).toBe(200);
+        const dates = { startTime, endTime, status };
+        expect(detail).toMatchObject(protocol === "REST" ? { data: dates } : { result: { data: dates } });
+      }
+      await expectPeriod("2026-10-01", "2026-10-31", EmploymentStatus.Enable);
+      const transferInput = { newOrgCode: "ORG", newPosCode: "DEST", isPrimary: true };
+      const actions = [
+        {
+          rest: { path: `/admin/employments/${original.id}/end` },
+          rpc: { path: "/rpc/end", input: { id: original.id } },
+          result: null,
+        },
+        {
+          rest: { path: `/admin/employments/${second.id}/transfer`, input: transferInput },
+          rpc: { path: "/rpc/transfer", input: { id: second.id, data: transferInput } },
+          result: { id: expect.any(Number) },
+        },
+        {
+          rest: { path: "/admin/employments/users/holder/resign" },
+          rpc: { path: "/rpc/resignUser", input: { username: "holder" } },
+          result: null,
+        },
+      ];
+      for (const action of actions) {
+        const { path, input } = protocol === "REST" ? action.rest : action.rpc;
+        const response = await app.request(path, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(input),
+        });
+        const result = await response.json();
+        expect(response.status).toBe(200);
+        const mutation = { changed: true, result: action.result };
+        expect(result).toMatchObject(protocol === "REST" ? { data: mutation } : { result: { data: mutation } });
+        if (action !== actions[2]) {
+          const [user] = await harness.db.select().from(users).where(eq(users.id, fixture.user.id));
+          expect(user?.status).toBe(UserStatus.Enable);
+          expect(subject.revokeUserSessions).not.toHaveBeenCalled();
+        }
+        if (action === actions[1]) {
+          const [created] = await harness.db
+            .select()
+            .from(employments)
+            .where(eq(employments.status, EmploymentStatus.Enable));
+          expect(created).toMatchObject({ startTime: today, endTime: null, isPrimary: true });
+        }
+      }
+      await expectPeriod(null, today, EmploymentStatus.Disable);
+      const after = await facts();
+      expect(after.users[0]?.status).toBe(UserStatus.Disable);
+      expect(subject.revokeUserSessions).toHaveBeenCalledTimes(1);
+      expect(
+        after.employments.map(({ status, isPrimary, startTime, endTime }) => ({
+          status,
+          isPrimary,
+          startTime,
+          endTime,
+        })),
+      ).toEqual(
+        Array.from({ length: 3 }, () => ({
+          status: EmploymentStatus.Disable,
+          isPrimary: false,
+          startTime: null,
+          endTime: today,
+        })),
+      );
+      const finalPeriod = { startTime: null, endTime: today };
+      expect(after.audits.map(({ action, eventTime }) => ({ action, eventTime }))).toEqual(
+        [
+          "admin.organization_responsibility_assignment.end",
+          "admin.organization_responsibility_assignment.end",
+          "admin.employment.end",
+          "admin.employment.transfer",
+          "admin.employment.resign_user",
+        ].map((action) => ({ action, eventTime: now })),
+      );
+      expect(after.audits.find((entry) => entry.action === "admin.employment.end")?.details).toMatchObject({
+        previousPeriod: { startTime: "2026-10-01", endTime: "2026-10-31" },
+        finalPeriod,
+      });
+      expect(after.audits.find((entry) => entry.action === "admin.employment.transfer")?.details).toMatchObject({
+        previousPeriod: { startTime: today, endTime: null },
+        finalPeriod,
+      });
+      expect(after.audits.find((entry) => entry.action === "admin.employment.resign_user")?.details).toMatchObject({
+        endedEmployments: [{ previousPeriod: { startTime: today, endTime: null }, finalPeriod }],
+      });
+      expect(after.assignments.map(({ status, endTime }) => ({ status, endTime }))).toEqual([
+        { status: AssignmentStatus.Disable, endTime: now },
+        { status: AssignmentStatus.Disable, endTime: now },
+      ]);
+      await expectCompletedUserDocumentSources(harness.db, fixture.user.id, [
+        "employment",
+        "organization-responsibility-assignment",
+        "user",
+      ]);
+    });
+
     test(`${protocol} uses the current User status for stale create/transfer requests and returns a stable rejection`, async () => {
       const fixture = await seed();
       await seedAssignments(fixture.employment!.id, fixture.org.id);
       await harness.db.insert(positions).values({ posCode: "DEST", posName: "Destination" });
       const subject = commands();
-      const adapter = createEmploymentAdapter({
-        employmentService: subject.profile,
-        createEmployment: subject.create,
-        transferEmployment: subject.transfer,
-        changeEmploymentAvailability: subject.availability,
-        endEmployment: subject.end,
-        managePrimaryEmployment: subject.primary,
-        resignUser: subject.resign,
-      });
-      const app = new Hono<{
-        Variables: {
-          adminAuthorizationPolicy: ReturnType<typeof createAdminAuthorizationPolicy>;
-          userId: number;
-          username: string;
-          userDetailDto: { roles: string[] };
-        };
-      }>();
-      app.use("*", async (context, next) => {
-        context.set("userId", fixture.user.id);
-        context.set("username", "actor");
-        context.set("userDetailDto", { roles: ["iam:admin"] });
-        context.set(
-          "adminAuthorizationPolicy",
-          createAdminAuthorizationPolicy({
-            logger: { warn: mock() },
-            hrAdministrationScopeResolver: { resolveForActor: async () => null },
-          }),
-        );
-        await next();
-      });
-      app.onError(createErrorHandler({ error: mock(), warn: mock(), info: mock() }));
-      app.route("/admin", createEmploymentRoute(adapter));
-      app.all("/rpc/*", (context) =>
-        fetchRequestHandler({
-          endpoint: "/rpc",
-          req: context.req.raw,
-          router: adapter.employmentAdminRouter,
-          createContext: () => ({ hono: context }),
-        }),
-      );
+      const app = employmentApp(subject, fixture.user.id);
       const visible = await app.request(`/admin/employments/${fixture.employment!.id}`);
       const visibleBody = await visible.json();
       expect(visibleBody).toMatchObject({ data: { allowedActions: { transfer: { allowed: true } } } });
@@ -621,6 +1452,19 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
       });
     });
   }
+
+  test("creates an enabled Employment with both dates unset when the Admin command omits them", async () => {
+    const fixture = await seed(false);
+    const app = employmentApp(commands(), fixture.user.id);
+    const response = await app.request("/admin/employments", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: "holder", orgCode: "ORG", posCode: "POS" }),
+    });
+    expect(response.status).toBe(200);
+    const created = await facts();
+    expect(created.employments).toMatchObject([{ status: EmploymentStatus.Enable, startTime: null, endTime: null }]);
+  });
 
   test("Primary no-ops audit intent without rewriting Employment or registering dirty", async () => {
     const fixture = await seed();
@@ -774,14 +1618,17 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
     expect(after.employments.find((row) => row.id === higher!.id)).toMatchObject({
       isPrimary: false,
       status: EmploymentStatus.Disable,
-      endTime: now,
+      endTime: today,
     });
     // Newly inserted rows were absent from both selected write sets; no phantom protection is claimed.
-    for (const id of [created.result.id, transferred!.result.id]) {
+    for (const [id, startTime] of [
+      [created.result.id, null],
+      [transferred!.result.id, today],
+    ] as const) {
       expect(after.employments.find((row) => row.id === id)).toMatchObject({
         isPrimary: true,
         status: EmploymentStatus.Enable,
-        startTime: now,
+        startTime,
         endTime: null,
       });
     }
@@ -794,6 +1641,60 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
     await expectCompletedUserDocumentSources(harness.db, after.dirty[0]!.userId);
     expect(subject.enqueueRebuildJobs).toHaveBeenCalledTimes(2);
   });
+
+  test.each([false, true])(
+    "Primary Create uses the day after waiting for an existing Primary (expired: %s)",
+    async (expired) => {
+      const fixture = await seed();
+      const id = fixture.employment!.id;
+      await harness.db.update(employments).set({ isPrimary: true }).where(eq(employments.id, id));
+      await harness.db.insert(positions).values({ posCode: "NEW", posName: "New Position" });
+      const before = await facts();
+      const entered = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      let instant = new Date("2026-09-07T15:59:59Z");
+      const subject = commands(undefined, undefined, undefined, undefined, { nowDate: () => instant });
+      const app = employmentApp(subject, fixture.user.id);
+      const blocker = harness.sql.begin(async (tx) => {
+        await tx`select id from employment where id = ${id} for update`;
+        entered.resolve();
+        await release.promise;
+      });
+      await Promise.race([entered.promise, blocker]);
+      const pending = app.request("/admin/employments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          username: "holder",
+          orgCode: "ORG",
+          posCode: "NEW",
+          isPrimary: true,
+          ...(expired ? { endTime: "2026-09-08" } : { startTime: "2026-09-08" }),
+        }),
+      });
+      try {
+        await waitForLock("employment");
+        instant = new Date("2026-09-07T16:00:00Z");
+      } finally {
+        release.resolve();
+        await Promise.allSettled([blocker, pending]);
+      }
+      await blocker;
+      const response = await pending;
+      const after = await facts();
+      if (expired) {
+        expect(response.status).toBe(400);
+        expect(after).toEqual(before);
+      } else {
+        expect(response.status).toBe(200);
+        expect(after.employments).toMatchObject([
+          { id, isPrimary: false },
+          { isPrimary: true, status: EmploymentStatus.Enable, startTime: "2026-09-08" },
+        ]);
+        expect(after.audits).toMatchObject([{ action: "admin.employment.create", eventTime: instant }]);
+      }
+    },
+  );
 
   for (const command of ["set", "clear"] as const) {
     test(`Primary ${command} audit failure leaves no committed business, audit or dirty changes`, async () => {
@@ -914,12 +1815,12 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
     expect(after.employments.find((row) => row.id === input.employmentId)).toMatchObject({
       status: EmploymentStatus.Disable,
       isPrimary: false,
-      endTime: now,
+      endTime: today,
     });
     expect(after.employments.find((row) => row.id === result.result.id)).toMatchObject({
       status: EmploymentStatus.Enable,
       isPrimary: true,
-      startTime: now,
+      startTime: today,
       endTime: null,
     });
     expect(after.assignments.map((row) => row.endTime)).toEqual([historicalEnd, now]);
@@ -953,7 +1854,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
       const second = commands();
       const secondPending =
         secondCommand === "profile"
-          ? second.profile.updateEmployment(id, { description: "Saved" })
+          ? second.update.execute({ employmentId: id, description: "Saved" })
           : secondCommand === "end"
             ? second.end.execute({ employmentId: id })
             : second.availability.execute({ employmentId: id, command: "pause" });
@@ -988,9 +1889,9 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
     const id = fixture.employment!.id;
     const subject = commands();
     const initial = await facts();
-    const empty = await failure(() => subject.profile.updateEmployment(id, {}));
+    const empty = await failure(() => subject.update.execute({ employmentId: id }));
     expect(empty).toBeInstanceOf(BadRequestError);
-    const edit = await subject.profile.updateEmployment(id, { description: null });
+    const edit = await subject.update.execute({ employmentId: id, description: null });
     expect(edit).toEqual({ changed: false, result: null });
     const afterEdit = await facts();
     expect(afterEdit).toEqual(initial);
@@ -1009,7 +1910,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
     expect(repeated).toEqual({ changed: false, result: null });
     const after = await facts();
     expect(after.employments).toEqual(ended.employments);
-    expect(after.employments[0]!.endTime).toEqual(now);
+    expect(after.employments[0]!.endTime).toEqual(today);
     expect(after.dirty).toEqual(ended.dirty);
     expect(after.audits.at(-1)!.details).toMatchObject({ changed: false });
     for (const command of ["resume", "pause"] as const) {
@@ -1022,32 +1923,46 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
     expect(afterInvalid).toEqual(after);
   });
 
-  for (const stage of ["audit", "dirty"] as const) {
+  for (const stage of ["cascade", "audit", "dirty"] as const) {
     test(`${stage} failure rolls back Employment, selected children, audit and dirty`, async () => {
       const fixture = await seed();
       await seedAssignments(fixture.employment!.id, fixture.org.id);
       const sentinel = new Error(`injected ${stage}`);
-      const subject = commands((tx) => ({
-        ...tx,
-        ...(stage === "audit"
-          ? {
-              auditService: {
-                ...tx.auditService,
-                recordAuditLog: async (input) => {
-                  await tx.auditService.recordAuditLog(input);
-                  throw sentinel;
-                },
+      const subject = commands((tx) => {
+        if (stage === "cascade") {
+          return {
+            ...tx,
+            responsibilityParentLifecycle: {
+              ...tx.responsibilityParentLifecycle,
+              endOpenAssignmentsForEmployment: async (input) => {
+                await tx.responsibilityParentLifecycle.endOpenAssignmentsForEmployment(input);
+                throw sentinel;
               },
-            }
-          : {
-              userDocumentInvalidation: {
-                recordChanges: async (changes) => {
-                  await tx.userDocumentInvalidation.recordChanges(changes);
-                  throw sentinel;
-                },
+            },
+          };
+        }
+        if (stage === "audit") {
+          return {
+            ...tx,
+            auditService: {
+              ...tx.auditService,
+              recordAuditLog: async (input) => {
+                await tx.auditService.recordAuditLog(input);
+                throw sentinel;
               },
-            }),
-      }));
+            },
+          };
+        }
+        return {
+          ...tx,
+          userDocumentInvalidation: {
+            recordChanges: async (changes) => {
+              await tx.userDocumentInvalidation.recordChanges(changes);
+              throw sentinel;
+            },
+          },
+        };
+      });
       const before = await facts();
       const error = await failure(() => subject.end.execute({ employmentId: fixture.employment!.id }));
       expect(error).toBe(sentinel);
@@ -1170,6 +2085,15 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
           .sort(),
       ).toEqual(children.map((row) => row.id));
       expect(after.audits).toHaveLength(3);
+      const parentAction =
+        parentCommand === "resign" ? "admin.employment.resign_user" : `admin.employment.${parentCommand}`;
+      expect(after.audits.find(({ action }) => action === parentAction)?.eventTime).toEqual(now);
+      expect(
+        after.audits.find(
+          ({ targetType, targetId }) =>
+            targetType === "organization_responsibility_assignment" && targetId === children[0]!.id,
+        )?.eventTime,
+      ).toEqual(now);
       await expectCompletedUserDocumentSources(harness.db, after.dirty[0]!.userId);
     });
   }
@@ -1196,7 +2120,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
       expect(committed.users[0]!.status).toBe(UserStatus.Disable);
       expect(committed.employments[0]).toMatchObject({
         status: EmploymentStatus.Disable,
-        endTime: now,
+        endTime: today,
         isPrimary: false,
       });
       const enqueuedBeforeRetry = subject.enqueueRebuildJobs.mock.calls.length;
@@ -1261,7 +2185,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
     expect(error).toBeInstanceOf(AdminMutationCommittedError);
     const after = await facts();
     expect(after.users[0]!.status).toBe(UserStatus.Disable);
-    expect(after.employments[0]!.endTime).toEqual(now);
+    expect(after.employments[0]!.endTime).toEqual(today);
     expect(after.audits).toMatchObject([{ action: "admin.employment.resign_user", details: { changed: true } }]);
     await expectCompletedUserDocumentSources(harness.db, after.dirty[0]!.userId);
   });
@@ -1346,8 +2270,8 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
     expect(result).toEqual({ changed: true, result: null });
     const after = await facts();
     expect(after.employments.map((row) => ({ status: row.status, endTime: row.endTime }))).toEqual([
-      { status: EmploymentStatus.Disable, endTime: now },
-      { status: EmploymentStatus.Disable, endTime: now },
+      { status: EmploymentStatus.Disable, endTime: today },
+      { status: EmploymentStatus.Disable, endTime: today },
     ]);
   });
 
@@ -1370,13 +2294,13 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
         },
       },
     }));
-    const input = { username: "holder", orgCode: "ORG", posCode: "POS" };
+    const input = { username: "holder", orgCode: "ORG", posCode: "POS", startTime: "2026-09-08" };
     const results = await Promise.allSettled([subject.create.execute(input), subject.create.execute(input)]);
     expect(results.filter((row) => row.status === "fulfilled")).toHaveLength(1);
     const rejected = results.find((row) => row.status === "rejected");
     expect(rejected?.reason).toBeInstanceOf(EmploymentAlreadyExistsError);
     const after = await facts();
-    expect(after.employments).toHaveLength(1);
+    expect(after.employments).toMatchObject([{ status: EmploymentStatus.Pending }]);
     expect(after.audits).toMatchObject([{ details: { changed: true } }]);
     await expectCompletedUserDocumentSources(harness.db, after.dirty[0]!.userId);
     const raw = await failure(() => harness.db.insert(employments).values(fixture.value));

@@ -1015,8 +1015,8 @@ async function seedAssociations() {
     { ancestorId: 20, descendantId: 20, depth: 0 },
   ]);
   await pg.db.insert(employments).values([
-    { id: 100, userId: 1, orgId: 11, posId: 10, startTime: new Date("2026-01-01T00:00:00Z") },
-    { id: 101, userId: 2, orgId: 20, posId: 10, startTime: new Date("2026-01-01T00:00:00Z") },
+    { id: 100, userId: 1, orgId: 11, posId: 10, startTime: "2026-01-01" },
+    { id: 101, userId: 2, orgId: 20, posId: 10, startTime: "2026-01-01" },
   ]);
   await pg.db.insert(organizationResponsibilityAssignments).values({
     employmentId: 101,

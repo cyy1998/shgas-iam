@@ -199,39 +199,45 @@ _Avoid_: Organization Responsibility Assignment History, assignment administrati
 _Avoid_: enabled-only cardinality, per-user responsibility deduplication, duplicate holder assignment
 
 **Organization Responsibility Assignment Integrity**:
-Assignment 创建或 Resume 时必须引用 Enable Employment；任何 Open Assignment 都必须引用 Open Employment、自身为 Enable 且未删除的目标 Organization、满足所属 Type 的 Open 基数，且 holder Employment 为 Pause 时不能保持 Enable，目标 Organization 的祖先状态不参与完整性判定。Employment Pause 必须 Pause 其 Enable Assignment，Employment Resume 不自动恢复责任，Employment End、Transfer 或 User Resignation 必须 End 其全部 Open Assignment；当 Organization 自身或任意 descendant 是 Open Assignment 的目标时，该 Organization 不得 Pause、Disable 或 Delete，仅有 Enable descendant 不构成阻断，任何来源造成的规则不满足均是 Organization Responsibility Integrity Violation。
+Assignment 创建或 Resume 时必须引用 Enable Employment；任何 Open Assignment 都必须引用 Open Employment、自身为 Enable 且未删除的目标 Organization、满足所属 Type 的 Open 基数，且 holder Employment 为未启用或 Pause 时不能保持 Enable，目标 Organization 的祖先状态不参与完整性判定。Employment 退回未启用或 Pause 时必须 Pause 其 Enable Assignment，再次启用不自动恢复责任，Employment End、Transfer 或 User Resignation 必须 End 其全部 Open Assignment；当 Organization 自身或任意 descendant 是 Open Assignment 的目标时，该 Organization 不得 Pause、Disable 或 Delete，仅有 Enable descendant 不构成阻断，任何来源造成的规则不满足均是 Organization Responsibility Integrity Violation。
 _Avoid_: best-effort responsibility cleanup, orphan responsibility, dynamically resurrected responsibility
 
 **Organization Responsibility Integrity Violation**:
 Open Assignment 与其 Employment、目标 Organization 本身或 Type 基数不再满足完整性规则的数据异常；祖先 Organization 的状态或删除不属于该完整性条件。异常不是正常生命周期状态，也不产生 Effective Organization Responsibility Assignment；正常读写必须 fail closed 并报告异常，修复流程不得借读取隐式改写事实。
 _Avoid_: paused assignment, automatic read repair, effective orphan responsibility
 
+任职有效期与生命周期的决定见 [ADR-0011](docs/adr/0011-model-employment-as-an-immutable-tenure-lifecycle.md)。
+
 **Employment**:
-用户以某个 Position 在某个 Organization 持有的一次任职期事实；未删除用户的 Enable、Pause 状态允许新增任职，Disable 状态禁止新增，常规 Admin 管理不预约未来任职，也不回溯或改写任职期边界。暂停可在同一 Employment 上恢复，结束后不可重开；返聘、重新任职或转岗产生新 Employment，它只描述组织归属与岗位身份，不表示组织责任或直接授予角色与权限。
+用户以某个 Position 在某个 Organization 持有的一次任职事实；未删除用户的 Enable、Pause 状态允许新增任职，Disable 状态禁止新增。任职有效期与生命周期状态正交，暂停可在同一 Employment 上恢复，结束后不可重开；返聘、重新任职或转岗产生新 Employment，它只描述组织归属与岗位身份，不表示组织责任或直接授予角色与权限。
 _Avoid_: reusable employment slot, Organization Responsibility Assignment, Role Assignment
 
 **Open Employment**:
-非 Legacy Employment Tombstone 且尚未结束的 Employment；它可以当前生效或暂停，但仍保持任职关系，因此会阻止其 Position 或所属 Organization 停用与软删除。同一用户在同一 Organization 和 Position 下最多只有一条 Open Employment，结束后的同组合历史不受此限制。
+非 Legacy Employment Tombstone 且尚未结束的 Employment，包含未启用、启用和暂停，均占用任职关系并阻止其 Position 或所属 Organization 停用、软删除以及关联 User 删除。同一用户在同一 Organization 和 Position 下最多只有一条 Open Employment，离职时三种状态一并结束，结束后的同组合历史不受此限制。
 _Avoid_: active employment, enabled employment
 
 **Employment End**:
-Open Employment 真实任职期的终态边界；结束后记录仍作为历史事实存在，不可删除、恢复或改写为继续任职。常规 Admin 对录入错误也通过结束旧任职并新建正确 Employment 处理。
+尚未结束的 Employment 进入结束状态的不可逆生命周期变化，并以实际结束日期更新有效期截止日；若原开始日不早于结束日则清空开始日，原日期由审计保留。结束后记录仍作为历史事实存在，不可删除、恢复或改写为继续任职，常规 Admin 对录入错误也通过结束旧任职并新建正确 Employment 处理。
 _Avoid_: employment deletion, reversible disable
+
+**Pending Employment**:
+等待日期驱动的状态转换使其启用的任职，中文称“未启用任职”；它可被人工暂停以阻止自动启用，但不允许强制提前启用。它属于 Open Employment，不属于 Effective Employment，也不同于暂停任职。
+_Avoid_: paused employment, ended employment, effective employment
 
 **Legacy Employment Tombstone**:
 旧版 Admin 删除入口产生的 `isDelete=true` Employment 兼容记录；它不等同于 Employment End，也不能据其更新时间推断真实结束时间。既有墓碑继续排除在任职、档案与授权计算之外，正式写路径不再产生新的墓碑。
 _Avoid_: ended employment, inferred employment history
 
 **Employment Lifecycle**:
-Employment 在 Open 期间只能通过显式命令暂停、恢复或结束；暂停与恢复可逆，结束不可逆，已完成的同一命令重试是不改写时间或审计的幂等操作。User Disable 不自动结束既有 Employment，也不额外禁止对已有 Open Employment 修改说明、暂停、恢复、结束或管理 Primary Employment。
+Employment 具有未启用、启用、暂停和结束状态；日期计算优先结束已到期任职，非暂停任职按日期进入未启用或启用，暂停在到期前保持，显式恢复解除暂停后重新按日期计算状态。结束不可逆，重复命令不重复改变生命周期事实；User Disable 不自动结束既有 Employment，也不额外禁止对已有 Open Employment 修改说明、暂停、恢复、结束或管理 Primary Employment。
 _Avoid_: generic status update, arbitrary status transition
 
 **Employment Transfer**:
-在同一时刻结束旧 Employment 并以新组织或岗位创建新 Employment 的原子业务过程；User 处于 Disable 时禁止转岗，新任职始终启用，即使旧任职曾暂停，且旧任职的组织责任不继承。管理员必须在转岗中明确选择新任职是否为 Primary Employment，不从旧任职默认继承。
+在同一操作中结束旧 Employment 并以新组织或岗位创建立即启用的新 Employment 的原子业务过程；旧任职当天结束，新任职开始日固定当天，截止日另行指定或留空，不继承旧有效期和组织责任。User 处于 Disable 时禁止转岗，管理员须明确选择新任职是否为 Primary Employment，即使旧任职暂停，新任职也立即启用。
 _Avoid_: in-place employment update, pause-preserving transfer
 
 **Primary Employment**:
-由管理员在一个用户的 Open Employment 中最多指定一条的可选主职标记；用户可以没有主任职，系统不根据任职数量或顺序自动选择或改派。暂停的 Employment 可以保留或被指定为主任职，Employment End 才会清除该标记。
+由管理员在一个用户的 Open Employment 中最多指定一条的可选主职标记；用户可以没有主任职，系统不根据任职数量或顺序自动选择或改派。未启用或暂停的 Employment 可以保留或被指定为主任职，Employment End 才会清除该标记。
 _Avoid_: required employment, automatically selected employment
 
 **Employment Authority**:
@@ -239,15 +245,15 @@ _Avoid_: required employment, automatically selected employment
 _Avoid_: last-writer-wins source, direct database writer
 
 **Employment Period**:
-一条 Employment 的权威业务时间边界，采用 `[startTime, endTime)`；空 `endTime` 表示尚未计划结束，非空时必须严格晚于 `startTime`。该区间由 Employment Authority 提供并与接收、处理及审计时间分离；当前 IAM Authority 使用命令的统一事务时刻。
-_Avoid_: Employment Tenure Interval, display-only employment dates, message receipt interval
+一条 Employment 的任职有效期，按北京时间的自然日采用左闭右开区间：包含开始日，不包含截止日；两端分别可空，表示无下界或无上界，两端均有值时开始日必须早于截止日。有效期与生命周期状态正交，日期范围不直接决定任职是否实际生效。
+_Avoid_: Employment Validity Period, Employment Lifecycle, actual lifecycle timestamps, message receipt interval
 
 **Employment Integrity**:
 Open Employment 必须引用已启用且未软删除的 Position 和所属 Organization；违反时是数据完整性异常，不是 Employment 的一种正常失效状态。正式写路径阻止异常产生，Subject Facts 发布前拒绝异常数据，已发布投影的下游不再联表重查父对象。
 _Avoid_: implicit employment pause, downstream parent-state filtering
 
 **Effective Employment**:
-当前时刻位于 Employment Period 内且生命周期状态为启用的 Employment。Primary Employment 标记和 User 账号状态不参与该判定；Position 与所属 Organization 的有效性由 Employment Integrity 保证，不作为运行时开关。
+非 Legacy Employment Tombstone 且生命周期状态为启用的 Employment，任职有效期不参与该判定；到期但尚未转换为结束状态的启用任职仍然有效。Primary Employment 标记和 User 账号状态不参与该判定；Position 与所属 Organization 的有效性由 Employment Integrity 保证，不作为运行时开关。
 _Avoid_: Open Employment, enabled user employment
 
 涉及组合继承的定义描述 [ADR-0049](docs/adr/0049-compose-roles-across-clients.md) 中已确认的目标模型。
@@ -340,7 +346,7 @@ HR Administrator 可以为 HR Administration Scope 内的 Open Employment 设置
 _Avoid_: scope-local primary invariant, out-of-scope employment administration
 
 **HR Employment Administration**:
-HR Administrator 可以为未删除且状态不为 Disable 的 User 在 HR Administration Scope 内创建 Employment，并对 HR-Visible Open Employment 修改描述、暂停、恢复或结束；Position 从全局目录选择，已结束 Employment 保持只读。Employment Transfer 的源 Employment 与目标 Organization 都必须位于当前范围并集内，可以跨 HR Administration Scope Root，并继续遵守 HR Employment Responsibility Cascade 与 HR Primary Employment Administration。
+HR Administrator 可以为未删除且状态不为 Disable 的 User 在 HR Administration Scope 内创建 Employment，并对 HR-Visible Open Employment 修改描述和有效期、暂停、恢复或结束；Position 从全局目录选择，已结束 Employment 保持只读。Employment Transfer 的源 Employment 与目标 Organization 都必须位于当前范围并集内，可以跨 HR Administration Scope Root，并继续遵守 HR Employment Responsibility Cascade 与 HR Primary Employment Administration。
 _Avoid_: user provisioning, out-of-scope employment mutation, single-root transfer
 
 **ORCAS Session Identity**:

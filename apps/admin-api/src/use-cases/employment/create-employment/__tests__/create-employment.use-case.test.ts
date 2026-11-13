@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 import type { AdminEmploymentAuthorization } from "@admin-api/services/admin-authorization/admin-employment-authorization.type";
 import type { AdminEmploymentRecordCreate } from "@admin-api/services/employment/employment.type";
-import { createFakeClock, createImmediateUnitOfWork } from "@admin-api/test/fakes";
+import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { createCreateEmploymentUseCase } from "@admin-api/use-cases/employment/create-employment/create-employment.use-case";
 import {
   EmploymentStatus,
@@ -21,7 +21,6 @@ import { UserNotFoundError } from "@iam/domain/user";
 const now = new Date("2026-01-01T00:00:00.000Z");
 
 function createLifecycle() {
-  const clock = createFakeClock(now.getTime());
   const user = {
     id: 1,
     subjectIdentifier: "00000000-0000-4000-8000-000000000001",
@@ -91,9 +90,8 @@ function createLifecycle() {
   };
 
   return {
-    clock,
     useCase: createCreateEmploymentUseCase({
-      clock,
+      clock: { nowDate: () => now },
       uow: createImmediateUnitOfWork(tx),
     }),
     tx,
@@ -101,8 +99,8 @@ function createLifecycle() {
 }
 
 describe("Employment Lifecycle", () => {
-  test("creates an immediately effective employment from one authoritative transaction time", async () => {
-    const { clock, useCase, tx } = createLifecycle();
+  test("creates an immediately effective employment with no date limits", async () => {
+    const { useCase, tx } = createLifecycle();
 
     await expect(
       useCase.execute({
@@ -114,13 +112,12 @@ describe("Employment Lifecycle", () => {
       }),
     ).resolves.toEqual({ changed: true, result: { id: 10 } });
 
-    expect(clock.nowDate).toHaveBeenCalledTimes(1);
     expect(tx.employmentStore.createEmploymentRecord).toHaveBeenCalledWith({
       userId: 1,
       orgId: 2,
       posId: 3,
       isPrimary: true,
-      startTime: now,
+      startTime: null,
       endTime: null,
       description: "new employment",
       status: EmploymentStatus.Enable,
@@ -129,7 +126,7 @@ describe("Employment Lifecycle", () => {
       expect.objectContaining({
         action: "admin.employment.create",
         targetId: 10,
-        details: expect.objectContaining({ startTime: now }),
+        details: expect.objectContaining({ startTime: null }),
       }),
     );
     expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "employment", userId: 1 }]);
@@ -273,7 +270,7 @@ describe("Employment Lifecycle", () => {
   });
 
   test("rolls back Employment, audit, and Dirty when the atomic transaction fails", async () => {
-    const { clock, tx } = createLifecycle();
+    const { tx } = createLifecycle();
     const failure = new Error("audit write failed");
     const committed = {
       employmentIds: [] as number[],
@@ -282,7 +279,7 @@ describe("Employment Lifecycle", () => {
     };
     const attempted = { employmentWrites: 0, auditWrites: 0 };
     const useCase = createCreateEmploymentUseCase({
-      clock,
+      clock: { nowDate: () => now },
       uow: {
         async transaction(callback) {
           const staged = {
@@ -352,7 +349,7 @@ describe("Employment Lifecycle", () => {
       orgId: 2,
       isPrimary: true,
       status: EmploymentStatus.Pause,
-      startTime: now,
+      startTime: null,
       endTime: null,
       description: null,
       isDelete: false,
@@ -362,7 +359,7 @@ describe("Employment Lifecycle", () => {
     tx.employmentStore.getOpenPrimaryEmploymentIdsByUserId.mockResolvedValueOnce([7, 8]);
     tx.employmentStore.lockEmploymentsByIds.mockResolvedValueOnce([
       primary,
-      { ...primary, id: 8, status: EmploymentStatus.Disable, endTime: now },
+      { ...primary, id: 8, status: EmploymentStatus.Disable, endTime: "2026-01-01" },
     ]);
     tx.employmentStore.updateEmploymentRecord.mockResolvedValueOnce({ ...primary, isPrimary: false });
     const result = await useCase.execute({ username: "zhangsan", orgCode: "ORG", posCode: "DEV", isPrimary: true });

@@ -22,12 +22,9 @@ export function createEmployment(body: AdminEmploymentInputs["create"]) {
   return runAdminMutation(() => apiClient.admin.employment.create.mutate(body));
 }
 
-export function updateEmployment(
-  id: number,
-  data: {
-    description?: string | null;
-  },
-) {
+export type EmploymentUpdateParams = AdminEmploymentInputs["update"]["data"];
+
+export function updateEmployment(id: number, data: EmploymentUpdateParams) {
   return runAdminMutation(() => apiClient.admin.employment.update.mutate({ id, data }));
 }
 

@@ -2,8 +2,23 @@ import { createAdminMutation } from "@admin-api/services/admin-mutation/admin-mu
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildEmploymentAudit } from "@admin-api/services/audit/events/employment.audit";
 import { assertEmploymentOrganizationScope } from "@admin-api/services/employment/employment-organization-scope";
-import { EmploymentStatus, OrganizationStatus, PositionStatus, UserStatus } from "@iam/contracts";
-import { EmploymentAlreadyExistsError, EmploymentUserDisabledError } from "@iam/domain/employment";
+import {
+  EmploymentStatus,
+  isOpenEmploymentStatus,
+  OrganizationStatus,
+  PositionStatus,
+  UserStatus,
+} from "@iam/contracts";
+import {
+  EmploymentAlreadyExistsError,
+  EmploymentInvalidPeriodError,
+  EmploymentUserDisabledError,
+} from "@iam/domain/employment";
+import {
+  assertValidEmploymentPeriod,
+  getEmploymentDate,
+  getEmploymentStatusForDate,
+} from "@iam/domain/employment/employment-date";
 import { OrganizationNotFoundError } from "@iam/domain/organization";
 import { PositionNotFoundError } from "@iam/domain/position";
 import { UserNotFoundError } from "@iam/domain/user";
@@ -47,40 +62,41 @@ export function createCreateEmploymentUseCase(deps: CreateEmploymentUseCaseDeps)
         "任职组织不属于期望组织范围",
       );
 
+      const period = { startTime: input.startTime ?? null, endTime: input.endTime ?? null };
+      assertValidEmploymentPeriod(period);
       const existing = await tx.employmentStore.getOpenEmploymentByUserOrgPosId(user.id, organization.id, position.id);
       if (existing !== null) {
         throw new EmploymentAlreadyExistsError();
       }
 
       const isPrimary = input.isPrimary ?? false;
-      const clearedPrimaryEmploymentIds: number[] = [];
-      if (isPrimary) {
-        const ids = await tx.employmentStore.getOpenPrimaryEmploymentIdsByUserId(user.id);
-        const selected = await tx.employmentStore.lockEmploymentsByIds(ids);
-        for (const employment of selected) {
-          if (
-            employment.isDelete ||
-            !employment.isPrimary ||
-            (employment.status !== EmploymentStatus.Enable && employment.status !== EmploymentStatus.Pause)
-          ) {
-            continue;
-          }
-          const updated = await tx.employmentStore.updateEmploymentRecord(employment.id, { isPrimary: false });
-          if (updated == null) throw new Error("Locked Employment primary update returned no row");
-          clearedPrimaryEmploymentIds.push(employment.id);
-        }
+      const selected = isPrimary
+        ? await tx.employmentStore.lockEmploymentsByIds(
+            await tx.employmentStore.getOpenPrimaryEmploymentIdsByUserId(user.id),
+          )
+        : [];
+      const observedAt = deps.clock.nowDate();
+      const status = getEmploymentStatusForDate(period, getEmploymentDate(observedAt));
+      if (status === EmploymentStatus.Disable) {
+        throw new EmploymentInvalidPeriodError("任职截止日必须晚于今天");
       }
 
-      const transactionTime = deps.clock.nowDate();
+      const clearedPrimaryEmploymentIds: number[] = [];
+      for (const employment of selected) {
+        if (employment.isDelete || !employment.isPrimary || !isOpenEmploymentStatus(employment.status)) continue;
+        const updated = await tx.employmentStore.updateEmploymentRecord(employment.id, { isPrimary: false });
+        if (updated == null) throw new Error("Locked Employment primary update returned no row");
+        clearedPrimaryEmploymentIds.push(employment.id);
+      }
+
       const created = await tx.employmentStore.createEmploymentRecord({
         userId: user.id,
         posId: position.id,
         orgId: organization.id,
         isPrimary,
-        startTime: transactionTime,
-        endTime: null,
+        ...period,
         description: input.description ?? null,
-        status: EmploymentStatus.Enable,
+        status,
       });
       if (created == null) throw new Error("Employment insert returned no row");
       await tx.auditLogWriter.recordAuditLog(
@@ -92,7 +108,7 @@ export function createCreateEmploymentUseCase(deps: CreateEmploymentUseCaseDeps)
             posId: position.id,
             orgId: organization.id,
             isPrimary,
-            status: EmploymentStatus.Enable,
+            status,
             user: { username: user.username },
             organization: { assignedOrg: { orgCode: organization.orgCode } },
             position: { posCode: position.posCode },
@@ -100,10 +116,12 @@ export function createCreateEmploymentUseCase(deps: CreateEmploymentUseCaseDeps)
           {
             changed: true,
             clearedPrimaryEmploymentIds,
-            startTime: transactionTime,
+            startTime: created.startTime,
+            endTime: created.endTime,
             description: input.description ?? null,
           },
           auditContext,
+          observedAt,
         ),
       );
       await tx.userDocumentInvalidation.recordChanges([{ kind: "employment", userId: user.id }]);

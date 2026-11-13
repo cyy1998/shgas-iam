@@ -1,8 +1,10 @@
 import { createAdminMutation } from "@admin-api/services/admin-mutation/admin-mutation";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildEmploymentAudit } from "@admin-api/services/audit/events/employment.audit";
-import { EmploymentStatus } from "@iam/contracts";
+import { endLockedEmployments } from "@iam/assignment-resolution/employment-lifecycle";
+import { EmploymentStatus, isOpenEmploymentStatus } from "@iam/contracts";
 import { EmploymentNotEditableError, EmploymentNotFoundError } from "@iam/domain/employment";
+import { getEmploymentDate } from "@iam/domain/employment/employment-date";
 import type { EndEmploymentUseCaseDeps } from "./end-employment.port";
 import type { EndEmploymentInput, EndEmploymentOptions } from "./end-employment.type";
 
@@ -56,24 +58,29 @@ export function createEndEmploymentUseCase(deps: EndEmploymentUseCaseDeps) {
           );
           return { changed: false, result: null };
         }
-        if (employment.status !== EmploymentStatus.Enable && employment.status !== EmploymentStatus.Pause) {
+        if (!isOpenEmploymentStatus(employment.status)) {
           throw new EmploymentNotEditableError("当前任职状态不允许结束");
         }
 
         const transactionTime = deps.clock.nowDate();
-        const updated = await tx.employmentStore.updateEmploymentRecord(employment.id, {
-          status: EmploymentStatus.Disable,
-          endTime: transactionTime,
-          isPrimary: false,
+        const operationDate = getEmploymentDate(transactionTime);
+        const {
+          documentChanges,
+          endedEmployments: [ended],
+        } = await endLockedEmployments(tx.employmentStore, {
+          userId: employment.userId,
+          employments: [employment],
+          operationDate,
+          endSelectedAssignments: () =>
+            tx.responsibilityParentLifecycle.endOpenAssignmentsForEmployment({
+              action: "end",
+              selectedAssignments,
+              auditContext,
+              employmentId: employment.id,
+              endTime: transactionTime,
+            }),
         });
-        if (updated == null) throw new Error("Locked Employment end returned no row");
-        const assignmentChanged = await tx.responsibilityParentLifecycle.endOpenAssignmentsForEmployment({
-          action: "end",
-          selectedAssignments,
-          auditContext,
-          employmentId: employment.id,
-          endTime: transactionTime,
-        });
+        if (!ended) throw new Error("Locked Employment end did not change the selected row");
         await tx.auditLogWriter.recordAuditLog(
           buildEmploymentAudit(
             "admin.employment.end",
@@ -82,22 +89,15 @@ export function createEndEmploymentUseCase(deps: EndEmploymentUseCaseDeps) {
               changed: true,
               fromStatus: employment.status,
               toStatus: EmploymentStatus.Disable,
-              endTime: transactionTime,
+              endTime: operationDate,
+              previousPeriod: ended.previousPeriod,
+              finalPeriod: ended.finalPeriod,
             },
             auditContext,
+            transactionTime,
           ),
         );
-        await tx.userDocumentInvalidation.recordChanges([
-          { kind: "employment", userId: employment.userId },
-          ...(assignmentChanged
-            ? [
-                {
-                  kind: "organization-responsibility-assignment" as const,
-                  userId: employment.userId,
-                },
-              ]
-            : []),
-        ]);
+        await tx.userDocumentInvalidation.recordChanges(documentChanges);
         return { changed: true, result: null };
       },
       adminAuditTransactionOptions(auditContext),

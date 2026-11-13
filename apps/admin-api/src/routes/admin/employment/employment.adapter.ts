@@ -20,6 +20,7 @@ import type { EndEmploymentUseCase } from "@admin-api/use-cases/employment/end-e
 import type { ManagePrimaryEmploymentUseCase } from "@admin-api/use-cases/employment/manage-primary-employment/manage-primary-employment.use-case";
 import type { ResignUserUseCase } from "@admin-api/use-cases/employment/resign-user/resign-user.use-case";
 import type { TransferEmploymentUseCase } from "@admin-api/use-cases/employment/transfer-employment/transfer-employment.use-case";
+import type { UpdateEmploymentUseCase } from "@admin-api/use-cases/employment/update-employment/update-employment.use-case";
 import { router } from "@iam/api-core/trpc";
 import { z } from "zod";
 import { toEmploymentDetailVo, toEmploymentVo } from "./employment.schema";
@@ -33,14 +34,12 @@ export interface CreateEmploymentAdapterDeps {
   endEmployment: Pick<EndEmploymentUseCase, "execute">;
   employmentService: Pick<
     EmploymentService,
-    | "getEmploymentDetailByIdForAdmin"
-    | "guardEmploymentMutationForAdmin"
-    | "searchEmploymentsFuzzyForAdmin"
-    | "updateEmployment"
+    "getEmploymentDetailByIdForAdmin" | "guardEmploymentMutationForAdmin" | "searchEmploymentsFuzzyForAdmin"
   >;
   managePrimaryEmployment: Pick<ManagePrimaryEmploymentUseCase, "execute">;
   resignUser: Pick<ResignUserUseCase, "execute">;
   transferEmployment: Pick<TransferEmploymentUseCase, "execute">;
+  updateEmployment: Pick<UpdateEmploymentUseCase, "execute">;
 }
 
 export function createEmploymentAdapter(deps: CreateEmploymentAdapterDeps) {
@@ -102,6 +101,8 @@ export function createEmploymentAdapter(deps: CreateEmploymentAdapterDeps) {
           expectedAncestorOrgCode: input.expectedAncestorOrgCode ?? input.companyOrgCode,
           posCode: input.posCode,
           isPrimary: input.isPrimary,
+          startTime: input.startTime,
+          endTime: input.endTime,
           description: input.description,
         },
         {
@@ -122,11 +123,12 @@ export function createEmploymentAdapter(deps: CreateEmploymentAdapterDeps) {
       data: c.req.valid("json") as z.infer<typeof EmploymentUpdateDtoSchema>,
     }),
     handler: async ({ id, data }, context) =>
-      deps.employmentService.updateEmployment(
-        id,
-        data,
-        resolveAdminAuditContext(context),
-        await resolveEmploymentAuthorization(context.hono, "admin.employment.update"),
+      deps.updateEmployment.execute(
+        { employmentId: id, ...data },
+        {
+          auditContext: resolveAdminAuditContext(context),
+          authorization: await resolveEmploymentAuthorization(context.hono, "admin.employment.update"),
+        },
       ),
   });
 
@@ -213,6 +215,7 @@ export function createEmploymentAdapter(deps: CreateEmploymentAdapterDeps) {
           expectedAncestorOrgCode: data.expectedAncestorOrgCode,
           newPosCode: data.newPosCode,
           isPrimary: data.isPrimary,
+          endTime: data.endTime,
           description: data.description,
         },
         {

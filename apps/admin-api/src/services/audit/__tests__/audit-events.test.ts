@@ -52,6 +52,7 @@ describe("admin audit event builders", () => {
         { id: 1001, username: "zhangsan", name: "张三" },
         { actorType: "system", actorSystemKey: "admin-api" },
         true,
+        [],
       ),
     ).toMatchObject({
       action: "admin.employment.resign_user",
@@ -62,6 +63,7 @@ describe("admin audit event builders", () => {
         username: "zhangsan",
         resigned: true,
         changed: true,
+        endedEmployments: [],
       },
     });
   });

@@ -162,7 +162,7 @@ async function seedResponsibility(harness: Awaited<ReturnType<typeof createPostg
     posId: 10,
     orgId: 20,
     status: EmploymentStatus.Enable,
-    startTime: new Date("2026-01-01T00:00:00.000Z"),
+    startTime: "2026-01-01",
   });
   await harness.db.insert(organizationResponsibilityAssignments).values({
     employmentId: 100,

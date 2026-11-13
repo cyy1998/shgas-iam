@@ -32,8 +32,9 @@ afterAll(async () => {
 });
 
 describe("HR Administration Scope resolver", () => {
-  test("derives self-inclusive multi-root scope from every Effective Role assignment source", async () => {
+  test("derives multi-root scope from effective role carriers even after the Employment cutoff", async () => {
     await seedScopeGraph(harness.db);
+    await harness.db.update(employments).set({ endTime: "2000-01-02" }).where(eq(employments.id, 1000));
     const resolver = createHrAdministrationScopeResolver({
       db: harness.db,
       roleAssignmentResolver: createRoleAssignmentResolver(harness.db),
@@ -45,6 +46,13 @@ describe("HR Administration Scope resolver", () => {
       rootOrganizationIds: [10, 20, 30],
       organizationIds: [10, 11, 12, 20, 21, 30, 31],
     });
+
+    await harness.db
+      .update(employments)
+      .set({ status: EmploymentStatus.Pending, endTime: null })
+      .where(eq(employments.id, 1000));
+    const withoutPending = await resolver.resolveForActor(900);
+    expect(withoutPending?.rootOrganizationIds).toEqual([20, 30]);
   });
 
   test("fails closed when a carrier has no unique structural root and observes later role revocation", async () => {

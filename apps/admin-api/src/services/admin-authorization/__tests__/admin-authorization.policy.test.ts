@@ -499,6 +499,7 @@ describe("Admin Authorization Policy", () => {
       }),
     ).toEqual({
       editDescription: { allowed: true, reason: null },
+      editPeriod: { allowed: true, reason: null },
       pause: { allowed: true, reason: null },
       resume: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
       end: { allowed: true, reason: null },
@@ -514,6 +515,7 @@ describe("Admin Authorization Policy", () => {
       }),
     ).toEqual({
       editDescription: { allowed: true, reason: null },
+      editPeriod: { allowed: true, reason: null },
       pause: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
       resume: { allowed: true, reason: null },
       end: { allowed: true, reason: null },
@@ -529,6 +531,7 @@ describe("Admin Authorization Policy", () => {
       }),
     ).toEqual({
       editDescription: { allowed: true, reason: null },
+      editPeriod: { allowed: true, reason: null },
       pause: { allowed: true, reason: null },
       resume: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
       end: { allowed: true, reason: null },
@@ -544,6 +547,7 @@ describe("Admin Authorization Policy", () => {
       }),
     ).toEqual({
       editDescription: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
+      editPeriod: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
       pause: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
       resume: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
       end: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
@@ -559,6 +563,7 @@ describe("Admin Authorization Policy", () => {
       }),
     ).toEqual({
       editDescription: { allowed: true, reason: null },
+      editPeriod: { allowed: true, reason: null },
       pause: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
       resume: { allowed: true, reason: null },
       end: { allowed: true, reason: null },

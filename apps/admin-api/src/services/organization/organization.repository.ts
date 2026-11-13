@@ -7,13 +7,17 @@ import type {
   OrganizationSelectorQueryDto,
   OrganizationUpdateDto,
 } from "@admin-api/services/organization/organization.type";
-import { ClientDelegationStatus, getChildOrganizationLevel, OrganizationStatus } from "@iam/contracts";
+import {
+  ClientDelegationStatus,
+  getChildOrganizationLevel,
+  OPEN_EMPLOYMENT_STATUSES,
+  OrganizationStatus,
+} from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
 import type { Organization } from "@iam/db/schema";
 import { clientDelegations, employments, organizationClosures, organizations } from "@iam/db/schema";
-import { OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
 import { OrganizationCodeExistsError } from "@iam/domain/organization";
 import { and, count, eq, exists, gt, inArray, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";

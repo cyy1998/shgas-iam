@@ -1,6 +1,7 @@
 import type { EmploymentStatus, OrganizationStatus, PositionStatus } from "@iam/contracts";
 import {
   EmploymentStatus as EmploymentStatusValue,
+  isOpenEmploymentStatus,
   OrganizationStatus as OrganizationStatusValue,
   PositionStatus as PositionStatusValue,
 } from "@iam/contracts";
@@ -10,9 +11,7 @@ const EMPLOYMENT_FAILURE_CODES = [
   "position-not-effective",
   "organization-not-effective",
   "invalid-employment-period",
-  "open-employment-has-end-time",
   "ended-employment-missing-end-time",
-  "future-open-start-time",
   "duplicate-open-employment",
   "multiple-open-primary-employments",
 ] as const;
@@ -26,8 +25,8 @@ export interface EmploymentInventoryRow {
   organizationId: number;
   isPrimary: boolean;
   status: number;
-  startTime: Date;
-  endTime: Date | null;
+  startTime: string | null;
+  endTime: string | null;
   isDelete: boolean;
   positionStatus: PositionStatus | null;
   positionDeleted: boolean | null;
@@ -79,23 +78,15 @@ export function createEmploymentVerifier(deps: CreateEmploymentVerifierDeps) {
         if (row.organizationStatus !== OrganizationStatusValue.Enable || row.organizationDeleted !== false) {
           failures.add("organization-not-effective", row.id);
         }
-        if (row.endTime !== null) {
-          failures.add("open-employment-has-end-time", row.id);
-        }
-        if (row.startTime.getTime() > verifiedAt.getTime()) {
-          failures.add("future-open-start-time", row.id);
-        }
       } else if (row.endTime === null) {
         failures.add("ended-employment-missing-end-time", row.id);
       }
-      if (row.endTime !== null && row.endTime.getTime() <= row.startTime.getTime()) {
+      if (row.startTime !== null && row.endTime !== null && row.endTime <= row.startTime) {
         failures.add("invalid-employment-period", row.id);
       }
     }
 
-    const openRows = rows.filter(
-      (row) => !row.isDelete && isKnownEmploymentStatus(row.status) && isOpenEmploymentStatus(row.status),
-    );
+    const openRows = rows.filter((row) => !row.isDelete && isOpenEmploymentStatus(row.status));
     collectGroupConflict(
       openRows,
       failures,
@@ -126,16 +117,8 @@ export function createEmploymentVerifier(deps: CreateEmploymentVerifierDeps) {
   return { verify };
 }
 
-function isOpenEmploymentStatus(status: EmploymentStatus) {
-  return status === EmploymentStatusValue.Enable || status === EmploymentStatusValue.Pause;
-}
-
 function isKnownEmploymentStatus(status: number): status is EmploymentStatus {
-  return (
-    status === EmploymentStatusValue.Enable ||
-    status === EmploymentStatusValue.Pause ||
-    status === EmploymentStatusValue.Disable
-  );
+  return isOpenEmploymentStatus(status) || status === EmploymentStatusValue.Disable;
 }
 
 function collectGroupConflict<TKey>(

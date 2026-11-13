@@ -1,6 +1,6 @@
 import { createChangeEmploymentAvailabilityUseCase } from "@admin-api/use-cases/employment/change-employment-availability/change-employment-availability.use-case";
-import type { CreateEmploymentClockPort } from "@admin-api/use-cases/employment/create-employment/create-employment.port";
 import { createCreateEmploymentUseCase } from "@admin-api/use-cases/employment/create-employment/create-employment.use-case";
+import type { EndEmploymentClockPort } from "@admin-api/use-cases/employment/end-employment/end-employment.port";
 import { createEndEmploymentUseCase } from "@admin-api/use-cases/employment/end-employment/end-employment.use-case";
 import { createManagePrimaryEmploymentUseCase } from "@admin-api/use-cases/employment/manage-primary-employment/manage-primary-employment.use-case";
 import type {
@@ -9,6 +9,7 @@ import type {
 } from "@admin-api/use-cases/employment/resign-user/resign-user.port";
 import { createResignUserUseCase } from "@admin-api/use-cases/employment/resign-user/resign-user.use-case";
 import { createTransferEmploymentUseCase } from "@admin-api/use-cases/employment/transfer-employment/transfer-employment.use-case";
+import { createUpdateEmploymentUseCase } from "@admin-api/use-cases/employment/update-employment/update-employment.use-case";
 import { createCreateOrganizationResponsibilityAssignmentUseCase } from "@admin-api/use-cases/organization-responsibility/create-assignment/create-assignment.use-case";
 import { createManageOrganizationResponsibilityAssignmentLifecycleUseCase } from "@admin-api/use-cases/organization-responsibility/manage-assignment-lifecycle/manage-assignment-lifecycle.use-case";
 import { mapUnitOfWork } from "@iam/unit-of-work";
@@ -17,7 +18,7 @@ import type { createAdminApiUnitOfWork } from "../tx";
 type AdminApiUnitOfWork = ReturnType<typeof createAdminApiUnitOfWork>;
 
 export interface CreateAdminApiUseCasesOptions {
-  clock: CreateEmploymentClockPort;
+  clock: EndEmploymentClockPort;
   sessionRevocation: ResignUserSessionRevocationPort;
   subjectAccessLifecycle: ResignUserUseCaseDeps["subjectAccessLifecycle"];
   unitOfWork: AdminApiUnitOfWork;
@@ -26,6 +27,7 @@ export interface CreateAdminApiUseCasesOptions {
 
 export function createAdminApiUseCases(options: CreateAdminApiUseCasesOptions) {
   const changeEmploymentAvailability = createChangeEmploymentAvailabilityUseCase({
+    clock: options.clock,
     uow: mapUnitOfWork(options.unitOfWork, (tx) => ({
       employmentStore: tx.repositories.employment,
       organizationReader: tx.repositories.organization,
@@ -78,6 +80,16 @@ export function createAdminApiUseCases(options: CreateAdminApiUseCasesOptions) {
     })),
   });
 
+  const updateEmployment = createUpdateEmploymentUseCase({
+    clock: options.clock,
+    uow: mapUnitOfWork(options.unitOfWork, (tx) => ({
+      employmentStore: tx.repositories.employment,
+      auditLogWriter: tx.auditService,
+      responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
+      userDocumentInvalidation: tx.userDocumentInvalidation,
+    })),
+  });
+
   const resignUser = createResignUserUseCase({
     clock: options.clock,
     sessionRevocation: options.sessionRevocation,
@@ -121,6 +133,7 @@ export function createAdminApiUseCases(options: CreateAdminApiUseCasesOptions) {
       managePrimaryEmployment,
       resignUser,
       transferEmployment,
+      updateEmployment,
     },
     organizationResponsibility: {
       createAssignment: createOrganizationResponsibilityAssignment,

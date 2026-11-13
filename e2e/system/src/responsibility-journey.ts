@@ -1,7 +1,7 @@
 import { UserDocumentSchema } from "@iam/contracts";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
-import { expectRpcMutationResult, isSuccessfulRpcResponse } from "./admin-client-journey.ts";
+import { isSuccessfulRpcResponse, readCreatedResourceId } from "./admin-client-journey.ts";
 
 const publicationTimeoutMs = 45_000;
 
@@ -38,7 +38,7 @@ export async function createHeadResponsibility(input: {
   const procedure = "admin.organizationResponsibility.createAssignment";
   const creation = input.page.waitForResponse((response) => isSuccessfulRpcResponse(response, procedure));
   await modal.getByRole("button", { name: /确\s*定/u }).click();
-  await expectRpcMutationResult(await creation, procedure, true, { id: expect.any(Number) });
+  return await readCreatedResourceId(await creation, procedure);
 }
 
 export async function waitForInternalResponsibility(input: ResponsibilityJourneyInput & { expected: boolean }) {

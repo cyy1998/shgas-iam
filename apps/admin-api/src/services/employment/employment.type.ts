@@ -16,8 +16,8 @@ export interface AdminEmploymentRecordCreate {
   posId: number;
   orgId: number;
   isPrimary: boolean;
-  startTime: Date;
-  endTime: Date | null;
+  startTime: string | null;
+  endTime: string | null;
   description: string | null;
   status: EmploymentStatus;
 }
@@ -31,8 +31,8 @@ export interface AdminEmploymentAuthorizationFacts {
 
 export type AdminEmploymentRecordUpdate = {
   isPrimary?: boolean;
-  startTime?: Date;
-  endTime?: Date | null;
+  startTime?: string | null;
+  endTime?: string | null;
   description?: string | null;
   status?: EmploymentStatus;
 };

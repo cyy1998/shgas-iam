@@ -1,6 +1,9 @@
 import type { AdminAuditContext, AuditLogInput } from "@admin-api/services/audit/audit.context";
-import type { OrganizationResponsibilityAssignmentWriteTarget } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.type";
-import type { EmploymentStatus } from "@iam/contracts";
+import type {
+  EmploymentLifecycleDocumentChange,
+  LockedEmploymentEndStorePort,
+} from "@iam/assignment-resolution/employment-lifecycle";
+import type { OrganizationResponsibilityAssignmentWriteTarget } from "@iam/assignment-resolution/organization-responsibility/assignment-lifecycle";
 import type { Employment } from "@iam/domain/employment";
 import type { UnitOfWorkPort } from "@iam/unit-of-work";
 
@@ -9,16 +12,8 @@ export interface EndEmploymentClockPort {
 }
 
 export interface EndEmploymentTransactionPorts {
-  employmentStore: {
+  employmentStore: LockedEmploymentEndStorePort & {
     lockEmploymentLifecycleContextById: (id: number) => Promise<{ employment: Employment } | null>;
-    updateEmploymentRecord: (
-      id: number,
-      patch: {
-        status: EmploymentStatus.Disable;
-        endTime: Date;
-        isPrimary: false;
-      },
-    ) => Promise<Employment>;
   };
   auditLogWriter: {
     recordAuditLog: (input: AuditLogInput) => Promise<void>;
@@ -37,18 +32,7 @@ export interface EndEmploymentTransactionPorts {
     }) => Promise<boolean>;
   };
   userDocumentInvalidation: {
-    recordChanges: (
-      changes: readonly (
-        | {
-            readonly kind: "employment";
-            readonly userId: number;
-          }
-        | {
-            readonly kind: "organization-responsibility-assignment";
-            readonly userId: number;
-          }
-      )[],
-    ) => Promise<void>;
+    recordChanges: (changes: readonly EmploymentLifecycleDocumentChange[]) => Promise<void>;
   };
 }
 

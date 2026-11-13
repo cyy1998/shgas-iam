@@ -11,6 +11,7 @@ export * from "./custom-sso/client";
 export * from "./custom-sso/first-party-navigation";
 export * from "./document";
 export * from "./document-search";
+export * from "./employment-date";
 export * from "./enums/api-error-code";
 export * from "./enums/client.status";
 export * from "./enums/client-delegation.status";

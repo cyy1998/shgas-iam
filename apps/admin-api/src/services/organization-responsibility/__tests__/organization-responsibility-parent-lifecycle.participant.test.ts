@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 import type { CreateOrganizationResponsibilityParentLifecycleParticipantDeps } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.participant";
 import { createOrganizationResponsibilityParentLifecycleParticipant } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.participant";
-import type { OrganizationResponsibilityAssignmentWriteTarget } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.type";
+import type { OrganizationResponsibilityAssignmentWriteTarget } from "@iam/assignment-resolution/organization-responsibility/assignment-lifecycle";
 import { OrganizationResponsibilityAssignmentStatus, OrganizationResponsibilityTypeCode } from "@iam/contracts";
 import { OrganizationHasOpenResponsibilityAssignmentError } from "@iam/domain/organization";
 

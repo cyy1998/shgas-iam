@@ -86,7 +86,7 @@ describe("admin employment adapter", () => {
         orgId: 11,
         posId: 12,
         isPrimary: false,
-        startTime: new Date("2026-01-01T00:00:00Z"),
+        startTime: "2026-01-01",
         endTime: null,
         description: null,
         status: EmploymentStatus.Enable,
@@ -167,8 +167,8 @@ describe("admin employment adapter", () => {
         getEmploymentDetailByIdForAdmin,
         guardEmploymentMutationForAdmin,
         searchEmploymentsFuzzyForAdmin,
-        updateEmployment,
       },
+      updateEmployment: { execute: updateEmployment },
       managePrimaryEmployment: { execute: managePrimaryEmployment },
       resignUser: { execute: mock(async () => ({ changed: true, result: null })) },
       transferEmployment: { execute: transferEmployment },
@@ -218,9 +218,13 @@ describe("admin employment adapter", () => {
       expect.objectContaining({ username: "user", orgCode: "CHILD", posCode: "DEV" }),
       expect.objectContaining({ authorization: scoped }),
     );
-    expect(updateEmployment).toHaveBeenCalledWith(4, { description: "updated" }, expect.anything(), scoped);
+    expect(updateEmployment).toHaveBeenCalledWith(
+      { employmentId: 4, description: "updated" },
+      expect.objectContaining({ authorization: scoped }),
+    );
     expect(detail.allowedActions).toEqual({
       editDescription: { allowed: true, reason: null },
+      editPeriod: { allowed: true, reason: null },
       pause: { allowed: true, reason: null },
       resume: { allowed: false, reason: "RESOURCE_STATE_NOT_ACTIONABLE" },
       end: { allowed: true, reason: null },
@@ -367,7 +371,7 @@ describe("admin employment adapter", () => {
       changeEmploymentAvailability: { execute: mock(async () => ({ changed: true, result: null })) },
       createEmployment: { execute: mock(async () => ({ changed: true, result: { id: 10 } })) },
       endEmployment: { execute: mock(async () => ({ changed: true, result: null })) },
-      employmentService: { updateEmployment },
+      updateEmployment: { execute: updateEmployment },
       resignUser: { execute: mock(async () => ({ changed: true, result: null })) },
     } as any);
     const caller = adapter.employmentAdminRouter.createCaller({
@@ -377,7 +381,7 @@ describe("admin employment adapter", () => {
     await expect(
       caller.update({
         id: 4,
-        data: { startTime: new Date("2020-01-01T00:00:00.000Z") },
+        data: { status: EmploymentStatus.Enable },
       } as any),
     ).rejects.toBeInstanceOf(TRPCError);
     await expect(
@@ -408,8 +412,8 @@ describe("admin employment adapter", () => {
         orgCode: "ORG",
         posCode: "DEV",
         isPrimary: false,
-        startTime: new Date("2020-01-01T00:00:00.000Z"),
-        endTime: new Date("2020-02-01T00:00:00.000Z"),
+        startTime: "2020-01-01",
+        endTime: "2020-02-01",
         status: 3,
       } as any),
     ).resolves.toEqual({ changed: true, result: { id: 10 } });
@@ -420,6 +424,8 @@ describe("admin employment adapter", () => {
         orgCode: "ORG",
         posCode: "DEV",
         isPrimary: false,
+        startTime: "2020-01-01",
+        endTime: "2020-02-01",
         description: undefined,
         expectedAncestorOrgCode: undefined,
       },
@@ -463,9 +469,9 @@ describe("admin employment adapter", () => {
     );
   });
 
-  test("rejects empty description input at the tRPC boundary", async () => {
+  test("rejects an empty Employment update at the tRPC boundary", async () => {
     const updateEmployment = mock(async () => ({ changed: true, result: null }));
-    const adapter = createEmploymentAdapter({ employmentService: { updateEmployment } } as any);
+    const adapter = createEmploymentAdapter({ updateEmployment: { execute: updateEmployment } } as any);
     const caller = adapter.employmentAdminRouter.createCaller({
       hono: createRestContext("unused") as unknown as Context,
     });
@@ -812,7 +818,7 @@ describe("admin employment adapter", () => {
           newPosCode: "TARGET_POS",
           isPrimary: false,
           inheritPrimary: true,
-          startTime: new Date("2020-01-01T00:00:00.000Z"),
+          startTime: "2020-01-01",
           endTime: null,
           status: 1,
         },

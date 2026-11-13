@@ -308,7 +308,7 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
         userId: user.id,
         orgId: organization!.id,
         posId: position!.id,
-        startTime: new Date("2026-01-01T00:00:00Z"),
+        startTime: "2026-01-01",
       })
       .returning();
     const subject = createCommand(undefined, undefined, stableStore(user.subjectIdentifier));
@@ -387,7 +387,7 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
     expect(intentsAfter).toEqual(intentsBefore);
   });
 
-  for (const status of [EmploymentStatus.Enable, EmploymentStatus.Pause]) {
+  for (const status of [EmploymentStatus.Enable, EmploymentStatus.Pause, EmploymentStatus.Pending]) {
     test(`Open Employment ${status} blocks deletion and restores the barrier`, async () => {
       const user = await seedUser();
       const [organization] = await harness.db

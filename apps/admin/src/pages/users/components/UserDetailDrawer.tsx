@@ -49,8 +49,6 @@ const employmentTableActionStyle: CSSProperties = {
   height: 24,
 };
 
-const formatDate = (value: Date | string | null | undefined) => (value ? new Date(value).toLocaleDateString() : "—");
-
 const formatEmploymentOrgPath = (row: EmploymentRow) =>
   row.organization?.fullOrgPath?.map((node) => node.orgName).join(" / ") || row.organization.assignedOrg.orgName || "—";
 
@@ -333,13 +331,13 @@ function UserDetailDrawerContent({ open, username, onClose, onChanged }: Props) 
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               开始{" "}
             </Typography.Text>
-            {formatDate(row.startTime)}
+            {row.startTime ?? "—"}
           </div>
           <div>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               结束{" "}
             </Typography.Text>
-            {formatDate(row.endTime)}
+            {row.endTime ?? "—"}
           </div>
         </div>
       ),

@@ -1,5 +1,9 @@
-import type { OrganizationResponsibilityAssignmentWriteTarget } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.type";
-import type { EmploymentStatus, UserStatus } from "@iam/contracts";
+import type {
+  EmploymentLifecycleDocumentChange,
+  LockedEmploymentEndStorePort,
+} from "@iam/assignment-resolution/employment-lifecycle";
+import type { OrganizationResponsibilityAssignmentWriteTarget } from "@iam/assignment-resolution/organization-responsibility/assignment-lifecycle";
+import type { UserStatus } from "@iam/contracts";
 import type { AuditActorType, AuditDetails, AuditOutcome } from "@iam/domain/audit";
 import type { Employment } from "@iam/domain/employment";
 import type { SubjectAccessMutationReceipt, SubjectAccessTransitionTarget } from "@iam/subject-access";
@@ -7,19 +11,7 @@ import type { SubjectAccessLifecycleRunInput } from "@iam/subject-access/lifecyc
 import type { UnitOfWorkPort } from "@iam/unit-of-work";
 import type { ResignUserOptions } from "./resign-user.type";
 
-export type ResignUserDocumentChange =
-  | {
-      readonly kind: "user";
-      readonly userId: number;
-    }
-  | {
-      readonly kind: "employment";
-      readonly userId: number;
-    }
-  | {
-      readonly kind: "organization-responsibility-assignment";
-      readonly userId: number;
-    };
+type ResignUserDocumentChange = EmploymentLifecycleDocumentChange | { readonly kind: "user"; readonly userId: number };
 
 export interface ResignUserTarget {
   id: number;
@@ -65,17 +57,9 @@ export interface ResignUserTransactionPorts {
   auditLogWriter: {
     recordAuditLog: (input: ResignUserAuditInput) => Promise<void>;
   };
-  employmentStore: {
+  employmentStore: LockedEmploymentEndStorePort & {
     getOpenEmploymentIdsByUserId: (userId: number) => Promise<number[]>;
     lockEmploymentsByIds: (ids: readonly number[]) => Promise<Employment[]>;
-    updateEmploymentRecord: (
-      id: number,
-      patch: {
-        status: EmploymentStatus.Disable;
-        endTime: Date;
-        isPrimary: false;
-      },
-    ) => Promise<Employment>;
   };
   responsibilityParentLifecycle: {
     lockAssignmentsForEmployments: (input: {

@@ -16,7 +16,7 @@ function employment(id: number) {
     orgId: 10,
     isPrimary: false,
     status: EmploymentStatus.Enable,
-    startTime: now,
+    startTime: "2026-01-01",
     endTime: null,
     description: null,
     isDelete: false,

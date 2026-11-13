@@ -1200,8 +1200,8 @@ test("Custom SSO delivers published nested Roles through V4 and refreshes an exi
     ]);
     const startTime = new Date("2026-01-01T00:00:00Z");
     await db.insert(employments).values([
-      { id: 1, userId: 1, orgId: 1, posId: 1, startTime, isPrimary: true },
-      { id: 2, userId: 1, orgId: 1, posId: 2, startTime },
+      { id: 1, userId: 1, orgId: 1, posId: 1, startTime: "2026-01-01", isPrimary: true },
+      { id: 2, userId: 1, orgId: 1, posId: 2, startTime: "2026-01-01" },
     ]);
     await db.insert(organizationResponsibilityAssignments).values({
       employmentId: 1,

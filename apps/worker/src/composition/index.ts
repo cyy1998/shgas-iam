@@ -18,6 +18,7 @@ import {
 } from "@worker/modules/registry";
 import { sql } from "drizzle-orm";
 import { startDocumentRepairSchedule } from "./document-repair-schedule";
+import { startEmploymentLifecycle } from "./employment-lifecycle";
 import type { WorkerLogger } from "./runtime";
 import { createWorkerRuntime } from "./runtime";
 import { createWorkerSubjectAccess } from "./subject-access";
@@ -122,15 +123,21 @@ export async function createWorkerComposition(options: CreateWorkerCompositionOp
   const repairSchedules = (["user", "organization"] as const).map((document) =>
     startDocumentRepairSchedule({ document, env: options.env, enabledModuleKeys, logger: runtime.logger }),
   );
+  const employmentLifecycle = enabledModuleKeys.includes(userDocumentModule.key)
+    ? startEmploymentLifecycle(db, runtime)
+    : undefined;
 
   let closing: Promise<void> | undefined;
   function shutdown(signal: string) {
     closing ??= (async () => {
       runtime.logger.info({ signal, enabledModules: enabledModuleKeys }, "worker shutting down");
       try {
-        const results = await Promise.allSettled(repairSchedules.map((schedule) => schedule.close()));
+        const results = await Promise.allSettled([
+          ...repairSchedules.map((schedule) => schedule.close()),
+          employmentLifecycle?.close(),
+        ]);
         const failures = results.flatMap((result) => (result.status === "rejected" ? [result.reason] : []));
-        if (failures.length) throw new AggregateError(failures, "Document repair schedules failed to close");
+        if (failures.length) throw new AggregateError(failures, "Worker schedules failed to close");
       } finally {
         await Promise.allSettled([
           closeWorkerModules(knownModules),

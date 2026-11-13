@@ -1,8 +1,8 @@
+import { OPEN_EMPLOYMENT_STATUSES } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import { compactUpdate, firstRow } from "@iam/db/query-utils";
 import { employments, positions } from "@iam/db/schema";
-import { OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
 import { PositionCodeExistsError } from "@iam/domain/position";
 import { and, count, eq, getTableColumns, inArray } from "drizzle-orm";
 import type { PositionCreateDto, PositionFuzzyQueryDto, PositionUpdateDto } from "./position.type";

@@ -459,7 +459,7 @@ async function seedEmployment() {
       orgId: organization!.id,
       posId: position!.id,
       status: EmploymentStatus.Enable,
-      startTime: new Date("2026-08-01T00:00:00Z"),
+      startTime: "2026-08-01",
     })
     .returning();
   return { user: user!, employment: employment!, organization: organization!, position: position! };

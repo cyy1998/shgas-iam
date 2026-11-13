@@ -73,7 +73,10 @@ async function retainedFacts() {
     organizations: [...(await h.sql`SELECT * FROM organization ORDER BY id`)],
     closure: [...(await h.sql`SELECT * FROM organization_closure ORDER BY ancestor_id,descendant_id`)],
     positions: [...(await h.sql`SELECT * FROM position ORDER BY id`)],
-    employments: [...(await h.sql`SELECT * FROM employment ORDER BY id`)],
+    employments: [
+      ...(await h.sql`SELECT id, user_id, pos_id, dept_id, is_primary, status, description,
+        is_delete, create_time, update_time FROM employment ORDER BY id`),
+    ],
     roles: [
       ...(await h.sql`SELECT id, role_code, role_name, client_id, status, description, is_delete, create_time, update_time
       FROM role ORDER BY id`),

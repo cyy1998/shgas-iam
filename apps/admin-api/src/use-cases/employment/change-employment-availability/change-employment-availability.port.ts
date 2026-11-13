@@ -1,6 +1,10 @@
 import type { AdminAuditContext, AuditLogInput } from "@admin-api/services/audit/audit.context";
-import type { OrganizationResponsibilityAssignmentWriteTarget } from "@admin-api/services/organization-responsibility/organization-responsibility-parent-lifecycle.type";
-import type { EmploymentStatus } from "@iam/contracts";
+import type {
+  EmploymentLifecycleDocumentChange,
+  LockedEmploymentEndStorePort,
+  OpenEmploymentPatch,
+} from "@iam/assignment-resolution/employment-lifecycle";
+import type { OrganizationResponsibilityAssignmentWriteTarget } from "@iam/assignment-resolution/organization-responsibility/assignment-lifecycle";
 import type { Employment } from "@iam/domain/employment";
 import type { Organization } from "@iam/domain/organization";
 import type { Position } from "@iam/domain/position";
@@ -23,7 +27,7 @@ export interface ChangeEmploymentAvailabilityTransactionPorts {
     ) => Promise<Employment | null>;
     updateEmploymentRecord: (
       id: number,
-      patch: { status: EmploymentStatus.Enable | EmploymentStatus.Pause },
+      patch: OpenEmploymentPatch | Parameters<LockedEmploymentEndStorePort["updateEmploymentRecord"]>[1],
     ) => Promise<Employment>;
   };
   organizationReader: {
@@ -37,6 +41,13 @@ export interface ChangeEmploymentAvailabilityTransactionPorts {
       employmentId: number;
       command: "pause" | "end";
     }) => Promise<OrganizationResponsibilityAssignmentWriteTarget[]>;
+    endOpenAssignmentsForEmployment: (input: {
+      action: "resume";
+      employmentId: number;
+      endTime: Date;
+      auditContext?: AdminAuditContext;
+      selectedAssignments: readonly OrganizationResponsibilityAssignmentWriteTarget[];
+    }) => Promise<boolean>;
     pauseEnabledAssignmentsForEmployment: (input: {
       employmentId: number;
       auditContext?: AdminAuditContext;
@@ -44,21 +55,11 @@ export interface ChangeEmploymentAvailabilityTransactionPorts {
     }) => Promise<boolean>;
   };
   userDocumentInvalidation: {
-    recordChanges: (
-      changes: readonly (
-        | {
-            readonly kind: "employment";
-            readonly userId: number;
-          }
-        | {
-            readonly kind: "organization-responsibility-assignment";
-            readonly userId: number;
-          }
-      )[],
-    ) => Promise<void>;
+    recordChanges: (changes: readonly EmploymentLifecycleDocumentChange[]) => Promise<void>;
   };
 }
 
 export interface ChangeEmploymentAvailabilityUseCaseDeps {
+  clock: { nowDate: () => Date };
   uow: UnitOfWorkPort<ChangeEmploymentAvailabilityTransactionPorts>;
 }

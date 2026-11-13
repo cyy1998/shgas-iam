@@ -2,13 +2,22 @@ import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "b
 import { createUserHandlers } from "@api/routes/internal/user/user.handlers";
 import { createUserRoute } from "@api/routes/internal/user/user.index";
 import type { AuditLogInput } from "@api/services/audit/audit.context";
+import { createEmploymentRepository } from "@api/services/employment/employment.repository";
+import { createPositionRepository } from "@api/services/position/position.repository";
 import { createUserRepository } from "@api/services/user/user.repository";
 import type { RegisterPurveyorContactTransactionPorts } from "@api/use-cases/internal/register-purveyor-contact/register-purveyor-contact.port";
 import { createRegisterPurveyorContactUseCase } from "@api/use-cases/internal/register-purveyor-contact/register-purveyor-contact.use-case";
 import { createErrorHandler } from "@iam/api-core/middlewares";
-import { ApiErrorCode, UserType } from "@iam/contracts";
+import {
+  ApiErrorCode,
+  EmploymentStatus,
+  OrganizationLevel,
+  OrganizationType,
+  PositionStatus,
+  UserType,
+} from "@iam/contracts";
 import type { DbClient } from "@iam/db";
-import { employments, users } from "@iam/db/schema";
+import { employments, organizationClosures, organizations, positions, users } from "@iam/db/schema";
 import type { SubjectAccessMutationReceipt } from "@iam/subject-access";
 import { createUnitOfWork } from "@iam/unit-of-work";
 import { eq, sql } from "drizzle-orm";
@@ -48,6 +57,19 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await harness!.reset();
+  await harness!.db.insert(organizations).values({
+    id: 2,
+    orgCode: "SUP",
+    orgName: "Supplier",
+    path: "/2",
+    level: OrganizationLevel.One,
+    orgType: OrganizationType.Department,
+  });
+  await harness!.db.insert(organizationClosures).values({ ancestorId: 2, descendantId: 2, depth: 0 });
+  await harness!.db
+    .insert(positions)
+    .values({ id: 3, posCode: "P001", posName: "Supplier Contact", status: PositionStatus.Enable })
+    .onConflictDoUpdate({ target: positions.id, set: { status: PositionStatus.Enable } });
 });
 
 afterAll(async () => {
@@ -99,6 +121,44 @@ describe("Register Purveyor Contact PostgreSQL contract", () => {
     expect(auditEvents.map((event) => event.details?.existingContact).sort()).toEqual([false, true]);
   });
 
+  test.each([EmploymentStatus.Pending, EmploymentStatus.Pause])(
+    "a matching open Employment in state %s remains unchanged on repeated registration",
+    async (status) => {
+      const { useCase } = createUseCase();
+      const app = createContactApp(useCase);
+      const input = { mobile, name: "Contact", orgCode: "SUP", username: "supplier" };
+      const created = await requestContact(app, input);
+      expect(created.status).toBe(200);
+      await harness!.db.update(employments).set({ status, startTime: "2090-01-01" });
+      const before = await harness!.db.select().from(employments);
+      const repeated = await requestContact(app, input);
+      expect(repeated.status).toBe(200);
+      const after = await harness!.db.select().from(employments);
+      expect(after).toEqual(before);
+    },
+  );
+
+  test.each([false, true])("rejects a disabled contact Position for an existing User: %s", async (existing) => {
+    if (existing) await harness!.db.insert(users).values({ username: "existing", name: "Existing", mobile });
+    await harness!.db.update(positions).set({ status: PositionStatus.Disable }).where(eq(positions.posCode, "P001"));
+    const { useCase, auditEvents } = createUseCase({ readExistingContact: existing });
+    const response = await requestContact(createContactApp(useCase), {
+      mobile,
+      name: "Contact",
+      orgCode: "SUP",
+      username: "supplier",
+    });
+
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body).toMatchObject({ message: "系统基本信息缺失" });
+    const persistedUsers = await harness!.db.select().from(users);
+    const persistedEmployments = await harness!.db.select().from(employments);
+    expect(persistedUsers).toHaveLength(existing ? 1 : 0);
+    expect(persistedEmployments).toEqual([]);
+    expect(auditEvents).toEqual([]);
+  });
+
   test("normalizes a new contact through the real HTTP parser and preserves username case", async () => {
     const { useCase } = createUseCase();
     const app = createContactApp(useCase);
@@ -118,6 +178,10 @@ describe("Register Purveyor Contact PostgreSQL contract", () => {
         username: "Mixed-Case",
         userType: UserType.External,
       },
+    ]);
+    const employmentsForContact = await harness!.db.select().from(employments);
+    expect(employmentsForContact).toMatchObject([
+      { userId: persisted[0]!.id, status: EmploymentStatus.Enable, startTime: null, endTime: null },
     ]);
   });
 
@@ -258,7 +322,7 @@ describe("Register Purveyor Contact PostgreSQL contract", () => {
   });
 });
 
-function createUseCase() {
+function createUseCase({ readExistingContact = false } = {}) {
   const auditEvents: AuditLogInput[] = [];
   const pendingSubjectAccessReceipts = [...subjectAccessMutationReceipts];
   const useCase = createRegisterPurveyorContactUseCase({
@@ -301,7 +365,9 @@ function createUseCase() {
       createTxPorts: (tx) => createTransactionPorts(tx),
     }),
     userReader: {
-      getActiveUserByMobile: mock(async () => null),
+      getActiveUserByMobile: readExistingContact
+        ? createUserRepository(harness!.db).getUserByMobile
+        : mock(async () => null),
     },
   });
   return { auditEvents, useCase };
@@ -335,29 +401,11 @@ async function requestContact(app: Hono, body: unknown) {
 function createTransactionPorts(tx: DbClient): RegisterPurveyorContactTransactionPorts {
   const repository = createUserRepository(tx);
   return {
-    employmentRepository: {
-      async getEmploymentByUserOrgPosId(userId: number, orgId: number, posId: number) {
-        return (
-          (await tx.query.employments.findFirst({
-            where: {
-              isDelete: false,
-              orgId,
-              posId,
-              userId,
-            },
-          })) ?? null
-        );
-      },
-      async setEmployment(userId: number, posId: number, orgId: number) {
-        return (await tx.insert(employments).values({ orgId, posId, userId }).returning())[0]!;
-      },
-    },
+    employmentRepository: createEmploymentRepository(tx),
     organizationRepository: {
       getOrganizationByCode: mock(async () => ({ id: 2 })),
     },
-    positionRepository: {
-      getPositionByCode: mock(async () => ({ id: 3 })),
-    },
+    positionRepository: createPositionRepository(tx),
     subjectAccessMutation: {
       async runMutation(_receipt, mutation, resolveTarget) {
         const result = await mutation();

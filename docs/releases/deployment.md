@@ -2,8 +2,8 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-11-06
-Next review: 2026-12-06
+Last verified: 2026-11-13
+Next review: 2026-12-13
 
 本页覆盖当前版本首次部署、常规更新和兼容版本回退。旧 Profile/Organization Search 升级先按[统一 Document 硬切换](data-maintenance.md#统一-document-硬切换)，其他跨代来源见[独立迁移指引](README.md#一次性迁移与旧版本)。
 本地开发见[项目快速开始](../../README.md#-快速开始)；网关、登录密钥、数据重建和日志栈按[专题入口](README.md)操作。
@@ -178,6 +178,31 @@ User Document 构建与发布的进程均使用支持组合角色的同一候选
 
 开放后用已批准的数据核对 Admin 实时授权、文档发布和应用端可见角色。写入组合角色或包含关系后，按下述回退流程
 检查制品与当前源数据及已发布事实的兼容性。旧版构建会遗漏继承角色，需要恢复匹配的制品与数据或在维护窗口内修复。
+
+### 启用按日任职有效期
+
+该升级将任职开始和截止字段由时间戳改为可空日期，加入未启用状态，并更新开放任职约束。Admin 页面与 Admin API、
+Internal API、Worker 及涉及任职诊断、构建或修复的 Ops 制品使用同一候选。旧 runtime 只能配对旧数据库与读模型，
+需要在同一停流窗口切换相关读写和任务。
+
+1. 准备可恢复且相互匹配的 PostgreSQL、Redis 备份以及新旧制品和配置。关闭 Admin、Internal、对外人员资料和涉及已发布
+   Facts 的认证入口，并排空源写入、文档发布、直连、脚本和重试。停止全部旧版任职读写、Worker 和相关 Ops。
+2. 在停流下用候选执行正式 `pnpm --filter @iam/db db:migrate`。旧时间戳按原应用的 UTC 读取语义转换为北京时间覆盖的自然日，
+   原状态和墓碑保留。发现逆序旧记录或重复开放任职时保持停流，按迁移报告核对样本 ID 和实际迁移状态。
+   在匹配源版本的维护环境中调查异常，按业务事实修正后重新执行正式迁移。需要查询重复关系完整清单时，使用与所查 schema
+   匹配的 `iam-ops employment verify`。升级后再用目标版本运行该命令，确认新区间和开放任职完整性。
+3. 在受控环境启动匹配候选的 User Document Worker，确认启动补扫完成，并等待文档及 Facts 收敛。
+   在停流下独立执行 `iam-ops user-document verify-postgres` 和 `iam-ops user-document verify-redis`。
+   对外 User Document 和 Facts 的结构保持兼容，但任职生效依据改用状态，库存的任职和责任内容可能变化。
+   若新版构建发现内容差异，按[全量重建](data-maintenance.md#user-document-全量重建)运行正式 backfill，等待匹配 Worker
+   发布，再从头通过完整 PG、Redis 两项核验。仅有待处理工作、入队或后处理失败时，先按
+   [日常修复](data-maintenance.md#user-document-日常修复)收敛后重跑核验。Organization Document 无需因任职日期改型单独重建。
+4. 在受控入口核对 Admin 日期保存、任职状态、组织责任及 Internal/协议资料的实际传播，处理验收数据并等待收敛。
+   再次通过两个完整 User Document gate 后恢复相关流量和任务。
+
+迁移、补扫或发布失败时保持停流，按各自持久事实恢复。Worker 源事务已提交时，使用 User Document 的发布或修复流程继续；
+源转换未提交时，恢复依赖后重启匹配 Worker 触发补扫。确需回退时，恢复兼容的制品、配置和一致数据，核对备份后的业务变更
+及会话撤销，避免恢复已撤销的访问。日期改型已提交后，旧镜像需要配对可恢复的旧数据才能启用。
 
 ## 完成检查与回退
 

@@ -152,7 +152,7 @@ export async function mockScopedManagementApi(page: Page) {
     employmentDetail = {
       ...employmentDetail,
       status,
-      endTime: status === EmploymentStatus.Disable ? "2026-08-24T00:00:00.000Z" : null,
+      endTime: status === EmploymentStatus.Disable ? "2026-08-24" : null,
       allowedActions: createHrEmploymentAllowedActions(status, employmentDetail.isPrimary),
     };
   };

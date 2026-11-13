@@ -1,12 +1,13 @@
 import {
   EmploymentStatus,
+  isOpenEmploymentStatus,
   ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG,
   OrganizationReferenceSchema,
   OrganizationStatus,
   PositionStatus,
   RoleType,
 } from "@iam/contracts";
-import type { Employment, User } from "@iam/db/schema";
+import type { User } from "@iam/db/schema";
 import { type PublishedUserDocument, PublishedUserDocumentSchema, USER_DOCUMENT_SCHEMA_VERSION } from "../document";
 import { UserDocumentSourceIntegrityError } from "./document-build.error";
 import type { DocumentBuildDataset } from "./document-build.repository";
@@ -88,11 +89,7 @@ function createDocumentAssembler(
     };
     if (user.isDelete) return PublishedUserDocumentSchema.parse({ ...metadata, document: null });
     const items = (employmentsByUser.get(user.id) ?? [])
-      .filter(
-        (employment) =>
-          !employment.isDelete &&
-          (employment.status === EmploymentStatus.Enable || employment.status === EmploymentStatus.Pause),
-      )
+      .filter((employment) => !employment.isDelete && isOpenEmploymentStatus(employment.status))
       .map((employment) => {
         const position = positions.get(employment.posId);
         if (!position || position.status !== PositionStatus.Enable || position.isDelete)
@@ -145,7 +142,7 @@ function createDocumentAssembler(
           },
         };
       })
-      .filter(({ employment }) => isEffective(employment, observedAt))
+      .filter(({ employment }) => employment.status === EmploymentStatus.Enable)
       .map(({ document }) => document)
       .sort(
         (left, right) =>
@@ -167,14 +164,6 @@ function createDocumentAssembler(
       },
     });
   };
-}
-
-function isEffective(employment: Employment, observedAt: Date) {
-  return (
-    employment.status === EmploymentStatus.Enable &&
-    employment.startTime <= observedAt &&
-    (employment.endTime === null || observedAt < employment.endTime)
-  );
 }
 
 function toOrganizationReference(rows: UserDocumentBuildOrgPathRow[], targetId: number) {

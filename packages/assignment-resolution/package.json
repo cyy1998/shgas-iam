@@ -4,8 +4,11 @@
   "version": "0.0.1",
   "private": true,
   "exports": {
+    "./employment-lifecycle": "./src/employment-lifecycle.ts",
     "./role-assignment": "./src/role-assignment/index.ts",
     "./organization-responsibility": "./src/organization-responsibility/index.ts",
+    "./organization-responsibility/assignment-lifecycle": "./src/organization-responsibility/assignment-lifecycle.ts",
+    "./organization-responsibility/assignment-lifecycle-store": "./src/organization-responsibility/assignment-lifecycle-store.ts",
     "./organization-responsibility/parent-lifecycle": "./src/organization-responsibility/parent-lifecycle.ts"
   },
   "scripts": {

@@ -221,7 +221,7 @@ async function attachCrossTreeResponsibility(orgCode: string, status: Organizati
       userId: holder!.id,
       orgId: holderOrganization!.id,
       posId: position!.id,
-      startTime: now,
+      startTime: "2026-08-01",
     })
     .returning();
   await harness.db.insert(organizationResponsibilityAssignments).values({

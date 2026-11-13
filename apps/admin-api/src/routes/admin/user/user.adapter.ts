@@ -13,8 +13,7 @@ import {
 } from "@admin-api/services/user/user.schema";
 import type { UserService } from "@admin-api/services/user/user.service";
 import { router } from "@iam/api-core/trpc";
-import { EmploymentStatus, UserStatus } from "@iam/contracts";
-import { OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
+import { EmploymentStatus, OPEN_EMPLOYMENT_STATUSES, UserStatus } from "@iam/contracts";
 import type { Context } from "hono";
 import { z } from "zod";
 import { toUserDetailVo, toUserVo } from "./user.schema";

@@ -174,8 +174,8 @@ test("User Employment history is hidden by default and can be revealed without m
           id: 43,
           status: EmploymentStatus.Disable,
           isPrimary: false,
-          startTime: "2025-01-05T08:00:00.000Z",
-          endTime: "2025-12-31T08:00:00.000Z",
+          startTime: "2025-01-05",
+          endTime: "2025-12-31",
           managementPath: null,
           allowedActions: createHrEmploymentAllowedActions(EmploymentStatus.Disable, false),
         },
@@ -323,6 +323,8 @@ test("an ended-only disabled User can be rehired only after a refreshed Pause re
       posCode: "FIN-001",
       isPrimary: false,
       description: null,
+      startTime: null,
+      endTime: null,
     },
   ]);
 });

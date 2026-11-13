@@ -50,12 +50,17 @@ for (const source of ["schema definition", "formal migrations"] as const) {
       `;
     }
 
-    test("rejects two live enabled employments with the same user, organization and position", async () => {
-      await insertEmployment();
-      await expectPostgresErrorCode(insertEmployment(), "23505");
-      const rows = await harness.sql`SELECT id FROM employment`;
-      expect(rows).toHaveLength(1);
-    });
+    for (const existingStatus of [EmploymentStatus.Enable, EmploymentStatus.Pause, EmploymentStatus.Pending]) {
+      test.each([EmploymentStatus.Enable, EmploymentStatus.Pause, EmploymentStatus.Pending])(
+        `rejects state %i as a duplicate of open state ${existingStatus}`,
+        async (status) => {
+          await insertEmployment({ status: existingStatus });
+          await expectPostgresErrorCode(insertEmployment({ status }), "23505");
+          const rows = await harness.sql`SELECT id FROM employment`;
+          expect(rows).toHaveLength(1);
+        },
+      );
+    }
 
     test.each(["userId", "orgId", "posId"] as const)("allows a different %s in the relationship", async (field) => {
       await insertEmployment();
@@ -65,9 +70,8 @@ for (const source of ["schema definition", "formal migrations"] as const) {
     });
 
     test.each([
-      { name: "paused", status: EmploymentStatus.Pause, isDelete: false },
       { name: "ended", status: EmploymentStatus.Disable, isDelete: false },
-      { name: "soft-deleted enabled", status: EmploymentStatus.Enable, isDelete: true },
+      { name: "soft-deleted Pending", status: EmploymentStatus.Pending, isDelete: true },
     ])("allows repeated $name records alongside a live enabled employment", async ({ status, isDelete }) => {
       await insertEmployment();
       await insertEmployment({ status, isDelete });

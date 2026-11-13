@@ -81,6 +81,7 @@ describe("TransferModal", () => {
       newPosCode: "TARGET_POS",
       isPrimary,
       description: null,
+      endTime: null,
     });
   });
 

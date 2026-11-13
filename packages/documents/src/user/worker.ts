@@ -1,6 +1,7 @@
 export * from "./build/user-document-builder";
 export * from "./employment/employment.repository";
 export * from "./employment/employment-verifier";
+export { createUserDocumentInvalidation } from "./invalidation/user-document-invalidation";
 export { createUserDocumentJobProducer } from "./invalidation/user-document-job.producer";
 export { createUserDocumentWriteResources } from "./producer/write-resources";
 export * from "./readiness/user-document-readiness";

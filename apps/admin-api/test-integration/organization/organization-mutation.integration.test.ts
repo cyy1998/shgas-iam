@@ -168,7 +168,7 @@ async function seedEmployment(organizationId: number, status = EmploymentStatus.
     orgId: organizationId,
     posId: position!.id,
     status,
-    startTime: new Date("2026-08-01T00:00:00Z"),
+    startTime: "2026-08-01",
   });
   return user!;
 }
@@ -833,7 +833,7 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
     expect(after.audits).toMatchObject([{ action: "admin.organization.delete", details: { changed: true } }]);
   });
 
-  for (const status of [EmploymentStatus.Enable, EmploymentStatus.Pause]) {
+  for (const status of [EmploymentStatus.Enable, EmploymentStatus.Pause, EmploymentStatus.Pending]) {
     test(`Open Employment ${status} blocks pause and deletion`, async () => {
       const organization = await seedOrganization();
       await seedEmployment(organization.id, status);

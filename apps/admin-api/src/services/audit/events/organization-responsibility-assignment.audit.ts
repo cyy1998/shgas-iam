@@ -1,3 +1,4 @@
+import type { ResponsibilityAssignmentCascadeCause } from "@iam/assignment-resolution/organization-responsibility/assignment-lifecycle";
 import type { OrganizationResponsibilityAssignmentStatus, OrganizationResponsibilityTypeCode } from "@iam/contracts";
 import { ORGANIZATION_RESPONSIBILITY_ASSIGNMENT_AUDIT_ACTIONS } from "@iam/contracts";
 import type { OrganizationResponsibilityAssignmentRecordCreate } from "@iam/domain/organization-responsibility";
@@ -45,19 +46,6 @@ interface OrganizationResponsibilityLifecycleAuditState {
   endTime: Date | null;
 }
 
-export type OrganizationResponsibilityAssignmentLifecycleAuditCause =
-  | "direct"
-  | {
-      kind: "employment";
-      action: "pause" | "end" | "transfer";
-      employmentId: number;
-    }
-  | {
-      kind: "user";
-      action: "resignation";
-      userId: number;
-    };
-
 export function buildOrganizationResponsibilityAssignmentLifecycleAudit(input: {
   action: OrganizationResponsibilityLifecycleAuditAction;
   assignment: {
@@ -68,7 +56,7 @@ export function buildOrganizationResponsibilityAssignmentLifecycleAudit(input: {
   };
   before: OrganizationResponsibilityLifecycleAuditState;
   after: OrganizationResponsibilityLifecycleAuditState;
-  cause?: OrganizationResponsibilityAssignmentLifecycleAuditCause;
+  cause?: "direct" | ResponsibilityAssignmentCascadeCause;
   changed?: boolean;
   auditContext?: AdminAuditContext;
 }): AuditLogInput {

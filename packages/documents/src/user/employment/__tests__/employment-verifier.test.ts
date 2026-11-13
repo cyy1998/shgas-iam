@@ -60,22 +60,22 @@ describe("Employment verifier", () => {
     ]);
   });
 
-  test("classifies invalid, contradictory, and unsupported Employment periods", async () => {
+  test("reports invalid ranges and missing cutoff dates for ended Employment", async () => {
     const verifier = createEmploymentVerifier({
       inventory: {
         readAll: async () => [
-          employment({ id: 50, positionId: 50, endTime: new Date("2026-08-10T00:00:00.000Z") }),
+          employment({ id: 50, positionId: 50, endTime: "2026-08-10" }),
           employment({ id: 51, status: EmploymentStatus.Disable }),
           employment({
             id: 52,
             status: EmploymentStatus.Disable,
-            endTime: new Date("2026-08-01T00:00:00.000Z"),
+            endTime: "2026-08-01",
           }),
           employment({
             id: 53,
             positionId: 53,
             status: EmploymentStatus.Pause,
-            startTime: new Date("2026-08-12T00:00:00.000Z"),
+            startTime: "2026-08-12",
           }),
         ],
       },
@@ -89,19 +89,9 @@ describe("Employment verifier", () => {
         employmentIds: [52],
       },
       {
-        code: "open-employment-has-end-time",
-        count: 1,
-        employmentIds: [50],
-      },
-      {
         code: "ended-employment-missing-end-time",
         count: 1,
         employmentIds: [51],
-      },
-      {
-        code: "future-open-start-time",
-        count: 1,
-        employmentIds: [53],
       },
     ]);
   });
@@ -110,7 +100,7 @@ describe("Employment verifier", () => {
     const verifier = createEmploymentVerifier({
       inventory: {
         readAll: async () => [
-          employment({ id: 61, userId: 10, status: EmploymentStatus.Pause }),
+          employment({ id: 61, userId: 10, status: EmploymentStatus.Pending }),
           employment({ id: 60, userId: 10 }),
           employment({
             id: 63,
@@ -147,7 +137,7 @@ describe("Employment verifier", () => {
           employment({
             id: 70,
             status: 99,
-            endTime: new Date("2026-08-01T00:00:00.000Z"),
+            endTime: "2026-08-01",
           }),
         ],
       },
@@ -174,8 +164,8 @@ describe("Employment verifier", () => {
     const verifier = createEmploymentVerifier({
       inventory: {
         readAll: async () => [
-          employment({ id: 1, startTime: NOW }),
-          employment({ id: 2, status: EmploymentStatus.Disable, endTime: NOW }),
+          employment({ id: 1, startTime: null }),
+          employment({ id: 2, status: EmploymentStatus.Disable, endTime: "2026-08-11" }),
           employment({ id: 3, isDelete: true, status: 99, positionStatus: null }),
         ],
       },
@@ -198,7 +188,7 @@ function employment(overrides: Partial<EmploymentInventoryRow> = {}): Employment
     organizationId: 30,
     isPrimary: false,
     status: EmploymentStatus.Enable,
-    startTime: new Date("2026-08-01T00:00:00.000Z"),
+    startTime: "2026-08-01",
     endTime: null,
     isDelete: false,
     positionStatus: PositionStatus.Enable,

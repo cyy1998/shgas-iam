@@ -1,6 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import { createPageQuerySchema } from "@iam/api-core/core/pagination/schema";
-import { EmploymentStatus, OrganizationType } from "@iam/contracts";
+import { EmploymentDateSchema, EmploymentStatus, OPEN_EMPLOYMENT_STATUSES, OrganizationType } from "@iam/contracts";
 import { EmploymentDetailDtoSchema as SharedEmploymentDetailDtoSchema } from "@iam/domain/employment";
 
 export const EmploymentDetailDtoSchema = SharedEmploymentDetailDtoSchema.pick({
@@ -95,13 +95,14 @@ export const EmploymentAdminPaginationQueryDtoSchema = createPageQuerySchema(
         .array(z.enum(EmploymentStatus))
         .optional()
         .openapi({
-          example: [EmploymentStatus.Enable, EmploymentStatus.Pause],
-          description:
-            "未传时全局管理员返回全部状态，范围管理员由服务端默认限定为 [Enable, Pause]；显式传入可查询已结束历史",
+          example: [...OPEN_EMPLOYMENT_STATUSES],
+          description: "未传时全局管理员返回全部状态，范围管理员由服务端默认限定为开放任职；显式传入可查询已结束历史",
         }),
     }),
   }),
 ).openapi("EmploymentAdminPaginationQueryDto");
+
+const employmentDateInput = EmploymentDateSchema.nullable().optional();
 
 export const EmploymentAdminCreateDtoSchema = z
   .object({
@@ -123,6 +124,8 @@ export const EmploymentAdminCreateDtoSchema = z
     }),
     posCode: z.string().openapi({ example: "E033" }),
     isPrimary: z.boolean().optional().openapi({ example: false }),
+    startTime: employmentDateInput,
+    endTime: employmentDateInput,
     description: z.string().max(500).nullable().optional(),
   })
   .refine((dto) => dto.orgCode !== undefined || dto.deptOrgCode !== undefined, {
@@ -133,9 +136,11 @@ export const EmploymentAdminCreateDtoSchema = z
 export const EmploymentUpdateDtoSchema = z
   .object({
     description: z.string().max(500).nullable().optional(),
+    startTime: employmentDateInput,
+    endTime: employmentDateInput,
   })
   .strict()
-  .refine((dto) => dto.description !== undefined, {
+  .refine((dto) => dto.description !== undefined || dto.startTime !== undefined || dto.endTime !== undefined, {
     message: "至少提交一个任职更新字段",
   })
   .openapi("EmploymentUpdateDto");
@@ -161,6 +166,7 @@ export const EmploymentTransferDtoSchema = z
       example: false,
       description: "新任职是否为主任职；必须由管理员明确选择",
     }),
+    endTime: employmentDateInput,
     description: z.string().max(500).nullable().optional(),
   })
   .strict()

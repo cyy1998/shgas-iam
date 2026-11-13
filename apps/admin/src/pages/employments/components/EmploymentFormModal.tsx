@@ -8,6 +8,7 @@ import { ModalForm, ProForm, ProFormSelect, ProFormSwitch, ProFormTextArea } fro
 import { PositionStatus, UserStatus } from "@iam/contracts";
 import { Alert, message } from "antd";
 import { useRef } from "react";
+import EmploymentDateFields from "./EmploymentDateFields";
 
 type Props = {
   open: boolean;
@@ -64,6 +65,8 @@ export default function EmploymentFormModal({
             posCode: values.posCode,
             isPrimary: values.isPrimary,
             description: values.description || null,
+            startTime: values.startTime || null,
+            endTime: values.endTime || null,
           });
           if (outcome.changed) message.success("雇佣已创建");
           else message.info("无需修改");
@@ -138,6 +141,7 @@ export default function EmploymentFormModal({
         }}
       />
       <ProFormSwitch name="isPrimary" label="设为主岗" tooltip="若选 true，将自动把该用户其它主岗置为非主" />
+      <EmploymentDateFields />
       <ProFormTextArea name="description" label="备注" />
     </ModalForm>
   );

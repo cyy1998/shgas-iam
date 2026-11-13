@@ -1,7 +1,9 @@
 import { createAdminMutation, runAdminSubjectAccessMutation } from "@admin-api/services/admin-mutation/admin-mutation";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildEmploymentResignUserAudit } from "@admin-api/services/audit/events/employment.audit";
-import { EmploymentStatus, UserStatus } from "@iam/contracts";
+import { endLockedEmployments } from "@iam/assignment-resolution/employment-lifecycle";
+import { UserStatus } from "@iam/contracts";
+import { getEmploymentDate } from "@iam/domain/employment/employment-date";
 import { UserNotFoundError } from "@iam/domain/user";
 import type { ResignUserEligibilityReaderPort, ResignUserTarget, ResignUserUseCaseDeps } from "./resign-user.port";
 import type { ResignUserInput, ResignUserOptions } from "./resign-user.type";
@@ -80,26 +82,17 @@ export function createResignUserUseCase(deps: ResignUserUseCaseDeps) {
                 // HR eligibility is based on current request-time facts, including changes observed after lock waits.
                 await assertResignationAllowed(tx.userStore, current, options);
                 const transactionTime = deps.clock.nowDate();
-                let employmentChanged = false;
-                for (const employment of selectedEmployments) {
-                  if (employment.userId !== current.id || employment.isDelete)
-                    throw new Error("Locked Employment does not belong to the resignation target");
-                  if (employment.status === EmploymentStatus.Disable) continue;
-                  if (employment.status !== EmploymentStatus.Enable && employment.status !== EmploymentStatus.Pause)
-                    throw new Error("Locked Employment has an invalid resignation state");
-                  const updated = await tx.employmentStore.updateEmploymentRecord(employment.id, {
-                    status: EmploymentStatus.Disable,
-                    endTime: transactionTime,
-                    isPrimary: false,
-                  });
-                  if (updated == null) throw new Error("Locked Employment resignation returned no row");
-                  employmentChanged = true;
-                }
-                const assignmentChanged = await tx.responsibilityParentLifecycle.endOpenAssignmentsForUserResignation({
-                  auditContext,
-                  selectedAssignments,
-                  endTime: transactionTime,
+                const { documentChanges, endedEmployments } = await endLockedEmployments(tx.employmentStore, {
                   userId: current.id,
+                  employments: selectedEmployments,
+                  operationDate: getEmploymentDate(transactionTime),
+                  endSelectedAssignments: () =>
+                    tx.responsibilityParentLifecycle.endOpenAssignmentsForUserResignation({
+                      auditContext,
+                      selectedAssignments,
+                      endTime: transactionTime,
+                      userId: current.id,
+                    }),
                 });
                 const userChanged = current.status !== UserStatus.Disable;
                 if (userChanged) {
@@ -108,15 +101,20 @@ export function createResignUserUseCase(deps: ResignUserUseCaseDeps) {
                   });
                   if (updatedUser === null) throw new Error("Locked User resignation returned no row");
                 }
-                const changed = userChanged || employmentChanged || assignmentChanged;
-                await tx.auditLogWriter.recordAuditLog(buildEmploymentResignUserAudit(current, auditContext, changed));
+                const changed = userChanged || documentChanges.length > 0;
+                await tx.auditLogWriter.recordAuditLog(
+                  buildEmploymentResignUserAudit(
+                    current,
+                    auditContext,
+                    changed,
+                    endedEmployments,
+                    changed ? transactionTime : undefined,
+                  ),
+                );
                 if (changed) {
                   await tx.userDocumentInvalidation.recordChanges([
                     ...(userChanged ? [{ kind: "user" as const, userId: current.id }] : []),
-                    ...(employmentChanged ? [{ kind: "employment" as const, userId: current.id }] : []),
-                    ...(assignmentChanged
-                      ? [{ kind: "organization-responsibility-assignment" as const, userId: current.id }]
-                      : []),
+                    ...documentChanges,
                   ]);
                 }
                 return { changed, result: null };

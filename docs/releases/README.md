@@ -2,8 +2,8 @@
 
 Type: runbook
 Status: Current
-Last verified: 2026-10-26
-Next review: 2026-11-26
+Last verified: 2026-11-13
+Next review: 2026-12-13
 
 面向具备基础部署能力、需要维护当前 IAM 的操作者。按任务进入专题，每个操作说明适用情况、前提、步骤、完成标准和失败处理。
 
@@ -25,7 +25,8 @@ Next review: 2026-11-26
 
 ## 一次性迁移与旧版本
 
-当前旧 Profile/Organization Search → Document 的升级使用[统一 Document 硬切换](data-maintenance.md#统一-document-硬切换)。
+任职时间戳升级为自然日使用[按日任职有效期的协调发布](deployment.md#启用按日任职有效期)。
+旧 Profile/Organization Search → Document 的升级使用[统一 Document 硬切换](data-maintenance.md#统一-document-硬切换)。
 以下更早指引保存在整理前的固定版本中，按实际来源环境选择；本次整理不表示目标环境已经执行迁移。
 尚待迁移的环境先完成对应独立流程，再使用当前代日常维护步骤；不能把当前命令直接套到其他旧布局。
 

@@ -8,6 +8,7 @@ import { createCreateEmploymentUseCase } from "@admin-api/use-cases/employment/c
 import { createEndEmploymentUseCase } from "@admin-api/use-cases/employment/end-employment/end-employment.use-case";
 import { createManagePrimaryEmploymentUseCase } from "@admin-api/use-cases/employment/manage-primary-employment/manage-primary-employment.use-case";
 import { createTransferEmploymentUseCase } from "@admin-api/use-cases/employment/transfer-employment/transfer-employment.use-case";
+import { createUpdateEmploymentUseCase } from "@admin-api/use-cases/employment/update-employment/update-employment.use-case";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -61,15 +62,23 @@ describe("HR Employment administration scope", () => {
     });
     const authorization = await scopedAuthorization(denyMutation);
 
+    const [pending] = await harness.db
+      .insert(employments)
+      .values({
+        ...employment(seeded.candidateUserId, seeded.globalPositionId, seeded.inScopeOrgId, EmploymentStatus.Pending),
+        startTime: "2090-01-01",
+      })
+      .returning({ id: employments.id });
     const firstPage = await service.searchEmploymentsFuzzyForAdmin(query(1, 1), authorization);
     const secondPage = await service.searchEmploymentsFuzzyForAdmin(query(2, 1), authorization);
+    const thirdPage = await service.searchEmploymentsFuzzyForAdmin(query(3, 1), authorization);
     const ended = await service.searchEmploymentsFuzzyForAdmin(query(1, 10, [EmploymentStatus.Disable]), authorization);
     const detail = await service.getEmploymentDetailByIdForAdmin(seeded.inScopeEnabledId, authorization);
 
-    expect(firstPage).toMatchObject({ total: 2, pages: 2, pageNum: 1 });
-    expect(secondPage).toMatchObject({ total: 2, pages: 2, pageNum: 2 });
-    expect([firstPage.result[0]?.id, secondPage.result[0]?.id].sort()).toEqual(
-      [seeded.inScopeEnabledId, seeded.inScopePausedId].sort(),
+    expect(firstPage).toMatchObject({ total: 3, pages: 3, pageNum: 1 });
+    expect(secondPage).toMatchObject({ total: 3, pages: 3, pageNum: 2 });
+    expect([firstPage.result[0]?.id, secondPage.result[0]?.id, thirdPage.result[0]?.id].sort()).toEqual(
+      [seeded.inScopeEnabledId, seeded.inScopePausedId, pending!.id].sort(),
     );
     expect(ended).toMatchObject({
       total: 1,
@@ -111,14 +120,12 @@ describe("HR Employment administration scope", () => {
   });
 
   test("commits scoped description and creation while denied and duplicate mutations write nothing", async () => {
-    const { service, createEmployment } = createSubject();
+    const { updateEmployment, createEmployment } = createSubject();
     const authorization = await scopedAuthorization();
 
-    const updated = await service.updateEmployment(
-      seeded.inScopeEnabledId,
-      { description: "HR approved" },
-      undefined,
-      authorization,
+    const updated = await updateEmployment.execute(
+      { employmentId: seeded.inScopeEnabledId, description: "HR approved" },
+      { authorization },
     );
     expect(updated).toEqual({ changed: true, result: null });
     const updatedRows = await harness.db
@@ -129,7 +136,10 @@ describe("HR Employment administration scope", () => {
 
     let deniedUpdate: unknown;
     try {
-      await service.updateEmployment(seeded.outOfScopeId, { description: "forbidden" }, undefined, authorization);
+      await updateEmployment.execute(
+        { employmentId: seeded.outOfScopeId, description: "forbidden" },
+        { authorization },
+      );
     } catch (error) {
       deniedUpdate = error;
     }
@@ -605,10 +615,13 @@ function createSubject() {
       resolveEffectiveRoles: mock(async () => new Map()),
     },
     roleRepository: repositories.role,
-
+  });
+  const updateEmployment = createUpdateEmploymentUseCase({
+    clock,
     uow: mapUnitOfWork(unitOfWork, (tx) => ({
-      employmentRepository: tx.repositories.employment,
-      auditService: tx.auditService,
+      employmentStore: tx.repositories.employment,
+      auditLogWriter: tx.auditService,
+      responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
       userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
   });
@@ -624,6 +637,7 @@ function createSubject() {
     })),
   });
   const changeEmploymentAvailability = createChangeEmploymentAvailabilityUseCase({
+    clock,
     uow: mapUnitOfWork(unitOfWork, (tx) => ({
       employmentStore: tx.repositories.employment,
       organizationReader: tx.repositories.organization,
@@ -667,6 +681,7 @@ function createSubject() {
     managePrimaryEmployment,
     service,
     transferEmployment,
+    updateEmployment,
   };
 }
 
@@ -806,7 +821,7 @@ function employment(userId: number, posId: number, orgId: number, status: Employ
     orgId,
     status,
     isPrimary: false,
-    startTime: new Date("2026-01-01T00:00:00Z"),
-    endTime: status === EmploymentStatus.Disable ? new Date("2026-02-01T00:00:00Z") : null,
+    startTime: "2026-01-01",
+    endTime: status === EmploymentStatus.Disable ? "2026-02-01" : null,
   };
 }

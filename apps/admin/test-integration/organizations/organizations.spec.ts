@@ -247,7 +247,7 @@ test("shows the Employment Pause cascade before executing the parent lifecycle c
     id: 42,
     status: EmploymentStatus.Enable,
     isPrimary: true,
-    startTime: "2026-08-20T00:00:00.000Z",
+    startTime: "2026-08-20",
     endTime: null,
     description: null,
     user: { id: 7, name: "张三", username: "zhangsan" },

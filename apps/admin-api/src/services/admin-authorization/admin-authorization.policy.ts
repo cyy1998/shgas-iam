@@ -10,6 +10,7 @@ import type {
 import {
   ADMIN_MODULE_CODES,
   EmploymentStatus,
+  isOpenEmploymentStatus,
   OrganizationLevel as OrganizationLevelValue,
   OrganizationResponsibilityAssignmentStatus,
   OrganizationStatus as OrganizationStatusValue,
@@ -222,10 +223,11 @@ function employmentAllowedActions(facts: AdminEmploymentActionFacts): AdminEmplo
     allowed: false,
     reason: "RESOURCE_STATE_NOT_ACTIONABLE",
   } as const satisfies AdminAuthorizationDecision;
-  const isOpen = facts.status !== EmploymentStatus.Disable;
+  const isOpen = isOpenEmploymentStatus(facts.status);
   return {
     editDescription: isOpen ? allowedDecision : stateNotActionable,
-    pause: facts.status === EmploymentStatus.Enable ? allowedDecision : stateNotActionable,
+    editPeriod: isOpen ? allowedDecision : stateNotActionable,
+    pause: isOpen && facts.status !== EmploymentStatus.Pause ? allowedDecision : stateNotActionable,
     resume: facts.status === EmploymentStatus.Pause ? allowedDecision : stateNotActionable,
     end: isOpen ? allowedDecision : stateNotActionable,
     transfer: !isOpen

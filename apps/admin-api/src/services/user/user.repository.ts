@@ -1,10 +1,9 @@
 import type { UserCreateDto, UserPaginationQueryDto, UserUpdateDto } from "@admin-api/services/user/user.type";
-import { ClientDelegationStatus, EmploymentStatus, UserStatus } from "@iam/contracts";
+import { ClientDelegationStatus, EmploymentStatus, OPEN_EMPLOYMENT_STATUSES, UserStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
 import { clientDelegations, employments, users } from "@iam/db/schema";
-import { OPEN_EMPLOYMENT_STATUSES } from "@iam/domain/employment";
 import { UsernameAlreadyExistsError } from "@iam/domain/user";
 import { and, count, eq, inArray, or } from "drizzle-orm";
 

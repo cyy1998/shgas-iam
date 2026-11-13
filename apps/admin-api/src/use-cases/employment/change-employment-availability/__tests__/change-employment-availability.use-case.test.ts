@@ -28,7 +28,7 @@ function employment(overrides: Record<string, unknown> = {}) {
     orgId: 2,
     isPrimary: true,
     status: EmploymentStatus.Enable,
-    startTime,
+    startTime: "2025-01-01",
     endTime: null,
     description: null,
     isDelete: false,
@@ -80,6 +80,7 @@ function createLifecycle() {
     responsibilityParentLifecycle: {
       lockAssignmentsForEmployment: mock(async () => []),
       pauseEnabledAssignmentsForEmployment: mock(async () => true),
+      endOpenAssignmentsForEmployment: mock(async () => false),
     },
     userDocumentInvalidation: { recordChanges: mock(async () => undefined) },
     employmentStore: {
@@ -102,6 +103,7 @@ function createLifecycle() {
   return {
     tx,
     useCase: createChangeEmploymentAvailabilityUseCase({
+      clock: { nowDate: () => new Date("2026-11-13T00:00:00Z") },
       uow: createImmediateUnitOfWork(tx),
     }),
   };
@@ -223,7 +225,7 @@ describe("Employment Lifecycle Pause/Resume", () => {
     tx.employmentStore.lockEmploymentLifecycleContextById.mockResolvedValueOnce({
       employment: employment({
         status: EmploymentStatus.Disable,
-        endTime: now,
+        endTime: "2026-01-01",
       }),
       organization: organization(),
       position: position(),
@@ -333,6 +335,7 @@ describe("Employment Lifecycle Pause/Resume", () => {
     };
     const attempted = { statusWrites: 0, auditWrites: 0 };
     const useCase = createChangeEmploymentAvailabilityUseCase({
+      clock: { nowDate: () => new Date("2026-11-13T00:00:00Z") },
       uow: {
         async transaction(callback) {
           const staged = {

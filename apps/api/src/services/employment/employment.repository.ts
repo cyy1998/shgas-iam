@@ -1,4 +1,4 @@
-import { EmploymentStatus, OrganizationType } from "@iam/contracts";
+import { EmploymentStatus, OPEN_EMPLOYMENT_STATUSES, OrganizationType } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import { firstRow } from "@iam/db/query-utils";
 import type { Employment, Organization, User } from "@iam/db/schema";
@@ -24,7 +24,7 @@ export function createEmploymentRepository(db: DbClient) {
           userId,
           orgId,
           posId,
-          status: EmploymentStatus.Enable,
+          status: { in: [...OPEN_EMPLOYMENT_STATUSES] },
           isDelete: false,
         },
       });
@@ -38,6 +38,9 @@ export function createEmploymentRepository(db: DbClient) {
             userId,
             posId,
             orgId,
+            status: EmploymentStatus.Enable,
+            startTime: null,
+            endTime: null,
           })
           .returning(),
       )!;

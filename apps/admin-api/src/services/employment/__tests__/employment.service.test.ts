@@ -2,6 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import type { AdminEmploymentAuthorization } from "@admin-api/services/admin-authorization/admin-employment-authorization.type";
 import { createEmploymentService } from "@admin-api/services/employment/employment.service";
 import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
+import { createUpdateEmploymentUseCase } from "@admin-api/use-cases/employment/update-employment/update-employment.use-case";
 import {
   EmploymentStatus,
   OrganizationLevel,
@@ -84,7 +85,7 @@ function employment(overrides: Record<string, unknown> = {}) {
     orgId: 2,
     isPrimary: false,
     status: EmploymentStatus.Enable,
-    startTime: now,
+    startTime: "2026-01-01",
     endTime: null,
     description: null,
     isDelete: false,
@@ -103,13 +104,24 @@ function employment(overrides: Record<string, unknown> = {}) {
 
 function createService() {
   const tx = {
-    auditService: { recordAuditLog: mock(async () => undefined) },
+    auditLogWriter: { recordAuditLog: mock(async () => undefined) },
     userDocumentInvalidation: {
       recordChanges: mock(async () => undefined),
     },
-    employmentRepository: {
+    employmentStore: {
       lockEmploymentByIdForAdmin: mock(async () => employment()),
-      updateEmploymentRecord: mock(async () => employment()),
+      updateEmploymentRecord: mock(async (): Promise<{ id: number } | null> => employment()),
+    },
+    responsibilityParentLifecycle: {
+      async lockAssignmentsForEmployment() {
+        throw new Error("Description edits must not lock assignments");
+      },
+      async pauseEnabledAssignmentsForEmployment() {
+        throw new Error("Description edits must not pause assignments");
+      },
+      async endOpenAssignmentsForEmployment() {
+        throw new Error("Description edits must not end assignments");
+      },
     },
   };
   const deps = {
@@ -127,9 +139,12 @@ function createService() {
     roleAssignmentResolver: {
       resolveEffectiveRoles: mock(async () => new Map()),
     },
-    uow: createImmediateUnitOfWork(tx),
   } as any;
-  return { service: createEmploymentService(deps), tx, deps };
+  const update = createUpdateEmploymentUseCase({
+    clock: { nowDate: () => now },
+    uow: createImmediateUnitOfWork(tx),
+  });
+  return { service: createEmploymentService(deps), update, tx, deps };
 }
 
 function scopedAuthorization(organizationIds: readonly number[] = [2]): Promise<AdminEmploymentAuthorization> {
@@ -241,7 +256,7 @@ describe("createEmploymentService", () => {
         conditions: {
           ...query.conditions,
           exactConditions: {
-            statuses: [EmploymentStatus.Enable, EmploymentStatus.Pause],
+            statuses: [EmploymentStatus.Enable, EmploymentStatus.Pause, EmploymentStatus.Pending],
           },
         },
       },
@@ -251,12 +266,12 @@ describe("createEmploymentService", () => {
   });
 
   test("conceals an out-of-scope Employment before description update writes", async () => {
-    const { service, tx } = createService();
+    const { update, tx } = createService();
     const authorization = await scopedAuthorization([99]);
 
     let failure: unknown;
     try {
-      await service.updateEmployment(4, { description: "forbidden" }, undefined, authorization);
+      await update.execute({ employmentId: 4, description: "forbidden" }, { authorization });
     } catch (error) {
       failure = error;
     }
@@ -268,8 +283,8 @@ describe("createEmploymentService", () => {
       reason: "RESOURCE_OUT_OF_SCOPE",
       concealExistence: true,
     });
-    expect(tx.employmentRepository.updateEmploymentRecord).not.toHaveBeenCalled();
-    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
+    expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
   });
 
   test("resolves Effective Roles for an employment detail through the batch interface", async () => {
@@ -309,66 +324,66 @@ describe("createEmploymentService", () => {
   });
 
   test("updates an employment and marks its existing user dirty", async () => {
-    const { service, tx } = createService();
+    const { update, tx } = createService();
 
-    await expect(service.updateEmployment(4, { description: "updated" })).resolves.toEqual({
+    await expect(update.execute({ employmentId: 4, description: "updated" })).resolves.toEqual({
       changed: true,
       result: null,
     });
 
-    expect(tx.employmentRepository.updateEmploymentRecord).toHaveBeenCalledWith(4, {
+    expect(tx.employmentStore.updateEmploymentRecord).toHaveBeenCalledWith(4, {
       description: "updated",
     });
     expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "employment", userId: 1 }]);
   });
 
   test("rejects description edits for an Ended Employment", async () => {
-    const { service, tx } = createService();
-    tx.employmentRepository.lockEmploymentByIdForAdmin.mockResolvedValue(
-      employment({ status: EmploymentStatus.Disable, endTime: now, isPrimary: false }),
+    const { update, tx } = createService();
+    tx.employmentStore.lockEmploymentByIdForAdmin.mockResolvedValue(
+      employment({ status: EmploymentStatus.Disable, endTime: "2026-01-02", isPrimary: false }),
     );
 
-    await expect(service.updateEmployment(4, { description: "rewritten" })).rejects.toBeInstanceOf(
+    await expect(update.execute({ employmentId: 4, description: "rewritten" })).rejects.toBeInstanceOf(
       EmploymentNotEditableError,
     );
 
-    expect(tx.employmentRepository.updateEmploymentRecord).not.toHaveBeenCalled();
-    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
+    expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
     expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
   test("rejects an empty description update before audit or dirty", async () => {
-    const { service, tx } = createService();
+    const { update, tx } = createService();
     let failure: unknown;
     try {
-      await service.updateEmployment(4, {});
+      await update.execute({ employmentId: 4 });
     } catch (error) {
       failure = error;
     }
     expect(failure).toBeInstanceOf(BadRequestError);
-    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
     expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("same description returns unchanged without writes, audit, or dirty", async () => {
-    const { service, tx } = createService();
-    const result = await service.updateEmployment(4, { description: null });
+    const { update, tx } = createService();
+    const result = await update.execute({ employmentId: 4, description: null });
     expect(result).toEqual({ changed: false, result: null });
-    expect(tx.employmentRepository.updateEmploymentRecord).not.toHaveBeenCalled();
-    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.employmentStore.updateEmploymentRecord).not.toHaveBeenCalled();
+    expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
     expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("fails closed when the locked update returns no row", async () => {
-    const { service, tx } = createService();
-    tx.employmentRepository.updateEmploymentRecord.mockResolvedValueOnce(null as never);
+    const { update, tx } = createService();
+    tx.employmentStore.updateEmploymentRecord.mockResolvedValueOnce(null);
     let failure: unknown;
     try {
-      await service.updateEmployment(4, { description: "changed" });
+      await update.execute({ employmentId: 4, description: "changed" });
     } catch (error) {
       failure = error;
     }
     expect(failure).toBeInstanceOf(Error);
-    expect(tx.auditService.recordAuditLog).not.toHaveBeenCalled();
+    expect(tx.auditLogWriter.recordAuditLog).not.toHaveBeenCalled();
     expect(tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 });

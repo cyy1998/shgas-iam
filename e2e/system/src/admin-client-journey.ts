@@ -74,12 +74,36 @@ export async function expectRpcMutationResult(
   changed: boolean,
   result: unknown,
 ) {
+  const data = await readRpcData(response, procedure);
+  expect(data).toEqual({ changed, result });
+}
+
+export async function readCreatedResourceId(response: Response, procedure: string): Promise<number> {
+  const data = await readRpcData(response, procedure);
+  if (
+    typeof data !== "object" ||
+    data === null ||
+    !("changed" in data) ||
+    data.changed !== true ||
+    !("result" in data) ||
+    typeof data.result !== "object" ||
+    data.result === null ||
+    !("id" in data.result) ||
+    typeof data.result.id !== "number"
+  ) {
+    throw new Error(`RPC response is missing the created resource ID for ${procedure}`);
+  }
+  return data.result.id;
+}
+
+async function readRpcData(response: Response | APIResponse, procedure: string): Promise<unknown> {
   expect(response.ok()).toBe(true);
   const procedureIndex = rpcProcedures(response.url()).indexOf(procedure);
   expect(procedureIndex).toBeGreaterThanOrEqual(0);
   const body = await response.json();
   const entry = Array.isArray(body) ? body[procedureIndex] : body;
-  expect(entry).toEqual({ result: { data: { changed, result } } });
+  if (!entry?.result || !("data" in entry.result)) throw new Error(`RPC response is missing data for ${procedure}`);
+  return entry.result.data;
 }
 
 export async function saveUnchangedClientProtocolConfiguration(
