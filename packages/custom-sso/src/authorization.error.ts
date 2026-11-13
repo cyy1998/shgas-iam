@@ -21,3 +21,10 @@ export class InvalidSsoClientError extends CustomError {
     this.name = "InvalidSsoClientError";
   }
 }
+
+export class CustomSsoAdmissionUnavailableError extends Error {
+  constructor() {
+    super("Application admission unavailable");
+    this.name = "CustomSsoAdmissionUnavailableError";
+  }
+}

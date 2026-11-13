@@ -35,6 +35,65 @@ test("Custom continuation uses same-entry discovery navigation and retains busin
   expect(target.searchParams.get("ssoReturn")).toBe("a".repeat(43));
 });
 
+test("a denied Custom SSO continuation shows the IAM application name and stops the login journey", async ({
+  page,
+}) => {
+  await mockSsoApi(page, { loginGuard: "continue" });
+  await page.route("**/sso/.well-known/authentication-configuration", (route) =>
+    route.fulfill({ json: { data: { authorizationEndpoint: "/sso/authorize", logoutEndpoint: "/sso/logout" } } }),
+  );
+  await page.route("**/open/client/status?**", (route) =>
+    route.fulfill({
+      json: {
+        code: 200,
+        message: "OK",
+        data: {
+          clientCode: new URL(route.request().url()).searchParams.get("clientCode"),
+          clientName: "费用报销",
+          status: 1,
+          url: null,
+        },
+      },
+    }),
+  );
+  const authorizationRequests: string[] = [];
+  await page.route("**/sso/authorize?**", async (route) => {
+    authorizationRequests.push(route.request().url());
+    await route.fulfill({
+      status: 302,
+      headers: { location: "/portal/application-access-denied?client=expense&clientName=ignored" },
+    });
+  });
+
+  await page.goto("/portal/login?client=expense&redirectUrl=https%3A%2F%2Fexpense.example%2Fwork");
+  await expect(page).toHaveURL("/portal/application-access-denied?client=expense&clientName=ignored");
+  await expect(page.getByRole("heading", { name: "无权限访问应用" })).toBeVisible();
+  await expect(page.getByText("费用报销")).toBeVisible();
+  await expect(page.getByText("你没有权限访问此应用，请联系管理员")).toBeVisible();
+  await expect(page.getByText("ignored")).toHaveCount(0);
+  await expect(page.getByPlaceholder("请输入您的工号")).toHaveCount(0);
+  expect(authorizationRequests).toHaveLength(1);
+});
+
+test("a temporarily unavailable Custom SSO authorization keeps the user out of the denial page", async ({ page }) => {
+  await mockSsoApi(page, { loginGuard: "continue" });
+  await page.route("**/sso/authorize?**", (route) =>
+    route.fulfill({
+      status: 503,
+      headers: { "retry-after": "3" },
+      json: { code: ApiErrorCode.InternalError, data: null, message: "服务暂时不可用" },
+    }),
+  );
+  const response = page.waitForResponse((response) => new URL(response.url()).pathname === "/sso/authorize");
+  await page.goto("/portal/login?client=expense&redirectUrl=https%3A%2F%2Fexpense.example%2Fwork");
+  const authorizationResponse = await response;
+  expect(authorizationResponse.status()).toBe(503);
+  expect(authorizationResponse.headers()["retry-after"]).toBe("3");
+  await expect(page).toHaveURL(/\/sso\/authorize\?/u);
+  await expect(page.getByText("服务暂时不可用")).toBeVisible();
+  await expect(page.getByText("你没有权限访问此应用，请联系管理员")).toHaveCount(0);
+});
+
 test("login page opens and shows mocked password login failure", async ({ page }) => {
   await mockSsoApi(page, { passwordLogin: "failure" });
 

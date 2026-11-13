@@ -23,7 +23,7 @@ export const OidcAuthorizationResponseSchema = z
     responseMode: OidcResponseModeSchema,
     parameters: z.union([
       z.object({ code: z.string(), state: z.string(), iss: z.url() }).strict(),
-      OidcErrorSchema.extend({ state: z.string().optional(), iss: z.url() }).strict(),
+      OidcErrorSchema.extend({ state: z.string().optional(), iss: z.url(), error_uri: z.url().optional() }).strict(),
     ]),
   })
   .strict();

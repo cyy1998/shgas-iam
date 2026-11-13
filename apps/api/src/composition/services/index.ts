@@ -30,6 +30,7 @@ import {
   createSubjectFactsReader,
   createSubjectFactsRedisCache,
 } from "@iam/documents/user";
+import { createApplicationAdmissionEvaluator } from "@iam/documents/user/admission";
 import {
   createUserDocumentQueryService,
   createUserDocumentSearchRepository,
@@ -267,6 +268,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
     userDocumentSearch,
     internalUserDocumentQuery,
   };
+  const admission = createApplicationAdmissionEvaluator(options.userDocumentQueryDb);
   const authentication = createRootAuthenticationComposition({
     kernel: sessionKernel,
     barrier: subjectAccess,
@@ -295,6 +297,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
       projectionRetryAfterSeconds: runtime.config.env.sso.projectionRetryAfterSeconds,
     },
     customSso: {
+      admission,
       redis: runtime.redis,
       namespace: runtime.config.sessionKernel.namespace,
       codeTtlSeconds: runtime.config.auth.authCodeExpireSeconds,
@@ -310,6 +313,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
       },
     },
     oidc: {
+      admission,
       redis: runtime.redis,
       namespace: runtime.config.oidc.namespace,
       issuers: {

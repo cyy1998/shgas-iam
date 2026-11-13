@@ -19,6 +19,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
 import styles from "./ClientSettings.module.less";
 import { useClientDraftGuard } from "./useClientDraftGuard";
+import { useClientSnapshotRepairNotice } from "./useClientSnapshotRepairNotice";
 
 type FormValues = {
   protocol: ClientSsoProtocol;
@@ -47,10 +48,7 @@ export function ClientSsoSettings({ onDirtyChange }: { onDirtyChange: (dirty: bo
   const { clientCode = "" } = useParams<{ clientCode: string }>();
   const [client, setClient] = useState<ClientSsoDetail>();
   const [error, setError] = useState(false);
-  const noticeKey = `client-sso-repair:${clientCode}`;
-  const [repairNotice, setRepairNotice] = useState<string | undefined>(
-    () => sessionStorage.getItem(noticeKey) ?? undefined,
-  );
+  const [repairNotice, setRepairNotice] = useClientSnapshotRepairNotice(clientCode);
   const [operationNotice, setOperationNotice] = useState<string>();
   const [dirty, setDirty] = useState(false);
   const dirtyFieldsRef = useRef(new Set<keyof FormValues>());
@@ -120,7 +118,6 @@ export function ClientSsoSettings({ onDirtyChange }: { onDirtyChange: (dirty: bo
         const nextNotice =
           "操作已提交，但缓存同步失败或未确认。旧配置或旧 Secret 可能仍生效；请联系管理员修复传播。刷新或读取 Secret 成功不代表传播已修复。";
         setRepairNotice(nextNotice);
-        sessionStorage.setItem(noticeKey, nextNotice);
       } else {
         setOperationNotice(
           failure instanceof ClientSsoMutationRejectedError

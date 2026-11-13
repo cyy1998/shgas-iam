@@ -7,8 +7,11 @@ export const ClientSnapshotValueSchema = z
     status: z.enum(ClientStatus),
     ssoEnabled: z.boolean(),
     ssoConfig: ClientSsoConfigSchema.nullable(),
+    admissionEnabled: z.boolean(),
+    admissionFilter: z.record(z.string(), z.unknown()).nullable(),
   })
-  .refine((value) => !value.ssoEnabled || value.ssoConfig !== null);
+  .refine((value) => !value.ssoEnabled || value.ssoConfig !== null)
+  .refine((value) => !value.admissionEnabled || value.admissionFilter !== null);
 
 export type ClientSnapshotValue = z.infer<typeof ClientSnapshotValueSchema>;
 export type ClientSnapshot<T = ClientSnapshotValue> =

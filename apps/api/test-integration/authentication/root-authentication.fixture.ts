@@ -3,10 +3,10 @@ import process from "node:process";
 import { createRootAuthenticationComposition } from "@api/composition/root-authentication";
 import { createLoginCredentialParser } from "@api/services/authentication/login-credential.parser";
 import { createErrorHandler } from "@iam/api-core/middlewares";
-import type { ClientSnapshotValue } from "@iam/client-snapshot";
+import type { ClientSnapshotSource, ClientSnapshotValue } from "@iam/client-snapshot";
 import { ClientSnapshotUnavailableError } from "@iam/client-snapshot";
 import { createClientSnapshots } from "@iam/client-snapshot/composition";
-import { createClientSecretAuthenticator } from "@iam/client-snapshot/credentials";
+import { type ClientCredentialSource, createClientSecretAuthenticator } from "@iam/client-snapshot/credentials";
 import type { SubjectFactsSnapshot } from "@iam/client-subject-projection";
 import {
   ClientSsoCallbackType,
@@ -17,6 +17,7 @@ import {
   UserStatus,
   UserType,
 } from "@iam/contracts";
+import type { UnifiedCustomSsoAuthorizationOptions } from "@iam/custom-sso";
 import { createUnifiedCustomSsoRedisTestScope } from "@iam/custom-sso/testing";
 import { relations } from "@iam/db/relations";
 import { createSubjectFactsReader, createSubjectFactsRedisCache } from "@iam/documents/user/subject-facts";
@@ -43,6 +44,10 @@ export async function fixture(
   tokenTtlSeconds = 45,
   continuationTtlSeconds = 60,
   subjectFacts?: { read: (subject: string) => Promise<SubjectFactsSnapshot | null> },
+  admission?: {
+    evaluator: UnifiedCustomSsoAuthorizationOptions["admission"];
+    source: ClientSnapshotSource & ClientCredentialSource;
+  },
 ) {
   const url = networkUrl ?? process.env.IAM_API_TEST_REDIS_URL;
   if (!url) throw new Error("IAM_API_TEST_REDIS_URL is required");
@@ -59,6 +64,7 @@ export async function fixture(
     const scope = await createUnifiedSessionRedisTestScope(url, { user: 120, client: 60 }, trackStop);
     scope.close = close;
     const codes = await createUnifiedCustomSsoRedisTestScope(url, trackStop);
+    const admissionSnapshots = admission && createClientSnapshots({ redis: codes.redis, source: admission.source });
     const kernel = scope.createFactoryForOperations<SubjectAccessOperation>(requireSubjectAccessOperation);
     const subjectIdentifier = randomUUID();
     const businessClientCode = networkUrl ? `sample-${randomUUID()}` : "app";
@@ -107,6 +113,8 @@ export async function fixture(
     let client: ClientSnapshotValue = {
       clientCode: "iam",
       status: ClientStatus.Enable,
+      admissionEnabled: false,
+      admissionFilter: null,
       ssoEnabled: true,
       ssoConfig: {
         protocol: ClientSsoProtocol.CustomSso,
@@ -190,6 +198,11 @@ export async function fixture(
         namespace: codes.namespace,
         codeTtlSeconds,
         continuationTtlSeconds,
+        admission: admission?.evaluator ?? {
+          evaluate() {
+            throw new Error("Admission requires a published User Document fixture");
+          },
+        },
       },
       customSsoAccess: {
         tokenTtlSeconds,
@@ -232,7 +245,7 @@ export async function fixture(
           return state.generation;
         },
       },
-      clients: {
+      clients: admissionSnapshots?.client ?? {
         async acquire(code) {
           state.clientReads++;
           if (state.clientUnavailable) throw new ClientSnapshotUnavailableError();
@@ -372,6 +385,7 @@ export async function fixture(
       state,
       sourceCounts,
       businessClientCode,
+      invalidateClient: admissionSnapshots?.invalidateClient,
       audits,
       warnings,
       subjectIdentifier,

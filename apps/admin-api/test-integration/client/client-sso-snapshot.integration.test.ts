@@ -1,7 +1,9 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { createAdminClientCache } from "@admin-api/composition/runtime/client-cache";
+import { createClientAdmissionManagement } from "@admin-api/composition/services/client-admission-management";
 import { createClientSsoSnapshotManagement } from "@admin-api/composition/services/client-sso-snapshots";
+import { createClientAdmissionAdapter } from "@admin-api/routes/admin/client-admission/client-admission.adapter";
 import { createAuditRepository } from "@admin-api/services/audit/audit.repository";
 import { createAdminAuditService } from "@admin-api/services/audit/audit.service";
 import { createClientSsoRepository } from "@admin-api/services/client-sso/client-sso.repository";
@@ -18,11 +20,22 @@ import {
   ClientStatus,
   OidcClientType,
   OidcScope,
+  UserType,
 } from "@iam/contracts";
+import { createSsoRedirectUrlValidator, createUnifiedCustomSsoAuthorization } from "@iam/custom-sso";
 import type { DbClient } from "@iam/db";
 import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
-import { auditLogs, clients } from "@iam/db/schema";
+import { auditLogs, clients, users } from "@iam/db/schema";
+import { createApplicationAdmissionEvaluator } from "@iam/documents/user/admission";
+import { createCurrentUserDocumentProjectionBundle } from "@iam/documents/user/worker";
 import { createUnifiedSessionKernel } from "@iam/session-kernel";
+import type { SubjectAccessOperation } from "@iam/subject-access";
+import {
+  createSubjectAccessBarrier,
+  createSubjectAccessOperations,
+  requireSubjectAccessOperation,
+} from "@iam/subject-access";
+import { createRedisSubjectAccessStore, createSubjectAccessBootstrap } from "@iam/subject-access/redis";
 import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import { createUnitOfWork } from "@iam/unit-of-work";
 import { eq } from "drizzle-orm";
@@ -336,6 +349,8 @@ test("actual PG projection and candidate Admin mutation invalidate ordinary and 
         status: ClientStatus.Enable,
         ssoConfig: null,
         ssoEnabled: false,
+        admissionEnabled: false,
+        admissionFilter: null,
       },
     });
     expect(warm).toEqual(cold);
@@ -451,6 +466,196 @@ test("actual committed mutation with failed Redis propagation retains old value 
       kind: "present",
       value: { status: ClientStatus.Maintenance },
     });
+  });
+});
+
+test("Custom SSO uses the observed admission policy through a committed failure and explicit repair", async () => {
+  const scope = await resource.createScope();
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => scope.close());
+    const code = scope.clientCode("admission");
+    await seed(code);
+    await pg.db.update(clients).set({ ssoConfig: managed, ssoEnabled: true }).where(eq(clients.clientCode, code));
+    const subjectIdentifier = randomUUID();
+    const [user] = await pg.db
+      .insert(users)
+      .values({
+        subjectIdentifier,
+        username: `snapshot-${subjectIdentifier}`,
+        name: "Snapshot admission",
+        userType: UserType.External,
+      })
+      .returning({ id: users.id });
+    if (!user) throw new Error("Missing admission subject");
+    const clock = { nowDate: () => new Date() };
+    const random = { uuid: randomUUID };
+    const projection = createCurrentUserDocumentProjectionBundle();
+    const document = await projection
+      .createBuilder({ db: pg.db, clock, batchSize: 100 })
+      .buildOne({ userId: user.id, sourceVersion: "1" });
+    if (!document || !(await projection.createRowRepository(pg.db).upsert(document))) {
+      throw new Error("Missing published admission document");
+    }
+
+    const keyPrefix = `${code}:subject-access:`;
+    const barrier = createSubjectAccessBarrier({
+      store: createRedisSubjectAccessStore({ redis: scope.observer, keyPrefix }),
+      clock,
+      random,
+    });
+    await createSubjectAccessBootstrap({ redis: scope.observer, keyPrefix, random }).seedMany(
+      [{ subjectIdentifier, state: "enabled" }],
+      clock.nowDate(),
+    );
+    const operations = createSubjectAccessOperations({
+      barrier,
+      revocation: {
+        async revokePrincipalSession() {
+          throw new Error("Unexpected Subject Access revocation");
+        },
+        async revokeUserSessions() {
+          throw new Error("Unexpected Subject Access revocation");
+        },
+      },
+    });
+    const kernel = createUnifiedSessionKernel<SubjectAccessOperation>({
+      redis: scope.observer,
+      namespace: code,
+      userSessionTtlSeconds: 3600,
+      clientSessionTtlSeconds: 1800,
+      assertOperationActive: requireSubjectAccessOperation,
+    });
+    const root = await operations.run(async (operation) => {
+      const permission = await operation.acquireForAuthentication(subjectIdentifier);
+      return kernel.forOperation(operation).createUserSession({
+        subjectIdentifier,
+        subjectContext: operation.getSubjectContext(permission),
+        amr: ["pwd"],
+      });
+    });
+
+    const source = createClientSnapshotRepository(pg.db);
+    const observer = createClientSnapshots({ redis: scope.observer, source });
+    const reached = latch();
+    const resume = latch();
+    let pauseNext = false;
+    const evaluator = createApplicationAdmissionEvaluator(pg.db);
+    const authorization = createUnifiedCustomSsoAuthorization({
+      kernel,
+      clients: observer.client,
+      redis: scope.observer,
+      namespace: code,
+      codeTtlSeconds: 60,
+      continuationTtlSeconds: 60,
+      redirectUrls: createSsoRedirectUrlValidator({ logger }),
+      admission: {
+        async evaluate(input) {
+          if (pauseNext) {
+            pauseNext = false;
+            reached.release();
+            await resume.promise;
+          }
+          return evaluator.evaluate(input);
+        },
+      },
+    });
+    const authorize = (state: string) =>
+      operations.run((operation) =>
+        authorization.forOperation(operation).authorize({
+          clientCode: code,
+          redirectUrl: "https://app.example/work/admission",
+          globalSessionToken: root.bearer,
+          state,
+        }),
+      );
+    let failInvalidation = false;
+    const admission = createClientAdmissionManagement({
+      db: pg.db,
+      adminClientCodes: [],
+      logger,
+      invalidation: createClientSnapshots({
+        source,
+        redis: {
+          async eval(script, count, ...args) {
+            if (failInvalidation) throw new Error("Redis unavailable");
+            return scope.redis.eval(script, count, ...args);
+          },
+        },
+      }),
+    });
+    const admin = new Hono();
+    addTestAdminAuthorizationMiddleware(admin);
+    admin.onError(createErrorHandler({ ...logger, info() {} }));
+    admin.route("/admin", createClientAdmissionAdapter(admission).rest);
+    const endpoint = `/admin/clients/${encodeURIComponent(code)}/admission`;
+    const write = (suffix: string, data: unknown) =>
+      admin.request(`${endpoint}${suffix}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+    const initial = await observer.client.acquire(code);
+    expect(initial).toMatchObject({ kind: "present", value: { admissionEnabled: false, admissionFilter: null } });
+    expect(await authorize("disabled")).toMatchObject({ kind: "granted", code: expect.any(String), state: "disabled" });
+    const filter = { field: "username", op: "eq", value: "admission-sentinel" } as const;
+    expect((await write("", { filter })).status).toBe(200);
+    const saved = await observer.client.acquire(code);
+    expect(saved).toMatchObject({ kind: "present", value: { admissionEnabled: false, admissionFilter: filter } });
+    expect((await write("/enabled", { enabled: true })).status).toBe(200);
+    const enabled = await observer.client.acquire(code);
+    expect(enabled).toMatchObject({ kind: "present", value: { admissionEnabled: true, admissionFilter: filter } });
+    expect(saved).toMatchObject({ kind: "present", value: { admissionEnabled: false, admissionFilter: filter } });
+    const denied = { kind: "denied", clientCode: code } as const;
+    expect(await authorize("enabled")).toEqual(denied);
+
+    pauseNext = true;
+    const inFlight = authorize("in-flight");
+    const settled = Promise.allSettled([inFlight]);
+    lifecycle.registerCleanup(
+      resource.registerStopExecutor(async () => {
+        resume.release();
+        await settled;
+      }),
+    );
+    await Promise.race([
+      reached.promise,
+      inFlight.then(() => {
+        throw new Error("Expected admission evaluation to pause");
+      }),
+    ]);
+
+    failInvalidation = true;
+    const failed = await write("/enabled", { enabled: false });
+    expect(failed.status).toBe(500);
+    expect(await failed.json()).toMatchObject({ code: ApiErrorCode.AdminMutationCommitted });
+    const detail = await admin.request(endpoint);
+    expect(detail.status).toBe(200);
+    expect(await detail.json()).toMatchObject({ data: { enabled: false, filter } });
+    expect(await observer.client.acquire(code)).toEqual(enabled);
+    expect(await authorize("stale")).toEqual(denied);
+
+    await createClientSnapshotMaintenance(scope.redis).repairClient(code);
+    const repaired = await observer.client.acquire(code);
+    expect(repaired).toMatchObject({ kind: "present", value: { admissionEnabled: false, admissionFilter: filter } });
+    expect(await authorize("repaired")).toMatchObject({ kind: "granted", code: expect.any(String), state: "repaired" });
+    resume.release();
+    expect(await inFlight).toEqual(denied);
+    const audits = await pg.db.select().from(auditLogs).where(eq(auditLogs.targetCode, code)).orderBy(auditLogs.id);
+    expect(audits.map(({ action, details }) => ({ action, details }))).toEqual([
+      {
+        action: "admin.client.admission.save",
+        details: { changed: true, enabled: false, targetName: "Snapshot candidate" },
+      },
+      {
+        action: "admin.client.admission.enabled",
+        details: { changed: true, enabled: true, targetName: "Snapshot candidate" },
+      },
+      {
+        action: "admin.client.admission.enabled",
+        details: { changed: true, enabled: false, targetName: "Snapshot candidate" },
+      },
+    ]);
   });
 });
 

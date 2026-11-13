@@ -72,6 +72,11 @@ client、redirectUrl 必填，state 可选。浏览器通常携带 HttpOnly glob
 无根时进入统一登录页并通过服务端续接完成认证。新请求校验当前允许列表，续接/Code 固定已接受地址；
 普通列表编辑不改写它，callbackType 改变要求重新授权。
 
+目标应用启用准入策略后，IAM 在签发 Code 前按当前已发布的用户文档检查资格。
+明确不符合时，IAM 直接把浏览器带到当前入口的「无权限访问应用」页，业务回调和托管回调都不会收到本次 Code。
+暂时无法完成检查时，授权返回 HTTP `503`。按 `Retry-After` 等待后从应用重新发起授权。
+这两种结果都保留已有登录和应用会话。此前签发的 Code 和 Token 仍按原有规则使用。
+
 Code 只能消费一次，成功结果不重放。根 UserSession 期限固定；
 Token 有效期取协议 TTL、根及 ClientSession 剩余期限的最小值，响应 ttl 以秒表示。
 普通访问、其他 Client 活动及新授权不延长旧 Token，也不提供 refresh 或 Cookie 滑动续期接口。

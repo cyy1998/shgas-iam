@@ -1,5 +1,6 @@
-import type { ClientSnapshotReader } from "@iam/client-snapshot";
+import type { ClientSnapshotReader, ClientSnapshotValue } from "@iam/client-snapshot";
 import { ClientSnapshotUnavailableError } from "@iam/client-snapshot";
+import type { ApplicationAdmissionInput, ApplicationAdmissionResult } from "@iam/contracts";
 import { ClientSsoCallbackType, ClientSsoProtocol, ClientStatus, LoginPageGuardDecision } from "@iam/contracts";
 import { AuthzMaintenanceError, AuthzUnauthorizedError, BadRequestError } from "@iam/runtime/errors";
 import type { UnifiedSessionKernel } from "@iam/session-kernel";
@@ -11,7 +12,11 @@ import {
   SubjectAccessUnavailableError,
 } from "@iam/subject-access";
 import { z } from "zod";
-import { InvalidRedirectUriError, InvalidSsoClientError } from "../authorization.error";
+import {
+  CustomSsoAdmissionUnavailableError,
+  InvalidRedirectUriError,
+  InvalidSsoClientError,
+} from "../authorization.error";
 import type { createSsoRedirectUrlValidator } from "../internal/redirect-url.validator";
 import { CustomSsoTrafficGateUnavailableError } from "../internal/traffic-gate";
 import type { AcceptedAuthorization, CustomSsoStateRedis } from "./state";
@@ -25,6 +30,9 @@ export interface UnifiedCustomSsoAuthorizationOptions {
   codeTtlSeconds: number;
   continuationTtlSeconds: number;
   redirectUrls: ReturnType<typeof createSsoRedirectUrlValidator>;
+  admission: {
+    evaluate(input: ApplicationAdmissionInput): Promise<ApplicationAdmissionResult>;
+  };
 }
 
 interface AuthorizationInput {
@@ -44,7 +52,10 @@ export function createUnifiedCustomSsoAuthorization(options: UnifiedCustomSsoAut
     forOperation(operation: SubjectAccessOperation) {
       requireSubjectAccessOperation(operation);
       const sessions = options.kernel.forOperation(operation);
-      async function accept(input: AuthorizationInput): Promise<AcceptedAuthorization> {
+      async function accept(input: AuthorizationInput): Promise<{
+        accepted: AcceptedAuthorization;
+        client: ClientSnapshotValue;
+      }> {
         let snapshot: Awaited<ReturnType<typeof options.clients.acquire>>;
         try {
           snapshot = await options.clients.acquire(input.clientCode);
@@ -74,7 +85,7 @@ export function createUnifiedCustomSsoAuthorization(options: UnifiedCustomSsoAut
           ) {
             throw new BadRequestError("登录请求已失效，请返回应用重新发起登录");
           }
-          return accepted;
+          return { accepted, client: snapshot.value };
         }
         const config = snapshot.value.ssoConfig;
         const redirectUrl = options.redirectUrls.normalizeAllowed(
@@ -88,11 +99,14 @@ export function createUnifiedCustomSsoAuthorization(options: UnifiedCustomSsoAut
             ? `${new URL(redirectUrl).origin}/sso/callback`
             : new URL(config.callbackEndpoint).href;
         return {
-          clientCode: input.clientCode,
-          redirectUrl,
-          callbackEndpoint,
-          redeemer: config.callbackType,
-          ...(input.state === undefined ? {} : { state: input.state }),
+          client: snapshot.value,
+          accepted: {
+            clientCode: input.clientCode,
+            redirectUrl,
+            callbackEndpoint,
+            redeemer: config.callbackType,
+            ...(input.state === undefined ? {} : { state: input.state }),
+          },
         };
       }
       async function root(token?: string) {
@@ -124,20 +138,29 @@ export function createUnifiedCustomSsoAuthorization(options: UnifiedCustomSsoAut
           };
         },
         async authorize(input: AuthorizationInput) {
-          const accepted = await accept(input);
+          const { accepted, client } = await accept(input);
           const observation = await root(input.globalSessionToken);
           if (!observation) {
             const browserBinding = input.browserBinding || randomHandle();
             const continuation =
               input.continuation ?? (await state.saveContinuation(accepted, browserBinding, continuationTtl));
             return {
-              isLogin: false as const,
+              kind: "login" as const,
               ...accepted,
               continuation,
               browserBinding,
               continuationTtlSeconds: continuationTtl,
               clearGlobalSessionCookie: Boolean(input.globalSessionToken),
             };
+          }
+          if (client.admissionEnabled) {
+            const result = await options.admission.evaluate({
+              clientCode: accepted.clientCode,
+              subjectIdentifier: observation.userSession.subjectIdentifier,
+              filter: client.admissionFilter,
+            });
+            if (result === "no-match") return { kind: "denied" as const, clientCode: accepted.clientCode };
+            if (result !== "match") throw new CustomSsoAdmissionUnavailableError();
           }
           const opened = await sessions.openClientSession(observation, {
             clientId: accepted.clientCode,
@@ -162,7 +185,7 @@ export function createUnifiedCustomSsoAuthorization(options: UnifiedCustomSsoAut
             expiresAt: lifetime.expiresAt,
           });
           return {
-            isLogin: true as const,
+            kind: "granted" as const,
             ...accepted,
             code: `${codeId}.${userSession.userSessionId}.${clientSession.clientSessionId}`,
           };

@@ -12,6 +12,8 @@ export function createClientSnapshotRepository(db: DbClient) {
           status: clients.status,
           ssoEnabled: clients.ssoEnabled,
           ssoConfig: clients.ssoConfig,
+          admissionEnabled: clients.admissionEnabled,
+          admissionFilter: clients.admissionFilter,
         })
         .from(clients)
         .where(where(code))

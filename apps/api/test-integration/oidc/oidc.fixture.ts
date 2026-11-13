@@ -20,6 +20,7 @@ import {
 import { createUnifiedCustomSsoRedisTestScope } from "@iam/custom-sso/testing";
 import { relations } from "@iam/db/relations";
 import { createSubjectFactsReader, createSubjectFactsRedisCache } from "@iam/documents/user/subject-facts";
+import type { OidcAuthorizationOptions } from "@iam/oidc";
 import { createOidcClientAuthRateLimiter, createOidcSigningKeys } from "@iam/oidc";
 import { createOidcRedisTestScope } from "@iam/oidc/testing";
 import { createUnifiedSessionRedisTestScope } from "@iam/session-kernel/testing";
@@ -75,10 +76,17 @@ export async function fixture(
   clientAuthWindowSeconds?: number,
   trustProxy = true,
   joint = false,
-  issuers = { internal: "https://iam.internal/oidc", external: "https://iam.example/oidc" },
+  authorization: {
+    issuers?: { internal: string; external: string };
+    admission?: OidcAuthorizationOptions["admission"];
+  } = {},
 ) {
   const url = networkUrl ?? process.env.IAM_API_TEST_REDIS_URL;
   if (!url) throw new Error("IAM_API_TEST_REDIS_URL is required");
+  const issuers = authorization.issuers ?? {
+    internal: "https://iam.internal/oidc",
+    external: "https://iam.example/oidc",
+  };
   const resources: Array<() => unknown | Promise<unknown>> = [];
   let stopped = false;
   const close = ownApiTestExecutor(async () => {
@@ -156,6 +164,8 @@ export async function fixture(
       clientCode: clientId,
       status: ClientStatus.Enable,
       ssoEnabled: true,
+      admissionEnabled: false,
+      admissionFilter: null,
       ssoConfig: {
         protocol: ClientSsoProtocol.Oidc,
         clientType: OidcClientType.Public,
@@ -234,6 +244,11 @@ export async function fixture(
       ...(customState
         ? {
             customSso: {
+              admission: {
+                evaluate() {
+                  throw new Error("Custom SSO admission is not configured in this fixture");
+                },
+              },
               redis: customState.redis,
               namespace: customState.namespace,
               codeTtlSeconds: ttl.code,
@@ -260,6 +275,11 @@ export async function fixture(
               windowSeconds: clientAuthWindowSeconds,
             }),
       oidc: {
+        admission: authorization.admission ?? {
+          evaluate() {
+            throw new Error("OIDC admission is not configured in this fixture");
+          },
+        },
         redis: oidcState.adapter,
         namespace: oidcState.namespace,
         codeTtlSeconds: ttl.code,

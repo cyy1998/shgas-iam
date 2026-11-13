@@ -65,6 +65,7 @@ describe("OIDC PKCE journey operations", () => {
       IAM_E2E_ORIGIN: descriptor.origin,
       IAM_E2E_RUN_ID: descriptor.runId,
       IAM_E2E_ADMIN_USERNAME: "e2e-admin-oidc-journey-01",
+      IAM_E2E_DELEGATEE_USERNAME: "e2e-delegatee-oidc-journey-01",
       IAM_E2E_OIDC_CLIENT_CODE: "e2e-oidc-oidc-journey-01",
       IAM_E2E_OIDC_REDIRECT_URI: "http://127.0.0.1:43123/e2e/oidc/callback",
       IAM_E2E_INTERNAL_API_KEY: "iam-e2e-internal-api-key-oidc-journey-01",

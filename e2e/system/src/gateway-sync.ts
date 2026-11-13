@@ -38,7 +38,7 @@ export async function publishGateway(
     if (!authority) throw new Error(`E2E Gateway ${entry} authority is missing`);
     source.routes.push({
       key: `e2e-rp-${entry}`,
-      uris: ["/e2e/custom-sso/callback", "/e2e/business/callback", "/e2e/business/landing"],
+      uris: ["/e2e/custom-sso/callback", "/e2e/business/callback", "/e2e/business/landing", "/e2e/oidc/callback"],
       vars: [["http_host", "==", authority]],
       plugins: {
         ...frontend.plugins,

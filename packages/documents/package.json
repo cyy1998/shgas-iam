@@ -5,6 +5,7 @@
   "private": true,
   "exports": {
     "./user": "./src/user/index.ts",
+    "./user/admission": "./src/user/admission.ts",
     "./user/document": "./src/user/document.ts",
     "./user/document/query": "./src/user/document-query.ts",
     "./user/producer": "./src/user/producer.ts",

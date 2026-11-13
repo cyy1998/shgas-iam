@@ -4,10 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ClientSsoProtocol, createLoginCredential, OidcClientType, OidcScope } from "@iam/contracts";
+import { clients } from "@iam/db/schema";
 import { hashSecret } from "@iam/runtime/security/bcrypt";
 import { createSubjectAccessBootstrap } from "@iam/subject-access/redis";
 import { parseDedicatedRedisTestUrl } from "@iam/test-support/external-test-resources";
 import { spawnOwnedProcessTree, terminateProcessTree } from "@iam/test-support/process-smoke-harness";
+import { eq } from "drizzle-orm";
 import Redis from "ioredis";
 import { sm2 } from "sm-crypto";
 import type { OidcConformanceLifecycle } from "../../src/testing/oidc-conformance-lifecycle.fixture";
@@ -233,10 +235,17 @@ export async function createOidcConformanceCandidate(options: {
       namespace,
       ...credentialsFor(identity),
       close,
-      async createIdentity() {
+      async createIdentity(publicClientAdmissionFilter?: Record<string, unknown>) {
         // Fresh identities isolate Redis sessions, replay/limit state and cached Client facts
         // while the command-owned API, schema and signing configuration stay alive.
-        return credentialsFor(await seedIdentity());
+        const identity = await seedIdentity();
+        if (publicClientAdmissionFilter) {
+          await pg.db
+            .update(clients)
+            .set({ admissionEnabled: true, admissionFilter: publicClientAdmissionFilter })
+            .where(eq(clients.clientCode, identity.publicClientId));
+        }
+        return credentialsFor(identity);
       },
     };
   } catch (error) {

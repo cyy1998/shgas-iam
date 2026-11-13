@@ -1,5 +1,5 @@
 import { ClientCodeSchema, ClientSsoConfigSchema, ClientStatus } from "@iam/contracts";
-import { sql } from "drizzle-orm";
+import { type Json, sql } from "drizzle-orm";
 import { boolean, check, integer, jsonb, snakeCase, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "zod";
@@ -21,6 +21,8 @@ export const clients = snakeCase.table(
     createTime: baseColumns.createTime,
     updateTime: baseColumns.updateTime,
     extAttributes: jsonb().$type<Record<string, unknown>>().notNull(),
+    admissionEnabled: boolean().notNull().default(false),
+    admissionFilter: jsonb().$type<Json>(),
     ssoEnabled: boolean().notNull().default(false),
     ssoConfig: jsonb().$type<z.infer<typeof ClientSsoConfigSchema>>(),
     ssoSecret: varchar({ length: 255 }),
@@ -31,6 +33,14 @@ export const clients = snakeCase.table(
     check(
       "client_role_namespace_check",
       sql`${table.clientCode} <> 'global' AND NOT starts_with(${table.clientCode}, 'global:')`,
+    ),
+    check(
+      "client_admission_enabled_filter_check",
+      sql`NOT ${table.admissionEnabled} OR ${table.admissionFilter} IS NOT NULL`,
+    ),
+    check(
+      "client_admission_filter_object_check",
+      sql`${table.admissionFilter} IS NULL OR jsonb_typeof(${table.admissionFilter}) = 'object'`,
     ),
     check("client_sso_enabled_config_check", sql`NOT ${table.ssoEnabled} OR ${table.ssoConfig} IS NOT NULL`),
     check(

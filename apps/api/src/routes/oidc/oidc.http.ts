@@ -58,6 +58,7 @@ export function createOidcHttpRouter(options: {
   ) => void;
   reportLogoutEffect?: (effect: OidcLogoutEffect | OidcLogoutFailure, request: OidcRequestContext) => void;
   reportExchangeFailure?: (failure: OidcExchangeFailure, request: OidcRequestContext) => void;
+  reportAdmissionDenied?: (clientCode: string, request: OidcRequestContext) => void;
   operations: ReturnType<typeof createSubjectAccessOperations>;
   issuers: { internal: string; external: string };
   loginEndpoint: string;
@@ -123,30 +124,43 @@ export function createOidcHttpRouter(options: {
       completion: getCookie(c, "oidc_login_completion"),
     };
   }
-  function respond(c: Context, response: OidcAuthorizationResponse) {
+  function respond(c: Context, response: OidcAuthorizationResponse, preserveRegisteredQuery = false) {
     const result = OidcAuthorizationResponseSchema.parse(response);
+    const target = new URL(result.redirectUri);
     if (result.responseMode === "form_post") {
       const fields = Object.entries(result.parameters)
         .map(([key, value]) => `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(value)}">`)
         .join("");
       c.header(
         "Content-Security-Policy",
-        `default-src 'none'; script-src 'unsafe-inline'; form-action ${new URL(result.redirectUri).origin}; base-uri 'none'; frame-ancestors 'none'`,
+        `default-src 'none'; script-src 'unsafe-inline'; form-action ${target.origin}; base-uri 'none'; frame-ancestors 'none'`,
       );
       return c.html(
         `<!doctype html><html><head><meta charset="utf-8"><title>Continue</title></head><body><form method="post" action="${escapeHtml(result.redirectUri)}">${fields}<noscript><button type="submit">Continue</button></noscript></form><script>document.forms[0].submit()</script></body></html>`,
       );
     }
-    const target = new URL(result.redirectUri);
     const parameters = new URLSearchParams(result.parameters);
-    if (result.responseMode === "fragment") target.hash = parameters.toString();
-    else
+    if (result.responseMode === "fragment") {
+      target.hash = parameters.toString();
+    } else if (
+      preserveRegisteredQuery &&
+      target.search &&
+      Array.from(parameters.keys()).every((key) => !target.searchParams.has(key))
+    ) {
+      // Keep the registered query encoding when appending silent admission response fields.
+      target.search += `&${parameters}`;
+    } else {
       parameters.forEach((value, key) => {
         target.searchParams.set(key, value);
       });
+    }
     return c.redirect(target.href, HttpStatusCodes.SEE_OTHER);
   }
   function result(c: Context, value: OidcAuthorizationResult) {
+    if (value.kind === "denied") {
+      options.reportAdmissionDenied?.(value.clientCode, requestContext(c));
+      return respond(c, value.response, !("error_uri" in value.response.parameters));
+    }
     if (value.clearGlobalSessionCookie) deleteCookie(c, "global_session", { path: "/" });
     if (value.kind === "response") return respond(c, value.response);
     setCookie(c, "oidc_interaction_binding", value.browserBinding, { ...cookieOptions, maxAge: value.ttl });
@@ -467,7 +481,7 @@ export function createOidcHttpRouter(options: {
         .forOperation(operation, requestIssuer(c))
         .resume(c.req.query("oidcReturn") ?? "", browser(c)),
     );
-    if (value.kind === "response" && "code" in value.response.parameters)
+    if (value.kind === "denied" || (value.kind === "response" && "code" in value.response.parameters))
       deleteCookie(c, "oidc_login_completion", cookieOptions);
     return result(c, value);
   });

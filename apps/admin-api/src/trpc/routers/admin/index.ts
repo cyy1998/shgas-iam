@@ -1,6 +1,7 @@
 import type { AuditAdapter } from "@admin-api/routes/admin/audit/audit.adapter";
 import type { AdminAuthorizationAdapter } from "@admin-api/routes/admin/authorization/authorization.adapter";
 import type { ClientAdapter } from "@admin-api/routes/admin/client/client.adapter";
+import type { ClientAdmissionRouter } from "@admin-api/routes/admin/client-admission/client-admission.adapter";
 import type { ClientSsoRouter } from "@admin-api/routes/admin/client-sso/client-sso.adapter";
 import type { DelegationAdapter } from "@admin-api/routes/admin/delegation/delegation.adapter";
 import type { EmploymentAdapter } from "@admin-api/routes/admin/employment/employment.adapter";
@@ -16,6 +17,7 @@ export interface CreateAdminRouterDeps {
   delegation: DelegationAdapter["delegationAdminRouter"];
   audit: AuditAdapter["auditAdminRouter"];
   authorization: AdminAuthorizationAdapter["authorizationAdminRouter"];
+  clientAdmission: ClientAdmissionRouter;
   clientSso: ClientSsoRouter;
   client: ClientAdapter["clientAdminRouter"];
   employment: EmploymentAdapter["employmentAdminRouter"];
@@ -40,6 +42,7 @@ export function createAdminRouter(deps: CreateAdminRouterDeps) {
     user: deps.user,
     employment: deps.employment,
     client: deps.client,
+    clientAdmission: deps.clientAdmission,
     clientSso: deps.clientSso,
   });
 }

@@ -16,6 +16,7 @@ import { createRootSecurityComposition } from "../root-security";
 import type { AdminApiRuntimePorts } from "../runtime";
 import type { AdminApiSession } from "../session";
 import type { createAdminApiUnitOfWork } from "../tx";
+import { createClientAdmissionManagement } from "./client-admission-management";
 import { createClientSsoSnapshotManagement } from "./client-sso-snapshots";
 
 type AdminApiUnitOfWork = ReturnType<typeof createAdminApiUnitOfWork>;
@@ -134,6 +135,12 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
       },
     }),
     client: clientService,
+    clientAdmission: createClientAdmissionManagement({
+      db: options.db,
+      adminClientCodes: runtime.config.auth.adminClientCodes,
+      invalidation: clientSso.snapshots,
+      logger: runtime.logger,
+    }),
     clientSso: clientSso.management,
     employment: employmentService,
     organization: organizationService,

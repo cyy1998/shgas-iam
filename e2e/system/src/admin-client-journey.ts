@@ -31,10 +31,23 @@ export async function loginToAdmin(input: {
   expect(await authenticated.json()).toMatchObject({ code: 200, data: { profile: { username: input.adminUsername } } });
 }
 
-export async function openClientSection(page: Page, clientCode: string, section: "basic" | "custom-sso" | "oidc") {
-  await page.goto(
-    `/iam-admin/clients/${encodeURIComponent(clientCode)}/edit?section=${section === "basic" ? "basic" : "sso"}`,
-  );
+export async function openClientSection(
+  page: Page,
+  clientCode: string,
+  section: "basic" | "custom-sso" | "oidc" | "admission",
+) {
+  const path = `/iam-admin/clients/${encodeURIComponent(clientCode)}/edit`;
+  const sectionKey = section === "basic" || section === "admission" ? section : "sso";
+  const tabNames = { basic: "基础信息", admission: "应用准入", sso: "SSO 配置" };
+  const current = new URL(page.url());
+  if (current.pathname === path) {
+    if (current.searchParams.get("section") !== sectionKey) {
+      await page.getByRole("tab", { name: tabNames[sectionKey], exact: true }).click();
+      await expect(page).toHaveURL((url) => url.pathname === path && url.searchParams.get("section") === sectionKey);
+    }
+  } else {
+    await page.goto(`${path}?section=${sectionKey}`);
+  }
   const response = await page.request.get(`/api/iam/admin/clients/${encodeURIComponent(clientCode)}`, {
     headers: { Client: "iam-admin" },
   });

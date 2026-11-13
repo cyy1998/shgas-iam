@@ -414,8 +414,7 @@ for (const entry of [undefined, "", "external, internal", "INTERNAL", "unknown"]
 test("equal configured origins allow opposite entry labels throughout continuation, Token, UserInfo and logout", async () => {
   const issuer = "https://iam.example/oidc";
   const f = await fixture(undefined, true, undefined, 45, undefined, true, undefined, true, false, {
-    internal: issuer,
-    external: issuer,
+    issuers: { internal: issuer, external: issuer },
   });
   try {
     f.setEntry("internal");

@@ -1,5 +1,7 @@
-import type { ClientSnapshotReader } from "@iam/client-snapshot";
+import type { ClientSnapshotReader, ClientSnapshotValue } from "@iam/client-snapshot";
+import type { ApplicationAdmissionInput, ApplicationAdmissionResult } from "@iam/contracts";
 import {
+  buildApplicationAccessDeniedPath,
   ClientCodeSchema,
   ClientSsoProtocol,
   ClientStatus,
@@ -11,7 +13,7 @@ import type { SubjectAccessOperation } from "@iam/subject-access";
 import { requireSubjectAccessOperation, SubjectAccessDisabledError } from "@iam/subject-access";
 import { z } from "zod";
 import { OidcProtocolError } from "./errors";
-import type { AcceptedAuthorization, OidcContinuation, OidcStateRedis } from "./state";
+import type { AcceptedAuthorization, OidcStateRedis } from "./state";
 import { createOidcState, digest, randomHandle } from "./state";
 import type { OidcAuthorizationResponse } from "./wire";
 import { OidcResponseModeSchema } from "./wire";
@@ -23,6 +25,9 @@ export interface OidcAuthorizationOptions {
   namespace: string;
   codeTtlSeconds: number;
   continuationTtlSeconds: number;
+  admission: {
+    evaluate(input: ApplicationAdmissionInput): Promise<ApplicationAdmissionResult>;
+  };
 }
 export interface OidcBrowserInput {
   globalSessionToken?: string;
@@ -31,7 +36,10 @@ export interface OidcBrowserInput {
 }
 export type OidcAuthorizationResult =
   | { kind: "response"; response: OidcAuthorizationResponse; clearGlobalSessionCookie?: boolean }
+  | { kind: "denied"; clientCode: string; response: OidcAuthorizationResponse }
   | { kind: "login"; handle: string; browserBinding: string; ttl: number; clearGlobalSessionCookie: boolean };
+
+type AdmissionPolicy = Pick<ClientSnapshotValue, "admissionEnabled" | "admissionFilter">;
 
 function invalid(description: string): never {
   throw new OidcProtocolError("invalid_request", description);
@@ -58,9 +66,10 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
         ) {
           throw new OidcProtocolError("unauthorized_client", "Client is not enabled for OIDC");
         }
-        return snapshot.value.ssoConfig;
+        const { ssoConfig, admissionEnabled, admissionFilter } = snapshot.value;
+        return { ssoConfig, admissionEnabled, admissionFilter };
       }
-      async function accept(parameters: URLSearchParams): Promise<AcceptedAuthorization> {
+      async function accept(parameters: URLSearchParams) {
         // Only known parameters participate. Disabled claims/resource and arbitrary extensions stay ignored.
         const known = [
           "client_id",
@@ -83,7 +92,8 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
         }
         const clientId = parameters.get("client_id");
         if (!clientId || !ClientCodeSchema.safeParse(clientId).success) invalid("client_id is required");
-        const config = await client(clientId);
+        const observedClient = await client(clientId);
+        const config = observedClient.ssoConfig;
         const redirectUri = parameters.get("redirect_uri");
         if (!redirectUri || !config.redirectUris.includes(redirectUri))
           invalid("redirect_uri must exactly match a registered URI");
@@ -128,7 +138,7 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
         const maxAge = rawMaxAge === null ? undefined : Number(rawMaxAge);
         if (maxAge !== undefined && (!Number.isSafeInteger(maxAge) || maxAge < 0))
           reject("invalid_request", "max_age must be a non-negative integer");
-        return {
+        const accepted: AcceptedAuthorization = {
           issuer,
           clientId,
           redirectUri,
@@ -141,6 +151,7 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
           ...(parameters.has("nonce") ? { nonce: parameters.get("nonce")! } : {}),
           ...(maxAge === undefined ? {} : { maxAge }),
         };
+        return { accepted, observedClient };
       }
       async function root(token?: string) {
         if (!token) return null;
@@ -188,10 +199,60 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
           },
         };
       }
-      async function issue(
+      async function checkAdmission(
         accepted: AcceptedAuthorization,
         parent: UserSessionObservation,
+        policy: AdmissionPolicy,
+      ): Promise<OidcAuthorizationResult | undefined> {
+        if (!policy.admissionEnabled) return;
+        const outcome = await options.admission.evaluate({
+          clientCode: accepted.clientId,
+          subjectIdentifier: parent.userSession.subjectIdentifier,
+          filter: policy.admissionFilter,
+        });
+        if (outcome === "match") return;
+        const response = {
+          redirectUri: accepted.redirectUri,
+          responseMode: accepted.responseMode,
+        };
+        const context = { iss: accepted.issuer, state: accepted.state };
+        if (outcome === "no-match") {
+          return {
+            kind: "denied",
+            clientCode: accepted.clientId,
+            response: {
+              ...response,
+              parameters: {
+                ...context,
+                error: "access_denied",
+                error_description: "Application access denied",
+                ...(accepted.prompt === "none"
+                  ? {}
+                  : { error_uri: new URL(buildApplicationAccessDeniedPath(accepted.clientId), accepted.issuer).href }),
+              },
+            },
+          };
+        }
+        const error = "temporarily_unavailable";
+        const description = "Application admission unavailable";
+        throw new OidcProtocolError(error, description, 503, {
+          ...response,
+          parameters: { ...context, error, error_description: description },
+        });
+      }
+      async function completeAuthorization(
+        accepted: AcceptedAuthorization,
+        parent: UserSessionObservation,
+        policy: AdmissionPolicy,
+        resume?: { handle: string; browserBinding: string },
       ): Promise<OidcAuthorizationResult> {
+        const denied = await checkAdmission(accepted, parent, policy);
+        // Keep the continuation available after a transient admission failure.
+        // A definitive outcome must still win the existing one-time consumption.
+        if (resume && !(await state.consumeContinuation(resume.handle, resume.browserBinding)))
+          invalid("Login request has already been used");
+        if (denied) return denied;
+
         const opened = await sessions.openClientSession(parent, {
           clientId: accepted.clientId,
           protocol: "oidc",
@@ -236,18 +297,19 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
           },
         };
       }
-      async function continuation(handle: string, browser: OidcBrowserInput): Promise<OidcContinuation> {
+      async function continuation(handle: string, browser: OidcBrowserInput) {
         const saved = await state.readContinuation(handle, browser.browserBinding ?? "");
         if (!saved || saved.authorization.issuer !== issuer) invalid("Login request is invalid or expired");
-        await client(saved.authorization.clientId);
-        return saved;
+        const observedClient = await client(saved.authorization.clientId);
+        return { saved, observedClient };
       }
       return {
         async authorize(parameters: URLSearchParams, browser: OidcBrowserInput): Promise<OidcAuthorizationResult> {
-          const accepted = await accept(parameters);
+          const { accepted, observedClient } = await accept(parameters);
           const parent = await root(browser.globalSessionToken);
           if (parent) {
-            return needsReauthentication(accepted, parent) ? loginRequired(accepted) : await issue(accepted, parent);
+            if (needsReauthentication(accepted, parent)) return loginRequired(accepted);
+            return await completeAuthorization(accepted, parent, observedClient);
           }
           if (accepted.prompt.split(" ").includes("none"))
             return loginRequired(accepted, Boolean(browser.globalSessionToken));
@@ -282,7 +344,7 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
           };
         },
         async resume(handle: string, browser: OidcBrowserInput): Promise<OidcAuthorizationResult> {
-          const saved = await continuation(handle, browser);
+          const { saved, observedClient } = await continuation(handle, browser);
           const parent = await root(browser.globalSessionToken);
           if (!parent) {
             throw new OidcProtocolError(
@@ -297,12 +359,13 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
             saved.completionDigest !== null && saved.completionDigest === digest(browser.completion ?? "");
           if (needsReauthentication(saved.authorization, parent) && !firstCompletion)
             return loginRequired(saved.authorization);
-          if (!(await state.consumeContinuation(handle, browser.browserBinding!)))
-            invalid("Login request has already been used");
-          return await issue(saved.authorization, parent);
+          return await completeAuthorization(saved.authorization, parent, observedClient, {
+            handle,
+            browserBinding: browser.browserBinding ?? "",
+          });
         },
         async clientMetadata(clientId: string) {
-          const config = await client(clientId);
+          const { ssoConfig: config } = await client(clientId);
           return {
             client_id: clientId,
             token_endpoint_auth_method: getClientSsoTokenEndpointAuthMethod(config),

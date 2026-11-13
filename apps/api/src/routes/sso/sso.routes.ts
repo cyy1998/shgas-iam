@@ -114,9 +114,11 @@ export const authorize = createRoute({
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.MOVED_TEMPORARILY]: {
-      description: "全局未登录，跳转登录页面",
+      description: "继续登录、跳转已登记的回调，或在明确不符合准入策略时跳转 IAM 无权限页",
     },
-    [HttpStatusCodes.SERVICE_UNAVAILABLE]: customSsoUnavailableResponse,
+    [HttpStatusCodes.SERVICE_UNAVAILABLE]: createCustomSsoUnavailableResponse(
+      "Client Snapshot、Subject Access 或应用准入暂时不可用；等待后重新发起应用授权",
+    ),
   },
 });
 

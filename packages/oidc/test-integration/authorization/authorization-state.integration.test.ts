@@ -80,6 +80,11 @@ async function fixture() {
       namespace: state.namespace,
       codeTtlSeconds: 30,
       continuationTtlSeconds: 60,
+      admission: {
+        evaluate() {
+          throw new Error("Disabled admission must skip document evaluation");
+        },
+      },
       clients: {
         async acquire(clientCode) {
           return {
@@ -88,6 +93,8 @@ async function fixture() {
               clientCode,
               status: ClientStatus.Enable,
               ssoEnabled: true,
+              admissionEnabled: false,
+              admissionFilter: null,
               ssoConfig: {
                 protocol: ClientSsoProtocol.Oidc,
                 clientType: OidcClientType.Public,

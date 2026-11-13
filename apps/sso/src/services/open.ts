@@ -35,10 +35,14 @@ export function passwordReset(body: { username: string; phoneNumber?: string; co
   });
 }
 
-export function clientStatus(params: { clientCode: string }) {
+export function clientStatus(
+  params: { clientCode: string },
+  options?: { suppressErrorMessage?: boolean; signal?: AbortSignal },
+) {
   const qs = toQueryString(params);
   return request<ClientStatusResult>(`/open/client/status?${qs}`, {
     skipAuthRedirect: true,
+    ...options,
   });
 }
 

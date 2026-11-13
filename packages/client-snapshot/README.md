@@ -1,12 +1,12 @@
 # @iam/client-snapshot
 
-`@iam/client-snapshot` 拥有普通配置与凭据缓存。一次普通读取固定 Client 状态和单协议配置，凭据由 `/credentials` 窄接口读取和认证，
+`@iam/client-snapshot` 拥有普通配置与凭据缓存。一次普通读取固定 Client 状态、单协议配置和应用准入策略，凭据由 `/credentials` 窄接口读取和认证，
 普通 DTO 不含 Secret，认证只交付身份。`/composition` 装配两个 reader、Gate 和统一失效，DB adapter 由各 app 注入。
 [DB adapter](../../packages/db/src/client-snapshot.ts)
 
 ## 读取与失效
 
-缓存缺失或损坏才回源，Redis 读取故障直接失败。同读取器、Client 和失效观察的回源合并。成功失效阻止旧请求回填及后续读取复用旧观察，
+缓存缺失、损坏或普通配置缺少准入字段时回源，Redis 读取故障直接失败。同读取器、Client 和失效观察的回源合并。成功失效阻止旧请求回填及后续读取复用旧观察，
 已接受 Snapshot 的请求仍可完成。发布与失效冲突至多重取一次，再冲突报告暂态失败。
 
 ## Admin 写入与恢复

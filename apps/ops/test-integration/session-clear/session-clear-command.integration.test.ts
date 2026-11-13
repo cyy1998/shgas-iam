@@ -392,6 +392,8 @@ test("Snapshot CLI shares control across ordinary and sensitive readers without 
           status: enabled ? ClientStatus.Enable : ClientStatus.Maintenance,
           ssoEnabled: false,
           ssoConfig: null,
+          admissionEnabled: false,
+          admissionFilter: null,
         };
       },
       async loadCredential() {

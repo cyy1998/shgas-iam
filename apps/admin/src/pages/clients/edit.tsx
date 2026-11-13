@@ -1,4 +1,5 @@
 import StatusTag from "@admin/components/StatusTag";
+import { ClientAdmissionSettings } from "@admin/pages/clients/ClientAdmissionSettings";
 import { ClientSsoSettings } from "@admin/pages/clients/ClientSsoPage";
 import BasicSettings from "@admin/pages/clients/components/BasicSettings";
 import { ClientDetailError, ClientDetailErrorKind, type ClientDetailVo, getClient } from "@admin/services/client";
@@ -10,7 +11,7 @@ import { useLocation, useNavigate, useParams } from "react-router";
 import styles from "./ClientSettings.module.less";
 import { useClientDraftGuard } from "./useClientDraftGuard";
 
-type ClientSection = "basic" | "sso";
+type ClientSection = "basic" | "sso" | "admission";
 
 type LoadState =
   | { status: "loading" }
@@ -18,7 +19,7 @@ type LoadState =
   | { status: "not-found" }
   | { status: "error" };
 
-const sections = new Set<ClientSection>(["basic", "sso"]);
+const sections = new Set<ClientSection>(["basic", "sso", "admission"]);
 
 function parseSection(search: string): ClientSection {
   const value = new URLSearchParams(search).get("section");
@@ -190,6 +191,17 @@ export default function ClientEditPage() {
             key: "sso",
             label: "SSO 配置",
             children: <ClientSsoSettings key={discardRevision} onDirtyChange={setDirty} />,
+          },
+          {
+            key: "admission",
+            label: "应用准入",
+            children: (
+              <ClientAdmissionSettings
+                key={`${clientCode}:${discardRevision}`}
+                clientCode={clientCode}
+                onDirtyChange={setDirty}
+              />
+            ),
           },
         ]}
       />

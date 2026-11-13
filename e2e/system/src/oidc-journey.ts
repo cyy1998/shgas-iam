@@ -11,6 +11,7 @@ export function createOidcJourneyOperations(options: CreateOidcJourneyOperations
     environment: (descriptor, scenario) => ({
       IAM_E2E_JOURNEY: "oidc",
       IAM_E2E_OIDC_CLIENT_CODE: scenario.oidcClientCode,
+      IAM_E2E_DELEGATEE_USERNAME: scenario.delegateeUsername,
       IAM_E2E_CUSTOM_CLIENT_CODE: `${scenario.customSsoClientCode}-dual`,
       IAM_E2E_BUSINESS_CLIENT_CODE: `${scenario.customSsoClientCode}-business`,
       IAM_E2E_OIDC_REDIRECT_URI: `${descriptor.origin}/e2e/oidc/callback`,

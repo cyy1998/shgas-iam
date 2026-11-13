@@ -1,6 +1,7 @@
 import type { createUnifiedAdminLifecycleRevocation } from "@admin-api/composition/session/unified-lifecycle";
 import type { AdminClientReaderPort, AdminClientTransactionStorePort } from "@admin-api/services/client/client.port";
 import type { ClientRepository } from "@admin-api/services/client/client.repository";
+import type { ClientAdmissionEvaluatorPort } from "@admin-api/services/client-admission/client-admission.port";
 import type {
   AdminEmploymentEffectiveRoleResolverPort,
   AdminEmploymentReaderPort,
@@ -42,6 +43,7 @@ import type { ManageOrganizationResponsibilityAssignmentLifecycleTransactionPort
 import type { LockedEmploymentEndStorePort } from "@iam/assignment-resolution/employment-lifecycle";
 import type { LockedAssignmentEndStorePort } from "@iam/assignment-resolution/organization-responsibility/assignment-lifecycle";
 import type { RoleAssignmentResolver } from "@iam/assignment-resolution/role-assignment";
+import type { createApplicationAdmissionEvaluator } from "@iam/documents/user/admission";
 import type { LoginRestriction } from "@iam/login-restriction";
 
 type AdminSessionRevocationPort = ReturnType<typeof createUnifiedAdminLifecycleRevocation>;
@@ -58,6 +60,10 @@ void missingAuditContext;
 
 type _AdminClientReaderPort = AssertAssignable<AdminClientReaderPort, ClientRepository>;
 type _AdminClientTransactionStorePort = AssertAssignable<AdminClientTransactionStorePort, ClientRepository>;
+type _ClientAdmissionEvaluatorPort = AssertAssignable<
+  ClientAdmissionEvaluatorPort,
+  ReturnType<typeof createApplicationAdmissionEvaluator>
+>;
 
 type _AdminEmploymentReaderPort = AssertAssignable<AdminEmploymentReaderPort, EmploymentRepository>;
 type _UpdateEmploymentStorePort = AssertAssignable<

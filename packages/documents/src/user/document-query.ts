@@ -23,6 +23,7 @@ const transport = createFilterTransportSchemas({
 
 export type UserDocumentFilter = FilterForShape<typeof structure.fields>;
 export const UserDocumentFilterSchema = engine.filterSchema;
+export const UserDocumentFilterTransportSchema = transport.budgetedSchema;
 export const UserDocumentSearchRequestSchema = DocumentPaginationSchema.safeExtend({
   filter: UserDocumentFilterSchema.optional(),
   select: userDocumentSelection.selectSchema.optional(),

@@ -255,6 +255,7 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
     const handlers = createUnifiedAuthorizationHandlers({
       authorization: customSso,
       operations,
+      logger: options.logger,
       loginEndpoint: options.config.loginEndpoint,
       retryAfterSeconds: options.config.projectionRetryAfterSeconds,
     });
@@ -340,6 +341,11 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
             "OIDC request failed",
           ),
         authorization: oidc,
+        reportAdmissionDenied: (clientCode, request) =>
+          options.logger.warn(
+            { ...request, event: "application.admission.denied", outcome: "no-match", protocol: "oidc", clientCode },
+            "Application admission denied",
+          ),
         tokens: oidcTokens,
         logout: oidcLogout,
         reportLogoutEffect: (effect, request) =>

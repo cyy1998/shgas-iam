@@ -385,6 +385,14 @@ _Avoid_: Independent/Gateway mode, OIDC client configuration, caller-supplied ca
 一个 Client 对所选 SSO 协议接入能力的启用意图，独立于 Client 的整体状态、Internal API 调用能力和显式会话撤销。关闭时保留配置和既有访问关系，恢复启用只允许仍在原期限内且未被终止的访问继续使用。
 _Avoid_: Client Disablement, configuration deletion, Session Revocation
 
+**Application Admission Policy**:
+一个业务应用根据已发布 User Document 决定用户能否获得本次应用登录授权的规则。策略默认关闭，关闭时保留已保存的条件，开启时要求用户满足条件才能取得本次应用登录授权，见 [ADR-0051](docs/adr/0051-enforce-admission-before-issuing-application-login-grants.md)。
+_Avoid_: Admin Authorization Policy, Client Authorization Claim, Session Revocation
+
+**Application Admission Condition**:
+基于 User Document 公开属性的非空条件表达式，支持全部满足、任一满足与排除，同一集合元素作用域内的条件由同一个元素满足。角色条件使用目标应用的有效 Client Role 与有效 Global Role，独立于应用的资料披露配置。
+_Avoid_: arbitrary JSON path, cross-Client private role condition, disclosure selection
+
 **SSO Client Secret**:
 IAM 为 Client 签发、用于所选 SSO 协议的客户端认证凭据，与 Internal API 凭据独立。轮换替换当前值而不撤销既有会话或协议授权，IAM 不主动提供新旧值并存的宽限期。
 _Avoid_: Internal API credential, user password, Authorization Code, Session Token

@@ -2,7 +2,7 @@ import { ClientSnapshotUnavailableError } from "@iam/client-snapshot";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import { ApiErrorCode, isRetryableServiceUnavailable } from "@iam/contracts";
 import { SERVICE_UNAVAILABLE } from "@iam/contracts/http";
-import { CustomSsoTrafficGateUnavailableError } from "@iam/custom-sso";
+import { CustomSsoAdmissionUnavailableError, CustomSsoTrafficGateUnavailableError } from "@iam/custom-sso";
 import { AuthzMaintenanceError, CustomError } from "@iam/runtime/errors";
 import { SubjectAccessUnavailableError } from "@iam/subject-access";
 
@@ -36,7 +36,11 @@ export function mapCustomSsoRetryableError(error: unknown, options: MapCustomSso
     assertRetryAfterSeconds(options.retryAfterSeconds);
     return new CustomSsoRetryableUnavailableError(ApiErrorCode.Maintenance, error.message, options.retryAfterSeconds);
   }
-  if (error instanceof CustomSsoTrafficGateUnavailableError || error instanceof ClientSnapshotUnavailableError) {
+  if (
+    error instanceof CustomSsoAdmissionUnavailableError ||
+    error instanceof CustomSsoTrafficGateUnavailableError ||
+    error instanceof ClientSnapshotUnavailableError
+  ) {
     assertRetryAfterSeconds(options.retryAfterSeconds);
     return new CustomSsoRetryableUnavailableError(
       ApiErrorCode.InternalError,

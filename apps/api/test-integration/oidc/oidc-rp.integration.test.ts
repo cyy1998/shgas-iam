@@ -24,6 +24,22 @@ beforeAll(async () => {
 // per-case resets must never close this shared process or erase another live request.
 afterAll(resetApiRedisTestDatabase);
 
+function createBrowserRequest() {
+  const cookies = new Map<string, string>();
+  async function request(url: string | URL, init: RequestInit = {}) {
+    const headers = new Headers(init.headers);
+    headers.set("Cookie", Array.from(cookies, ([name, value]) => `${name}=${value}`).join("; "));
+    const response = await fetch(url, { ...init, headers, redirect: "manual" });
+    for (const cookie of response.headers.getSetCookie()) {
+      const pair = cookie.split(";", 1)[0]!;
+      const separator = pair.indexOf("=");
+      cookies.set(pair.slice(0, separator), pair.slice(separator + 1));
+    }
+    return response;
+  }
+  return { cookies, request };
+}
+
 const scenarios = (["internal", "external"] as const).flatMap((entry) =>
   (["public", "confidential"] as const).flatMap((clientType) =>
     (["normal", "none", "state-only", "hint-only"] as const).map(
@@ -64,18 +80,7 @@ test.each(scenarios)(
     const clientId = clientType === "public" ? identity.publicClientId : identity.clientId;
     // Each scenario owns a fresh browser, user and Client; previous authentication
     // must not satisfy the initial authorization request or influence the ID Token.
-    const cookies = new Map<string, string>();
-    async function browserRequest(url: string | URL, init: RequestInit = {}) {
-      const headers = new Headers(init.headers);
-      headers.set("Cookie", Array.from(cookies, ([name, value]) => `${name}=${value}`).join("; "));
-      const response = await fetch(url, { ...init, headers, redirect: "manual" });
-      for (const cookie of response.headers.getSetCookie()) {
-        const pair = cookie.split(";", 1)[0]!;
-        const separator = pair.indexOf("=");
-        cookies.set(pair.slice(0, separator), pair.slice(separator + 1));
-      }
-      return response;
-    }
+    const { cookies, request: browserRequest } = createBrowserRequest();
     const config = await rp.discovery(
       new URL(`${origin}/oidc`),
       clientId,
@@ -172,4 +177,59 @@ test.each(scenarios)(
     expect(rejected).toBeInstanceOf(rp.WWWAuthenticateChallengeError);
   },
   45000,
+);
+
+test.each(["internal", "external"] as const)(
+  "independent openid-client validates interactive and silent admission errors at the %s issuer",
+  async (entry) => {
+    const identity = await candidate.createIdentity({ field: "username", op: "eq", value: "another-user" });
+    const origin = candidate.origins[entry];
+    const config = await rp.discovery(
+      new URL(`${origin}/oidc`),
+      identity.publicClientId,
+      { token_endpoint_auth_method: "none" },
+      rp.None(),
+      { execute: [rp.allowInsecureRequests] },
+    );
+    const { request } = createBrowserRequest();
+    const login = await request(`${origin}/auth/login/password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ credential: identity.credential() }),
+    });
+    expect(login.status).toBe(200);
+    for (const silent of [false, true]) {
+      const verifier = rp.randomPKCECodeVerifier();
+      const state = rp.randomState();
+      const authorize = rp.buildAuthorizationUrl(config, {
+        redirect_uri: redirectUri,
+        scope: "openid",
+        state,
+        code_challenge: await rp.calculatePKCECodeChallenge(verifier),
+        code_challenge_method: "S256",
+        ...(silent ? { prompt: "none" } : {}),
+      });
+      const response = await request(authorize);
+      expect(response.status).toBe(303);
+      const location = response.headers.get("location");
+      if (!location) throw new Error("Expected OIDC callback redirect");
+      const callback = new URL(location);
+      expect(`${callback.origin}${callback.pathname}`).toBe(redirectUri);
+      let rejected: unknown;
+      try {
+        await rp.authorizationCodeGrant(config, callback, { pkceCodeVerifier: verifier, expectedState: state });
+      } catch (error) {
+        rejected = error;
+      }
+      if (!(rejected instanceof rp.AuthorizationResponseError))
+        throw new Error("Expected OIDC authorization error", { cause: rejected });
+      expect(rejected.error).toBe("access_denied");
+      expect(rejected.cause.get("state")).toBe(state);
+      expect(rejected.cause.get("iss")).toBe(`${origin}/oidc`);
+      expect(rejected.cause.get("error_uri")).toBe(
+        silent ? null : `${origin}/portal/application-access-denied?client=${identity.publicClientId}`,
+      );
+    }
+  },
+  45_000,
 );

@@ -7,6 +7,7 @@ import { createAdminAuthorizationAdminRouter } from "@admin-api/routes/admin/aut
 import { createClientAdapter } from "@admin-api/routes/admin/client/client.adapter";
 import { createClientRoute } from "@admin-api/routes/admin/client/client.index";
 import { createClientAdminRouter } from "@admin-api/routes/admin/client/client.trpc";
+import { createClientAdmissionAdapter } from "@admin-api/routes/admin/client-admission/client-admission.adapter";
 import { createClientSsoAdapter } from "@admin-api/routes/admin/client-sso/client-sso.adapter";
 import { createDelegationAdapter } from "@admin-api/routes/admin/delegation/delegation.adapter";
 import { createDelegationRoute } from "@admin-api/routes/admin/delegation/delegation.index";
@@ -88,9 +89,11 @@ export function createAdminApiRouteComposition(options: CreateAdminApiRoutesOpti
     userService: services.user,
   });
 
+  const clientAdmissionAdapter = createClientAdmissionAdapter(services.clientAdmission);
   const clientSsoAdapter = createClientSsoAdapter(services.clientSso.service);
   const adminRouter = createAdminRouter({
     delegation: createDelegationAdminRouter(delegationAdapter),
+    clientAdmission: clientAdmissionAdapter.trpc,
     clientSso: clientSsoAdapter.trpc,
     authorization: createAdminAuthorizationAdminRouter(authorizationAdapter),
     audit: createAuditAdminRouter(auditAdapter),
@@ -109,6 +112,7 @@ export function createAdminApiRouteComposition(options: CreateAdminApiRoutesOpti
 
   const routes: CreateAppOptions["routes"] = {
     "./src/routes/admin/delegation/delegation.index.ts": { default: createDelegationRoute(delegationAdapter) },
+    "./src/routes/admin/client-admission/client-admission.index.ts": { default: clientAdmissionAdapter.rest },
     "./src/routes/admin/client-sso/client-sso.index.ts": { default: clientSsoAdapter.rest },
     "./src/routes/admin/authorization/authorization.index.ts": {
       default: createAdminAuthorizationRoute(authorizationAdapter),

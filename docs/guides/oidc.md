@@ -91,6 +91,20 @@ max_age 为非负安全整数，0 要求新鲜认证。当前不支持 claims、
 拒绝绝对/协议相对 URL、反斜杠、控制字符和改变 authority 的歧义路径。
 Portal 对发现的完整端点先验证属于当前入口，再构造相对导航；登记的业务 redirect 保持完整地址。
 
+### 处理应用准入错误
+
+应用启用准入策略后，已有 IAM 登录的直接授权和登录后的续接都会检查本次登录资格。明确不匹配时，
+IAM 按请求的响应模式向已登记的回调返回 `access_denied`、`iss` 和原 `state`。
+
+- 交互式登录回调先校验预期的 `iss` 与本次请求的 `state`，再结束本次登录。若 `error_uri` 指向预期 issuer 的
+  origin 和 `/portal/application-access-denied` 路径，可引导用户打开该页查看应用名称与联系管理员的提示。
+- `prompt=none` 的准入拒绝中，IAM 省略协议字段 `error_uri`。登记回调地址时，请为协议保留响应字段名，
+  避免在回调查询参数中使用 `error_uri` 等名称。静默授权失败时，接入方在后台处理错误并结束本次授权，不触发页面导航。
+- 收到 `temporarily_unavailable` 时提示稍后重试，从应用重新发起授权。
+
+准入失败仅结束或中断本次新授权。已签发的 Code、Token 和已有登录会话继续按各自的有效期与撤销规则处理。
+资格依据与发布延迟见[应用准入决策](../adr/0051-enforce-admission-before-issuing-application-login-grants.md#策略配置与事实时效)。
+
 ## Token、Scope 与当前披露
 
 | Scope             | 披露                                                        |

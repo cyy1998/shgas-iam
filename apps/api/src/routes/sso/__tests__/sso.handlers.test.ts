@@ -48,6 +48,7 @@ function createHandlers() {
         barrier: { readCommittedTransitionId: unexpected },
         revocation: { revokePrincipalSession: unexpected, revokeUserSessions: unexpected },
       }),
+      logger,
       loginEndpoint: "/login",
       retryAfterSeconds: 3,
     }),

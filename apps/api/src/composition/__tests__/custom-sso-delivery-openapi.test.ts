@@ -34,6 +34,7 @@ function createContractApp() {
     logger,
     config: { projectionRetryAfterSeconds: 3, redisExpireSeconds: 3600, loginEndpoint: "/login" },
     customSso: {
+      admission: { evaluate: unexpectedDependencyCall },
       redis,
       namespace: "openapi-test",
       codeTtlSeconds: 60,

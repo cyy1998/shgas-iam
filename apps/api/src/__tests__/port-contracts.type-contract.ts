@@ -38,12 +38,18 @@ import type {
   RegisterPurveyorUserStorePort,
 } from "@api/use-cases/internal/register-purveyor-contact/register-purveyor-contact.port";
 import type { ClientDelegationResolutionPort } from "@api/use-cases/internal/resolve-client-delegations/resolve-client-delegations.port";
+import type { UnifiedCustomSsoAuthorizationOptions } from "@iam/custom-sso";
+import type { createApplicationAdmissionEvaluator } from "@iam/documents/user/admission";
 import type { UserDocumentQueryService } from "@iam/documents/user/query";
 import type { LoginRestriction } from "@iam/login-restriction";
+import type { OidcAuthorizationOptions } from "@iam/oidc";
 
 type PrincipalSessionAdapter = ReturnType<typeof createUserSessionAuthenticationAdapter>;
 
 type AssertAssignable<Port, _Provider extends Port> = true;
+type AdmissionProvider = ReturnType<typeof createApplicationAdmissionEvaluator>;
+type _CustomSsoAdmissionPort = AssertAssignable<UnifiedCustomSsoAuthorizationOptions["admission"], AdmissionProvider>;
+type _OidcAdmissionPort = AssertAssignable<OidcAuthorizationOptions["admission"], AdmissionProvider>;
 function assertPrincipalSessionCreationContracts(
   passwordSessions: PasswordPrincipalSessionPort,
   mobileSessions: MobilePrincipalSessionPort,

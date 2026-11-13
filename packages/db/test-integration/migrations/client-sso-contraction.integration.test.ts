@@ -11,6 +11,7 @@ import { createPostgresTestHarness, expectPostgresErrorCode } from "../support/p
 const folder = new URL("../../src/migrations/", import.meta.url);
 const contraction = "20260914173743_confused_mystique";
 const migration = new URL(`${contraction}/migration.sql`, folder);
+const admissionMigration = new URL("20261113091724_client_admission/migration.sql", folder);
 const dropped = [
   "oidc_enabled",
   "oidc_config",
@@ -104,10 +105,18 @@ test("contraction preserves migrated identity, Role, independent Internal creden
     "update_time",
     "url",
   ]);
+  await harness.sql.file(fileURLToPath(admissionMigration), { cache: false });
   const source = createClientSnapshotRepository(drizzle({ client: harness.sql, relations }));
   const ordinary = await source.loadClient("app.web");
   const credential = await source.loadCredential("app.web");
-  expect(ordinary).toEqual({ clientCode: "app.web", status: 1, ssoEnabled: true, ssoConfig: newOidc });
+  expect(ordinary).toEqual({
+    clientCode: "app.web",
+    status: 1,
+    ssoEnabled: true,
+    ssoConfig: newOidc,
+    admissionEnabled: false,
+    admissionFilter: null,
+  });
   expect(JSON.stringify(ordinary)).not.toContain("N".repeat(43));
   expect(credential).toMatchObject({ secret: "N".repeat(43), credentialId: "20000000-0000-4000-8000-000000000001" });
   const internal = await source.loadClient("internal");
@@ -129,6 +138,7 @@ test("hash-only and missing-current-credential upgrades fail before source colum
 });
 test("empty and Internal-only inventories support a fresh installation without inventing SSO", async () => {
   await apply();
+  await harness.sql.file(fileURLToPath(admissionMigration), { cache: false });
   const source = createClientSnapshotRepository(drizzle({ client: harness.sql, relations }));
   const empty = await source.loadClient("missing");
   expect(empty).toBeNull();

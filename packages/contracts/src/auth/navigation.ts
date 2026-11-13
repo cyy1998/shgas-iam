@@ -22,3 +22,9 @@ export function appendNavigationParameters(path: string, parameters: URLSearchPa
   });
   return `${target.pathname}${target.search}${target.hash}`;
 }
+
+export const APPLICATION_ACCESS_DENIED_ROUTE = "/application-access-denied";
+
+export function buildApplicationAccessDeniedPath(clientCode: string): string {
+  return `/portal${APPLICATION_ACCESS_DENIED_ROUTE}?${new URLSearchParams({ client: clientCode })}`;
+}

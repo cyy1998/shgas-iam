@@ -3,6 +3,8 @@ export const auditActionCatalog = [
   { action: "admin.delegation.update", label: "管理员更新应用委托" },
   { action: "sso.delegation.create", label: "自助创建应用委托" },
   { action: "sso.delegation.update", label: "自助更新应用委托" },
+  { action: "admin.client.admission.save", label: "保存应用准入条件" },
+  { action: "admin.client.admission.enabled", label: "开启或关闭应用准入策略" },
   { action: "admin.client.sso_secret_rotate", label: "轮换 SSO Secret" },
   { action: "admin.client.sso_secret_read", label: "读取当前 SSO Secret" },
   {

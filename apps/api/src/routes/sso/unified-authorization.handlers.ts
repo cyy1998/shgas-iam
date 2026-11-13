@@ -1,10 +1,11 @@
 import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
 import { expireCustomSsoCookies } from "@api/services/sso/transport/custom-sso-cookie";
+import { getRequestId, getTraceId } from "@iam/api-core/core/request-context";
 import * as resp from "@iam/api-core/http";
 import { createSubjectAccessHttpAdapter } from "@iam/api-core/http/subject-access";
-import { appendNavigationParameters } from "@iam/contracts";
+import { appendNavigationParameters, buildApplicationAccessDeniedPath } from "@iam/contracts";
 import { HttpStatusCodes } from "@iam/contracts/http";
-import type { UnifiedCustomSsoAuthorization } from "@iam/custom-sso";
+import type { CustomSsoLoggerPort, UnifiedCustomSsoAuthorization } from "@iam/custom-sso";
 import type { createSubjectAccessOperations } from "@iam/subject-access";
 import { getCookie, setCookie } from "hono/cookie";
 import type { SsoRouteHandler } from "./sso.type";
@@ -12,12 +13,14 @@ import type { SsoRouteHandler } from "./sso.type";
 export function createUnifiedAuthorizationHandlers(deps: {
   authorization: UnifiedCustomSsoAuthorization;
   operations: ReturnType<typeof createSubjectAccessOperations>;
+  logger: Pick<CustomSsoLoggerPort, "warn">;
   loginEndpoint: string;
   retryAfterSeconds: number;
 }) {
   const boundary = createSubjectAccessHttpAdapter();
   const authorize: SsoRouteHandler<"authorize"> = async (c) => {
     const { client, redirectUrl, state, token, ssoReturn } = c.req.valid("query");
+    c.header("Cache-Control", "no-store");
     const cookie = getCookie(c, "global_session");
     const binding = getCookie(c, "custom_sso_continuation");
     let data: Awaited<ReturnType<ReturnType<typeof deps.authorization.forOperation>["authorize"]>>;
@@ -41,7 +44,21 @@ export function createUnifiedAuthorizationHandlers(deps: {
     } catch (error) {
       throw mapCustomSsoRetryableError(error, { retryAfterSeconds: deps.retryAfterSeconds });
     }
-    if (!data.isLogin) {
+    if (data.kind === "denied") {
+      deps.logger.warn(
+        {
+          event: "application.admission.denied",
+          outcome: "no-match",
+          protocol: "custom_sso",
+          clientCode: data.clientCode,
+          requestId: getRequestId(c) ?? c.req.header("x-request-id") ?? null,
+          traceId: getTraceId(c),
+        },
+        "Application admission denied",
+      );
+      return c.redirect(buildApplicationAccessDeniedPath(data.clientCode));
+    }
+    if (data.kind === "login") {
       if (data.clearGlobalSessionCookie) expireCustomSsoCookies(c, ["global_session"]);
       setCookie(c, "custom_sso_continuation", data.browserBinding, {
         httpOnly: true,

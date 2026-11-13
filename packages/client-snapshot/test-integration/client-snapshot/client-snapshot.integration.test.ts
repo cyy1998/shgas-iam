@@ -46,10 +46,14 @@ function fixture() {
     status: ClientStatus.Enable,
     ssoEnabled: false,
     ssoConfig: null,
+    admissionEnabled: false,
+    admissionFilter: null,
     secret: "SECRET-SENTINEL",
   };
   let secret: unknown = {
     secret: "current",
+    admissionEnabled: true,
+    admissionFilter: { field: "userType", op: "eq", value: "正式员工" },
     credentialId: randomUUID(),
     updatedAt: new Date().toISOString(),
     control: "PRIVATE",
@@ -109,6 +113,8 @@ test("ordinary cold/warm serializer strips sensitive source fields, gate shares 
       status: ClientStatus.Enable,
       ssoEnabled: false,
       ssoConfig: null,
+      admissionEnabled: false,
+      admissionFilter: null,
     },
   });
   expect(gate).toEqual({
@@ -117,6 +123,7 @@ test("ordinary cold/warm serializer strips sensitive source fields, gate shares 
   });
   expect(credential.kind).toBe("present");
   expect(JSON.stringify(credential)).not.toContain("PRIVATE");
+  expect(JSON.stringify(credential)).not.toContain("admission");
   const warm = await snapshots.client.acquire(f.code);
   expect(warm).toEqual(cold);
   expect(f.counts()).toEqual({ clientLoads: 1, secretLoads: 1 });
@@ -147,7 +154,14 @@ test("credential authentication after unified invalidation accepts only the curr
   const credentialId = randomUUID();
   const updatedAt = "2026-11-08T00:00:00.000Z";
   f.setSecret({ secret: "replacement", credentialId, updatedAt });
-  f.setClient({ clientCode: f.code, status: ClientStatus.Maintenance, ssoEnabled: false, ssoConfig: null });
+  f.setClient({
+    clientCode: f.code,
+    status: ClientStatus.Maintenance,
+    ssoEnabled: false,
+    ssoConfig: null,
+    admissionEnabled: false,
+    admissionFilter: null,
+  });
   await snapshots.invalidateClient(f.code);
 
   const oldCredential = await authenticator.authenticate(f.code, "current");
@@ -157,6 +171,35 @@ test("credential authentication after unified invalidation accepts only the curr
   expect(newCredential).toEqual({ clientCode: f.code, credentialId, updatedAt });
   expect(original).toMatchObject({ kind: "present", value: { status: ClientStatus.Enable } });
   expect(current).toMatchObject({ kind: "present", value: { status: ClientStatus.Maintenance } });
+});
+
+test("a valid legacy ordinary payload is replaced by the current admission policy without changing the credential cache", async () => {
+  const f = fixture();
+  const snapshots = createClientSnapshots({ redis, source: f.source });
+  await snapshots.client.acquire(f.code);
+  const credential = await snapshots.credential.acquire(f.code);
+  const keys = clientSnapshotKeys(f.code);
+  const oldPayload = await redis.get(keys.payloads[0]);
+  if (!oldPayload) throw new Error("Missing ordinary cache fixture");
+  const legacy = JSON.parse(oldPayload);
+  delete legacy.snapshot.value.admissionEnabled;
+  delete legacy.snapshot.value.admissionFilter;
+  await redis.set(keys.payloads[0], JSON.stringify(legacy));
+  const admissionFilter = { field: "userType", op: "eq", value: "正式员工" };
+  f.setClient({
+    clientCode: f.code,
+    status: ClientStatus.Enable,
+    ssoEnabled: false,
+    ssoConfig: null,
+    admissionEnabled: true,
+    admissionFilter,
+  });
+
+  const current = await snapshots.client.acquire(f.code);
+  expect(current).toMatchObject({ kind: "present", value: { admissionEnabled: true, admissionFilter } });
+  expect(await snapshots.client.acquire(f.code)).toEqual(current);
+  expect(await snapshots.credential.acquire(f.code)).toEqual(credential);
+  expect(f.counts()).toEqual({ clientLoads: 2, secretLoads: 1 });
 });
 
 test("injected TTL expires and invalidation does not replace an already accepted observation", async () => {
@@ -220,6 +263,8 @@ for (const kind of ["client", "gate", "credential"] as const) {
           status: ClientStatus.Maintenance,
           ssoEnabled: false,
           ssoConfig: null,
+          admissionEnabled: false,
+          admissionFilter: null,
         });
         f.setSecret({
           secret: "replacement",

@@ -122,6 +122,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [ADR-0048](adr/0048-model-global-roles-without-client-ownership.md)                     | decision | Current    | 2026-11-10    | 2026-12-10  | 已确认的全局角色归属、编码命名空间与应用披露边界。                                                         |
 | [ADR-0049](adr/0049-compose-roles-across-clients.md)                                    | decision | Current    | 2026-11-10    | 2026-12-10  | 组合角色授予、应用披露、管理生命周期与发布边界。                                                           |
 | [ADR-0050](adr/0050-bind-image-captcha-to-the-required-operation.md)                    | decision | Current    | 2026-11-11    | 2026-12-11  | Cap 求解失败时使用图片验证码，并将证明绑定原操作。                                                         |
+| [ADR-0051](adr/0051-enforce-admission-before-issuing-application-login-grants.md)       | decision | Current    | 2026-11-13    | 2026-12-13  | 新应用授权的准入检查、已发布文档时效和协议拒绝行为。                                                       |
 
 </details>
 
@@ -189,7 +190,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [用户、组织与任职](features/directory-management.md)        | feature | Current | 2026-11-13    | 2026-12-13  | 用户档案、按日任职有效期、离职、组织责任与目录搜索。 |
 | [角色、管理授权与审计](features/roles-and-authorization.md) | feature | Current | 2026-10-25    | 2026-11-25  | 角色授予与披露、Admin 授权、HR 范围和审计。          |
 | [登录与会话](features/login-and-session.md)                 | feature | Current | 2026-10-25    | 2026-11-25  | 身份验证、找回密码、改密、登录限制与会话撤销。       |
-| [应用接入](features/application-integration.md)             | feature | Current | 2026-10-25    | 2026-11-25  | 应用配置与凭据、单点登录、资料披露与网关发布。       |
+| [应用接入](features/application-integration.md)             | feature | Current | 2026-11-13    | 2026-12-13  | 应用配置与凭据、准入、单点登录、资料披露与网关发布。 |
 | [应用委托](features/client-delegation.md)                   | feature | Current | 2026-10-25    | 2026-11-25  | 委托范围、期间冲突、生命周期与直接代办人解析。       |
 
 </details>
@@ -209,9 +210,9 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 
 #### 管理员操作
 
-| Document                        | Type  | Status  | Last verified | Next review | Notes                                  |
-| ------------------------------- | ----- | ------- | ------------- | ----------- | -------------------------------------- |
-| [管理后台操作](guides/admin.md) | guide | Current | 2026-11-12    | 2026-12-12  | 管理账号、应用、委托、会话及查询审计。 |
+| Document                        | Type  | Status  | Last verified | Next review | Notes                                        |
+| ------------------------------- | ----- | ------- | ------------- | ----------- | -------------------------------------------- |
+| [管理后台操作](guides/admin.md) | guide | Current | 2026-11-13    | 2026-12-13  | 管理账号、应用、准入、委托、会话及查询审计。 |
 
 #### 第三方接入
 
