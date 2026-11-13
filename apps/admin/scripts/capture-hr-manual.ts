@@ -363,7 +363,7 @@ async function captureEmploymentScreens(page: Page) {
   await view.click();
   const drawer = page.getByRole("dialog").filter({ hasText: manualExample.employee.name });
   const transferAction = drawer.getByRole("button", { name: /转\s*岗/ });
-  const note = drawer.getByRole("button", { name: "编辑备注" });
+  const edit = drawer.getByRole("button", { name: /^编\s*辑$/ });
   const setPrimary = drawer.getByRole("button", { name: "设主岗", exact: true });
   const pause = drawer.getByRole("button", { name: /暂\s*停/, exact: false });
   const resume = drawer.getByRole("button", { name: /恢\s*复/ });
@@ -375,20 +375,20 @@ async function captureEmploymentScreens(page: Page) {
     drawer,
     [
       { target: transferAction, label: "从原任职发起转岗" },
-      { target: note, label: "在基本信息中编辑备注" },
+      { target: edit, label: "编辑任职有效期和备注" },
       { target: pause, label: "暂停正常任职" },
       { target: end, label: "结束当前任职" },
       { target: setPrimary, label: "将该任职设为主岗" },
     ],
     540,
   );
-  await note.click();
+  await edit.click();
   const basic = drawer.getByRole("region", { name: "基本信息" });
   const noteField = basic.getByRole("textbox", { name: "备注" });
   await noteField.fill("负责示例公司月度报表复核");
   await capture(page, "employment-note.png", basic, [
     { target: noteField, label: "填写任职备注" },
-    { target: basic.getByRole("button", { name: /保\s*存/ }), label: "保存备注" },
+    { target: basic.getByRole("button", { name: /保\s*存/ }), label: "保存任职修改" },
   ]);
   await cancel(basic).click();
 

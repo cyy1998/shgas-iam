@@ -173,18 +173,11 @@ export const hrManualSections: ManualSection[] = [
         id: "primary-employment",
       },
       {
-        title: "修改任职备注",
+        title: "编辑任职",
         prerequisites: ["目标任职尚未结束，且在你的管理范围内。"],
         steps: [
-          {
-            text: "在「雇佣关系」查到任职，点击「查看」，在「任职信息」中点击「编辑备注」。",
-            image: "employment-detail",
-            highlights: [2],
-          },
-          {
-            text: "修改备注后点击「保存」。",
-            image: "employment-note",
-          },
+          "在「雇佣关系」查到任职，点击「查看」，在「基本信息」中点击「编辑」。",
+          "修改有效期或备注后点击「保存」。修改有效期后，核对任职状态。",
         ],
       },
       {

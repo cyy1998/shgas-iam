@@ -175,7 +175,7 @@ describe("EmploymentDetailDrawer responsibility wayfinding", () => {
     });
     const { user } = render(<EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} />);
 
-    const edit = await screen.findByRole("button", { name: "编辑备注" });
+    const edit = await screen.findByRole("button", { name: /^编\s*辑$/ });
     expect(edit).toBeEnabled();
     for (const action of [/暂\s*停/, /结\s*束/]) {
       expect(screen.getByRole("button", { name: action })).toBeEnabled();
@@ -304,9 +304,10 @@ describe("Employment mutation outcomes", () => {
       mutation.mockResolvedValue({ changed: false, result: null });
       const info = vi.spyOn(message, "info");
       const { user } = render(<EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} />);
-      await screen.findByRole("button", { name: "编辑备注" });
+      await screen.findByRole("button", { name: /^编\s*辑$/ });
       if (command === "update") {
-        await user.click(screen.getByRole("button", { name: "编辑备注" }));
+        await user.click(screen.getByRole("button", { name: /^编\s*辑$/ }));
+        await user.type(screen.getByRole("textbox", { name: "备注" }), "更新备注");
         await user.click(screen.getByRole("button", { name: /保\s*存/ }));
       } else if (command === "resume") {
         await user.click(screen.getByRole("button", { name: /恢\s*复/ }));
@@ -340,9 +341,10 @@ describe("Employment mutation outcomes", () => {
       const mutation = services[`${command}Employment`];
       mutation.mockRejectedValue(new AdminMutationCommittedError(null));
       const { user } = render(<EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} />);
-      await screen.findByRole("button", { name: "编辑备注" });
+      await screen.findByRole("button", { name: /^编\s*辑$/ });
       if (command === "update") {
-        await user.click(screen.getByRole("button", { name: "编辑备注" }));
+        await user.click(screen.getByRole("button", { name: /^编\s*辑$/ }));
+        await user.type(screen.getByRole("textbox", { name: "备注" }), "更新备注");
         await user.click(screen.getByRole("button", { name: /保\s*存/ }));
       } else if (command === "resume") {
         await user.click(screen.getByRole("button", { name: /恢\s*复/ }));
@@ -365,12 +367,12 @@ describe("Employment mutation outcomes", () => {
   );
 });
 
-describe("Employment inline description editing", () => {
+describe("Employment inline editing", () => {
   it("keeps a draft across tabs and discards it when cancelled", async () => {
     services.getEmployment.mockResolvedValue({ ...employment, description: "原备注" });
     const onChanged = vi.fn();
     const { user } = render(<EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} onChanged={onChanged} />);
-    await user.click(await screen.findByRole("button", { name: "编辑备注" }));
+    await user.click(await screen.findByRole("button", { name: /^编\s*辑$/ }));
     const basic = within(screen.getByRole("region", { name: "基本信息" }));
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
     await user.clear(basic.getByRole("textbox", { name: "备注" }));
@@ -379,7 +381,7 @@ describe("Employment inline description editing", () => {
     await user.click(screen.getByRole("tab", { name: "任职信息" }));
     expect(basic.getByRole("textbox", { name: "备注" })).toHaveValue("未保存的备注");
     await user.click(basic.getByRole("button", { name: /取\s*消/ }));
-    await user.click(screen.getByRole("button", { name: "编辑备注" }));
+    await user.click(screen.getByRole("button", { name: /^编\s*辑$/ }));
     expect(basic.getByRole("textbox", { name: "备注" })).toHaveValue("原备注");
     expect(services.updateEmployment).not.toHaveBeenCalled();
     expect(onChanged).not.toHaveBeenCalled();
@@ -390,7 +392,7 @@ describe("Employment inline description editing", () => {
     services.updateEmployment.mockRejectedValue(new Error("备注修改被拒绝"));
     const onChanged = vi.fn();
     const { user } = render(<EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} onChanged={onChanged} />);
-    await user.click(await screen.findByRole("button", { name: "编辑备注" }));
+    await user.click(await screen.findByRole("button", { name: /^编\s*辑$/ }));
     await user.type(screen.getByRole("textbox", { name: "备注" }), "保留草稿");
     await user.click(screen.getByRole("button", { name: /保\s*存/ }));
     expect(await screen.findByText("备注修改被拒绝")).toBeInTheDocument();
@@ -408,14 +410,14 @@ describe("Employment inline description editing", () => {
     services.updateEmployment.mockResolvedValue({ changed: true, result: null });
     const onChanged = vi.fn();
     const { user } = render(<EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} onChanged={onChanged} />);
-    await user.click(await screen.findByRole("button", { name: "编辑备注" }));
+    await user.click(await screen.findByRole("button", { name: /^编\s*辑$/ }));
     await user.clear(screen.getByRole("textbox", { name: "备注" }));
     await user.click(screen.getByRole("button", { name: /保\s*存/ }));
     await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
     expect(services.updateEmployment).toHaveBeenCalledExactlyOnceWith(42, { description: null });
     expect(screen.queryByRole("textbox", { name: "备注" })).not.toBeInTheDocument();
     expect(screen.queryByText("原备注")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "编辑备注" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /^编\s*辑$/ })).toBeEnabled();
   });
 
   it.each([false, true])(
@@ -428,10 +430,10 @@ describe("Employment inline description editing", () => {
       const { user } = render(
         <EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} onChanged={onChanged} />,
       );
-      await user.click(await screen.findByRole("button", { name: "编辑备注" }));
+      await user.click(await screen.findByRole("button", { name: /^编\s*辑$/ }));
       await user.type(screen.getByRole("textbox", { name: "备注" }), "已保存的备注");
       await user.click(screen.getByRole("button", { name: /保\s*存/ }));
-      expect(await screen.findByText(/备注已保存，但详情刷新失败/)).toBeInTheDocument();
+      expect(await screen.findByText(/任职已保存，但详情刷新失败/)).toBeInTheDocument();
       expect(screen.queryByRole("textbox", { name: "备注" })).not.toBeInTheDocument();
       if (committed) expect(within(screen.getByRole("dialog")).getByRole("alert")).toHaveTextContent("操作已生效");
       expect(services.updateEmployment).toHaveBeenCalledTimes(1);
@@ -448,10 +450,10 @@ describe("Employment inline description editing", () => {
     });
     const props = { open: true, onClose: vi.fn() };
     const view = render(<EmploymentDetailDrawer {...props} employmentId={42} />);
-    await view.user.click(await screen.findByRole("button", { name: "编辑备注" }));
+    await view.user.click(await screen.findByRole("button", { name: /^编\s*辑$/ }));
     await view.user.type(screen.getByRole("textbox", { name: "备注" }), "未保存内容");
     view.rerender(<EmploymentDetailDrawer {...props} employmentId={43} />);
-    await view.user.click(await screen.findByRole("button", { name: "编辑备注" }));
+    await view.user.click(await screen.findByRole("button", { name: /^编\s*辑$/ }));
     expect(screen.getByRole("textbox", { name: "备注" })).toHaveValue("第二段任职备注");
     expect(services.updateEmployment).not.toHaveBeenCalled();
   });
@@ -464,7 +466,7 @@ describe("Employment inline description editing", () => {
       allowedActions: createHrEmploymentAllowedActions(EmploymentStatus.Disable, false),
     });
     const { user } = render(<EmploymentDetailDrawer open employmentId={42} onClose={vi.fn()} />);
-    const edit = await screen.findByRole("button", { name: "编辑备注" });
+    const edit = await screen.findByRole("button", { name: /^编\s*辑$/ });
     expect(edit).toBeDisabled();
     await user.click(edit);
     expect(screen.queryByRole("textbox", { name: "备注" })).not.toBeInTheDocument();

@@ -28,8 +28,13 @@ export async function exerciseDatedEmployment(input: JourneyInput) {
   const original = await readInternalDetail(input);
   expect(original.username).toBe(adminUsername);
   const markerName = "E2E Employment Publication";
-  const futureStart = "2099-01-01";
-  const futureEnd = "2099-02-01";
+  const nextMonth = await adminPage.evaluate(() => {
+    const now = new Date();
+    const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const futureStart = `${nextMonth}-10`;
+  const futureEnd = `${nextMonth}-20`;
   const id = await createEmployment(input, futureStart, futureEnd);
   await expectEmployment(adminPage, id, {
     status: EmploymentStatus.Pending,
@@ -110,8 +115,9 @@ async function createEmployment(input: JourneyInput, startTime: string, endTime:
     .locator(".ant-select-dropdown:visible")
     .getByTitle(new RegExp(`\\(${input.positionCode}\\)$`, "u"))
     .click();
-  await dialog.getByLabel("开始日", { exact: true }).fill(startTime);
-  await dialog.getByLabel("截止日", { exact: true }).fill(endTime);
+  await dialog.getByPlaceholder("开始日").click();
+  await chooseCalendarDay(page, startTime);
+  await chooseCalendarDay(page, endTime);
 
   const procedure = "admin.employment.create";
   const saved = page.waitForResponse((response) => isSuccessfulRpcResponse(response, procedure));
@@ -126,13 +132,23 @@ async function openEmployment(page: Page, id: number) {
 
 async function editPeriod(page: Page, id: number, startTime: string | null) {
   const drawer = await openEmployment(page, id);
-  await drawer.getByRole("button", { name: "编辑有效期" }).click();
-  const startDate = drawer.getByLabel("开始日", { exact: true });
-  await startDate.fill(startTime ?? "");
+  await drawer.getByRole("button", { name: /^编\s*辑$/u }).click();
+  await drawer.getByPlaceholder("开始日").click();
+  if (startTime) {
+    await chooseCalendarDay(page, startTime);
+    await drawer.getByRole("heading", { name: "基本信息" }).click();
+    await expect(drawer.getByPlaceholder("开始日")).toHaveValue(startTime);
+  } else {
+    await page.getByText("清空开始日", { exact: true }).click();
+  }
   const procedure = "admin.employment.update";
   const saved = page.waitForResponse((response) => isSuccessfulRpcResponse(response, procedure));
   await drawer.getByRole("button", { name: /保\s*存/u }).click();
   await expectRpcMutationResult(await saved, procedure, true, null);
+}
+
+async function chooseCalendarDay(page: Page, date: string) {
+  await page.locator(`.ant-picker-dropdown:visible .ant-picker-cell-in-view[title="${date}"]`).click();
 }
 
 async function endEmployment(page: Page, id: number) {

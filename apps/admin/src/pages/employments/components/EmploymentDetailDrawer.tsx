@@ -17,8 +17,7 @@ import {
 import { StopOutlined, SwapOutlined } from "@ant-design/icons";
 import { Alert, Descriptions, Drawer, Empty, message, Skeleton, Space, Tabs, Tag, Typography, theme } from "antd";
 import { useEffect, useState } from "react";
-import EmploymentDescriptionForm from "./EmploymentDescriptionForm";
-import EmploymentPeriodForm from "./EmploymentPeriodForm";
+import EmploymentEditForm from "./EmploymentEditForm";
 import TransferModal from "./TransferModal";
 
 type Props = {
@@ -66,20 +65,20 @@ function EmploymentDetailDrawerContent({ open, employmentId, onClose, onChanged 
   const [committedWarning, setCommittedWarning] = useState<string>();
   const [detail, setDetail] = useState<EmploymentDetailVo | null>(null);
   const [loading, setLoading] = useState(open && employmentId !== null);
-  const [editing, setEditing] = useState<"description" | "period" | null>(null);
+  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState("details");
   const [transferOpen, setTransferOpen] = useState(false);
+  const canEditPeriod = detail?.allowedActions.editPeriod.allowed ?? false;
+  const canEditDescription = detail?.allowedActions.editDescription.allowed ?? false;
 
   const loadDetail = async () => {
     if (employmentId === null) return;
     const nextDetail = await getEmployment(employmentId);
     setDetail(nextDetail);
-    setEditing((current) => {
-      if (current === "description" && !nextDetail.allowedActions.editDescription.allowed) return null;
-      if (current === "period" && !nextDetail.allowedActions.editPeriod.allowed) return null;
-      return current;
-    });
+    if (!nextDetail.allowedActions.editPeriod.allowed && !nextDetail.allowedActions.editDescription.allowed) {
+      setEditing(false);
+    }
   };
 
   useEffect(() => {
@@ -111,7 +110,7 @@ function EmploymentDetailDrawerContent({ open, employmentId, onClose, onChanged 
 
   const onCommitted = async (error: AdminMutationCommittedError) => {
     setCommittedWarning(error.message);
-    setEditing(null);
+    setEditing(false);
     setTransferOpen(false);
     try {
       await refresh();
@@ -122,14 +121,13 @@ function EmploymentDetailDrawerContent({ open, employmentId, onClose, onChanged 
 
   const saveEdit = async (data: EmploymentUpdateParams) => {
     if (!detail || !editing || saving) return;
-    const decision = editing === "period" ? detail.allowedActions.editPeriod : detail.allowedActions.editDescription;
-    if (!decision.allowed) return;
-    const label = editing === "period" ? "有效期" : "备注";
+    if ((data.startTime !== undefined || data.endTime !== undefined) && !canEditPeriod) return;
+    if (data.description !== undefined && !canEditDescription) return;
     setSaving(true);
     try {
       try {
         const outcome = await updateEmployment(detail.id, data);
-        if (outcome.changed) message.success(`${label}已更新`);
+        if (outcome.changed) message.success("任职已更新");
         else message.info("无需修改");
       } catch (error) {
         if (!(error instanceof AdminMutationCommittedError)) {
@@ -139,16 +137,16 @@ function EmploymentDetailDrawerContent({ open, employmentId, onClose, onChanged 
         setCommittedWarning(error.message);
         setTransferOpen(false);
       }
-      setEditing(null);
+      setEditing(false);
       try {
         await loadDetail();
       } catch (error) {
-        message.error(`${label}已保存，但详情刷新失败：${error instanceof Error ? error.message : "请稍后重试"}`);
+        message.error(`任职已保存，但详情刷新失败：${error instanceof Error ? error.message : "请稍后重试"}`);
       }
       try {
         await onChanged?.();
       } catch (error) {
-        message.error(`${label}已保存，但列表刷新失败：${error instanceof Error ? error.message : "请稍后重试"}`);
+        message.error(`任职已保存，但列表刷新失败：${error instanceof Error ? error.message : "请稍后重试"}`);
       }
     } finally {
       setSaving(false);
@@ -255,24 +253,16 @@ function EmploymentDetailDrawerContent({ open, employmentId, onClose, onChanged 
                           基本信息
                         </Typography.Title>
                         {!editing && !saving && (
-                          <Space size={4}>
-                            <AuthorizationActionButton
-                              decision={detail.allowedActions.editPeriod}
-                              onClick={() => setEditing("period")}
-                              type="link"
-                              size="small"
-                            >
-                              编辑有效期
-                            </AuthorizationActionButton>
-                            <AuthorizationActionButton
-                              decision={detail.allowedActions.editDescription}
-                              onClick={() => setEditing("description")}
-                              type="link"
-                              size="small"
-                            >
-                              编辑备注
-                            </AuthorizationActionButton>
-                          </Space>
+                          <AuthorizationActionButton
+                            decision={
+                              canEditPeriod ? detail.allowedActions.editPeriod : detail.allowedActions.editDescription
+                            }
+                            onClick={() => setEditing(true)}
+                            type="link"
+                            size="small"
+                          >
+                            编辑
+                          </AuthorizationActionButton>
                         )}
                       </div>
                       <Descriptions
@@ -289,13 +279,13 @@ function EmploymentDetailDrawerContent({ open, employmentId, onClose, onChanged 
                           { key: "organization", label: "组织路径", span: "filled", children: formatOrgPath(detail) },
                           { key: "position", label: "岗位", children: formatPosition(detail) },
                           { key: "primary", label: "主岗", children: detail.isPrimary ? "是" : "否" },
-                          ...(editing !== "period"
+                          ...(!editing || !canEditPeriod
                             ? [
                                 { key: "start", label: "开始日", children: detail.startTime ?? "—" },
                                 { key: "end", label: "截止日", children: detail.endTime ?? "—" },
                               ]
                             : []),
-                          ...(editing !== "description"
+                          ...(!editing || !canEditDescription
                             ? [
                                 {
                                   key: "description",
@@ -307,20 +297,14 @@ function EmploymentDetailDrawerContent({ open, employmentId, onClose, onChanged 
                             : []),
                         ]}
                       />
-                      {editing === "description" && detail.allowedActions.editDescription.allowed && (
-                        <EmploymentDescriptionForm
-                          description={detail.description}
-                          saving={saving}
-                          onSave={(description) => saveEdit({ description: description || null })}
-                          onCancel={() => setEditing(null)}
-                        />
-                      )}
-                      {editing === "period" && detail.allowedActions.editPeriod.allowed && (
-                        <EmploymentPeriodForm
-                          period={detail}
+                      {editing && (
+                        <EmploymentEditForm
+                          employment={detail}
+                          canEditPeriod={canEditPeriod}
+                          canEditDescription={canEditDescription}
                           saving={saving}
                           onSave={saveEdit}
-                          onCancel={() => setEditing(null)}
+                          onCancel={() => setEditing(false)}
                         />
                       )}
                       <div className={styles["role-row"]}>

@@ -4,11 +4,17 @@ import { getAdminAuthorizationReasonText } from "@admin/services/authorization";
 import { type EmploymentDetailVo, transferEmployment } from "@admin/services/employment";
 import { searchPositions } from "@admin/services/position";
 import type { ProFormInstance } from "@ant-design/pro-components";
-import { ModalForm, ProForm, ProFormRadio, ProFormSelect, ProFormTextArea } from "@ant-design/pro-components";
-import { PositionStatus } from "@iam/contracts";
+import {
+  ModalForm,
+  ProForm,
+  ProFormRadio,
+  ProFormSelect,
+  ProFormText,
+  ProFormTextArea,
+} from "@ant-design/pro-components";
+import { EmploymentDateSchema, PositionStatus } from "@iam/contracts";
 import { Alert, Descriptions, message } from "antd";
 import { useRef } from "react";
-import EmploymentDateFields from "./EmploymentDateFields";
 
 type EmploymentTransferSource = Pick<
   EmploymentDetailVo,
@@ -96,7 +102,7 @@ export default function TransferModal({ open, employment, onOpenChange, onSucces
         type="warning"
         showIcon
         style={{ marginBottom: 16 }}
-        message="转岗会结束原任职及其全部开放责任任命；新任职不会自动继承责任。"
+        message="原任职及其未结束的责任任命在转岗当天结束。新任职当天生效，如需继续承担责任，请重新任命。"
       />
       {employment && (
         <Descriptions
@@ -149,7 +155,19 @@ export default function TransferModal({ open, employment, onOpenChange, onSucces
           { label: "非主任职", value: false },
         ]}
       />
-      <EmploymentDateFields transfer />
+      <ProFormText
+        name="endTime"
+        label="新任职截止日"
+        extra="按北京时间，须晚于转岗当天。新任职有效至截止日前一天，留空表示长期有效。"
+        fieldProps={{ type: "date" }}
+        rules={[
+          {
+            validator: async (_, value?: string) => {
+              if (value && !EmploymentDateSchema.safeParse(value).success) throw new Error("请输入有效日期");
+            },
+          },
+        ]}
+      />
       <ProFormTextArea name="description" label="备注" />
     </ModalForm>
   );

@@ -8,7 +8,7 @@ import { ModalForm, ProForm, ProFormSelect, ProFormSwitch, ProFormTextArea } fro
 import { PositionStatus, UserStatus } from "@iam/contracts";
 import { Alert, message } from "antd";
 import { useRef } from "react";
-import EmploymentDateFields from "./EmploymentDateFields";
+import EmploymentPeriodField, { type EmploymentPeriodValue } from "./EmploymentPeriodField";
 
 type Props = {
   open: boolean;
@@ -38,7 +38,14 @@ export default function EmploymentFormModal({
   const handleError = (err: unknown) => message.error(err instanceof Error ? err.message : "创建失败");
 
   return (
-    <ModalForm
+    <ModalForm<{
+      username: string;
+      orgCode: string;
+      posCode: string;
+      isPrimary: boolean;
+      description?: string;
+      period?: EmploymentPeriodValue;
+    }>
       title={
         presetUsername ? `为 ${presetName ? `${presetName} (${presetUsername})` : presetUsername} 新增雇佣` : "新增雇佣"
       }
@@ -58,6 +65,7 @@ export default function EmploymentFormModal({
       submitter={{ submitButtonProps: { disabled: userDisabled } }}
       onFinish={async (values) => {
         if (userDisabled) return false;
+        const [startTime, endTime] = values.period ?? [null, null];
         try {
           const outcome = await createEmployment({
             username: values.username,
@@ -65,8 +73,8 @@ export default function EmploymentFormModal({
             posCode: values.posCode,
             isPrimary: values.isPrimary,
             description: values.description || null,
-            startTime: values.startTime || null,
-            endTime: values.endTime || null,
+            startTime,
+            endTime,
           });
           if (outcome.changed) message.success("雇佣已创建");
           else message.info("无需修改");
@@ -141,7 +149,7 @@ export default function EmploymentFormModal({
         }}
       />
       <ProFormSwitch name="isPrimary" label="设为主岗" tooltip="若选 true，将自动把该用户其它主岗置为非主" />
-      <EmploymentDateFields />
+      <EmploymentPeriodField />
       <ProFormTextArea name="description" label="备注" />
     </ModalForm>
   );

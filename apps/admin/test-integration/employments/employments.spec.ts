@@ -3,7 +3,7 @@
 import type { AuditLogSearchParams } from "@admin/services/audit";
 import type { updateEmployment } from "@admin/services/employment";
 import { ApiErrorCode, EmploymentStatus } from "@iam/contracts";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import {
   adminCapabilitySummary,
   adminEmploymentSearchResult,
@@ -14,7 +14,11 @@ import {
 import { fulfillJson, fulfillTrpc, parseTrpcBatchInput } from "../fixtures";
 import { mockScopedManagementApi } from "../scoped-management.fixture";
 
+const calendarDay = (page: Page, date: string) =>
+  page.locator(`.ant-picker-dropdown:visible .ant-picker-cell-in-view[title="${date}"]`);
+
 test("Employment filters and creation selectors use the granted organization scope", async ({ page }) => {
+  await page.clock.setFixedTime(new Date(2090, 2, 1, 12));
   const { employmentSearchInputs } = await mockScopedManagementApi(page);
   const requests: unknown[] = [];
   const pending = {
@@ -95,13 +99,16 @@ test("Employment filters and creation selectors use the granted organization sco
   await scopedOrganization.click();
   await createDialog.getByRole("combobox", { name: /岗位/ }).click();
   await page.getByText("财务经理 (FIN-001)").last().click();
-  await createDialog.getByLabel("开始日").fill(pending.startTime);
-  const endDate = createDialog.getByLabel("截止日");
-  await endDate.fill(pending.startTime);
+  const startDate = createDialog.getByPlaceholder("开始日");
+  await startDate.click();
+  await calendarDay(page, pending.startTime).click();
+  await calendarDay(page, pending.startTime).click();
   await createDialog.getByRole("button", { name: /确\s*定/ }).click();
   await expect(createDialog.getByText("开始日必须早于截止日")).toBeVisible();
   expect(requests).toEqual([]);
-  await endDate.fill(pending.endTime);
+  await startDate.click();
+  await calendarDay(page, pending.startTime).click();
+  await calendarDay(page, pending.endTime).click();
   await createDialog.getByRole("button", { name: /确\s*定/ }).click();
   await expect
     .poll(() => requests)
@@ -151,7 +158,7 @@ test("Employment transfers between granted roots using the global Position catal
   await expect(page.getByText("财务经理 (FIN-001)").last()).toBeVisible();
   await page.getByText("财务经理 (FIN-001)").last().click();
   await transferDialog.getByRole("radio", { name: "主任职", exact: true }).check();
-  await transferDialog.getByLabel("截止日").fill("2090-04-01");
+  await transferDialog.getByLabel("新任职截止日").fill("2090-04-01");
   await transferDialog.getByRole("button", { name: /确\s*定/ }).click();
 
   await expect.poll(() => employmentTransfers.length).toBe(1);
@@ -203,7 +210,7 @@ test("Employment description edits stay in the detail and survive a scoped log-t
   await page.getByRole("row").filter({ hasText: "张三" }).getByText("查看").click();
   const drawer = page.getByRole("dialog");
   const basic = drawer.getByRole("region", { name: "基本信息" });
-  await basic.getByRole("button", { name: "编辑备注" }).click();
+  await basic.getByRole("button", { name: /^(编\s*辑)$/ }).click();
   await expect(page.getByRole("dialog")).toHaveCount(1);
   const note = basic.getByRole("textbox", { name: "备注", exact: true });
   await note.fill("待保存备注");
@@ -221,7 +228,7 @@ test("Employment description edits stay in the detail and survive a scoped log-t
   await drawer.getByRole("tab", { name: "任职信息" }).click();
   await expect(note).toHaveValue("待保存备注");
   await basic.getByRole("button", { name: /取\s*消/ }).click();
-  await basic.getByRole("button", { name: "编辑备注" }).click();
+  await basic.getByRole("button", { name: /^(编\s*辑)$/ }).click();
   await expect(note).toHaveValue("原任职备注");
   expect(updates).toEqual([]);
   await note.fill("  更新任职备注  ");
@@ -229,7 +236,7 @@ test("Employment description edits stay in the detail and survive a scoped log-t
   await expect(note).toHaveCount(0);
   await expect(basic.getByText("更新任职备注", { exact: true })).toBeVisible();
   expect(updates).toEqual([{ id: 42, data: { description: "  更新任职备注  " } }]);
-  await basic.getByRole("button", { name: "编辑备注" }).click();
+  await basic.getByRole("button", { name: /^(编\s*辑)$/ }).click();
   await expect(note).toHaveValue("  更新任职备注  ");
 });
 
@@ -239,11 +246,21 @@ for (const committedFailure of [false, true]) {
   }) => {
     const { employmentSearchInputs } = await mockScopedManagementApi(page);
     const updates: Array<{ id: number; data: Record<string, unknown> }> = [];
-    const initialPeriod = { startTime: "2026-01-05", endTime: committedFailure ? "2026-09-01" : null };
-    const committedPeriod = { startTime: null, endTime: "2026-09-07" };
+    const initialPeriod = { startTime: "2026-01-05", endTime: committedFailure ? "2026-02-01" : null };
+    const committedPeriod = { startTime: committedFailure ? null : initialPeriod.startTime, endTime: "2026-02-07" };
+    const description = "有效期变更说明";
+    const searchResult = () => (updates.length ? { result: [], total: 0 } : adminEmploymentSearchResult);
     await page.route("**/rpc/admin.employment.search**", (route) => {
       employmentSearchInputs.push(parseTrpcBatchInput(route));
-      return fulfillTrpc(route, updates.length ? { result: [], total: 0 } : adminEmploymentSearchResult);
+      return fulfillTrpc(route, searchResult());
+    });
+    await page.route("**/rpc/admin.organizationResponsibility.searchAssignments,admin.employment.search**", (route) => {
+      const inputs = new URL(route.request().url()).searchParams.get("input");
+      employmentSearchInputs.push(JSON.parse(inputs ?? "{}")["1"]);
+      return fulfillJson(route, [
+        { result: { data: { items: [], total: 0, nextCursor: null } } },
+        { result: { data: searchResult() } },
+      ]);
     });
     await page.route("**/rpc/admin.employment.detail**", (route) =>
       fulfillTrpc(route, {
@@ -252,6 +269,7 @@ for (const committedFailure of [false, true]) {
         ...(updates.length === 0
           ? {}
           : {
+              description: committedFailure ? hrAdminEmploymentDetail.description : description,
               status: EmploymentStatus.Disable,
               isPrimary: false,
               allowedActions: createHrEmploymentAllowedActions(EmploymentStatus.Disable, false),
@@ -281,30 +299,35 @@ for (const committedFailure of [false, true]) {
     await page.getByRole("row").filter({ hasText: "张三" }).getByText("查看").click();
     const drawer = page.getByRole("dialog");
     const basic = drawer.getByRole("region", { name: "基本信息" });
-    const edit = basic.getByRole("button", { name: "编辑有效期" });
+    const edit = basic.getByRole("button", { name: /^(编\s*辑)$/ });
     await edit.click();
     await basic.getByRole("button", { name: /保\s*存/ }).click();
     await expect(edit).toBeVisible();
     expect(updates).toEqual([]);
     await edit.click();
 
-    const start = basic.getByLabel("开始日", { exact: true });
-    const end = basic.getByLabel("截止日", { exact: true });
+    const start = basic.getByPlaceholder("开始日");
+    const end = basic.getByPlaceholder("截止日");
     const save = basic.getByRole("button", { name: /保\s*存/ });
     await expect(start).toHaveValue(initialPeriod.startTime);
     await expect(end).toHaveValue(initialPeriod.endTime ?? "");
-    await end.fill(initialPeriod.startTime);
-    await save.click();
-    await expect(basic.getByText("开始日必须早于截止日")).toBeVisible();
-    expect(updates).toEqual([]);
-
     const readsBeforeSave = employmentSearchInputs.length;
-    await start.fill("");
-    await end.fill("2026-09-01");
+    if (!initialPeriod.endTime) {
+      await end.click();
+      await calendarDay(page, "2026-02-01").click();
+      await basic.getByRole("heading", { name: "基本信息" }).click();
+      await expect(end).toHaveValue("2026-02-01");
+      await basic.getByRole("textbox", { name: "备注", exact: true }).fill(description);
+    } else {
+      await start.click();
+      await page.getByText("清空开始日", { exact: true }).click();
+      await expect(start).toHaveValue("");
+      await expect(end).toHaveValue("2026-02-01");
+    }
     await save.click();
     await expect(edit).toBeDisabled();
     await expect(basic.getByText(committedPeriod.endTime, { exact: true })).toBeVisible();
-    await expect(basic.getByText("2026-09-01", { exact: true })).toHaveCount(0);
+    await expect(basic.getByText("2026-02-01", { exact: true })).toHaveCount(0);
     await expect(drawer.getByText("结束", { exact: true }).first()).toBeVisible();
     await expect.poll(() => employmentSearchInputs.length).toBeGreaterThan(readsBeforeSave);
     await expect(
@@ -315,8 +338,9 @@ for (const committedFailure of [false, true]) {
         .filter({ hasText: "张三" }),
     ).toHaveCount(0);
     if (committedFailure) await expect(drawer.getByRole("alert")).toContainText("后续处理失败");
+    else await expect(basic.getByText(description, { exact: true })).toBeVisible();
     expect(updates).toEqual([
-      { id: 42, data: { startTime: null, ...(committedFailure ? {} : { endTime: "2026-09-01" }) } },
+      { id: 42, data: committedFailure ? { startTime: null } : { endTime: "2026-02-01", description } },
     ]);
   });
 }
