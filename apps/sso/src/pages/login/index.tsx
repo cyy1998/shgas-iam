@@ -3,7 +3,9 @@ import {
   LockOutlined,
   LoginOutlined,
   MobileOutlined,
+  QrcodeOutlined,
   SafetyCertificateOutlined,
+  UserOutlined,
 } from "@ant-design/icons";
 import { ApiErrorCode } from "@iam/contracts";
 import logo from "@sso/assets/logo.png";
@@ -27,7 +29,7 @@ import { useLoginPageGuard } from "./_hooks/useLoginPageGuard";
 import { useLoginRedirect } from "./_hooks/useLoginRedirect";
 import "./index.less";
 
-type LoginMode = "PWD" | "SMS" | "BMN" | "WECHAT";
+type LoginMode = "PWD" | "SMS" | "BMN";
 
 export default function LoginPage() {
   const { verify: withHumanVerification, captcha, cancel: cancelVerification } = useHumanVerification();
@@ -36,6 +38,7 @@ export default function LoginPage() {
     const loginType = new URLSearchParams(window.location.search).get("loginType");
     return loginType === "SMS" || loginType === "PWD" ? loginType : "PWD";
   });
+  const [showWechatQr, setShowWechatQr] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const submission = useRef<"idle" | "submitting" | "continuing">("idle");
   const beginSubmission = useCallback(() => {
@@ -76,6 +79,8 @@ export default function LoginPage() {
     state,
     ssoReturn,
   });
+  const canSwitchLogin = loginGuard.wechatQr && mode !== "BMN";
+  const wechatQrActive = canSwitchLogin && showWechatQr;
 
   const continueAfterLogin = useCallback(() => {
     submission.current = "continuing";
@@ -261,12 +266,30 @@ export default function LoginPage() {
         </section>
 
         <div className="login-card">
-          <div className="client-badge">
-            <SafetyCertificateOutlined />
-            <span>{clientLabel}</span>
+          <div className="login-card-top">
+            <div className="client-badge" title={clientLabel}>
+              <SafetyCertificateOutlined />
+              <span className="client-name">{clientLabel}</span>
+            </div>
+            {canSwitchLogin && (
+              <Button
+                className="login-mode-switch"
+                type="text"
+                icon={wechatQrActive ? <UserOutlined aria-hidden /> : <QrcodeOutlined aria-hidden />}
+                iconPlacement="end"
+                disabled={submitting}
+                onClick={() => {
+                  if (submission.current !== "idle") return;
+                  cancelVerification();
+                  setShowWechatQr(!wechatQrActive);
+                }}
+              >
+                {wechatQrActive ? "账号登录" : "企业微信扫码登录"}
+              </Button>
+            )}
           </div>
 
-          <div className="login-header">
+          <div className={wechatQrActive ? "login-header login-header-centered" : "login-header"}>
             <img src={logo} alt="上海燃气" />
             <div>
               <div className="title-zh">欢迎登录</div>
@@ -278,19 +301,18 @@ export default function LoginPage() {
             <div className="bmn-tip">您的账号尚未绑定手机号，为保障账户安全并及时接收重要通知，建议先完成绑定。</div>
           )}
 
-          {mode !== "BMN" && (
+          {mode !== "BMN" && !wechatQrActive && (
             <Tabs
-              activeKey={mode === "WECHAT" && !loginGuard.wechatQr ? "PWD" : mode}
+              activeKey={mode}
               onChange={(key) => {
-                if (submission.current !== "idle") return;
+                if (submission.current !== "idle" || (key !== "PWD" && key !== "SMS")) return;
                 cancelVerification();
-                setMode(key as LoginMode);
+                setMode(key);
               }}
               centered
               items={[
                 { key: "PWD", label: "密码登录", disabled: submitting },
                 { key: "SMS", label: "手机登录", disabled: submitting },
-                ...(loginGuard.wechatQr ? [{ key: "WECHAT", label: "企业微信扫码登录", disabled: submitting }] : []),
               ]}
             />
           )}
@@ -298,7 +320,7 @@ export default function LoginPage() {
           {loginGuard.wechatQr && (
             <WechatQrLogin
               key={JSON.stringify([client, redirectUrl, state, ssoReturn, oidcReturn])}
-              active={mode === "WECHAT"}
+              active={wechatQrActive}
               continuation={wechatContinuation}
               onContinue={continueAfterLogin}
               submitting={submitting}
@@ -307,7 +329,7 @@ export default function LoginPage() {
             />
           )}
 
-          {(mode === "PWD" || (mode === "WECHAT" && !loginGuard.wechatQr)) && (
+          {mode === "PWD" && !wechatQrActive && (
             <PasswordLoginForm
               form={pwdForm}
               submitting={submitting}
@@ -318,7 +340,7 @@ export default function LoginPage() {
             />
           )}
 
-          {(mode === "SMS" || mode === "BMN") && (
+          {(mode === "SMS" || mode === "BMN") && !wechatQrActive && (
             <SmsLoginForm
               key={mode}
               countdown={countdown}

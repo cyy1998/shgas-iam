@@ -39,7 +39,7 @@ async function confirmWecom(desktop: Page, phone: Page, authorization: URL, memb
   await standInForWecomAuthorization(phone, { mobileOrigin, member });
   await desktop.goto(authorization.href);
   await expect(desktop).toHaveURL((url) => url.origin === authorization.origin && url.pathname === "/portal/login");
-  await desktop.getByRole("tab", { name: "企业微信扫码登录" }).click();
+  await desktop.getByRole("button", { name: "企业微信扫码登录" }).click();
   const mobileLink = await desktop.getByRole("link", { name: "企业微信扫码链接" }).getAttribute("href");
   if (!mobileLink) throw new Error("WeCom QR did not expose its mobile destination");
   expect(new URL(mobileLink).origin).toBe(mobileOrigin);

@@ -12,7 +12,7 @@ import {
   type WechatQrContinuation,
 } from "@sso/services/wechat-qr";
 import { ServiceError } from "@sso/utils/request";
-import { Button, QRCode, Space } from "antd";
+import { Button, QRCode } from "antd";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type { PasswordLoginValues } from "./PasswordLoginForm";
@@ -256,17 +256,23 @@ export function WechatQrLogin({
   if (!active) return null;
 
   return (
-    <Space
-      direction="vertical"
-      align={status === "binding_required" && !needsNewQr ? undefined : "center"}
-      className="wechat-qr-login"
-    >
+    <div className="wechat-qr-login">
       {request && status === "waiting" && !needsNewQr && (
-        <a href={request.mobileUrl} aria-label="企业微信扫码链接" onClick={(event) => event.preventDefault()}>
-          <QRCode value={request.mobileUrl} type="svg" />
-        </a>
+        <>
+          <a
+            className="wechat-qr-code"
+            href={request.mobileUrl}
+            aria-label="企业微信扫码链接"
+            onClick={(event) => event.preventDefault()}
+          >
+            <QRCode value={request.mobileUrl} type="svg" size={216} marginSize={4} bordered={false} />
+          </a>
+          <p className="wechat-qr-instructions">
+            使用 <strong>企业微信</strong> 扫描二维码
+          </p>
+        </>
       )}
-      <p role="status">
+      <p className="wechat-qr-status" role="status">
         {loading
           ? "正在生成二维码"
           : submitting
@@ -278,7 +284,7 @@ export function WechatQrLogin({
                 : completionError || (status && statusText[status])}
       </p>
       {request && status === "binding_required" && !needsNewQr && (
-        <div key={request.requestId}>
+        <div className="wechat-qr-binding" key={request.requestId}>
           <p>验证您的 IAM 账号后，将绑定企业微信并继续登录。</p>
           <Button
             type="link"
@@ -317,9 +323,9 @@ export function WechatQrLogin({
           重试登录
         </Button>
       )}
-      <Button disabled={loading || submitting || sendingSms} onClick={() => void start()}>
+      <Button type="text" disabled={loading || submitting || sendingSms} onClick={() => void start()}>
         重新生成二维码
       </Button>
-    </Space>
+    </div>
   );
 }

@@ -135,13 +135,21 @@
     padding: 30px;
   }
 
+  .login-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 22px;
+  }
+
   .client-badge {
     display: inline-flex;
     align-items: center;
     gap: 8px;
     height: 30px;
+    min-width: 0;
     padding: 0 11px;
-    margin-bottom: 22px;
     font-size: 12px;
     font-weight: 700;
     color: #1554ad;
@@ -150,7 +158,34 @@
     border-radius: 999px;
 
     .anticon {
+      flex: 0 0 auto;
       color: #2874f0;
+    }
+  }
+
+  .client-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .login-mode-switch {
+    flex: 0 0 auto;
+    gap: 8px;
+    height: 44px;
+    padding: 0 10px;
+    font-size: 13px;
+    font-weight: 650;
+    color: #1554ad;
+    background: #edf5ff;
+
+    .anticon {
+      font-size: 18px;
+    }
+
+    &:hover:not(:disabled) {
+      color: #0e4cad;
+      background: #dcecff;
     }
   }
 
@@ -179,6 +214,52 @@
       font-weight: 600;
       color: #6c7a89;
     }
+  }
+
+  .login-header-centered {
+    justify-content: center;
+  }
+
+  .wechat-qr-login {
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    text-align: center;
+  }
+
+  .wechat-qr-code {
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    width: min(100%, 240px);
+    padding: 11px;
+    background: #fff;
+    border: 1px solid #e2eaf2;
+    border-radius: 12px;
+
+    svg {
+      display: block;
+    }
+  }
+
+  .wechat-qr-instructions {
+    margin: 6px 0 0;
+    font-size: 15px;
+
+    strong {
+      color: #1554ad;
+    }
+  }
+
+  .wechat-qr-status {
+    margin: 0;
+    font-size: 13px;
+    color: #596879;
+  }
+
+  .wechat-qr-binding {
+    width: 100%;
+    text-align: left;
   }
 
   .bmn-tip {
@@ -474,7 +555,7 @@
     overflow: auto;
 
     .login-shell {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
       gap: 30px;
       width: calc(100% - 32px);
       max-width: 520px;

@@ -43,7 +43,7 @@ test("an internal OIDC request completes with WeCom confirmation on a separate p
     await standInForWecomAuthorization(mobilePage, { mobileOrigin, member: wecomBoundMember });
     await page.goto(authorization.href);
     await expect(page).toHaveURL((url) => url.origin === desktopOrigin && url.pathname === "/portal/login");
-    await page.getByRole("tab", { name: "企业微信扫码登录" }).click();
+    await page.getByRole("button", { name: "企业微信扫码登录" }).click();
     const login = new URL(page.url());
     const link = await page.getByRole("link", { name: "企业微信扫码链接" }).getAttribute("href");
     if (!link) throw new Error("WeCom QR did not expose its mobile destination");

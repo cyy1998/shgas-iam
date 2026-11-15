@@ -63,7 +63,7 @@ describe("LoginPage", () => {
   });
 
   it.each(["密码登录", "手机登录"])(
-    "keeps the submitted %s form until its request finishes and then allows starting WeCom QR",
+    "guards the switch from %s during submission and returns to the selected method from WeCom QR",
     async (method) => {
       const oidcReturn = "a".repeat(43);
       window.history.replaceState({}, "", `/portal/login?oidcReturn=${oidcReturn}`);
@@ -86,7 +86,7 @@ describe("LoginPage", () => {
       );
       render(<LoginPage />, { withSso: true });
 
-      const qrTab = await screen.findByRole("tab", { name: "企业微信扫码登录" });
+      const qrSwitch = await screen.findByRole("button", { name: "企业微信扫码登录" });
       try {
         if (method === "密码登录") {
           fireEvent.change(screen.getByPlaceholderText("请输入您的工号"), { target: { value: "zhangsan" } });
@@ -101,7 +101,7 @@ describe("LoginPage", () => {
           expect(submitted).toHaveBeenCalledWith(method === "密码登录" ? "passwordLogin" : "mobileLogin"),
         );
 
-        fireEvent.click(qrTab);
+        fireEvent.click(qrSwitch);
         expect(screen.getByRole("tab", { name: method })).toHaveAttribute("aria-selected", "true");
         expect(qrStarted).not.toHaveBeenCalled();
       } finally {
@@ -109,8 +109,12 @@ describe("LoginPage", () => {
           finishRequest(new ServiceError("登录失败", ApiErrorCode.LoginFailed));
         });
       }
-      fireEvent.click(qrTab);
+      fireEvent.click(qrSwitch);
       await waitFor(() => expect(qrStarted).toHaveBeenCalledExactlyOnceWith(oidcReturn));
+      const accountSwitch = screen.getByRole("button", { name: "账号登录" });
+      await waitFor(() => expect(accountSwitch).toBeEnabled());
+      fireEvent.click(accountSwitch);
+      expect(screen.getByRole("tab", { name: method })).toHaveAttribute("aria-selected", "true");
     },
   );
 

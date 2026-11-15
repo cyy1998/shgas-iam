@@ -36,7 +36,7 @@ test("WeCom confirmation on the public phone updates the originating internal br
 
     await page.goto(authorization.href);
     await expect(page).toHaveURL((url) => url.origin === desktopOrigin && url.pathname === "/portal/login");
-    await page.getByRole("tab", { name: "企业微信扫码登录" }).click();
+    await page.getByRole("button", { name: "企业微信扫码登录" }).click();
     const mobileLink = await page.getByRole("link", { name: "企业微信扫码链接" }).getAttribute("href");
     if (!mobileLink) throw new Error("WeCom QR did not expose its mobile destination");
     const qrUrl = new URL(mobileLink);
@@ -130,7 +130,7 @@ test("WeCom confirmation continues the original Custom SSO request after switchi
     await standInForWecomAuthorization(mobilePage, { mobileOrigin, member: wecomUnlinkMember });
     await page.goto(authorization.href);
     await expect(page).toHaveURL((url) => url.origin === desktopOrigin && url.pathname === "/portal/login");
-    const qrTab = page.getByRole("tab", { name: "企业微信扫码登录" });
+    const qrSwitch = page.getByRole("button", { name: "企业微信扫码登录" });
     const desktopNetwork = await page.context().newCDPSession(page);
     await desktopNetwork.send("Network.enable");
     const streams = new Set<string>();
@@ -145,13 +145,13 @@ test("WeCom confirmation continues the original Custom SSO request after switchi
     page.on("request", (request) => {
       if (new URL(request.url()).pathname.endsWith("/complete")) completionRequests.push(request.url());
     });
-    await qrTab.click();
+    await qrSwitch.click();
     const mobileLink = await page.getByRole("link", { name: "企业微信扫码链接" }).getAttribute("href");
     if (!mobileLink) throw new Error("WeCom QR did not expose its mobile destination");
     const requestId = new URL(mobileLink).pathname.split("/").at(-1);
     const completePath = `/sso/wechat-qr/${requestId}/complete`;
 
-    await page.getByRole("tab", { name: "密码登录" }).click();
+    await page.getByRole("button", { name: "账号登录" }).click();
     await page.getByLabel("工号 / 账号").fill(delegatee);
     expect((await mobilePage.goto(mobileLink))?.status()).toBe(200);
     await mobilePage.getByRole("button", { name: "确认登录" }).click();
@@ -168,7 +168,7 @@ test("WeCom confirmation continues the original Custom SSO request after switchi
     expect(await unlink.json()).toMatchObject({ code: 200, data: { changed: true } });
     expect(completionRequests).toEqual([]);
     const completion = page.waitForResponse((candidate) => new URL(candidate.url()).pathname === completePath);
-    await qrTab.click();
+    await qrSwitch.click();
     const delivered = await completion;
     expect(delivered.ok()).toBe(true);
     await expect(page).toHaveURL((url) => `${url.origin}${url.pathname}` === destination);
