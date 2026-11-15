@@ -34,6 +34,7 @@ export function useLoginPageGuard(input: {
   const [guardState, setGuardState] = useState<{
     continuationKey: string;
     status: LoginPageGuardStatus;
+    wechatQr?: boolean;
   }>(() => ({
     continuationKey,
     status: continuationInitialStatus,
@@ -73,7 +74,11 @@ export function useLoginPageGuard(input: {
           setGuardState({ continuationKey, status: "continuing" });
           return;
         }
-        setGuardState({ continuationKey, status: outcome });
+        setGuardState({
+          continuationKey,
+          status: outcome === "wechat_qr" ? "login" : outcome,
+          wechatQr: outcome === "wechat_qr",
+        });
       } catch {
         if (requestGenerationRef.current === requestGeneration) {
           setGuardState({ continuationKey, status: "unavailable" });
@@ -106,5 +111,5 @@ export function useLoginPageGuard(input: {
     setGuardState({ continuationKey, status: "checking" });
     setAttempt((value) => value + 1);
   }, [continuationKey]);
-  return { retry, status };
+  return { retry, status, wechatQr: !continuationChanged && guardState.wechatQr === true };
 }

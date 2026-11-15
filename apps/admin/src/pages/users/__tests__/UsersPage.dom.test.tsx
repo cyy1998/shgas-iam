@@ -316,11 +316,10 @@ describe("User forms through the user service", () => {
     const { user } = renderPage();
     const form = await openEdit(user);
     await user.clear(form.getByRole("textbox", { name: "手机号" }));
-    await user.type(form.getByRole("textbox", { name: "微信 ID" }), "temporary");
-    await user.clear(form.getByRole("textbox", { name: "微信 ID" }));
+    expect(form.queryByRole("textbox", { name: /微信 ID/ })).not.toBeInTheDocument();
     await user.click(form.getByRole("button", { name: /保\s*存/ }));
     expect(await screen.findByText("更新成功")).toBeInTheDocument();
-    expect(requests).toEqual([{ "0": { username: adminUserDetail.username, data: { mobile: null, wxId: null } } }]);
+    expect(requests).toEqual([{ "0": { username: adminUserDetail.username, data: { mobile: null } } }]);
   });
 
   it.each([

@@ -14,6 +14,7 @@ import {
   OrganizationLevel,
   OrganizationType,
   PositionStatus,
+  UserStatus,
   UserType,
 } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
@@ -102,7 +103,7 @@ describe("Register Purveyor Contact PostgreSQL contract", () => {
       ),
       useCase.execute(
         {
-          mobile,
+          mobile: " 13800000000 ",
           name: "李四",
           orgCode: "SUP",
           username: "supplier-b",
@@ -163,7 +164,7 @@ describe("Register Purveyor Contact PostgreSQL contract", () => {
     const { useCase } = createUseCase();
     const app = createContactApp(useCase);
     const response = await requestContact(app, {
-      mobile: "13800000001",
+      mobile: "  12345678 \t",
       name: "  Contact Name  ",
       orgCode: "SUP",
       username: "  Mixed-Case  ",
@@ -173,7 +174,7 @@ describe("Register Purveyor Contact PostgreSQL contract", () => {
     const persisted = await harness!.db.select().from(users);
     expect(persisted).toMatchObject([
       {
-        mobile: "13800000001",
+        mobile: "12345678",
         name: "Contact Name",
         username: "Mixed-Case",
         userType: UserType.External,
@@ -288,6 +289,38 @@ describe("Register Purveyor Contact PostgreSQL contract", () => {
     });
   }
 
+  test("a disabled contact retains the number and is not assigned a new Employment", async () => {
+    await harness!.db.insert(users).values({ username: "owner", name: "Owner", mobile, status: UserStatus.Disable });
+    const { useCase, auditEvents } = createUseCase({ readExistingContact: true });
+    const response = await requestContact(createContactApp(useCase), {
+      mobile: " 13800000000 ",
+      name: "Contact",
+      orgCode: "SUP",
+      username: "contender",
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: ApiErrorCode.MobileAlreadyExists });
+    expect(await harness!.db.select().from(users)).toMatchObject([{ username: "owner", mobile }]);
+    expect(await harness!.db.select().from(employments)).toEqual([]);
+    expect(auditEvents).toEqual([]);
+  });
+
+  test("does not match contacts with missing phone numbers", async () => {
+    const { useCase } = createUseCase({ readExistingContact: true });
+    const app = createContactApp(useCase);
+    for (const [username, mobile] of [
+      ["first", " \t"],
+      ["second", "\u00a0"],
+    ] as const) {
+      expect((await requestContact(app, { mobile, name: "Contact", orgCode: "SUP", username })).status).toBe(200);
+    }
+    expect(await harness!.db.select().from(users).orderBy(users.id)).toMatchObject([
+      { username: "first", mobile: null },
+      { username: "second", mobile: null },
+    ]);
+  });
+
   test("reuses a mobile-matched User without rewriting its identity", async () => {
     const [existing] = await harness!.db
       .insert(users)
@@ -300,7 +333,7 @@ describe("Register Purveyor Contact PostgreSQL contract", () => {
     const { useCase } = createUseCase();
     const result = await useCase.execute(
       {
-        mobile: "13800000006",
+        mobile: " 13800000006 ",
         name: "Different Name",
         orgCode: "SUP",
         username: "different-user",

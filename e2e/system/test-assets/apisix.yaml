@@ -21,6 +21,26 @@ deployment:
 apisix:
   node_listen: 9080
   enable_admin: true
+  ssl:
+    enable: true
+    listen:
+      - port: 9443
+
+nginx_config:
+  # NGINX error log entries may include the full request line, including OAuth parameters.
+  error_log_level: crit
+  http_configuration_snippet: |
+    map $uri $iam_log_path {
+      default $uri;
+      ~^/sso/wechat-qr/mobile/confirm/[^/]+/?$ /sso/wechat-qr/mobile/confirm/:flowId;
+      ~^/sso/wechat-qr/mobile/(callback|decision)$ $uri;
+      ~^/sso/wechat-qr/mobile/[^/]+/?$ /sso/wechat-qr/mobile/:requestId;
+      ~^/(?<qr_protocol>sso|oidc)/wechat-qr/[^/]+/(?<qr_action>events|complete|bind/(?:password|sms(?:/send)?))/?$ /${qr_protocol}/wechat-qr/:requestId/${qr_action};
+      ~^/sso/wechat-qr/ /sso/wechat-qr/*;
+      ~^/oidc/wechat-qr/ /oidc/wechat-qr/*;
+    }
+  http:
+    access_log_format: '$remote_addr [$time_local] $http_host "$request_method $iam_log_path" $status $request_time "$apisix_request_id"'
 
 plugins:
   - request-id

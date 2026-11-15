@@ -81,9 +81,10 @@ test("formal migration removes only ORCAS configuration and preserves every othe
   const after = await clients();
   expect([...after]).toEqual(
     before.map(({ config, retained }) => {
-      if (config?.protocol !== "custom-sso") return { config, retained };
+      const expectedRetained = { ...retained, admission_enabled: false, admission_filter: null };
+      if (config?.protocol !== "custom-sso") return { config, retained: expectedRetained };
       const { orcas: _retired, ...remaining } = config;
-      return { config: remaining, retained };
+      return { config: remaining, retained: expectedRetained };
     }),
   );
   for (const row of after) expect(ClientSsoConfigSchema.nullable().safeParse(row.config).success).toBe(true);

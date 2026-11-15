@@ -54,9 +54,12 @@ function createOperations(signal?: AbortSignal) {
       join(workspaceRoot, "docker", "seed.Dockerfile"),
       join(workspaceRoot, "docker", "gateway-sync.Dockerfile"),
       join(workspaceRoot, "docker", "start-api.sh"),
+      join(workspaceRoot, "docker", "start-api.ts"),
       join(workspaceRoot, "docker", "rp-terminal.html"),
       join(workspaceRoot, "test-assets", "apisix.yaml"),
       join(workspaceRoot, "test-assets", "iam.yaml"),
+      join(workspaceRoot, "test-assets", "wecom-mobile-cert.pem"),
+      join(workspaceRoot, "test-assets", "wecom-mobile-key.pem"),
       join(repositoryRoot, "packages", "db", "drizzle.config.ts"),
       join(repositoryRoot, "packages", "db", "src", "migrations"),
       join(repositoryRoot, "pnpm-lock.yaml"),
@@ -158,11 +161,15 @@ async function runJourneyLifecycle(
           await operations.preflight(preflightSignal);
         },
         async createDescriptor() {
+          const gatewayPort = await allocateAvailablePort();
+          let wecomMobilePort = dualEntry ? await allocateAvailablePort() : undefined;
+          while (wecomMobilePort === gatewayPort) wecomMobilePort = await allocateAvailablePort();
           return createRunDescriptor({
             artifactRoot,
             dualEntry,
-            gatewayPort: await allocateAvailablePort(),
+            gatewayPort,
             runId: createRunId(),
+            wecomMobilePort,
           });
         },
         async persistDescriptor(descriptor) {

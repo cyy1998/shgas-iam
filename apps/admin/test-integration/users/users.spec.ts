@@ -202,7 +202,9 @@ test("User basic information is edited and saved in the existing detail", async 
   await mockScopedManagementApi(page);
   let name = hrAdminUserDetail.name;
   const updates: unknown[] = [];
-  await page.route("**/rpc/admin.user.detail**", (route) => fulfillTrpc(route, { ...hrAdminUserDetail, name }));
+  await page.route("**/rpc/admin.user.detail**", (route) =>
+    fulfillTrpc(route, { ...hrAdminUserDetail, name, wxId: "employee-member" }),
+  );
   await page.route("**/rpc/admin.user.update**", (route) => {
     const input = parseTrpcBatchInput<{ username: string; data: { name: string } }>(route);
     updates.push(input);
@@ -212,8 +214,11 @@ test("User basic information is edited and saved in the existing detail", async 
   await page.goto("/iam-admin/users");
   await page.locator("td").getByRole("button", { name: "查看", exact: true }).first().click();
   const drawer = page.getByRole("dialog");
+  await expect(drawer.getByText("employee-member")).toBeVisible();
+  await expect(drawer.getByRole("button", { name: "解除企业微信绑定" })).toHaveCount(0);
   await drawer.getByRole("button", { name: /编\s*辑/ }).click();
   const panel = drawer.getByRole("region", { name: "基本信息" });
+  await expect(panel.getByRole("textbox", { name: /微信 ID/ })).toHaveCount(0);
   const nameField = panel.getByRole("textbox", { name: "姓名" });
   await expect(drawer.getByRole("region", { name: "雇佣信息" })).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(1);
@@ -235,6 +240,37 @@ test("User basic information is edited and saved in the existing detail", async 
   await expect(drawer.getByRole("button", { name: /编\s*辑/ })).toBeEnabled();
   expect(updates).toEqual([{ username: hrAdminUserDetail.username, data: { name: "更新后的姓名" } }]);
   await expect(page).toHaveURL(/\/iam-admin\/users$/);
+});
+
+test("full Admin confirms WeCom unlink separately from profile editing", async ({ page }) => {
+  await mockAdminApi(page);
+  await page.route("**/rpc/admin.organizationResponsibility.searchAssignments**", (route) =>
+    fulfillTrpc(route, { items: [], total: 0, nextCursor: null }),
+  );
+  let wxId: string | null = "member-before-unlink";
+  const unlinks: unknown[] = [];
+  await page.route("**/rpc/admin.user.detail**", (route) => fulfillTrpc(route, { ...adminUserDetail, wxId }));
+  await page.route("**/rpc/admin.user.unlinkWecom**", (route) => {
+    unlinks.push(parseTrpcBatchInput(route));
+    wxId = null;
+    return fulfillTrpc(route, { changed: true, result: null });
+  });
+
+  await page.goto("/iam-admin/users");
+  await page.locator("td").getByRole("button", { name: "查看", exact: true }).first().click();
+  const drawer = page.getByRole("dialog").filter({ has: page.getByRole("tab", { name: "用户信息" }) });
+  const unlink = drawer.getByRole("button", { name: "解除企业微信绑定" });
+  await expect(drawer.getByText("member-before-unlink")).toBeVisible();
+  await unlink.click();
+  const confirm = page.getByRole("dialog").filter({ hasText: /解除 .+ 的企业微信绑定/ });
+  await confirm.getByRole("button", { name: /取\s*消/ }).click();
+  expect(unlinks).toEqual([]);
+
+  await unlink.click();
+  await confirm.getByRole("button", { name: "确认解绑" }).click();
+  await expect(drawer.getByText("member-before-unlink")).toHaveCount(0);
+  await expect(unlink).toHaveCount(0);
+  expect(unlinks).toEqual([{ username: adminUserDetail.username }]);
 });
 
 test("User operation logs load when selected and preserve the profile draft on return", async ({ page }) => {

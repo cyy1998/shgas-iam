@@ -57,6 +57,8 @@ const RawEnvSchema = z
     IAM_API_PORT: z.coerce.number().int().min(1).max(65535).default(30000),
     IAM_API_WECHAT_CORP_ID: z.string().min(1),
     IAM_API_WECHAT_CORP_SECRET: z.string().min(1),
+    IAM_API_WECHAT_QR_AGENT_ID: optionalNonEmptyString(),
+    IAM_API_WECHAT_QR_CALLBACK_URL: optionalNonEmptyString(),
     IAM_API_MAGIC_CODE: z.string().min(1),
     NODE_ENV: z.string().default("development"),
     IAM_API_REDIS_URL: redisUrlString(),
@@ -131,6 +133,35 @@ const RawEnvSchema = z
       ),
   })
   .superRefine((raw, ctx) => {
+    const agentId = raw.IAM_API_WECHAT_QR_AGENT_ID;
+    const callback = raw.IAM_API_WECHAT_QR_CALLBACK_URL;
+    if (agentId || callback) {
+      if (!agentId || !/^\d+$/u.test(agentId)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["IAM_API_WECHAT_QR_AGENT_ID"],
+          message: "WeChat QR requires a numeric AgentId",
+        });
+      }
+      const url = callback && URL.canParse(callback) ? new URL(callback) : undefined;
+      if (
+        url?.protocol !== "https:" ||
+        url.hostname !== new URL(raw.IAM_API_SSO_EXTERNAL_ORIGIN).hostname ||
+        url.hostname === new URL(raw.IAM_API_SSO_INTERNAL_ORIGIN).hostname ||
+        url.pathname !== "/sso/wechat-qr/mobile/callback" ||
+        url.search ||
+        url.hash ||
+        url.username ||
+        url.password ||
+        url.href !== callback
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["IAM_API_WECHAT_QR_CALLBACK_URL"],
+          message: "WeChat QR requires the canonical HTTPS public /sso/wechat-qr/mobile/callback URL",
+        });
+      }
+    }
     if (raw.IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON[raw.IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID] === undefined) {
       ctx.addIssue({
         code: "custom",
@@ -200,6 +231,7 @@ export interface Env extends Record<string, unknown> {
     wechat: {
       corpId: string;
       corpSecret: string;
+      qr?: { agentId: string; callbackUrl: string };
     };
   };
   sso: {
@@ -272,6 +304,10 @@ function toApiEnv(raw: RawEnv): Env {
       wechat: {
         corpId: raw.IAM_API_WECHAT_CORP_ID,
         corpSecret: raw.IAM_API_WECHAT_CORP_SECRET,
+        qr:
+          raw.IAM_API_WECHAT_QR_AGENT_ID && raw.IAM_API_WECHAT_QR_CALLBACK_URL
+            ? { agentId: raw.IAM_API_WECHAT_QR_AGENT_ID, callbackUrl: raw.IAM_API_WECHAT_QR_CALLBACK_URL }
+            : undefined,
       },
     },
     sso: {

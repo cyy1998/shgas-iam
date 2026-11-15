@@ -13,14 +13,13 @@ type Props = {
   onDirtyChange: (dirty: boolean) => void;
 };
 
-type ProfileValues = Pick<UserDetailVo, "name" | "mobile" | "wxId" | "userType">;
+type ProfileValues = Pick<UserDetailVo, "name" | "mobile" | "userType">;
 
 export default function UserProfileForm({ detail, saving, onCancel, onSave, onDirtyChange }: Props) {
   const [form] = Form.useForm<ProfileValues>();
   const initialValues = useRef<ProfileValues>({
     name: detail.name,
     mobile: detail.mobile ?? "",
-    wxId: detail.wxId ?? "",
     userType: detail.userType,
   });
 
@@ -47,7 +46,6 @@ export default function UserProfileForm({ detail, saving, onCancel, onSave, onDi
           const data: Parameters<typeof updateUser>[1] = {};
           if (form.isFieldTouched("name")) data.name = values.name.trim();
           if (form.isFieldTouched("mobile")) data.mobile = values.mobile || null;
-          if (form.isFieldTouched("wxId")) data.wxId = values.wxId || null;
           if (form.isFieldTouched("userType")) data.userType = values.userType;
           if (Object.keys(data).length === 0) {
             message.info("请先编辑需要保存的字段");

@@ -31,6 +31,7 @@ describe("seed receipt", () => {
           disabledUsername: "e2e-disabled-run-receipt-01",
           noScopeHrAdminSubjectIdentifier: "8b766c91-1daa-4c09-89e4-ea87ad123456",
           noScopeHrAdminUsername: "e2e-no-scope-hr-run-receipt-01",
+          smsBindingSubjectIdentifier: "9b766c91-1daa-4c09-89e4-ea87ad123456",
           organizationCode: "e2e-org-run-receipt-01",
           responsibilityHolderOrganizationCode: "e2e-holder-org-run-receipt-01",
           responsibilityTargetOrganizationCode: "e2e-resp-target-run-receipt-01",

@@ -16,17 +16,18 @@ import { sendMessage } from "@sso/services/open";
 import { mobileSet } from "@sso/services/public";
 import { ServiceError } from "@sso/utils/request";
 import { Button, Form, Modal, message, Tabs } from "antd";
-import { useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { LoginGuardNotice } from "./_components/LoginGuardNotice";
 import { PasswordLoginForm, type PasswordLoginValues } from "./_components/PasswordLoginForm";
 import { SmsLoginForm, type SmsLoginValues } from "./_components/SmsLoginForm";
 import { UnsafeEntryNotice } from "./_components/UnsafeEntryNotice";
+import { WechatQrLogin } from "./_components/WechatQrLogin";
 import { useLoginPageGuard } from "./_hooks/useLoginPageGuard";
 import { useLoginRedirect } from "./_hooks/useLoginRedirect";
 import "./index.less";
 
-type LoginMode = "PWD" | "SMS" | "BMN";
+type LoginMode = "PWD" | "SMS" | "BMN" | "WECHAT";
 
 export default function LoginPage() {
   const { verify: withHumanVerification, captcha, cancel: cancelVerification } = useHumanVerification();
@@ -36,6 +37,18 @@ export default function LoginPage() {
     return loginType === "SMS" || loginType === "PWD" ? loginType : "PWD";
   });
   const [submitting, setSubmitting] = useState(false);
+  const submission = useRef<"idle" | "submitting" | "continuing">("idle");
+  const beginSubmission = useCallback(() => {
+    if (submission.current !== "idle") return false;
+    submission.current = "submitting";
+    setSubmitting(true);
+    return true;
+  }, []);
+  const endSubmission = useCallback(() => {
+    if (submission.current === "continuing") return;
+    submission.current = "idle";
+    setSubmitting(false);
+  }, []);
   const [smsSending, setSmsSending] = useState(false);
   const [pwdForm] = Form.useForm<PasswordLoginValues>();
   const { countdown, isCounting, startCountdown, restoreCountdown } = useSmsCodeCountdown();
@@ -64,6 +77,16 @@ export default function LoginPage() {
     ssoReturn,
   });
 
+  const continueAfterLogin = useCallback(() => {
+    submission.current = "continuing";
+    redirectAfterLogin();
+  }, [redirectAfterLogin]);
+
+  const wechatContinuation = useMemo(
+    () => (oidcReturn ? { oidcReturn } : { client: client ?? "", redirectUrl, state, ssoReturn: ssoReturn ?? "" }),
+    [client, oidcReturn, redirectUrl, state, ssoReturn],
+  );
+
   const showLoginFailureModal = (msg: string) => {
     Modal.error({
       centered: true,
@@ -81,8 +104,7 @@ export default function LoginPage() {
   };
 
   const handlePwdLogin = async (values: PasswordLoginValues) => {
-    if (submitting) return;
-    setSubmitting(true);
+    if (!beginSubmission()) return;
     try {
       const body = {
         username: values.username.trim(),
@@ -95,7 +117,7 @@ export default function LoginPage() {
         setMode("BMN");
         return;
       }
-      redirectAfterLogin();
+      continueAfterLogin();
     } catch (e) {
       if (e instanceof HumanVerificationCancelled) return;
       if (!(e instanceof ServiceError)) throw e;
@@ -105,13 +127,12 @@ export default function LoginPage() {
         message.error(e.message);
       }
     } finally {
-      setSubmitting(false);
+      endSubmission();
     }
   };
 
   const handleSmsLogin = async (values: SmsLoginValues) => {
-    if (submitting) return;
-    setSubmitting(true);
+    if (!beginSubmission()) return;
     try {
       const body = {
         phoneNumber: values.phoneNumber.trim(),
@@ -120,7 +141,7 @@ export default function LoginPage() {
       await withHumanVerification("mobileLogin", (capToken, imageCaptchaProof) =>
         mobileLogin({ ...body, capToken }, { suppressErrorMessage: true, imageCaptchaProof }),
       );
-      redirectAfterLogin();
+      continueAfterLogin();
     } catch (e) {
       if (e instanceof HumanVerificationCancelled) return;
       if (!(e instanceof ServiceError)) throw e;
@@ -134,23 +155,22 @@ export default function LoginPage() {
         message.error(e.message);
       }
     } finally {
-      setSubmitting(false);
+      endSubmission();
     }
   };
 
   const handleBindMobile = async (values: SmsLoginValues) => {
-    if (submitting) return;
-    setSubmitting(true);
+    if (!beginSubmission()) return;
     try {
       await mobileSet({
         phoneNumber: values.phoneNumber.trim(),
         code: values.code.trim(),
       });
-      redirectAfterLogin();
+      continueAfterLogin();
     } catch (e) {
       if (!(e instanceof ServiceError)) throw e;
     } finally {
-      setSubmitting(false);
+      endSubmission();
     }
   };
 
@@ -260,20 +280,34 @@ export default function LoginPage() {
 
           {mode !== "BMN" && (
             <Tabs
-              activeKey={mode}
+              activeKey={mode === "WECHAT" && !loginGuard.wechatQr ? "PWD" : mode}
               onChange={(key) => {
+                if (submission.current !== "idle") return;
                 cancelVerification();
                 setMode(key as LoginMode);
               }}
               centered
               items={[
-                { key: "PWD", label: "密码登录" },
-                { key: "SMS", label: "手机登录" },
+                { key: "PWD", label: "密码登录", disabled: submitting },
+                { key: "SMS", label: "手机登录", disabled: submitting },
+                ...(loginGuard.wechatQr ? [{ key: "WECHAT", label: "企业微信扫码登录", disabled: submitting }] : []),
               ]}
             />
           )}
 
-          {mode === "PWD" && (
+          {loginGuard.wechatQr && (
+            <WechatQrLogin
+              key={JSON.stringify([client, redirectUrl, state, ssoReturn, oidcReturn])}
+              active={mode === "WECHAT"}
+              continuation={wechatContinuation}
+              onContinue={continueAfterLogin}
+              submitting={submitting}
+              beginSubmission={beginSubmission}
+              endSubmission={endSubmission}
+            />
+          )}
+
+          {(mode === "PWD" || (mode === "WECHAT" && !loginGuard.wechatQr)) && (
             <PasswordLoginForm
               form={pwdForm}
               submitting={submitting}
@@ -301,7 +335,7 @@ export default function LoginPage() {
           )}
 
           {mode === "BMN" && (
-            <Button className="skip-btn" type="link" onClick={redirectAfterLogin}>
+            <Button className="skip-btn" type="link" disabled={submitting} onClick={redirectAfterLogin}>
               跳过
             </Button>
           )}

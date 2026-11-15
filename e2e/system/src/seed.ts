@@ -7,6 +7,7 @@ import {
 } from "@iam/contracts";
 import { USER_DOCUMENT_SCHEMA_VERSION } from "@iam/documents/user/document";
 import { createE2EGatewayApiKey } from "./gateway-credential";
+import { smsBindingMobile, smsBindingUsername } from "./sms-provider";
 
 export interface E2EScenarioReferences {
   version: 1;
@@ -26,6 +27,7 @@ export interface E2EScenarioReferences {
   disabledUsername: string;
   noScopeHrAdminSubjectIdentifier: string;
   noScopeHrAdminUsername: string;
+  smsBindingSubjectIdentifier: string;
   organizationCode: string;
   responsibilityHolderOrganizationCode: string;
   responsibilityTargetOrganizationCode: string;
@@ -124,6 +126,7 @@ export interface E2EScenarioReadBack {
     subjectIdentifier: string;
     username: string;
   };
+  smsBindingUser: { username: string; mobile: string | null; wxId: string | null } | undefined;
   organization: { active: boolean; code: string };
   responsibilityHolderOrganization: { active: boolean; code: string };
   responsibilityTargetOrganization: { active: boolean; code: string };
@@ -247,6 +250,7 @@ export async function seedE2EScenario(input: SeedE2EScenarioInput): Promise<E2ES
     pausedSubjectIdentifier: input.random.uuid(),
     disabledSubjectIdentifier: input.random.uuid(),
     noScopeHrAdminSubjectIdentifier: input.random.uuid(),
+    smsBindingSubjectIdentifier: input.random.uuid(),
     ...identity,
     adminRedirectUri: `${origin}/iam-admin/*`,
     customSsoRedirectUri: `${origin}/e2e/custom-sso/*`,
@@ -310,6 +314,7 @@ export function createE2ESeedSubjects(
     { subjectIdentifier: references.pausedSubjectIdentifier, state: "disabled" },
     { subjectIdentifier: references.disabledSubjectIdentifier, state: "disabled" },
     { subjectIdentifier: references.noScopeHrAdminSubjectIdentifier, state: "enabled" },
+    { subjectIdentifier: references.smsBindingSubjectIdentifier, state: "enabled" },
   ];
 }
 
@@ -354,7 +359,7 @@ function assertScenarioReadBack(expected: E2EScenarioReferences, actual: E2EScen
       );
     })
   ) {
-    throw new Error("E2E seed read-back did not confirm all six users' documents, facts and access barriers");
+    throw new Error("E2E seed read-back did not confirm all users' documents, facts and access barriers");
   }
   const matches =
     actual.admin.active &&
@@ -373,6 +378,9 @@ function assertScenarioReadBack(expected: E2EScenarioReferences, actual: E2EScen
     actual.noScopeHrAdmin.passwordConfigured &&
     actual.noScopeHrAdmin.subjectIdentifier === expected.noScopeHrAdminSubjectIdentifier &&
     actual.noScopeHrAdmin.username === expected.noScopeHrAdminUsername &&
+    actual.smsBindingUser?.username === smsBindingUsername &&
+    actual.smsBindingUser.mobile === smsBindingMobile &&
+    actual.smsBindingUser.wxId === null &&
     actual.organization.active &&
     actual.organization.code === expected.organizationCode &&
     actual.responsibilityHolderOrganization.active &&

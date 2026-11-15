@@ -54,7 +54,7 @@ export const hrManualSections: ManualSection[] = [
             highlights: [1],
           },
           {
-            text: "修改「姓名」「用户类型」「手机号」或「微信 ID」，核对后点击「保存」。",
+            text: "修改「姓名」「用户类型」或「手机号」，核对后点击「保存」。",
             image: "user-edit",
           },
         ],

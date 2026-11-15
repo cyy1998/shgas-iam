@@ -2,6 +2,7 @@ import { withApiRequestContext } from "@api/services/audit/audit.context";
 import { buildInternalPurveyorContactRegisterAudit } from "@api/services/audit/events/internal.audit";
 import { UserType } from "@iam/contracts";
 import { OrganizationNotFoundError } from "@iam/domain/organization";
+import { normalizeRegisteredIdentifier } from "@iam/domain/user";
 import { CustomError } from "@iam/runtime/errors";
 import type { RegisterPurveyorContactUseCaseDeps } from "./register-purveyor-contact.port";
 import type { RegisterPurveyorContactInput, RegisterPurveyorContactOptions } from "./register-purveyor-contact.type";
@@ -14,12 +15,13 @@ export function createRegisterPurveyorContactUseCase(deps: RegisterPurveyorConta
     input: RegisterPurveyorContactInput,
     options: RegisterPurveyorContactOptions,
   ): Promise<boolean> {
-    const existingUser = await deps.userReader.getActiveUserByMobile(input.mobile);
-    const registerExistingContact = async () =>
+    const mobile = normalizeRegisteredIdentifier(input.mobile);
+    const existingUser = mobile === null ? null : await deps.userReader.getActiveUserByMobile(mobile);
+    const registerExistingContact = async (mobile: string) =>
       await deps.uow.transaction(
         async (tx) => {
-          await tx.userRepository.lockPurveyorContactMobile(input.mobile);
-          const existingUser = await tx.userRepository.getUserByMobile(input.mobile);
+          await tx.userRepository.lockPurveyorContactMobile(mobile);
+          const existingUser = await tx.userRepository.getUserByMobile(mobile);
           if (existingUser === null) throw new ConcurrentContactDisappearedError();
 
           const [position, organization] = await Promise.all([
@@ -57,9 +59,11 @@ export function createRegisterPurveyorContactUseCase(deps: RegisterPurveyorConta
               await tx.subjectAccessMutation.runMutation(
                 receipt,
                 async () => {
-                  await tx.userRepository.lockPurveyorContactMobile(input.mobile);
-                  const existingUser = await tx.userRepository.getUserByMobile(input.mobile);
-                  if (existingUser !== null) throw new ConcurrentContactAppearedError();
+                  if (mobile !== null) {
+                    await tx.userRepository.lockPurveyorContactMobile(mobile);
+                    const existingUser = await tx.userRepository.getUserByMobile(mobile);
+                    if (existingUser !== null) throw new ConcurrentContactAppearedError();
+                  }
 
                   const [position, organization] = await Promise.all([
                     tx.positionRepository.getPositionByCode("P001"),
@@ -75,7 +79,7 @@ export function createRegisterPurveyorContactUseCase(deps: RegisterPurveyorConta
                   const user = await tx.userRepository.setUser({
                     username: input.username,
                     name: input.name,
-                    mobile: input.mobile,
+                    mobile,
                     userType: UserType.External,
                     password: null,
                     subjectIdentifier,
@@ -99,16 +103,18 @@ export function createRegisterPurveyorContactUseCase(deps: RegisterPurveyorConta
     };
 
     let registration: Awaited<ReturnType<typeof registerExistingContact>>;
-    if (existingUser === null) {
+    if (mobile === null) {
+      registration = await registerNewContact();
+    } else if (existingUser === null) {
       try {
         registration = await registerNewContact();
       } catch (error) {
         if (!(error instanceof ConcurrentContactAppearedError)) throw error;
-        registration = await registerExistingContact();
+        registration = await registerExistingContact(mobile);
       }
     } else {
       try {
-        registration = await registerExistingContact();
+        registration = await registerExistingContact(mobile);
       } catch (error) {
         if (!(error instanceof ConcurrentContactDisappearedError)) throw error;
         registration = await registerNewContact();
@@ -122,14 +128,14 @@ export function createRegisterPurveyorContactUseCase(deps: RegisterPurveyorConta
           targetUserId: registration.targetUserId,
           username: input.username,
           name: input.name,
-          mobile: input.mobile,
+          mobile,
           orgCode: input.orgCode,
           existingContact: registration.existingContact,
         }),
       ),
     );
-    if (deps.config.nodeEnv === "production") {
-      await deps.mobileService.sendMessage(input.mobile, deps.mobileService.getPurveyorWelcomeMessage(input.name));
+    if (deps.config.nodeEnv === "production" && mobile !== null) {
+      await deps.mobileService.sendMessage(mobile, deps.mobileService.getPurveyorWelcomeMessage(input.name));
     }
     return true;
   }

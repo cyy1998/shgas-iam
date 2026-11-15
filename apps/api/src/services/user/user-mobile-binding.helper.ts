@@ -15,7 +15,7 @@ export function createUserMobileBinding(deps: UserMobileBindingDeps) {
     if (!deps.mobileService.checkValidPhoneNumber(phoneNumber)) {
       throw new InvalidMobileError("无效手机号");
     }
-    if (await deps.mobileService.checkExistingPhoneNumber(phoneNumber)) {
+    if (await deps.userRepository.isMobileRegistered(phoneNumber)) {
       throw new MobileAlreadyExistsError("手机号已存在");
     }
     const reservation = await deps.mobileService.reserveVerificationCode(

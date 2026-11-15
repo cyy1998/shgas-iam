@@ -69,10 +69,32 @@ export function buildOaLoginSuccessAudit(user: UserAuditTarget, clientCode: stri
   });
 }
 
-export function buildWechatLoginSuccessAudit(user: UserAuditTarget) {
+export function buildWechatLoginSuccessAudit(user: UserAuditTarget, source?: "cross_device") {
   return buildUserLoginSuccessAudit(AuditActions["auth.login.wechat"], user, {
     loginType: "wechat",
+    ...(source && { source }),
   });
+}
+
+export function buildWechatBindingAudit(input: {
+  method: "password" | "mobile";
+  user?: UserAuditTarget;
+  reason?: string;
+  verified: boolean;
+}): AuditLogInput {
+  const { method, user, reason, verified } = input;
+  return {
+    action: AuditActions["self.wecom.bind"],
+    outcome: reason ? "failure" : "success",
+    actorType: verified && user ? "user" : "anonymous",
+    actorUserId: verified ? user?.id : undefined,
+    actorUsername: verified ? user?.username : undefined,
+    targetType: "user",
+    targetId: user?.id,
+    targetCode: user?.username,
+    targetName: user?.name,
+    details: { verificationMethod: method, ...(reason && { reason }) },
+  };
 }
 
 export function buildSmsCodeSendAudit(input: { phoneNumber: string; usage: string; username?: string }): AuditLogInput {

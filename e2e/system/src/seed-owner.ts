@@ -49,6 +49,8 @@ import type {
   E2EScenarioSeedReferences,
 } from "./seed.ts";
 import { createE2ESeedSubjects } from "./seed.ts";
+import { smsBindingMobile, smsBindingUsername } from "./sms-provider";
+import { wecomBoundMember, wecomUnlinkMember } from "./wecom-provider";
 
 export interface CreateProductionE2EScenarioOwnerInput {
   db: typeof database;
@@ -425,6 +427,7 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
           subjectIdentifier: scenario.adminSubjectIdentifier,
           username: scenario.adminUsername,
           name: `E2E Admin ${scenario.runId}`,
+          wxId: wecomBoundMember,
           password: passwordHash,
           status: UserStatus.Enable,
         })
@@ -448,6 +451,7 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
           subjectIdentifier: scenario.delegateeSubjectIdentifier,
           username: scenario.delegateeUsername,
           name: `E2E Delegatee ${scenario.runId}`,
+          wxId: wecomUnlinkMember,
           password: passwordHash,
           status: UserStatus.Enable,
         },
@@ -462,6 +466,13 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
           username: scenario.disabledUsername,
           name: `E2E Disabled User ${scenario.runId}`,
           status: UserStatus.Disable,
+        },
+        {
+          subjectIdentifier: scenario.smsBindingSubjectIdentifier,
+          username: smsBindingUsername,
+          name: "E2E WeCom SMS User",
+          mobile: smsBindingMobile,
+          status: UserStatus.Enable,
         },
       ]);
 
@@ -703,19 +714,20 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
         backfillBatchSize: 100,
       },
     });
+    const seedSubjects = createE2ESeedSubjects(scenario);
     try {
       const backfill = await documentModule.maintenance.backfillAllUsers({ batchSize: 100 });
-      if (backfill.enqueued !== 6) {
-        throw new Error("E2E User Document backfill did not enqueue all six seeded users");
+      if (backfill.enqueued !== seedSubjects.length) {
+        throw new Error("E2E User Document backfill did not enqueue all seeded users");
       }
     } finally {
       await documentModule.close();
     }
 
     await waitForPublishedUserDocuments(scenario);
-    const access = await subjectAccess.seedMany(createE2ESeedSubjects(scenario), input.clock.nowDate());
-    if (access.seeded !== 6 || access.retainedExisting !== 0) {
-      throw new Error("E2E Subject Access bootstrap did not seed all six users");
+    const access = await subjectAccess.seedMany(seedSubjects, input.clock.nowDate());
+    if (access.seeded !== seedSubjects.length || access.retainedExisting !== 0) {
+      throw new Error("E2E Subject Access bootstrap did not seed all users");
     }
     if (generatedReferences === undefined) {
       throw new Error("E2E generated scenario references were not captured");
@@ -777,6 +789,7 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
       hrAdmin,
       delegatee,
       noScopeHrAdmin,
+      smsBindingUser,
       organization,
       responsibilityHolderOrganization,
       responsibilityTargetOrganization,
@@ -805,6 +818,14 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
       }),
       input.db.query.users.findFirst({
         where: { username: references.noScopeHrAdminUsername, isDelete: false },
+      }),
+      input.db.query.users.findFirst({
+        where: {
+          subjectIdentifier: references.smsBindingSubjectIdentifier,
+          isDelete: false,
+          status: UserStatus.Enable,
+        },
+        columns: { username: true, mobile: true, wxId: true },
       }),
       input.db.query.organizations.findFirst({
         where: { orgCode: references.organizationCode, isDelete: false },
@@ -1016,6 +1037,7 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
         : [];
 
     return {
+      smsBindingUser,
       subjects: seedSubjects.map(({ subjectIdentifier }, index): E2EScenarioReadBack["subjects"][number] => {
         const document = documents.get(subjectIdentifier);
         const fact = facts[index];

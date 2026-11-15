@@ -23,9 +23,9 @@ describe("user helper factories", () => {
     };
     const reservation = { usage: "bindPhone", phone: "13800000000", token: "reservation-1" };
     const mobileBinding = createUserMobileBinding({
+      userRepository: { isMobileRegistered: async () => false },
       auditLogWriter,
       mobileService: {
-        checkExistingPhoneNumber: mock(async () => false),
         checkValidPhoneNumber: mock(() => true),
         reserveVerificationCode: mock(async () => reservation),
       },
@@ -40,9 +40,9 @@ describe("user helper factories", () => {
       recordAuditLogFromContext: mock(async () => undefined),
     };
     const mobileBinding = createUserMobileBinding({
+      userRepository: { isMobileRegistered: async () => false },
       auditLogWriter,
       mobileService: {
-        checkExistingPhoneNumber: mock(async () => false),
         checkValidPhoneNumber: mock(() => true),
         reserveVerificationCode: mock(async () => null),
       },

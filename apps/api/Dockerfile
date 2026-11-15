@@ -91,6 +91,7 @@ CMD ["bun", "run", "src/index.ts"]
 
 FROM runtime AS e2e
 COPY e2e/system/docker/start-api.sh /run/iam-e2e/start-api.sh
+COPY e2e/system/docker/start-api.ts e2e/system/src/wecom-provider.ts e2e/system/src/sms-provider.ts ./src/e2e/
 CMD ["sh", "/run/iam-e2e/start-api.sh"]
 
 # Keep the default production image free of E2E inputs.

@@ -1,3 +1,6 @@
+import { request as requestHttps } from "node:https";
+import { readWecomMobileCertificate } from "./wecom-mobile-tls.ts";
+
 export async function probeGateway(origin: string, signal?: AbortSignal) {
   const deadline = Date.now() + 30_000;
   let lastError: unknown;
@@ -25,12 +28,19 @@ export async function probeHttpRoute(origin: string, path: string, expectedStatu
   while (Date.now() < deadline) {
     if (signal?.aborted) throw signal.reason ?? new Error("Gateway route probe aborted");
     try {
-      const response = await requestGateway(new URL(path, origin), {
-        redirect: "manual",
-        signal: probeSignal(signal),
-      });
-      if (expectedStatuses.includes(response.status)) return;
-      lastError = new Error(`received HTTP ${response.status}`);
+      const url = new URL(path, origin);
+      const requestSignal = probeSignal(signal);
+      const status =
+        url.protocol === "https:" && url.hostname === "external.iam.localhost"
+          ? await readWecomMobileResponseStatus(url, requestSignal)
+          : (
+              await requestGateway(url, {
+                redirect: "manual",
+                signal: requestSignal,
+              })
+            ).status;
+      if (expectedStatuses.includes(status)) return;
+      lastError = new Error(`received HTTP ${status}`);
     } catch (error) {
       lastError = error;
     }
@@ -38,6 +48,28 @@ export async function probeHttpRoute(origin: string, path: string, expectedStatu
   }
   throw new Error(`Gateway route ${path} was not ready at ${origin}`, {
     cause: lastError,
+  });
+}
+
+function readWecomMobileResponseStatus(url: URL, signal: AbortSignal) {
+  return new Promise<number>((resolve, reject) => {
+    const request = requestHttps(
+      {
+        hostname: "127.0.0.1",
+        servername: url.hostname,
+        port: url.port,
+        path: url.pathname + url.search,
+        headers: { Host: url.host },
+        ca: readWecomMobileCertificate(),
+        signal,
+      },
+      (response) => {
+        response.resume();
+        resolve(response.statusCode ?? 0);
+      },
+    );
+    request.on("error", reject);
+    request.end();
   });
 }
 

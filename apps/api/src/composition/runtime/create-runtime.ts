@@ -13,6 +13,7 @@ export interface CreateApiRuntimeOptions {
   env?: typeof env;
   logger?: typeof logger;
   redis?: typeof redis;
+  integrationFetch?: { wechat?: typeof fetch; sms?: typeof fetch };
 }
 
 export function createApiRuntime(options: CreateApiRuntimeOptions = {}): ApiRuntimePorts {
@@ -80,6 +81,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions = {}): ApiRunt
         clock: runtimeClock,
       }),
       sms: createSmsClient({
+        fetch: options.integrationFetch?.sms,
         clock: runtimeClock,
         random: runtimeRandom,
         config: {
@@ -88,6 +90,7 @@ export function createApiRuntime(options: CreateApiRuntimeOptions = {}): ApiRunt
         },
       }),
       wechat: createWechatClient({
+        fetch: options.integrationFetch?.wechat,
         redis: runtimeRedis,
         config: {
           corpId: runtimeEnv.integrations.wechat.corpId,

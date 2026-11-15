@@ -270,6 +270,7 @@ export const adminUserDetail = {
   allowedActions: {
     editProfile: allowedAction,
     resetPassword: allowedAction,
+    unlinkWecom: allowedAction,
     changeStatus: allowedAction,
     delete: allowedAction,
     resign: allowedAction,
@@ -285,6 +286,7 @@ export const hrAdminUserDetail = {
   allowedActions: {
     editProfile: allowedAction,
     resetPassword: allowedAction,
+    unlinkWecom: deniedAction,
     changeStatus: {
       allowed: false,
       reason: "USER_HAS_OUT_OF_SCOPE_OPEN_EMPLOYMENT",

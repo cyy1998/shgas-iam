@@ -61,6 +61,29 @@ SSO 使用同源 API 前缀，例如 `/api/iam`。经实际网关进入 SSO，�
 取图和换图共用额度，同一操作和目标每分钟 10 次，同一来源 IP 每分钟 120 次。提交答案按同一操作和目标每秒 1 次、同一来源 IP 每分钟
 180 次限流。来源 IP 取自[可信代理配置](apisix-gateway-release.md)。原操作的领图票据有效期为 5 分钟，答对后的凭证有效期为 1 分钟。
 
+## 企业微信扫码登录配置
+
+1. 在本企业的企业微信自建应用中配置网页授权可信域名。确认手机能通过公网 HTTPS 访问回调，API 能通过 HTTPS 访问
+   `qyapi.weixin.qq.com`，并使用同一套企业标识、应用 Secret 和 AgentId。沿用 `IAM_API_WECHAT_CORP_ID` 和
+   `IAM_API_WECHAT_CORP_SECRET`，在所有 API 副本同时设置 `IAM_API_WECHAT_QR_AGENT_ID` 和
+   `IAM_API_WECHAT_QR_CALLBACK_URL`。内网和公网入口使用不同 hostname。回调使用 `IAM_API_SSO_EXTERNAL_ORIGIN` 的 hostname，路径固定为
+   `/sso/wechat-qr/mobile/callback`，例如 `https://iam.example.com/sso/wechat-qr/mobile/callback`。
+2. 按[网关发布](apisix-gateway-release.md)在 API upstream 前配置高优先级的扫码路由。公网手机路径
+   `/sso/wechat-qr/mobile/*` 只向上述 HTTPS authority 开放，Gateway 覆盖 `X-IAM-Entry-Network: external`，
+   并根据实际 TLS 入口覆盖 `X-Forwarded-Proto`。在更通用的路由也覆盖客户端传入的协议与入口头。
+   电脑路径 `/sso/wechat-qr`、`/oidc/wechat-qr` 及其子路径只走内网 authority，Gateway 覆盖
+   `X-IAM-Entry-Network: internal`。内网的登录守卫也使用相同的可信入口头。禁止外部直连 API。
+3. 网关和日志采集只记录脱敏路径或路由名。扫码路由不记录 query、Cookie、表单、完整请求行或 Referer。
+   为扫码路由将 OpenTelemetry sampler 设置为 `always_off`。检查访问日志、错误日志及 tracing 的实际输出，
+   回调里的授权码和 state、发起浏览器续接参数都不能进入采集。
+   SSE 转发保留流式响应与 `X-Accel-Buffering: no`，代理读超时应长于心跳间隔。
+4. 按[常规更新](deployment.md#常规更新)部署 API 和 SSO。用不同 hostname 的原电脑和手机验证公网登录守卫不提供出码，
+   手机没有 `global_session`，电脑能实时读到确认或取消。断开 SSE 后重连，核对已发生的结果仍可见，旧码在换码后不可用。
+   在网关验证无 TLS 的回调和客户端伪造入口头均被拒绝，再放开流量。
+
+关闭功能时清空两个 `IAM_API_WECHAT_QR_*` 配置并重建所有 API 副本。遇到状态丢失、超时或换码，用户从电脑重新出码。
+Redis 需要从备份恢复时，关闭扫码入口并等待在途请求到期后再开放。既有第三方企业微信回调使用原企业配置。
+
 ## OIDC 双入口配置
 
 用于发布或调整内外网 OIDC 入口。API、Gateway、SSO 与接入应用的 origin/issuer 必须匹配：

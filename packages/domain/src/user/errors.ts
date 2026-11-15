@@ -37,6 +37,15 @@ export class MobileAlreadyExistsError extends DomainBusinessError {
   }
 }
 
+export class WxIdAlreadyExistsError extends DomainBusinessError {
+  constructor(message: string = "企业微信身份已存在") {
+    super(message, {
+      code: ApiErrorCode.WxIdAlreadyExists,
+      httpStatus: DomainHttpStatus.Conflict,
+    });
+  }
+}
+
 export class InvalidOldPasswordError extends DomainBusinessError {
   constructor(message: string = "旧密码错误") {
     super(message, {

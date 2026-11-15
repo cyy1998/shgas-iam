@@ -9,6 +9,7 @@ import type { SubjectAccessOperation } from "@iam/subject-access";
 import {
   requireSubjectAccessOperation,
   SubjectAccessDisabledError,
+  SubjectAccessOperationDeniedError,
   SubjectAccessUnavailableError,
 } from "@iam/subject-access";
 import { z } from "zod";
@@ -55,6 +56,7 @@ export function createUnifiedCustomSsoAuthorization(options: UnifiedCustomSsoAut
       async function accept(input: AuthorizationInput): Promise<{
         accepted: AcceptedAuthorization;
         client: ClientSnapshotValue;
+        expiresAt?: number;
       }> {
         let snapshot: Awaited<ReturnType<typeof options.clients.acquire>>;
         try {
@@ -75,9 +77,10 @@ export function createUnifiedCustomSsoAuthorization(options: UnifiedCustomSsoAut
           throw new InvalidSsoClientError("非法Client");
         }
         if (input.continuation !== undefined) {
-          const accepted = await state.readContinuation(input.continuation, input.browserBinding ?? "");
+          const continuation = await state.readContinuation(input.continuation, input.browserBinding ?? "");
+          if (!continuation) throw new BadRequestError("登录请求已失效，请返回应用重新发起登录");
+          const { expiresAt, ...accepted } = continuation;
           if (
-            !accepted ||
             accepted.clientCode !== input.clientCode ||
             accepted.redirectUrl !== input.redirectUrl ||
             accepted.state !== input.state ||
@@ -85,7 +88,7 @@ export function createUnifiedCustomSsoAuthorization(options: UnifiedCustomSsoAut
           ) {
             throw new BadRequestError("登录请求已失效，请返回应用重新发起登录");
           }
-          return { accepted, client: snapshot.value };
+          return { accepted, client: snapshot.value, expiresAt };
         }
         const config = snapshot.value.ssoConfig;
         const redirectUrl = options.redirectUrls.normalizeAllowed(
@@ -109,7 +112,7 @@ export function createUnifiedCustomSsoAuthorization(options: UnifiedCustomSsoAut
           },
         };
       }
-      async function root(token?: string) {
+      async function root(token?: string, failOnIdentityMismatch = false) {
         if (!token) return null;
         try {
           const result = await sessions.resolveUserSession(token);
@@ -123,12 +126,24 @@ export function createUnifiedCustomSsoAuthorization(options: UnifiedCustomSsoAut
           });
           return result.value;
         } catch (error) {
+          if (
+            failOnIdentityMismatch &&
+            error instanceof SubjectAccessOperationDeniedError &&
+            error.reason === "identity_mismatch"
+          ) {
+            throw new SubjectAccessUnavailableError(error);
+          }
           if (error instanceof SubjectAccessDisabledError || error instanceof AuthzUnauthorizedError) return null;
           if (error instanceof SessionStorageError) throw new SubjectAccessUnavailableError();
           throw error;
         }
       }
       return {
+        async inspectLoginContinuation(input: AuthorizationInput) {
+          const { accepted, expiresAt } = await accept(input);
+          if (expiresAt === undefined) throw new BadRequestError("登录请求已失效，请返回应用重新发起登录");
+          return { clientCode: accepted.clientCode, expiresAt, root: await root(input.globalSessionToken, true) };
+        },
         async checkLoginContinuation(input: AuthorizationInput) {
           await accept(input);
           const observation = await root(input.globalSessionToken);

@@ -8,6 +8,7 @@ import {
 } from "@iam/contracts";
 import type { E2EScenarioOwner, E2EScenarioReadBack, E2EScenarioReferences } from "../seed.ts";
 import { createE2ESeedSubjects, seedE2EScenario } from "../seed.ts";
+import { smsBindingMobile, smsBindingUsername } from "../sms-provider.ts";
 
 describe("E2E scenario seed", () => {
   test("establishes the fixed scenario through its owner and returns only run-scoped references", async () => {
@@ -64,6 +65,7 @@ describe("E2E scenario seed", () => {
       outsideResponsibilityHolderPositionCode: "e2e-outside-resp-pos-123000000-a1b2c3d4",
       noScopeHrAdminSubjectIdentifier: "3b766c91-1daa-4c09-89e4-ea87ad123456",
       noScopeHrAdminUsername: "e2e-no-scope-hr-123000000-a1b2c3d4",
+      smsBindingSubjectIdentifier: "3b766c91-1daa-4c09-89e4-ea87ad123457",
       adminMixedRoleAssignmentId: 45,
       hiddenResponsibilityAssignmentId: 41,
       hrSecondScopeRoleAssignmentId: 42,
@@ -314,12 +316,13 @@ async function expectSeedReadBackFailure(mutate: (readBack: E2EScenarioReadBack)
   }
   expect(failure).toBeInstanceOf(Error);
   expect(failure).toMatchObject({
-    message: "E2E seed read-back did not confirm all six users' documents, facts and access barriers",
+    message: "E2E seed read-back did not confirm all users' documents, facts and access barriers",
   });
 }
 
 function completeReadBack(references: E2EScenarioReferences): E2EScenarioReadBack {
   return {
+    smsBindingUser: { username: smsBindingUsername, mobile: smsBindingMobile, wxId: null },
     subjects: createE2ESeedSubjects(references).map(({ subjectIdentifier, state }) => ({
       subjectIdentifier,
       documentSchemaVersion: 1,

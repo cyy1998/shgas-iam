@@ -33,3 +33,54 @@ test("publishes the existing E2E topology through authenticated HTTP and verifie
   });
   expect(JSON.stringify(result)).not.toMatch(/synthetic-/);
 });
+
+test("publishes the mobile TLS material through Gateway variables and keeps QR routes unsampled", async () => {
+  let publication: { yaml: string; variables: Record<string, string> } | undefined;
+  await publishGateway(
+    {
+      yaml: await Bun.file(new URL("../../test-assets/iam.yaml", import.meta.url)).text(),
+      variables: {
+        IAM_SSO_INTERNAL_HOST: "internal.iam.localhost:1234",
+        IAM_SSO_EXTERNAL_HOST: "external.iam.localhost:1234",
+      },
+      wecomMobile: { authority: "external.iam.localhost:4321", cert: "fixture-cert", privateKey: "fixture-key" },
+      clientSecret: "synthetic-client-key",
+      gatewayOrigin: "http://gateway-api:30004",
+      adminUrl: "http://apisix:9180/apisix/admin",
+      adminKey: "synthetic-admin-key",
+    },
+    async (_input, init) => {
+      if (init?.method !== "POST") {
+        return Response.json({ value: { pass_host: "rewrite", upstream_host: "api.e2e.internal" } });
+      }
+      publication = JSON.parse(String(init.body));
+      return Response.json({ code: 200, data: { outcome: "applied" } });
+    },
+  );
+
+  if (!publication) throw new Error("Gateway publication was not requested");
+  expect(publication.variables).toMatchObject({
+    IAM_E2E_WECHAT_QR_TLS_CERT: "fixture-cert",
+    IAM_E2E_WECHAT_QR_TLS_PRIVATE_KEY: "fixture-key",
+  });
+  expect(publication.yaml).not.toContain("fixture-key");
+  expect(Bun.YAML.parse(publication.yaml)).toMatchObject({
+    ssls: [
+      {
+        key: "wecom-mobile",
+        private_key: `\${IAM_E2E_WECHAT_QR_TLS_PRIVATE_KEY}`,
+        snis: ["external.iam.localhost"],
+      },
+    ],
+    routes: expect.arrayContaining([
+      expect.objectContaining({
+        key: "wecom-mobile",
+        vars: [
+          ["http_host", "==", "external.iam.localhost:4321"],
+          ["scheme", "==", "https"],
+        ],
+        plugins: expect.objectContaining({ opentelemetry: { sampler: { name: "always_off" } } }),
+      }),
+    ]),
+  });
+});

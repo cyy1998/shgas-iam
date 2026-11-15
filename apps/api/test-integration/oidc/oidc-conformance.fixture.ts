@@ -71,6 +71,7 @@ export async function createOidcConformanceCandidate(options: {
     const password = "Conformance195!synthetic";
     const secret = "conformance195-synthetic-secret-for-local-testing";
     const passwordHash = await hashSecret(password, 4);
+    let nextMobileSuffix = 195;
     await checkpoint("before-seed");
     async function seedIdentity() {
       if (stopped) throw new Error("OIDC candidate has stopped");
@@ -79,9 +80,10 @@ export async function createOidcConformanceCandidate(options: {
       const clientId = `oidc-${randomUUID()}`;
       const publicClientId = `oidc-${randomUUID()}`;
       const secondClientId = `oidc-${randomUUID()}`;
+      const mobile = `+86138${String(nextMobileSuffix++).padStart(8, "0")}`;
       const sql = pg.sql;
       const [user] =
-        await sql`INSERT INTO "user" (subject_identifier, username, name, password, mobile_phone) VALUES (${subjectIdentifier}, ${username}, 'Conformance User', ${passwordHash}, '+8613800000195') RETURNING id`;
+        await sql`INSERT INTO "user" (subject_identifier, username, name, password, mobile_phone) VALUES (${subjectIdentifier}, ${username}, 'Conformance User', ${passwordHash}, ${mobile}) RETURNING id`;
       if (!user) throw new Error("Synthetic user insert did not return an id");
       await publishUserDocument(pg.db, user.id);
       await sql`INSERT INTO user_document_rebuild_state (user_id, version, status, reason_codes, dirty_at, processed_at) VALUES (${user.id}, 1, 'processed', '["user-updated"]'::jsonb, NOW(), NOW())`;
@@ -99,7 +101,7 @@ export async function createOidcConformanceCandidate(options: {
         [{ subjectIdentifier, state: "enabled" }],
         new Date(),
       );
-      return { subjectIdentifier, username, clientId, publicClientId, secondClientId, secret };
+      return { subjectIdentifier, username, clientId, publicClientId, secondClientId, secret, mobile };
     }
     const identity = await seedIdentity();
     await checkpoint("redis-seeded");

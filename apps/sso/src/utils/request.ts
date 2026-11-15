@@ -70,7 +70,7 @@ async function readEnvelope<T>(res: Response): Promise<ApiEnvelope<T> | null> {
   return ((await res.clone().json()) as ApiEnvelope<T>) ?? null;
 }
 
-function readRetryAfter(res: Response): number | undefined {
+export function readRetryAfter(res: Response): number | undefined {
   const value = res.headers.get("Retry-After");
   if (!value || !/^\d+$/.test(value)) return undefined;
   const seconds = Number(value);

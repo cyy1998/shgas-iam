@@ -1,21 +1,25 @@
 import smCrypto from "sm-crypto";
+import { WechatQrIdSchema } from "./wechat-qr";
 
 const { sm2, sm3, sm4 } = smCrypto;
 
 export const LOGIN_CREDENTIAL_PREFIX = "iam-login-v1";
 export const LOGIN_CREDENTIAL_VERSION = 1;
 export const LOGIN_CREDENTIAL_TYPE = "password-login";
+export const WECHAT_BINDING_CREDENTIAL_TYPE = "wechat-binding-password";
 export const LOGIN_CREDENTIAL_ALG = "SM2-SM4-CBC";
 export const LOGIN_CREDENTIAL_SM2_CIPHER_MODE = 1;
 
-export interface LoginCredentialPlaintext {
+interface PasswordCredentialFields {
   v: typeof LOGIN_CREDENTIAL_VERSION;
-  typ: typeof LOGIN_CREDENTIAL_TYPE;
   username: string;
   password: string;
   ts: number;
   nonce: string;
 }
+
+export type LoginCredentialPlaintext = PasswordCredentialFields &
+  ({ typ: typeof LOGIN_CREDENTIAL_TYPE } | { typ: typeof WECHAT_BINDING_CREDENTIAL_TYPE; requestId: string });
 
 export interface LoginCredentialEnvelope {
   v: typeof LOGIN_CREDENTIAL_VERSION;
@@ -37,6 +41,7 @@ export interface CreateLoginCredentialInput {
   password: string;
   kid: string;
   publicKey: string;
+  wechatQrRequestId?: string;
   now?: number;
   nonce?: string;
   encKey?: string;
@@ -154,7 +159,6 @@ function assertPlaintext(value: unknown): LoginCredentialPlaintext {
   const payload = value as Record<string, unknown>;
   if (
     payload.v !== LOGIN_CREDENTIAL_VERSION ||
-    payload.typ !== LOGIN_CREDENTIAL_TYPE ||
     typeof payload.username !== "string" ||
     payload.username.trim() === "" ||
     typeof payload.password !== "string" ||
@@ -167,14 +171,19 @@ function assertPlaintext(value: unknown): LoginCredentialPlaintext {
     throw new LoginCredentialError();
   }
 
-  return {
+  const fields: PasswordCredentialFields = {
     v: LOGIN_CREDENTIAL_VERSION,
-    typ: LOGIN_CREDENTIAL_TYPE,
     username: payload.username,
     password: payload.password,
     ts: payload.ts,
     nonce: payload.nonce,
   };
+  if (payload.typ === LOGIN_CREDENTIAL_TYPE) return { ...fields, typ: LOGIN_CREDENTIAL_TYPE };
+  if (payload.typ === WECHAT_BINDING_CREDENTIAL_TYPE) {
+    const requestId = WechatQrIdSchema.safeParse(payload.requestId);
+    if (requestId.success) return { ...fields, typ: WECHAT_BINDING_CREDENTIAL_TYPE, requestId: requestId.data };
+  }
+  throw new LoginCredentialError();
 }
 
 function assertEnvelope(value: unknown): LoginCredentialEnvelope {
@@ -235,7 +244,9 @@ export function createLoginCredential(input: CreateLoginCredentialInput): string
   const nonce = input.nonce ?? bytesToBase64Url(hexToBytes(randomHex(16)));
   const plaintext: LoginCredentialPlaintext = {
     v: LOGIN_CREDENTIAL_VERSION,
-    typ: LOGIN_CREDENTIAL_TYPE,
+    ...(input.wechatQrRequestId === undefined
+      ? { typ: LOGIN_CREDENTIAL_TYPE }
+      : { typ: WECHAT_BINDING_CREDENTIAL_TYPE, requestId: input.wechatQrRequestId }),
     username: input.username,
     password: input.password,
     ts: input.now ?? Date.now(),

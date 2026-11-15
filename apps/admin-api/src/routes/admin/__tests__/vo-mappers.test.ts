@@ -127,6 +127,7 @@ describe("admin route VO mappers", () => {
         {
           editProfile: { allowed: true, reason: null },
           resetPassword: { allowed: true, reason: null },
+          unlinkWecom: { allowed: true, reason: null },
           changeStatus: { allowed: true, reason: null },
           delete: { allowed: true, reason: null },
           resign: { allowed: true, reason: null },

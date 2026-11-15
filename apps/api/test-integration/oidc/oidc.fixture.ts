@@ -79,6 +79,7 @@ export async function fixture(
   authorization: {
     issuers?: { internal: string; external: string };
     admission?: OidcAuthorizationOptions["admission"];
+    wechatQr?: boolean;
   } = {},
 ) {
   const url = networkUrl ?? process.env.IAM_API_TEST_REDIS_URL;
@@ -119,6 +120,7 @@ export async function fixture(
       signingMs: 0,
       factsSql: 0,
       loginFailure: false,
+      restricted: false,
       failClientAuthClear: false,
     };
     const networkPrefix = `${oidcState.namespace}:network:`;
@@ -241,6 +243,22 @@ export async function fixture(
     };
     const composition = createRootAuthenticationComposition({
       kernel,
+      wechatQr: authorization.wechatQr
+        ? {
+            redis: oidcState.redis,
+            namespace: oidcState.namespace,
+            config: {
+              corpId: "test-tenant",
+              agentId: "1000001",
+              callbackUrl: `${new URL(issuers.external).origin}/sso/wechat-qr/mobile/callback`,
+            },
+            directory: {
+              lookupApplicationName: async () => "业务应用",
+              findRegisteredMember: async (wxId) =>
+                wxId === user.wxId ? { userId: user.id, subjectIdentifier } : null,
+            },
+          }
+        : undefined,
       ...(customState
         ? {
             customSso: {
@@ -378,7 +396,7 @@ export async function fixture(
           humanRisk: { async recordLoginFailure() {} },
           loginRestriction: {
             async getRestriction() {
-              return null;
+              return state.restricted ? { triggerMethod: "password" as const, remainingSeconds: 60 } : null;
             },
             async clearLoginState() {},
             async recordFailure() {

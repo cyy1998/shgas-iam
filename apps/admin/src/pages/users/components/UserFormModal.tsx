@@ -79,6 +79,7 @@ export default function UserFormModal({ open, onOpenChange, onSuccess, onCommitt
         ]}
       />
       <UserProfileFields />
+      <ProFormText name="wxId" label="微信 ID" />
       <ProFormText.Password name="password" label="初始密码" placeholder="留空则后端生成随机密码" />
       <ProFormSelect
         name="status"

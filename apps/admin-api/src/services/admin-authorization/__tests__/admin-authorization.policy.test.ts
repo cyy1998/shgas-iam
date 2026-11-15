@@ -264,6 +264,7 @@ describe("Admin Authorization Policy", () => {
     ).toEqual({
       editProfile: { allowed: true, reason: null },
       resetPassword: { allowed: true, reason: null },
+      unlinkWecom: { allowed: false, reason: "ACTION_NOT_GRANTED" },
       changeStatus: {
         allowed: false,
         reason: "USER_HAS_OUT_OF_SCOPE_OPEN_EMPLOYMENT",
@@ -434,7 +435,7 @@ describe("Admin Authorization Policy", () => {
       operationId: "admin.user.update",
       operationInput: {
         username: "target",
-        data: { name: "Target", mobile: null, wxId: null, userType: 1 },
+        data: { name: "Target", mobile: null, userType: 1 },
       },
     });
     const restAuthorization = await policy.assertOperationAllowed({
@@ -443,7 +444,7 @@ describe("Admin Authorization Policy", () => {
       operationInput: {
         params: { username: "target" },
         query: {},
-        body: { name: "Target", mobile: null, wxId: null, userType: 1 },
+        body: { name: "Target", mobile: null, userType: 1 },
       },
     });
 
@@ -453,9 +454,11 @@ describe("Admin Authorization Policy", () => {
     for (const operationInput of [
       { username: "target", data: { status: UserStatus.Pause } },
       { username: "target", data: { orderNum: 3 } },
+      { username: "target", data: { wxId: null } },
       { username: "target", data: { unexpected: true } },
       { params: { username: "target" }, query: {}, body: { status: UserStatus.Pause } },
       { params: { username: "target" }, query: {}, body: { orderNum: 3 } },
+      { params: { username: "target" }, query: {}, body: { wxId: null } },
       { params: { username: "target" }, query: {}, body: { unexpected: true } },
     ]) {
       let failure: unknown;
@@ -470,7 +473,7 @@ describe("Admin Authorization Policy", () => {
       }
       expect(failure).toMatchObject({ httpStatus: 403 });
     }
-    expect(warn).toHaveBeenCalledTimes(6);
+    expect(warn).toHaveBeenCalledTimes(8);
   });
 
   for (const role of ["iam:hr-admin", "iam:admin"]) {
@@ -633,6 +636,7 @@ describe("Admin Authorization Policy", () => {
         ).toEqual({
           editProfile: { allowed: true, reason: null },
           resetPassword: { allowed: true, reason: null },
+          unlinkWecom: { allowed: true, reason: null },
           changeStatus: { allowed: true, reason: null },
           delete: { allowed: true, reason: null },
           resign: { allowed: true, reason: null },

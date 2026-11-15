@@ -7,6 +7,7 @@ export interface RunDescriptor {
   gatewayPort: number;
   origin: string;
   internalOrigin?: string;
+  wecomMobileOrigin?: string;
   artifactDirectory: string;
   resourceRecord?: string;
   labels: {

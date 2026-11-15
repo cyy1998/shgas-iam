@@ -7,7 +7,7 @@ export type CreateAdminJourneyOperationsOptions = PlaywrightJourneyRuntimeOption
 export function createAdminJourneyOperations(options: CreateAdminJourneyOperationsOptions) {
   return createPlaywrightJourneyOperations({
     ...options,
-    specPath: "admin-custom-sso.spec.ts",
+    specPaths: ["admin-custom-sso.spec.ts"],
     environment: (descriptor, scenario) => ({
       IAM_E2E_ADMIN_CLIENT_CODE: scenario.adminClientCode,
       IAM_E2E_ADMIN_ROLE_CODE: scenario.adminRoleCode,

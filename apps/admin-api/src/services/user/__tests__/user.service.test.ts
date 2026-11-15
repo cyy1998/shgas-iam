@@ -170,6 +170,7 @@ function createService(
         async (username: string) => await getUserByUsernameForAdmin(username),
       ),
       setPassword: mock(async () => user()),
+      unlinkWecom: mock(async () => user({ wxId: null })),
       setUserForAdmin: mock(async (input: Record<string, unknown>) => user(input)),
       softDeleteUserByUsername: mock(async () => user({ isDelete: true })),
       updateUserByUsername: mock(async (_username: string, input: Record<string, unknown>) => user(input)),

@@ -143,7 +143,7 @@ test.each(scenarios)(
       sub: identity.subjectIdentifier,
       name: "Conformance User",
       preferred_username: identity.username,
-      phone_number: "+8613800000195",
+      phone_number: identity.mobile,
     });
     const logoutState = rp.randomState();
     const logoutParameters: Record<string, string> = {};

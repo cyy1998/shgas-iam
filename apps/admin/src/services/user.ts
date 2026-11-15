@@ -39,6 +39,10 @@ export function resetUserPassword(username: string) {
   return runAdminMutation(() => apiClient.admin.user.resetPassword.mutate({ username }));
 }
 
+export function unlinkUserWecom(username: string) {
+  return runAdminMutation(() => apiClient.admin.user.unlinkWecom.mutate({ username }));
+}
+
 export function generateRandomPassword() {
   return apiClient.admin.user.generatePassword.query(undefined);
 }

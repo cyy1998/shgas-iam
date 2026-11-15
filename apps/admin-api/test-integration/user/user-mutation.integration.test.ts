@@ -6,6 +6,7 @@ import { createAdminApiRepositories } from "@admin-api/composition/repositories"
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import { createUserAdapter } from "@admin-api/routes/admin/user/user.adapter";
 import { createUserRoute } from "@admin-api/routes/admin/user/user.index";
+import { createAdminAuthorizationContextHandler } from "@admin-api/services/admin-authorization/admin-authorization.context";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
 import type { AdminUserTransactionPorts } from "@admin-api/services/user/user.port";
@@ -153,11 +154,27 @@ function createCommand(
 type UserWriteProtocol = "REST" | "tRPC";
 const userWriteProtocols: UserWriteProtocol[] = ["REST", "tRPC"];
 
-function createUserWriteApp(command = createCommand()) {
+function createUserWriteApp(command = createCommand(), hrOrganizationId?: number) {
   const adapter = createUserAdapter({ userService: command.service, random: command.random });
   const app = new Hono();
   app.onError(createErrorHandler({ info() {}, warn() {}, error() {} }));
-  addTestAdminAuthorizationMiddleware(app);
+  addTestAdminAuthorizationMiddleware(app, hrOrganizationId === undefined ? ["iam:admin"] : ["iam:hr-admin"]);
+  if (hrOrganizationId !== undefined) {
+    app.use(
+      "*",
+      createAdminAuthorizationContextHandler(
+        createAdminAuthorizationPolicy({
+          logger: { warn: mock() },
+          hrAdministrationScopeResolver: {
+            resolveForActor: async () => ({
+              rootOrganizationIds: [hrOrganizationId],
+              organizationIds: [hrOrganizationId],
+            }),
+          },
+        }),
+      ),
+    );
+  }
   app.route("/admin", createUserRoute(adapter));
   app.all("/rpc/*", (c) =>
     fetchRequestHandler({
@@ -170,11 +187,29 @@ function createUserWriteApp(command = createCommand()) {
   return { app, command };
 }
 
+function requestUserUnlinkWecom(app: Hono, protocol: UserWriteProtocol, username: string) {
+  return protocol === "REST"
+    ? app.request(`/admin/users/${username}/unlink-wecom`, { method: "POST" })
+    : app.request("/rpc/unlinkWecom", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username }),
+      });
+}
+
 async function requestUserCreate(app: Hono, protocol: UserWriteProtocol, input: Record<string, unknown>) {
   return await app.request(protocol === "REST" ? "/admin/users" : "/rpc/create", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
+  });
+}
+
+function requestUserUpdate(app: Hono, protocol: UserWriteProtocol, username: string, data: Record<string, unknown>) {
+  return app.request(protocol === "REST" ? `/admin/users/${username}` : "/rpc/update", {
+    method: protocol === "REST" ? "PUT" : "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(protocol === "REST" ? data : { username, data }),
   });
 }
 
@@ -817,6 +852,223 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
 });
 
 describe("User mutations through production PostgreSQL UnitOfWork", () => {
+  test.each(userWriteProtocols)("%s unlinks WeCom from a disabled user and audits both results", async (protocol) => {
+    const { app, command } = createUserWriteApp();
+    const [target] = await harness.db
+      .insert(users)
+      .values({ username: "wecom-user", name: "User", wxId: "Private-Member", status: UserStatus.Disable })
+      .returning();
+
+    for (const changed of [true, false]) {
+      const response = await requestUserUnlinkWecom(app, protocol, target!.username);
+      expect(response.status).toBe(200);
+      const result = { changed, result: null };
+      expect(await response.json()).toMatchObject(
+        protocol === "REST" ? { data: result } : { result: { data: result } },
+      );
+    }
+
+    const after = await facts();
+    expect(after.users).toMatchObject([{ id: target!.id, wxId: null, status: UserStatus.Disable }]);
+    expect(after.audits).toMatchObject(
+      [true, false].map((changed) => ({
+        action: "admin.user.unlink_wecom",
+        outcome: "success",
+        actorType: "admin",
+        actorUsername: "admin",
+        actorUserId: 1,
+        targetType: "user",
+        targetId: target!.id,
+        targetCode: "wecom-user",
+        details: { changed },
+      })),
+    );
+    expect(JSON.stringify(after.audits)).not.toContain("Private-Member");
+    expect(after.dirty).toMatchObject([{ userId: target!.id, version: "1" }]);
+    expect(command.revokeUserSessions).not.toHaveBeenCalled();
+
+    const newOwner = await requestUserCreate(app, protocol, {
+      username: "other",
+      name: "Other User",
+      userType: UserType.Formal,
+      wxId: "Private-Member",
+    });
+    expect(newOwner.status).toBe(200);
+  });
+
+  test("aborts WeCom unlink when document invalidation fails", async () => {
+    const [target] = await harness.db
+      .insert(users)
+      .values({ username: "linked", name: "Linked User", wxId: "Private-Member" })
+      .returning();
+    const command = createCommand((tx) => ({
+      ...tx,
+      userDocumentInvalidation: {
+        recordChanges: async (changes) => {
+          await tx.userDocumentInvalidation.recordChanges(changes);
+          throw new Error("injected document invalidation failure");
+        },
+      },
+    }));
+    const { app } = createUserWriteApp(command);
+    const before = await facts();
+
+    const response = await requestUserUnlinkWecom(app, "REST", target!.username);
+    expect(response.status).toBe(500);
+    expect(await facts()).toEqual(before);
+    expect(command.enqueueRebuildJobs).not.toHaveBeenCalled();
+  });
+
+  test.each(userWriteProtocols)(
+    "%s ordinary profile edits cannot replace or clear a WeCom binding",
+    async (protocol) => {
+      const { app } = createUserWriteApp();
+      const [target] = await harness.db
+        .insert(users)
+        .values({ username: "linked", name: "Linked User", wxId: "Private-Member" })
+        .returning();
+      const response = await requestUserUpdate(app, protocol, target!.username, { wxId: null });
+      expect(response.status).toBe(400);
+      const update = await requestUserUpdate(app, protocol, target!.username, { name: "Renamed User", wxId: "Other" });
+      expect(update.status).toBe(200);
+
+      const after = await facts();
+      expect(after.users).toMatchObject([{ name: "Renamed User", wxId: "Private-Member" }]);
+      expect(after.audits).toMatchObject([
+        { action: "admin.user.update", details: { patch: { name: "Renamed User" } } },
+      ]);
+      expect(after.audits[0]?.details).not.toHaveProperty("patch.wxId");
+    },
+  );
+
+  test.each(userWriteProtocols)("%s denies WeCom unlink to HR who can edit the user's profile", async (protocol) => {
+    const [target] = await harness.db
+      .insert(users)
+      .values({ username: "managed", name: "Managed User", wxId: "Private-Member" })
+      .returning();
+    const [organization] = await harness.db
+      .insert(organizations)
+      .values({
+        orgCode: "IN",
+        orgName: "In scope",
+        path: "/IN",
+        level: OrganizationLevel.One,
+        orgType: OrganizationType.Company,
+      })
+      .returning();
+    const [position] = await harness.db.insert(positions).values({ posCode: "POS", posName: "Position" }).returning();
+    await harness.db.insert(employments).values({
+      userId: target!.id,
+      orgId: organization!.id,
+      posId: position!.id,
+      status: EmploymentStatus.Enable,
+    });
+    const { app } = createUserWriteApp(createCommand(), organization!.id);
+    const update = await requestUserUpdate(app, protocol, target!.username, { name: "HR Edit" });
+    expect(update.status).toBe(200);
+    const before = await facts();
+    expect(before.users).toMatchObject([{ name: "HR Edit", wxId: "Private-Member" }]);
+
+    const denied = await requestUserUnlinkWecom(app, protocol, target!.username);
+    expect(denied.status).toBe(403);
+    expect(await facts()).toEqual(before);
+  });
+
+  test.each([
+    ["mobile", "12345678", ApiErrorCode.MobileAlreadyExists],
+    ["wxId", "Member-A", ApiErrorCode.WxIdAlreadyExists],
+  ] as const)(
+    "disabled users retain %s until soft deletion, which preserves the old value",
+    async (field, value, code) => {
+      const { app } = createUserWriteApp();
+      const owner = await requestUserCreate(app, "REST", {
+        username: "owner",
+        name: "Owner",
+        userType: UserType.Formal,
+        status: UserStatus.Disable,
+        [field]: `  ${value}  `,
+      });
+      expect(owner.status).toBe(200);
+
+      const candidate = { username: "candidate", name: "Candidate", userType: UserType.Formal };
+      if (field === "mobile") expect((await requestUserCreate(app, "REST", candidate)).status).toBe(200);
+      const claim = () =>
+        field === "mobile"
+          ? requestUserUpdate(app, "REST", candidate.username, { mobile: ` ${value}` })
+          : requestUserCreate(app, "REST", { ...candidate, wxId: ` ${value}` });
+      const duplicate = await claim();
+      expect(duplicate.status).toBe(409);
+      expect(await duplicate.json()).toMatchObject({ code });
+      expect((await facts()).audits).toHaveLength(field === "mobile" ? 2 : 1);
+
+      const removed = await app.request("/admin/users/owner", { method: "DELETE" });
+      expect(removed.status).toBe(200);
+      expect((await claim()).status).toBe(200);
+      const after = await facts();
+      expect(after.users).toMatchObject([
+        { username: "owner", isDelete: true, [field]: value },
+        { username: "candidate", isDelete: false, [field]: value },
+      ]);
+    },
+  );
+
+  test.each([
+    ["mobile", "17712345678", ApiErrorCode.MobileAlreadyExists],
+    ["wxId", "Member-A", ApiErrorCode.WxIdAlreadyExists],
+  ] as const)("concurrent creates cannot claim the same normalized %s", async (field, value, code) => {
+    let arrived = 0;
+    const gate = Promise.withResolvers<void>();
+    const command = createCommand((tx) => ({
+      ...tx,
+      userRepository: {
+        ...tx.userRepository,
+        setUserForAdmin: async (input) => {
+          if (++arrived === 2) gate.resolve();
+          await gate.promise;
+          return await tx.userRepository.setUserForAdmin(input);
+        },
+      },
+    }));
+    const { app } = createUserWriteApp(command);
+    const responses = await Promise.all(
+      ["First", "Second"].map((name, index) =>
+        requestUserCreate(app, "REST", {
+          username: name,
+          name,
+          userType: UserType.Formal,
+          [field]: index === 0 ? " " + value : `${value} `,
+        }),
+      ),
+    );
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
+    const rejected = responses.find((response) => response.status === 409);
+    expect(await rejected?.json()).toMatchObject({ code });
+    const after = await facts();
+    expect(after.users).toMatchObject([{ [field]: value }]);
+    expect(after.audits).toHaveLength(1);
+    expect(after.dirty).toHaveLength(1);
+  });
+
+  test("stores blank contacts as null and keeps wxId case significant", async () => {
+    const { app } = createUserWriteApp();
+    for (const [index, wxId] of [" \t", "", "Member", "member"].entries()) {
+      const created = await requestUserCreate(app, "REST", {
+        username: `user-${index}`,
+        name: "User",
+        userType: UserType.Formal,
+        mobile: " \t",
+        wxId,
+      });
+      expect(created.status).toBe(200);
+    }
+    expect((await facts()).users.map(({ mobile, wxId }) => ({ mobile, wxId }))).toEqual([
+      { mobile: null, wxId: null },
+      { mobile: null, wxId: null },
+      { mobile: null, wxId: "Member" },
+      { mobile: null, wxId: "member" },
+    ]);
+  });
+
   test.each(userWriteProtocols)(
     "%s normalizes User identity writes before PostgreSQL and preserves no-op semantics",
     async (protocol) => {
@@ -826,27 +1078,18 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
       const createInput = {
         username: `  ${username}  `,
         name: `  ${suffix} Name  `,
+        mobile: "  12345678 \t",
+        wxId: "  Mixed-Wx \t",
         userType: UserType.Formal,
       };
       const created = await requestUserCreate(app, protocol, createInput);
       expect(created.status).toBe(200);
 
-      const updated =
-        protocol === "REST"
-          ? await app.request(`/admin/users/${username}`, {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ name: `  ${suffix} Name  ` }),
-            })
-          : await app.request("/rpc/update", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ username, data: { name: `  ${suffix} Name  ` } }),
-            });
+      const updated = await requestUserUpdate(app, protocol, username, { mobile: " 12345678 " });
       expect(updated.status).toBe(200);
 
       const after = await facts();
-      expect(after.users).toMatchObject([{ username, name: `${suffix} Name` }]);
+      expect(after.users).toMatchObject([{ username, name: `${suffix} Name`, mobile: "12345678", wxId: "Mixed-Wx" }]);
       expect(after.audits).toMatchObject([{ action: "admin.user.create" }]);
       expect(after.dirty).toMatchObject([{ version: "1" }]);
     },
@@ -1043,7 +1286,7 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
     expect(empty).toBeInstanceOf(BadRequestError);
     const missing = await failure(() => service.updateUser("missing", { name: "Name" }));
     expect(missing).toBeInstanceOf(UserNotFoundError);
-    const same = await service.updateUser("user", { name: "Original", mobile: "13800000000", wxId: null });
+    const same = await service.updateUser("user", { name: "Original", mobile: "13800000000" });
     expect(same).toEqual({ changed: false, result: null });
     const after = await facts();
     expect(after).toEqual(before);

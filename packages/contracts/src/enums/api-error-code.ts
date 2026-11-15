@@ -33,6 +33,7 @@ export enum ApiErrorCode {
   UsernameAlreadyExists = "USER.USERNAME_ALREADY_EXISTS",
   InvalidMobile = "USER.INVALID_MOBILE",
   MobileAlreadyExists = "USER.MOBILE_ALREADY_EXISTS",
+  WxIdAlreadyExists = "USER.WX_ID_ALREADY_EXISTS",
   WeakPassword = "USER.WEAK_PASSWORD",
   InvalidOldPassword = "USER.INVALID_OLD_PASSWORD",
   UserHasActiveEmployment = "USER.HAS_ACTIVE_EMPLOYMENT",

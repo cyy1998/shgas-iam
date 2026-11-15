@@ -4,7 +4,9 @@ export const OidcResponseModeSchema = z.enum(["query", "fragment", "form_post"])
 export type OidcResponseMode = z.infer<typeof OidcResponseModeSchema>;
 export const OidcErrorSchema = z.object({ error: z.string(), error_description: z.string() }).strict();
 export type OidcErrorResponse = z.infer<typeof OidcErrorSchema>;
-export const OidcLoginGuardSchema = z.object({ decision: z.enum(["continue", "login"]) }).strict();
+export const OidcLoginGuardSchema = z
+  .object({ decision: z.enum(["continue", "login"]), wechatQr: z.literal(true).optional() })
+  .strict();
 export const OidcReturnHandleSchema = z.string().regex(/^[\w-]{43}$/u);
 export const OidcTokenResponseSchema = z
   .object({

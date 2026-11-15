@@ -40,6 +40,9 @@ describe("OIDC PKCE journey operations", () => {
     expect(new Set(checkedPaths.map((path) => path.replaceAll("\\", "/")))).toEqual(
       new Set([
         "D:/repo/e2e/system/oidc-pkce.spec.ts",
+        "D:/repo/e2e/system/wecom-qr.spec.ts",
+        "D:/repo/e2e/system/wecom-qr-oidc.spec.ts",
+        "D:/repo/e2e/system/wecom-qr-binding.spec.ts",
         "D:/repo/e2e/system/playwright.config.ts",
         "D:/repo/e2e/system/src/playwright-browser-preflight.ts",
       ]),
@@ -66,6 +69,8 @@ describe("OIDC PKCE journey operations", () => {
       IAM_E2E_RUN_ID: descriptor.runId,
       IAM_E2E_ADMIN_USERNAME: "e2e-admin-oidc-journey-01",
       IAM_E2E_DELEGATEE_USERNAME: "e2e-delegatee-oidc-journey-01",
+      IAM_E2E_HR_ADMIN_USERNAME: "e2e-hr-admin-oidc-journey-01",
+      IAM_E2E_NO_SCOPE_HR_ADMIN_USERNAME: "e2e-no-scope-hr-oidc-journey-01",
       IAM_E2E_OIDC_CLIENT_CODE: "e2e-oidc-oidc-journey-01",
       IAM_E2E_OIDC_REDIRECT_URI: "http://127.0.0.1:43123/e2e/oidc/callback",
       IAM_E2E_INTERNAL_API_KEY: "iam-e2e-internal-api-key-oidc-journey-01",

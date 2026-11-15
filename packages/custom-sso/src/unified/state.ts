@@ -145,6 +145,7 @@ export function createCustomSsoState(redis: CustomSsoStateRedis, namespace: stri
         const value = continuationSchema.parse(JSON.parse(String(raw)));
         if (value.browserDigest !== digest(browserBinding)) return null;
         return {
+          expiresAt: value.expiresAt,
           clientCode: value.clientCode,
           redirectUrl: value.redirectUrl,
           callbackEndpoint: value.callbackEndpoint,

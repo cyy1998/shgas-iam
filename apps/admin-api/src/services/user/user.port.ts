@@ -24,6 +24,7 @@ export interface AdminUserTransactionStorePort {
   countOpenEmploymentsByUsername: (username: string) => Promise<number>;
   softDeleteUserByUsername: (username: string) => Promise<User | null>;
   setPassword: (userId: number, password: string) => Promise<User | null>;
+  unlinkWecom: (userId: number) => Promise<User | null>;
 }
 
 export interface AdminUserReaderPort {

@@ -62,6 +62,58 @@ describe("LoginPage", () => {
     });
   });
 
+  it.each(["密码登录", "手机登录"])(
+    "keeps the submitted %s form until its request finishes and then allows starting WeCom QR",
+    async (method) => {
+      const oidcReturn = "a".repeat(43);
+      window.history.replaceState({}, "", `/portal/login?oidcReturn=${oidcReturn}`);
+      const submitted = vi.fn();
+      const qrStarted = vi.fn();
+      let finishRequest!: (error: ServiceError) => void;
+      const pending = new Promise<never>((_resolve, reject) => {
+        finishRequest = reject;
+      });
+      withHumanVerification.mockImplementation((action) => {
+        submitted(action);
+        return pending;
+      });
+      server.use(
+        http.get("*/oidc/login-guard", () => HttpResponse.json({ decision: "login", wechatQr: true })),
+        http.post("*/oidc/wechat-qr", ({ request }) => {
+          qrStarted(new URL(request.url).searchParams.get("oidcReturn"));
+          return new HttpResponse(null, { status: 503 });
+        }),
+      );
+      render(<LoginPage />, { withSso: true });
+
+      const qrTab = await screen.findByRole("tab", { name: "企业微信扫码登录" });
+      try {
+        if (method === "密码登录") {
+          fireEvent.change(screen.getByPlaceholderText("请输入您的工号"), { target: { value: "zhangsan" } });
+          fireEvent.change(screen.getByPlaceholderText("请输入登录密码"), { target: { value: "secret" } });
+        } else {
+          fireEvent.click(screen.getByRole("tab", { name: method }));
+          fireEvent.change(screen.getByPlaceholderText("请输入手机号"), { target: { value: "17721462865" } });
+          fireEvent.change(screen.getByPlaceholderText("验证码"), { target: { value: "1234" } });
+        }
+        fireEvent.click(screen.getByRole("button", { name: /安全登录/ }));
+        await waitFor(() =>
+          expect(submitted).toHaveBeenCalledWith(method === "密码登录" ? "passwordLogin" : "mobileLogin"),
+        );
+
+        fireEvent.click(qrTab);
+        expect(screen.getByRole("tab", { name: method })).toHaveAttribute("aria-selected", "true");
+        expect(qrStarted).not.toHaveBeenCalled();
+      } finally {
+        await act(async () => {
+          finishRequest(new ServiceError("登录失败", ApiErrorCode.LoginFailed));
+        });
+      }
+      fireEvent.click(qrTab);
+      await waitFor(() => expect(qrStarted).toHaveBeenCalledExactlyOnceWith(oidcReturn));
+    },
+  );
+
   it("does not render the login form while the continuation check is pending", async () => {
     let release!: () => void;
     let started!: () => void;

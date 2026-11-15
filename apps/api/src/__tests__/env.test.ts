@@ -176,6 +176,40 @@ describe("API environment", () => {
     expect(() => parseApiEnv({ ...validEnv(), IAM_API_LOGIN_ENDPOINT: endpoint })).toThrow("safe root-relative path");
   });
 
+  test("enables WeChat QR only with paired AgentId and the exact HTTPS callback on the public hostname", () => {
+    const disabled = parseApiEnv({
+      ...validEnv(),
+      IAM_API_WECHAT_QR_AGENT_ID: "",
+      IAM_API_WECHAT_QR_CALLBACK_URL: "",
+    });
+    expect(disabled.integrations.wechat.qr).toBeUndefined();
+
+    const callbackUrl = "https://iam.example.com:8443/sso/wechat-qr/mobile/callback";
+    const enabled = parseApiEnv({
+      ...validEnv(),
+      IAM_API_WECHAT_QR_AGENT_ID: "1000001",
+      IAM_API_WECHAT_QR_CALLBACK_URL: callbackUrl,
+    });
+    expect(enabled.integrations.wechat.qr).toEqual({ agentId: "1000001", callbackUrl });
+
+    const invalid = [
+      undefined,
+      "http://iam.example.com/sso/wechat-qr/mobile/callback",
+      "https://another.example.com/sso/wechat-qr/mobile/callback",
+      "https://iam.example.com/sso/wechat-qr/mobile/callback?source=1",
+      "https://iam.example.com/other-path",
+    ];
+    for (const callback of invalid) {
+      expect(() =>
+        parseApiEnv({
+          ...validEnv(),
+          IAM_API_WECHAT_QR_AGENT_ID: "1000001",
+          IAM_API_WECHAT_QR_CALLBACK_URL: callback,
+        }),
+      ).toThrow("WeChat QR requires the canonical HTTPS public");
+    }
+  });
+
   test("still requires a configured active login credential key in production", () => {
     expect(() =>
       parseApiEnv({

@@ -67,7 +67,8 @@ test("rejected sends preserve the code and consuming it does not release cooldow
   const f = await fixture();
   try {
     const service = f.services[0]!;
-    await service.sendCode("13800000000", VerificationCodeUsage.Login);
+    await service.sendCode(" 13800000000 ", VerificationCodeUsage.Login);
+    expect(f.sender).toHaveBeenCalledWith("13800000000");
     const rejected = await Promise.allSettled([service.sendCode("13800000000", "login")]);
     expect(rejected[0]!.status).toBe("rejected");
     const valid = await service.checkVerificationCode("login", "13800000000", "1234");

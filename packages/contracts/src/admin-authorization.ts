@@ -81,6 +81,7 @@ export const AdminCapabilitySummarySchema = z
 export const AdminUserAllowedActionsSchema = z
   .object({
     editProfile: AdminAuthorizationDecisionSchema,
+    unlinkWecom: AdminAuthorizationDecisionSchema,
     resetPassword: AdminAuthorizationDecisionSchema,
     changeStatus: AdminAuthorizationDecisionSchema,
     delete: AdminAuthorizationDecisionSchema,

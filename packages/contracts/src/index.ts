@@ -6,6 +6,7 @@ export * from "./auth/image-captcha";
 export * from "./auth/login-credential";
 export * from "./auth/login-page-guard";
 export * from "./auth/navigation";
+export * from "./auth/wechat-qr";
 export * from "./client";
 export * from "./client-sso";
 export * from "./custom-sso/client";

@@ -40,6 +40,13 @@ export const UserNameWriteSchema = z
   .max(64, "姓名最多64个字符")
   .openapi({ description: "姓名" });
 
+export function normalizeRegisteredIdentifier(value: string | null): string | null {
+  return value?.trim() || null;
+}
+
+export const UserMobileWriteSchema = z.string().trim().max(20).nullable().transform(normalizeRegisteredIdentifier);
+export const UserWxIdWriteSchema = z.string().trim().max(255).nullable().transform(normalizeRegisteredIdentifier);
+
 export const UserDetailDtoSchema = UserDtoSchema.extend({
   employments: z.array(EmploymentDetailDtoSchema).default([]),
   roles: z
@@ -68,6 +75,8 @@ export const UserCreateDtoSchema = UserSchema.pick({
   .extend({
     username: UsernameWriteSchema,
     name: UserNameWriteSchema,
+    mobile: UserMobileWriteSchema.optional(),
+    wxId: UserWxIdWriteSchema.optional(),
   })
   .openapi("UserCreateDto");
 

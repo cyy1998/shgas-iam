@@ -20,7 +20,7 @@ export interface PlaywrightJourneyRuntimeOptions {
 }
 
 interface CreatePlaywrightJourneyOperationsOptions extends PlaywrightJourneyRuntimeOptions {
-  specPath: string;
+  specPaths: string[];
   environment: (
     descriptor: RunDescriptor,
     scenario: E2EScenarioIdentity,
@@ -33,7 +33,7 @@ export function createPlaywrightJourneyOperations(options: CreatePlaywrightJourn
   return {
     async preflight(signal?: AbortSignal) {
       await Promise.all(
-        [options.specPath, "playwright.config.ts", join("src", "playwright-browser-preflight.ts")].map((path) =>
+        [...options.specPaths, "playwright.config.ts", join("src", "playwright-browser-preflight.ts")].map((path) =>
           accessPath(join(options.workspaceRoot, path)),
         ),
       );

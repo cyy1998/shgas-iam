@@ -19,17 +19,33 @@ import type { CreateRootSsoHandlersDeps, SsoEndpointsOptions } from "@api/routes
 import { createRootSsoHandlers, createSsoEndpointsHandler } from "@api/routes/sso/sso.handlers";
 import * as ssoRoutes from "@api/routes/sso/sso.routes";
 import { CUSTOM_SSO_BASIC_SECURITY_SCHEME } from "@api/routes/sso/sso.security";
-import { createUnifiedAuthorizationHandlers } from "@api/routes/sso/unified-authorization.handlers";
+import {
+  createInspectCustomSsoWechatQr,
+  createUnifiedAuthorizationHandlers,
+} from "@api/routes/sso/unified-authorization.handlers";
 import { createUnifiedCallbackHandler } from "@api/routes/sso/unified-callback.handler";
 import { createUnifiedTokenHandler } from "@api/routes/sso/unified-token.handler";
+import { getWechatLoginLogPath } from "@api/routes/sso/wechat-login-log-path";
+import { createWechatQrDesktopRouter, createWechatQrMobileRouter } from "@api/routes/sso/wechat-qr.http";
 import { createRootSessionService } from "@api/services/authentication/root-session.service";
 import { createUserSessionAuthenticationAdapter } from "@api/services/authentication/user-session.adapter";
+import { createWechatQrState } from "@api/services/authentication/wechat-qr.state";
 import { createCustomSsoSubjectDeliveryRequestScope } from "@api/services/sso/subject-delivery/custom-sso-subject-delivery-request-scope";
 import {
   CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_DEFINITION,
   CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_SCHEME,
 } from "@api/services/sso/transport/custom-sso-delivery.security";
+import type {
+  WechatQrCompletionPorts,
+  WechatQrConfig,
+  WechatQrDirectoryPort,
+} from "@api/use-cases/authentication/wechat-qr/wechat-qr.port";
+import { createWechatQrUseCase } from "@api/use-cases/authentication/wechat-qr/wechat-qr.use-case";
+import type { WechatQrBindingPorts } from "@api/use-cases/authentication/wechat-qr/wechat-qr-binding.port";
+import { createWechatQrBindingUseCase } from "@api/use-cases/authentication/wechat-qr/wechat-qr-binding.use-case";
+import { createWechatQrCompletionUseCase } from "@api/use-cases/authentication/wechat-qr/wechat-qr-completion.use-case";
 import { createRouter } from "@iam/api-core/core/create-router";
+import { createErrorHandler } from "@iam/api-core/middlewares";
 import type { PublicBindings } from "@iam/api-core/types";
 import type { ClientSnapshotReader } from "@iam/client-snapshot";
 import { createPermittedClientSubjectProjectionService } from "@iam/client-subject-projection";
@@ -72,16 +88,18 @@ export interface RootAuthenticationCompositionOptions {
   kernel: UnifiedSessionKernel<SubjectAccessOperation>;
   barrier: SubjectAccessOperationBarrierPort;
   authentication: Omit<AuthenticationOptions, "services"> & {
-    services: Omit<AuthenticationOptions["services"], "principalSessions" | "oaCurrentSessions">;
+    services: Omit<AuthenticationOptions["services"], "principalSessions" | "oaCurrentSessions" | "user"> & {
+      user: AuthenticationOptions["services"]["user"] & WechatQrCompletionPorts["users"];
+      loginRestriction: AuthenticationOptions["services"]["loginRestriction"] &
+        WechatQrBindingPorts["loginRestriction"];
+    };
   };
   clients: ClientSnapshotReader;
   subjectFacts: ProjectionOptions["subjectFacts"];
   loginCredentialParser: CreateAuthHandlersDeps["loginCredentialParser"];
   internalClients: CreateAuthHandlersDeps["clientService"];
   internalAuthzLogger?: CreateAuthHandlersDeps["logger"];
-  logger: Parameters<typeof createSsoRedirectUrlValidator>[0]["logger"] & {
-    error: (fields: Record<string, unknown>, message: string) => void;
-  };
+  logger: Parameters<typeof createErrorHandler>[0];
   config: CreateRootSsoHandlersDeps["config"];
   endpoints?: SsoEndpointsOptions;
   publicServices?: Pick<CreatePublicHandlersDeps, "userService">;
@@ -90,6 +108,16 @@ export interface RootAuthenticationCompositionOptions {
   oidc?: Omit<OidcAuthorizationOptions, "kernel" | "clients"> & {
     issuers: { internal: string; external: string };
     secureCookies: boolean;
+  };
+  wechatQr?: {
+    redis: Parameters<typeof createWechatQrState>[0];
+    namespace: string;
+    config: WechatQrConfig;
+    directory: WechatQrDirectoryPort;
+    binding?: Pick<
+      WechatQrBindingPorts,
+      "users" | "sms" | "uow" | "verifyUserPassword" | "credentials" | "humanRisk" | "humanVerification"
+    >;
   };
   oidcClientAuth?: OidcClientAuthRateLimiter;
   oidcTrustProxy?: boolean;
@@ -133,11 +161,12 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
     clients: options.clients,
     projection,
   });
+  const principalSessions = createUserSessionAuthenticationAdapter(options.kernel, operations);
   const authentication = createAuthenticationUseCases({
     ...options.authentication,
     services: {
       ...options.authentication.services,
-      principalSessions: createUserSessionAuthenticationAdapter(options.kernel, operations),
+      principalSessions,
       oaCurrentSessions: {
         resolve: (token) =>
           operations.run(async (operation) => {
@@ -214,6 +243,39 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
       clients: options.clients,
       redirectUrls: createSsoRedirectUrlValidator({ logger: options.logger }),
     });
+  const wechatQrState = options.wechatQr && createWechatQrState(options.wechatQr.redis, options.wechatQr.namespace);
+  const wechatQrBinding =
+    wechatQrState &&
+    options.wechatQr?.binding &&
+    createWechatQrBindingUseCase({
+      ...options.wechatQr.binding,
+      state: wechatQrState,
+      loginRestriction: options.authentication.services.loginRestriction,
+      auditLogWriter: options.authentication.auditLogWriter,
+      requireAccess: (subjectIdentifier) =>
+        operations.run(async (operation) => {
+          await operation.acquireForAuthentication(subjectIdentifier);
+        }),
+    });
+  const wechatQrCompletion =
+    wechatQrState &&
+    createWechatQrCompletionUseCase({
+      state: wechatQrState,
+      principalSessions,
+      auditLogWriter: options.authentication.auditLogWriter,
+      loginRestriction: options.authentication.services.loginRestriction,
+      users: options.authentication.services.user,
+    });
+  const wechatQr =
+    options.wechatQr &&
+    wechatQrState &&
+    createWechatQrUseCase({
+      config: options.wechatQr.config,
+      state: wechatQrState,
+      directory: options.wechatQr.directory,
+      wechat: options.authentication.runtime.integrations.wechat,
+    });
+  if (wechatQr) ssoRouter.route("/wechat-qr/mobile", createWechatQrMobileRouter(wechatQr));
   if (customAccess) {
     ssoRouter.openAPIRegistry.registerComponent("securitySchemes", CUSTOM_SSO_BASIC_SECURITY_SCHEME, {
       type: "http",
@@ -258,7 +320,25 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
       logger: options.logger,
       loginEndpoint: options.config.loginEndpoint,
       retryAfterSeconds: options.config.projectionRetryAfterSeconds,
+      wechatQrEnabled: Boolean(wechatQr),
     });
+    if (wechatQr && wechatQrState) {
+      ssoRouter.route(
+        "/wechat-qr",
+        createWechatQrDesktopRouter({
+          qr: wechatQr,
+          state: wechatQrState,
+          complete: wechatQrCompletion,
+          binding: wechatQrBinding,
+          internalOrigin: options.endpoints?.config.ssoInternalOrigin,
+          inspect: createInspectCustomSsoWechatQr({
+            inspectLoginContinuation: (input) =>
+              operations.run((operation) => customSso.forOperation(operation).inspectLoginContinuation(input)),
+            retryAfterSeconds: options.config.projectionRetryAfterSeconds,
+          }),
+        }),
+      );
+    }
     ssoRouter.openapi(ssoRoutes.authorize, handlers.authorize);
     ssoRouter.openapi(ssoRoutes.loginGuard, handlers.loginGuard);
   }
@@ -341,6 +421,16 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
             "OIDC request failed",
           ),
         authorization: oidc,
+        wechatQr:
+          wechatQr && wechatQrState && wechatQrCompletion
+            ? {
+                useCase: wechatQr,
+                state: wechatQrState,
+                complete: wechatQrCompletion,
+                binding: wechatQrBinding,
+                handleApiError: createErrorHandler(options.logger, getWechatLoginLogPath),
+              }
+            : undefined,
         reportAdmissionDenied: (clientCode, request) =>
           options.logger.warn(
             { ...request, event: "application.admission.denied", outcome: "no-match", protocol: "oidc", clientCode },
@@ -391,6 +481,7 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
     roots,
     customSso,
     customAccess,
+    wechatQrState,
     oidc,
     oidcTokens,
     oidcLogout,

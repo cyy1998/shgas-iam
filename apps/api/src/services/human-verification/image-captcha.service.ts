@@ -82,7 +82,9 @@ export function createImageCaptchaService(deps: ImageCaptchaDeps) {
   }
 
   function bindingFor(action: HumanVerificationAction, context: HumanVerificationContext) {
-    return digest("image-captcha-operation", JSON.stringify([action, context.subject, context.sms]));
+    const operation = [action, context.subject, context.sms];
+    if (context.wechatQrRequestId) operation.push(context.wechatQrRequestId);
+    return digest("image-captcha-operation", JSON.stringify(operation));
   }
 
   function issueTicket(action: HumanVerificationAction, context: HumanVerificationContext) {

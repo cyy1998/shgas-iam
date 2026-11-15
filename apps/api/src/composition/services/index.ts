@@ -172,6 +172,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
     }),
   );
   const userMobileBinding = createUserMobileBinding({
+    userRepository: repositories.user,
     mobileService,
     auditLogWriter,
   });
@@ -269,7 +270,31 @@ export function createApiServices(options: CreateApiServicesOptions) {
     internalUserDocumentQuery,
   };
   const admission = createApplicationAdmissionEvaluator(options.userDocumentQueryDb);
+  const wechat = runtime.config.env.integrations.wechat;
   const authentication = createRootAuthenticationComposition({
+    wechatQr: wechat.qr && {
+      config: { corpId: wechat.corpId, ...wechat.qr },
+      redis: runtime.redis,
+      namespace: runtime.config.sessionKernel.namespace,
+      binding: {
+        users: repositories.user,
+        sms: mobileService,
+        verifyUserPassword: userPasswordHelper.verifyUserPassword,
+        credentials: loginCredentialParser,
+        humanVerification: capService,
+        humanRisk: humanRiskService,
+        uow: mapUnitOfWork(unitOfWork, (tx) => ({
+          userRepository: tx.repositories.user,
+          auditLogWriter: tx.auditLogWriter,
+          userDocumentInvalidation: tx.userDocumentInvalidation,
+        })),
+      },
+      directory: {
+        lookupApplicationName: async (clientCode) =>
+          (await clientService.getClientByCode(clientCode))?.clientName ?? null,
+        findRegisteredMember: repositories.user.findRegisteredWechatMember,
+      },
+    },
     kernel: sessionKernel,
     barrier: subjectAccess,
     authentication: { auditLogWriter, runtime, services },

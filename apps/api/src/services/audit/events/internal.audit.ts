@@ -21,7 +21,7 @@ export function buildInternalPurveyorContactRegisterAudit(
     targetUserId: number | null;
     username: string;
     name: string;
-    mobile: string;
+    mobile: string | null;
     orgCode: string;
     existingContact: boolean;
   },

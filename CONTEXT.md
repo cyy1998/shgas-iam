@@ -310,7 +310,7 @@ _Avoid_: all-employments-in-scope user, Effective-Employment-only user, employme
 _Avoid_: open-only employment view, editable employment history, Legacy Employment Tombstone
 
 **HR User Profile Administration**:
-HR Administrator 对未删除 User 的全局读取和对 HR-Managed User 的受限档案管理能力；User 详情与 `iam:admin` 一样展示其全部非墓碑 Employment 及 Role，范围外任职保持只读且不能进入任职管理，普通档案编辑只包含 name、mobile、wxId 与 userType。它不创建或删除 User；Credential 重置与 User Status 变更是另行约束的全局账号动作。
+HR Administrator 对未删除 User 的全局读取和对 HR-Managed User 的受限档案管理能力；User 详情与 `iam:admin` 一样展示其全部非墓碑 Employment 及 Role，范围外任职保持只读且不能进入任职管理，普通档案编辑只包含 name、mobile 与 userType。它不创建或删除 User；Credential 重置与 User Status 变更是另行约束的全局账号动作。
 _Avoid_: scoped user visibility, user provisioning, user deletion
 
 **HR Credential Reset**:
@@ -520,6 +520,14 @@ _Avoid_: valid session, online user, 在线用户
 **Authentication Continuation**:
 IAM 在身份验证前保留、并在身份验证后继续原 Custom SSO 或 OIDC 授权请求的上下文，包含首次已接受的授权事实。恢复不因普通配置编辑重新审核原 redirect/scope 允许范围，但仍受当前流量、协议启用与适用认证规则约束；有效根登录应被复用，普通登录页参数不能绕过续接。
 _Avoid_: post-login homepage, new login attempt, generic redirect, force-login query
+
+**企业微信跨设备扫码登录**:
+用户在手机端通过企业微信证明成员身份并确认本次登录，再由发起请求的电脑浏览器完成 IAM 登录、继续原 Authentication Continuation 的认证方式。
+_Avoid_: 企业微信工作台免登、企业微信第三方登录回调
+
+**企业微信身份绑定**:
+企业微信成员身份与既有 IAM 用户之间的一对一登录关联，账号停用期间仍保留，由 IAM 完整管理员显式解除。未绑定的成员在发起扫码的电脑上用用户名和密码验证既有账号，或直接输入已登记且唯一标识该账号的手机号并验证短信验证码，建立绑定。
+_Avoid_: 手机号自动匹配、扫码开户
 
 **Protocol Reauthentication Requirement**:
 OIDC Client 对当前授权请求提出、并由 OIDC 验证和绑定到 Authentication Continuation 的新鲜身份验证要求；没有有效会话时它可通过首次登录满足，已有有效 UserSession 时 IAM 不再次执行身份验证，而以 `login_required` 终止本次授权。任意登录页 query 或 Custom SSO 参数不构成该要求。

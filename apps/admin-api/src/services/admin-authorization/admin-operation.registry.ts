@@ -271,6 +271,7 @@ export const ADMIN_OPERATION_REGISTRY = {
   "admin.user.updateStatus": userMutation(["username"]),
   "admin.user.delete": userMutation(["username"]),
   "admin.user.resetPassword": userMutation(["username"]),
+  "admin.user.unlinkWecom": userMutation(["username"]),
 } as const satisfies Record<string, AdminOperationClassification>;
 
 export const ADMIN_AUTHORIZATION_OPERATION_REGISTRY = ADMIN_OPERATION_REGISTRY;

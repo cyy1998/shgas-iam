@@ -108,7 +108,8 @@ export function createUserService(deps: UserServiceDeps) {
     });
   }
 
-  async function setMobile(userId: number, phoneNumber: string, code: string, options: UserRequestOptions = {}) {
+  async function setMobile(userId: number, inputPhoneNumber: string, code: string, options: UserRequestOptions = {}) {
+    const phoneNumber = inputPhoneNumber.trim();
     const reservation = await deps.mobileBinding.assertCanBindMobile(userId, phoneNumber, code, options);
     let transactionSucceeded = false;
     try {

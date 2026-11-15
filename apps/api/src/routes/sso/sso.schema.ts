@@ -5,6 +5,7 @@ import { LoginPageGuardDecision } from "@iam/contracts";
 export const LoginPageGuardResultSchema = z
   .object({
     decision: z.enum([LoginPageGuardDecision.Continue, LoginPageGuardDecision.Login]),
+    wechatQr: z.literal(true).optional(),
   })
   .strict()
   .openapi("LoginPageGuardResult");

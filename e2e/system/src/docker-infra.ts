@@ -19,6 +19,7 @@ import type { RunDescriptor } from "./lifecycle.ts";
 import { assertCanonicalOriginComposeConfig } from "./origin-contract.ts";
 import { createE2EScenarioIdentity } from "./seed.ts";
 import { readAppliedSeedReferences } from "./seed-receipt.ts";
+import { wecomAgent, wecomMobileCallbackPath } from "./wecom-provider.ts";
 
 const diagnosticLogServices = [
   "postgres",
@@ -95,6 +96,7 @@ export function composeArguments(composeFile: string, project: string, args: str
 
 export function descriptorEnvironment(descriptor: RunDescriptor) {
   const scenario = createE2EScenarioIdentity(descriptor.runId);
+  const wecomMobile = descriptor.wecomMobileOrigin ? new URL(descriptor.wecomMobileOrigin) : undefined;
   return {
     ...process.env,
     COMPOSE_DISABLE_ENV_FILE: "1",
@@ -107,6 +109,10 @@ export function descriptorEnvironment(descriptor: RunDescriptor) {
     IAM_E2E_ORIGIN: descriptor.origin,
     IAM_E2E_PROJECT: descriptor.project,
     IAM_E2E_RUN_ID: descriptor.runId,
+    IAM_E2E_WECHAT_QR_AGENT_ID: wecomMobile ? wecomAgent : "",
+    IAM_E2E_WECHAT_QR_CALLBACK_URL: wecomMobile ? new URL(wecomMobileCallbackPath, wecomMobile).href : "",
+    IAM_E2E_WECHAT_QR_MOBILE_AUTHORITY: wecomMobile?.host ?? "",
+    IAM_E2E_WECHAT_QR_TLS_PORT: wecomMobile?.port ?? "0",
   };
 }
 
@@ -194,6 +200,7 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
         runId: descriptor.runId,
         canonicalOrigin: descriptor.origin,
         internalOrigin: descriptor.internalOrigin,
+        wecomMobileOrigin: descriptor.wecomMobileOrigin,
         adminClientCode: createE2EScenarioIdentity(descriptor.runId).adminClientCode,
       });
       for (const service of Object.values(configuration.services) as Array<{ build?: { context: string } }>) {
@@ -405,6 +412,7 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
         canonicalOrigin: descriptor.origin,
         internalOrigin: descriptor.internalOrigin,
         runId: descriptor.runId,
+        wecomMobileOrigin: descriptor.wecomMobileOrigin,
       });
     },
 
@@ -498,6 +506,14 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
       if (descriptor.internalOrigin) {
         await options.probeOidcDiscovery(descriptor.internalOrigin, signal ?? options.signal);
         await options.probeSsoConfiguration(descriptor.internalOrigin, signal ?? options.signal);
+      }
+      if (descriptor.wecomMobileOrigin) {
+        await options.probeRoute(
+          descriptor.wecomMobileOrigin,
+          wecomMobileCallbackPath,
+          [400],
+          signal ?? options.signal,
+        );
       }
       run.record.status = "running";
       await saveManagedResourceRun(run);

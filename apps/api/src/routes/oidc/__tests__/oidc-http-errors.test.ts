@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { createOidcHttpRouter } from "@api/routes/oidc/oidc.http";
 import { createSubjectAccessOperations } from "@iam/subject-access";
+import { Hono } from "hono";
 
 test("OIDC HTTP reports safe protocol and dependency failure classifications without request secrets", async () => {
   const failures: unknown[] = [];
@@ -47,6 +48,12 @@ test("OIDC HTTP reports safe protocol and dependency failure classifications wit
   const unavailable = await router.request("/auth?client_id=secret-client&state=secret-state", { headers });
   expect(unavailable.status).toBe(503);
   expect(unavailable.headers.get("Retry-After")).toBe("3");
+  const app = new Hono().route("/oidc", router);
+  const qrBeforeTrustedEntry = await app.request(
+    "/oidc/wechat-qr/secret-qr-request-handle/complete?oidcReturn=secret-oidc-return",
+    { method: "POST", headers: { "X-Request-Id": "oidc-qr-error-request" } },
+  );
+  expect(qrBeforeTrustedEntry.status).toBe(400);
   expect(failures).toEqual([
     {
       requestId: "oidc-error-request",
@@ -63,6 +70,14 @@ test("OIDC HTTP reports safe protocol and dependency failure classifications wit
       outcome: "unavailable",
       path: "/auth",
       statusCode: 503,
+    },
+    {
+      requestId: "oidc-qr-error-request",
+      traceId: null,
+      errorCode: "invalid_request",
+      outcome: "protocol",
+      path: "/oidc/wechat-qr/:requestId/complete",
+      statusCode: 400,
     },
   ]);
   expect(JSON.stringify(failures)).not.toContain("secret");

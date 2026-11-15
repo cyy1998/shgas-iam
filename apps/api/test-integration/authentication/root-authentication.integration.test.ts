@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { connect, createServer } from "node:net";
 import process from "node:process";
+import { createUserRepository } from "@api/services/user/user.repository";
 import type { ClientSnapshotValue } from "@iam/client-snapshot";
 import type { SubjectFactsSnapshot } from "@iam/client-subject-projection";
 import {
@@ -19,6 +20,7 @@ import {
   RoleStatus,
   RoleType,
   SubjectClaim,
+  UserStatus,
 } from "@iam/contracts";
 import { CustomSsoManagedFailure } from "@iam/custom-sso";
 import {
@@ -403,6 +405,89 @@ test("candidate four authentication handlers validate credentials and create ind
     ]);
   } finally {
     await f.scope.close();
+  }
+});
+
+test("legacy WeCom callback only logs in the enabled owner of the registered member ID", async () => {
+  const pg = await createApiPostgresTestHarness();
+  try {
+    const f = await fixture(undefined, undefined, undefined, undefined, undefined, undefined, {
+      wechatUsers: createUserRepository(pg.db),
+    });
+    try {
+      await pg.db.insert(users).values([
+        { username: "disabled", name: "Disabled", wxId: "Wx-Member", status: UserStatus.Disable },
+        { username: "other", name: "Other", wxId: "wx-member" },
+      ]);
+      const callback = (code: string) =>
+        f.app.request(
+          `/sso/third-party/wx?${new URLSearchParams({
+            code,
+            client: "iam",
+            redirectUrl: "https://app.example/callback",
+            state: "existing-client-state",
+          })}`,
+        );
+      const disabled = await callback("wx-pg-disabled");
+      expect(disabled.status).not.toBe(302);
+      expect(f.cookie(disabled)).toBeUndefined();
+
+      await pg.db.update(users).set({ isDelete: true }).where(eq(users.username, "disabled"));
+      const deleted = await callback("wx-pg-deleted");
+      expect(deleted.status).not.toBe(302);
+      expect(f.cookie(deleted)).toBeUndefined();
+
+      await pg.db.insert(users).values({
+        id: 1001,
+        subjectIdentifier: f.subjectIdentifier,
+        username: "enabled",
+        name: "Enabled",
+        wxId: "Wx-Member",
+      });
+      const enabled = await callback("wx-pg-enabled");
+      expect(enabled.status).toBe(302);
+      const token = f.cookie(enabled);
+      if (!token) throw new Error("Missing global session cookie");
+      const location = enabled.headers.get("location");
+      if (location === null) throw new Error("Missing authorization redirect");
+      const redirect = new URL(location, "https://iam.example");
+      expect(redirect.pathname).toBe("/sso/authorize");
+      expect(Object.fromEntries(redirect.searchParams)).toMatchObject({
+        client: "iam",
+        redirectUrl: "https://app.example/callback",
+        state: "existing-client-state",
+        token,
+      });
+      await f.operations.run(async (operation) => {
+        const session = await f.kernel.forOperation(operation).resolveUserSession(token);
+        expect(session).toMatchObject({
+          status: "resolved",
+          value: { userSession: { subjectIdentifier: f.subjectIdentifier, amr: ["wechat"] } },
+        });
+      });
+      const retry = await callback("wx-pg-enabled");
+      expect(retry.status).toBe(302);
+      expect(f.cookie(retry)).toEqual(expect.any(String));
+      expect(
+        f.audits.filter(({ action, outcome }) => action === "auth.login.wechat" && outcome === "success"),
+      ).toHaveLength(1);
+
+      await pg.db.update(users).set({ wxId: null }).where(eq(users.username, "enabled"));
+      const unlinked = await callback("wx-pg-enabled");
+      expect(unlinked.status).toBe(400);
+      expect(f.cookie(unlinked)).toBeUndefined();
+      expect(unlinked.headers.get("location")).toBeNull();
+
+      await pg.db.update(users).set({ wxId: "Wx-Member" }).where(eq(users.username, "other"));
+      const reassigned = await callback("wx-pg-enabled");
+      expect(reassigned.status).toBe(400);
+      expect(f.cookie(reassigned)).toBeUndefined();
+      expect(reassigned.headers.get("location")).toBeNull();
+    } finally {
+      await f.close();
+    }
+  } finally {
+    await pg.close();
   }
 });
 

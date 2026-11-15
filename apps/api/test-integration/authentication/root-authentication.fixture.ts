@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
 import process from "node:process";
-import { createRootAuthenticationComposition } from "@api/composition/root-authentication";
+import {
+  createRootAuthenticationComposition,
+  type RootAuthenticationCompositionOptions,
+} from "@api/composition/root-authentication";
 import { createLoginCredentialParser } from "@api/services/authentication/login-credential.parser";
+import type { UserRepository } from "@api/services/user/user.repository";
+import type { UserService } from "@api/services/user/user.service";
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import type { ClientSnapshotSource, ClientSnapshotValue } from "@iam/client-snapshot";
 import { ClientSnapshotUnavailableError } from "@iam/client-snapshot";
@@ -21,6 +26,7 @@ import type { UnifiedCustomSsoAuthorizationOptions } from "@iam/custom-sso";
 import { createUnifiedCustomSsoRedisTestScope } from "@iam/custom-sso/testing";
 import { relations } from "@iam/db/relations";
 import { createSubjectFactsReader, createSubjectFactsRedisCache } from "@iam/documents/user/subject-facts";
+import { LoginRestrictionUnavailableError } from "@iam/login-restriction";
 import { createUnifiedSessionRedisTestScope } from "@iam/session-kernel/testing";
 import type { SubjectAccessOperation } from "@iam/subject-access";
 import {
@@ -47,6 +53,22 @@ export async function fixture(
   admission?: {
     evaluator: UnifiedCustomSsoAuthorizationOptions["admission"];
     source: ClientSnapshotSource & ClientCredentialSource;
+  },
+  userDependencies?: {
+    wechatUsers?: Pick<UserRepository, "getUserByWxId" | "getUserById">;
+    publicUser?: Pick<UserService, "getActiveUserBySubjectIdentifier" | "setMobile">;
+    wechatQr?: Omit<
+      NonNullable<RootAuthenticationCompositionOptions["wechatQr"]>,
+      "redis" | "namespace" | "binding"
+    > & {
+      binding?: Omit<
+        NonNullable<NonNullable<RootAuthenticationCompositionOptions["wechatQr"]>["binding"]>,
+        "credentials"
+      >;
+    };
+    customAdmission?: UnifiedCustomSsoAuthorizationOptions["admission"];
+    auditLogWriter?: RootAuthenticationCompositionOptions["authentication"]["auditLogWriter"];
+    loginRestriction?: RootAuthenticationCompositionOptions["authentication"]["services"]["loginRestriction"];
   },
 ) {
   const url = networkUrl ?? process.env.IAM_API_TEST_REDIS_URL;
@@ -91,6 +113,8 @@ export async function fixture(
       permissionReads: 0,
       factsReads: 0,
       restriction: false,
+      restrictionUnavailable: false,
+      authenticationAuditUnavailable: false,
       failures: 0,
       clientReads: 0,
       clientUnavailable: false,
@@ -191,18 +215,42 @@ export async function fixture(
       });
     }
     const now = 1700000000000;
+    const loginCredentialParser = createLoginCredentialParser({
+      clock: { now: () => now },
+      nonceStore: {
+        set: (key, value, _expiry, ttl, _condition) =>
+          codes.redis.eval(
+            "return redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2], 'NX')",
+            1,
+            key,
+            value,
+            String(ttl),
+          ),
+      },
+      config: { privateKeysByKid: { test: keys.privateKey }, maxSkewMs: 60000, nonceTtlSeconds: 120 },
+    });
     const composition = createRootAuthenticationComposition({
       kernel,
+      wechatQr: userDependencies?.wechatQr && {
+        ...userDependencies.wechatQr,
+        redis: codes.redis,
+        namespace: codes.namespace,
+        binding: userDependencies.wechatQr.binding && {
+          ...userDependencies.wechatQr.binding,
+          credentials: loginCredentialParser,
+        },
+      },
       customSso: {
         redis: codes.redis,
         namespace: codes.namespace,
         codeTtlSeconds,
         continuationTtlSeconds,
-        admission: admission?.evaluator ?? {
-          evaluate() {
-            throw new Error("Admission requires a published User Document fixture");
+        admission: admission?.evaluator ??
+          userDependencies?.customAdmission ?? {
+            evaluate() {
+              throw new Error("Admission requires a published User Document fixture");
+            },
           },
-        },
       },
       customSsoAccess: {
         tokenTtlSeconds,
@@ -269,28 +317,22 @@ export async function fixture(
           };
         },
       },
-      loginCredentialParser: createLoginCredentialParser({
-        clock: { now: () => now },
-        nonceStore: {
-          async set(key) {
-            if (cache.has(key)) return null;
-            cache.set(key, "used");
-            return "OK";
-          },
-        },
-        config: { privateKeysByKid: { test: keys.privateKey }, maxSkewMs: 60000, nonceTtlSeconds: 120 },
-      }),
+      loginCredentialParser,
       publicServices: {
         userService: {
-          getActiveUserBySubjectIdentifier: async () => ({ ...user, password: null }),
+          getActiveUserBySubjectIdentifier:
+            userDependencies?.publicUser?.getActiveUserBySubjectIdentifier ??
+            (async () => ({ ...user, password: null })),
           setPassword: async () => {
             state.publicBusinessReads++;
             return true;
           },
-          setMobile: async () => {
-            state.publicBusinessReads++;
-            return true;
-          },
+          setMobile:
+            userDependencies?.publicUser?.setMobile ??
+            (async () => {
+              state.publicBusinessReads++;
+              return true;
+            }),
         },
       },
       internalClients: { getClientBySecret: async () => null },
@@ -303,7 +345,9 @@ export async function fixture(
       authentication: {
         auditLogWriter: {
           async recordAuditLog(input) {
+            if (state.authenticationAuditUnavailable) throw new Error("Authentication audit unavailable");
             audits.push(input);
+            await userDependencies?.auditLogWriter?.recordAuditLog(input);
           },
         },
         runtime: {
@@ -317,8 +361,12 @@ export async function fixture(
           integrations: {
             wechat: {
               async getWxUserId(code) {
-                if (code !== "wx-code") throw new Error("invalid wx code");
-                return "wx-test";
+                if (code === "wx-code") return "wx-test";
+                if (userDependencies?.wechatQr && code === "wx-unregistered-code") return "wx-unregistered";
+                if (userDependencies?.wechatQr?.binding && code === "wx-unregistered-other-code")
+                  return "wx-unregistered-other";
+                if (userDependencies?.wechatUsers && code.startsWith("wx-pg-")) return " Wx-Member ";
+                throw new Error("invalid wx code");
               },
             },
           },
@@ -327,9 +375,11 @@ export async function fixture(
           cap: { ensureActionAllowed: async () => {} },
           client: { getClientByCode: async () => ({ clientSecret: "secret" }) },
           humanRisk: { recordLoginFailure: async () => {} },
-          loginRestriction: {
-            getRestriction: async () =>
-              state.restriction ? { triggerMethod: "password", remainingSeconds: 60 } : null,
+          loginRestriction: userDependencies?.loginRestriction ?? {
+            getRestriction: async () => {
+              if (state.restrictionUnavailable) throw new LoginRestrictionUnavailableError();
+              return state.restriction ? { triggerMethod: "password", remainingSeconds: 60 } : null;
+            },
             clearLoginState: async () => {},
             async recordFailure() {
               state.failures++;
@@ -341,8 +391,8 @@ export async function fixture(
             checkPassword: async (_name, password) => password === "password",
             getActiveUserByUsername: async () => user,
             getActiveUserByMobile: async () => user,
-            getActiveUserByWxId: async () => user,
-            getActiveUserById: async () => user,
+            getActiveUserByWxId: userDependencies?.wechatUsers?.getUserByWxId ?? (async () => user),
+            getActiveUserById: userDependencies?.wechatUsers?.getUserById ?? (async () => user),
             getLoginProfileById: async () => user,
           },
         },
@@ -351,19 +401,22 @@ export async function fixture(
     const app = new Hono();
     app.onError(createErrorHandler(logger));
     app.route("/", composition.router);
-    async function password(value = "password") {
-      const credential = createLoginCredential({
-        username: user.username,
+    function credential(value: string, username = user.username, wechatQrRequestId?: string) {
+      return createLoginCredential({
+        username,
         password: value,
         kid: "test",
         publicKey: keys.publicKey,
         now,
         nonce: randomUUID(),
+        wechatQrRequestId,
       });
+    }
+    async function password(value = "password") {
       return await app.request("/auth/login/password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ credential }),
+        body: JSON.stringify({ credential: credential(value) }),
       });
     }
     async function login() {
@@ -389,6 +442,7 @@ export async function fixture(
       audits,
       warnings,
       subjectIdentifier,
+      credential,
       password,
       login,
       cookie,

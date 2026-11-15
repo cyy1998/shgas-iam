@@ -4,6 +4,7 @@ import { LOGIN_CREDENTIAL_KID, LOGIN_CREDENTIAL_PUBLIC_KEY } from "@sso/constant
 type PasswordLoginCredentialInput = {
   username: string;
   password: string;
+  wechatQrRequestId?: string;
 };
 
 function assertLoginCredentialConfig() {
@@ -17,6 +18,7 @@ export function createPasswordLoginCredential(input: PasswordLoginCredentialInpu
   return createLoginCredential({
     username: input.username,
     password: input.password,
+    ...(input.wechatQrRequestId !== undefined && { wechatQrRequestId: input.wechatQrRequestId }),
     kid: LOGIN_CREDENTIAL_KID,
     publicKey: LOGIN_CREDENTIAL_PUBLIC_KEY,
   });

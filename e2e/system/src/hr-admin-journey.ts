@@ -30,7 +30,7 @@ export function createHrAdminJourneyOperations(options: CreateHrAdminJourneyOper
   const readScenarioReferences = options.readScenarioReferences ?? readAppliedSeedReferences;
   const playwright = createPlaywrightJourneyOperations({
     ...options,
-    specPath: "hr-admin-user-management.spec.ts",
+    specPaths: ["hr-admin-user-management.spec.ts"],
     environment: async (descriptor, scenario) => {
       const generated = await readScenarioReferences(descriptor);
       return {

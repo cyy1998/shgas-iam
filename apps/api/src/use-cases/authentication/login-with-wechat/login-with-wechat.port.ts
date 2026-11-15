@@ -50,7 +50,6 @@ export interface LoginWithWechatDeps {
   };
   principalSessions: WechatPrincipalSessionPort;
   users: {
-    getActiveUserById: (userId: number) => Promise<WechatLoginUser | null>;
     getActiveUserByWxId: (wxId: string) => Promise<WechatLoginUser | null>;
     getLoginProfileById: (userId: number) => Promise<PublishedUserLoginProfile>;
   };

@@ -3,6 +3,7 @@ import type { APIRequestContext, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 
 import { expectClientDelegationJourney } from "./delegation-journey.ts";
+import { smsBindingUsername } from "./sms-provider.ts";
 
 const publicationTimeoutMs = 45_000;
 
@@ -32,6 +33,7 @@ export async function expectInternalUserDocumentSearchMatrix(input: InternalSear
     input.delegateeUsername,
     input.pausedUsername,
     input.disabledUsername,
+    smsBindingUsername,
     input.noScopeHrAdminUsername,
   ];
   const allProfiles = await searchDsl(input, {
@@ -66,6 +68,7 @@ export async function expectInternalUserDocumentSearchMatrix(input: InternalSear
     input.adminUsername,
     input.hrAdminUsername,
     input.delegateeUsername,
+    smsBindingUsername,
     input.noScopeHrAdminUsername,
   ]);
 

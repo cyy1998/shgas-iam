@@ -125,6 +125,22 @@ export const usersDelete = createRoute({
   },
 });
 
+export const usersUnlinkWecom = createRoute({
+  method: "post",
+  path: "/:username/unlink-wecom",
+  tags,
+  request: {
+    params: z.object({ username: z.string() }),
+  },
+  responses: {
+    ...commonErrorResponses,
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(createAdminMutationResultSchema(z.null())),
+      "企业微信解绑结果",
+    ),
+  },
+});
+
 export const usersResetPassword = createRoute({
   method: "post",
   path: "/:username/reset-password",

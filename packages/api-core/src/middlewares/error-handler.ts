@@ -43,15 +43,15 @@ function getRoutePath(c: Context) {
   return request.routePath ?? c.req.path;
 }
 
-function buildRestErrorContext(c: Context, logger: ErrorLogger) {
+function buildRestErrorContext(c: Context, logger: ErrorLogger, redactedPath?: string) {
   return {
     surface: "rest" as const,
     sourceApp: getLoggerSourceApp(logger),
     requestId: getRequestId(c),
     traceId: getTraceIdFromHeaders((name) => getHeader(c, name)),
     method: c.req.method,
-    path: c.req.path,
-    route: getRoutePath(c),
+    path: redactedPath ?? c.req.path,
+    route: redactedPath ?? getRoutePath(c),
   };
 }
 
@@ -68,20 +68,24 @@ function setRetryAfterHeader(err: { retryAfterSeconds?: number }, c: Context) {
     c.header("Retry-After", String(err.retryAfterSeconds));
 }
 
-export function createErrorHandler(appLogger: ErrorLogger) {
+export function createErrorHandler(appLogger: ErrorLogger, redactLogPath?: (path: string) => string | undefined) {
   return function errorHandler(err: Error | HTTPResponseError, c: Context) {
     const logger = getRequestLogger(c) ?? appLogger;
+    const redactedPath = redactLogPath?.(c.req.path);
+    const context = buildRestErrorContext(c, logger, redactedPath);
+    const errorMessage = redactedPath !== undefined ? "Request error on redacted route" : err.message;
+    const logError = redactedPath === undefined ? err : undefined;
     if (isApiRuntimeError(err)) {
       logApiError(
         logger,
         {
-          ...buildRestErrorContext(c, logger),
+          ...context,
           event: SystemLogEvent.ApiErrorHandled,
           statusCode: err.httpStatus,
           errorCode: err.code,
           errorName: err.name,
-          errorMessage: err.message,
-          err,
+          errorMessage,
+          err: logError,
         },
         "handled request error",
       );
@@ -92,13 +96,13 @@ export function createErrorHandler(appLogger: ErrorLogger) {
       logApiError(
         logger,
         {
-          ...buildRestErrorContext(c, logger),
+          ...context,
           event: SystemLogEvent.ApiErrorHandled,
           statusCode: err.status,
           errorCode: ApiErrorCode.InternalError,
           errorName: err.name === "Error" ? "HTTPException" : err.name,
-          errorMessage: err.message,
-          err,
+          errorMessage,
+          err: logError,
         },
         "handled request error",
       );
@@ -108,14 +112,14 @@ export function createErrorHandler(appLogger: ErrorLogger) {
       logApiError(
         logger,
         {
-          ...buildRestErrorContext(c, logger),
+          ...context,
           event: SystemLogEvent.ApiErrorUnhandled,
           statusCode: INTERNAL_SERVER_ERROR,
           errorCode: ApiErrorCode.InternalError,
           source: getErrorSourceLocation(err),
           errorName: err.name,
-          errorMessage: err.message,
-          err,
+          errorMessage,
+          err: logError,
         },
         "unhandled request error",
       );

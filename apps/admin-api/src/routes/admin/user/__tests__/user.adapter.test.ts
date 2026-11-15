@@ -328,6 +328,7 @@ describe("admin User adapter authorization projection", () => {
     expect(result.allowedActions).toEqual({
       editProfile: allowed,
       resetPassword: allowed,
+      unlinkWecom: denied,
       changeStatus: {
         allowed: false,
         reason: "USER_HAS_OUT_OF_SCOPE_OPEN_EMPLOYMENT",
@@ -463,6 +464,7 @@ describe("admin User adapter authorization projection", () => {
     expect(result.allowedActions).toEqual({
       editProfile: allowed,
       resetPassword: allowed,
+      unlinkWecom: allowed,
       changeStatus: allowed,
       delete: allowed,
       resign: allowed,

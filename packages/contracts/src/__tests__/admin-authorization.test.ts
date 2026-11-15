@@ -67,6 +67,7 @@ describe("Admin authorization contract", () => {
     expect(
       AdminUserAllowedActionsSchema.parse({
         editProfile: denied,
+        unlinkWecom: denied,
         resetPassword: denied,
         changeStatus: denied,
         delete: denied,
@@ -74,6 +75,7 @@ describe("Admin authorization contract", () => {
       }),
     ).toEqual({
       editProfile: denied,
+      unlinkWecom: denied,
       resetPassword: denied,
       changeStatus: denied,
       delete: denied,

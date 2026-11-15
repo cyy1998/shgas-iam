@@ -69,6 +69,7 @@ services:
       APISIX_OTEL_COLLECTOR_ENDPOINT: 127.0.0.1:9
     ports:
       - "127.0.0.1:${IAM_E2E_GATEWAY_PORT:-49152}:9080"
+      - "127.0.0.1:${IAM_E2E_WECHAT_QR_TLS_PORT:-0}:9443"
     depends_on:
       apisix-etcd:
         condition: service_healthy
@@ -125,10 +126,12 @@ services:
       IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON: '{"2026-05-primary":"319b4e59ca80d7b4cc35955b63da4edf1ed51772ec8f33c0a4f769dda7b9fc65"}'
       IAM_API_SESSION_KERNEL_NAMESPACE: "iam:session"
       IAM_API_OIDC_COOKIE_SECURE: "false"
-      IAM_API_WECHAT_CORP_ID: e2e-disabled
-      IAM_API_WECHAT_CORP_SECRET: e2e-disabled
-      IAM_API_SMS_URL: http://127.0.0.1:9/disabled
-      IAM_API_SMS_SIGNATURE_KEY: e2e-disabled
+      IAM_API_WECHAT_CORP_ID: ww-e2e-local
+      IAM_API_WECHAT_CORP_SECRET: wecom-e2e-secret-only
+      IAM_API_WECHAT_QR_AGENT_ID: ${IAM_E2E_WECHAT_QR_AGENT_ID:-}
+      IAM_API_WECHAT_QR_CALLBACK_URL: ${IAM_E2E_WECHAT_QR_CALLBACK_URL:-}
+      IAM_API_SMS_URL: http://127.0.0.1:9/test-sms
+      IAM_API_SMS_SIGNATURE_KEY: e2e-sms
       IAM_API_USER_SESSION_TTL_SECONDS: "86400"
       IAM_API_CLIENT_SESSION_TTL_SECONDS: "86400"
       IAM_API_CUSTOM_SSO_TOKEN_TTL_SECONDS: "86400"
@@ -139,6 +142,7 @@ services:
       IAM_API_AUTHORIZATION_ENDPOINT: /sso/authorize
       IAM_API_LOGOUT_ENDPOINT: /sso/logout
       IAM_API_THIRDPARTY_OA_ENDPOINT: /sso/thirdparty/oa
+      IAM_E2E_RUN_ID: ${IAM_E2E_RUN_ID:-preflight}
     depends_on: *runtime-dependencies
     healthcheck:
       test:
@@ -289,6 +293,7 @@ services:
       DEV_IAM_ADMIN_FRONTEND_UPSTREAM_PORT: "80"
       IAM_SSO_INTERNAL_HOST: ${IAM_E2E_INTERNAL_AUTHORITY:-127.0.0.1:49152}
       IAM_SSO_EXTERNAL_HOST: ${IAM_E2E_GATEWAY_AUTHORITY:-127.0.0.1:49152}
+      IAM_E2E_WECHAT_QR_MOBILE_AUTHORITY: ${IAM_E2E_WECHAT_QR_MOBILE_AUTHORITY:-}
     depends_on:
       gateway-api:
         condition: service_healthy

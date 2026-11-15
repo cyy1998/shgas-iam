@@ -9,10 +9,22 @@ export function createRunDescriptor(options: {
   gatewayPort: number;
   runId: string;
   dualEntry?: boolean;
+  wecomMobilePort?: number;
 }): RunDescriptor {
   if (!runIdPattern.test(options.runId)) throw new Error("E2E run id must be a lowercase Docker-safe identifier");
   if (!Number.isInteger(options.gatewayPort) || options.gatewayPort < 1 || options.gatewayPort > 65_535) {
     throw new Error("E2E Gateway port must be an integer between 1 and 65535");
+  }
+  const mobilePort = options.wecomMobilePort;
+  if (
+    mobilePort !== undefined &&
+    (!options.dualEntry ||
+      !Number.isInteger(mobilePort) ||
+      mobilePort < 1 ||
+      mobilePort > 65_535 ||
+      mobilePort === options.gatewayPort)
+  ) {
+    throw new Error("E2E WeCom mobile port requires a separate port and dual entry");
   }
 
   const project = `iam-e2e-${options.runId}`;
@@ -23,6 +35,7 @@ export function createRunDescriptor(options: {
     gatewayPort: options.gatewayPort,
     origin: `http://${options.dualEntry ? "external.iam.localhost" : "127.0.0.1"}:${options.gatewayPort}`,
     ...(options.dualEntry ? { internalOrigin: `http://internal.iam.localhost:${options.gatewayPort}` } : {}),
+    ...(mobilePort === undefined ? {} : { wecomMobileOrigin: `https://external.iam.localhost:${mobilePort}` }),
     artifactDirectory: resolve(options.artifactRoot, options.runId),
     labels: {
       "com.docker.compose.project": project,

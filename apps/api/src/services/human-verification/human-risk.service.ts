@@ -1,5 +1,5 @@
 import { HumanVerificationAction } from "@api/enums/humanVerification.action";
-import type { HumanRiskServiceDeps } from "./human-verification.port";
+import type { HumanRiskServiceDeps, HumanRiskServicePort } from "./human-verification.port";
 import type { HumanVerificationContext } from "./human-verification.type";
 
 type Dimension = "subject" | "ip";
@@ -13,7 +13,10 @@ function normalizeValue(value: string | undefined): string | null {
 }
 
 function countKey(action: HumanVerificationAction, dimension: Dimension, value: string) {
-  return `human-risk:${action}:${dimension}:${value}`;
+  let scope = action;
+  if (action === HumanVerificationAction.WechatBindingPassword) scope = HumanVerificationAction.PasswordLogin;
+  if (action === HumanVerificationAction.WechatBindingSmsVerify) scope = HumanVerificationAction.MobileLogin;
+  return `human-risk:${scope}:${dimension}:${value}`;
 }
 
 function lookupUsernamesKey(dimension: Dimension, value: string) {
@@ -45,7 +48,7 @@ export function createHumanRiskService(deps: HumanRiskServiceDeps) {
     if (!deps.config.capEnabled) {
       return false;
     }
-    if (action === HumanVerificationAction.SendSmsCode) {
+    if (action === HumanVerificationAction.SendSmsCode || action === HumanVerificationAction.WechatBindingSmsSend) {
       return true;
     }
     if (action === HumanVerificationAction.OpenUserInfoLookup) {
@@ -62,7 +65,7 @@ export function createHumanRiskService(deps: HumanRiskServiceDeps) {
   }
 
   async function recordLoginFailure(
-    action: HumanVerificationAction.PasswordLogin | HumanVerificationAction.MobileLogin,
+    action: Parameters<HumanRiskServicePort["recordLoginFailure"]>[0],
     context: HumanVerificationContext,
   ) {
     const entries = contextEntries(context, LOGIN_FAILURE_DIMENSIONS);

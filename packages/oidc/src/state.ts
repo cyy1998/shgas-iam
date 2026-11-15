@@ -8,6 +8,7 @@ export interface OidcStateRedis {
 }
 export const randomHandle = () => randomBytes(32).toString("base64url");
 export const digest = (value: string) => createHash("sha256").update(value).digest("hex");
+const completionDigestSchema = z.string().regex(/^(?:[a-f0-9]{64}|qr:[a-f0-9]{64}:(?:[a-f0-9]{64})?)$/u);
 export const acceptedAuthorizationSchema = z
   .object({
     issuer: z.url(),
@@ -43,7 +44,7 @@ export const continuationSchema = z
     version: z.literal(1),
     authorization: acceptedAuthorizationSchema,
     browserDigest: z.string().regex(/^[a-f0-9]{64}$/u),
-    completionDigest: z.string().nullable(),
+    completionDigest: completionDigestSchema.nullable(),
     expiresAt: z.number().int().positive(),
   })
   .strict();
@@ -150,13 +151,62 @@ export function createOidcState(redis: OidcStateRedis, namespace: string) {
       return handle;
     },
     readContinuation,
-    async allowCompletion(handle: string, browserBinding: string, completion: string) {
-      const key = `${prefix}continuation:${digest(handle)}`;
+    async updateCompletion(
+      handle: string,
+      browserBinding: string,
+      issuer: string,
+      proof: { kind: "guard"; digest: string } | { kind: "qr"; digest: string } | { kind: "existing" },
+    ) {
+      if (!OidcReturnHandleSchema.safeParse(handle).success || !browserBinding) return false;
       const result = await execute(
-        "local raw=redis.call('GET',KEYS[1]); if not raw then return 0 end; local ok,v=pcall(cjson.decode,raw); if not ok then return -1 end; if v.browserDigest~=ARGV[1] then return 0 end; v.completionDigest=ARGV[2]; redis.call('SET',KEYS[1],cjson.encode(v),'KEEPTTL'); return 1",
-        key,
+        `
+local raw = redis.call('GET', KEYS[1])
+if not raw then return 0 end
+local ok, v = pcall(cjson.decode, raw)
+if not ok or type(v) ~= 'table' or type(v.authorization) ~= 'table' or type(v.expiresAt) ~= 'number' then
+  return -1
+end
+local t = redis.call('TIME')
+if v.browserDigest ~= ARGV[1] or v.authorization.issuer ~= ARGV[2]
+   or v.expiresAt <= t[1]*1000 + math.floor(t[2]/1000) then
+  return 0
+end
+local root, guard = '', ''
+local current = v.completionDigest
+if type(current) == 'string' then
+  if string.sub(current, 1, 3) == 'qr:' then
+    root, guard = string.match(current, '^qr:([a-f0-9]+):([a-f0-9]*)$')
+    if not root or #root ~= 64 or (#guard ~= 0 and #guard ~= 64) then return -1 end
+  else
+    if #current ~= 64 or not string.match(current, '^[a-f0-9]+$') then return -1 end
+    guard = current
+  end
+elseif current ~= cjson.null then
+  return -1
+end
+if ARGV[3] == 'qr' then
+  root = ARGV[4]
+elseif ARGV[3] == 'guard' then
+  guard = ARGV[4]
+else
+  -- Existing-root QR recovery retires an ordinary guard proof and preserves exact QR recovery.
+  guard = ''
+end
+if root ~= '' then
+  v.completionDigest = 'qr:' .. root .. ':' .. guard
+elseif guard ~= '' then
+  v.completionDigest = guard
+else
+  v.completionDigest = cjson.null
+end
+redis.call('SET', KEYS[1], cjson.encode(v), 'KEEPTTL')
+return 1
+`,
+        `${prefix}continuation:${digest(handle)}`,
         digest(browserBinding),
-        digest(completion),
+        issuer,
+        proof.kind,
+        "digest" in proof ? proof.digest : "",
       );
       if (result !== 0 && result !== 1) throw new OidcStateUnavailableError("corrupt");
       return result === 1;

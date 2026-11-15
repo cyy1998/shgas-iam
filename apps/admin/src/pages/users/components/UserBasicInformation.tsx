@@ -1,6 +1,6 @@
 import styles from "@admin/components/detail/DetailDrawer.module.less";
 import type { UserDetailVo, updateUser } from "@admin/services/user";
-import { Descriptions, Space, Tag, Typography, theme } from "antd";
+import { Button, Descriptions, Space, Tag, Typography, theme } from "antd";
 import userStyles from "./UserDetail.module.less";
 import UserProfileForm from "./UserProfileForm";
 
@@ -11,9 +11,18 @@ type Props = {
   onCancel: () => void;
   onSave: (data: Parameters<typeof updateUser>[1]) => Promise<boolean>;
   onDirtyChange: (dirty: boolean) => void;
+  onUnlinkWecom: () => void;
 };
 
-export default function UserBasicInformation({ detail, editing, saving, onCancel, onSave, onDirtyChange }: Props) {
+export default function UserBasicInformation({
+  detail,
+  editing,
+  saving,
+  onCancel,
+  onSave,
+  onDirtyChange,
+  onUnlinkWecom,
+}: Props) {
   const { token } = theme.useToken();
 
   return (
@@ -46,7 +55,20 @@ export default function UserBasicInformation({ detail, editing, saving, onCancel
             { key: "name", label: "姓名", children: detail.name },
             { key: "userType", label: "用户类型", children: detail.userType ?? "—" },
             { key: "mobile", label: "手机号", children: detail.mobile ?? "—" },
-            { key: "wxId", label: "微信 ID", children: detail.wxId ?? "—" },
+            {
+              key: "wxId",
+              label: "企业微信 ID",
+              children: (
+                <Space size={8} wrap>
+                  {detail.wxId ?? "—"}
+                  {detail.wxId && detail.allowedActions.unlinkWecom?.allowed && (
+                    <Button size="small" danger onClick={onUnlinkWecom}>
+                      解除企业微信绑定
+                    </Button>
+                  )}
+                </Space>
+              ),
+            },
           ]}
         />
       )}

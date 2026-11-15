@@ -222,7 +222,6 @@ export function createUserService(deps: AdminUserServiceDeps) {
             const changed =
               (data.name !== undefined && data.name !== current.name) ||
               (data.mobile !== undefined && data.mobile !== current.mobile) ||
-              (data.wxId !== undefined && data.wxId !== current.wxId) ||
               (data.userType !== undefined && data.userType !== current.userType) ||
               (data.status !== undefined && data.status !== current.status) ||
               (data.orderNum !== undefined && data.orderNum !== current.orderNum);
@@ -317,6 +316,27 @@ export function createUserService(deps: AdminUserServiceDeps) {
     authorization?: AdminUserAuthorization,
   ) {
     return await updateUser(username, { status }, auditContext, authorization, "changeStatus");
+  }
+
+  async function unlinkWecom(username: string, auditContext?: AdminAuditContext) {
+    return await adminMutation.locked(
+      (tx) => tx.userRepository.lockUserByUsername(username),
+      () => new UserNotFoundError("用户不存在"),
+      async (tx, current) => {
+        const changed = current.wxId !== null;
+        if (changed && (await tx.userRepository.unlinkWecom(current.id)) === null) {
+          throw new Error("Locked User WeCom unlink returned no row");
+        }
+        await tx.auditService.recordAuditLog(
+          buildAdminUserAudit("admin.user.unlink_wecom", current, { changed }, auditContext),
+        );
+        if (changed) {
+          await tx.userDocumentInvalidation.recordChanges([{ kind: "user", userId: current.id }]);
+        }
+        return { changed, result: null };
+      },
+      adminAuditTransactionOptions(auditContext),
+    );
   }
 
   async function deleteUser(username: string, auditContext?: AdminAuditContext) {
@@ -445,6 +465,7 @@ export function createUserService(deps: AdminUserServiceDeps) {
     resetPasswordByUsername,
     searchUsersFuzzyForAdmin,
     setUserForAdmin,
+    unlinkWecom,
     updateUser,
     updateUserStatus,
   };

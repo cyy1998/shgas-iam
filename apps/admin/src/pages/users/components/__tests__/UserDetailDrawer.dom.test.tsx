@@ -73,6 +73,7 @@ const denied = { allowed: false, reason: "ACTION_NOT_GRANTED" } as const;
 const fullAdminActions = {
   editProfile: allowed,
   resetPassword: allowed,
+  unlinkWecom: allowed,
   changeStatus: allowed,
   delete: allowed,
   resign: allowed,
@@ -323,6 +324,7 @@ describe("UserDetailDrawer Employment lifecycle actions", () => {
     const hrActions = {
       editProfile: denied,
       resetPassword: denied,
+      unlinkWecom: denied,
       changeStatus: denied,
       delete: denied,
       resign: allowed,
@@ -521,6 +523,7 @@ describe("UserDetailDrawer Employment lifecycle actions", () => {
       detail(EmploymentStatus.Enable, true, {
         editProfile: denied,
         resetPassword: denied,
+        unlinkWecom: denied,
         changeStatus: denied,
         delete: denied,
         resign: denied,

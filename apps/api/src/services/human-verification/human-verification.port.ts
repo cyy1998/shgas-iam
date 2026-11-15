@@ -5,7 +5,11 @@ import type { HumanVerificationContext } from "./human-verification.type";
 export interface HumanRiskServicePort {
   shouldRequireVerification: (action: HumanVerificationAction, context: HumanVerificationContext) => Promise<boolean>;
   recordLoginFailure: (
-    action: HumanVerificationAction.PasswordLogin | HumanVerificationAction.MobileLogin,
+    action:
+      | HumanVerificationAction.PasswordLogin
+      | HumanVerificationAction.MobileLogin
+      | HumanVerificationAction.WechatBindingPassword
+      | HumanVerificationAction.WechatBindingSmsVerify,
     context: HumanVerificationContext,
   ) => Promise<void>;
   recordOpenUserInfoLookup: (username: string, context: HumanVerificationContext) => Promise<void>;

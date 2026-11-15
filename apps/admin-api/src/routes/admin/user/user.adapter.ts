@@ -30,6 +30,7 @@ export interface CreateUserAdapterDeps {
     | "resetPasswordByUsername"
     | "searchUsersFuzzyForAdmin"
     | "setUserForAdmin"
+    | "unlinkWecom"
     | "updateUser"
     | "updateUserStatus"
   >;
@@ -147,6 +148,13 @@ export function createUserAdapter(deps: CreateUserAdapterDeps) {
     handler: ({ username }, context) => deps.userService.deleteUser(username, resolveAuditContext(context)),
   });
 
+  const unlinkWecom = defineAdminApiMutationOperation({
+    operationId: "admin.user.unlinkWecom",
+    input: z.object({ username: z.string() }),
+    restInput: (c) => c.req.valid("param") as { username: string },
+    handler: ({ username }, context) => deps.userService.unlinkWecom(username, resolveAuditContext(context)),
+  });
+
   const resetPassword = defineAdminApiMutationOperation({
     operationId: "admin.user.resetPassword",
     input: z.object({ username: z.string() }),
@@ -173,6 +181,7 @@ export function createUserAdapter(deps: CreateUserAdapterDeps) {
     update: updateUser.toTRPC(),
     updateStatus: updateUserStatus.toTRPC(),
     delete: deleteUser.toTRPC(),
+    unlinkWecom: unlinkWecom.toTRPC(),
     resetPassword: resetPassword.toTRPC(),
     generatePassword: generatePassword.toTRPC(),
   });
@@ -186,6 +195,7 @@ export function createUserAdapter(deps: CreateUserAdapterDeps) {
     usersResetPassword: resetPassword.toHandler<UserRouteHandler<"usersResetPassword">>(),
     usersSearch: searchUser.toHandler<UserRouteHandler<"usersSearch">>(),
     usersStatusUpdate: updateUserStatus.toHandler<UserRouteHandler<"usersStatusUpdate">>(),
+    usersUnlinkWecom: unlinkWecom.toHandler<UserRouteHandler<"usersUnlinkWecom">>(),
     usersUpdate: updateUser.toHandler<UserRouteHandler<"usersUpdate">>(),
   };
 }

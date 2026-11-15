@@ -145,6 +145,16 @@ backfill、部分 repair 只登记或唤醒工作，仍须匹配版本的 consum
 回退到不支持准入的版本前，先核对已开启策略的应用。旧版授权进程会跳过准入检查，需继续维持准入的应用应保持停流，
 直至恢复支持准入的版本。传播异常按 [Client Snapshot 修复](authentication-and-session.md#client-snapshot-修复)处理。
 
+### 启用手机号和企业微信身份唯一性
+
+按[常规更新](#常规更新)准备 PostgreSQL 备份和同一候选的 API、Admin API、Admin、SSO 与 User Document Worker。
+迁移会规范化未删除账号的登记值，并登记受影响用户的文档更新。停用账号保留占用，软删除记录保留原值。
+
+1. 关闭用户资料写入入口并排空在途请求，停止旧版 API、Admin API 和可能写入用户档案的维护任务。
+2. 用候选执行正式 `pnpm --filter @iam/db db:migrate`。如果规范化后出现重复登记值，本次迁移整体回滚。
+   保持写入关闭，核对冲突值的归属，修正后再执行迁移。
+3. 启动候选应用和 Worker。发布收敛后，通过受限入口核对手机号查询、旧企业微信回调和用户资料写入，再恢复流量。
+
 ### 独立更新和回退前端
 
 Admin 和 SSO 分别使用 `IAM_ADMIN_IMAGE` 和 `IAM_SSO_IMAGE`。准备目标镜像与上一版本的镜像和部署配置，按常规更新步骤控制受影响入口。

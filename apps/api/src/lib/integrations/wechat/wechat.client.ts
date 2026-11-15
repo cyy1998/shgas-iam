@@ -1,20 +1,13 @@
+import { createHash } from "node:crypto";
 import type { RedisPort } from "@api/composition/runtime";
-import { z } from "@hono/zod-openapi";
+import { z } from "zod";
 
-const WechatAccessTokenResponseSchema = z
-  .object({
-    errcode: z.number(),
-    errmsg: z.string(),
-    access_token: z.string(),
-    expires_in: z.number(),
-  })
-  .openapi("WechatAccessTokenResponseSchema");
-
-const WechatUserInfoResponseSchema = z.object({
-  errcode: z.number(),
-  errmsg: z.string(),
-  userid: z.string(),
+const tokenResponse = z.object({
+  errcode: z.literal(0),
+  access_token: z.string().min(1),
+  expires_in: z.number().int().positive(),
 });
+const memberResponse = z.object({ errcode: z.literal(0), userid: z.string().trim().min(1).max(255) });
 
 export interface CreateWechatClientDeps {
   redis: Pick<RedisPort, "get" | "set">;
@@ -27,43 +20,52 @@ export interface CreateWechatClientDeps {
 
 export function createWechatClient(deps: CreateWechatClientDeps) {
   const fetchFn = deps.fetch ?? fetch;
+  const { corpId, corpSecret } = deps.config;
+  const credentialDigest = createHash("sha256")
+    .update(JSON.stringify([corpId, corpSecret]))
+    .digest("hex");
+  const cacheKey = `wechat:app-access-token:${credentialDigest}`;
+
+  async function getJson(path: string, parameters: Record<string, string>): Promise<unknown> {
+    const url = new URL(path, "https://qyapi.weixin.qq.com");
+    url.search = new URLSearchParams(parameters).toString();
+    try {
+      const response = await fetchFn(url, {
+        method: "GET",
+        redirect: "error",
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!response.ok) throw new Error();
+      return await response.json();
+    } catch {
+      // The URL contains provider credentials. Never propagate transport error details.
+      throw new Error("WeChat provider request failed");
+    }
+  }
 
   async function getWxAccessToken() {
-    const cachedToken = await deps.redis.get("wx_access_token");
-    if (cachedToken !== null) {
-      return cachedToken;
-    }
-    const res = await fetchFn(
-      `https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=${deps.config.corpId}&corpsecret=${deps.config.corpSecret}`,
-      {
-        method: "POST",
-      },
+    const cachedToken = await deps.redis.get(cacheKey);
+    if (cachedToken !== null) return cachedToken;
+    const token = tokenResponse.safeParse(
+      await getJson("/cgi-bin/gettoken", { corpid: corpId, corpsecret: corpSecret }),
     );
-    const body = WechatAccessTokenResponseSchema.parse(await res.json());
-    if (body.errcode !== 0) {
-      return null;
-    }
-    const accessToken = body.access_token;
-    await deps.redis.set("wx_access_token", accessToken, "EX", 3600);
-    return accessToken;
+    if (!token.success) throw new Error("WeChat application credential unavailable");
+    const { access_token, expires_in } = token.data;
+    // Cache for at most an hour and expire before the provider's deadline.
+    if (expires_in > 60) await deps.redis.set(cacheKey, access_token, "EX", Math.min(3600, expires_in - 60));
+    return access_token;
   }
 
   async function getWxUserId(code: string) {
     const accessToken = await getWxAccessToken();
-    const resp = await fetchFn(
-      `https://qyapi.weixin.qq.com/cgi-bin/auth/getuserinfo?access_token=${accessToken}&code=${code}`,
-      {
-        method: "POST",
-      },
+    const member = memberResponse.safeParse(
+      await getJson("/cgi-bin/auth/getuserinfo", { access_token: accessToken, code }),
     );
-    const body = WechatUserInfoResponseSchema.parse(await resp.json());
-    return body.userid;
+    if (!member.success) throw new Error("WeChat member identity unavailable");
+    return member.data.userid;
   }
 
-  return {
-    getWxAccessToken,
-    getWxUserId,
-  };
+  return { getWxAccessToken, getWxUserId };
 }
 
 export type WechatClient = ReturnType<typeof createWechatClient>;

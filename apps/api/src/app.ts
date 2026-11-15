@@ -1,33 +1,18 @@
 import createApp from "@iam/api-core/core/create-app";
 import appConfig from "~api/app.config";
-import { createApiComposition } from "./composition";
-import env from "./env";
-import { logger } from "./lib/logger";
+import { type CreateApiCompositionOptions, createApiComposition } from "./composition";
+import { getWechatLoginLogPath } from "./routes/sso/wechat-login-log-path";
 
-const composition = await createApiComposition({ env, logger });
-
-export async function closeAppComposition() {
-  await composition.close();
+export async function createApiApp(options: CreateApiCompositionOptions = {}) {
+  const composition = await createApiComposition(options);
+  const app = createApp(appConfig, {
+    env: composition.env,
+    logger: composition.logger,
+    redactLogPath: getWechatLoginLogPath,
+    routes: composition.routes,
+    middlewares: composition.middlewares,
+  });
+  return { app, close: composition.close, port: composition.env.port, logger: composition.logger };
 }
 
-const app = createApp(appConfig, {
-  env,
-  logger,
-  routes: composition.routes,
-  middlewares: composition.middlewares,
-});
-
-export const appLifecycle = {
-  started(port: number) {
-    composition.logger.info({ event: "api_started", port }, `server: http://localhost:${port}`);
-  },
-  stopped() {
-    composition.logger.info({ event: "api_stopped" }, "API stopped");
-  },
-  shutdownFailed() {
-    composition.logger.error({ event: "api_shutdown_failed" }, "API shutdown failed");
-  },
-};
-
-export type AppType = typeof app;
-export default app;
+export type AppType = Awaited<ReturnType<typeof createApiApp>>["app"];

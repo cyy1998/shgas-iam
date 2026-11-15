@@ -8,6 +8,7 @@ export async function publishGateway(
     gatewayOrigin: string;
     adminUrl: string;
     adminKey: string;
+    wecomMobile?: { authority: string; cert: string; privateKey: string };
   },
   request: (input: string, init?: RequestInit) => Promise<Response> = fetch,
 ) {
@@ -47,13 +48,59 @@ export async function publishGateway(
       upstream: "sso-frontend",
     });
   }
+  let variables = input.variables;
+  if (input.wecomMobile) {
+    const { authority, cert, privateKey } = input.wecomMobile;
+    // The normal telemetry policy records query strings. These routes carry OAuth state and continuations.
+    const privatePlugins = {
+      "request-id": frontend.plugins["request-id"],
+      opentelemetry: { sampler: { name: "always_off" } },
+    };
+    source.routes.push({
+      key: "wecom-mobile",
+      uri: "/sso/wechat-qr/mobile/*",
+      vars: [
+        ["http_host", "==", authority],
+        ["scheme", "==", "https"],
+      ],
+      upstream: "api",
+      priority: 10,
+      plugins: {
+        ...privatePlugins,
+        "proxy-rewrite": { headers: { set: { "X-IAM-Entry-Network": "external", "X-Forwarded-Proto": "$scheme" } } },
+      },
+    });
+    for (const protocol of ["sso", "oidc"]) {
+      const route = source.routes.find((route) => route.key === `${protocol}-internal`);
+      if (!route) throw new Error(`E2E Gateway has no internal ${protocol} route`);
+      source.routes.push({
+        key: `wecom-desktop-${protocol}`,
+        uris: [`/${protocol}/wechat-qr`, `/${protocol}/wechat-qr/*`],
+        vars: route.vars,
+        upstream: route.upstream,
+        priority: 10,
+        plugins: { ...privatePlugins, ...route.plugins },
+      });
+    }
+    Object.assign(source, {
+      ssls: [
+        {
+          key: "wecom-mobile",
+          cert: `\${IAM_E2E_WECHAT_QR_TLS_CERT}`,
+          private_key: `\${IAM_E2E_WECHAT_QR_TLS_PRIVATE_KEY}`,
+          snis: [new URL(`https://${authority}`).hostname],
+        },
+      ],
+    });
+    variables = { ...variables, IAM_E2E_WECHAT_QR_TLS_CERT: cert, IAM_E2E_WECHAT_QR_TLS_PRIVATE_KEY: privateKey };
+  }
   const publication = await request(`${input.gatewayOrigin}/apply`, {
     method: "POST",
     headers: { "content-type": "application/json", apikey: input.clientSecret },
     body: JSON.stringify({
       scope: "e2e:iam",
       yaml: Bun.YAML.stringify(source),
-      variables: input.variables,
+      variables,
       prune: true,
     }),
     signal: AbortSignal.timeout(70_000),
@@ -96,6 +143,7 @@ if (import.meta.main) {
     return value;
   };
   try {
+    const mobileAuthority = process.env.IAM_E2E_WECHAT_QR_MOBILE_AUTHORITY;
     const result = await publishGateway({
       yaml: await Bun.file(new URL("../test-assets/iam.yaml", import.meta.url)).text(),
       variables: Object.fromEntries(variableNames.map((name) => [name, required(name)])),
@@ -103,6 +151,13 @@ if (import.meta.main) {
       gatewayOrigin: required("IAM_E2E_GATEWAY_API_ORIGIN"),
       adminUrl: "http://apisix:9180/apisix/admin",
       adminKey: "dev-local-admin-key-change-me",
+      wecomMobile: mobileAuthority
+        ? {
+            authority: mobileAuthority,
+            cert: await Bun.file(new URL("../test-assets/wecom-mobile-cert.pem", import.meta.url)).text(),
+            privateKey: await Bun.file(new URL("../test-assets/wecom-mobile-key.pem", import.meta.url)).text(),
+          }
+        : undefined,
     });
     console.log(JSON.stringify(result));
   } catch {

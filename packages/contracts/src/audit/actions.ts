@@ -52,6 +52,10 @@ export const auditActionCatalog = [
     label: "绑定手机号",
   },
   {
+    action: "self.wecom.bind",
+    label: "首次绑定企业微信",
+  },
+  {
     action: "admin.user.create",
     label: "创建用户",
   },
@@ -70,6 +74,10 @@ export const auditActionCatalog = [
   {
     action: "admin.user.reset_password",
     label: "管理员重置密码",
+  },
+  {
+    action: "admin.user.unlink_wecom",
+    label: "解除企业微信绑定",
   },
   {
     action: "admin.session.revoke",

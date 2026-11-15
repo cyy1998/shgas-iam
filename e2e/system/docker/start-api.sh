@@ -13,4 +13,4 @@ IAM_API_OIDC_CURRENT_JWK_JSON="$(bun -e '
 ')"
 export IAM_API_OIDC_CURRENT_JWK_JSON
 
-exec bun src/index.ts
+exec bun src/e2e/start-api.ts

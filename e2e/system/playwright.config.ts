@@ -1,5 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 import { requireEnvironment } from "./src/environment.ts";
+import { wecomMobileCertificatePin } from "./src/wecom-mobile-tls.ts";
 
 const origin = requireEnvironment("IAM_E2E_ORIGIN");
 const outputDir = requireEnvironment("IAM_E2E_PLAYWRIGHT_OUTPUT_DIR");
@@ -23,7 +24,14 @@ export default defineConfig({
   testDir: ".",
   testMatch:
     journey === "oidc"
-      ? ["oidc-pkce.spec.ts", "dual-entry.spec.ts", "application-admission.spec.ts"]
+      ? [
+          "oidc-pkce.spec.ts",
+          "dual-entry.spec.ts",
+          "application-admission.spec.ts",
+          "wecom-qr.spec.ts",
+          "wecom-qr-oidc.spec.ts",
+          "wecom-qr-binding.spec.ts",
+        ]
       : journey === "hr-admin"
         ? "hr-admin-user-management.spec.ts"
         : "admin-custom-sso.spec.ts",
@@ -31,7 +39,10 @@ export default defineConfig({
   use: {
     baseURL: origin,
     launchOptions: {
-      args: ["--host-resolver-rules=MAP internal.iam.localhost 127.0.0.1, MAP external.iam.localhost 127.0.0.1"],
+      args: [
+        "--host-resolver-rules=MAP internal.iam.localhost 127.0.0.1, MAP external.iam.localhost 127.0.0.1",
+        ...(journey === "oidc" ? [`--ignore-certificate-errors-spki-list=${wecomMobileCertificatePin()}`] : []),
+      ],
     },
     screenshot: "only-on-failure",
     trace: "retain-on-failure",

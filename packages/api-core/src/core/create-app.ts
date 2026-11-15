@@ -20,6 +20,7 @@ type TierApps = Array<{ tierApp: AnyRouter; tier: TierConfig; basePath: string }
 export type CreateAppOptions = {
   env: Record<string, unknown>;
   logger: Logger;
+  redactLogPath?: (path: string) => string | undefined;
   routes: Record<string, { default: AnyRouter }>;
   middlewares: Record<string, { default: TierMiddleware[] }>;
 };
@@ -95,7 +96,10 @@ function getResponseStatus(c: Context) {
   return (c.res as { status?: number }).status ?? 200;
 }
 
-function createIamRequestLogger(rootLogger: Logger, sourceApp: string): MiddlewareHandler {
+function createIamRequestLogger(
+  sourceApp: string,
+  redactLogPath: CreateAppOptions["redactLogPath"],
+): MiddlewareHandler {
   return async (c, next) => {
     const startedAt = performance.now();
     await next();
@@ -103,6 +107,7 @@ function createIamRequestLogger(rootLogger: Logger, sourceApp: string): Middlewa
     const statusCode = getResponseStatus(c);
     const logger = c.get("logger" as never) as Pick<Logger, "info" | "warn" | "error">;
     const level = getStatusLogLevel(statusCode);
+    const redactedPath = redactLogPath?.(c.req.path);
 
     logger[level](
       buildHttpRequestLogFields({
@@ -110,8 +115,8 @@ function createIamRequestLogger(rootLogger: Logger, sourceApp: string): Middlewa
         requestId: c.get("requestId" as never),
         readHeader: (name) => getHeader(c, name),
         method: c.req.method,
-        path: c.req.path,
-        route: getRoutePath(c),
+        path: redactedPath ?? c.req.path,
+        route: redactedPath ?? getRoutePath(c),
         statusCode,
         durationMs,
       }),
@@ -171,10 +176,10 @@ export default function createApp(config: AppConfig, options: CreateAppOptions) 
 
   app.use(requestId());
   app.use(pinoLogger({ pino: options.logger, http: false }));
-  app.use(createIamRequestLogger(options.logger, getSourceApp(options.logger)));
+  app.use(createIamRequestLogger(getSourceApp(options.logger), options.redactLogPath));
 
   app.notFound(notFound);
-  app.onError(createErrorHandler(options.logger));
+  app.onError(createErrorHandler(options.logger, options.redactLogPath));
 
   const openapiEnabled = resolveEnabled(config.openapi?.enabled, options.env);
   const docEndpoint = config.openapi?.docEndpoint ?? "/doc";

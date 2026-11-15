@@ -19,7 +19,6 @@ export default function UserProfileFields() {
         rules={[{ required: true, message: "请选择用户类型" }]}
       />
       <ProFormText name="mobile" label="手机号" />
-      <ProFormText name="wxId" label="微信 ID" />
     </>
   );
 }

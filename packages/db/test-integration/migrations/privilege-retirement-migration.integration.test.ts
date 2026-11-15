@@ -110,7 +110,10 @@ test("formal retirement removes the populated permission source while preserving
   const after = await retainedFacts();
   const journal = await h.sql`SELECT * FROM __drizzle_migrations ORDER BY id`;
   expect(inventory).toEqual({ privilege: null, role_privilege: null, privilege_index: null });
-  expect(after).toEqual(before);
+  expect(after).toEqual({
+    ...before,
+    clients: before.clients.map((client) => ({ ...client, admission_enabled: false, admission_filter: null })),
+  });
   expect([...(await h.sql`SELECT role_type FROM role ORDER BY id`)]).toEqual([
     { role_type: "client" },
     { role_type: "client" },

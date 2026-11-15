@@ -1,7 +1,10 @@
+import { wecomAgent, wecomMobileCallbackPath } from "./wecom-provider.ts";
+
 export interface CanonicalOriginContract {
   adminClientCode: string;
   canonicalOrigin: string;
   internalOrigin?: string;
+  wecomMobileOrigin?: string;
   runId: string;
 }
 
@@ -26,6 +29,17 @@ export function assertCanonicalOriginComposeConfig(renderedConfig: unknown, cont
 
   for (const [path, value] of expected) {
     if (readStringPath(renderedConfig, path) !== value) throw new Error(contractError);
+  }
+  if (contract.wecomMobileOrigin) {
+    const mobile = new URL(contract.wecomMobileOrigin);
+    if (
+      readStringPath(renderedConfig, "services.api.environment.IAM_API_WECHAT_QR_AGENT_ID") !== wecomAgent ||
+      readStringPath(renderedConfig, "services.api.environment.IAM_API_WECHAT_QR_CALLBACK_URL") !==
+        new URL(wecomMobileCallbackPath, mobile).href ||
+      readStringPath(renderedConfig, "services.gateway-sync.environment.IAM_E2E_WECHAT_QR_MOBILE_AUTHORITY") !==
+        mobile.host
+    )
+      throw new Error(contractError);
   }
 }
 

@@ -1,4 +1,10 @@
 import { Buffer } from "node:buffer";
+import { getWechatLoginLogPath } from "@api/routes/sso/wechat-login-log-path";
+import { createWechatQrDesktopRouter } from "@api/routes/sso/wechat-qr.http";
+import type { WechatQrState } from "@api/services/authentication/wechat-qr.state";
+import type { WechatQrUseCase } from "@api/use-cases/authentication/wechat-qr/wechat-qr.use-case";
+import type { WechatQrBindingUseCase } from "@api/use-cases/authentication/wechat-qr/wechat-qr-binding.use-case";
+import type { WechatQrCompletionUseCase } from "@api/use-cases/authentication/wechat-qr/wechat-qr-completion.use-case";
 import { getRequestId, getTraceId } from "@iam/api-core/core/request-context";
 import { appendNavigationParameters } from "@iam/contracts";
 import { HttpStatusCodes } from "@iam/contracts/http";
@@ -20,8 +26,9 @@ import {
   OidcLoginGuardSchema,
   OidcTokenResponseSchema,
 } from "@iam/oidc/wire";
+import { isApiRuntimeError } from "@iam/runtime/errors";
 import type { createSubjectAccessOperations } from "@iam/subject-access";
-import type { Context } from "hono";
+import type { Context, ErrorHandler } from "hono";
 import { Hono } from "hono";
 import { getConnInfo } from "hono/bun";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
@@ -43,6 +50,13 @@ function escapeHtml(value: string) {
 /** Formal candidate transport. It consumes protocol results and owns all HTTP/Cookie rendering. */
 export function createOidcHttpRouter(options: {
   authorization: OidcAuthorization;
+  wechatQr?: {
+    useCase: WechatQrUseCase;
+    state: WechatQrState;
+    complete: WechatQrCompletionUseCase;
+    binding?: WechatQrBindingUseCase;
+    handleApiError: ErrorHandler;
+  };
   tokens?: OidcTokens;
   userInfo?: OidcUserInfo;
   logout?: OidcLogout;
@@ -124,6 +138,13 @@ export function createOidcHttpRouter(options: {
       completion: getCookie(c, "oidc_login_completion"),
     };
   }
+  function wechatQrRequest(c: Context) {
+    const handle = c.req.queries("oidcReturn");
+    const input = browser(c);
+    if (handle?.length !== 1 || !input.browserBinding)
+      throw new OidcProtocolError("invalid_request", "Login request is invalid or expired");
+    return { handle: handle[0]!, input, browserBinding: input.browserBinding, issuer: requestIssuer(c) };
+  }
   function respond(c: Context, response: OidcAuthorizationResponse, preserveRegisteredQuery = false) {
     const result = OidcAuthorizationResponseSchema.parse(response);
     const target = new URL(result.redirectUri);
@@ -187,7 +208,7 @@ export function createOidcHttpRouter(options: {
         ...requestContext(c),
         errorCode: error.errorCode,
         outcome: error.status >= 500 ? "unavailable" : "protocol",
-        path: new URL(c.req.url).pathname,
+        path: getWechatLoginLogPath(c.req.path) ?? c.req.path,
         statusCode: error.status,
       });
       if (error.clearGlobalSessionCookie) deleteCookie(c, "global_session", { path: "/" });
@@ -208,7 +229,7 @@ export function createOidcHttpRouter(options: {
       ...requestContext(c),
       errorCode: "temporarily_unavailable",
       outcome: "unavailable",
-      path: new URL(c.req.url).pathname,
+      path: getWechatLoginLogPath(c.req.path) ?? c.req.path,
       statusCode: 503,
     });
     // Unknown dependency outcomes stay local and preserve the recoverable browser cookies.
@@ -464,6 +485,43 @@ export function createOidcHttpRouter(options: {
       ),
     );
   });
+  const wechatQr = options.wechatQr;
+  if (wechatQr) {
+    router.route(
+      "/wechat-qr",
+      createWechatQrDesktopRouter({
+        qr: wechatQr.useCase,
+        state: wechatQr.state,
+        complete: wechatQr.complete,
+        binding: wechatQr.binding,
+        internalOrigin: new URL(options.issuers.internal).origin,
+        onError(error, c) {
+          if (isApiRuntimeError(error)) return wechatQr.handleApiError(error, c);
+          throw error;
+        },
+        async inspect(c) {
+          const { handle, input, browserBinding, issuer } = wechatQrRequest(c);
+          const continuation = await options.operations.run((operation) =>
+            options.authorization.forOperation(operation, issuer).inspectLoginContinuation(handle, input),
+          );
+          return {
+            clientCode: continuation.clientCode,
+            expiresAt: continuation.expiresAt,
+            root: continuation.root,
+            browser: { protocol: "oidc", continuation: handle, browserBinding },
+          };
+        },
+        async prepareContinuation(c, root) {
+          const { handle, browserBinding, issuer } = wechatQrRequest(c);
+          await options.operations.run((operation) =>
+            options.authorization
+              .forOperation(operation, issuer)
+              .prepareWechatQrCompletion(handle, browserBinding, root),
+          );
+        },
+      }),
+    );
+  }
   router.get("/login-guard", async (c) => {
     const value = await options.operations.run((operation) =>
       options.authorization
@@ -473,7 +531,9 @@ export function createOidcHttpRouter(options: {
     if (value.clearGlobalSessionCookie) deleteCookie(c, "global_session", { path: "/" });
     if (value.completion)
       setCookie(c, "oidc_login_completion", value.completion, { ...cookieOptions, maxAge: value.ttl });
-    return c.json(OidcLoginGuardSchema.parse({ decision: value.decision }));
+    const wechatQr =
+      options.wechatQr && value.decision === "login" && c.req.header("X-IAM-Entry-Network") === "internal";
+    return c.json(OidcLoginGuardSchema.parse({ decision: value.decision, ...(wechatQr ? { wechatQr: true } : {}) }));
   });
   router.get("/resume", async (c) => {
     const value = await options.operations.run((operation) =>

@@ -19,7 +19,6 @@ export interface UserDocumentReaderPort {
 
 export interface UserMobileBindingPort {
   checkValidPhoneNumber: (phone: string) => boolean;
-  checkExistingPhoneNumber: (phone: string) => Promise<boolean>;
   reserveVerificationCode: (
     usage: string,
     phone: string,
@@ -50,6 +49,7 @@ export interface UserTransactionStorePort {
 }
 
 export interface UserMobileBindingDeps {
+  userRepository: { isMobileRegistered: (phone: string) => Promise<boolean> };
   mobileService: UserMobileBindingPort;
   auditLogWriter: AuditLogWriterPort;
 }

@@ -12,7 +12,14 @@ import EmploymentFormModal from "@admin/pages/employments/components/EmploymentF
 import TransferModal from "@admin/pages/employments/components/TransferModal";
 import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
 import { resignUser } from "@admin/services/employment";
-import { deleteUser, getUser, type UserDetailVo, updateUser, updateUserStatus } from "@admin/services/user";
+import {
+  deleteUser,
+  getUser,
+  type UserDetailVo,
+  unlinkUserWecom,
+  updateUser,
+  updateUserStatus,
+} from "@admin/services/user";
 import { DeleteOutlined, DownOutlined, EditOutlined, KeyOutlined, LogoutOutlined } from "@ant-design/icons";
 import { EmploymentStatus, getUserStatusOptions, UserStatus } from "@iam/contracts";
 import {
@@ -216,6 +223,31 @@ function UserDetailDrawerContent({ open, username, onClose, onChanged }: Props) 
     } catch (refreshError) {
       handleError(refreshError);
     }
+  };
+
+  const onUnlinkWecom = () => {
+    if (!detail?.wxId || !detail.allowedActions.unlinkWecom?.allowed) return;
+    Modal.confirm({
+      title: `解除 ${detail.name} 的企业微信绑定？`,
+      content: "员工可重新扫码验证 IAM 账号并建立绑定。现有会话按原规则继续，可在会话管理中撤销。",
+      okText: "确认解绑",
+      okType: "danger",
+      onOk: async () => {
+        try {
+          const outcome = await unlinkUserWecom(detail.username);
+          if (outcome.changed) message.success("企业微信绑定已解除");
+          else message.info("该账号当前未绑定企业微信");
+        } catch (error) {
+          if (error instanceof AdminMutationCommittedError) setCommittedWarning(error.message);
+          else handleError(error);
+        }
+        try {
+          await refresh();
+        } catch (error) {
+          handleError(error);
+        }
+      },
+    });
   };
 
   const onStatusChange = async (status: UserStatus) => {
@@ -538,6 +570,7 @@ function UserDetailDrawerContent({ open, username, onClose, onChanged }: Props) 
                       onCancel={() => confirmDiscard(() => setEditingProfile(false))}
                       onSave={saveProfile}
                       onDirtyChange={setProfileDirty}
+                      onUnlinkWecom={onUnlinkWecom}
                     />
                     <section
                       aria-label="雇佣信息"

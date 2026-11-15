@@ -11,7 +11,7 @@ import { createInternalOrganizationQueryResource } from "./internal-organization
 import { createApiMiddlewares } from "./middlewares";
 import { createApiRepositories } from "./repositories";
 import { createApiRoutes } from "./routes";
-import { createApiRuntime } from "./runtime";
+import { type CreateApiRuntimeOptions, createApiRuntime } from "./runtime";
 import { createApiServices } from "./services";
 import { createApiUnitOfWork } from "./tx";
 import { createApiUseCases } from "./use-cases";
@@ -37,12 +37,17 @@ export interface ApiComposition {
 export interface CreateApiCompositionOptions {
   env?: typeof env;
   logger?: typeof logger;
+  integrationFetch?: CreateApiRuntimeOptions["integrationFetch"];
 }
 
 export async function createApiComposition(options: CreateApiCompositionOptions = {}): Promise<ApiComposition> {
   const compositionEnv = options.env ?? env;
   const compositionLogger = options.logger ?? logger;
-  const runtime = createApiRuntime({ env: compositionEnv, logger: compositionLogger });
+  const runtime = createApiRuntime({
+    env: compositionEnv,
+    logger: compositionLogger,
+    integrationFetch: options.integrationFetch,
+  });
   const userDocumentResources = createApiUserDocumentResources({
     databaseUrl: compositionEnv.databaseUrl,
     redis: runtime.config.env.redis,

@@ -3,9 +3,31 @@ import { ClientDelegationStatus, EmploymentStatus, OPEN_EMPLOYMENT_STATUSES, Use
 import type { DbClient } from "@iam/db";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
-import { clientDelegations, employments, users } from "@iam/db/schema";
-import { UsernameAlreadyExistsError } from "@iam/domain/user";
+import {
+  clientDelegations,
+  employments,
+  USER_MOBILE_UNIQUE_INDEX,
+  USER_WX_ID_UNIQUE_INDEX,
+  users,
+} from "@iam/db/schema";
+import { MobileAlreadyExistsError, UsernameAlreadyExistsError, WxIdAlreadyExistsError } from "@iam/domain/user";
 import { and, count, eq, inArray, or } from "drizzle-orm";
+
+function rethrowUserWriteError(error: unknown): never {
+  const detail = extractPostgresError(error);
+  if (detail?.code === "23505") {
+    switch (detail.constraint) {
+      case "user_username_key":
+      case "user_username_unique":
+        throw new UsernameAlreadyExistsError();
+      case USER_MOBILE_UNIQUE_INDEX:
+        throw new MobileAlreadyExistsError();
+      case USER_WX_ID_UNIQUE_INDEX:
+        throw new WxIdAlreadyExistsError();
+    }
+  }
+  throw error;
+}
 
 export function createUserRepository(db: DbClient) {
   return {
@@ -55,6 +77,15 @@ export function createUserRepository(db: DbClient) {
           .update(users)
           .set({ password })
           .where(and(eq(users.id, userId), eq(users.status, UserStatus.Enable), eq(users.isDelete, false)))
+          .returning(),
+      );
+    },
+    async unlinkWecom(userId: number) {
+      return firstRow(
+        await db
+          .update(users)
+          .set({ wxId: null })
+          .where(and(eq(users.id, userId), eq(users.isDelete, false)))
           .returning(),
       );
     },
@@ -132,13 +163,25 @@ export function createUserRepository(db: DbClient) {
       return { rows, total: firstRow(totalRows)?.value ?? 0 };
     },
     async updateUserByUsername(username: string, data: UserUpdateDto) {
-      return firstRow(
-        await db
-          .update(users)
-          .set(compactUpdate(data))
-          .where(and(eq(users.username, username), eq(users.isDelete, false)))
-          .returning(),
-      );
+      try {
+        return firstRow(
+          await db
+            .update(users)
+            .set(
+              compactUpdate({
+                name: data.name,
+                mobile: data.mobile,
+                userType: data.userType,
+                status: data.status,
+                orderNum: data.orderNum,
+              }),
+            )
+            .where(and(eq(users.username, username), eq(users.isDelete, false)))
+            .returning(),
+        );
+      } catch (error) {
+        rethrowUserWriteError(error);
+      }
     },
     async softDeleteUserByUsername(username: string) {
       return firstRow(
@@ -181,14 +224,7 @@ export function createUserRepository(db: DbClient) {
       try {
         return firstRow(await db.insert(users).values(userCreateDto).returning());
       } catch (error) {
-        const detail = extractPostgresError(error);
-        if (
-          detail?.code === "23505" &&
-          (detail.constraint === "user_username_key" || detail.constraint === "user_username_unique")
-        ) {
-          throw new UsernameAlreadyExistsError();
-        }
-        throw error;
+        rethrowUserWriteError(error);
       }
     },
   };

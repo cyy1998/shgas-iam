@@ -4,8 +4,10 @@ import { UserStatus, UserType } from "@iam/contracts";
 import {
   UserDetailDtoSchema as SharedUserDetailDtoSchema,
   UserSchema as SharedUserSchema,
+  UserMobileWriteSchema,
   UserNameWriteSchema,
   UsernameWriteSchema,
+  UserWxIdWriteSchema,
 } from "@iam/domain/user";
 import { EmploymentDetailDtoSchema } from "../employment/employment.schema";
 
@@ -86,6 +88,8 @@ export const UserAdminCreateDtoSchema = SharedUserSchema.pick({
   .extend({
     username: UsernameWriteSchema,
     name: UserNameWriteSchema,
+    mobile: UserMobileWriteSchema.optional(),
+    wxId: UserWxIdWriteSchema.optional(),
     password: z.string().min(8).optional().openapi({
       example: "P@ssw0rd1",
       description: "留空则后端生成随机 8 位密码（需由前端通过单独渠道展示给管理员）",
@@ -98,13 +102,13 @@ export const UserUpdateDtoSchema = SharedUserSchema.partial()
   .pick({
     name: true,
     mobile: true,
-    wxId: true,
     userType: true,
     status: true,
     orderNum: true,
   })
   .extend({
     name: UserNameWriteSchema.optional(),
+    mobile: UserMobileWriteSchema.optional(),
   })
   .openapi("UserUpdateDto");
 

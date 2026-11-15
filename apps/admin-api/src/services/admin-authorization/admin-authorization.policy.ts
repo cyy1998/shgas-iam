@@ -65,7 +65,7 @@ export interface CreateAdminAuthorizationPolicyDeps {
 }
 
 const FULL_ADMIN_ROLE_CODE = "iam:admin";
-const HR_USER_DOCUMENT_UPDATE_FIELDS = new Set(["name", "mobile", "wxId", "userType"]);
+const HR_USER_DOCUMENT_UPDATE_FIELDS = new Set(["name", "mobile", "userType"]);
 const HR_ADMIN_OPERATION_IDS = new Set<string>([
   "admin.authorization.capabilitySummary",
   "admin.employment.search",
@@ -126,6 +126,7 @@ function hasForbiddenHrUserDocumentField(operationInput: unknown) {
 function userAllowedActions(decision: AdminAuthorizationDecision): AdminUserAllowedActions {
   return {
     editProfile: decision,
+    unlinkWecom: decision,
     resetPassword: decision,
     changeStatus: decision,
     delete: decision,
@@ -175,6 +176,7 @@ function scopedUserAllowedActions(
         : userHasOutOfScopeOpenEmploymentDecision;
   return {
     editProfile,
+    unlinkWecom: actionNotGrantedDecision,
     resetPassword,
     changeStatus,
     delete: actionNotGrantedDecision,

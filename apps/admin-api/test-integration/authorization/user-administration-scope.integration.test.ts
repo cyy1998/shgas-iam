@@ -63,7 +63,6 @@ describe("User administration PostgreSQL authorization", () => {
       {
         name: "Managed Updated",
         mobile: "13900000000",
-        wxId: "managed-wx",
         userType: UserType.Informal,
       },
       undefined,
@@ -90,7 +89,7 @@ describe("User administration PostgreSQL authorization", () => {
     expect(persistedUser).toEqual({
       name: "Managed Updated",
       mobile: "13900000000",
-      wxId: "managed-wx",
+      wxId: null,
       userType: UserType.Informal,
       password: "hashed:Rand1234",
     });

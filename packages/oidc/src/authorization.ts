@@ -10,7 +10,11 @@ import {
 } from "@iam/contracts";
 import type { UnifiedSessionKernel, UserSessionObservation } from "@iam/session-kernel";
 import type { SubjectAccessOperation } from "@iam/subject-access";
-import { requireSubjectAccessOperation, SubjectAccessDisabledError } from "@iam/subject-access";
+import {
+  requireSubjectAccessOperation,
+  SubjectAccessDisabledError,
+  SubjectAccessOperationDeniedError,
+} from "@iam/subject-access";
 import { z } from "zod";
 import { OidcProtocolError } from "./errors";
 import type { AcceptedAuthorization, OidcStateRedis } from "./state";
@@ -43,6 +47,25 @@ type AdmissionPolicy = Pick<ClientSnapshotValue, "admissionEnabled" | "admission
 
 function invalid(description: string): never {
   throw new OidcProtocolError("invalid_request", description);
+}
+
+function qrRootDigest({ userSession }: UserSessionObservation) {
+  return digest(JSON.stringify([userSession.userSessionId, userSession.instance]));
+}
+
+function hasFirstLoginProof(
+  completionDigest: string | null,
+  completion: string | undefined,
+  root: UserSessionObservation,
+) {
+  if (!completionDigest?.startsWith("qr:")) return Boolean(completion && completionDigest === digest(completion));
+  // The tagged value retains the v1 Redis record shape. Older readers fail closed for tagged proofs.
+  const [, exactRoot, guard] = completionDigest.split(":");
+  if (exactRoot === qrRootDigest(root)) return true;
+  const amr = root.userSession.amr;
+  return Boolean(
+    completion && guard === digest(completion) && amr.length === 1 && (amr[0] === "pwd" || amr[0] === "sms"),
+  );
 }
 
 export function createOidcAuthorization(options: OidcAuthorizationOptions) {
@@ -153,7 +176,7 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
         };
         return { accepted, observedClient };
       }
-      async function root(token?: string) {
+      async function root(token?: string, failOnIdentityMismatch = false) {
         if (!token) return null;
         const result = await sessions.resolveUserSession(token);
         if (result.status === "corrupt")
@@ -167,6 +190,13 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
             subjectContext: user.subjectContext,
           });
         } catch (error) {
+          if (
+            failOnIdentityMismatch &&
+            error instanceof SubjectAccessOperationDeniedError &&
+            error.reason === "identity_mismatch"
+          ) {
+            throw new OidcProtocolError("temporarily_unavailable", "Session state unavailable", 503);
+          }
           if (error instanceof SubjectAccessDisabledError) return null;
           throw error;
         }
@@ -327,6 +357,14 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
             clearGlobalSessionCookie: Boolean(browser.globalSessionToken),
           };
         },
+        async inspectLoginContinuation(handle: string, browser: OidcBrowserInput) {
+          const { saved } = await continuation(handle, browser);
+          return {
+            clientCode: saved.authorization.clientId,
+            expiresAt: saved.expiresAt,
+            root: await root(browser.globalSessionToken, true),
+          };
+        },
         async checkLoginContinuation(handle: string, browser: OidcBrowserInput) {
           await continuation(handle, browser);
           const parent = await root(browser.globalSessionToken);
@@ -334,7 +372,12 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
             return { decision: "continue" as const, clearGlobalSessionCookie: false };
           }
           const completion = randomHandle();
-          if (!(await state.allowCompletion(handle, browser.browserBinding!, completion)))
+          if (
+            !(await state.updateCompletion(handle, browser.browserBinding ?? "", issuer, {
+              kind: "guard",
+              digest: digest(completion),
+            }))
+          )
             invalid("Login request is invalid or expired");
           return {
             decision: "login" as const,
@@ -342,6 +385,18 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
             completion,
             ttl: continuationTtl,
           };
+        },
+        async prepareWechatQrCompletion(
+          handle: string,
+          browserBinding: string,
+          root: { kind: "created" | "existing"; observation: UserSessionObservation },
+        ) {
+          const proof =
+            root.kind === "created"
+              ? { kind: "qr" as const, digest: qrRootDigest(root.observation) }
+              : { kind: "existing" as const };
+          if (!(await state.updateCompletion(handle, browserBinding, issuer, proof)))
+            invalid("Login request is invalid or expired");
         },
         async resume(handle: string, browser: OidcBrowserInput): Promise<OidcAuthorizationResult> {
           const { saved, observedClient } = await continuation(handle, browser);
@@ -355,9 +410,10 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
               Boolean(browser.globalSessionToken),
             );
           }
-          const firstCompletion =
-            saved.completionDigest !== null && saved.completionDigest === digest(browser.completion ?? "");
-          if (needsReauthentication(saved.authorization, parent) && !firstCompletion)
+          if (
+            needsReauthentication(saved.authorization, parent) &&
+            !hasFirstLoginProof(saved.completionDigest, browser.completion, parent)
+          )
             return loginRequired(saved.authorization);
           return await completeAuthorization(saved.authorization, parent, observedClient, {
             handle,

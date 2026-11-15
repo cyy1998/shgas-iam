@@ -3,11 +3,10 @@ import type { ClockPort } from "@api/composition/runtime";
 import {
   decryptLoginCredential,
   LOGIN_CREDENTIAL_TYPE,
-  LOGIN_CREDENTIAL_VERSION,
-  LoginCredentialError,
+  type LoginCredentialPlaintext,
+  WECHAT_BINDING_CREDENTIAL_TYPE,
 } from "@iam/contracts";
 import { CustomError } from "@iam/runtime/errors";
-import { z } from "zod";
 import { InvalidLoginCredentialError } from "./login-credential.error";
 
 export type LoginPasswordCredential = {
@@ -40,15 +39,6 @@ type ParseCredentialOptions = {
 const INVALID_CREDENTIAL_MESSAGE = "登录凭证无效";
 const INVALID_CREDENTIAL_TIMESTAMP_MESSAGE = "登录凭证已过期或设备时间不正确，请校正设备时间后重试";
 
-const LoginCredentialPayloadSchema = z.object({
-  v: z.literal(LOGIN_CREDENTIAL_VERSION),
-  typ: z.literal(LOGIN_CREDENTIAL_TYPE),
-  username: z.string().min(1),
-  password: z.string().min(1),
-  ts: z.number().int().safe(),
-  nonce: z.string().min(16),
-});
-
 function invalidCredential(): never {
   throw new InvalidLoginCredentialError(INVALID_CREDENTIAL_MESSAGE);
 }
@@ -77,9 +67,11 @@ async function recordNonce(kid: string, nonce: string, nonceStore: RedisNonceSto
 }
 
 export function createLoginCredentialParser(deps: LoginCredentialParserDeps) {
-  async function parseLoginPasswordCredential(
+  async function parsePassword(
     credential: string,
-    options: ParseCredentialOptions = {},
+    options: ParseCredentialOptions,
+    accepts: (payload: LoginCredentialPlaintext, now: number) => boolean,
+    bindingDeadline?: number,
   ): Promise<LoginPasswordCredential> {
     try {
       const parsed = decryptLoginCredential(credential, options.privateKeys ?? deps.config.privateKeysByKid);
@@ -87,10 +79,15 @@ export function createLoginCredentialParser(deps: LoginCredentialParserDeps) {
       const maxSkewMs = options.maxSkewMs ?? deps.config.maxSkewMs;
       const nonceTtlSeconds = options.nonceTtlSeconds ?? deps.config.nonceTtlSeconds;
       const nonceStore = options.nonceStore ?? deps.nonceStore;
-      const payload = LoginCredentialPayloadSchema.parse(parsed.payload);
+      const { payload } = parsed;
 
+      if (!accepts(payload, now)) invalidCredential();
       assertTimestampInWindow(payload.ts, now, maxSkewMs);
-      await recordNonce(parsed.kid, payload.nonce, nonceStore, nonceTtlSeconds);
+      const ttl =
+        bindingDeadline === undefined
+          ? nonceTtlSeconds
+          : Math.max(nonceTtlSeconds, Math.ceil((bindingDeadline - now) / 1000));
+      await recordNonce(parsed.kid, payload.nonce, nonceStore, ttl);
 
       return {
         username: payload.username,
@@ -100,14 +97,26 @@ export function createLoginCredentialParser(deps: LoginCredentialParserDeps) {
       if (error instanceof CustomError) {
         throw error;
       }
-      if (error instanceof LoginCredentialError) {
-        invalidCredential();
-      }
       invalidCredential();
     }
   }
 
-  return { parseLoginPasswordCredential };
+  return {
+    parseLoginPasswordCredential(credential: string, options: ParseCredentialOptions = {}) {
+      return parsePassword(credential, options, (payload) => payload.typ === LOGIN_CREDENTIAL_TYPE);
+    },
+    parseWechatBindingPasswordCredential(credential: string, request: { requestId: string; expiresAt: number }) {
+      return parsePassword(
+        credential,
+        {},
+        (payload, now) =>
+          payload.typ === WECHAT_BINDING_CREDENTIAL_TYPE &&
+          payload.requestId === request.requestId &&
+          now < request.expiresAt,
+        request.expiresAt,
+      );
+    },
+  };
 }
 
 export type LoginCredentialParser = ReturnType<typeof createLoginCredentialParser>;
