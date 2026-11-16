@@ -56,14 +56,34 @@ git diff --check
 pnpm test:unit
 pnpm --filter @iam/api-core test:unit
 pnpm test:integration
-pnpm test:integration --workspace @iam/worker
-pnpm test:integration --workspace apps/admin --workspace apps/sso
-pnpm test:integration --workspace @iam/ops --file test-integration/session-clear/session-clear-command.integration.test.ts
 ```
 
 `--workspace` 接受 package name 或仓库相对 workspace 目录。`--workspace` 与 `--file` 均可重复。
 `--file` 接受绝对路径、仓库相对路径或 owner 相对路径，须属于所选 owner 的 collection。
 无匹配、越界文件或未知参数均失败。根 `iam-monorepo` 负责聚合，测试 owner 是实际 workspace。
+
+同一候选的同一轮 Integration 检查按所需范围合并。根入口为整轮统一准备所需 PostgreSQL/Redis，串行调度所选 workspace，首错停止。
+
+- **多个文件**。重复传 `--file`，使用仓库相对路径区分不同 workspace 的文件。
+
+  ```bash
+  pnpm test:integration \
+    --file apps/worker/test-integration/user-document/user-document-repair-schedule.integration.test.ts \
+    --file apps/ops/test-integration/session-clear/session-clear-command.integration.test.ts
+  ```
+
+- **多个 workspace 全量**。重复传 `--workspace`，运行各 workspace 的完整 Integration collection。
+
+  ```bash
+  pnpm test:integration --workspace @iam/worker --workspace @iam/ops
+  ```
+
+- **全量与定向混用**。`--file` 对整条命令生效。用一条命令跑全量 workspace，再用一条命令跑定向文件。
+
+  ```bash
+  pnpm test:integration --workspace @iam/worker
+  pnpm test:integration --workspace @iam/ops --file test-integration/session-clear/session-clear-command.integration.test.ts
+  ```
 
 Integration 的 `--timeout-ms` 默认 30 分钟，`--cleanup-timeout-ms` 默认 30 秒。
 `--keep-resources` 显式保留本次环境。准确 project、配置与产物登记在 `test-results/integration/<run-id>/run.json`。
