@@ -40,10 +40,15 @@ AFK 的逐轮复审要求由 [AFK 工作流](sandcastle-afk.md#双轴评审子�
   按实际变化重跑失效的类型或行为检查。
 - 手动 tickets 不逐票要求 `verify:static`。最终集成内容交付前，以合入目标的固定提交与候选比较。
   仅当完整差异满足[纯文档验证](../engineering/commands.md#纯文档验证)的范围，且验收只涉及文档时，使用
-  `pnpm verify:docs --base <target-commit>` 完成基础门禁。其余改动运行一次 `pnpm verify`。
+  `pnpm verify:docs --base <target-commit>` 完成基础门禁。其余改动完成 `pnpm verify` 覆盖的全部检查。
   按 Spec 和改动风险补齐所需 Integration、E2E、Gateway 等检查。小任务准备本地合入时使用同一规则。
-- 后续修改只重跑失效的检查，未受代码、依赖、配置或环境变化影响的通过结果可以复用；无法判断时扩大验证。
-  最终证据必须覆盖当前候选的全部受影响范围，记录实际命令、结果和未执行项。
+- 同一候选已有通过结果时，核对候选 SHA、实际命令和检查范围，确认相关依赖、配置与环境仍一致。
+  只通过独立入口补跑缺失或失效的检查。
+  - `pnpm verify` 已通过，只缺 Integration 时，运行 `pnpm test:integration`，按验收范围选择全量或定向。
+  - `pnpm verify` 和全量 Integration 已通过，只缺 E2E 时，运行 `pnpm test:e2e`。
+  - `pnpm verify` 的静态检查、typecheck 和 Unit 已通过，仅 build 失败时，补跑 `pnpm build`。
+- 候选后续有修改时，按代码、依赖、配置或环境变化判断哪些结果仍有效，无法判断时扩大验证。
+  最终证据必须覆盖当前候选的全部受影响范围，记录候选 SHA、实际命令及检查范围、结果和未执行项。
 - 必需检查失败或未执行时保持工作未完成。认定基线失败需在固定基线、可比环境复现并记录证据；
   维护者明确接受后才可作为例外，创建 issue 本身不构成豁免。
 
