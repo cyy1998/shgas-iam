@@ -8,14 +8,16 @@
 IAM 交付角色事实，由接入应用解释角色对应的业务操作权限；权限点退役及协调发布的决定见
 [ADR-0045](docs/adr/0045-retire-privilege-permission-points.md)。代码模型与目标环境的发布验收分别记录。
 
-## 文档与目录语言
+## Language
+
+### 目录文档与搜索
 
 以下术语采用 [ADR-0046](docs/adr/0046-unify-user-and-organization-read-documents.md) 的统一文档模型。
 User Profile 继续表示领域用户档案；文档表示发布后的目录事实。
 
-**User Search**:
-以用户为结果根，按用户及其明确公开的关联事实筛选，并返回当前 Client 可见的 User Document 或其选定字段的查询能力。
-_Avoid_: generic entity query, historical profile search
+**User Profile**:
+IAM 中关于一个用户的稳定档案视图，包括用户基础身份信息、任职、角色和组织责任。
+_Avoid_: session payload, protocol payload
 
 **User Document**:
 由用户源事实派生并按用户发布的当前文档，是用户搜索、目录详情及 SSO 资料的共同事实基础；
@@ -26,6 +28,18 @@ _Avoid_: User Profile Search Document, User Profile Base, protocol payload
 由组织源事实派生并按组织发布的当前文档，承载组织自身属性和完整路径，供组织搜索与目录详情共同读取；
 它允许落后于源事实，不是组织的独立业务写入来源。
 _Avoid_: Organization Search Document, organization source of truth, editable organization document
+
+**Organization Path**:
+从根 Organization 到目标 Organization 且包含目标自身的有序当前路径；每个公开节点包含 code、name、type、level 与 distanceToTarget，根 level 为 1，目标自身 distanceToTarget 为 0。暂停或禁用的祖先仍在路径中。
+_Avoid_: ancestorCodes, ancestorDepths, storage path encoding
+
+**User Search**:
+以用户为结果根，按用户及其明确公开的关联事实筛选，并返回当前 Client 可见的 User Document 或其选定字段的查询能力。
+_Avoid_: generic entity query, historical profile search
+
+**Organization Search**:
+以未删除的 Organization 为结果根，按组织自身属性和完整路径筛选并返回 Organization Document 或其选定字段的查询能力；Enable、Pause、Disable 均可查询，状态由调用方显式筛选，不包含成员、岗位、角色或责任持有人反查。
+_Avoid_: organization member search, generic entity query
 
 **Internal Role Visibility**:
 已认证 Internal Client 在用户目录查询中可以筛选和读取的角色范围，由该 Client 的有效 Client Role 与各任职上的有效 Global Role 组成；
@@ -41,31 +55,6 @@ _Avoid_: Admin detail, source-table DTO, protocol payload
 已发布目录中表示对象已删除的带版本记录，保留识别对象和判断发布先后所需的信息，不再包含完整业务资料；
 暂停或禁用但未删除的对象不属于墓碑，目录缺行也不等于墓碑。
 _Avoid_: missing document, disabled account, deleted source record
-
-文档处理词汇：
-
-**Document Outbox Entry**:
-源事实变化所产生的待处理文档更新消息，承载将该变化传播到相关文档的义务；其处理完成表示受影响对象的重建要求已经可靠登记，
-不表示文档已全部更新，也不表示已有合法文档立即不可读。
-_Avoid_: published document change, queue delivery receipt, document rebuild state
-
-**Document Rebuild State**:
-一个目标文档当前要求达到的版本及其处理进度，用于判断已发布文档是否满足最新重建要求；完成后仍保留该判断依据。
-_Avoid_: queue job, business status, event checkpoint
-
-## Language
-
-**User Profile**:
-IAM 中关于一个用户的稳定档案视图，包括用户基础身份信息、任职、角色和组织责任。
-_Avoid_: session payload, protocol payload
-
-**Organization Path**:
-从根 Organization 到目标 Organization 且包含目标自身的有序当前路径；每个公开节点包含 code、name、type、level 与 distanceToTarget，根 level 为 1，目标自身 distanceToTarget 为 0。暂停或禁用的祖先仍在路径中。
-_Avoid_: ancestorCodes, ancestorDepths, storage path encoding
-
-**Organization Search**:
-以未删除的 Organization 为结果根，按组织自身属性和完整路径筛选并返回 Organization Document 或其选定字段的查询能力；Enable、Pause、Disable 均可查询，状态由调用方显式筛选，不包含成员、岗位、角色或责任持有人反查。
-_Avoid_: organization member search, generic entity query
 
 **Directory Search Path**:
 沿公开 User Document 或 Organization Document 结构到达可比较字段的类型化条件路径；内部标识、Client 归属路径、源表字段与任意 JSON path 不属于可用路径。角色路径始终受 Internal Role Visibility 约束。
@@ -84,67 +73,82 @@ _Avoid_: fuzzy equality, implicit normalization, global role filtering
 分页仅界定本次返回的对象范围，不保证跨请求固定结果集合，也不允许跳过本页失败对象拼成部分成功。
 _Avoid_: unbounded filter, unbounded result set, partial search success
 
-Client Delegation 独立于文档与过滤条件，调用与切换边界见[委托接入](docs/guides/delegation.md)。
+文档处理词汇：
 
-**Client Delegation**:
-绑定一个 Client、在指定组织范围内为委托人确定直接代办人的委托关系；它不向受托人授予或复制委托人的角色、权限或登录身份，不同 Client 的委托分别管理。
-_Avoid_: permission grant, role inheritance, impersonation
+**Document Outbox Entry**:
+源事实变化所产生的待处理文档更新消息，承载将该变化传播到相关文档的义务；其处理完成表示受影响对象的重建要求已经可靠登记，
+不表示文档已全部更新，也不表示已有合法文档立即不可读。
+_Avoid_: published document change, queue delivery receipt, document rebuild state
 
-**Client Delegation Scope**:
-Client Delegation 适用的组织集合，包含所选 Organization 及其当前全部后代；以后新增的后代自动纳入。
-_Avoid_: exact organization only, implicit global scope, creation-time subtree snapshot
+**Document Rebuild State**:
+一个目标文档当前要求达到的版本及其处理进度，用于判断已发布文档是否满足最新重建要求；完成后仍保留该判断依据。
+_Avoid_: queue job, business status, event checkpoint
 
-**Client Delegation Resolution**:
-在同一服务端观察时刻和数据库快照，为指定 User 及 Organization 查找属于调用方 Client 的零或一个直接代办人；Client 由认证身份确定，无当前委托时为 null。不沿链递归，不验证委托人或受托人是否持有该应用角色或权限，调用方不能指定其他 Client。
-_Avoid_: caller-selected client, cross-client delegation resolution, authorization resolution
+### 用户生命周期与任职
 
-**Client Delegation Lifecycle**:
-Client Delegation 无需受托人确认，按指定期间与自身状态参与解析；未结束时可修改期间与说明、暂停或恢复，委托人、受托人、Client 和组织范围固定。手动结束不可恢复，自然到期但未手动结束时仍可延期，结束或到期的记录仍可查看。
-_Avoid_: delegatee approval, mutable delegation bindings, delegation reopening, delegation deletion
+任职有效期与生命周期的决定见 [ADR-0011](docs/adr/0011-model-employment-as-an-immutable-tenure-lifecycle.md)。
 
-**Client Delegation Conflict**:
-同一委托人在同一 Client 下的两条未结束委托，其组织覆盖范围和闭区间业务期间均有交集时形成的冲突；Pause 仍占位，受托人相同不豁免，时间端点相接也属于重叠。
-_Avoid_: nearest-scope override, duplicate delegation collapse, paused-slot reuse
+**Employment**:
+用户以某个 Position 在某个 Organization 持有的一次任职事实；未删除用户的 Enable、Pause 状态允许新增任职，Disable 状态禁止新增。任职有效期与生命周期状态正交，暂停可在同一 Employment 上恢复，结束后不可重开；返聘、重新任职或转岗产生新 Employment，它只描述组织归属与岗位身份，不表示组织责任或直接授予角色与权限。
+_Avoid_: reusable employment slot, Organization Responsibility Assignment, Role Assignment
 
-**Current Client Delegation**:
-状态为 Enable 且观察时刻位于闭区间业务期间内的 Client Delegation；双方 User 或组织的 Pause、Disable 不改变已有委托关系的解析，委托关系本身不证明受托人能够登录或执行代办操作。
-_Avoid_: effective authorization, delegatee login permission, automatic delegation termination
+**Open Employment**:
+非 Legacy Employment Tombstone 且尚未结束的 Employment，包含未启用、启用和暂停，均占用任职关系并阻止其 Position 或所属 Organization 停用、软删除以及关联 User 删除。同一用户在同一 Organization 和 Position 下最多只有一条 Open Employment，离职时三种状态一并结束，结束后的同组合历史不受此限制。
+_Avoid_: active employment, enabled employment
 
-**Open Client Delegation**:
-尚未手动结束、状态为 Enable 或 Pause 的 Client Delegation，不因尚未开始或自然到期改变其未结束的生命周期事实；它阻止委托双方、绑定的 Client 和所选 Organization 被删除，只有显式结束后才释放这项约束。
-_Avoid_: Current Client Delegation, automatic delegation expiry, implicit cascade termination
+**Effective Employment**:
+非 Legacy Employment Tombstone 且生命周期状态为启用的 Employment，任职有效期不参与该判定；到期但尚未转换为结束状态的启用任职仍然有效。Primary Employment 标记和 User 账号状态不参与该判定；Position 与所属 Organization 的有效性由 Employment Integrity 保证，不作为运行时开关。
+_Avoid_: Open Employment, enabled user employment
 
-**Client Delegation Resolution Input**:
-Client Delegation Resolution 中以 username 或 Organization code 指向的存在且未删除领域对象；Pause 或 Disable 状态不影响识别。任一输入无法识别时解析整体失败，不返回部分结果；Client 固定来自已认证 Internal 调用方。
-_Avoid_: enabled-only resolution input, missing input as no delegation, caller-selected client
+**Pending Employment**:
+等待日期驱动的状态转换使其启用的任职，中文称“未启用任职”；它可被人工暂停以阻止自动启用，但不允许强制提前启用。它属于 Open Employment，不属于 Effective Employment，也不同于暂停任职。
+_Avoid_: paused employment, ended employment, effective employment
 
-**Client Delegation Resolution Integrity Violation**:
-同一观察时刻、Organization 与 Client 下，一个已识别 User 匹配多条 Current Client Delegation、匹配记录发生自委托，或引用缺失或已删除的用户、组织的数据异常；多条记录即使指向同一 Delegatee 仍属异常，双向直接委托不属于异常。解析必须整体失败，不得选择或折叠记录、把异常降级为 null 或返回部分结果。
-_Avoid_: delegation winner selection, duplicate delegation collapse, self-delegation, multi-delegate resolution
+**Employment Period**:
+一条 Employment 的任职有效期，按北京时间的自然日采用左闭右开区间：包含开始日，不包含截止日；两端分别可空，表示无下界或无上界，两端均有值时开始日必须早于截止日。有效期与生命周期状态正交，日期范围不直接决定任职是否实际生效。
+_Avoid_: Employment Validity Period, Employment Lifecycle, actual lifecycle timestamps, message receipt interval
 
-**Subject Identifier**:
-IAM 身份域为一个用户持有的稳定 opaque 标识，也是 User Search 的公开精确身份路径；登录协议可以将它映射到各自契约，但任何协议都不拥有该标识。
-_Avoid_: OIDC-owned subject, protocol session ID, username
+**Employment Lifecycle**:
+Employment 具有未启用、启用、暂停和结束状态；日期计算优先结束已到期任职，非暂停任职按日期进入未启用或启用，暂停在到期前保持，显式恢复解除暂停后重新按日期计算状态。结束不可逆，重复命令不重复改变生命周期事实；User Disable 不自动结束既有 Employment，也不额外禁止对已有 Open Employment 修改说明、暂停、恢复、结束或管理 Primary Employment。
+_Avoid_: generic status update, arbitrary status transition
 
-**IAM Entry**:
-调用方访问 IAM 时选用的内网或公网入口，决定同入口导航使用的 IAM 地址及 OIDC issuer；显式配置的 Custom SSO 回调可以跨入口。它表达所选入口，不表示用户实际身处哪个网络，也不构成独立用户或 Client。
-_Avoid_: client network location, independent IAM tenant
+**Employment End**:
+尚未结束的 Employment 进入结束状态的不可逆生命周期变化，并以实际结束日期更新有效期截止日；若原开始日不早于结束日则清空开始日，原日期由审计保留。结束后记录仍作为历史事实存在，不可删除、恢复或改写为继续任职，常规 Admin 对录入错误也通过结束旧任职并新建正确 Employment 处理。
+_Avoid_: employment deletion, reversible disable
 
-**Principal Reference**:
-Session Kernel 用 `{ principalType, subjectId }` 指向会话主体的最小引用；用户主体的 `subjectId` 是 Subject Identifier，不包含数据库主键、显示名称或档案快照。Principal Session 不再另存通用 Principal Snapshot；协议确需固化的声明快照由各协议自行拥有。
-_Avoid_: user snapshot, display user, database user reference
+**Employment Transfer**:
+在同一操作中结束旧 Employment 并以新组织或岗位创建立即启用的新 Employment 的原子业务过程；旧任职当天结束，新任职开始日固定当天，截止日另行指定或留空，不继承旧有效期和组织责任。User 处于 Disable 时禁止转岗，管理员须明确选择新任职是否为 Primary Employment，即使旧任职暂停，新任职也立即启用。
+_Avoid_: in-place employment update, pause-preserving transfer
 
-**UserSession**:
-用户一次 IAM 认证形成的根登录关系，拥有该次可信主体、原认证事实、主体访问代际和固定到期时间。协议活动不延长它，同一账号的不同根登录彼此独立。
-_Avoid_: ClientSession, protocol Token, renewable login slot
+**Primary Employment**:
+由管理员在一个用户的 Open Employment 中最多指定一条的可选主职标记；用户可以没有主任职，系统不根据任职数量或顺序自动选择或改派。未启用或暂停的 Employment 可以保留或被指定为主任职，Employment End 才会清除该标记。
+_Avoid_: required employment, automatically selected employment
 
-**ClientSession**:
-指定 UserSession 与一个 Client 的持续应用关系，同一对最多存在一个有效实例，在线使用同时要求该实例和原根有效；后续授权可更新其协议标记并在原根期限内延长。协议切换本身不终止该关系，符合协议前置条件的 Code 兑换失败可触发原实例终止；实例终止或过期后新授权建立新实例，旧 Code/Token 不随之改绑或延长。
-_Avoid_: Provider Session, protocol Token, per-protocol relationship, per-authorization scope container
+**Employment Authority**:
+一条 Employment 的唯一权威事实来源，决定其生命周期命令和任职期边界；当前是 IAM 自主管理，未来可扩展为受信任的外部任职源，但不允许多个来源通过最后写入覆盖同一任职。
+_Avoid_: last-writer-wins source, direct database writer
 
-**Authenticated Subject Context**:
-共享 HTTP 认证中间件验证 UserSession 或 Gateway Local Session 后产生的最小请求上下文，只包含 Subject Identifier 和适用时已验证的 client code。它不包含外部系统会话引用、`UserDetailDto`、数据库用户主键、username 或 Client Subject Projection；需要内部账号字段的用例必须通过自己的 Account Resolver 按 Subject Identifier 获取。
-_Avoid_: request user detail, shared user DTO, protocol claim payload
+**Employment Integrity**:
+Open Employment 必须引用已启用且未软删除的 Position 和所属 Organization；违反时是数据完整性异常，不是 Employment 的一种正常失效状态。正式写路径阻止异常产生，Subject Facts 发布前拒绝异常数据，已发布投影的下游不再联表重查父对象。
+_Avoid_: implicit employment pause, downstream parent-state filtering
+
+**Legacy Employment Tombstone**:
+旧版 Admin 删除入口产生的 `isDelete=true` Employment 兼容记录；它不等同于 Employment End，也不能据其更新时间推断真实结束时间。既有墓碑继续排除在任职、档案与授权计算之外，正式写路径不再产生新的墓碑。
+_Avoid_: ended employment, inferred employment history
+
+**User Resignation**:
+管理员原子地结束用户全部 Open Employment 并禁用其 IAM 账号，提交后撤销离职前 IAM 活跃 Session 的业务流程；撤销失败不回滚已生效的离职结果。合法重复执行属于无业务变化，仍保留离职意图并尝试完成遗留 Session 撤销，不改写既有结束时间，迟到的撤销不终止恢复启用后新建立的 Session；它不同于普通任职变化、账号禁用或删除用户。
+_Avoid_: account disable, employment deletion, user deletion
+
+**User Disablement**:
+User 账号处于 Disable 的可恢复停用状态；处于该状态时不能新增 Employment 或转岗，恢复为 Enable 或 Pause 后可以按任职规则建立新任职。它不表示 User 的永久终态，不自动结束已有任职，也不赋予重新打开已结束 Employment 的能力。
+_Avoid_: permanent user end, User Deletion, Employment End
+
+**User Deletion**:
+在用户已不存在任何 Open Employment，且不再作为委托人或受托人被 Open Client Delegation 引用后软删除其 IAM 账号；暂停任职和未结束委托仍会阻止删除，已结束的 Employment 与 Organization Responsibility Assignment 历史不会阻止并继续保留。它不替代 User Resignation，也不是普通账号禁用，不隐式结束委托；普通账号 Disable 不改变 Organization Responsibility Assignment。
+_Avoid_: User Resignation, account disable, employment cascade deletion
+
+### 组织责任
 
 **Organization Responsibility Type**:
 IAM 封闭枚举中可被 Organization Responsibility Assignment 引用的一种组织责任类型；其 code、业务含义与 `assignmentCardinality` 永久稳定且不可复用，任一项需要改变时必须使用新的 Type，历史 Assignment 始终通过 code 解析当前名称和说明而不保存展示文本快照。Type 没有状态或生命周期，已发布成员永久保留并始终可用于新任命；它不表示具体任命或授予 Role。
@@ -206,57 +210,10 @@ _Avoid_: best-effort responsibility cleanup, orphan responsibility, dynamically 
 Open Assignment 与其 Employment、目标 Organization 本身或 Type 基数不再满足完整性规则的数据异常；祖先 Organization 的状态或删除不属于该完整性条件。异常不是正常生命周期状态，也不产生 Effective Organization Responsibility Assignment；正常读写必须 fail closed 并报告异常，修复流程不得借读取隐式改写事实。
 _Avoid_: paused assignment, automatic read repair, effective orphan responsibility
 
-任职有效期与生命周期的决定见 [ADR-0011](docs/adr/0011-model-employment-as-an-immutable-tenure-lifecycle.md)。
+### 角色、管理授权与 HR 范围
 
-**Employment**:
-用户以某个 Position 在某个 Organization 持有的一次任职事实；未删除用户的 Enable、Pause 状态允许新增任职，Disable 状态禁止新增。任职有效期与生命周期状态正交，暂停可在同一 Employment 上恢复，结束后不可重开；返聘、重新任职或转岗产生新 Employment，它只描述组织归属与岗位身份，不表示组织责任或直接授予角色与权限。
-_Avoid_: reusable employment slot, Organization Responsibility Assignment, Role Assignment
-
-**Open Employment**:
-非 Legacy Employment Tombstone 且尚未结束的 Employment，包含未启用、启用和暂停，均占用任职关系并阻止其 Position 或所属 Organization 停用、软删除以及关联 User 删除。同一用户在同一 Organization 和 Position 下最多只有一条 Open Employment，离职时三种状态一并结束，结束后的同组合历史不受此限制。
-_Avoid_: active employment, enabled employment
-
-**Employment End**:
-尚未结束的 Employment 进入结束状态的不可逆生命周期变化，并以实际结束日期更新有效期截止日；若原开始日不早于结束日则清空开始日，原日期由审计保留。结束后记录仍作为历史事实存在，不可删除、恢复或改写为继续任职，常规 Admin 对录入错误也通过结束旧任职并新建正确 Employment 处理。
-_Avoid_: employment deletion, reversible disable
-
-**Pending Employment**:
-等待日期驱动的状态转换使其启用的任职，中文称“未启用任职”；它可被人工暂停以阻止自动启用，但不允许强制提前启用。它属于 Open Employment，不属于 Effective Employment，也不同于暂停任职。
-_Avoid_: paused employment, ended employment, effective employment
-
-**Legacy Employment Tombstone**:
-旧版 Admin 删除入口产生的 `isDelete=true` Employment 兼容记录；它不等同于 Employment End，也不能据其更新时间推断真实结束时间。既有墓碑继续排除在任职、档案与授权计算之外，正式写路径不再产生新的墓碑。
-_Avoid_: ended employment, inferred employment history
-
-**Employment Lifecycle**:
-Employment 具有未启用、启用、暂停和结束状态；日期计算优先结束已到期任职，非暂停任职按日期进入未启用或启用，暂停在到期前保持，显式恢复解除暂停后重新按日期计算状态。结束不可逆，重复命令不重复改变生命周期事实；User Disable 不自动结束既有 Employment，也不额外禁止对已有 Open Employment 修改说明、暂停、恢复、结束或管理 Primary Employment。
-_Avoid_: generic status update, arbitrary status transition
-
-**Employment Transfer**:
-在同一操作中结束旧 Employment 并以新组织或岗位创建立即启用的新 Employment 的原子业务过程；旧任职当天结束，新任职开始日固定当天，截止日另行指定或留空，不继承旧有效期和组织责任。User 处于 Disable 时禁止转岗，管理员须明确选择新任职是否为 Primary Employment，即使旧任职暂停，新任职也立即启用。
-_Avoid_: in-place employment update, pause-preserving transfer
-
-**Primary Employment**:
-由管理员在一个用户的 Open Employment 中最多指定一条的可选主职标记；用户可以没有主任职，系统不根据任职数量或顺序自动选择或改派。未启用或暂停的 Employment 可以保留或被指定为主任职，Employment End 才会清除该标记。
-_Avoid_: required employment, automatically selected employment
-
-**Employment Authority**:
-一条 Employment 的唯一权威事实来源，决定其生命周期命令和任职期边界；当前是 IAM 自主管理，未来可扩展为受信任的外部任职源，但不允许多个来源通过最后写入覆盖同一任职。
-_Avoid_: last-writer-wins source, direct database writer
-
-**Employment Period**:
-一条 Employment 的任职有效期，按北京时间的自然日采用左闭右开区间：包含开始日，不包含截止日；两端分别可空，表示无下界或无上界，两端均有值时开始日必须早于截止日。有效期与生命周期状态正交，日期范围不直接决定任职是否实际生效。
-_Avoid_: Employment Validity Period, Employment Lifecycle, actual lifecycle timestamps, message receipt interval
-
-**Employment Integrity**:
-Open Employment 必须引用已启用且未软删除的 Position 和所属 Organization；违反时是数据完整性异常，不是 Employment 的一种正常失效状态。正式写路径阻止异常产生，Subject Facts 发布前拒绝异常数据，已发布投影的下游不再联表重查父对象。
-_Avoid_: implicit employment pause, downstream parent-state filtering
-
-**Effective Employment**:
-非 Legacy Employment Tombstone 且生命周期状态为启用的 Employment，任职有效期不参与该判定；到期但尚未转换为结束状态的启用任职仍然有效。Primary Employment 标记和 User 账号状态不参与该判定；Position 与所属 Organization 的有效性由 Employment Integrity 保证，不作为运行时开关。
-_Avoid_: Open Employment, enabled user employment
-
-涉及组合继承的定义描述 [ADR-0049](docs/adr/0049-compose-roles-across-clients.md) 中已确认的目标模型。
+涉及组合继承的定义描述 [ADR-0049](docs/adr/0049-compose-roles-across-clients.md) 中已确认的目标模型；
+角色类型与应用披露边界见 [ADR-0048](docs/adr/0048-model-global-roles-without-client-ownership.md)。
 
 **Effective Role**:
 对一条 Effective Employment 生效的启用且未删除的角色，来自有效的角色分配或组合继承。源分配目标必须启用且未删除。
@@ -276,8 +233,6 @@ _Avoid_: assignment template
 同一任职通过多条有效路径获得同一个 Role 时，该角色只计一次。
 _Avoid_: Role Assignment, Client Delegation
 
-角色类型与应用披露边界见 [ADR-0048](docs/adr/0048-model-global-roles-without-client-ownership.md)。
-
 **Client Role**:
 归属一个 Client 的角色。成为 Effective Role 后，只有所属 Client 可以在应用侧读取该角色事实。
 
@@ -285,13 +240,13 @@ _Avoid_: Role Assignment, Client Delegation
 由 IAM 统一管理、无 Client 归属的角色。成为 Effective Role 后，各 Client 可在各自的披露范围内读取该任职上的角色事实。
 _Avoid_: global administrator, automatic grant
 
-**HR Administrator**:
-对至少一条 Effective Employment 具有 `iam:hr-admin` Effective Role 的管理员主体；`iam:hr-admin` 是绑定 `iam-admin` Client、沿用普通 Role 生命周期的角色，不是内置或受保护角色。该角色自身只授予限定管理能力，其组织范围只从承载该 Effective Role 的 Employment 推导，其他普通 Employment 不扩大范围；与其他角色组合时权限取并集，本角色不撤销其他角色授予的能力。
-_Avoid_: full administrator, global administrator, deny-override role
-
 **Admin Authorization Policy**:
 IAM Admin 服务端把当前有效管理角色映射为模块、动作与数据范围能力的集中式授权规则；`iam:admin` 授予完整能力，正确绑定 `iam-admin` Client 的 `iam:hr-admin` 授予 HR 限定能力，多角色能力取并集。它不以 `role_privilege`、前端可见性、管理入口 allowlist 或调用方声明的组织范围作为授权事实。
 _Avoid_: UI access flag, admin admission allowlist, role-privilege policy, caller-declared scope
+
+**HR Administrator**:
+对至少一条 Effective Employment 具有 `iam:hr-admin` Effective Role 的管理员主体；`iam:hr-admin` 是绑定 `iam-admin` Client、沿用普通 Role 生命周期的角色，不是内置或受保护角色。该角色自身只授予限定管理能力，其组织范围只从承载该 Effective Role 的 Employment 推导，其他普通 Employment 不扩大范围；与其他角色组合时权限取并集，本角色不撤销其他角色授予的能力。
+_Avoid_: full administrator, global administrator, deny-override role
 
 **HR Administration Scope Root**:
 HR Administrator 的某条角色承载任职所属 Organization Path 中首个一级 Organization；`iam:hr-admin` 通过角色分配或组合继承成为该任职的 Effective Role 时口径相同，角色分配目标和路径中的 Company 节点都不替代该结构根。
@@ -349,41 +304,141 @@ _Avoid_: scope-local primary invariant, out-of-scope employment administration
 HR Administrator 可以为未删除且状态不为 Disable 的 User 在 HR Administration Scope 内创建 Employment，并对 HR-Visible Open Employment 修改描述和有效期、暂停、恢复或结束；Position 从全局目录选择，已结束 Employment 保持只读。Employment Transfer 的源 Employment 与目标 Organization 都必须位于当前范围并集内，可以跨 HR Administration Scope Root，并继续遵守 HR Employment Responsibility Cascade 与 HR Primary Employment Administration。
 _Avoid_: user provisioning, out-of-scope employment mutation, single-root transfer
 
-**ORCAS Session Identity**:
-已退役 ORCAS 集成曾使用的外部用户与会话引用；IAM 不保存或交付该引用，它不属于 IAM 用户档案、主体声明或会话关系。历史外部会话的有效期和注销仍由 ORCAS 负责，见 [ADR-0040](docs/adr/0040-retire-orcas-custom-sso-integration.md)。
-_Avoid_: user detail field, user profile attribute, subject claim, Independent client context
+### 应用委托
 
-**Custom SSO Authorization Grant**:
-授予指定 Client 一次性继续 Custom SSO 登录的 Code。适用认证和原实例定位通过后消费；后续失败不恢复 Code，并按兑换规则在本请求内有界尝试终止原 ClientSession。
-_Avoid_: local session, client session, recoverable authorization code, replayable exchange result
+Client Delegation 独立于文档与过滤条件，调用与切换边界见[委托接入](docs/guides/delegation.md)。
 
-**Independent Client Credential**:
-业务自行接入 Custom SSO 时取得的 Client scoped Token；第三方可以据此建立自己的本地会话，但本地会话不属于 IAM。
-_Avoid_: third-party local session, IAM-created third-party session
+**Client Delegation**:
+绑定一个 Client、在指定组织范围内为委托人确定直接代办人的委托关系；它不向受托人授予或复制委托人的角色、权限或登录身份，不同 Client 的委托分别管理。
+_Avoid_: permission grant, role inheritance, impersonation
 
-**Gateway Application Configuration**:
-以一个 IAM Client 为归属单位的一组网关配置，可以包含多条路由和多个上游；需要独立维护的子应用拥有各自的 Client，统一维护的子应用共用所属 Client。该归属表达配置的管理单位，本身不构成调用者的操作权限。
-_Avoid_: Gateway Local Session, SSO Client Configuration, caller authorization
+**Client Delegation Scope**:
+Client Delegation 适用的组织集合，包含所选 Organization 及其当前全部后代；以后新增的后代自动纳入。
+_Avoid_: exact organization only, implicit global scope, creation-time subtree snapshot
 
-**Gateway Local Session**:
-IAM 托管接入为浏览器保存的 Custom SSO Token 及其 ClientSession 关系；它受根登录、应用关系和当前接入规则约束。
-_Avoid_: Independent Client Credential, third-party local session
+**Client Delegation Lifecycle**:
+Client Delegation 无需受托人确认，按指定期间与自身状态参与解析；未结束时可修改期间与说明、暂停或恢复，委托人、受托人、Client 和组织范围固定。手动结束不可恢复，自然到期但未手动结束时仍可延期，结束或到期的记录仍可查看。
+_Avoid_: delegatee approval, mutable delegation bindings, delegation reopening, delegation deletion
 
-**Credential Identity**:
-标识一次协议 Token 签发的身份，用于在该次签发结果不确定时确认或补偿作用。
-_Avoid_: reusable credential slot, bearer token, user identity
+**Client Delegation Conflict**:
+同一委托人在同一 Client 下的两条未结束委托，其组织覆盖范围和闭区间业务期间均有交集时形成的冲突；Pause 仍占位，受托人相同不豁免，时间端点相接也属于重叠。
+_Avoid_: nearest-scope override, duplicate delegation collapse, paused-slot reuse
 
-**Credential**:
-旧模型中访问凭据的名称；统一模型以协议 Token 表达访问凭据，以 UserSession 和 ClientSession 表达登录关系。
-_Avoid_: Principal Session, Authorization Grant, unconditional access permission
+**Current Client Delegation**:
+状态为 Enable 且观察时刻位于闭区间业务期间内的 Client Delegation；双方 User 或组织的 Pause、Disable 不改变已有委托关系的解析，委托关系本身不证明受托人能够登录或执行代办操作。
+_Avoid_: effective authorization, delegatee login permission, automatic delegation termination
 
-**Custom SSO Client Configuration**:
-一个选择 Custom SSO 的 Client 对回调类型、允许的业务落地地址和主体披露范围的声明；管理员显式选择由 IAM 托管还是业务处理，托管回调归属由已接受业务落地地址的 origin 确定，业务回调使用显式登记的完整地址，见 [ADR-0038](docs/adr/0038-derive-managed-sso-callback-from-redirect-origin.md)。普通编辑不等于终止已有会话，接入启用意图由 SSO Enablement 表达。
-_Avoid_: Independent/Gateway mode, OIDC client configuration, caller-supplied callback selection, ClientSession state
+**Open Client Delegation**:
+尚未手动结束、状态为 Enable 或 Pause 的 Client Delegation，不因尚未开始或自然到期改变其未结束的生命周期事实；它阻止委托双方、绑定的 Client 和所选 Organization 被删除，只有显式结束后才释放这项约束。
+_Avoid_: Current Client Delegation, automatic delegation expiry, implicit cascade termination
+
+**Client Delegation Resolution**:
+在同一服务端观察时刻和数据库快照，为指定 User 及 Organization 查找属于调用方 Client 的零或一个直接代办人；Client 由认证身份确定，无当前委托时为 null。不沿链递归，不验证委托人或受托人是否持有该应用角色或权限，调用方不能指定其他 Client。
+_Avoid_: caller-selected client, cross-client delegation resolution, authorization resolution
+
+**Client Delegation Resolution Input**:
+Client Delegation Resolution 中以 username 或 Organization code 指向的存在且未删除领域对象；Pause 或 Disable 状态不影响识别。任一输入无法识别时解析整体失败，不返回部分结果；Client 固定来自已认证 Internal 调用方。
+_Avoid_: enabled-only resolution input, missing input as no delegation, caller-selected client
+
+**Client Delegation Resolution Integrity Violation**:
+同一观察时刻、Organization 与 Client 下，一个已识别 User 匹配多条 Current Client Delegation、匹配记录发生自委托，或引用缺失或已删除的用户、组织的数据异常；多条记录即使指向同一 Delegatee 仍属异常，双向直接委托不属于异常。解析必须整体失败，不得选择或折叠记录、把异常降级为 null 或返回部分结果。
+_Avoid_: delegation winner selection, duplicate delegation collapse, self-delegation, multi-delegate resolution
+
+### 主体身份、会话与认证
+
+**Subject Identifier**:
+IAM 身份域为一个用户持有的稳定 opaque 标识，也是 User Search 的公开精确身份路径；登录协议可以将它映射到各自契约，但任何协议都不拥有该标识。
+_Avoid_: OIDC-owned subject, protocol session ID, username
+
+**IAM Entry**:
+调用方访问 IAM 时选用的内网或公网入口，决定同入口导航使用的 IAM 地址及 OIDC issuer；显式配置的 Custom SSO 回调可以跨入口。它表达所选入口，不表示用户实际身处哪个网络，也不构成独立用户或 Client。
+_Avoid_: client network location, independent IAM tenant
+
+**Principal Reference**:
+Session Kernel 用 `{ principalType, subjectId }` 指向会话主体的最小引用；用户主体的 `subjectId` 是 Subject Identifier，不包含数据库主键、显示名称或档案快照。Principal Session 不再另存通用 Principal Snapshot；协议确需固化的声明快照由各协议自行拥有。
+_Avoid_: user snapshot, display user, database user reference
+
+**UserSession**:
+用户一次 IAM 认证形成的根登录关系，拥有该次可信主体、原认证事实、主体访问代际和固定到期时间。协议活动不延长它，同一账号的不同根登录彼此独立。
+_Avoid_: ClientSession, protocol Token, renewable login slot
+
+**ClientSession**:
+指定 UserSession 与一个 Client 的持续应用关系，同一对最多存在一个有效实例，在线使用同时要求该实例和原根有效；后续授权可更新其协议标记并在原根期限内延长。协议切换本身不终止该关系，符合协议前置条件的 Code 兑换失败可触发原实例终止；实例终止或过期后新授权建立新实例，旧 Code/Token 不随之改绑或延长。
+_Avoid_: Provider Session, protocol Token, per-protocol relationship, per-authorization scope container
+
+**Authenticated Subject Context**:
+共享 HTTP 认证中间件验证 UserSession 或 Gateway Local Session 后产生的最小请求上下文，只包含 Subject Identifier 和适用时已验证的 client code。它不包含外部系统会话引用、`UserDetailDto`、数据库用户主键、username 或 Client Subject Projection；需要内部账号字段的用例必须通过自己的 Account Resolver 按 Subject Identifier 获取。
+_Avoid_: request user detail, shared user DTO, protocol claim payload
+
+**Authentication Continuation**:
+IAM 在身份验证前保留、并在身份验证后继续原 Custom SSO 或 OIDC 授权请求的上下文，包含首次已接受的授权事实。恢复不因普通配置编辑重新审核原 redirect/scope 允许范围，但仍受当前流量、协议启用与适用认证规则约束；有效根登录应被复用，普通登录页参数不能绕过续接。
+_Avoid_: post-login homepage, new login attempt, generic redirect, force-login query
+
+**Protocol Reauthentication Requirement**:
+OIDC Client 对当前授权请求提出、并由 OIDC 验证和绑定到 Authentication Continuation 的新鲜身份验证要求；没有有效会话时它可通过首次登录满足，已有有效 UserSession 时 IAM 不再次执行身份验证，而以 `login_required` 终止本次授权。任意登录页 query 或 Custom SSO 参数不构成该要求。
+_Avoid_: force-login query, repeated login, session refresh
+
+**企业微信跨设备扫码登录**:
+用户在手机端通过企业微信证明成员身份并确认本次登录，再由发起请求的电脑浏览器完成 IAM 登录、继续原 Authentication Continuation 的认证方式。
+_Avoid_: 企业微信工作台免登、企业微信第三方登录回调
+
+**企业微信身份绑定**:
+企业微信成员身份与既有 IAM 用户之间的一对一登录关联，账号停用期间仍保留，由 IAM 完整管理员显式解除。未绑定的成员在发起扫码的电脑上用用户名和密码验证既有账号，或直接输入已登记且唯一标识该账号的手机号并验证短信验证码，建立绑定。
+_Avoid_: 手机号自动匹配、扫码开户
+
+**Account Recovery**:
+用户无法正常登录时，通过已绑定身份凭据重新取得 IAM 账号访问权的自助过程；它不包括普通登录或管理员代为重置凭据。
+_Avoid_: open flow, public password helper
+
+**Image CAPTCHA Proof**:
+IAM 确认图片验证码已答对后授予的一次性人机校验证明。它只适用于原操作及其目标，短信发送还受原短信用途约束。
+_Avoid_: SMS verification code, login credential, session token
+
+**Temporary Login Restriction**:
+用户在统计窗口内登录失败次数过多后受到的用户级临时登录限制；它只阻止新的认证，不撤销已有会话，也不是账号禁用或永久黑名单。
+_Avoid_: blacklist, 黑名单, disabled account
+
+**Login Restriction Trigger Method**:
+使登录失败计数达到限制阈值的最后一种认证方式；它不表示该认证方式独自产生了全部失败。
+_Avoid_: restriction cause, failure breakdown
+
+**Session Origin**:
+登录时观测到的客户端 IP 和由 User-Agent 推断的粗粒度设备描述；它只用于调查提示，不是可信设备身份或授权依据。
+_Avoid_: trusted device, device identity, device fingerprint
+
+**Session Revocation**:
+使明确捕获的 UserSession 或 ClientSession 不再被 IAM 接受的终止操作；Token 使用验证根与应用关系，旁路协议清理失败不会恢复已终止关系。它不阻止未来登录，不保证第三方自行建立的本地会话退出。
+_Avoid_: guaranteed third-party logout, reversible logout
+
+### 应用接入、单点登录与网关
+
+**Client Protocol Selection**:
+Client 当前采用的 SSO 协议及其相应配置，决定后续操作允许使用的协议。改变选择不自动撤销已有应用关系，后续授权可以复用有效关系；切回后仍满足自身条件的旧访问可以恢复，永久终止由显式撤销表达。
+_Avoid_: immutable ClientSession protocol, protocol revocation epoch, Session Revocation
 
 **SSO Enablement**:
 一个 Client 对所选 SSO 协议接入能力的启用意图，独立于 Client 的整体状态、Internal API 调用能力和显式会话撤销。关闭时保留配置和既有访问关系，恢复启用只允许仍在原期限内且未被终止的访问继续使用。
 _Avoid_: Client Disablement, configuration deletion, Session Revocation
+
+**Client Maintenance**:
+Client 可恢复地暂停在线协议流量的状态；它保留配置、启用意图和原有期限，恢复后未过期且未被撤销的访问可以继续。退出与显式撤销仍可执行，discovery、JWKS 和健康检查不属于该门禁。
+_Avoid_: configuration freeze, protocol disablement, maintenance bypass
+
+**Client Maintenance Unavailable**:
+Client Snapshot 明确表示目标 Client 处于 Client Maintenance 时，IAM 在线协议入口产生的可重试暂态结果。配置进入维护本身不终止会话或协议产物；普通访问遇到维护不清除仍可能恢复有效的 Cookie。兑换若已完成认证并定位原 ClientSession，后续失败仍按该兑换操作的既定补偿规则终止原实例，不能由“维护可恢复”推导豁免；认证前拒绝不消费 Code 或作用于会话。Custom SSO 将维护映射为 HTTP `503`、稳定错误码 `AUTH.MAINTENANCE` 和可选重试提示，OIDC 使用相应 endpoint 的 `temporarily_unavailable` 或 HTTP `503` 语义。无法取得可信 Client Snapshot 属于通用暂态不可用，不得冒充明确的 Client Maintenance。
+_Avoid_: invalid client, invalid token, unauthorized, protocol revocation
+
+**Client Disablement**:
+Client 被明确行政停用并拒绝在线协议流量的状态；配置和既有关系保留，恢复不会续期，永久终止由显式撤销表达。
+_Avoid_: Client Maintenance, configuration removal, protocol reset
+
+**Client Deletion**:
+在 Client 名下已不存在任何未删除 Client Role 后软删除该 Client 的管理操作；所属角色处于 Enable、Pause 或 Disable 都会阻止删除，必须先按各自生命周期处理角色分配和 Role。它不通过删除 Client 隐式级联删除角色或角色分配，也不同于可恢复的 Client Disablement。
+_Avoid_: Client Disablement, implicit role cascade, enabled-only role blocker
+
+**Client Runtime Snapshot**:
+IAM 在线协议入口为一次业务操作取得的 Client 通行状态与所选协议配置，两者来自同一次源事实观察，后续变更不追溯推翻本操作已接受的事实。新操作重新取得，传播失败时仍可能取得先前已发布的事实；它不代表全局最新配置、Secret 认证结果或会话及协议产物的有效性。
+_Avoid_: live Client row, protocol config version, linearizable Client state, Client authentication result
 
 **Application Admission Policy**:
 一个业务应用根据已发布 User Document 决定用户能否获得本次应用登录授权的规则。策略默认关闭，关闭时保留已保存的条件，开启时要求用户满足条件才能取得本次应用登录授权，见 [ADR-0051](docs/adr/0051-enforce-admission-before-issuing-application-login-grants.md)。
@@ -401,33 +456,9 @@ _Avoid_: Internal API credential, user password, Authorization Code, Session Tok
 IAM 为 Client 持有、用于服务间调用身份验证的秘密凭据，与 SSO Client Secret 独立。Gateway 配置管理使用它证明调用方能够以目标 Client 的身份操作，凭据本身不授予额外的环境或配置项权限。
 _Avoid_: SSO Client Secret, APISIX Admin Key, ClientSession Token, public Client metadata
 
-**Client Protocol Selection**:
-Client 当前采用的 SSO 协议及其相应配置，决定后续操作允许使用的协议。改变选择不自动撤销已有应用关系，后续授权可以复用有效关系；切回后仍满足自身条件的旧访问可以恢复，永久终止由显式撤销表达。
-_Avoid_: immutable ClientSession protocol, protocol revocation epoch, Session Revocation
-
-**Client Runtime Snapshot**:
-IAM 在线协议入口为一次业务操作取得的 Client 通行状态与所选协议配置，两者来自同一次源事实观察，后续变更不追溯推翻本操作已接受的事实。新操作重新取得，传播失败时仍可能取得先前已发布的事实；它不代表全局最新配置、Secret 认证结果或会话及协议产物的有效性。
-_Avoid_: live Client row, protocol config version, linearizable Client state, Client authentication result
-
-**Protocol Configuration Revocation**:
-旧模型中配置编辑驱动协议代际撤销的名称，已退役；当前配置维护与显式会话撤销相互独立。
-_Avoid_: validation failure cleanup, unconditional client-wide revocation, Runtime Snapshot invalidation
-
-**Client Maintenance**:
-Client 可恢复地暂停在线协议流量的状态；它保留配置、启用意图和原有期限，恢复后未过期且未被撤销的访问可以继续。退出与显式撤销仍可执行，discovery、JWKS 和健康检查不属于该门禁。
-_Avoid_: configuration freeze, protocol disablement, maintenance bypass
-
-**Client Disablement**:
-Client 被明确行政停用并拒绝在线协议流量的状态；配置和既有关系保留，恢复不会续期，永久终止由显式撤销表达。
-_Avoid_: Client Maintenance, configuration removal, protocol reset
-
-**Client Deletion**:
-在 Client 名下已不存在任何未删除 Client Role 后软删除该 Client 的管理操作；所属角色处于 Enable、Pause 或 Disable 都会阻止删除，必须先按各自生命周期处理角色分配和 Role。它不通过删除 Client 隐式级联删除角色或角色分配，也不同于可恢复的 Client Disablement。
-_Avoid_: Client Disablement, implicit role cascade, enabled-only role blocker
-
-**Client Maintenance Unavailable**:
-Client Snapshot 明确表示目标 Client 处于 Client Maintenance 时，IAM 在线协议入口产生的可重试暂态结果。配置进入维护本身不终止会话或协议产物；普通访问遇到维护不清除仍可能恢复有效的 Cookie。兑换若已完成认证并定位原 ClientSession，后续失败仍按该兑换操作的既定补偿规则终止原实例，不能由“维护可恢复”推导豁免；认证前拒绝不消费 Code 或作用于会话。Custom SSO 将维护映射为 HTTP `503`、稳定错误码 `AUTH.MAINTENANCE` 和可选重试提示，OIDC 使用相应 endpoint 的 `temporarily_unavailable` 或 HTTP `503` 语义。无法取得可信 Client Snapshot 属于通用暂态不可用，不得冒充明确的 Client Maintenance。
-_Avoid_: invalid client, invalid token, unauthorized, protocol revocation
+**Custom SSO Client Configuration**:
+一个选择 Custom SSO 的 Client 对回调类型、允许的业务落地地址和主体披露范围的声明；管理员显式选择由 IAM 托管还是业务处理，托管回调归属由已接受业务落地地址的 origin 确定，业务回调使用显式登记的完整地址，见 [ADR-0038](docs/adr/0038-derive-managed-sso-callback-from-redirect-origin.md)。普通编辑不等于终止已有会话，接入启用意图由 SSO Enablement 表达。
+_Avoid_: Independent/Gateway mode, OIDC client configuration, caller-supplied callback selection, ClientSession state
 
 **Custom SSO Redirect Pattern**:
 Custom SSO client 对允许的实际 redirect URI 使用的显式受限模式。无通配的 URI 只匹配精确路径；只有以 `/*` 结尾才匹配路径子树，主机 `*.` 只匹配一级子域且不匹配根域或多级子域；scheme 与 port 必须精确一致。禁止裸 `*`、公共后缀或 IP 通配及 URL credentials。模式不允许 query；实际地址仅在命中主机或路径通配模式时允许 query。实际地址允许 fragment；模式未指定 fragment 时不限制它，指定时精确匹配规范化后的完整 fragment（包含 `#`，空 `#` 与未指定不同），不对 fragment 展开通配，fragment 内的 `?` 不属于 URL query。动态往返信息也可由 `state` 承载。Authorization 阶段先按模式允许实际 URI，随后 Code 保存包含 fragment 的规范化实际值，callback 或 token 兑换必须与 Code 逐字匹配；允许列表变化约束新授权，不以已退役的配置版本比较使旧 Code 失效。
@@ -437,29 +468,27 @@ _Avoid_: exact-only redirect registry, implicit origin/path subtree, grant-time 
 Custom SSO V1 中由 client 可选提供的 opaque 流程关联值；存在时 IAM 将其绑定进 Authorization Grant 并在 callback 原样返回，不解释、不修改、不写入普通日志，client 负责校验。缺失时 V1 仍允许继续，IAM 不生成默认值；它不是 Session Token、Authorization Code 或身份声明，未来若改为必填必须通过新的契约版本完成。
 _Avoid_: required V1 state, session credential, server-side return URL
 
-**OIDC Client Binding**:
-旧 OIDC 模型中的 Client 关系名称；统一模型由协议中性的 ClientSession 表达应用关系。
-_Avoid_: generic Client Binding, Custom SSO binding, client configuration, credential
+**Custom SSO Authorization Grant**:
+授予指定 Client 一次性继续 Custom SSO 登录的 Code。适用认证和原实例定位通过后消费；后续失败不恢复 Code，并按兑换规则在本请求内有界尝试终止原 ClientSession。
+_Avoid_: local session, client session, recoverable authorization code, replayable exchange result
 
-**Client Subject Projection**:
-IAM 向指定 Client 实际交付的主体属性视图，始终包含 Subject Identifier，其余字段受该 Client 当前披露配置和 IAM 允许词汇约束，不暴露数据库用户标识。两协议在实际交付时使用同一主体事实与裁剪语义，但保留各自响应形状；OIDC UserInfo 的新披露范围也适用于旧 Token，已签 ID Token 内容固定。
-_Avoid_: User Profile, session payload, mode-specific user info
+**Independent Client Credential**:
+业务自行接入 Custom SSO 时取得的 Client scoped Token；第三方可以据此建立自己的本地会话，但本地会话不属于 IAM。
+_Avoid_: third-party local session, IAM-created third-party session
 
-**Subject Projection Not Ready**:
-实际主体交付时无法取得合法已发布 Subject Facts 的暂态结果，不表示未认证或无权限。已消费 Code 不恢复；既有 Token 的 UserInfo 可以稍后重试。
-_Avoid_: unauthorized, forbidden, dirty-state response
+**Gateway Local Session**:
+IAM 托管接入为浏览器保存的 Custom SSO Token 及其 ClientSession 关系；它受根登录、应用关系和当前接入规则约束。
+_Avoid_: Independent Client Credential, third-party local session
 
-**Gateway Subject Header**:
-`/auth/authz` 成功时通过 `X-User-Info` 交付的版本化最小主体信息；编码后的 JSON 始终包含 Subject Identifier，只在 Custom SSO client 已声明相应 claim 时包含 username 或 name。它不包含数据库用户主键、phone、employments 或 `iam:authorization`，也不是完整 Client Subject Projection。
-_Avoid_: authorization header payload, UserDetail header, legacy id compatibility
+**Gateway Application Configuration**:
+以一个 IAM Client 为归属单位的一组网关配置，可以包含多条路由和多个上游；需要独立维护的子应用拥有各自的 Client，统一维护的子应用共用所属 Client。该归属表达配置的管理单位，本身不构成调用者的操作权限。
+_Avoid_: Gateway Local Session, SSO Client Configuration, caller authorization
 
-**Subject Claim Catalog**:
-IAM 定义的版本化语义 claim 词汇，client 从服务端唯一 active Catalog 中声明 Client Subject Projection 所需字段；Catalog 版本不按 client 持久化或协商，代际升级只在维护窗口内全局硬切换，不提供 Client 代际选择、运行时混读或 fallback。Claim 由专用投影映射产生，不直接引用 User Profile DTO 字段或 JSON path。
-_Avoid_: UserDetail field list, arbitrary JSON path, protocol scope
+**Credential Identity**:
+标识一次协议 Token 签发的身份，用于在该次签发结果不确定时确认或补偿作用。
+_Avoid_: reusable credential slot, bearer token, user identity
 
-**Subject Claim Selection**:
-IAM 按 Client 当前披露配置及适用协议规则确定的本次主体字段选择，始终包含 Subject Identifier。它不是客户端直接指定的字段清单，也不作为会话或 Token 的固定披露快照；OIDC UserInfo 不以旧 Token 原申请范围限制当前选择。
-_Avoid_: ProjectionSpec, client configuration, protocol scope, requested HTTP fields
+### 主体事实、披露投影与访问屏障
 
 **Subject Facts**:
 按 Subject Identifier 识别、供 IAM 内部投影使用的已发布协议中性主体事实，包含基础资料、发布版本中的 Effective Employment、组织及完整路径、岗位，以及每条任职上生效的 Global Role 和按 Client 区分的 Client Role；无角色的有效任职仍保留。它由同一主体的全部 Client Subject Projection 共同消费，不包含账号可访问性或授权决策，允许落后于源业务事实，且不承诺固定时间内完成更新；取得合法已发布事实不等于确认其与当前源事实一致。
@@ -481,6 +510,22 @@ _Avoid_: profile cache field, eventual account disable, protocol-specific blackl
 一次独立业务操作开始时，根据可信主体、账号访问状态及适用的会话代际取得的访问许可，仅对该次操作的同一主体与代际有效；取得后账号状态变化不追加中途拒绝，但许可不替代会话生命周期、协议和业务授权约束。新的接口调用必须重新取得许可，持久化的代际信息本身不构成许可。
 _Avoid_: request-wide boolean, persistent authorization, reusable access token
 
+**Subject Claim Catalog**:
+IAM 定义的版本化语义 claim 词汇，client 从服务端唯一 active Catalog 中声明 Client Subject Projection 所需字段；Catalog 版本不按 client 持久化或协商，代际升级只在维护窗口内全局硬切换，不提供 Client 代际选择、运行时混读或 fallback。Claim 由专用投影映射产生，不直接引用 User Profile DTO 字段或 JSON path。
+_Avoid_: UserDetail field list, arbitrary JSON path, protocol scope
+
+**Subject Claim Selection**:
+IAM 按 Client 当前披露配置及适用协议规则确定的本次主体字段选择，始终包含 Subject Identifier。它不是客户端直接指定的字段清单，也不作为会话或 Token 的固定披露快照；OIDC UserInfo 不以旧 Token 原申请范围限制当前选择。
+_Avoid_: ProjectionSpec, client configuration, protocol scope, requested HTTP fields
+
+**Client Subject Projection**:
+IAM 向指定 Client 实际交付的主体属性视图，始终包含 Subject Identifier，其余字段受该 Client 当前披露配置和 IAM 允许词汇约束，不暴露数据库用户标识。两协议在实际交付时使用同一主体事实与裁剪语义，但保留各自响应形状；OIDC UserInfo 的新披露范围也适用于旧 Token，已签 ID Token 内容固定。
+_Avoid_: User Profile, session payload, mode-specific user info
+
+**Subject Projection Not Ready**:
+实际主体交付时无法取得合法已发布 Subject Facts 的暂态结果，不表示未认证或无权限。已消费 Code 不恢复；既有 Token 的 UserInfo 可以稍后重试。
+_Avoid_: unauthorized, forbidden, dirty-state response
+
 **Client Authorization Claim**:
 `iam:authorization` 表达指定 Client 在已发布 Subject Facts 中可见的角色事实，包括有效任职、该 Client 的有效 Client Role 及任职上的有效 Global Role，公开结构排除数据库标识和授权决策。两协议实际交付时均可使用落后于源事实的已发布角色，无法取得合法 Facts 时不能省略必要声明伪装成功，接入应用解释角色对应的业务操作权限，并负责其副本的刷新。
 _Avoid_: global roles, global privileges, authorization decision, guaranteed current authorization
@@ -489,25 +534,15 @@ _Avoid_: global roles, global privileges, authorization decision, guaranteed cur
 `profile:employments` 表达用户有效任职的非授权事实，包括主任职标记、组织及完整路径、岗位，不包含角色、权限、数据库标识或任职历史。Custom SSO 按当前 Catalog 声明交付，OIDC 按 Client 当前 `iam:employments` 披露范围交付到 UserInfo，不扩展标准 `profile` scope 或 ID Token。
 _Avoid_: raw employment record, Client Authorization Claim, employment history
 
-**Account Recovery**:
-用户无法正常登录时，通过已绑定身份凭据重新取得 IAM 账号访问权的自助过程；它不包括普通登录或管理员代为重置凭据。
-_Avoid_: open flow, public password helper
+**Gateway Subject Header**:
+`/auth/authz` 成功时通过 `X-User-Info` 交付的版本化最小主体信息；编码后的 JSON 始终包含 Subject Identifier，只在 Custom SSO client 已声明相应 claim 时包含 username 或 name。它不包含数据库用户主键、phone、employments 或 `iam:authorization`，也不是完整 Client Subject Projection。
+_Avoid_: authorization header payload, UserDetail header, legacy id compatibility
 
-**User Resignation**:
-管理员原子地结束用户全部 Open Employment 并禁用其 IAM 账号，提交后撤销离职前 IAM 活跃 Session 的业务流程；撤销失败不回滚已生效的离职结果。合法重复执行属于无业务变化，仍保留离职意图并尝试完成遗留 Session 撤销，不改写既有结束时间，迟到的撤销不终止恢复启用后新建立的 Session；它不同于普通任职变化、账号禁用或删除用户。
-_Avoid_: account disable, employment deletion, user deletion
+### 已退役与历史映射术语
 
-**User Disablement**:
-User 账号处于 Disable 的可恢复停用状态；处于该状态时不能新增 Employment 或转岗，恢复为 Enable 或 Pause 后可以按任职规则建立新任职。它不表示 User 的永久终态，不自动结束已有任职，也不赋予重新打开已结束 Employment 的能力。
-_Avoid_: permanent user end, User Deletion, Employment End
-
-**User Deletion**:
-在用户已不存在任何 Open Employment，且不再作为委托人或受托人被 Open Client Delegation 引用后软删除其 IAM 账号；暂停任职和未结束委托仍会阻止删除，已结束的 Employment 与 Organization Responsibility Assignment 历史不会阻止并继续保留。它不替代 User Resignation，也不是普通账号禁用，不隐式结束委托；普通账号 Disable 不改变 Organization Responsibility Assignment。
-_Avoid_: User Resignation, account disable, employment cascade deletion
-
-**OIDC Claims Snapshot**:
-旧 OIDC 模型中授权时固化的声明视图，已退出当前在线模型；当前 UserInfo 按 Client 当前披露范围交付已发布 Subject Facts，已签发 ID Token 内容固定。
-_Avoid_: token-endpoint live projection, current user profile, current authorization view
+**Credential**:
+旧模型中访问凭据的名称；统一模型以协议 Token 表达访问凭据，以 UserSession 和 ClientSession 表达登录关系。
+_Avoid_: Principal Session, Authorization Grant, unconditional access permission
 
 **Valid Principal Session**:
 旧模型中有效根登录的名称；当前使用有效 UserSession，要求根未过期、未撤销且主体访问许可仍成立。
@@ -517,38 +552,18 @@ _Avoid_: online session, 在线会话
 旧模型中管理可观察根记录的名称；当前管理查询观察 UserSession，记录可见不等于本次访问获准。
 _Avoid_: valid session, online user, 在线用户
 
-**Authentication Continuation**:
-IAM 在身份验证前保留、并在身份验证后继续原 Custom SSO 或 OIDC 授权请求的上下文，包含首次已接受的授权事实。恢复不因普通配置编辑重新审核原 redirect/scope 允许范围，但仍受当前流量、协议启用与适用认证规则约束；有效根登录应被复用，普通登录页参数不能绕过续接。
-_Avoid_: post-login homepage, new login attempt, generic redirect, force-login query
+**OIDC Client Binding**:
+旧 OIDC 模型中的 Client 关系名称；统一模型由协议中性的 ClientSession 表达应用关系。
+_Avoid_: generic Client Binding, Custom SSO binding, client configuration, credential
 
-**企业微信跨设备扫码登录**:
-用户在手机端通过企业微信证明成员身份并确认本次登录，再由发起请求的电脑浏览器完成 IAM 登录、继续原 Authentication Continuation 的认证方式。
-_Avoid_: 企业微信工作台免登、企业微信第三方登录回调
+**OIDC Claims Snapshot**:
+旧 OIDC 模型中授权时固化的声明视图，已退出当前在线模型；当前 UserInfo 按 Client 当前披露范围交付已发布 Subject Facts，已签发 ID Token 内容固定。
+_Avoid_: token-endpoint live projection, current user profile, current authorization view
 
-**企业微信身份绑定**:
-企业微信成员身份与既有 IAM 用户之间的一对一登录关联，账号停用期间仍保留，由 IAM 完整管理员显式解除。未绑定的成员在发起扫码的电脑上用用户名和密码验证既有账号，或直接输入已登记且唯一标识该账号的手机号并验证短信验证码，建立绑定。
-_Avoid_: 手机号自动匹配、扫码开户
+**Protocol Configuration Revocation**:
+旧模型中配置编辑驱动协议代际撤销的名称，已退役；当前配置维护与显式会话撤销相互独立。
+_Avoid_: validation failure cleanup, unconditional client-wide revocation, Runtime Snapshot invalidation
 
-**Protocol Reauthentication Requirement**:
-OIDC Client 对当前授权请求提出、并由 OIDC 验证和绑定到 Authentication Continuation 的新鲜身份验证要求；没有有效会话时它可通过首次登录满足，已有有效 UserSession 时 IAM 不再次执行身份验证，而以 `login_required` 终止本次授权。任意登录页 query 或 Custom SSO 参数不构成该要求。
-_Avoid_: force-login query, repeated login, session refresh
-
-**Image CAPTCHA Proof**:
-IAM 确认图片验证码已答对后授予的一次性人机校验证明。它只适用于原操作及其目标，短信发送还受原短信用途约束。
-_Avoid_: SMS verification code, login credential, session token
-
-**Temporary Login Restriction**:
-用户在统计窗口内登录失败次数过多后受到的用户级临时登录限制；它只阻止新的认证，不撤销已有会话，也不是账号禁用或永久黑名单。
-_Avoid_: blacklist, 黑名单, disabled account
-
-**Login Restriction Trigger Method**:
-使登录失败计数达到限制阈值的最后一种认证方式；它不表示该认证方式独自产生了全部失败。
-_Avoid_: restriction cause, failure breakdown
-
-**Session Origin**:
-登录时观测到的客户端 IP 和由 User-Agent 推断的粗粒度设备描述；它只用于调查提示，不是可信设备身份或授权依据。
-_Avoid_: trusted device, device identity, device fingerprint
-
-**Session Revocation**:
-使明确捕获的 UserSession 或 ClientSession 不再被 IAM 接受的终止操作；Token 使用验证根与应用关系，旁路协议清理失败不会恢复已终止关系。它不阻止未来登录，不保证第三方自行建立的本地会话退出。
-_Avoid_: guaranteed third-party logout, reversible logout
+**ORCAS Session Identity**:
+已退役 ORCAS 集成曾使用的外部用户与会话引用；IAM 不保存或交付该引用，它不属于 IAM 用户档案、主体声明或会话关系。历史外部会话的有效期和注销仍由 ORCAS 负责，见 [ADR-0040](docs/adr/0040-retire-orcas-custom-sso-integration.md)。
+_Avoid_: user detail field, user profile attribute, subject claim, Independent client context

@@ -126,7 +126,7 @@ APISIX 启动配置位于 `tmp/gateway-config/apisix/`，发布基线位于 `tmp
 首次配置通过直连 API 完成，不依赖尚未创建的 IAM 路由。
 APISIX Admin API 固定使用 v3，Admin Key 只留在服务部署配置。
 
-本机 dev 发布变量示例为 [`variables.dev.example.json`](../../tmp/gateway-config/apisix/variables.dev.example.json)，
+本机 dev 发布变量示例为 `tmp/gateway-config/apisix/variables.dev.example.json`，
 作为请求的 `variables` 字段提交，不由 Compose 自动加载。示例保留本机 IAM 和 GDS 主应用地址，
 GDS 子应用、dashboard、Tender、Contract 与 MinIO 使用远程 dev 上游；发布前按实际运行位置调整。
 SSO/OIDC 的两个 Host 必须与 API 的 internal/external origin 一致，示例为 `localhost:30080` 和

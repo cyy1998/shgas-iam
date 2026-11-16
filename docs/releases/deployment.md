@@ -6,7 +6,7 @@ Last verified: 2026-11-13
 Next review: 2026-12-13
 
 本页覆盖当前版本首次部署、常规更新和兼容版本回退。旧 Profile/Organization Search 升级先按[统一 Document 硬切换](data-maintenance.md#统一-document-硬切换)，其他跨代来源见[独立迁移指引](README.md#一次性迁移与旧版本)。
-本地开发见[项目快速开始](../../README.md#-快速开始)；网关、登录密钥、数据重建和日志栈按[专题入口](README.md)操作。
+本地开发见[项目快速开始](../../README.md#快速开始)；网关、登录密钥、数据重建和日志栈按[专题入口](README.md)操作。
 
 ## 部署输入
 

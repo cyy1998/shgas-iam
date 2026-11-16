@@ -17,7 +17,8 @@ Session Kernel 只拥有协议中性的 UserSession / ClientSession 生命周期
 Barrier 或主体投影；采用模块分离不表示协议作用可放进一个跨数据库、Redis 和外部服务的大事务。
 
 代价是每个边界必须明确失败后已发生的作用与恢复 owner，而不能用一个总回滚承诺隐藏部分成功。
-Worker 只编排各 owner 的公开维护能力；离线全量清理按显式 namespace 下的 owner 前缀扫描并批量 UNLINK，
+Ops CLI 通过各 owner 的公开维护能力执行离线全量会话清理，入口分工见
+[ADR-0047](0047-separate-operations-cli-from-worker.md)。清理按显式 namespace 下的 owner 前缀扫描并批量 UNLINK，
 不解析状态格式，也不按 Client 或记录版本筛选。它覆盖这些前缀内的全部版本与键族，接受所选范围全部重新登录的代价。
 其他前缀的旧布局离线能力已退役，不进入在线探测；前缀、维护窗口与独立清零核验见维护手册。
 
@@ -26,7 +27,7 @@ Worker 只编排各 owner 的公开维护能力；离线全量清理按显式 na
 包位置和公开能力见[仓库地图](../engineering/repository-map.md#共享-packages)，
 依赖与接线见[后端架构](../engineering/backend-architecture.md#核心依赖方向)。
 生命周期选择见 [ADR-0035](0035-unify-user-and-client-session-lifecycles.md)，当前维护见
-[统一维护手册](../releases/authentication-and-session.md)。Custom SSO 不再注入 ORCAS 外部能力，退役历史见
+[会话清理手册](../releases/authentication-and-session.md#会话清理)。Custom SSO 不再注入 ORCAS 外部能力，退役历史见
 [ADR-0040](0040-retire-orcas-custom-sso-integration.md)。
 
 历史来源：[ADR-0028 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0028-extract-session-and-grant-state.md)、[ADR-0035 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0035-unify-user-and-client-session-lifecycles.md)。原始决定与后续修订按各版本追溯。

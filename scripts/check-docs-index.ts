@@ -1,5 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import GithubSlugger from "github-slugger";
+import MarkdownIt from "markdown-it";
 
 type DocStatus = "Current" | "Needs Review" | "Historical" | "Stale";
 
@@ -17,9 +19,17 @@ type Finding = {
   message: string;
 };
 
+type MarkdownDocument = {
+  links: Set<string>;
+  anchors: Set<string>;
+};
+
 const repoRoot = join(import.meta.dirname, "..");
 const docsRoot = join(repoRoot, "docs");
 const indexPath = join(docsRoot, "index.md");
+const rootMarkdownFiles = ["README.md", "AGENTS.md", "CONTEXT.md"];
+const workspaceRoots = ["apps", "packages"];
+const historicalRoots = [".scratch/", "openspec/"];
 const validStatuses = new Set<DocStatus>(["Current", "Needs Review", "Historical", "Stale"]);
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -28,16 +38,17 @@ const todayUtc = Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth(
 
 const findings: Finding[] = [];
 const warnings: Finding[] = [];
+const markdown = new MarkdownIt({ html: true });
+const markdownCache = new Map<string, MarkdownDocument>();
 
 const indexedDocs = parseIndex();
-const docs = listMarkdownFiles(docsRoot)
-  .map((file) => toRepoPath(file))
-  .filter((file) => file !== "docs/index.md")
-  .sort();
+const allDocsFiles = listMarkdownFiles(docsRoot).map((file) => toRepoPath(file));
+const docs = allDocsFiles.filter((file) => file !== "docs/index.md").sort();
+const linkCheckFiles = collectLinkCheckFiles(allDocsFiles);
 
 checkIndexCoverage(indexedDocs, docs);
 checkIndexFreshness(indexedDocs);
-checkMarkdownLinks(listMarkdownFiles(docsRoot).map((file) => toRepoPath(file)));
+const checkedFileCount = checkMarkdownLinks(linkCheckFiles);
 
 for (const warning of warnings) {
   console.warn(`Docs index warning: ${warning.file} ${warning.message}`);
@@ -51,7 +62,7 @@ if (findings.length > 0) {
   process.exit(1);
 }
 
-console.log(`Docs index guard passed: ${docs.length} docs indexed.`);
+console.log(`Docs index guard passed: ${docs.length} docs indexed, ${checkedFileCount} markdown files link-checked.`);
 
 function parseIndex(): Map<string, IndexedDoc> {
   if (!existsSync(indexPath)) {
@@ -76,14 +87,18 @@ function parseIndex(): Map<string, IndexedDoc> {
       continue;
     }
 
-    const linkMatch = cells[0].match(/\[[^\]]+\]\(([^)]+)\)/);
-    if (!linkMatch) {
+    const [document = "", type = "", statusCell = "", lastVerified = "", nextReview = "", notes = ""] = cells;
+    const linkTarget = markdown
+      .parseInline(document, {})[0]
+      ?.children?.find((token) => token.type === "link_open")
+      ?.attrGet("href");
+    if (typeof linkTarget !== "string" || !linkTarget) {
       fail("docs/index.md", `document cell must be a markdown link: ${cells[0]}`);
       continue;
     }
 
-    const path = normalizeDocPath(linkMatch[1]);
-    const status = cells[2] as DocStatus;
+    const path = toRepoPath(resolveLinkPath("docs/index.md", linkTarget));
+    const status = statusCell as DocStatus;
 
     if (!validStatuses.has(status)) {
       fail("docs/index.md", `${path} has invalid status "${cells[2]}"`);
@@ -97,11 +112,11 @@ function parseIndex(): Map<string, IndexedDoc> {
 
     rows.set(path, {
       path,
-      type: cells[1],
+      type,
       status,
-      lastVerified: cells[3],
-      nextReview: cells[4],
-      notes: cells[5],
+      lastVerified,
+      nextReview,
+      notes,
     });
   }
 
@@ -158,34 +173,132 @@ function checkIndexFreshness(rows: Map<string, IndexedDoc>): void {
   }
 }
 
-function checkMarkdownLinks(files: string[]): void {
-  for (const file of files) {
-    const text = read(file);
-    const linkPattern = /!?\[[^\]]*\]\(([^)]+)\)/g;
+function collectLinkCheckFiles(docsFiles: string[]): string[] {
+  const files = new Set<string>(docsFiles);
 
-    for (const match of text.matchAll(linkPattern)) {
-      const rawTarget = match[1].trim();
-      const target = rawTarget.split(/\s+/)[0].split("#")[0];
-      if (!target || shouldSkipLink(target)) continue;
+  for (const rootFile of rootMarkdownFiles) {
+    if (existsSync(join(repoRoot, rootFile))) {
+      files.add(rootFile);
+    }
+  }
 
-      const targetPath = resolve(dirname(join(repoRoot, file)), target);
-      if (!existsSync(targetPath)) {
-        fail(file, `broken markdown link target: ${rawTarget}`);
+  for (const workspaceRoot of workspaceRoots) {
+    const absoluteRoot = join(repoRoot, workspaceRoot);
+    if (!existsSync(absoluteRoot)) continue;
+
+    for (const dirEntry of readdirSync(absoluteRoot, { withFileTypes: true })) {
+      if (!dirEntry.isDirectory()) continue;
+      const readmeFile = join(absoluteRoot, dirEntry.name, "README.md");
+      if (existsSync(readmeFile)) {
+        files.add(toRepoPath(readmeFile));
       }
     }
   }
+
+  return [...files].sort();
+}
+
+function checkMarkdownLinks(initialFiles: string[]): number {
+  const visited = new Set<string>(initialFiles);
+
+  for (const file of visited) {
+    for (const target of getMarkdownDocument(file).links) {
+      if (!target || /^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(target)) continue;
+
+      const hashIndex = target.indexOf("#");
+      const anchor = hashIndex === -1 ? "" : decodeLinkPart(target.slice(hashIndex + 1));
+      const targetPath = resolveLinkPath(file, target);
+      const targetFile = toRepoPath(targetPath);
+
+      if (targetFile === ".." || targetFile.startsWith("../") || isAbsolute(targetFile)) {
+        fail(file, `markdown link leaves the repository: ${target}`);
+        continue;
+      }
+
+      if (!existsSync(targetPath)) {
+        fail(file, `broken markdown link target: ${target}`);
+        continue;
+      }
+
+      if (!/\.md$/i.test(targetFile) || !statSync(targetPath).isFile()) continue;
+
+      if (!historicalRoots.some((root) => targetFile.startsWith(root))) {
+        visited.add(targetFile);
+      }
+      if (anchor && !getMarkdownDocument(targetFile).anchors.has(anchor)) {
+        fail(file, `broken markdown anchor "#${anchor}" in link target: ${target}`);
+      }
+    }
+  }
+
+  return visited.size;
+}
+
+function getMarkdownDocument(file: string): MarkdownDocument {
+  const cached = markdownCache.get(file);
+  if (cached) return cached;
+
+  const env = {};
+  const tokens = markdown.parse(read(file), env);
+  const anchors = new Set<string>();
+  const slugger = new GithubSlugger();
+
+  for (const [index, token] of tokens.entries()) {
+    if (token.type !== "heading_open") continue;
+    const heading = (tokens[index + 1]?.children ?? [])
+      .filter((child) => child.type === "text" || child.type === "code_inline")
+      .map((child) => child.content)
+      .join("");
+    anchors.add(slugger.slug(heading.trim()));
+  }
+
+  const links = new Set<string>();
+  new HTMLRewriter()
+    .on("a[href], img[src]", {
+      element(element) {
+        const link = element.getAttribute(element.tagName === "a" ? "href" : "src");
+        if (link) links.add(markdown.utils.unescapeAll(link).trim());
+      },
+    })
+    .on("[id], a[name]", {
+      element(element) {
+        const id = element.getAttribute("id");
+        const name = element.tagName === "a" ? element.getAttribute("name") : null;
+        if (id) anchors.add(markdown.utils.unescapeAll(id));
+        if (name) anchors.add(markdown.utils.unescapeAll(name));
+      },
+    })
+    .transform(markdown.renderer.render(tokens, markdown.options, env));
+
+  const document = { links, anchors };
+  markdownCache.set(file, document);
+  return document;
+}
+
+function decodeLinkPart(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function resolveLinkPath(file: string, target: string): string {
+  const path = decodeLinkPart(target.split(/[?#]/, 1)[0] ?? "");
+  const source = join(repoRoot, file);
+  if (!path) return source;
+  return path.startsWith("/") ? resolve(repoRoot, `.${path}`) : resolve(dirname(source), path);
 }
 
 function listMarkdownFiles(dir: string): string[] {
   const result: string[] = [];
 
-  for (const entry of readdirSync(dir)) {
-    const absolutePath = join(dir, entry);
-    const stat = statSync(absolutePath);
+  for (const dirEntry of readdirSync(dir, { withFileTypes: true })) {
+    const absolutePath = join(dir, dirEntry.name);
 
-    if (stat.isDirectory()) {
+    if (dirEntry.isDirectory()) {
       result.push(...listMarkdownFiles(absolutePath));
-    } else if (entry.endsWith(".md")) {
+    } else if (dirEntry.isFile() && dirEntry.name.endsWith(".md")) {
       result.push(absolutePath);
     }
   }
@@ -193,22 +306,12 @@ function listMarkdownFiles(dir: string): string[] {
   return result;
 }
 
-function normalizeDocPath(target: string): string {
-  const normalized = target.replace(/\\/g, "/").split("#")[0];
-  const withDocsPrefix = normalized.startsWith("docs/") ? normalized : `docs/${normalized}`;
-  return withDocsPrefix.replace(/\/+/g, "/");
-}
-
-function shouldSkipLink(target: string): boolean {
-  return /^(?:https?:|mailto:|#)/i.test(target);
-}
-
 function isDate(value: string): boolean {
   return datePattern.test(value) && !Number.isNaN(dateToUtc(value));
 }
 
 function dateToUtc(value: string): number {
-  const [year, month, day] = value.split("-").map(Number);
+  const [year = NaN, month = NaN, day = NaN] = value.split("-").map(Number);
   return Date.UTC(year, month - 1, day);
 }
 

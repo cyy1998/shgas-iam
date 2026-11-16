@@ -4,13 +4,14 @@ status: accepted
 
 # 以独立模块统一角色分配解析
 
-Admin 与 User Profile 的构建、失效需要同一套 Effective Role 和受影响用户解析。由 `@iam/assignment-resolution/role-assignment` 模块接收数据库能力，隐藏分配来源、组织闭包、去重与查询实现；调用方只拥有各自的结果映射。
+Admin 和 User Document 构建共用 Effective Role 正向解析，角色变动后的 User Document 失效使用反向解析定位受影响用户。
+`@iam/assignment-resolution/role-assignment` 接收数据库能力，隐藏分配来源、组织闭包、去重与查询实现。调用方负责各自的结果映射。
 OIDC 消费已发布 Subject Facts，不直接调用角色解析器。
 
 ## 理由与代价
 
-不把授权语义放进基础设施包 `@iam/db`，不使纯 `@iam/domain` 依赖数据库，也不让 Admin 反向依赖 User Profile
-投影实现。公开能力批量处理，查询次数不随输入 ID 数量增长，空输入不查库；不承诺具体 SQL 条数或写法。
+不把授权语义放进基础设施包 `@iam/db`，不使纯 `@iam/domain` 依赖数据库，也不让 Admin 依赖 User Document
+的构建实现。公开能力批量处理，查询次数不随输入 ID 数量增长，空输入不查库；不承诺具体 SQL 条数或写法。
 
 正向解析返回当前有效角色；反向解析用于扩大 dirty scope，不能因 Role、Position 或 Organization 已停用而漏掉需要去除
 旧授权的用户。接受保守范围带来的额外重建，不接受漏重建。正向可按 Client 限定，调用方不自行重建过滤规则。

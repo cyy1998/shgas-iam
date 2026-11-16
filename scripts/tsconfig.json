@@ -3,5 +3,5 @@
   "compilerOptions": {
     "allowJs": true
   },
-  "include": ["./architecture-guard.ts"]
+  "include": ["./architecture-guard.ts", "./check-docs-index.ts"]
 }
