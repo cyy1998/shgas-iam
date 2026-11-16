@@ -68,18 +68,19 @@ SSO 使用同源 API 前缀，例如 `/api/iam`。经实际网关进入 SSO，�
    `IAM_API_WECHAT_CORP_SECRET`，在所有 API 副本同时设置 `IAM_API_WECHAT_QR_AGENT_ID` 和
    `IAM_API_WECHAT_QR_CALLBACK_URL`。内网和公网入口使用不同 hostname。回调使用 `IAM_API_SSO_EXTERNAL_ORIGIN` 的 hostname，路径固定为
    `/sso/wechat-qr/mobile/callback`，例如 `https://iam.example.com/sso/wechat-qr/mobile/callback`。
-2. 按[网关发布](apisix-gateway-release.md)在 API upstream 前配置高优先级的扫码路由。公网手机路径
-   `/sso/wechat-qr/mobile/*` 只向上述 HTTPS authority 开放，Gateway 覆盖 `X-IAM-Entry-Network: external`，
-   并根据实际 TLS 入口覆盖 `X-Forwarded-Proto`。在更通用的路由也覆盖客户端传入的协议与入口头。
-   电脑路径 `/sso/wechat-qr`、`/oidc/wechat-qr` 及其子路径只走内网 authority，Gateway 覆盖
-   `X-IAM-Entry-Network: internal`。内网的登录守卫也使用相同的可信入口头。禁止外部直连 API。
+2. 在前置 NGINX 终止公网 TLS。仅向上述域名的 HTTPS 入口开放 `/sso/wechat-qr/mobile/*`，在公网 HTTP 入口阻止该路径
+   转发，并禁止公网绕过前置 NGINX 直连 APISIX 或 API。前置 NGINX 到 APISIX 可以走内部 HTTP。
+   按[网关发布](apisix-gateway-release.md)配置高优先级的扫码路由。手机路径只匹配公网域名，Gateway 覆盖
+   `X-IAM-Entry-Network: external`，API 校验该入口头。电脑路径 `/sso/wechat-qr`、`/oidc/wechat-qr` 及其子路径
+   只走内网 authority，Gateway 覆盖 `X-IAM-Entry-Network: internal`。内网登录守卫与其他通用路由也沿用各自的可信入口头。
 3. 网关和日志采集只记录脱敏路径或路由名。扫码路由不记录 query、Cookie、表单、完整请求行或 Referer。
    为扫码路由将 OpenTelemetry sampler 设置为 `always_off`。检查访问日志、错误日志及 tracing 的实际输出，
    回调里的授权码和 state、发起浏览器续接参数都不能进入采集。
    SSE 转发保留流式响应与 `X-Accel-Buffering: no`，代理读超时应长于心跳间隔。
-4. 按[常规更新](deployment.md#常规更新)部署 API 和 SSO。用不同 hostname 的原电脑和手机验证公网登录守卫不提供出码，
+4. 应用前置 NGINX 的入口规则并验证生效后，按[常规更新](deployment.md#常规更新)部署 API 和 SSO，并发布对应的 APISIX 路由。
+   用不同 hostname 的原电脑和手机验证公网登录守卫不提供出码，
    手机没有 `global_session`，电脑能实时读到确认或取消。断开 SSE 后重连，核对已发生的结果仍可见，旧码在换码后不可用。
-   在网关验证无 TLS 的回调和客户端伪造入口头均被拒绝，再放开流量。
+   验证公网 HTTP 回调在前置 NGINX 被拦截、伪造入口头无法跨用内外网路径，再放开流量。
 
 关闭功能时清空两个 `IAM_API_WECHAT_QR_*` 配置并重建所有 API 副本。遇到状态丢失、超时或换码，用户从电脑重新出码。
 Redis 需要从备份恢复时，关闭扫码入口并等待在途请求到期后再开放。既有第三方企业微信回调使用原企业配置。
