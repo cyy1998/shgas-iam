@@ -30,6 +30,7 @@
     "check:env-names": "bun scripts/check-env-names.ts",
     "verify": "node scripts/verify.mjs",
     "verify:static": "node scripts/verify.mjs --static",
+    "verify:docs": "node scripts/verify-docs.mjs",
     "verify:ci": "node scripts/run-verification-gate.mjs ci",
     "verify:release": "node scripts/run-verification-gate.mjs release",
     "test:resources:cleanup": "node scripts/run-test-resource-cleanup.mjs"

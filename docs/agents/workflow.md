@@ -38,8 +38,10 @@ AFK 的逐轮复审要求由 [AFK 工作流](sandcastle-afk.md#双轴评审子�
   显式调用 `implement` 时，其中的完整测试指当前任务的完整受影响范围。
 - 格式与 lint 修复由[提交 Hook](../engineering/commands.md#commit-前检查)处理暂存文件；核对修复 diff，
   按实际变化重跑失效的类型或行为检查。
-- 手动 tickets 不逐票要求 `verify:static`。最终集成内容交付前运行一次 `pnpm verify`，并按 Spec 和改动风险
-  补齐相关 Integration、E2E、Gateway 等检查。小任务在准备本地合入时执行同样的最终验证。
+- 手动 tickets 不逐票要求 `verify:static`。最终集成内容交付前，以合入目标的固定提交与候选比较。
+  仅当完整差异满足[纯文档验证](../engineering/commands.md#纯文档验证)的范围，且验收只涉及文档时，使用
+  `pnpm verify:docs --base <target-commit>` 完成基础门禁。其余改动运行一次 `pnpm verify`。
+  按 Spec 和改动风险补齐所需 Integration、E2E、Gateway 等检查。小任务准备本地合入时使用同一规则。
 - 后续修改只重跑失效的检查，未受代码、依赖、配置或环境变化影响的通过结果可以复用；无法判断时扩大验证。
   最终证据必须覆盖当前候选的全部受影响范围，记录实际命令、结果和未执行项。
 - 必需检查失败或未执行时保持工作未完成。认定基线失败需在固定基线、可比环境复现并记录证据；

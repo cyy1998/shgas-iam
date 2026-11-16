@@ -19,7 +19,8 @@
    对确实成立的缺陷按仓库 `tdd` skill 修复，用引用父 Spec 的普通提交保存；保留提交 Hook，核对其修复 diff。
    需要安全、并发、一致性或跨 runtime 新设计且未能解决时保留现场并报告下一恢复动作。
    本次沿用手动 `implement-spec` 的节奏，不默认循环双轴全量复审，也不派生其他实施者分摊 findings。
-3. 在最终集成内容上执行一次 `pnpm verify`，并按完整 Spec 和 tickets 的风险、验收与测试决策，补齐必需
+3. 以 `{{REVIEW_BASE}}` 为合入目标，按 `docs/agents/workflow.md` 的验证节奏为最终集成内容选择基础门禁。
+   按完整 Spec 和 tickets 的风险、验收与测试决策补齐必需
    Integration、E2E、Gateway 或其他检查；重复覆盖按范围去重。票级通过不能代替最终组合验证。
    真实资源检查通过根 `pnpm test:integration --workspace ... --file ...` 或 `pnpm test:e2e`，每条命令独立管理资源。
    修改依赖后运行 `sh scripts/sandcastle/prepare-workspace.sh`。遵守 Bun 真实 I/O await 规则。

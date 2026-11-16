@@ -107,6 +107,16 @@ pnpm --filter @iam/e2e-system runtime:cleanup -- --project iam-e2e-<run-id>
 
 组合入口首错停止。何时执行见[验证节奏](../agents/workflow.md#验证节奏)，结果能证明的范围见[验证结果与交付](testing.md#验证结果与交付)。
 
+### 纯文档验证
+
+```bash
+pnpm verify:docs --base <target-commit>
+```
+
+在干净的候选工作树中执行，传入本次合入目标的固定提交。候选须包含目标提交，且差异仅限 `docs/` 下的普通 Markdown 文件。
+`docs/agents/`、`AGENTS.md`、文件类型或权限变化以及范围外的改动走 `pnpm verify`。轻量入口检查提交范围的
+`git diff --check`、变动后仍存在的 Markdown 排版和整个文档索引。范围不符或任一检查失败时非零退出。
+
 ## 工具链排查
 
 对比工具链性能时可以用 `pnpm exec turbo typecheck --force --concurrency=3` 或
@@ -136,7 +146,7 @@ lint-staged 自动重新暂存修复结果，并暂时隐藏部分暂存文件�
 lint-staged 会尝试还原原始状态。若自动恢复失败，保留其输出的备份 stash 和恢复提示，核对备份内容后再按提示恢复，
 不要用全仓 `git add` 或清理 stash 掩盖冲突。
 
-Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit；最终候选仍由 verify 的全仓只读检查覆盖。
+Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit。最终候选仍按[验证节奏](../agents/workflow.md#验证节奏)执行只读检查。
 提交工具链变化时，在独立临时 Git 仓库中按[一次性验证约定](testing.md#root-工具链的一次性验证)
 检查涉及的真实提交、部分暂存和失败恢复行为。
 
