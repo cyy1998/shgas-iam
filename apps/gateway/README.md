@@ -16,17 +16,18 @@ pnpm --filter @iam/gateway-apisix start
 pnpm --filter @iam/gateway-apisix dev
 ```
 
-正式入口为 `src/main.ts`，start 执行 `bun src/main.ts`，默认监听 `0.0.0.0:30004`。
-Compose 的 `gateway-api` 默认只向宿主 `127.0.0.1:30004` 映射，应限制在可信管理网络。
-`GET /health` 返回 200 只证明 HTTP 就绪，不检查 PostgreSQL 或 APISIX；关闭期间返回 503。
-Gateway 不依赖 Redis。自有 PostgreSQL pool 最多 4 条连接并设置默认只读，部署仍需专用 reader role。
-启动参数、权限和执行/关闭预算见[服务配置](../../docs/releases/apisix-gateway-release.md#服务与首次配置)。
+- **监听与健康检查** 正式入口为 `src/main.ts`，start 执行 `bun src/main.ts`，默认监听 `0.0.0.0:30004`。
+  Compose 的 `gateway-api` 默认只向宿主 `127.0.0.1:30004` 映射，应限制在可信管理网络。
+  `GET /health` 返回 200 只证明 HTTP 就绪，不检查 PostgreSQL 或 APISIX；关闭期间返回 503。
 
-三种操作均要求 `Content-Type: application/json`，通过 `apikey` header 提交 scope 对应 Client 的
-Internal API Secret。例如 `prod:tender` 要求 code 为 tender、Enable 且未删除的 Client。
-每次请求读取当前数据库记录，不缓存、不使用 SSO Secret；已认证的在途操作继续完成。
-缺失、错误、跨应用或状态不允许统一返回 401，数据库不可用返回 503，均不访问 APISIX。
-首次提交 iam scope 前需准备 `iam` Client，`iam-admin` 不能替代它。
+- **数据库连接** Gateway 不依赖 Redis。自有 PostgreSQL pool 最多 4 条连接并设置默认只读，部署仍需专用 reader role。
+  启动参数、权限和执行/关闭预算见[服务配置](../../docs/releases/apisix-gateway-release.md#服务与首次配置)。
+
+- **请求认证** 三种操作均要求 `Content-Type: application/json`，通过 `apikey` header 提交 scope 对应 Client 的
+  Internal API Secret。例如 `prod:tender` 要求 code 为 tender、Enable 且未删除的 Client。
+  每次请求读取当前数据库记录，不缓存、不使用 SSO Secret；已认证的在途操作继续完成。
+  缺失、错误、跨应用或状态不允许统一返回 401，数据库不可用返回 503，均不访问 APISIX。
+  首次提交 iam scope 前需准备 `iam` Client，`iam-admin` 不能替代它。
 
 共同请求体：
 
@@ -94,15 +95,15 @@ routes:
 ```
 
 - app service 的 id/name 为 `<app>.<env>`；route、upstream、plugin_config 的 id/name 为 `<app>.<key>.<env>`。
-- Consumer 的 username 为 `<app>_<key>_<env>`，例如 tender_reader_dev；其余标识保持既有规则，plugin_metadata 仍以插件 key 标识。
+- **标识生成** Consumer 的 username 为 `<app>_<key>_<env>`，例如 tender_reader_dev；其余标识保持既有规则，plugin_metadata 仍以插件 key 标识。
 - SSL 的 id 沿点号规则，不生成 name；`ssls[].key` 为本地名，`private_key: ${TLS_PRIVATE_KEY}` 映射 APISIX 私钥 key，证书与私钥均必填。
 - 非 terminal route 声明 `upstream: <key>`，物化时注入 service/upstream 引用；`plugin_config: <key>` 引用同文件策略。
 - `terminal: true` 不注入 service/upstream，适用于 redirect；源文件不手写物化后的 id/name 或资源引用 ID。
 
-物化时注入 managed_by:shgas-iam、source:repo-manifest、env、app 标签，源自定义 labels 不得覆盖它们。
-发布只管理当前 scope 的 repo-manifest 对象，避让 dynamic-registry、其他 scope 和未管理对象。
-删除候选默认只展示，不执行。存在独立 credential 子资源的 Consumer 不允许 prune；无法确认子列表为空时，
-整次 apply 在任何写入前拒绝。子凭据先由实际 owner 处理，不属于七类 YAML 或恢复集合。
+- **受管标签与安全清理** 物化时注入 managed_by:shgas-iam、source:repo-manifest、env、app 标签，源自定义 labels 不得覆盖它们。
+  发布只管理当前 scope 的 repo-manifest 对象，避让 dynamic-registry、其他 scope 和未管理对象。
+  删除候选默认只展示，不执行。存在独立 credential 子资源的 Consumer 不允许 prune；无法确认子列表为空时，
+  整次 apply 在任何写入前拒绝。子凭据先由实际 owner 处理，不属于七类 YAML 或恢复集合。
 
 ## 本地与生产基线
 
@@ -117,14 +118,14 @@ Gateway Integration 使用 `test-integration/support/` 内的一套固定 APISIX
 Full-system E2E 独立维护 `e2e/system/test-assets/` 中的启动配置和 IAM 路由。
 这些测试资产不作为部署模板；现场配置仍须由部署方准备并按发布手册验收。
 
-开发编排为 `docker/compose.dev.yaml`，模板为 `docker/.env.dev.example`；Gateway 数据库 URL
-必须显式提供，不能继承其他 app 的读写连接。生产 `gateway-api` 位于 `docker/compose.prod.apps.yaml`，
-镜像由 `apps/gateway/Dockerfile` 构建；APISIX 与 etcd 位于 `docker/compose.prod.gateway.yaml`。
-APISIX 启动配置位于 `tmp/gateway-config/apisix/`，发布基线位于 `tmp/gateway-config/apisix/manifests/<env>/<app>.yaml`。
-生产 Gateway API 可独立启动，通过 `IAM_GATEWAY_APISIX_ADMIN_URL` 连接 APISIX；发布前须按
-[发布手册](../../docs/releases/apisix-gateway-release.md)核验数据库权限与 APISIX 可用性。
-首次配置通过直连 API 完成，不依赖尚未创建的 IAM 路由。
-APISIX Admin API 固定使用 v3，Admin Key 只留在服务部署配置。
+- **开发与生产编排** 开发编排为 `docker/compose.dev.yaml`，模板为 `docker/.env.dev.example`；Gateway 数据库 URL
+  必须显式提供，不能继承其他 app 的读写连接。生产 `gateway-api` 位于 `docker/compose.prod.apps.yaml`，
+  镜像由 `apps/gateway/Dockerfile` 构建；APISIX 与 etcd 位于 `docker/compose.prod.gateway.yaml`。
+  APISIX 启动配置位于 `tmp/gateway-config/apisix/`，发布基线位于 `tmp/gateway-config/apisix/manifests/<env>/<app>.yaml`。
+  生产 Gateway API 可独立启动，通过 `IAM_GATEWAY_APISIX_ADMIN_URL` 连接 APISIX；发布前须按
+  [发布手册](../../docs/releases/apisix-gateway-release.md)核验数据库权限与 APISIX 可用性。
+  首次配置通过直连 API 完成，不依赖尚未创建的 IAM 路由。
+  APISIX Admin API 固定使用 v3，Admin Key 只留在服务部署配置。
 
 本机 dev 发布变量示例为 `tmp/gateway-config/apisix/variables.dev.example.json`，
 作为请求的 `variables` 字段提交，不由 Compose 自动加载。示例保留本机 IAM 和 GDS 主应用地址，
@@ -138,11 +139,11 @@ MinIO 保留远程的路径重写与无网关鉴权插件配置；Contract/Tende
 GDS 示例鉴权指向本机 IAM。发布各 scope 前均需准备同名、已启用的 Client；不能为同步配置绕过禁用状态。
 这两条路由在远程仍是未管理对象，不会被 `prune` 清除，不能直接将新增 manifest 发布到远程造成重叠路由。
 
-本地数据面为 `http://localhost:30080` / `https://localhost:30443`，Admin API 为
-`http://127.0.0.1:9180/apisix/admin`。IAM 的 `/api/iam` 前缀经 proxy-rewrite 去除：
-public/open/internal/auth 转 API，admin/rpc 转 Admin API；`/portal`、`/iam-admin` 转前端。
-SSO/OIDC 使用受控内外网 host，分别覆盖 X-IAM-Entry-Network，无未知 host 的协议兜底。
-双入口发布见[OIDC 手册](../../docs/releases/authentication-and-session.md#oidc-双入口配置)。
+- **本地开发变量与路由基线** 本地数据面为 `http://localhost:30080` / `https://localhost:30443`，Admin API 为
+  `http://127.0.0.1:9180/apisix/admin`。IAM 的 `/api/iam` 前缀经 proxy-rewrite 去除：
+  public/open/internal/auth 转 API，admin/rpc 转 Admin API；`/portal`、`/iam-admin` 转前端。
+  SSO/OIDC 使用受控内外网 host，分别覆盖 X-IAM-Entry-Network，无未知 host 的协议兜底。
+  双入口发布见[OIDC 手册](../../docs/releases/authentication-and-session.md#oidc-双入口配置)。
 
 API routes 经 route 级 plugin_config 绑定 limit-req，普通 API 为 rate 10 / burst 20，
 IAM internal 为 rate 50 / burst 100；前端、静态和文件入口不使用本 API 限流策略。

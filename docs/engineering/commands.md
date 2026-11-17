@@ -18,12 +18,13 @@ Admin 和 SSO 各自按 app 的 `.env.example` 准备 `.env.local`。默认入�
 公开变量和构建缓存输入见[前端构建输入](../releases/deployment.md#前端构建输入)。
 
 使用 `pnpm --filter <package-name> <script>` 选择 workspace。包名和源码入口见[仓库地图](repository-map.md)，
-可用脚本查该 workspace 的 `package.json`。Gateway API 使用 `pnpm --filter @iam/gateway-apisix dev` 或 `start`，
-配置见 [Gateway README](../../apps/gateway/README.md)。数据库脚本使用 `pnpm --filter @iam/db <script>`，
-常用入口为 `db:generate`、`db:check`、`db:migrate` 和 `db:push`。目标环境的迁移与回退见[部署手册](../releases/deployment.md)。
+可用脚本查该 workspace 的 `package.json`。
 
-人工维护命令见 [Ops README](../../apps/ops/README.md)，按目标选择[运维手册](../releases/README.md)。
-运行 Sandcastle 见 [AFK 启动与诊断](../agents/sandcastle-afk.md#启动与诊断)。
+- **Gateway API** 使用 `pnpm --filter @iam/gateway-apisix dev` 或 `start`，配置见 [Gateway README](../../apps/gateway/README.md)。
+- **数据库迁移与 schema** 使用 `pnpm --filter @iam/db <script>`。常用入口为 `db:generate`、`db:check`、`db:migrate` 和 `db:push`。
+  目标环境的迁移与回退见[部署手册](../releases/deployment.md)。
+- **人工维护 CLI** 人工维护命令见 [Ops README](../../apps/ops/README.md)，按目标选择[运维手册](../releases/README.md)。
+- **Sandcastle AFK** 见 [AFK 启动与诊断](../agents/sandcastle-afk.md#启动与诊断)。
 
 ## 日常检查
 

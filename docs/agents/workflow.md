@@ -12,14 +12,14 @@
 
 ## 授权与分支
 
-- 按用户已授权的范围连续推进。只要求拆票时止于拆票；已明确授权拆票并实施时，发布 tickets 后直接继续。
+- **按授权范围推进** 按用户已授权的范围连续推进。只要求拆票时止于拆票；已明确授权拆票并实施时，发布 tickets 后直接继续。
   范围扩大、需求冲突或关键设计未定时，先澄清对应问题。
-- 同一 feature 从讨论落盘到实施复用同一功能分支；在 `implement-spec` 中它就是集成分支。
+- **功能分支复用** 同一 feature 从讨论落盘到实施复用同一功能分支；在 `implement-spec` 中它就是集成分支。
   首次落盘前核对目标分支、工作区和已有分支；没有可复用分支时创建 `codex/<feature-slug>`。
   只读调查不建分支，用户指定的分支或 worktree 安排优先。
-- 文档随相关工作正常提交。跨会话按[议题跟踪](issue-tracker.md#当-skill-要求publish-to-the-issue-tracker)恢复分支和基线，
+- **跨会话恢复** 文档随相关工作正常提交。跨会话按[议题跟踪](issue-tracker.md#当-skill-要求publish-to-the-issue-tracker)恢复分支和基线，
   不因阶段变化另建功能分支。未知改动原样保留，发生覆盖风险时先解决重叠。
-- 实施授权包含集成分支内的提交、合并和修复；目标分支的本地合入按[收尾约定](#完成与本地合入)单独确认。
+- **合入确认** 实施授权包含集成分支内的提交、合并和修复；目标分支的本地合入按[收尾约定](#完成与本地合入)单独确认。
 
 ## 实施者与评审适配
 
@@ -34,15 +34,15 @@ AFK 的逐轮复审要求由 [AFK 工作流](sandcastle-afk.md#双轴评审子�
 
 ## 验证节奏
 
-- 实施中按改动运行相关测试、受影响 workspace 的 typecheck；文档变化运行 `pnpm check:docs` 和 `git diff --check`。
+- **实施过程验证** 实施中按改动运行相关测试、受影响 workspace 的 typecheck；文档变化运行 `pnpm check:docs` 和 `git diff --check`。
   显式调用 `implement` 时，其中的完整测试指当前任务的完整受影响范围。
-- 格式与 lint 修复由[提交 Hook](../engineering/commands.md#commit-前检查)处理暂存文件；核对修复 diff，
+- **提交时检查** 格式与 lint 修复由[提交 Hook](../engineering/commands.md#commit-前检查)处理暂存文件；核对修复 diff，
   按实际变化重跑失效的类型或行为检查。
 - 手动 tickets 不逐票要求 `verify:static`。最终集成内容交付前，以合入目标的固定提交与候选比较。
   仅当完整差异满足[纯文档验证](../engineering/commands.md#纯文档验证)的范围，且验收只涉及文档时，使用
   `pnpm verify:docs --base <target-commit>` 完成基础门禁。其余改动完成 `pnpm verify` 覆盖的全部检查。
   按 Spec 和改动风险补齐所需 Integration、E2E、Gateway 等检查。小任务准备本地合入时使用同一规则。
-- 同一候选已有通过结果时，核对候选 SHA、实际命令和检查范围，确认相关依赖、配置与环境仍一致。
+- **验证结果复用** 同一候选已有通过结果时，核对候选 SHA、实际命令和检查范围，确认相关依赖、配置与环境仍一致。
   只通过独立入口补跑缺失或失效的检查。
   - `pnpm verify` 已通过，只缺 Integration 时，运行 `pnpm test:integration`，按验收范围选择全量或定向。
   - `pnpm verify` 和全量 Integration 已通过，只缺 E2E 时，运行 `pnpm test:e2e`。

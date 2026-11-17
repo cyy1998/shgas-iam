@@ -10,16 +10,16 @@ OIDC 按配置声明内部与外部 issuer，由可信 Gateway 入口信息选�
 
 ## 理由与代价
 
-网络可达性与协议身份不能靠请求头临时推断。接受显式维护两套受信入口、RP 配置与验收的成本，
-换取可确定的 issuer、回调与退出归属。共享密钥不取消 issuer 检查，可信代理标签也须由实际网络和 Gateway 配置保证来源。
+- **确定性 Issuer 归属** 网络可达性与协议身份不能靠请求头临时推断。接受显式维护两套受信入口、RP 配置与验收的成本，
+  换取可确定的 issuer、回调与退出归属。共享密钥不取消 issuer 检查，可信代理标签也须由实际网络和 Gateway 配置保证来源。
 
-UserSession/ClientSession 保持协议中性，不按 issuer 拆分或绑定。协议产物保存自身 issuer，入口不匹配沿各自协议顺序拒绝；
-Code 兑换在适用认证与原实例定位后才发现错误 issuer 时，仍承担
-[ADR-0035](0035-unify-user-and-client-session-lifecycles.md#一次消费与失败作用) 的原实例撤销尝试。
-不能把错入口处理泛化为任何阶段都无作用的拒绝。
+- **协议层绑定与内核中立** UserSession/ClientSession 保持协议中性，不按 issuer 拆分或绑定。协议产物保存自身 issuer，入口不匹配沿各自协议顺序拒绝；
+  Code 兑换在适用认证与原实例定位后才发现错误 issuer 时，仍承担
+  [ADR-0035](0035-unify-user-and-client-session-lifecycles.md#一次消费与失败作用) 的原实例撤销尝试。
+  不能把错入口处理泛化为任何阶段都无作用的拒绝。
 
-SSO 内部导航保留相对路径以跟随入口；Cookie 按 hostname 隔离，不承诺只换端口就隔离，也不自动同步两个域的登录和退出。
-浏览器状态与服务端中性关系的边界必须分开验收。
+- **相对导航与域名 Cookie 隔离** SSO 内部导航保留相对路径以跟随入口；Cookie 按 hostname 隔离，不承诺只换端口就隔离，也不自动同步两个域的登录和退出。
+  浏览器状态与服务端中性关系的边界必须分开验收。
 
 Custom managed callback 不再固定属于某个 SSO origin，其显式类型与落地 origin 推导由
 [ADR-0038](0038-derive-managed-sso-callback-from-redirect-origin.md) 拥有，本页不保留已被其取代的回调结论。

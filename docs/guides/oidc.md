@@ -10,37 +10,37 @@ Issuer 是以 `/oidc` 结尾的完整 URL，例如 `https://iam.example.com/oidc
 Discovery 缓存须按完整 issuer 区分。续接、Code、Access Token 和退出请求必须回到原 issuer。
 错入口兑换 Code 可能终止共享应用会话，使正确入口的关联 Token 也失效；UserInfo、续接和退出的错入口拒绝不触发这类兑换撤销。
 
-支持 Authorization Code Flow、public subject、RS256 ID Token、opaque Access Token、PKCE S256、
-JSON UserInfo 和 RP-Initiated Logout。不提供 refresh token、consent、pairwise subject、动态注册或在线签名密钥管理。
-Client 使用现有 IAM Client 记录，`client_id` 为不可变 clientCode。
+- **支持能力** 支持 Authorization Code Flow、public subject、RS256 ID Token、opaque Access Token、PKCE S256、
+  JSON UserInfo 和 RP-Initiated Logout。不提供 refresh token、consent、pairwise subject、动态注册或在线签名密钥管理。
+  Client 使用现有 IAM Client 记录，`client_id` 为不可变 clientCode。
 
 | Client 类型  | Token 认证                                                                     |
 | ------------ | ------------------------------------------------------------------------------ |
 | Public       | `token_endpoint_auth_method=none`，强制 S256。                                 |
 | Confidential | `client_secret_basic` 与 S256；使用[应用的 SSO Secret](README.md#应用与凭据)。 |
 
-授权 GET/form POST 要求 `response_type=code`、含 openid 的允许 scope、非空 state、code_challenge 和
-`code_challenge_method=S256`。nonce 可省略，提供时绑定并回传。
-Token POST 使用 form、原 Code、redirect_uri 与匹配 code_verifier；Public 提交 client_id，Confidential 使用 Basic。
-Basic 按 form URL 解码并以首个冒号分隔，Basic 与 body client_id 冲突在认证前拒绝；不接受 client_secret_post 或 refresh grant。
+- **授权与 Token 兑换** 授权 GET/form POST 要求 `response_type=code`、含 openid 的允许 scope、非空 state、code_challenge 和
+  `code_challenge_method=S256`。nonce 可省略，提供时绑定并回传。
+  Token POST 使用 form、原 Code、redirect_uri 与匹配 code_verifier；Public 提交 client_id，Confidential 使用 Basic。
+  Basic 按 form URL 解码并以首个冒号分隔，Basic 与 body client_id 冲突在认证前拒绝；不接受 client_secret_post 或 refresh grant。
 
-Confidential 认证失败按 Client/IP 计数：首次失败起 60 秒固定窗口，达到 5 次后正确 Secret 也暂时拒绝；
-成功兑换清除该 Client/IP 计数。限流拒绝时保留 Code 和会话。
-客户端 IP 的可信代理配置见[发布前提](../releases/authentication-and-session.md#oidc-双入口配置)。
+- **认证失败限流** Confidential 认证失败按 Client/IP 计数：首次失败起 60 秒固定窗口，达到 5 次后正确 Secret 也暂时拒绝；
+  成功兑换清除该 Client/IP 计数。限流拒绝时保留 Code 和会话。
+  客户端 IP 的可信代理配置见[发布前提](../releases/authentication-and-session.md#oidc-双入口配置)。
 
 ## 最小接入示例
 
 以下以 Confidential Client 为例，端点占位符取自同一 issuer 的 Discovery。先登记
 `https://app.example.com/callback` 和 `openid profile`，由业务后端持有 SSO Secret。
 
-1. 生成随机 `state`、`nonce` 和 PKCE `code_verifier`，保存到本次登录上下文；
+1. **发起授权跳转** 生成随机 `state`、`nonce` 和 PKCE `code_verifier`，保存到本次登录上下文；
    `code_challenge` 为 verifier 的 SHA-256 摘要经无填充 Base64URL 编码后的值。浏览器跳转：
 
 ```http
 GET {authorization_endpoint}?response_type=code&client_id=tender&redirect_uri=https%3A%2F%2Fapp.example.com%2Fcallback&scope=openid%20profile&state={state}&nonce={nonce}&code_challenge={code_challenge}&code_challenge_method=S256
 ```
 
-2. 回调先核对 `state` 和预期 `iss`，再由后端使用原 verifier 兑换 Code：
+2. **回调校验与兑换 Code** 回调先核对 `state` 和预期 `iss`，再由后端使用原 verifier 兑换 Code：
 
 ```http
 POST {token_endpoint}
@@ -62,7 +62,7 @@ grant_type=authorization_code&code={encoded_code}&redirect_uri=https%3A%2F%2Fapp
 }
 ```
 
-3. 使用 Discovery 的 JWKS 验证 ID Token 的签名、`iss`、`aud`、期限和原 `nonce`；
+3. **验证 ID Token 与获取 UserInfo** 使用 Discovery 的 JWKS 验证 ID Token 的签名、`iss`、`aud`、期限和原 `nonce`；
    需要用户资料时调用 UserInfo，并核对返回的 `sub` 与 ID Token 一致：
 
 ```http
@@ -75,17 +75,17 @@ Public Client 省略 Basic，在 Token form 中提交 `client_id`，仍必须使
 
 ## Redirect、参数与浏览器导航
 
-redirect URI 与 post-logout redirect URI 是绝对 HTTP/HTTPS URL，允许 query，禁止 fragment、通配与模板变量。
-地址逐字匹配，host 大小写、默认端口、路径、query 顺序、百分号编码和末尾斜杠的差异均会影响匹配。
-生产优先 HTTPS，受控 HTTP 接入的网络边界由部署负责人核验。
+- **回调地址精确匹配** redirect URI 与 post-logout redirect URI 是绝对 HTTP/HTTPS URL，允许 query，禁止 fragment、通配与模板变量。
+  地址逐字匹配，host 大小写、默认端口、路径、query 顺序、百分号编码和末尾斜杠的差异均会影响匹配。
+  生产优先 HTTPS，受控 HTTP 接入的网络边界由部署负责人核验。
 
-授权支持 query、fragment、form_post。已确认安全地址上的成功和标准错误按所选 mode 返回；
-form HTML 转义地址、state 和全部字段，使用 no-store/no-referrer。
-未确认安全地址、重复必要参数或编码错误返回本地标准 JSON，不使用 IAM REST envelope 或通用 422。
+- **响应模式与错误处理** 授权支持 query、fragment、form_post。已确认安全地址上的成功和标准错误按所选 mode 返回；
+  form HTML 转义地址、state 和全部字段，使用 no-store/no-referrer。
+  未确认安全地址、重复必要参数或编码错误返回本地标准 JSON，不使用 IAM REST envelope 或通用 422。
 
-未知参数及关闭的 claims/resource 被忽略；request、request_uri、registration 返回各自 not-supported 错误。
-scope 去重，忽略不支持的 offline_access。`prompt` 只接受 none/login，none 不可组合；
-max_age 为非负安全整数，0 要求新鲜认证。当前不支持 claims、MFA 或 offline access。
+- **可选与不支持参数** 未知参数及关闭的 claims/resource 被忽略；request、request_uri、registration 返回各自 not-supported 错误。
+  scope 去重，忽略不支持的 offline_access。`prompt` 只接受 none/login，none 不可组合；
+  max_age 为非负安全整数，0 要求新鲜认证。当前不支持 claims、MFA 或 offline access。
 
 `IAM_API_LOGIN_ENDPOINT` 使用根相对路径。登录、续接、退出确认和默认成功页沿用当前入口；
 拒绝绝对/协议相对 URL、反斜杠、控制字符和改变 authority 的歧义路径。
@@ -96,11 +96,11 @@ Portal 对发现的完整端点先验证属于当前入口，再构造相对导�
 应用启用准入策略后，已有 IAM 登录的直接授权和登录后的续接都会检查本次登录资格。明确不匹配时，
 IAM 按请求的响应模式向已登记的回调返回 `access_denied`、`iss` 和原 `state`。
 
-- 交互式登录回调先校验预期的 `iss` 与本次请求的 `state`，再结束本次登录。若 `error_uri` 指向预期 issuer 的
+- **交互式登录** 交互式登录回调先校验预期的 `iss` 与本次请求的 `state`，再结束本次登录。若 `error_uri` 指向预期 issuer 的
   origin 和 `/portal/application-access-denied` 路径，可引导用户打开该页查看应用名称与联系管理员的提示。
-- `prompt=none` 的准入拒绝中，IAM 省略协议字段 `error_uri`。登记回调地址时，请为协议保留响应字段名，
+- **静默授权（`prompt=none`）** `prompt=none` 的准入拒绝中，IAM 省略协议字段 `error_uri`。登记回调地址时，请为协议保留响应字段名，
   避免在回调查询参数中使用 `error_uri` 等名称。静默授权失败时，接入方在后台处理错误并结束本次授权，不触发页面导航。
-- 收到 `temporarily_unavailable` 时提示稍后重试，从应用重新发起授权。
+- **暂态不可用（`temporarily_unavailable`）** 收到 `temporarily_unavailable` 时提示稍后重试，从应用重新发起授权。
 
 准入失败仅结束或中断本次新授权。已签发的 Code、Token 和已有登录会话继续按各自的有效期与撤销规则处理。
 资格依据与发布延迟见[应用准入决策](../adr/0051-enforce-admission-before-issuing-application-login-grants.md#策略配置与事实时效)。
@@ -122,7 +122,7 @@ UserInfo 按 Client 当前 allowedScopes 返回字段，范围变化也适用于
 profile/phone；仅 sub 或 IAM 扩展 scope 不读取完整 Facts。没有 Claims Snapshot。
 可以返回已发布的旧角色；必要 Facts 缺失时整次交付失败。详见[事实契约](../features/application-integration.md#用户信息共享)。
 
-ID Token 使用 RS256，JWKS 仅公开 kty/kid/alg/use/n/e，不交付私钥。
+- **JWKS** ID Token 使用 RS256，JWKS 仅公开 kty/kid/alg/use/n/e，不交付私钥。
 
 ## HTTP、CORS 与流量限制
 
@@ -131,11 +131,11 @@ UserInfo `/me` GET/POST 接受 Authorization Bearer；form POST 也可使用单�
 混用或重复为 invalid_request，query bearer 拒绝。无凭据/无效 Token 为 401 Bearer challenge，
 无凭据时 challenge 不带 error；不套 IAM envelope。
 
-Discovery/JWKS GET/OPTIONS 回显 Origin，无 Origin 时不返回 wildcard，不开放 credentials。
-Token OPTIONS 不依赖 body/client_id，反射 Origin/请求 headers；实际 POST 只允许 Public 登记 redirect origins，
-Confidential 不开放实际 Token CORS。UserInfo 预检反射 Origin/headers、声明 GET/POST，
-实际请求按 Token 所属 Client 当前 redirect origins 检查，两类 Client 相同，不信任请求 client_id。
-授权不开放 CORS。
+- **CORS 策略** Discovery/JWKS GET/OPTIONS 回显 Origin，无 Origin 时不返回 wildcard，不开放 credentials。
+  Token OPTIONS 不依赖 body/client_id，反射 Origin/请求 headers；实际 POST 只允许 Public 登记 redirect origins，
+  Confidential 不开放实际 Token CORS。UserInfo 预检反射 Origin/headers、声明 GET/POST，
+  实际请求按 Token 所属 Client 当前 redirect origins 检查，两类 Client 相同，不信任请求 client_id。
+  授权不开放 CORS。
 
 UserInfo 遇 Maintenance 返回 temporarily_unavailable/503 和 Retry-After，保留 Cookie 和会话。
 配置暂停/切换只拒绝当前访问，切回后未终止且未到期的 Token 可以恢复。

@@ -4,15 +4,15 @@
 
 ## 准备配置和凭据
 
-`scope` 使用 `<env>:<app>`，app 为 IAM Client code；两段以小写字母或数字开头，其余仅限小写字母、数字、连字符。
-按 [Internal API 认证](README.md#internal-api-认证)准备凭据和服务地址。
-首次发布 `prod:iam` 需要 iam Client 的凭据，不能使用 iam-admin。
+- **Scope 与认证** `scope` 使用 `<env>:<app>`，app 为 IAM Client code；两段以小写字母或数字开头，其余仅限小写字母、数字、连字符。
+  按 [Internal API 认证](README.md#internal-api-认证)准备凭据和服务地址。
+  首次发布 `prod:iam` 需要 iam Client 的凭据，不能使用 iam-admin。
 
 scope 只匹配应用身份，环境仍由部署目标校验；当前没有域名/路径配额、插件审批或完整多租户隔离。
 同一 APISIX 集群须保持一个写入口，发布期间也不能从其他工具修改配置。
 
-按调用方保管的 YAML（例如 `tmp/gateway-config/apisix/manifests/dev/iam.yaml`）准备资源；配置不随 clone 提供，准备方式见[网关手册](../releases/apisix-gateway-release.md#服务与首次配置)。占位符仅从本次 variables 取值，缺失时报错；秘密使用变量或外部秘密引用。
-资源名按以下规则生成，跨应用接管资源前须核对归属：
+- **YAML 模板与变量** 按调用方保管的 YAML（例如 `tmp/gateway-config/apisix/manifests/dev/iam.yaml`）准备资源；配置不随 clone 提供，准备方式见[网关手册](../releases/apisix-gateway-release.md#服务与首次配置)。占位符仅从本次 variables 取值，缺失时报错；秘密使用变量或外部秘密引用。
+  资源名按以下规则生成，跨应用接管资源前须核对归属：
 
 | YAML 资源                                                  | 远端标识                          |
 | ---------------------------------------------------------- | --------------------------------- |
@@ -51,9 +51,9 @@ dryRun、prune 均默认 false。需要删除源配置已移除的资源时，�
 
 响应使用 `{ code, data, message }`，按 data.outcome 判断：
 
-- preview：仅预览；no_change：没有实际写入；applied：本次 Admin API 操作已完成。
+- **`preview` / `no_change` / `applied`** preview：仅预览；no_change：没有实际写入；applied：本次 Admin API 操作已完成。
 - rolled_back：发布失败，已恢复本次尝试修改的资源；仍应按发布失败处理。
-- rollback_failed 或 unknown：停止发布，按[人工恢复](../releases/apisix-gateway-release.md#失败与恢复)核对 APISIX，再重启解除阻断。
+- **`rollback_failed` / `unknown`** rollback_failed 或 unknown：停止发布，按[人工恢复](../releases/apisix-gateway-release.md#失败与恢复)核对 APISIX，再重启解除阻断。
 - busy 或 blocked：本次未读取或修改 APISIX；前态无法可靠恢复时也会在写入前拒绝。
 
 writeAttempted 只表示尝试过写入。超时、响应丢失或未确认完成的响应不能当作失败且未生效，也不能自动重发。

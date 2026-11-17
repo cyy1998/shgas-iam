@@ -32,12 +32,12 @@ Next review: 2026-12-03
 适用于旧 Profile v4 / Organization Search schema 1 到 User Document schema 1 / Organization Document schema 1 的不兼容升级。
 Custom SSO 调用方同时适配 wire 4；Catalog 保持 3，OIDC 标准字段映射和 session/protocol 代际不推进。
 
-1. 固定新旧制品与配置，准备可恢复且相互匹配的 PostgreSQL、Redis 备份。核对有效登录状态、UserSession/ClientSession、Code/Token、登录限制、OIDC 密钥、SSO Secret、Internal Secret 与认证 key ring 的保留和回退条件。
-2. 关闭并排空两类文档的读写、认证/SSO/OIDC/Gateway 访问、缓存回填 reader、全部相关源写入和直连/重试。停止旧 Worker、publisher、repair 与一次性命令，确认在途源事务和队列任务已结束；旧 `user-profile` 队列不交给新 consumer 解释。
-3. 在停流下用新制品运行正式 `pnpm --filter @iam/db db:migrate`，保留完整迁移链与 journal，不使用 db:push 或删 journal 重放。该链建立六张规范 Document/Outbox/Rebuild State 表，保留源事实与已有处理版本；旧用户派生副本被退役，迁移完成不表示资料已发布。
-4. 部署唯一匹配新模型的 reader/writer、`user-document` 与 `organization-document` consumer 和 wire 4 调用方，继续关闭公共流量。按本页两类全量重建流程登记全部对象，包括旧 processed 但内容陈旧、暂停、禁用和删除对象；等待两阶段工作、文档及用户后续责任收敛。
-5. 完整运行 `iam-ops user-document verify-postgres`、`iam-ops user-document verify-redis` 和 `iam-ops organization-document verify`。任一不完整或失败均保持停流；健康检查、队列为空、入队完成不替代这些门禁。
-6. 仅开放受控入口，验证详情/搜索同文档、Client 角色隔离、SSO 披露、旧有效凭据续用与必要源变化传播。关闭并排空受控入口及清理写入，等待收敛后再次完整核验三个 gate；全部通过才恢复流量。
+1. **备份与准备** 固定新旧制品与配置，准备可恢复且相互匹配的 PostgreSQL、Redis 备份。核对有效登录状态、UserSession/ClientSession、Code/Token、登录限制、OIDC 密钥、SSO Secret、Internal Secret 与认证 key ring 的保留和回退条件。
+2. **停流与排空** 关闭并排空两类文档的读写、认证/SSO/OIDC/Gateway 访问、缓存回填 reader、全部相关源写入和直连/重试。停止旧 Worker、publisher、repair 与一次性命令，确认在途源事务和队列任务已结束；旧 `user-profile` 队列不交给新 consumer 解释。
+3. **执行数据库迁移** 在停流下用新制品运行正式 `pnpm --filter @iam/db db:migrate`，保留完整迁移链与 journal，不使用 db:push 或删 journal 重放。该链建立六张规范 Document/Outbox/Rebuild State 表，保留源事实与已有处理版本；旧用户派生副本被退役，迁移完成不表示资料已发布。
+4. **启动新版消费者并全量登记** 部署唯一匹配新模型的 reader/writer、`user-document` 与 `organization-document` consumer 和 wire 4 调用方，继续关闭公共流量。按本页两类全量重建流程登记全部对象，包括旧 processed 但内容陈旧、暂停、禁用和删除对象；等待两阶段工作、文档及用户后续责任收敛。
+5. **运行三项完整核验门禁** 完整运行 `iam-ops user-document verify-postgres`、`iam-ops user-document verify-redis` 和 `iam-ops organization-document verify`。任一不完整或失败均保持停流；健康检查、队列为空、入队完成不替代这些门禁。
+6. **受控验收与放流** 仅开放受控入口，验证详情/搜索同文档、Client 角色隔离、SSO 披露、旧有效凭据续用与必要源变化传播。关闭并排空受控入口及清理写入，等待收敛后再次完整核验三个 gate；全部通过才恢复流量。
 
 不得清空共享 Redis、清会话或借切换撤销有效凭据。失败时保留停流和持久恢复义务，按正式 repair/管理入口恢复后重新完整核验；需要回退时使用相互匹配的旧制品、配置与备份，不能混跑新旧 reader/writer 或依赖逐对象回退。
 本地迁移、恢复和跨制品演练只证明固定候选，目标环境实际停流、备份与放流由部署操作者完成。
@@ -152,45 +152,45 @@ reaper 失败时命令非零退出，不继续 Redis 恢复。
 
 ## User Document 全量重建
 
-先关闭并排空以下范围，保留唯一匹配 schema 1 的受控 Worker：
+1. **停流与排空**。关闭并排空以下范围，保留唯一匹配 schema 1 的受控 Worker。
 
-| 范围     | 需关闭的工作                                                                                                                                            |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 读取     | Internal Detail/用户 Filter DSL、Admin 用户及任职详情、消费 Facts/Subject Access 的认证与 SSO/OIDC/Gateway 访问，包括回填 Redis 的 reader               |
-| 源写入   | 改变 User、Employment、Organization、Position、Role、Role Assignment、Organization Responsibility Assignment 及账号状态/删除/离职的正式入口、导入与脚本 |
-| 派生写入 | 不兼容或非本轮受控的 publisher、repair、后台与 one-shot 工作；包括直连、自动重试及在途事务/任务                                                         |
+   | 范围     | 需关闭的工作                                                                                                                                            |
+   | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | 读取     | Internal Detail/用户 Filter DSL、Admin 用户及任职详情、消费 Facts/Subject Access 的认证与 SSO/OIDC/Gateway 访问，包括回填 Redis 的 reader               |
+   | 源写入   | 改变 User、Employment、Organization、Position、Role、Role Assignment、Organization Responsibility Assignment 及账号状态/删除/离职的正式入口、导入与脚本 |
+   | 派生写入 | 不兼容或非本轮受控的 publisher、repair、后台与 one-shot 工作；包括直连、自动重试及在途事务/任务                                                         |
 
-确认实际停流和排空后执行：
+2. **全量登记并等待收敛**。确认实际停流和排空后执行：
 
-```bash
-pnpm --filter @iam/ops iam-ops user-document backfill
-```
+   ```bash
+   pnpm --filter @iam/ops iam-ops user-document backfill
+   ```
 
-`--batch-size` 或 `IAM_OPS_USER_DOCUMENT_BACKFILL_BATCH_SIZE` 控制每页登记数量。每页在一个事务中为每个用户登记重建版本和已完成的 Outbox 凭据，
-提交后再按重建批大小入队。同一任务可以重建多个用户，报告中的 registered 和 enqueued 仍按用户计数。
-已提交的页若唤醒失败，由正式 repair 从 Rebuild State 重新入队；命令提前退出时，重跑 backfill 才能登记尚未扫描的用户。
-Backfill 扫描全部源 User，包括 Enable、Pause、Disable 和 deleted，也会推进已经 processed 但内容陈旧的库存。
-等待受控 consumer 发布当前完整 Document 或删除墓碑；缺行不能代替墓碑。完成状态、版本、Outbox 凭据与用户后续责任必须全部收敛。
+   `--batch-size` 或 `IAM_OPS_USER_DOCUMENT_BACKFILL_BATCH_SIZE` 控制每页登记数量。每页在一个事务中为每个用户登记重建版本和已完成的 Outbox 凭据，
+   提交后再按重建批大小入队。同一任务可以重建多个用户，报告中的 registered 和 enqueued 仍按用户计数。
+   已提交的页若唤醒失败，由正式 repair 从 Rebuild State 重新入队；命令提前退出时，重跑 backfill 才能登记尚未扫描的用户。
+   Backfill 扫描全部源 User，包括 Enable、Pause、Disable 和 deleted，也会推进已经 processed 但内容陈旧的库存。
+   等待受控 consumer 发布当前完整 Document 或删除墓碑；缺行不能代替墓碑。完成状态、版本、Outbox 凭据与用户后续责任必须全部收敛。
 
-在独立命令中先 PostgreSQL、后 Redis 核验：
+3. **执行双存储完整性核验**。在独立命令中先 PostgreSQL、后 Redis 核验：
 
-```bash
-pnpm --filter @iam/ops iam-ops user-document verify-postgres -- --batch-size 500
-pnpm --filter @iam/ops iam-ops user-document verify-redis -- --batch-size 500
-```
+   ```bash
+   pnpm --filter @iam/ops iam-ops user-document verify-postgres -- --batch-size 500
+   pnpm --filter @iam/ops iam-ops user-document verify-redis -- --batch-size 500
+   ```
 
-PG gate 在一个 RR READ ONLY 事务中扫描完整源库存、文档/墓碑、Rebuild State、Outbox 与历史完成凭据，
-并用同一快照和固定观察时间重建期望事实。更高已完成版本可满足历史请求；合法间接零目标消息允许空 receipt，
-历史关联已物理删除不等于消息损坏。Backfill 原因码不作为就绪条件。
-Redis gate 使用一致的 PG 库存逐个核对完整 Facts 或版本化墓碑与屏障，已删除用户也必须有墓碑和 disabled 屏障，不能跳过。
-两者独立只读，不修复、不入队。只有两次完整扫描均 `status=passed` 且退出 0 才通过。
-缺行、孤立记录、旧 schema、损坏、未完成或不匹配凭据、事实差异、Facts/Barrier 不一致、timeout 或不完整报告均阻断恢复。
-失败时保持停流，经正式 repair/publication 或管理入口修复，再重跑两个完整 gate；不能只重跑失败 batch。
+   PG gate 在一个 RR READ ONLY 事务中扫描完整源库存、文档/墓碑、Rebuild State、Outbox 与历史完成凭据，
+   并用同一快照和固定观察时间重建期望事实。更高已完成版本可满足历史请求；合法间接零目标消息允许空 receipt，
+   历史关联已物理删除不等于消息损坏。Backfill 原因码不作为就绪条件。
+   Redis gate 使用一致的 PG 库存逐个核对完整 Facts 或版本化墓碑与屏障，已删除用户也必须有墓碑和 disabled 屏障，不能跳过。
+   两者独立只读，不修复、不入队。只有两次完整扫描均 `status=passed` 且退出 0 才通过。
+   缺行、孤立记录、旧 schema、损坏、未完成或不匹配凭据、事实差异、Facts/Barrier 不一致、timeout 或不完整报告均阻断恢复。
+   失败时保持停流，经正式 repair/publication 或管理入口修复，再重跑两个完整 gate；不能只重跑失败 batch。
 
-通过后仅为受控操作者开放必要入口，检查源事实变更能发布当前 Document/Facts、用户 Detail/DSL 正常、Subject Access 按账号状态授予或拒绝访问。
-保持无关会话与凭据不变；本操作不清会话或推进协议代际。
-验证与测试数据清理完成后关闭临时入口并排空，等待新增 Outbox/Rebuild State/publication/recovery 收敛，再依次重跑两个完整 gate。
-全部通过后恢复受影响入口；验证或开放失败时重新关闭不确定入口，修复并完成受影响检查后再开放。
+4. **受控验收与放流**。通过后仅为受控操作者开放必要入口，检查源事实变更能发布当前 Document/Facts、用户 Detail/DSL 正常、Subject Access 按账号状态授予或拒绝访问。
+   保持无关会话与凭据不变；本操作不清会话或推进协议代际。
+   验证与测试数据清理完成后关闭临时入口并排空，等待新增 Outbox/Rebuild State/publication/recovery 收敛，再依次重跑两个完整 gate。
+   全部通过后恢复受影响入口；验证或开放失败时重新关闭不确定入口，修复并完成受影响检查后再开放。
 
 ## 组织搜索日常修复
 
@@ -217,9 +217,9 @@ backfill/repair/verify 都支持 `--deadline-ms <1..300000>`，默认 30000；de
 
 适用于首次构建、单版本不兼容升级与全量恢复。
 
-1. 关闭 `POST /internal/organizations/search-dsl`、`GET /internal/organizations/:orgCode` 和 API/Admin API 全部组织写入口，包括 Internal 注册、资料、状态、删除及同类脚本。
+1. **停流与排空** 关闭 `POST /internal/organizations/search-dsl`、`GET /internal/organizations/:orgCode` 和 API/Admin API 全部组织写入口，包括 Internal 注册、资料、状态、删除及同类脚本。
    关闭直连/重试，排空在途请求、源事务和任务，停止旧 publisher，启用唯一匹配当前 schema 的受控 consumer。
-2. 全量登记并等待两阶段工作完成，按需 repair：
+2. **全量登记并等待收敛** 全量登记并等待两阶段工作完成，按需 repair：
 
    ```bash
    pnpm --filter @iam/ops iam-ops organization-document backfill -- --batch-size 500

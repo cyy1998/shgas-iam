@@ -1,7 +1,11 @@
 # @iam/client-snapshot
 
-`@iam/client-snapshot` 拥有普通配置与凭据缓存。一次普通读取固定 Client 状态、单协议配置和应用准入策略，凭据由 `/credentials` 窄接口读取和认证，
-普通 DTO 不含 Secret，认证只交付身份。`/composition` 装配两个 reader、Gate 和统一失效，DB adapter 由各 app 注入。
+`@iam/client-snapshot` 拥有普通配置与凭据缓存。
+
+- **普通配置读取**。一次普通读取固定 Client 状态、单协议配置和应用准入策略。普通 DTO 不含 Secret。
+- **敏感凭据认证**。凭据由 `/credentials` 窄接口读取和认证，认证只交付身份。
+- **依赖装配**。`/composition` 装配两个 reader、Gate 和统一失效，DB adapter 由各 app 注入。
+
 [DB adapter](../../packages/db/src/client-snapshot.ts)
 
 ## 读取与失效

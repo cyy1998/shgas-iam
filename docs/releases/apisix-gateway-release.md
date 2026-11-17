@@ -43,7 +43,7 @@ Gateway 不需要 Redis、不执行 migration，应用只读设置不能代替�
 准备完整 YAML、仅本次所需的 variables 字符串映射及已知良好的恢复配置；服务不持久保存前态、任务或发布历史。
 SSL 私钥以 `${TLS_PRIVATE_KEY}` 等变量传入，YAML 不内嵌秘密；生产可信代理 CIDR 不得为全网段。
 
-1. 从安全环境提供 `IAM_GATEWAY_URL` 和 `IAM_GATEWAY_CLIENT_SECRET`，在调用方终端准备私有 `variables.json`。
+1. **校验与差异预览** 从安全环境提供 `IAM_GATEWAY_URL` 和 `IAM_GATEWAY_CLIENT_SECRET`，在调用方终端准备私有 `variables.json`。
    以下是 PowerShell 7 示例；文件读取在调用方发生，不接受服务器路径，也不转发服务的整个环境：
 
    ```powershell
@@ -63,7 +63,7 @@ SSL 私钥以 `${TLS_PRIVATE_KEY}` 等变量传入，YAML 不内嵌秘密；生�
    $preview.data.plan
    ```
 
-2. 检查目标 scope、创建/更新/删除对象及忽略项；忽略原因只应为预期的 dynamic、out_of_scope、unmanaged。
+2. **核对变更计划** 检查目标 scope、创建/更新/删除对象及忽略项；忽略原因只应为预期的 dynamic、out_of_scope、unmanaged。
    需要清除本 scope 多余 repo-manifest 对象时先设置 `prune=true` 并重做 diff，后续请求保持同值。
    有非预期对象或请求失败时停止；diff 不冻结后续计划。
 3. dry-run 后再明确提交正式发布：
@@ -85,7 +85,7 @@ SSL 私钥以 `${TLS_PRIVATE_KEY}` 等变量传入，YAML 不内嵌秘密；生�
    if ($applied.data.outcome -notin @('applied', 'no_change')) { throw 'Gateway apply was not confirmed' }
    ```
 
-4. 经受控 Admin API 回读本次触及对象，核对身份、引用及预期字段，再完成受影响数据面检查。
+4. **回读与数据面验证** 经受控 Admin API 回读本次触及对象，核对身份、引用及预期字段，再完成受影响数据面检查。
 
 prune 不删除 dynamic-registry、其他 app/env 或未管理对象。待删 Consumer 有独立 credential 或无法确认其子列表为空时，
 整次 apply 写前拒绝；先由子凭据 owner 处理，不绕过检查。
@@ -119,10 +119,10 @@ IAM/Tender/GDS 共用限流变更时，核对 dev/prod 的六个 scope 配置，
 未知或阻断时：
 
 1. 停止后续发布并协调其他写者，确认原操作及可能迟到的远端调用结束。
-2. 经受控 Admin API 核对本次触及对象、引用及 Consumer 子凭据，与已知良好 YAML 和可用前态比较。
+2. **比对现场** 经受控 Admin API 核对本次触及对象、引用及 Consumer 子凭据，与已知良好 YAML 和可用前态比较。
 3. 修复现场；确需 Admin API 应急写入时保持其他写者暂停，遵守子凭据所有权。
-4. 确认现场与在途状态后再重启 Gateway。重启仅清内存阻断，不自动核验或恢复 APISIX。
-5. 重做 validate、diff、dry-run，明确提交新发布，完成回读和受影响数据面检查后恢复调用方与业务入口。
+4. **现场核验后重启** 确认现场与在途状态后再重启 Gateway。重启仅清内存阻断，不自动核验或恢复 APISIX。
+5. **标准重发与验收** 重做 validate、diff、dry-run，明确提交新发布，完成回读和受影响数据面检查后恢复调用方与业务入口。
 
 恢复旧 YAML 也走相同流程，prune 只在删除范围确认后开启。
 补偿允许中间配置短暂生效，不撤销业务请求作用；崩溃无自动恢复，仍须按上述步骤人工核对。

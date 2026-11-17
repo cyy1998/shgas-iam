@@ -43,9 +43,9 @@ status: accepted
 
 ## 保留边界
 
-组织和用户的 Internal 精确详情、写入口，以及 Admin 搜索、组织树和选择器继续保留。
-`POST /internal/delegations/search` 搜索委托实体，`POST /internal/delegations/resolve` 解析显式用户的直接委托，均不在退役范围内。
+- **保留的管理与 Internal 入口** 组织和用户的 Internal 精确详情、写入口，以及 Admin 搜索、组织树和选择器继续保留。
+  `POST /internal/delegations/search` 搜索委托实体，`POST /internal/delegations/resolve` 解析显式用户的直接委托，均不在退役范围内。
 
-Internal 用户与组织详情只读已发布目录，不保留旧 `user_profile.detail` 副本或源表 OrganizationDto 作为回退。登录与账号恢复使用各自必要的窄事实；Admin 管理 DTO、组织闭包和源事实继续由实际业务消费者拥有。
+- **目录读取与源事实归属** Internal 用户与组织详情只读已发布目录，不保留旧 `user_profile.detail` 副本或源表 OrganizationDto 作为回退。登录与账号恢复使用各自必要的窄事实；Admin 管理 DTO、组织闭包和源事实继续由实际业务消费者拥有。
 
 本决定保留 [ADR-0015](https://github.com/cyy1998/shgas-iam/blob/cbfd4aa60fd6000662026b68576f1aa1409b6ce4/docs/adr/0015-adopt-schema-driven-user-profile-filter-dsl.md) 与 [ADR-0042](https://github.com/cyy1998/shgas-iam/blob/cbfd4aa60fd6000662026b68576f1aa1409b6ce4/docs/adr/0042-search-organizations-with-published-documents.md) 的有界 DSL 和异步发布取舍；原详情保留范围见[固定历史版本](https://github.com/cyy1998/shgas-iam/blob/95dc4871c62e36b63b26a3f71c5670ae449c79e2/docs/adr/0043-retire-public-and-legacy-internal-directory-search.md)。

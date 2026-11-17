@@ -115,10 +115,10 @@ Node/DOM 是同一 Unit runner 内的环境，不增加公开层级或命令；�
 
 测试应在行为被破坏时失败，在内部重构未改变行为时继续通过。
 
-- 一个用例保护一个可命名行为；该行为的前后状态、结果和副作用可以一起断言，独立变体使用独立或参数化案例。
-- Admin 测试按用户、任职、组织等功能归属组织，不按 HR 等管理员角色重复建立业务流程集合。角色差异通过服务端 capability、allowedActions 和可见范围作为用例输入；通用行为只保留一份覆盖，权限拒绝、范围选择与权限变化后的恢复保留独立验证。浏览器验证真实路由与组件接线，组件测试承接表单和权限组合；mock API 的前端测试不替代后端授权验证。
-- 每例建立并清理自己的状态，不依赖顺序；并发通过显式信号、受控 Promise 或时钟同步，真实到期与进程退出使用真实资源。
-- 只替换模块的外部依赖，保留内部协作。仅当顺序或次数属于契约时才锁定它，禁止重放、零写入和脱敏可直接观察。
+- **单一行为聚焦** 一个用例保护一个可命名行为；该行为的前后状态、结果和副作用可以一起断言，独立变体使用独立或参数化案例。
+- **按功能组织管理端测试** Admin 测试按用户、任职、组织等功能归属组织，不按 HR 等管理员角色重复建立业务流程集合。角色差异通过服务端 capability、allowedActions 和可见范围作为用例输入；通用行为只保留一份覆盖，权限拒绝、范围选择与权限变化后的恢复保留独立验证。浏览器验证真实路由与组件接线，组件测试承接表单和权限组合；mock API 的前端测试不替代后端授权验证。
+- **状态自包含与确定性同步** 每例建立并清理自己的状态，不依赖顺序；并发通过显式信号、受控 Promise 或时钟同步，真实到期与进程退出使用真实资源。
+- **最小化替身** 只替换模块的外部依赖，保留内部协作。仅当顺序或次数属于契约时才锁定它，禁止重放、零写入和脱敏可直接观察。
 - 断言必须能区分正确与错误实现：固定返回值不能证明缓存命中，mock 加密不能证明真实加密安全。
 - DTO 裁剪提供额外输入并调用正式解析或 mapper；手写 fixture 的序列化不能证明生产输出安全。
 - 不扫描其他源文件的变量名、注释或调用文本来推断业务行为；静态分析工具自己的路径/import fixture 属于公开输入。
@@ -238,11 +238,11 @@ Root typecheck 检查工具源码。任务定义见[turbo.json](../../turbo.json
 
 ## 并发、timeout 与清理
 
-预算由根入口与 runner 统一执行，不在各 manifest 重复填写。Unit 允许有界并发；同一真实资源 Integration 环境的套件和用例串行、首错停止。
-Admin 的 mock API 浏览器 Integration 使用两个 Chromium worker，按文件并行、文件内串行，共用本次开发服务器；每例独立的 browser context、路由 mock 和浏览器存储隔离状态。
-其 package script 显式选择内部 runner 的 `--browser-workers 2`；该选项仅允许无 PostgreSQL/Redis 声明、无资源 provider 的 Playwright collection，最多两个 worker。
-其余浏览器 Integration 与 E2E 使用单 worker。浏览器均零 retry，首个失败后停止调度后续用例并结束在途执行，所属进程树与 web server 按原生命周期收尾。
-用例内部为验证竞态而建立的并发保留。当前数值以 runner 配置为准。
+- **预算与并发** 预算由根入口与 runner 统一执行，不在各 manifest 重复填写。Unit 允许有界并发；同一真实资源 Integration 环境的套件和用例串行、首错停止。
+  Admin 的 mock API 浏览器 Integration 使用两个 Chromium worker，按文件并行、文件内串行，共用本次开发服务器；每例独立的 browser context、路由 mock 和浏览器存储隔离状态。
+  其 package script 显式选择内部 runner 的 `--browser-workers 2`；该选项仅允许无 PostgreSQL/Redis 声明、无资源 provider 的 Playwright collection，最多两个 worker。
+  其余浏览器 Integration 与 E2E 使用单 worker。浏览器均零 retry，首个失败后停止调度后续用例并结束在途执行，所属进程树与 web server 按原生命周期收尾。
+  用例内部为验证竞态而建立的并发保留。当前数值以 runner 配置为准。
 
 Timeout 防止挂起，不作为性能 SLA。进程使用真实 readiness，并同时观察退出与错误；输出有界，在成功、失败、超时和中断时清理所属进程树、端口和临时目录。
 不能以放宽全局 timeout、重试或吞掉 cleanup 错误换取通过。
@@ -284,10 +284,10 @@ Worker 与 Ops 各自保留生产连接防误用检查，不另设 cleanup URL �
 Ops 通过正式 CLI 子进程验证命令输入、配置、报告、退出及资源作用；Worker 通过正式进程验证周期恢复。
 共享维护生命周期和完整领域编排分别在基础设施与领域 owner 集中验证，消费方只补实际接线及自身差异。
 
-Gateway Integration 由 package runner 的资源 provider 持有本次 APISIX/etcd，首次租用才启动，跨文件串行复用。
-每例先结束 Gateway 进程、调用连接、故障代理及在途转发，再直连 Admin 按依赖顺序删除七类完整资源并回读空基线。
-用例或收尾失败后停止 collection，不重建环境继续；父 runner 结束后清理准确 project，root 在所属命令的子资源登记中兜底恢复。
-测试只使用一套固定配置，不承担调用方 dev/prod 部署配置验收。
+- **Gateway Integration** Gateway Integration 由 package runner 的资源 provider 持有本次 APISIX/etcd，首次租用才启动，跨文件串行复用。
+  每例先结束 Gateway 进程、调用连接、故障代理及在途转发，再直连 Admin 按依赖顺序删除七类完整资源并回读空基线。
+  用例或收尾失败后停止 collection，不重建环境继续；父 runner 结束后清理准确 project，root 在所属命令的子资源登记中兜底恢复。
+  测试只使用一套固定配置，不承担调用方 dev/prod 部署配置验收。
 
 ### 浏览器 harness 与产物
 
@@ -305,12 +305,12 @@ APISIX 启动配置与 IAM 路由由 `e2e/system/test-assets/` 独立维护，�
 ### 初始化与就绪
 
 1. Preflight 使用独立 deadline，在资源与 descriptor 创建前失败退出。
-2. Descriptor 落盘后先写未尝试迁移的 receipt，再准备 project 内诊断工具与资源；诊断阶段不临时构建，不公开 APISIX Admin host port。
-3. Migration receipt 区分未尝试、已尝试、完成与安全失败，不保存原始错误或环境。
-4. Seed 通过生产领域能力建立状态，经真实 Worker 收敛，回读本次各用户的 Document、Facts 版本与预期访问屏障状态，确认一致后才进入 Gateway 发布与业务旅程。
+2. **迁移与诊断准备** Descriptor 落盘后先写未尝试迁移的 receipt，再准备 project 内诊断工具与资源；诊断阶段不临时构建，不公开 APISIX Admin host port。
+3. **Migration Receipt** Migration receipt 区分未尝试、已尝试、完成与安全失败，不保存原始错误或环境。
+4. **Seed 与读模型收敛** Seed 通过生产领域能力建立状态，经真实 Worker 收敛，回读本次各用户的 Document、Facts 版本与预期访问屏障状态，确认一致后才进入 Gateway 发布与业务旅程。
    核对 rendered Compose 中各入口的 canonical origin；导出必要 seed receipt 后才删除 seed 容器，缺失或导出失败阻断旅程。
    业务 E2E 不调用人工维护 CLI；Ops 命令的行为由其专属 Integration 验证，维护制品与恢复流程按对应验收执行。
-5. 协议 readiness 校验 discovery 各端点及 issuer 的 canonical origin，Custom SSO 两入口配置也须匹配；随后执行浏览器 preflight。
+5. **协议与浏览器就绪** 协议 readiness 校验 discovery 各端点及 issuer 的 canonical origin，Custom SSO 两入口配置也须匹配；随后执行浏览器 preflight。
 
 Receipt 只含阶段、时间、安全失败类别或本次公开引用，不保存凭据。具体流程见[e2e/system](../../e2e/system/)。
 

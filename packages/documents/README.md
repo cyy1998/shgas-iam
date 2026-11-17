@@ -6,8 +6,8 @@
 API/Admin API composition 注入 producer，查询 composition 注入 repository，Worker composition 接入 consumer。
 
 1. 文档相关源写入将事实、审计和实际变化的 Outbox 同事务提交。提交后按一致观察展开，原子登记目标重建版本和 Outbox 完成凭据。重复投递已完成消息时只唤醒原版本。
-2. 队列仅唤醒。每类通知按事务合并，提交后分批、共享本次入队总预算。失败保留 Outbox，由两阶段 repair 回收失败或过期工作并重新投递。
-3. 领取版本与处理 token 后，构建器在同一只读源快照中构建并校验覆盖。发布按数量和文档字节分组，锁定并重验版本和 owner，原子提交文档或墓碑、processed 与后续义务。
+2. **有界队列唤醒** 队列仅唤醒。每类通知按事务合并，提交后分批、共享本次入队总预算。失败保留 Outbox，由两阶段 repair 回收失败或过期工作并重新投递。
+3. **快照构建与原子发布** 领取版本与处理 token 后，构建器在同一只读源快照中构建并校验覆盖。发布按数量和文档字节分组，锁定并重验版本和 owner，原子提交文档或墓碑、processed 与后续义务。
 4. repair 跳过活跃事务，重领更换 token，旧 owner 即使同版本也不能完成。确定回滚的目标局部错误可有界重试或拆分，连接、配置或提交未知时停止扩散重试。已确认提交的对象仍进入后处理。
 
 `@iam/jobs` 管理分批、预算、身份、确认和连接关闭。HTTP producer 与维护命令使用专用快速失败连接，常驻 Worker 保留长期重连。
@@ -25,18 +25,18 @@ Outbox 保存变化来源、直接用户及必要的原关联，消费者在提�
 构建固定观察时点，校验开放任职、岗位、组织和完整路径，按任职保存全局与按 Client 分组的应用角色。旧文档缺省的全局角色按空集合处理。
 PostgreSQL 每个用户只保存一份业务文档与技术元数据，Admin 保持专属模型。
 
-发布事务登记后续义务，确认提交后才处理 Facts 缓存和 Subject Access。正常消费与 repair 共用同版本尝试预算，逐用户执行并按版本/token 完成。
-缓存失败保留恢复义务，耗尽交人工处理，重置预算与领取须原子完成。Access lease 在该主体实际修复时领取。账号解除 blocking 遵循 [Subject Access 恢复与重新启用](../subject-access/README.md#恢复与重新启用)。
-[后处理器](src/user/worker/user-document-post-publication.processor.ts) · [日常修复](../../docs/releases/data-maintenance.md#user-document-日常修复)
+- **重试预算与恢复** 发布事务登记后续义务，确认提交后才处理 Facts 缓存和 Subject Access。正常消费与 repair 共用同版本尝试预算，逐用户执行并按版本/token 完成。
+  缓存失败保留恢复义务，耗尽交人工处理，重置预算与领取须原子完成。Access lease 在该主体实际修复时领取。账号解除 blocking 遵循 [Subject Access 恢复与重新启用](../subject-access/README.md#恢复与重新启用)。
+  [后处理器](src/user/worker/user-document-post-publication.processor.ts) · [日常修复](../../docs/releases/data-maintenance.md#user-document-日常修复)
 
-只有已删除的用户发布墓碑，Pause/Disable 仍发布完整文档，源行缺失是异常。Redis 保留带版本墓碑以阻止旧发布或回填复活，比较保留 bigint 精度。
-Facts 缓存缺失、损坏或主体错配时合并回源，由已发布 PG 文档派生同版本 Facts 或墓碑。回填失败可使用合法 PG 结果，Redis 读取故障直接失败。
-[Facts reader](src/user/subject-facts/document-facts.reader.ts)
+- **墓碑与缓存回源** 只有已删除的用户发布墓碑，Pause/Disable 仍发布完整文档，源行缺失是异常。Redis 保留带版本墓碑以阻止旧发布或回填复活，比较保留 bigint 精度。
+  Facts 缓存缺失、损坏或主体错配时合并回源，由已发布 PG 文档派生同版本 Facts 或墓碑。回填失败可使用合法 PG 结果，Redis 读取故障直接失败。
+  [Facts reader](src/user/subject-facts/document-facts.reader.ts)
 
-PG gate 在 `REPEATABLE READ READ ONLY` 事务完整核对源用户、文档与墓碑、Outbox、Rebuild State、处理凭据、后续义务、源事实及孤立记录。
-Redis gate 对照一致 PG 库存核验完整 Facts、墓碑与屏障。两者均只读，不入队、不修复，取消或中断不能返回完整核验结果。
-任职完整性另由 [Ops 的独立只读诊断](../../apps/ops/README.md#任职只读诊断)检查。
-[数据维护](../../docs/releases/data-maintenance.md#user-document-全量重建) · [Ops 维护测试](../../apps/ops/test-integration/user-document/user-document-maintenance.integration.test.ts)
+- **双存储只读门禁** PG gate 在 `REPEATABLE READ READ ONLY` 事务完整核对源用户、文档与墓碑、Outbox、Rebuild State、处理凭据、后续义务、源事实及孤立记录。
+  Redis gate 对照一致 PG 库存核验完整 Facts、墓碑与屏障。两者均只读，不入队、不修复，取消或中断不能返回完整核验结果。
+  任职完整性另由 [Ops 的独立只读诊断](../../apps/ops/README.md#任职只读诊断)检查。
+  [数据维护](../../docs/releases/data-maintenance.md#user-document-全量重建) · [Ops 维护测试](../../apps/ops/test-integration/user-document/user-document-maintenance.integration.test.ts)
 
 ## Organization Search 发布与核验
 

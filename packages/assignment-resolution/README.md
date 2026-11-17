@@ -15,10 +15,11 @@
 
 ## Organization Responsibility 解析
 
-`@iam/assignment-resolution/organization-responsibility` 按显式观察时间解析有效责任和跨树 holder。查询及完整性重查排除已结束责任，
-开放责任的引用、生命周期、期间或名额异常，以及未知状态，均拒绝整批。组织变更覆盖子树任职用户和跨树 holder，Type 披露或排序变化也使 holder 失效。
+- **读取与完整性** `@iam/assignment-resolution/organization-responsibility` 按显式观察时间解析有效责任和跨树 holder。查询及完整性重查排除已结束责任，
+  开放责任的引用、生命周期、期间或名额异常，以及未知状态，均拒绝整批。组织变更覆盖子树任职用户和跨树 holder，Type 披露或排序变化也使 holder 失效。
 
-`/assignment-lifecycle-store` 提供选中责任的有序锁定与生命周期更新，由 Admin 责任 repository 和 Worker 的任职调度装配绑定到当前事务。
-`/parent-lifecycle` 提供父组织写入侧预检，由 composition 绑定事务，责任 repository 与父生命周期 participant 复用，其他业务通过注入 port 使用。
-父组织暂停或停用按实际修改范围预检，拒绝时事实、审计及两类 Outbox 一并回滚。预检不额外加锁或保护 phantom。
-[公开接口](src/organization-responsibility/index.ts) · [责任规则](../../docs/features/directory-management.md#组织责任管理) · [ADR-0014](../../docs/adr/0014-model-organization-responsibility-as-employment-bound-fact.md)
+- **生命周期更新** `/assignment-lifecycle-store` 提供选中责任的有序锁定与生命周期更新，由 Admin 责任 repository 和 Worker 的任职调度装配绑定到当前事务。
+
+- **父级停用预检** `/parent-lifecycle` 提供父组织写入侧预检，由 composition 绑定事务，责任 repository 与父生命周期 participant 复用，其他业务通过注入 port 使用。
+  父组织暂停或停用按实际修改范围预检，拒绝时事实、审计及两类 Outbox 一并回滚。预检不额外加锁或保护 phantom。
+  [公开接口](src/organization-responsibility/index.ts) · [责任规则](../../docs/features/directory-management.md#组织责任管理) · [ADR-0014](../../docs/adr/0014-model-organization-responsibility-as-employment-bound-fact.md)

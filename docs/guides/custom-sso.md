@@ -72,10 +72,10 @@ client、redirectUrl 必填，state 可选。浏览器通常携带 HttpOnly glob
 无根时进入统一登录页并通过服务端续接完成认证。新请求校验当前允许列表，续接/Code 固定已接受地址；
 普通列表编辑不改写它，callbackType 改变要求重新授权。
 
-目标应用启用准入策略后，IAM 在签发 Code 前按当前已发布的用户文档检查资格。
-明确不符合时，IAM 直接把浏览器带到当前入口的「无权限访问应用」页，业务回调和托管回调都不会收到本次 Code。
-暂时无法完成检查时，授权返回 HTTP `503`。按 `Retry-After` 等待后从应用重新发起授权。
-这两种结果都保留已有登录和应用会话。此前签发的 Code 和 Token 仍按原有规则使用。
+- **应用准入检查** 目标应用启用准入策略后，IAM 在签发 Code 前按当前已发布的用户文档检查资格。
+  明确不符合时，IAM 直接把浏览器带到当前入口的「无权限访问应用」页，业务回调和托管回调都不会收到本次 Code。
+  暂时无法完成检查时，授权返回 HTTP `503`。按 `Retry-After` 等待后从应用重新发起授权。
+  这两种结果都保留已有登录和应用会话。此前签发的 Code 和 Token 仍按原有规则使用。
 
 Code 只能消费一次，成功结果不重放。根 UserSession 期限固定；
 Token 有效期取协议 TTL、根及 ClientSession 剩余期限的最小值，响应 ttl 以秒表示。
@@ -114,20 +114,20 @@ code={urlencoded_code}&redirect_uri={urlencoded_original_redirect_url}
 }
 ```
 
-subject 仅包含当前 Client 选择的字段，授权交付本 Client 的有效角色和任职上的有效全局角色，公开结构排除数据库 ID 和兼容别名。
-完整主体仅接受 wire v4，`authorization` 及其每条任职只交付角色。
-任职与责任目标的组织使用[共用资料结构](README.md#单点登录的共同处理)。
-`subjectClaims` 的名称和选项保持不变；接入方须适配新响应，并在恢复访问前清理或停用旧权限副本。
-业务后端自行建立本地会话、关联 sid、设置自己的 HttpOnly Cookie，再跳回原 redirectUrl；
-IAM 不建立或存储第三方自有 session。
+- **主体投影格式（Wire v4）** subject 仅包含当前 Client 选择的字段，授权交付本 Client 的有效角色和任职上的有效全局角色，公开结构排除数据库 ID 和兼容别名。
+  完整主体仅接受 wire v4，`authorization` 及其每条任职只交付角色。
+  任职与责任目标的组织使用[共用资料结构](README.md#单点登录的共同处理)。
+  `subjectClaims` 的名称和选项保持不变；接入方须适配新响应，并在恢复访问前清理或停用旧权限副本。
+  业务后端自行建立本地会话、关联 sid、设置自己的 HttpOnly Cookie，再跳回原 redirectUrl；
+  IAM 不建立或存储第三方自有 session。
 
-遇 500、503 或响应结果未知时，按[共同处理流程](README.md#单点登录的共同处理)重新授权。
-认证、参数或配置错误应先修正。认证并定位会话后发生的拒绝，即使是消费前的 Maintenance，也会尝试终止原 ClientSession。
-旧应用 Token 可能因此失效，有效根仍可重新授权。
-诊断 Header 分别报告 Code 消费、会话撤销和 Token 补偿结果；失败后仍须重新授权。
-三个诊断 Header 为 `X-IAM-Code-Consumption`、`X-IAM-Client-Session-Revocation`、`X-IAM-Token-Compensation`。
-unknown/failed 不表示撤销成功；响应构造完成也不保证调用方已收到。managed 只报告消费和 Token 补偿，不返回业务兑换的会话撤销 Header。
-具体结果类型和错误映射见[协议操作](../../packages/custom-sso/src/unified/operations.ts)。
+- **异常与诊断 Header** 遇 500、503 或响应结果未知时，按[共同处理流程](README.md#单点登录的共同处理)重新授权。
+  认证、参数或配置错误应先修正。认证并定位会话后发生的拒绝，即使是消费前的 Maintenance，也会尝试终止原 ClientSession。
+  旧应用 Token 可能因此失效，有效根仍可重新授权。
+  诊断 Header 分别报告 Code 消费、会话撤销和 Token 补偿结果；失败后仍须重新授权。
+  三个诊断 Header 为 `X-IAM-Code-Consumption`、`X-IAM-Client-Session-Revocation`、`X-IAM-Token-Compensation`。
+  unknown/failed 不表示撤销成功；响应构造完成也不保证调用方已收到。managed 只报告消费和 Token 补偿，不返回业务兑换的会话撤销 Header。
+  具体结果类型和错误映射见[协议操作](../../packages/custom-sso/src/unified/operations.ts)。
 
 ## managed：托管回调
 
@@ -201,11 +201,11 @@ IAM Client 的交付配置不可用时，仍保留全局 Cookie。
 GET {IAM_ORIGIN}/sso/thirdparty/{sourceClientCode}?loginid={username}&ts={timestamp_ms}&token={signature}&client={targetClientCode}&redirectUrl={encoded_url}
 ```
 
-loginid、ts、token、client、redirectUrl 必填，state/ssoReturn 可选并透传；ssoReturn 是既有续接 handle。
-用户须为 active 且 Formal 正式员工。production 校验毫秒时间与服务端偏差严格小于 5 分钟，发送方应同步时钟。
-签名为 `Base64(SM3(loginid + "|" + ts + "|" + clientSecret + clientSecret))`；
-对 SM3 摘要的原始字节做标准 Base64 编码，不能编码其十六进制文本。
-以下服务端示例同时正确编码路径、Base64 和嵌套 URL：
+- **参数与校验** loginid、ts、token、client、redirectUrl 必填，state/ssoReturn 可选并透传；ssoReturn 是既有续接 handle。
+  用户须为 active 且 Formal 正式员工。production 校验毫秒时间与服务端偏差严格小于 5 分钟，发送方应同步时钟。
+  签名为 `Base64(SM3(loginid + "|" + ts + "|" + clientSecret + clientSecret))`；
+  对 SM3 摘要的原始字节做标准 Base64 编码，不能编码其十六进制文本。
+  以下服务端示例同时正确编码路径、Base64 和嵌套 URL：
 
 ```ts
 import { sm3 } from "sm-crypto";

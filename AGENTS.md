@@ -1,6 +1,6 @@
 # 仓库指引入口
 
-本文件是 Codex 和其他 agent 的仓库级入口。详细规则放在 `docs/`；`AGENTS.md` 保持为短索引。
+本文件是 Codex 和其他 Agent 的仓库级导航入口，具体规范集中维护在 `docs/` 下。本页只保留按任务查找规范的指引。
 
 ## 阅读顺序
 
@@ -10,7 +10,7 @@
 3. 讨论首次落盘、开始实施、修改文件或执行提交、合并、发布、关闭 Spec 前，必须先读
    [工作流补充](docs/agents/workflow.md)，核对仓库的分支、验证与本地收尾约束。
 
-| 任务触发条件                                                                                   | 必须读取                                                                                                                                                                     |
+| 任务触发条件                                                                                   | 必读文档                                                                                                                                                                     |
 | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 定位陌生代码、新增或移动文件、涉及生成目录或 vendored 资源                                     | [仓库地图](docs/engineering/repository-map.md)                                                                                                                               |
 | 跨 runtime 设计、调整信任边界、数据权威来源、一致性或恢复责任                                  | [系统架构视图](docs/engineering/system-architecture.md)；按涉及模块继续阅读，验证方式见[测试规范](docs/engineering/testing.md#验证选择)                                      |
@@ -24,7 +24,7 @@
 | 修改 runner、测试收集、fixture、资源隔离或清理                                                 | [收集与编排](docs/engineering/testing.md#收集与编排)、[专用资源与隔离](docs/engineering/testing.md#专用资源与隔离)                                                           |
 | 调整模块依赖边界、公开出口，或新增/修改 Architecture Guard                                     | [架构守卫](docs/engineering/testing.md#架构守卫)                                                                                                                             |
 | 运行本地开发、构建、测试或检查命令                                                             | [命令入口](docs/engineering/commands.md)中的对应通道或 workspace 入口                                                                                                        |
-| Gateway、Docker、observability 配置，或部署、数据切换、运维修复                                | [仓库地图](docs/engineering/repository-map.md)，以及索引中覆盖该系统或操作的 Current runbook；执行命令前读完整的适用流程                                                     |
+| Gateway、Docker、observability 配置，或部署、数据切换、运维修复                                | [仓库地图](docs/engineering/repository-map.md)及[发布与维护](docs/index.md#发布与维护)中对应的 Current runbook。执行命令前读完整的适用流程                                   |
 | 修改文档、AGENTS.md 或 skill                                                                   | [文档索引的维护方式](docs/index.md#维护方式)；涉及的架构或领域规则仍按上表叠加                                                                                               |
 
 具体模块的功能契约和发布手册沿所涉架构文档及索引继续定位；本入口不复制其规则。

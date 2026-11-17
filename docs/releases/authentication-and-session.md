@@ -23,10 +23,10 @@ Next review: 2026-12-02
 需要完整防重放保证时，先解决并验证[时间窗口缺口](#凭证时间窗口与防重放限制)；
 只调大 TTL 或即时重复请求被拒绝都不足以证明缺口已解决。
 
-1. 准备兼容的 API/SSO 构建与回退配置，关闭密码登录公共入口、直连和自动重试，排空在途认证。
-2. 向全部 API 副本注入私钥映射、active kid 及时间配置，确认配置校验通过；active kid 缺少私钥必须启动失败。
-3. 部署以匹配公钥/kid 构建的 SSO，更新 CDN 缓存并确认实际浏览器页面使用新 bundle。
-4. 仅开放受控账号和入口检查下表；通过后关闭临时入口，确认配置一致，再恢复公共密码登录。
+1. **准备与停流** 准备兼容的 API/SSO 构建与回退配置，关闭密码登录公共入口、直连和自动重试，排空在途认证。
+2. **更新 API** 向全部 API 副本注入私钥映射、active kid 及时间配置，确认配置校验通过；active kid 缺少私钥必须启动失败。
+3. **更新 SSO 前端** 部署以匹配公钥/kid 构建的 SSO，更新 CDN 缓存并确认实际浏览器页面使用新 bundle。
+4. **受控验证与放流** 仅开放受控账号和入口检查下表；通过后关闭临时入口，确认配置一致，再恢复公共密码登录。
 
 | 检查           | 完成标准                                                                                                 |
 | -------------- | -------------------------------------------------------------------------------------------------------- |
@@ -54,16 +54,16 @@ Redis 异常先恢复依赖；`login-credential-nonce:<digest>` 不能批量清�
 启用 `IAM_API_CAP_ENABLED` 时，图片验证码默认可用。将 `IAM_API_IMAGE_CAPTCHA_ENABLED` 设为 `false` 并按
 [常规更新](deployment.md#常规更新)重建 API 实例，可以单独关闭图片方式。部署使用独立的高熵 `IAM_API_CAP_SECRET`，所有 API 副本使用同一值。
 
-SSO 使用同源 API 前缀，例如 `/api/iam`。经实际网关进入 SSO，在测试浏览器中阻止 Cap 求解，确认页面自动显示图片，答错后可重试，
-换图后上一张失效，答对后原操作只重试一次。短时间重复取图或提交时检查 API 的 `429` 与 `Retry-After`。
-部署配置限制图片来源时，需允许验证码区域显示 API 返回的 PNG data URL。
+- **功能验证** SSO 使用同源 API 前缀，例如 `/api/iam`。经实际网关进入 SSO，在测试浏览器中阻止 Cap 求解，确认页面自动显示图片，答错后可重试，
+  换图后上一张失效，答对后原操作只重试一次。短时间重复取图或提交时检查 API 的 `429` 与 `Retry-After`。
+  部署配置限制图片来源时，需允许验证码区域显示 API 返回的 PNG data URL。
 
-取图和换图共用额度，同一操作和目标每分钟 10 次，同一来源 IP 每分钟 120 次。提交答案按同一操作和目标每秒 1 次、同一来源 IP 每分钟
-180 次限流。来源 IP 取自[可信代理配置](apisix-gateway-release.md)。原操作的领图票据有效期为 5 分钟，答对后的凭证有效期为 1 分钟。
+- **限流阈值** 取图和换图共用额度，同一操作和目标每分钟 10 次，同一来源 IP 每分钟 120 次。提交答案按同一操作和目标每秒 1 次、同一来源 IP 每分钟
+  180 次限流。来源 IP 取自[可信代理配置](apisix-gateway-release.md)。原操作的领图票据有效期为 5 分钟，答对后的凭证有效期为 1 分钟。
 
 ## 企业微信扫码登录配置
 
-1. 在本企业的企业微信自建应用中配置网页授权可信域名。确认手机能通过公网 HTTPS 访问回调，API 能通过 HTTPS 访问
+1. **企业微信后台与 API 配置** 在本企业的企业微信自建应用中配置网页授权可信域名。确认手机能通过公网 HTTPS 访问回调，API 能通过 HTTPS 访问
    `qyapi.weixin.qq.com`，并使用同一套企业标识、应用 Secret 和 AgentId。沿用 `IAM_API_WECHAT_CORP_ID` 和
    `IAM_API_WECHAT_CORP_SECRET`，在所有 API 副本同时设置 `IAM_API_WECHAT_QR_AGENT_ID` 和
    `IAM_API_WECHAT_QR_CALLBACK_URL`。内网和公网入口使用不同 hostname。回调使用 `IAM_API_SSO_EXTERNAL_ORIGIN` 的 hostname，路径固定为
@@ -73,11 +73,11 @@ SSO 使用同源 API 前缀，例如 `/api/iam`。经实际网关进入 SSO，�
    并根据实际 TLS 入口覆盖 `X-Forwarded-Proto`。在更通用的路由也覆盖客户端传入的协议与入口头。
    电脑路径 `/sso/wechat-qr`、`/oidc/wechat-qr` 及其子路径只走内网 authority，Gateway 覆盖
    `X-IAM-Entry-Network: internal`。内网的登录守卫也使用相同的可信入口头。禁止外部直连 API。
-3. 网关和日志采集只记录脱敏路径或路由名。扫码路由不记录 query、Cookie、表单、完整请求行或 Referer。
+3. **日志与追踪脱敏** 网关和日志采集只记录脱敏路径或路由名。扫码路由不记录 query、Cookie、表单、完整请求行或 Referer。
    为扫码路由将 OpenTelemetry sampler 设置为 `always_off`。检查访问日志、错误日志及 tracing 的实际输出，
    回调里的授权码和 state、发起浏览器续接参数都不能进入采集。
    SSE 转发保留流式响应与 `X-Accel-Buffering: no`，代理读超时应长于心跳间隔。
-4. 按[常规更新](deployment.md#常规更新)部署 API 和 SSO。用不同 hostname 的原电脑和手机验证公网登录守卫不提供出码，
+4. **部署与核验** 按[常规更新](deployment.md#常规更新)部署 API 和 SSO。用不同 hostname 的原电脑和手机验证公网登录守卫不提供出码，
    手机没有 `global_session`，电脑能实时读到确认或取消。断开 SSE 后重连，核对已发生的结果仍可见，旧码在换码后不可用。
    在网关验证无 TLS 的回调和客户端伪造入口头均被拒绝，再放开流量。
 
@@ -88,12 +88,12 @@ Redis 需要从备份恢复时，关闭扫码入口并等待在途请求到期�
 
 用于发布或调整内外网 OIDC 入口。API、Gateway、SSO 与接入应用的 origin/issuer 必须匹配：
 
-- API 设置 `IAM_API_SSO_INTERNAL_ORIGIN`、`IAM_API_SSO_EXTERNAL_ORIGIN` 和 `IAM_API_OIDC_CURRENT_JWK_JSON`。
+- **API 配置** API 设置 `IAM_API_SSO_INTERNAL_ORIGIN`、`IAM_API_SSO_EXTERNAL_ORIGIN` 和 `IAM_API_OIDC_CURRENT_JWK_JSON`。
   origin 只允许 HTTP(S) origin，不含用户信息、非根路径、query 或 fragment；规范化后加 `/oidc` 得到 issuer。
   两个 origin 相同即同一 issuer，不同 issuer 共用签名 key。
 - Gateway 保留 `/oidc` 路径并按可信 host 覆盖 `X-IAM-Entry-Network`；dev 核对含端口的 authority，prod 核对 host。
   API 不应被外部直连绕过。`IAM_API_OIDC_TRUST_PROXY` 只控制客户端 IP：true 时取 `X-Forwarded-For` 首项，false 或无头取连接地址。
-- Client 选择 OIDC，登记 redirect/post-logout URI、scope 与 Public/Confidential 类型；Public 使用 PKCE S256，Confidential 使用 Basic 与 PKCE。
+- **Client 登记** Client 选择 OIDC，登记 redirect/post-logout URI、scope 与 Public/Confidential 类型；Public 使用 PKCE S256，Confidential 使用 Basic 与 PKCE。
   Secret 通过[授权读取](../features/application-integration.md#查看和轮换凭据)取得，不使用普通详情响应。
 
 按[部署与发布](deployment.md)更新配对配置，再按[网关发布](apisix-gateway-release.md)更新路由。
@@ -112,14 +112,14 @@ Redis 需要从备份恢复时，关闭扫码入口并等待在途请求到期�
 **先判断能否轮换：** 设 current 为 A、已有 previous 为 P、新 key 为 B。P 仍需用于接入应用验签或 IAM 退出 hint 时不能开始，
 两槽无法容纳 P/A/B。普通 Token 到期不表示退出 hint 已退役；规则见[密钥兼容边界](#签名密钥兼容边界)。
 
-1. 准备唯一新 kid 的 B、对应公开 JWK 与回退配置，确认所有 API 副本及自动扩容模板。
+1. **停流与排空** 准备唯一新 kid 的 B、对应公开 JWK 与回退配置，确认所有 API 副本及自动扩容模板。
    关闭 OIDC 授权、兑换、续接、退出及直连/重试入口，停止旧 API signer，排空在途请求。
    保留最后可能由 A 签名的时点上界，用于计算旧 Token 接受期。
 2. 仅在 P 已可退役时，将 A 设为 `IAM_API_OIDC_PREVIOUS_JWK_JSON`、B 设为 current，启动全部目标副本。
 3. 从受控管理路径逐副本检查配置、readiness、Discovery 和 JWKS，再检查两个实际 Gateway 入口。
    对照从密钥管理端取得的预期公开 JWK，比较完整 `kty/kid/alg/use/n/e` 集合；不得含私钥字段。
    受控直连副本按目标 issuer 发送入口头，Gateway 检查按真实 host，不覆盖入口头。不要仅反复访问负载均衡地址。
-4. 将受控兑换分别送至各副本，确认实际签发的 Token 使用 B，接入应用完成签名和 claims 验证。
+4. **签发与兼容验证** 将受控兑换分别送至各副本，确认实际签发的 Token 使用 B，接入应用完成签名和 claims 验证。
    逐接入应用刷新 JWKS，或等待其明确的缓存期限后实际验证 B；同时验证仍有效的 A Token 和 A 退出 hint。
 5. 全部通过后恢复入口。以后移除 A 是另一次停流配置更新，必须同时满足普通 Token 与退出 hint 的退役条件。
 
@@ -154,8 +154,8 @@ IAM 允许过期 ID Token 作退出 hint，未用 exp 限制其使用期限。�
 | ----------------------------------------- | ---------------------------------------------------------------------- |
 | 查询、撤销指定用户/根/应用关系            | 使用[会话管理](../guides/admin.md#会话与登录限制)，不做 namespace 全清 |
 | 清空当前 namespace 中全部会话或协议 owner | 按下节 inventory、clear、verify；不能按 Client 筛选                    |
-| Client 提交后 Snapshot 传播失败           | 使用定向 repair，不重放数据库写入                                      |
-| Redis 备份恢复后的 Snapshot 修复          | 停流执行全量 repair 和独立 verify                                      |
+| Client 提交后 Snapshot 传播失败           | 执行[定向修复](#client-snapshot-修复)，不重放数据库写入                |
+| Redis 备份恢复后的 Snapshot 修复          | 停流执行[全量修复与独立核验](#client-snapshot-修复)                    |
 
 ## 会话清理
 
@@ -183,7 +183,7 @@ IAM 允许过期 ID Token 作退出 hint，未用 exp 限制其使用期限。�
    pnpm --filter @iam/ops iam-ops session verify -- --layout unified --owner all --kernel-namespace '<kernel>' --custom-namespace '<custom>' --oidc-namespace '<oidc>' --writers-stopped --drained
    ```
 
-3. clear 退出 0 且 `status=completed` 后，还须 verify 完整扫描、退出 0、matching 为零。
+3. **确认清零并恢复** clear 退出 0 且 `status=completed` 后，还须 verify 完整扫描、退出 0、matching 为零。
    此结果只证明目标范围清零；在重新开放 reader/writer 前完成核验，再检查受影响的新登录或协议流程并恢复入口。
 
 退出 2 表示参数无效；退出 1、timeout、中断或结果未知时保持停流，用原范围重新 inventory，修复原因后 clear、verify。
@@ -216,8 +216,8 @@ verify 须独立完整扫描、退出 0 且 matching=0，且发生在 reader 回
 
 ## 恢复边界
 
-- 账号与 Subject Access 恢复使用[数据维护](data-maintenance.md)，不能通过清会话或手工写 Redis 把不确定 Barrier 变成 enabled。
+- **账号访问屏障（Subject Access）** 账号与 Subject Access 恢复使用[数据维护](data-maintenance.md)，不能通过清会话或手工写 Redis 把不确定 Barrier 变成 enabled。
 - 精确会话撤销失败时仅重试原捕获集合；集合丢失重新查询发起操作，已终止的根不恢复。
-- 作用后审计失败不回滚已生效动作，也不为补审计重放 mutation；按[写入结果契约](../engineering/backend-architecture.md#admin-写入结果与失败恢复)处理。
+- **作用后审计未确认** 作用后审计失败不回滚已生效动作，也不为补审计重放 mutation；按[写入结果契约](../engineering/backend-architecture.md#admin-写入结果与失败恢复)处理。
 - Redis 实时登录态以服务端时间为准；主从时钟异常先处理时钟与 failover，不能靠续期或恢复登录态备份补偿。
 - 入口开放失败或状态未知时，停止继续开放，关闭不确定入口并排空，完成该操作所需核验后再恢复。

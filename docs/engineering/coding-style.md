@@ -4,10 +4,11 @@
 
 ## Formatter 边界
 
-- Biome 负责 JS/TS、JSX/TSX、JSON/JSONC、CSS 的排版与代码规则；Less、YAML、Markdown 只由 Prettier 排版。
-- Less 额外使用 Stylelint 检查规则，不自动应用无法区分安全性的修复。YAML 的语义由实际消费工具的专属验证负责，
-  Markdown 继续使用文档检查，不引入通用 YAML linter 或 prose lint。
-- 仓库自有且受支持的文件使用相同工具分工；生成输出、vendored 资源、冻结历史、依赖锁文件和外来 skill 副本排除。
+- **Biome** 负责 JS/TS、JSX/TSX、JSON/JSONC、CSS 的排版与代码规则。
+- **Prettier** 独立负责 Less、YAML、Markdown 的排版。
+- **Stylelint** 检查 Less 规则，不自动应用无法区分安全性的修复。
+- **配置与文档校验** YAML 的语义由实际消费工具的专属验证负责。Markdown 继续使用文档检查，不引入通用 YAML linter 或 prose lint。
+- **作用范围** 仓库自有且受支持的文件使用相同工具分工；生成输出、vendored 资源、冻结历史、依赖锁文件和外来 skill 副本排除。
   未支持类型不冒充已检查；排除规则及命令入口见[构建、测试与开发命令](commands.md)。
 
 ## 规则选择
@@ -26,8 +27,8 @@ Warning 沿用工具定义的级别，完整类型检查由 typecheck 负责。�
 
 ## 命名
 
-- 保留既有 domain file naming：`user.service.ts`、`user.repository.ts`、`user.schema.ts`、`user.routes.ts`、
+- **领域与模块文件** 保留既有 domain file naming：`user.service.ts`、`user.repository.ts`、`user.schema.ts`、`user.routes.ts`、
   `user.handlers.ts`、`user.trpc.ts` 和 `user.type.ts`。
-- React component 和 page 使用 PascalCase。
-- 已经使用 import alias 的地方，优先沿用 `@admin`、`@sso` 或 workspace package import。
-- 测试文件位置与命名统一见[测试规范](testing.md#路径与命名)。
+- **前端组件** React component 和 page 使用 PascalCase。
+- **路径导入** 已经使用 import alias 的地方，优先沿用 `@admin`、`@sso` 或 workspace package import。
+- **测试文件** 测试文件位置与命名统一见[测试规范](testing.md#路径与命名)。

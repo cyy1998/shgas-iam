@@ -23,19 +23,20 @@ PostgreSQL 业务审计独立保留。应用字段与脱敏规则见[系统日�
 | `LOKI_DATA_PATH`、`GRAFANA_DATA_PATH`、`ALLOY_DATA_PATH` | 实际持久化目录、权限与容量                                                 |
 | Grafana root URL、管理员凭据与 OIDC                      | 与实际访问地址及下节登录设置一致                                           |
 
-开发环境启动：
+- **开发环境启动**
 
-```bash
-docker compose --env-file docker/.env -f docker/compose.dev.yaml --profile observability up -d loki grafana alloy
-```
+  ```bash
+  docker compose --env-file docker/.env -f docker/compose.dev.yaml --profile observability up -d loki grafana alloy
+  ```
 
-开发默认 Loki `http://localhost:3100`、Grafana `http://localhost:30030`、Alloy `http://localhost:12345`。
-生产分别在中心主机和各采集主机启动：
+  开发默认 Loki `http://localhost:3100`、Grafana `http://localhost:30030`、Alloy `http://localhost:12345`。
 
-```bash
-docker compose --env-file docker/.env -f docker/compose.prod.observability.yaml up -d loki grafana
-docker compose --env-file docker/.env -f docker/compose.prod.observability.yaml up -d alloy
-```
+- **生产环境启动** 分别在中心主机和各采集主机启动。
+
+  ```bash
+  docker compose --env-file docker/.env -f docker/compose.prod.observability.yaml up -d loki grafana
+  docker compose --env-file docker/.env -f docker/compose.prod.observability.yaml up -d alloy
+  ```
 
 Loki 默认保留期 30 天（`720h`）；当前 Compose 未透传 `LOKI_RETENTION_PERIOD`，只改宿主 `.env` 不会生效。
 需覆盖时先落实配置接线并检查容器实际生效值，见[问题 #262](https://github.com/cyy1998/shgas-iam/issues/262)。
@@ -49,12 +50,12 @@ Loki 默认保留期 30 天（`720h`）；当前 Compose 未透传 `LOKI_RETENTI
 
 通过现有 Client 管理流程创建 `grafana` confidential OIDC Client：
 
-- Redirect URI 为 `${GRAFANA_ROOT_URL}/login/generic_oauth`，scope 为 `openid profile`。
-- 经[授权读取](../features/application-integration.md#查看和轮换凭据)取得 SSO Secret，注入 `GRAFANA_OIDC_CLIENT_SECRET`。
-- 设置 `GRAFANA_OIDC_ENABLED=true`、`GRAFANA_AUTH_ANONYMOUS_ENABLED=false`。
-- `GRAFANA_OIDC_AUTH_URL`、`GRAFANA_OIDC_TOKEN_URL`、`GRAFANA_OIDC_USERINFO_URL` 分别指向同一 issuer 的 `/auth`、`/token`、`/me`。
+- **回调与范围** Redirect URI 为 `${GRAFANA_ROOT_URL}/login/generic_oauth`，scope 为 `openid profile`。
+- **密钥与开关** 经[授权读取](../features/application-integration.md#查看和轮换凭据)取得 SSO Secret，注入 `GRAFANA_OIDC_CLIENT_SECRET`。
+  设置 `GRAFANA_OIDC_ENABLED=true`、`GRAFANA_AUTH_ANONYMOUS_ENABLED=false`。
+- **端点一致性** `GRAFANA_OIDC_AUTH_URL`、`GRAFANA_OIDC_TOKEN_URL`、`GRAFANA_OIDC_USERINFO_URL` 分别指向同一 issuer 的 `/auth`、`/token`、`/me`。
   浏览器与 Grafana 容器都须可达该入口，可使用不同 DNS 解析，但请求 authority 必须命中同一 Gateway issuer。
-- 当前 login/name/email attribute path 保持 `preferred_username`、`name`、`preferred_username`，不要假设 IAM 已签发 email claim。
+- **属性映射** 当前 login/name/email attribute path 保持 `preferred_username`、`name`、`preferred_username`，不要假设 IAM 已签发 email claim。
 
 开发默认 localhost 与 host.docker.internal 的 URL 组合不保证双入口 issuer 一致；按实际部署覆盖三项 URL 并配置容器解析。
 更新后重建 Grafana，例如开发环境：
@@ -78,9 +79,9 @@ Provisioning 位于 [grafana/provisioning](../../docker/observability/grafana/pr
 | `IAM Error Center` / `iam-error-center`           | 按服务、事件、错误类型/代码聚合，找到相关请求             |
 | `IAM Request Drilldown` / `iam-request-drilldown` | 使用 requestId 或 traceId 查询关联详情与网关/后端时间线   |
 
-OIDC 日志位于 `service=api`：`oidc_server_error` 为依赖/服务失败，`oidc_protocol_error` 为已知协议拒绝。
-Alloy 标签仅用 `env`、`service`、`component`、`level`、`host`，不把请求 ID 或业务标识作为标签；Loki 自动 `service_name` 发现已禁用。
-Grafana deep link 仅携带 env、service、requestId、traceId 和时间范围，不放业务查询参数、用户资料、Token 或请求原文。
+- **OIDC 事件区分** OIDC 日志位于 `service=api`：`oidc_server_error` 为依赖/服务失败，`oidc_protocol_error` 为已知协议拒绝。
+- **Alloy 标签** 仅用 `env`、`service`、`component`、`level`、`host`，不把请求 ID 或业务标识作为标签。Loki 自动 `service_name` 发现已禁用。
+- **Grafana deep link** 仅携带 env、service、requestId、traceId 和时间范围，不放业务查询参数、用户资料、Token 或请求原文。
 
 ## Trace 关联检查
 

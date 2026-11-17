@@ -27,25 +27,25 @@
 先与管理员确认目标环境、IAM 入口及应用的 Client code。需要单点登录时，先按对应协议登记回调、披露范围并启用登录。
 凭据按用途从[管理后台](admin.md#应用配置与凭据)取得，保存在服务端。日志对 Token、Code 和 Secret 脱敏。
 
-- OIDC Confidential 和 Custom SSO 业务兑换使用 SSO Secret。OIDC 两类客户端均使用 PKCE S256，Public 使用 Client code 兑换。
-- 搜索、委托与网关配置使用通用应用密钥（Internal API Secret）。
-- OA 可信登录签名使用源应用的通用应用密钥，按[可信登录流程](custom-sso.md#第三方可信登录oa-与微信)确定源应用与目标应用。
+- **SSO Secret** OIDC Confidential 和 Custom SSO 业务兑换使用 SSO Secret。OIDC 两类客户端均使用 PKCE S256，Public 使用 Client code 兑换。
+- **Internal API Secret（通用应用密钥）** 搜索、委托与网关配置使用通用应用密钥（Internal API Secret）。
+- **OA 可信登录签名密钥** OA 可信登录签名使用源应用的通用应用密钥，按[可信登录流程](custom-sso.md#第三方可信登录oa-与微信)确定源应用与目标应用。
 
 ### Internal API 认证
 
-使用本应用的 Internal API Secret 设置 `apikey` 请求头。搜索、委托及网关配置调用的 Client 须启用且未删除。
-搜索与委托使用 API 服务的 `/internal/…` 路径，经标准 IAM Gateway 调用时加 `/api/iam`。
-网关配置请求发送到 Gateway 配置服务，scope 的应用部分须匹配认证 Client。
+- **Internal API 认证要求** 使用本应用的 Internal API Secret 设置 `apikey` 请求头。搜索、委托及网关配置调用的 Client 须启用且未删除。
+  搜索与委托使用 API 服务的 `/internal/…` 路径，经标准 IAM Gateway 调用时加 `/api/iam`。
+  网关配置请求发送到 Gateway 配置服务，scope 的应用部分须匹配认证 Client。
 
 ### 单点登录的共同处理
 
-Code 只可兑换一次。兑换失败或结果未知时弃用旧 Code，修正原因并按适用的 `Retry-After` 等待，再从应用重新发起授权。协议错误与会话作用见各自的兑换章节。
+- **一次性 Code 兑换** Code 只可兑换一次。兑换失败或结果未知时弃用旧 Code，修正原因并按适用的 `Retry-After` 等待，再从应用重新发起授权。协议错误与会话作用见各自的兑换章节。
 
-披露任职和组织责任时，组织结构使用 `code/name/type/path`。路径包含自身和祖先，`level` 从根的 1 起算，
-`distanceToTarget` 从自身的 0 起算，岗位使用 `code/name`。交付角色时，无可见角色的有效任职仍保留空角色集合。
-时效与当前披露规则见[用户信息共享](../features/application-integration.md#用户信息共享)。
+- **共用组织与角色结构** 披露任职和组织责任时，组织结构使用 `code/name/type/path`。路径包含自身和祖先，`level` 从根的 1 起算，
+  `distanceToTarget` 从自身的 0 起算，岗位使用 `code/name`。交付角色时，无可见角色的有效任职仍保留空角色集合。
+  时效与当前披露规则见[用户信息共享](../features/application-integration.md#用户信息共享)。
 
-IAM 退出后，应用处理自己的会话、Cookie 和资料副本。离线身份凭证继续适用原期限，应用自行判断如何结束本地访问。
+- **退出清理** IAM 退出后，应用处理自己的会话、Cookie 和资料副本。离线身份凭证继续适用原期限，应用自行判断如何结束本地访问。
 
 业务规则见[功能与业务规则](../features/README.md)，部署与恢复见[运维入口](../releases/README.md)。
 字段、类型和错误码以各指南链接的 schema、接口定义和测试为准。

@@ -5,8 +5,10 @@ status: accepted
 # 显式选择回调类型并从落地 origin 推导托管回调
 
 Custom SSO 由管理员显式选择 managed 或 business，不按 URL、路径或历史来源猜测类型。
-managed 从首次已接受 redirect URI 的 origin 推导固定 `/sso/callback`，配置中没有独立 callbackEndpoint；
-business 使用显式登记的完整 callbackEndpoint，即使路径也叫 `/sso/callback` 仍是 business。
+
+- **`managed` 模式**。从首次已接受 redirect URI 的 origin 推导固定 `/sso/callback`，配置中没有独立 callbackEndpoint。
+- **`business` 模式**。使用显式登记的完整 callbackEndpoint，即使路径也叫 `/sso/callback` 仍是 business。
+
 本页合并显式类型与后续 origin 推导的决定。
 
 ## 理由与代价
@@ -21,13 +23,14 @@ IAM 代理路由的责任。
 
 ## 原授权与实际入口
 
-续接复用首次接受事实，不因普通允许列表编辑重新审核原 redirect；当前 callbackType 必须仍匹配原流程。
-类型变化使不兼容的未完成流程拒绝，不能把 business Code 转到托管入口绕过 Secret 认证。
-类型切换本身不删除 Secret 或会话，退出不以当前类型重新解释既有 Token。
+- **模式一致性校验**。续接复用首次接受事实，不因普通允许列表编辑重新审核原 redirect。当前 callbackType 必须仍匹配原流程。
+  类型变化使不兼容的未完成流程拒绝，不能把 business Code 转到托管入口绕过 Secret 认证。
+  类型切换本身不删除 Secret 或会话，退出不以当前类型重新解释既有 Token。
 
-固定回调是授权绑定，不等于验证实际 HTTP 请求的公网 origin。代理可以改写 Host，IAM 不据此重新推导或额外验证
-回调公网来源；管理员必须确保所信任 origin 的代理确实指向正确 IAM 入口。host-only Cookie 不自动跨域同步。
-托管回调从 Code 绑定验证原会话关系与用途，不以请求 Host、浏览器根 Cookie 或 IAM 内部读取 Secret 作为托管认证依据。
+- **Code 绑定鉴权**。固定回调只表达授权绑定。IAM 不通过该地址确认实际 HTTP 请求的公网 origin。
+  代理可以改写 Host，IAM 不据此重新推导或额外验证回调公网来源。
+  管理员必须确保所信任 origin 的代理确实指向正确 IAM 入口。host-only Cookie 不自动跨域同步。
+  托管回调从 Code 绑定验证原会话关系与用途，不以请求 Host、浏览器根 Cookie 或 IAM 内部读取 Secret 作为托管认证依据。
 
 这些选择避免额外的全局 origin 配置和跨域登录同步机制，但不承诺代理部署正确或所有用户旅程已验收。
 托管与业务失败作用继续分开，见 [ADR-0035](0035-unify-user-and-client-session-lifecycles.md#一次消费与失败作用)。

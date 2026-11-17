@@ -78,7 +78,7 @@ backfill、部分 repair 只登记或唤醒工作，仍须匹配版本的 consum
 
 适用于新环境。已有数据库先判断来源版本与迁移要求，不把空库安装流程当作旧环境升级。
 
-1. 准备持久化目录与权限、配置和依赖网络。在各主机仅启动分配给本机的服务：
+1. **启动数据层与网关底座** 准备持久化目录与权限、配置和依赖网络。在各主机仅启动分配给本机的服务：
 
    ```bash
    docker compose --env-file docker/.env -f docker/compose.prod.data.yaml config --quiet
@@ -88,7 +88,7 @@ backfill、部分 repair 只登记或唤醒工作，仍须匹配版本的 consum
 
    示例中的 primary 与 Redis 可同机；分主机时拆开执行。确认数据服务可连接，APISIX 健康且管理接口仅供可信管理网络访问。
 
-2. 在匹配目标版本的源码或维护环境安装锁定依赖，通过安全环境提供目标 `DATABASE_URL` 后执行正式迁移：
+2. **执行数据库迁移** 在匹配目标版本的源码或维护环境安装锁定依赖，通过安全环境提供目标 `DATABASE_URL` 后执行正式迁移：
 
    ```bash
    pnpm install --frozen-lockfile
@@ -98,7 +98,7 @@ backfill、部分 repair 只登记或唤醒工作，仍须匹配版本的 consum
    `DATABASE_URL` 是迁移工具输入，不能用应用的 `IAM_API_DATABASE_URL` 代替。
    Compose 不自动执行迁移；失败先核对原因和实际 schema，不用 `db:push` 或删除 migration journal 绕过。
 
-3. 启动应用，公共流量暂不开放：
+3. **启动应用与后台服务** 启动应用，公共流量暂不开放：
 
    ```bash
    docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml config --quiet
@@ -108,16 +108,16 @@ backfill、部分 repair 只登记或唤醒工作，仍须匹配版本的 consum
    通过已有的受控初始化/管理流程准备管理员与 Client 配置。不能使用测试 seed 或假定空库会自动创建生产账号。
    有导入源数据时，按[数据维护](data-maintenance.md)完成对应读模型构建及核验。
 
-4. 按[网关发布流程](apisix-gateway-release.md)发布目标环境配置。经受限入口完成下述检查，再开放公共流量。
+4. **发布网关路由并放流** 按[网关发布流程](apisix-gateway-release.md)发布目标环境配置。经受限入口完成[完成检查](#完成检查与回退)，再开放公共流量。
    任一步失败保持受影响入口关闭，修复后重做失败步骤及受影响检查。
 
 ## 常规更新
 
 先确定受影响服务及配对要求。数据库不兼容变更、密钥轮换、读模型升级各用其专门流程；普通应用更新不附带会话全清或全量重建。
 
-1. 准备目标镜像和已知兼容的回退镜像、配置；涉及持久数据变更时先取得可恢复备份。
-2. 通过实际网关/部署控制关闭受影响流量和任务，排空在途工作。Compose 的 `stop` 不是流量控制替代品。
-3. 更新 `docker/.env` 中相应 `*_IMAGE` 和配置。以下以 API 与 Admin API 为例：
+1. **备份与准备** 准备目标镜像和已知兼容的回退镜像、配置；涉及持久数据变更时先取得可恢复备份。
+2. **切流与排空** 通过实际网关/部署控制关闭受影响流量和任务，排空在途工作。Compose 的 `stop` 不是流量控制替代品。
+3. **拉取镜像与迁移** 更新 `docker/.env` 中相应 `*_IMAGE` 和配置。以下以 API 与 Admin API 为例：
 
    ```bash
    docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml config --quiet
@@ -128,14 +128,14 @@ backfill、部分 repair 只登记或唤醒工作，仍须匹配版本的 consum
    从源码构建时，将 `pull` 替换为同一 Compose 的 `build api admin-api`，构建上下文为仓库根目录。
    有兼容的待执行迁移时，在相关旧 writer 已停止后运行 `db:migrate`；需要协调切换的迁移先转专门指引。
 
-4. 用目标镜像重建所选服务：
+4. **重建服务容器** 用目标镜像重建所选服务：
 
    ```bash
    docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml up -d --no-deps --force-recreate api admin-api
    docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml ps api admin-api
    ```
 
-5. 完成受影响检查后恢复流量与任务。检查或开放失败时停止继续开放，关闭不确定入口并按回退/修复流程处理。
+5. **核验并恢复放流** 按[完成检查](#完成检查与回退)核验受影响范围，再恢复流量与任务。检查或开放失败时停止继续开放，关闭不确定入口并按回退/修复流程处理。
 
 ### 开放应用准入策略
 
@@ -203,19 +203,19 @@ User Document 构建与发布的进程均使用支持组合角色的同一候选
 Internal API、Worker 及涉及任职诊断、构建或修复的 Ops 制品使用同一候选。旧 runtime 只能配对旧数据库与读模型，
 需要在同一停流窗口切换相关读写和任务。
 
-1. 准备可恢复且相互匹配的 PostgreSQL、Redis 备份以及新旧制品和配置。关闭 Admin、Internal、对外人员资料和涉及已发布
+1. **备份与停流** 准备可恢复且相互匹配的 PostgreSQL、Redis 备份以及新旧制品和配置。关闭 Admin、Internal、对外人员资料和涉及已发布
    Facts 的认证入口，并排空源写入、文档发布、直连、脚本和重试。停止全部旧版任职读写、Worker 和相关 Ops。
-2. 在停流下用候选执行正式 `pnpm --filter @iam/db db:migrate`。旧时间戳按原应用的 UTC 读取语义转换为北京时间覆盖的自然日，
+2. **执行迁移与唯一性核验** 在停流下用候选执行正式 `pnpm --filter @iam/db db:migrate`。旧时间戳按原应用的 UTC 读取语义转换为北京时间覆盖的自然日，
    原状态和墓碑保留。发现逆序旧记录或重复开放任职时保持停流，按迁移报告核对样本 ID 和实际迁移状态。
    在匹配源版本的维护环境中调查异常，按业务事实修正后重新执行正式迁移。需要查询重复关系完整清单时，使用与所查 schema
    匹配的 `iam-ops employment verify`。升级后再用目标版本运行该命令，确认新区间和开放任职完整性。
-3. 在受控环境启动匹配候选的 User Document Worker，确认启动补扫完成，并等待文档及 Facts 收敛。
+3. **启动补扫与读模型核验** 在受控环境启动匹配候选的 User Document Worker，确认启动补扫完成，并等待文档及 Facts 收敛。
    在停流下独立执行 `iam-ops user-document verify-postgres` 和 `iam-ops user-document verify-redis`。
    对外 User Document 和 Facts 的结构保持兼容，但任职生效依据改用状态，库存的任职和责任内容可能变化。
    若新版构建发现内容差异，按[全量重建](data-maintenance.md#user-document-全量重建)运行正式 backfill，等待匹配 Worker
    发布，再从头通过完整 PG、Redis 两项核验。仅有待处理工作、入队或后处理失败时，先按
    [日常修复](data-maintenance.md#user-document-日常修复)收敛后重跑核验。Organization Document 无需因任职日期改型单独重建。
-4. 在受控入口核对 Admin 日期保存、任职状态、组织责任及 Internal/协议资料的实际传播，处理验收数据并等待收敛。
+4. **受控验收与放流** 在受控入口核对 Admin 日期保存、任职状态、组织责任及 Internal/协议资料的实际传播，处理验收数据并等待收敛。
    再次通过两个完整 User Document gate 后恢复相关流量和任务。
 
 迁移、补扫或发布失败时保持停流，按各自持久事实恢复。Worker 源事务已提交时，使用 User Document 的发布或修复流程继续；

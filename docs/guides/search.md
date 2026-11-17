@@ -117,17 +117,17 @@ null 在升序和降序中都置于末尾；全部排序键同值时按内部唯
 将任职条件拆成两个独立 exists 会允许不同任职分别满足。组织路径同理；`organization.path` 内的 code、level 等条件须匹配同一节点。
 组织路径包含自身；`level` 从根的 1 起算，`distanceToTarget` 从目标自身的 0 起算。
 
-独立组织搜索的路径位于文档根，使用 `exists.path = "path"`；任职中的组织使用 `organization.path`，
-责任元素中的目标组织使用 `targetOrganization.path`。`not` 应包裹整个 exists 才表示排除该组织子树。
+- **路径写法区分** 独立组织搜索的路径位于文档根，使用 `exists.path = "path"`；任职中的组织使用 `organization.path`，
+  责任元素中的目标组织使用 `targetOrganization.path`。`not` 应包裹整个 exists 才表示排除该组织子树。
 
-空字段上的原子条件为 false，not 再取反，所以“手机号不等于某值”会包含没有手机号的用户。
-`not exists(...)` 与 `exists(... where not ...)` 不等价。不能直接查询 null、空集合或缺失字段，也不支持模糊搜索。
-表达式和查询值数组须非空；旧 all/any/nested、`withinSubtreeOf`、旧根路径 `user.*`、独立组织的 `organization.*`、权限点路径和任意 JSON path 均无效。
+- **空值语义** 空字段上的原子条件为 false，not 再取反，所以“手机号不等于某值”会包含没有手机号的用户。
+  `not exists(...)` 与 `exists(... where not ...)` 不等价。不能直接查询 null、空集合或缺失字段，也不支持模糊搜索。
+  表达式和查询值数组须非空；旧 all/any/nested、`withinSubtreeOf`、旧根路径 `user.*`、独立组织的 `organization.*`、权限点路径和任意 JSON path 均无效。
 
 ## 处理结果
 
-过滤器限深度 8、节点 64、每个 and/or 的子条件 16、每个查询数组去重后 50 项、字符串 128 字符。
-非法字段、类型或超预算条件返回 422。服务在裁剪字段前校验本次返回范围内的完整文档。未选字段损坏、查询异常或超时均使整次请求返回 503。
+- **复杂度预算** 过滤器限深度 8、节点 64、每个 and/or 的子条件 16、每个查询数组去重后 50 项、字符串 128 字符。
+  非法字段、类型或超预算条件返回 422。服务在裁剪字段前校验本次返回范围内的完整文档。未选字段损坏、查询异常或超时均使整次请求返回 503。
 
 搜索读取当前版本已发布数据。尚未发布、缺失或版本不符的行可能缺席。
 遇到目录长期缺失或延迟时，按[数据维护](../releases/data-maintenance.md)核验和恢复文档。

@@ -10,12 +10,12 @@ status: accepted
 
 ## 开放引用与软删除历史
 
-- User Disable 时禁止新增任职或转岗。既有开放任职仍按原权限和生命周期维护，返聘建立新任职。
+- **停用账号的任职限制** User Disable 时禁止新增任职或转岗。既有开放任职仍按原权限和生命周期维护，返聘建立新任职。
   停用且无开放任职的用户须由完整管理员先恢复为 Pause，HR 再按当前组织范围办理新任职。
   [任职决定](0011-model-employment-as-an-immutable-tenure-lifecycle.md)
-- 未结束委托会阻止引用对象删除，暂停、未来和自然到期的委托仍按其生命周期判断。Client 有未删除 Role 时拒绝删除。
+- **委托与角色删除门禁** 未结束委托会阻止引用对象删除，暂停、未来和自然到期的委托仍按其生命周期判断。Client 有未删除 Role 时拒绝删除。
   [委托引用范围](0020-provide-fail-closed-privilege-delegation-resolution.md) · [删除应用](../features/application-integration.md#删除应用)
-- Ended 责任沿保留的关联读取当前名称与软删除状态。接受无法重建历史时刻名称的代价，省去独立名称快照。
+- **历史记录关联展示** Ended 责任沿保留的关联读取当前名称与软删除状态。接受无法重建历史时刻名称的代价，省去独立名称快照。
   开放责任仍执行完整性检查。[组织责任模型](0014-model-organization-responsibility-as-employment-bound-fact.md)
 
 沿用 [ADR-0025](0025-align-admin-mutation-results-with-committed-facts.md) 的同对象写入规则。跨对象门禁采用预检，

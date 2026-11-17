@@ -108,10 +108,10 @@ Admin PostgreSQL 写入在同一 UnitOfWork 内锁定、重验、比较变化、
 
 - 锁定现存目标和完整的选中级联集合。仅用于读取的父对象走普通预检，创建竞争由唯一约束裁决。组织与路径、闭包关系同事务创建，无需锁整棵父树。
 - 先锁 Employment、后锁 Assignment，各表按 ID 升序。直接责任命令只锁 Assignment。Set/Clear Primary 与 Transfer 首次取锁前合并全部目标任职，Transfer 随后锁齐选中责任。
-- 账号生命周期先锁 User，再锁精确 transition intent。离职随后锁定选中的 Employment 和 Assignment，锁齐后重验 HR 资格，原子提交事实、审计与 Outbox。
+- **加锁范围与顺序** 账号生命周期先锁 User，再锁精确 transition intent。离职随后锁定选中的 Employment 和 Assignment，锁齐后重验 HR 资格，原子提交事实、审计与 Outbox。
 - 锁后写入零行属于不变量失败。同态命令与已结束的级联对象保留历史时间，新插入或未选中记录在本次集合之外。
-- 资料编辑只提交变动字段，关联状态以锁后事实为准。同值资料不写审计或 Outbox，合法的显式状态、安全和授权意图保留 no-op 审计。
-- 数据库基础层统一提取 SQLSTATE 和 constraint，包括包装错误的 cause。已知唯一冲突按领域映射，未知错误原样上报。事务失败后不得继续查询推断冲突、自动重试或扩大锁范围。
+- **幂等与变更判定** 资料编辑只提交变动字段，关联状态以锁后事实为准。同值资料不写审计或 Outbox，合法的显式状态、安全和授权意图保留 no-op 审计。
+- **冲突映射** 数据库基础层统一提取 SQLSTATE 和 constraint，包括包装错误的 cause。已知唯一冲突按领域映射，未知错误原样上报。事务失败后不得继续查询推断冲突、自动重试或扩大锁范围。
 
 行锁只覆盖已选中的行。父引用、空槽、Primary 唯一性和请求时 HR 范围仍由领域校验及适用的数据库约束负责。
 [ADR-0025](../adr/0025-align-admin-mutation-results-with-committed-facts.md)

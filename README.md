@@ -4,9 +4,14 @@ IAM 提供统一登录、应用接入、组织与任职管理、角色授权和�
 
 ## 仓库结构
 
-- `apps/api` 提供公共、开放、内部、单点登录和认证 API，并承载 OIDC。`apps/admin-api` 提供管理端 REST 和 tRPC。
-- `apps/worker` 运行队列消费和周期维护，`apps/ops` 提供人工维护与核验命令，`apps/gateway` 提供 APISIX 配置校验与发布 API。
-- `apps/admin` 和 `apps/sso` 分别是管理后台与 SSO 门户。`packages/` 存放共享能力，`e2e/system/` 存放整套系统的端到端测试。
+- `apps/api` 提供公共、开放、内部、单点登录和认证 API，并承载 OIDC。
+- `apps/admin-api` 提供管理端 REST 和 tRPC。
+- `apps/worker` 运行队列消费和周期维护。
+- `apps/ops` 提供人工维护与核验命令。
+- `apps/gateway` 提供 APISIX 配置校验与发布 API。
+- `apps/admin` 和 `apps/sso` 分别是管理后台与 SSO 门户。
+- `packages/` 存放共享能力。
+- `e2e/system/` 存放整套系统的端到端测试。
 
 模块职责、源码入口和共享包清单见[仓库地图](docs/engineering/repository-map.md)。运行时关系和请求路径见[系统架构](docs/engineering/system-architecture.md)。
 
@@ -46,7 +51,7 @@ API 与 SSO 的登录密钥需要配对，OIDC 的内外网 origin 与访问入�
 pnpm --filter @iam/db db:migrate
 ```
 
-### 4. 启动需要的应用
+### 4. 启动应用
 
 在各自的终端执行对应命令。
 
