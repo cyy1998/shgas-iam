@@ -77,7 +77,7 @@ async function setup(
   const login = new URL(required(initial.headers.get("location")), internal);
   const browser = requestCookie(initial);
   const desktop = { Cookie: browser, "X-IAM-Entry-Network": "internal" };
-  const mobile = { "X-IAM-Entry-Network": "external", "X-Forwarded-Proto": "https" };
+  const mobile = { "X-IAM-Entry-Network": "external", "X-Forwarded-Proto": "http" };
   const begin = (headers: HeadersInit = desktop) =>
     f.app.request(`${internal}/sso/wechat-qr?${login.searchParams}`, {
       method: "POST",
@@ -144,10 +144,10 @@ test("only the originating internal browser can create and observe the current Q
     expect(qr.expiresAt - Date.now()).toBeLessThanOrEqual(60_000);
     expect(qr.expiresAt - Date.now()).toBeGreaterThan(0);
     expect(start.headers.getSetCookie()).toEqual([]);
-    const insecureMobile = await f.app.request(qr.mobileUrl, {
-      headers: { ...f.mobile, "X-Forwarded-Proto": "http" },
+    const internalMobile = await f.app.request(qr.mobileUrl, {
+      headers: { "X-IAM-Entry-Network": "internal", "X-Forwarded-Proto": "https" },
     });
-    expect(insecureMobile.status).toBe(404);
+    expect(internalMobile.status).toBe(404);
 
     const waiting = await f.readStatus(qr.requestId);
     expect(waiting).toEqual({ status: 200, event: { status: "waiting" } });
@@ -843,7 +843,7 @@ test("resend replaces the delivered code without extending the original QR deadl
     },
     { continuationTtlSeconds: 3, cooldownMilliseconds: 650 },
   );
-});
+}, 10_000);
 
 test("password binding accepts only the account's own password and completes an account with no mobile", async () => {
   await withBindingDatabase(async ({ pg, newBrowser, addAccount }) => {

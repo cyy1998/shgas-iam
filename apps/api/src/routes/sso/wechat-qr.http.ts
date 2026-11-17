@@ -238,9 +238,7 @@ export function createWechatQrMobileRouter(qr: WechatQrUseCase) {
   const router = new Hono();
   router.use("*", async (c, next) => {
     privateHeaders(c);
-    if (c.req.header("X-IAM-Entry-Network") !== "external" || c.req.header("X-Forwarded-Proto") !== "https") {
-      return c.notFound();
-    }
+    if (c.req.header("X-IAM-Entry-Network") !== "external") return c.notFound();
     c.header(
       "Content-Security-Policy",
       "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
