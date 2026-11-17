@@ -1,4 +1,4 @@
-FROM docker.xuanyuan.run/node:24.18.0-alpine AS base
+FROM docker.xuanyuan.run/node:24.22.3-alpine AS base
 
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
@@ -7,7 +7,7 @@ ENV COREPACK_NPM_REGISTRY="https://registry.npmmirror.com"
 ENV NPM_CONFIG_REGISTRY="https://registry.npmmirror.com"
 ENV npm_config_registry="https://registry.npmmirror.com"
 
-RUN corepack enable && corepack prepare pnpm@12.5.1 --activate
+RUN corepack enable && corepack prepare pnpm@12.21.0 --activate
 
 FROM base AS deps
 WORKDIR /workspace
@@ -48,7 +48,7 @@ COPY packages/filter-engine ./packages/filter-engine
 RUN --mount=type=cache,id=iam-e2e-pnpm-v12,target=/pnpm/store \
     pnpm --config.inject-workspace-packages=true --filter @iam/e2e-system deploy --prod /deploy/e2e-system
 
-FROM docker.xuanyuan.run/oven/bun:1.4.2-alpine AS runner
+FROM docker.xuanyuan.run/oven/bun:1.4.4-alpine AS runner
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=builder /deploy/e2e-system ./

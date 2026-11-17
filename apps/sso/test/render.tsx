@@ -9,20 +9,21 @@ import { BrowserRouter } from "react-router";
 
 type SsoRenderOptions = RenderOptions & { withSso?: boolean };
 
-export function render(ui: ReactElement, { withSso = false, ...options }: SsoRenderOptions = {}) {
-  function Providers({ children }: { children: ReactNode }) {
-    return (
-      <ConfigProvider locale={zhCN}>
-        <BrowserRouter basename={portalBase}>
-          {withSso ? <SsoProvider>{children}</SsoProvider> : children}
-        </BrowserRouter>
-      </ConfigProvider>
-    );
-  }
+function Providers({ children, withSso }: { children: ReactNode; withSso: boolean }) {
+  return (
+    <ConfigProvider locale={zhCN}>
+      <BrowserRouter basename={portalBase}>{withSso ? <SsoProvider>{children}</SsoProvider> : children}</BrowserRouter>
+    </ConfigProvider>
+  );
+}
 
+export function render(ui: ReactElement, { withSso = false, ...options }: SsoRenderOptions = {}) {
   return {
     user: userEvent.setup(),
-    ...testingLibraryRender(ui, { wrapper: Providers, ...options }),
+    ...testingLibraryRender(ui, {
+      wrapper: ({ children }) => <Providers withSso={withSso}>{children}</Providers>,
+      ...options,
+    }),
   };
 }
 

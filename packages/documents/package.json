@@ -32,7 +32,7 @@
     "test:integration:bun": "node ../../scripts/run-package-integration.mjs bun -- bun test test-integration"
   },
   "dependencies": {
-    "@hono/zod-openapi": "^1.5.1",
+    "@hono/zod-openapi": "^1.6.3",
     "@iam/assignment-resolution": "workspace:*",
     "@iam/client-subject-projection": "workspace:*",
     "@iam/contracts": "workspace:*",
@@ -42,9 +42,9 @@
     "@iam/jobs": "workspace:*",
     "@iam/runtime": "workspace:*",
     "@iam/subject-access": "workspace:*",
-    "bullmq": "^6.3.8",
+    "bullmq": "^6.7.7",
     "drizzle-orm": "1.0.0-rc.2",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@iam/test-support": "workspace:*",

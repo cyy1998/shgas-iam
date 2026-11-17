@@ -12,7 +12,7 @@
   "devEngines": {
     "runtime": {
       "name": "bun",
-      "version": "1.4.2"
+      "version": "1.4.4"
     }
   },
   "scripts": {
@@ -28,7 +28,7 @@
     "test:integration:bun": "node ../../scripts/run-package-integration.mjs bun -- bun test test-integration"
   },
   "dependencies": {
-    "@hono/zod-openapi": "^1.5.1",
+    "@hono/zod-openapi": "^1.6.3",
     "@iam/api-core": "workspace:*",
     "@iam/assignment-resolution": "workspace:*",
     "@iam/client-snapshot": "workspace:*",
@@ -44,15 +44,15 @@
     "@iam/session-kernel": "workspace:*",
     "@iam/subject-access": "workspace:*",
     "@iam/unit-of-work": "workspace:*",
-    "@scalar/hono-api-reference": "^0.11.11",
-    "@trpc/server": "^11.18.0",
+    "@scalar/hono-api-reference": "^0.11.16",
+    "@trpc/server": "^11.28.3",
     "drizzle-orm": "1.0.0-rc.2",
-    "hono": "^4.12.30",
+    "hono": "^4.13.19",
     "hono-pino": "^0.10.3",
     "ioredis": "^6.0.0",
-    "pino": "^10.3.1",
+    "pino": "^10.4.0",
     "postgres": "^3.4.9",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@iam/test-support": "workspace:*",

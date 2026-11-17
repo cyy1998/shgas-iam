@@ -1,4 +1,4 @@
-FROM docker.xuanyuan.run/node:24.18.0-alpine
+FROM docker.xuanyuan.run/node:24.22.3-alpine
 
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
@@ -8,7 +8,7 @@ ENV NPM_CONFIG_REGISTRY="https://registry.npmmirror.com"
 ENV npm_config_registry="https://registry.npmmirror.com"
 ENV HUSKY=0
 
-RUN corepack enable && corepack prepare pnpm@12.5.1 --activate
+RUN corepack enable && corepack prepare pnpm@12.21.0 --activate
 
 WORKDIR /workspace
 COPY .npmrc pnpm-workspace.yaml package.json pnpm-lock.yaml ./

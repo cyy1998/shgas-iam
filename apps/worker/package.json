@@ -10,7 +10,7 @@
   "devEngines": {
     "runtime": {
       "name": "bun",
-      "version": "1.4.2"
+      "version": "1.4.4"
     }
   },
   "scripts": {
@@ -34,8 +34,8 @@
     }
   },
   "dependencies": {
-    "@bull-board/api": "^9.10.1",
-    "@bull-board/hono": "^9.10.1",
+    "@bull-board/api": "^9.13.2",
+    "@bull-board/hono": "^9.13.2",
     "@iam/assignment-resolution": "workspace:*",
     "@iam/contracts": "workspace:*",
     "@iam/db": "workspace:*",
@@ -46,10 +46,10 @@
     "@iam/subject-access": "workspace:*",
     "@iam/unit-of-work": "workspace:*",
     "drizzle-orm": "1.0.0-rc.2",
-    "hono": "^4.12.30",
+    "hono": "^4.13.19",
     "ioredis": "^6.0.0",
-    "pino": "^10.3.1",
-    "zod": "^4.4.3"
+    "pino": "^10.4.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@iam/session-kernel": "workspace:*",

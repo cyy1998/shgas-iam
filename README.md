@@ -17,7 +17,7 @@ IAM 提供统一登录、应用接入、组织与任职管理、角色授权和�
 
 ## 快速开始
 
-从仓库根目录执行。使用 Node.js 24、Bun 1.4.2、根 [package.json](package.json) 指定版本的 pnpm，以及 Docker Compose。
+从仓库根目录执行。使用 Node.js 24、Bun 1.4.4、根 [package.json](package.json) 指定版本的 pnpm，以及 Docker Compose。
 
 ### 1. 安装依赖并启动 PostgreSQL 和 Redis
 

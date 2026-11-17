@@ -51,7 +51,7 @@ test("User filters query the server and clearing them restores the unfiltered fi
     return fulfillTrpc(route, { ...adminUserSearchResult, total: 45 });
   });
   await page.goto("/iam-admin/users");
-  await page.locator(".ant-pagination-next").click();
+  await page.getByRole("button", { name: "下一页", exact: true }).click();
   await expect.poll(() => searches.at(-1)?.pageNum).toBe(2);
   await page.getByRole("searchbox", { name: "搜索用户" }).fill("  张三  ");
   await page.getByRole("searchbox", { name: "搜索用户" }).press("Enter");
@@ -316,6 +316,7 @@ test("User operation logs load when selected and preserve the profile draft on r
 });
 
 test("an ended-only disabled User can be rehired only after a refreshed Pause response", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-17T16:30:00Z"));
   await mockScopedManagementApi(page);
   let status = UserStatus.Disable;
   const mutations: unknown[] = [];
@@ -359,7 +360,7 @@ test("an ended-only disabled User can be rehired only after a refreshed Pause re
       posCode: "FIN-001",
       isPrimary: false,
       description: null,
-      startTime: null,
+      startTime: "2026-11-18",
       endTime: null,
     },
   ]);

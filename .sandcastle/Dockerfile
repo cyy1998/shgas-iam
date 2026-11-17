@@ -1,15 +1,15 @@
-FROM docker.xuanyuan.run/library/node:24.18.0-bookworm
+FROM docker.xuanyuan.run/library/node:24.22.3-bookworm
 
 ARG CODEX_VERSION=0.154.0
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl git gh ripgrep unzip postgresql-client redis-tools \
     && rm -rf /var/lib/apt/lists/*
-RUN npm install -g pnpm@12.5.1 @openai/codex@${CODEX_VERSION}
-RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.2" \
+RUN npm install -g pnpm@12.21.0 @openai/codex@${CODEX_VERSION}
+RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.4" \
     && install -m 0755 /root/.bun/bin/bun /usr/local/bin/bun
 
 # Keep this version aligned with pnpm-lock.yaml; smoke launches the workspace version.
-ARG PLAYWRIGHT_VERSION=1.61.1
+ARG PLAYWRIGHT_VERSION=1.65.1
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
 RUN npx --yes playwright@${PLAYWRIGHT_VERSION} install --with-deps chromium \
     && chmod -R a+rX /opt/ms-playwright \

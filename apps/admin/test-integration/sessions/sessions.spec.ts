@@ -301,7 +301,7 @@ test("application sessions are loaded on demand per root, paginate, and clear st
   await entry.first().click();
   await expect(page.getByText("ps-current-app-1", { exact: true })).toBeVisible();
   const nested = page.locator(".ant-table-expanded-row");
-  await nested.locator(".ant-pagination-next").click();
+  await nested.getByRole("button", { name: "下一页", exact: true }).click();
   await expect(page.getByText("ps-current-app-2", { exact: true })).toBeVisible();
   await expect
     .poll(() => queries.at(-1))
@@ -655,7 +655,7 @@ test("session records support navigation, exact user filtering, pagination, and 
   await expect(page.getByText("手机 / iOS / 微信")).toBeVisible();
   await expect(page.getByText("当前会话")).toBeVisible();
 
-  await page.locator(".ant-pagination-next").click();
+  await page.getByRole("button", { name: "下一页", exact: true }).click();
   await expect(page.getByText("未知").first()).toBeVisible();
   await expect.poll(() => inputs.at(-1)?.pageNum).toBe(2);
 

@@ -33,27 +33,30 @@ type AdminRenderOptions = RenderOptions & {
   path?: string;
 };
 
+function Providers({ children, router }: { children: ReactNode; router: ReturnType<typeof createMemoryRouter> }) {
+  return (
+    <ConfigProvider locale={zhCN}>
+      <AdminAccessContext.Provider value={testAccess}>
+        <RenderContentContext.Provider value={children}>
+          <RouterProvider router={router} />
+        </RenderContentContext.Provider>
+      </AdminAccessContext.Provider>
+    </ConfigProvider>
+  );
+}
+
 export function render(ui: ReactElement, { initialEntry = "/", path = "*", ...options }: AdminRenderOptions = {}) {
   const routes: RouteObject[] = [{ path, Component: RenderContent }];
   if (path !== "*") routes.push({ path: "*", element: null });
   const router = createMemoryRouter(routes, { initialEntries: [initialEntry] });
 
-  function Providers({ children }: { children: ReactNode }) {
-    return (
-      <ConfigProvider locale={zhCN}>
-        <AdminAccessContext.Provider value={testAccess}>
-          <RenderContentContext.Provider value={children}>
-            <RouterProvider router={router} />
-          </RenderContentContext.Provider>
-        </AdminAccessContext.Provider>
-      </ConfigProvider>
-    );
-  }
-
   return {
     user: userEvent.setup(),
     router,
-    ...testingLibraryRender(ui, { ...options, wrapper: Providers }),
+    ...testingLibraryRender(ui, {
+      ...options,
+      wrapper: ({ children }) => <Providers router={router}>{children}</Providers>,
+    }),
   };
 }
 

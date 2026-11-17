@@ -1,6 +1,6 @@
 # Build context: monorepo root.
-ARG NODE_IMAGE=docker.xuanyuan.run/node:24.18.0-alpine
-ARG BUN_IMAGE=docker.xuanyuan.run/oven/bun:1.4.2-alpine
+ARG NODE_IMAGE=docker.xuanyuan.run/node:24.22.3-alpine
+ARG BUN_IMAGE=docker.xuanyuan.run/oven/bun:1.4.4-alpine
 FROM ${NODE_IMAGE} AS workspace
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
@@ -15,7 +15,7 @@ ARG NO_PROXY
 ARG http_proxy
 ARG https_proxy
 ARG no_proxy
-RUN corepack enable && corepack prepare pnpm@12.5.1 --activate
+RUN corepack enable && corepack prepare pnpm@12.21.0 --activate
 WORKDIR /workspace
 COPY .npmrc pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY patches/ ./patches/

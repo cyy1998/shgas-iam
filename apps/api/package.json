@@ -10,7 +10,7 @@
   "devEngines": {
     "runtime": {
       "name": "bun",
-      "version": "1.4.2"
+      "version": "1.4.4"
     }
   },
   "scripts": {
@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "@cap.js/server": "^4.0.5",
-    "@hono/zod-openapi": "^1.5.1",
+    "@hono/zod-openapi": "^1.6.3",
     "@iam/api-core": "workspace:*",
     "@iam/assignment-resolution": "workspace:*",
     "@iam/client-snapshot": "workspace:*",
@@ -50,30 +50,30 @@
     "@iam/session-kernel": "workspace:*",
     "@iam/subject-access": "workspace:*",
     "@iam/unit-of-work": "workspace:*",
-    "@scalar/hono-api-reference": "^0.11.11",
-    "@trpc/server": "^11.18.0",
+    "@scalar/hono-api-reference": "^0.11.16",
+    "@trpc/server": "^11.28.3",
     "bcrypt": "^6.0.0",
     "drizzle-orm": "1.0.0-rc.2",
-    "hono": "^4.12.30",
+    "hono": "^4.13.19",
     "hono-pino": "^0.10.3",
     "ioredis": "^6.0.0",
     "p-limit": "^7.3.3",
-    "pino": "^10.3.1",
+    "pino": "^10.4.0",
     "pngjs": "7.0.0",
     "postgres": "^3.4.9",
-    "sm-crypto": "^0.4.0",
+    "sm-crypto": "^0.5.9",
     "ts-enum-util": "^4.1.0",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@iam/test-support": "workspace:*",
-    "@playwright/test": "^1.61.1",
+    "@playwright/test": "^1.65.1",
     "@types/bun": "latest",
     "@types/pngjs": "6.0.5",
     "@types/sm-crypto": "^0.3.4",
     "@typescript/native": "npm:typescript@7.0.2",
     "drizzle-kit": "1.0.0-rc.2",
-    "openid-client": "6.8.8",
+    "openid-client": "6.9.0",
     "tsx": "4.23.15",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },

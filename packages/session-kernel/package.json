@@ -19,7 +19,7 @@
     "test:unit": "bun test --max-concurrency=2 src"
   },
   "dependencies": {
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/bun": "latest",

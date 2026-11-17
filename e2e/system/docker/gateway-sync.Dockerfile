@@ -1,4 +1,4 @@
-ARG BUN_IMAGE=docker.xuanyuan.run/oven/bun:1.4.2-alpine
+ARG BUN_IMAGE=docker.xuanyuan.run/oven/bun:1.4.4-alpine
 FROM ${BUN_IMAGE}
 WORKDIR /workspace
 COPY e2e/system/test-assets/iam.yaml ./e2e/system/test-assets/iam.yaml

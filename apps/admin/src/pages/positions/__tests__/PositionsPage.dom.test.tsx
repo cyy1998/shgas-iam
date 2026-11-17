@@ -62,23 +62,27 @@ afterEach(async () => {
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 });
 
+function Form({
+  editing,
+  onSuccess,
+}: Pick<ComponentProps<typeof PositionFormModal>, "onSuccess"> & { editing: boolean }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <PositionFormModal
+      open={open}
+      initialValues={editing ? { ...adminPositionSearchResult.result[0], isDelete: false, statusText: "正常" } : null}
+      onOpenChange={setOpen}
+      onSuccess={onSuccess}
+    />
+  );
+}
+
 function renderForm(editing = false) {
   const onSuccess = vi.fn();
-  function Form() {
-    const [open, setOpen] = useState(true);
-    return (
-      <PositionFormModal
-        open={open}
-        initialValues={editing ? { ...adminPositionSearchResult.result[0], isDelete: false, statusText: "正常" } : null}
-        onOpenChange={setOpen}
-        onSuccess={onSuccess}
-      />
-    );
-  }
   return {
     ...render(
       <ConfigProvider theme={{ token: { motion: false } }}>
-        <Form />
+        <Form editing={editing} onSuccess={onSuccess} />
       </ConfigProvider>,
     ),
     onSuccess,

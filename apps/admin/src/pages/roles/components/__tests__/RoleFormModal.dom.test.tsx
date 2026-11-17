@@ -26,21 +26,22 @@ beforeEach(() => {
   createRole.mockReset().mockResolvedValue({ changed: true, result: { roleCode: "tender:admin" } });
 });
 
+function Harness({ onSuccess, onCommitted }: Pick<ComponentProps<typeof RoleFormModal>, "onSuccess" | "onCommitted">) {
+  const [open, setOpen] = useState(true);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)}>
+        重新创建
+      </button>
+      <RoleFormModal open={open} onOpenChange={setOpen} onSuccess={onSuccess} onCommitted={onCommitted} />
+    </>
+  );
+}
+
 async function setup() {
   const onSuccess = vi.fn();
   const onCommitted = vi.fn();
-  function Harness() {
-    const [open, setOpen] = useState(true);
-    return (
-      <>
-        <button type="button" onClick={() => setOpen(true)}>
-          重新创建
-        </button>
-        <RoleFormModal open={open} onOpenChange={setOpen} onSuccess={onSuccess} onCommitted={onCommitted} />
-      </>
-    );
-  }
-  const view = render(<Harness />);
+  const view = render(<Harness onSuccess={onSuccess} onCommitted={onCommitted} />);
   const dialog = within(await screen.findByRole("dialog"));
   const selectClient = async (name: string) => {
     await view.user.click(dialog.getByRole("combobox", { name: "所属应用" }));

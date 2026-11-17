@@ -34,12 +34,12 @@
     "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check"
   },
   "dependencies": {
-    "@hono/zod-openapi": "^1.5.1",
+    "@hono/zod-openapi": "^1.6.3",
     "@iam/contracts": "workspace:*",
     "@iam/db": "workspace:*",
     "drizzle-orm": "1.0.0-rc.2",
-    "tldts": "^7.4.13",
-    "zod": "^4.4.3"
+    "tldts": "^7.5.4",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/bun": "latest",

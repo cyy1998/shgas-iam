@@ -53,7 +53,10 @@ routes:
         regex_uri: ["^/api/iam/(.*)", "/$1"]
   - key: sso-internal
     uri: /sso/*
-    vars: [[http_host, "==", "${IAM_SSO_INTERNAL_HOST}"]]
+    # The mobile QR path is served only by the dedicated TLS route.
+    vars:
+      - [http_host, "==", "${IAM_SSO_INTERNAL_HOST}"]
+      - [uri, "!", "~~", "^/sso/wechat-qr/mobile(/|$)"]
     upstream: api
     plugin_config: api
     plugins:
@@ -64,7 +67,9 @@ routes:
             X-Forwarded-Proto: $scheme
   - key: sso-external
     uri: /sso/*
-    vars: [[http_host, "==", "${IAM_SSO_EXTERNAL_HOST}"]]
+    vars:
+      - [http_host, "==", "${IAM_SSO_EXTERNAL_HOST}"]
+      - [uri, "!", "~~", "^/sso/wechat-qr/mobile(/|$)"]
     upstream: api
     plugin_config: api
     plugins:

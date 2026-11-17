@@ -3,7 +3,7 @@ import type { ClientDetailVo } from "@admin/services/client";
 import { ApiErrorCode, ClientStatus } from "@iam/contracts";
 import { ConfigProvider, Modal, message } from "antd";
 import { HttpResponse, http } from "msw";
-import { useState } from "react";
+import { type ComponentProps, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { adminClientDetail } from "~admin/test/mocks/fixtures";
 import { server } from "~admin/test/mocks/server";
@@ -28,6 +28,29 @@ const client: ClientDetailVo = {
 };
 type Command = "update" | "updateStatus" | "delete";
 let requests: Record<Command, unknown[]>;
+
+function SettingsHarness({
+  refreshedClient,
+  onMutated,
+  onCommitted,
+  ...callbacks
+}: Omit<ComponentProps<typeof BasicSettings>, "client"> & { refreshedClient: ClientDetailVo }) {
+  const [current, setCurrent] = useState(client);
+  return (
+    <BasicSettings
+      {...callbacks}
+      client={current}
+      onMutated={async () => {
+        await onMutated();
+        setCurrent(refreshedClient);
+      }}
+      onCommitted={async () => {
+        await onCommitted();
+        setCurrent(refreshedClient);
+      }}
+    />
+  );
+}
 
 function mutationResponse(command: Command, changed = true) {
   server.use(
@@ -80,28 +103,16 @@ describe("BasicSettings through the client service", () => {
     const onMutated = vi.fn(async () => {});
     const onCommitted = vi.fn(async () => {});
     const onDeleted = vi.fn();
-    function Parent() {
-      const [current, setCurrent] = useState(client);
-      return (
-        <BasicSettings
-          client={current}
-          onDirtyChange={onDirtyChange}
-          onMutated={async () => {
-            await onMutated();
-            setCurrent(refreshedClient);
-          }}
-          onDeleted={onDeleted}
-          onCommitted={async () => {
-            await onCommitted();
-            setCurrent(refreshedClient);
-          }}
-        />
-      );
-    }
     return {
       ...render(
         <ConfigProvider theme={{ token: { motion: false } }}>
-          <Parent />
+          <SettingsHarness
+            refreshedClient={refreshedClient}
+            onDirtyChange={onDirtyChange}
+            onMutated={onMutated}
+            onCommitted={onCommitted}
+            onDeleted={onDeleted}
+          />
         </ConfigProvider>,
       ),
       onMutated,

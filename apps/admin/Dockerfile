@@ -1,6 +1,6 @@
 # Build context: monorepo root
 
-FROM docker.xuanyuan.run/node:24.18.0-alpine AS base
+FROM docker.xuanyuan.run/node:24.22.3-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 ARG HTTP_PROXY
@@ -14,7 +14,7 @@ ENV NODE_USE_ENV_PROXY=1
 ENV COREPACK_NPM_REGISTRY="https://registry.npmmirror.com"
 ENV NPM_CONFIG_REGISTRY="https://registry.npmmirror.com"
 ENV npm_config_registry="https://registry.npmmirror.com"
-RUN corepack enable && corepack prepare pnpm@12.5.1 --activate
+RUN corepack enable && corepack prepare pnpm@12.21.0 --activate
 
 FROM base AS deps
 WORKDIR /app

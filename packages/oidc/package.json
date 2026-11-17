@@ -23,7 +23,7 @@
     "@iam/contracts": "workspace:*",
     "@iam/session-kernel": "workspace:*",
     "@iam/subject-access": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@iam/test-support": "workspace:*",

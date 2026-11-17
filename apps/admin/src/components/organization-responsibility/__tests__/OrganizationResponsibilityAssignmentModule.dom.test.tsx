@@ -122,6 +122,14 @@ const assignment = {
   allowedActions: enabledAllowedActions,
 } satisfies OrganizationResponsibilityAssignmentView;
 
+function HistoryHarness() {
+  const [state, setState] = useState<OrganizationResponsibilityAssignmentState>({
+    lifecycle: "ended",
+    assignmentId: null,
+  });
+  return <OrganizationResponsibilityAssignmentModule host={{ kind: "global", state, onStateChange: setState }} />;
+}
+
 describe("OrganizationResponsibilityAssignmentModule", () => {
   beforeEach(() => {
     ConfigProvider.config({
@@ -664,13 +672,6 @@ describe("OrganizationResponsibilityAssignmentModule", () => {
         nextCursor: null,
       });
       responsibilityService.detailAssignment.mockResolvedValue(history);
-      function HistoryHarness() {
-        const [state, setState] = useState<OrganizationResponsibilityAssignmentState>({
-          lifecycle: "ended",
-          assignmentId: null,
-        });
-        return <OrganizationResponsibilityAssignmentModule host={{ kind: "global", state, onStateChange: setState }} />;
-      }
       const { user } = render(<HistoryHarness />);
       const detailButton = await screen.findByRole("button", { name: "详情" });
       const row = detailButton.closest("tr");

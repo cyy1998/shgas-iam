@@ -145,17 +145,18 @@ function mutationFailure(procedure: string, messageText: string) {
   );
   return requests;
 }
+function Form({ onSuccess, onCommitted }: Pick<ComponentProps<typeof UserFormModal>, "onSuccess" | "onCommitted">) {
+  const [open, setOpen] = useState(true);
+  return <UserFormModal open={open} onOpenChange={setOpen} onSuccess={onSuccess} onCommitted={onCommitted} />;
+}
+
 function renderForm() {
   const onSuccess = vi.fn();
   const onCommitted = vi.fn();
-  function Form() {
-    const [open, setOpen] = useState(true);
-    return <UserFormModal open={open} onOpenChange={setOpen} onSuccess={onSuccess} onCommitted={onCommitted} />;
-  }
   return {
     ...render(
       <ConfigProvider theme={{ token: { motion: false } }}>
-        <Form />
+        <Form onSuccess={onSuccess} onCommitted={onCommitted} />
       </ConfigProvider>,
     ),
     onSuccess,

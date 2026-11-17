@@ -39,7 +39,7 @@ describe("Audit target filters", () => {
   it("applies multiple actions and resets pagination when a common filter changes", async () => {
     const { user } = render(<AuditLogTable />);
     await waitFor(() => expect(searchAuditLogs).toHaveBeenCalled());
-    await user.click(screen.getByTitle("2"));
+    await user.click(screen.getByRole("button", { name: "页 2" }));
     await waitFor(() => expect(searchAuditLogs).toHaveBeenLastCalledWith(expect.objectContaining({ pageNum: 2 })));
     await user.click(screen.getByRole("combobox", { name: "动作" }));
     await user.click(await screen.findByTitle(auditActionOptions[0].label));

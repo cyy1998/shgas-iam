@@ -285,7 +285,7 @@ describe("OrganizationResponsibilityAssignmentsPanel", () => {
 
     const { user } = render(<OrganizationResponsibilityAssignmentsPanel orgCode="FIN" />);
     await screen.findByRole("button", { name: "详情" });
-    await user.click(screen.getByTitle("2"));
+    await user.click(screen.getByRole("button", { name: "页 2" }));
 
     expect(await screen.findAllByRole("button", { name: "详情" })).toHaveLength(1);
     expect(responsibilityService.listAssignments).toHaveBeenNthCalledWith(2, {
@@ -295,7 +295,7 @@ describe("OrganizationResponsibilityAssignmentsPanel", () => {
       pageSize: 20,
     });
     await screen.findByText("分管领导（supervising）");
-    await user.click(screen.getByTitle("1"));
+    await user.click(screen.getByRole("button", { name: "页 1" }));
     await waitFor(() =>
       expect(responsibilityService.listAssignments).toHaveBeenLastCalledWith({
         targetOrganizationCode: "FIN",
@@ -332,7 +332,7 @@ describe("OrganizationResponsibilityAssignmentsPanel", () => {
     });
     const { user } = render(<OrganizationResponsibilityAssignmentsPanel orgCode="FIN" />);
     await screen.findByRole("button", { name: "详情" });
-    await user.click(screen.getByTitle("2"));
+    await user.click(screen.getByRole("button", { name: "页 2" }));
     await waitFor(() => expect(responsibilityService.listAssignments).toHaveBeenCalledTimes(2));
     await user.click(screen.getByRole("button", { name: "详情" }));
     const dialog = await screen.findByRole("dialog");
@@ -361,7 +361,7 @@ describe("OrganizationResponsibilityAssignmentsPanel", () => {
     });
     const { user } = render(<OrganizationResponsibilityAssignmentsPanel orgCode="FIN" />);
     await screen.findByRole("button", { name: "详情" });
-    await user.click(screen.getByTitle("2"));
+    await user.click(screen.getByRole("button", { name: "页 2" }));
     await waitFor(() =>
       expect(responsibilityService.listAssignments).toHaveBeenLastCalledWith({
         targetOrganizationCode: "FIN",
@@ -390,7 +390,7 @@ describe("OrganizationResponsibilityAssignmentsPanel", () => {
         pageSize: 20,
       }),
     );
-    await user.click(screen.getByTitle("2"));
+    await user.click(screen.getByRole("button", { name: "页 2" }));
     await waitFor(() =>
       expect(responsibilityService.listAssignments).toHaveBeenLastCalledWith({
         targetOrganizationCode: "FIN",
