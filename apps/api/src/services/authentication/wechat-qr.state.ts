@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { WechatQrIdSchema } from "@iam/contracts";
 import { z } from "zod";
+import { type WechatQrIdentity, wechatExternalIdentitySchema } from "./wechat-qr-identity.type";
 
 export interface WechatQrBrowser {
   protocol: "custom_sso" | "oidc";
@@ -11,23 +12,47 @@ export interface WechatQrBrowser {
 const memberSchema = z.object({ userId: z.number().int().positive(), subjectIdentifier: z.uuid() });
 export type RegisteredWechatQrMember = z.infer<typeof memberSchema>;
 
+// Keep the member wire format readable during rollout. An older instance cannot decode an external identity as wxId.
+const storedIdentitySchema = z.union([
+  z.object({ wxId: z.string().min(1), externalIdentity: z.never().optional() }),
+  z.object({ externalIdentity: wechatExternalIdentitySchema, wxId: z.never().optional() }),
+]);
+
+type StoredWechatQrIdentity = z.infer<typeof storedIdentitySchema>;
+
+function encodeIdentity(identity: WechatQrIdentity): StoredWechatQrIdentity {
+  if (identity.kind === "member") return { wxId: identity.wxId };
+  return { externalIdentity: { corpId: identity.corpId, openId: identity.openId } };
+}
+
+function decodeIdentity(identity: StoredWechatQrIdentity): WechatQrIdentity {
+  if (identity.externalIdentity) return { kind: "external", ...identity.externalIdentity };
+  return { kind: "member", wxId: identity.wxId };
+}
+
 const requestSchema = z.intersection(
   z.object({ browser: z.string(), expiresAt: z.number().int(), applicationName: z.string(), device: z.string() }),
-  z.discriminatedUnion("status", [
+  z.union([
     z.object({ status: z.literal("waiting") }),
     z.object({ status: z.literal("confirmed"), member: memberSchema }),
-    z.object({
-      status: z.literal("binding_required"),
-      wxId: z.string().min(1),
-      bindingOwner: z.object({ token: z.string(), member: memberSchema }).optional(),
-    }),
+    z
+      .object({
+        status: z.literal("binding_required"),
+        bindingOwner: z.object({ token: z.string(), member: memberSchema }).optional(),
+      })
+      .and(storedIdentitySchema)
+      .transform(({ status, bindingOwner, ...storedIdentity }) => ({
+        status,
+        bindingOwner,
+        identity: decodeIdentity(storedIdentity),
+      })),
     z.object({ status: z.literal("consumed") }),
     z.object({ status: z.literal("restart") }),
   ]),
 );
 
 const mobileSchema = z.object({ requestId: WechatQrIdSchema, browser: z.string() });
-const confirmationSchema = mobileSchema.extend({ wxId: z.string().min(1) });
+const confirmationSchema = mobileSchema.and(storedIdentitySchema);
 const newHandle = () => randomBytes(24).toString("hex");
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 const browserKey = (browser: WechatQrBrowser) =>
@@ -57,7 +82,7 @@ if request.expiresAt <= now or tonumber(ARGV[4]) <= now then return nil end
 export interface AuthorizedWechatQrBinding {
   browser: WechatQrBrowser;
   requestId: string;
-  wxId: string;
+  identity: WechatQrIdentity;
   expiresAt: number;
 }
 
@@ -120,6 +145,7 @@ export function createWechatQrState(redis: WechatQrRedis, namespace: string) {
            request.status = ARGV[6]
            if ARGV[6] == 'confirmed' then request.member = request.bindingOwner.member end
            request.wxId = nil
+           request.externalIdentity = nil
          end
          request.bindingOwner = nil
          return redis.call('SET', KEYS[1], cjson.encode(request), 'XX', 'KEEPTTL')`,
@@ -140,7 +166,16 @@ export function createWechatQrState(redis: WechatQrRedis, namespace: string) {
       const owner = newHandle();
       const result = await execute(
         `${currentBindingRequest}
-         if request.bindingOwner or request.wxId ~= ARGV[5] then return nil end
+         if request.bindingOwner then return nil end
+         local identity = cjson.decode(ARGV[5])
+         if request.wxId ~= identity.wxId then return nil end
+         if identity.externalIdentity then
+           local external = request.externalIdentity
+           if not external or external.corpId ~= identity.externalIdentity.corpId
+             or external.openId ~= identity.externalIdentity.openId then return nil end
+         elseif request.externalIdentity then
+           return nil
+         end
          request.bindingOwner = cjson.decode(ARGV[6])
          return redis.call('SET', KEYS[1], cjson.encode(request), 'XX', 'KEEPTTL')`,
         1,
@@ -149,7 +184,7 @@ export function createWechatQrState(redis: WechatQrRedis, namespace: string) {
         binding.requestId,
         browserKey(binding.browser),
         String(binding.expiresAt),
-        binding.wxId,
+        JSON.stringify(encodeIdentity(binding.identity)),
         JSON.stringify({ token: owner, member }),
       );
       return result === "OK" ? owner : null;
@@ -249,12 +284,12 @@ export function createWechatQrState(redis: WechatQrRedis, namespace: string) {
       return request?.status === "waiting" ? requestId : null;
     },
 
-    async prepareConfirmation(requestId: string, wxId: string) {
+    async prepareConfirmation(requestId: string, identity: WechatQrIdentity) {
       const flowId = newHandle();
       const proof = newHandle();
       const saved = await withWaitingRequest(requestId, confirmationKey(flowId), {
         requestId,
-        wxId,
+        ...encodeIdentity(identity),
         browser: digest(proof),
       });
       return saved ? { flowId, proof } : null;
@@ -270,7 +305,7 @@ export function createWechatQrState(redis: WechatQrRedis, namespace: string) {
       if (request?.status !== "waiting") return null;
       return {
         requestId: confirmation.requestId,
-        wxId: confirmation.wxId,
+        identity: decodeIdentity(confirmation),
         applicationName: request.applicationName,
         device: request.device,
       };
@@ -283,7 +318,7 @@ export function createWechatQrState(redis: WechatQrRedis, namespace: string) {
       decision:
         | { status: "restart" }
         | { status: "confirmed"; member: RegisteredWechatQrMember }
-        | { status: "binding_required"; wxId: string },
+        | { status: "binding_required" },
     ) {
       const result = await execute(
         `${waitingRequest}
@@ -294,7 +329,10 @@ export function createWechatQrState(redis: WechatQrRedis, namespace: string) {
         local decision = cjson.decode(ARGV[4])
         request.status = decision.status
         request.member = decision.member
-        request.wxId = decision.wxId
+        if decision.status == 'binding_required' then
+          request.wxId = confirmation.wxId
+          request.externalIdentity = confirmation.externalIdentity
+        end
         if not redis.call('SET', KEYS[1], cjson.encode(request), 'XX', 'KEEPTTL') then return nil end
         redis.call('DEL', KEYS[2])
         return 'OK'`,

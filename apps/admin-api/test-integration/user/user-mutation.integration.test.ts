@@ -35,6 +35,7 @@ import {
   subjectAccessTransitions,
   userDocumentRebuildStates,
   users,
+  userWechatExternalBindings,
 } from "@iam/db/schema";
 import { createSubjectAccessTransitionRepository } from "@iam/documents/user/subject-access-transition";
 import { UserHasOpenEmploymentError, UserNotFoundError, UsernameAlreadyExistsError } from "@iam/domain/user";
@@ -194,6 +195,21 @@ function requestUserUnlinkWecom(app: Hono, protocol: UserWriteProtocol, username
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username }),
+      });
+}
+
+function requestUserUnlinkWecomExternalBinding(
+  app: Hono,
+  protocol: UserWriteProtocol,
+  username: string,
+  bindingId: number,
+) {
+  return protocol === "REST"
+    ? app.request(`/admin/users/${username}/wecom-external-bindings/${bindingId}`, { method: "DELETE" })
+    : app.request("/rpc/unlinkWecomExternalBinding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, bindingId }),
       });
 }
 
@@ -894,6 +910,91 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
       wxId: "Private-Member",
     });
     expect(newOwner.status).toBe(200);
+  });
+
+  test.each(userWriteProtocols)("%s revokes only the selected external WeCom binding", async (protocol) => {
+    const { app, command } = createUserWriteApp();
+    const [target, other] = await harness.db
+      .insert(users)
+      .values([
+        { username: "target", name: "User", wxId: "Member-User", status: UserStatus.Disable },
+        { username: "other", name: "Other User" },
+      ])
+      .returning();
+    if (!target || !other) throw new Error("WeCom test users were not inserted");
+    const [first, second] = await harness.db
+      .insert(userWechatExternalBindings)
+      .values([
+        { userId: target.id, corpId: "test-corp", openId: "Private-OpenId-1234" },
+        { userId: target.id, corpId: "test-corp", openId: "abc" },
+      ])
+      .returning();
+    if (!first || !second) throw new Error("WeCom test bindings were not inserted");
+
+    const detailResponse = await app.request("/admin/users/target");
+    expect(detailResponse.status).toBe(200);
+    const detail = (await detailResponse.json()) as { data: unknown };
+    expect(detail.data).toMatchObject({
+      externalWecomBindings: [
+        { id: first.id, maskedOpenId: "••••1234" },
+        { id: second.id, maskedOpenId: "••••" },
+      ],
+    });
+    expect(JSON.stringify(detail)).not.toContain(first.openId);
+
+    const wrongOwner = await requestUserUnlinkWecomExternalBinding(app, protocol, other.username, first.id);
+    expect(wrongOwner.status).toBe(404);
+    for (const changed of [true, false]) {
+      const response = await requestUserUnlinkWecomExternalBinding(app, protocol, target.username, first.id);
+      expect(response.status).toBe(200);
+      const result = { changed, result: null };
+      const body = await response.json();
+      expect(body).toMatchObject(protocol === "REST" ? { data: result } : { result: { data: result } });
+    }
+
+    const after = await facts();
+    expect(after.users.find((row) => row.id === target.id)?.wxId).toBe("Member-User");
+    expect(after.audits).toMatchObject(
+      [true, false].map((changed) => ({
+        action: "admin.user.unlink_wecom",
+        targetId: target.id,
+        details: { changed, bindingId: first.id, identityType: "openid" },
+      })),
+    );
+    expect(JSON.stringify(after.audits)).not.toContain(first.openId);
+    expect(after.dirty).toHaveLength(0);
+    expect(command.revokeUserSessions).not.toHaveBeenCalled();
+    const activeBindings = await command.service.listWecomExternalBindings(target.id);
+    expect(activeBindings).toMatchObject([{ id: second.id }]);
+    const rows = await harness.db.select().from(userWechatExternalBindings).orderBy(userWechatExternalBindings.id);
+    expect(rows).toMatchObject([
+      { id: first.id, revokedAt: expect.any(Date) },
+      { id: second.id, revokedAt: null },
+    ]);
+  });
+
+  test("soft deletion releases external WeCom identities and preserves their binding history", async () => {
+    const { service } = createCommand();
+    const target = await seedUser();
+    const [other] = await harness.db.insert(users).values({ username: "other", name: "Other User" }).returning();
+    const [binding] = await harness.db
+      .insert(userWechatExternalBindings)
+      .values({ userId: target.id, corpId: "test-corp", openId: "Private-OpenId" })
+      .returning();
+    if (!other || !binding) throw new Error("WeCom test records were not inserted");
+
+    const result = await service.deleteUser(target.username);
+    expect(result).toEqual({ changed: true, result: null });
+    await harness.db.insert(userWechatExternalBindings).values({
+      userId: other.id,
+      corpId: binding.corpId,
+      openId: binding.openId,
+    });
+    const rows = await harness.db.select().from(userWechatExternalBindings).orderBy(userWechatExternalBindings.id);
+    expect(rows).toMatchObject([
+      { id: binding.id, userId: target.id, revokedAt: expect.any(Date) },
+      { userId: other.id, revokedAt: null },
+    ]);
   });
 
   test("aborts WeCom unlink when document invalidation fails", async () => {

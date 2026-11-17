@@ -274,6 +274,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
   const authentication = createRootAuthenticationComposition({
     wechatQr: wechat.qr && {
       config: { corpId: wechat.corpId, ...wechat.qr },
+      wechat: runtime.integrations.wechat,
       redis: runtime.redis,
       namespace: runtime.config.sessionKernel.namespace,
       binding: {
@@ -293,6 +294,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
         lookupApplicationName: async (clientCode) =>
           (await clientService.getClientByCode(clientCode))?.clientName ?? null,
         findRegisteredMember: repositories.user.findRegisteredWechatMember,
+        findRegisteredExternalIdentity: repositories.user.findRegisteredWechatExternalIdentity,
       },
     },
     kernel: sessionKernel,

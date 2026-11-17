@@ -13,6 +13,7 @@ export function createUserRoute(adapter: UserAdapter) {
     .openapi(routes.usersStatusUpdate, adapter.usersStatusUpdate)
     .openapi(routes.usersDelete, adapter.usersDelete)
     .openapi(routes.usersUnlinkWecom, adapter.usersUnlinkWecom)
+    .openapi(routes.usersUnlinkWecomExternalBinding, adapter.usersUnlinkWecomExternalBinding)
     .openapi(routes.usersResetPassword, adapter.usersResetPassword)
     .openapi(routes.usersGeneratePassword, adapter.usersGeneratePassword);
 }

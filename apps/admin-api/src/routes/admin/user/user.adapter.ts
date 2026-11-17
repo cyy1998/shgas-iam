@@ -10,6 +10,7 @@ import {
   UserAdminCreateDtoSchema,
   UserPaginationQueryDtoSchema,
   UserUpdateDtoSchema,
+  UserWecomExternalBindingSchema,
 } from "@admin-api/services/user/user.schema";
 import type { UserService } from "@admin-api/services/user/user.service";
 import { router } from "@iam/api-core/trpc";
@@ -27,10 +28,12 @@ export interface CreateUserAdapterDeps {
     UserService,
     | "deleteUser"
     | "getUserDetailByUsernameForAdmin"
+    | "listWecomExternalBindings"
     | "resetPasswordByUsername"
     | "searchUsersFuzzyForAdmin"
     | "setUserForAdmin"
     | "unlinkWecom"
+    | "unlinkWecomExternalBinding"
     | "updateUser"
     | "updateUserStatus"
   >;
@@ -86,7 +89,11 @@ export function createUserAdapter(deps: CreateUserAdapterDeps) {
           .filter((employment) => !employment.isDelete && employment.status === EmploymentStatus.Disable)
           .map((employment) => employment.orgId),
       });
-      return toUserDetailVo(detail, allowedActions, employmentAuthorization);
+      const externalWecomBindings =
+        userAuthorization.kind === "full" && !detail.isDelete
+          ? await deps.userService.listWecomExternalBindings(detail.id)
+          : undefined;
+      return toUserDetailVo(detail, allowedActions, employmentAuthorization, externalWecomBindings);
     },
   });
 
@@ -155,6 +162,14 @@ export function createUserAdapter(deps: CreateUserAdapterDeps) {
     handler: ({ username }, context) => deps.userService.unlinkWecom(username, resolveAuditContext(context)),
   });
 
+  const unlinkWecomExternalBinding = defineAdminApiMutationOperation({
+    operationId: "admin.user.unlinkWecomExternalBinding",
+    input: z.object({ username: z.string(), bindingId: UserWecomExternalBindingSchema.shape.id }),
+    restInput: (c) => c.req.valid("param") as { username: string; bindingId: number },
+    handler: ({ username, bindingId }, context) =>
+      deps.userService.unlinkWecomExternalBinding(username, bindingId, resolveAuditContext(context)),
+  });
+
   const resetPassword = defineAdminApiMutationOperation({
     operationId: "admin.user.resetPassword",
     input: z.object({ username: z.string() }),
@@ -182,6 +197,7 @@ export function createUserAdapter(deps: CreateUserAdapterDeps) {
     updateStatus: updateUserStatus.toTRPC(),
     delete: deleteUser.toTRPC(),
     unlinkWecom: unlinkWecom.toTRPC(),
+    unlinkWecomExternalBinding: unlinkWecomExternalBinding.toTRPC(),
     resetPassword: resetPassword.toTRPC(),
     generatePassword: generatePassword.toTRPC(),
   });
@@ -196,6 +212,8 @@ export function createUserAdapter(deps: CreateUserAdapterDeps) {
     usersSearch: searchUser.toHandler<UserRouteHandler<"usersSearch">>(),
     usersStatusUpdate: updateUserStatus.toHandler<UserRouteHandler<"usersStatusUpdate">>(),
     usersUnlinkWecom: unlinkWecom.toHandler<UserRouteHandler<"usersUnlinkWecom">>(),
+    usersUnlinkWecomExternalBinding:
+      unlinkWecomExternalBinding.toHandler<UserRouteHandler<"usersUnlinkWecomExternalBinding">>(),
     usersUpdate: updateUser.toHandler<UserRouteHandler<"usersUpdate">>(),
   };
 }

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { RedisPort } from "@api/composition/runtime";
+import { type WechatQrIdentity, wechatOpenIdSchema } from "@api/services/authentication/wechat-qr-identity.type";
 import { z } from "zod";
 
 const tokenResponse = z.object({
@@ -8,6 +9,11 @@ const tokenResponse = z.object({
   expires_in: z.number().int().positive(),
 });
 const memberResponse = z.object({ errcode: z.literal(0), userid: z.string().trim().min(1).max(255) });
+const externalIdentityResponse = z.object({
+  errcode: z.literal(0),
+  userid: z.never().optional(),
+  openid: wechatOpenIdSchema,
+});
 
 export interface CreateWechatClientDeps {
   redis: Pick<RedisPort, "get" | "set">;
@@ -56,16 +62,27 @@ export function createWechatClient(deps: CreateWechatClientDeps) {
     return access_token;
   }
 
-  async function getWxUserId(code: string) {
+  async function getIdentityResponse(code: string) {
     const accessToken = await getWxAccessToken();
-    const member = memberResponse.safeParse(
-      await getJson("/cgi-bin/auth/getuserinfo", { access_token: accessToken, code }),
-    );
+    return await getJson("/cgi-bin/auth/getuserinfo", { access_token: accessToken, code });
+  }
+
+  async function getWxUserId(code: string) {
+    const member = memberResponse.safeParse(await getIdentityResponse(code));
     if (!member.success) throw new Error("WeChat member identity unavailable");
     return member.data.userid;
   }
 
-  return { getWxAccessToken, getWxUserId };
+  async function getQrIdentity(code: string): Promise<WechatQrIdentity> {
+    const response = await getIdentityResponse(code);
+    const member = memberResponse.safeParse(response);
+    if (member.success) return { kind: "member", wxId: member.data.userid };
+    const external = externalIdentityResponse.safeParse(response);
+    if (external.success) return { kind: "external", corpId, openId: external.data.openid };
+    throw new Error("WeChat QR identity unavailable");
+  }
+
+  return { getWxAccessToken, getWxUserId, getQrIdentity };
 }
 
 export type WechatClient = ReturnType<typeof createWechatClient>;

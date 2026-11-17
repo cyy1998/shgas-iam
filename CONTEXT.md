@@ -379,11 +379,13 @@ OIDC Client 对当前授权请求提出、并由 OIDC 验证和绑定到 Authent
 _Avoid_: force-login query, repeated login, session refresh
 
 **企业微信跨设备扫码登录**:
-用户在手机端通过企业微信证明成员身份并确认本次登录，再由发起请求的电脑浏览器完成 IAM 登录、继续原 Authentication Continuation 的认证方式。
+用户在手机端通过企业微信证明登录身份并确认本次登录，再由发起请求的电脑浏览器完成 IAM 登录、继续原 Authentication Continuation 的认证方式。
 _Avoid_: 企业微信工作台免登、企业微信第三方登录回调
 
 **企业微信身份绑定**:
-企业微信成员身份与既有 IAM 用户之间的一对一登录关联，账号停用期间仍保留，由 IAM 完整管理员显式解除。未绑定的成员在发起扫码的电脑上用用户名和密码验证既有账号，或直接输入已登记且唯一标识该账号的手机号并验证短信验证码，建立绑定。
+经企业微信授权验证的登录身份与既有 IAM 用户之间的关联，账号停用期间仍保留。一个 IAM 用户可以拥有多条绑定，每个企业微信身份同一时间只绑定一个 IAM 用户，IAM 完整管理员可逐条解除。
+设计决定见 [ADR-0053](docs/adr/0053-bind-wecom-identities-through-one-qr-flow.md)，首版见
+[ADR-0052](docs/adr/0052-complete-wecom-qr-login-at-the-originating-browser.md#企业微信绑定与手机号唯一性)。
 _Avoid_: 手机号自动匹配、扫码开户
 
 **Account Recovery**:

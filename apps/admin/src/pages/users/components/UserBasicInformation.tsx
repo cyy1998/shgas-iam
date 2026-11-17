@@ -1,5 +1,5 @@
 import styles from "@admin/components/detail/DetailDrawer.module.less";
-import type { UserDetailVo, updateUser } from "@admin/services/user";
+import type { UserDetailVo, UserWecomExternalBinding, updateUser } from "@admin/services/user";
 import { Button, Descriptions, Space, Tag, Typography, theme } from "antd";
 import userStyles from "./UserDetail.module.less";
 import UserProfileForm from "./UserProfileForm";
@@ -11,7 +11,7 @@ type Props = {
   onCancel: () => void;
   onSave: (data: Parameters<typeof updateUser>[1]) => Promise<boolean>;
   onDirtyChange: (dirty: boolean) => void;
-  onUnlinkWecom: () => void;
+  onUnlinkWecom: (binding?: UserWecomExternalBinding) => void;
 };
 
 export default function UserBasicInformation({
@@ -24,6 +24,7 @@ export default function UserBasicInformation({
   onUnlinkWecom,
 }: Props) {
   const { token } = theme.useToken();
+  const externalBindings = detail.externalWecomBindings ?? [];
 
   return (
     <section
@@ -62,13 +63,43 @@ export default function UserBasicInformation({
                 <Space size={8} wrap>
                   {detail.wxId ?? "—"}
                   {detail.wxId && detail.allowedActions.unlinkWecom?.allowed && (
-                    <Button size="small" danger onClick={onUnlinkWecom}>
+                    <Button size="small" danger onClick={() => onUnlinkWecom()}>
                       解除企业微信绑定
                     </Button>
                   )}
                 </Space>
               ),
             },
+            ...(externalBindings.length > 0 && detail.allowedActions.unlinkWecom?.allowed
+              ? [
+                  {
+                    key: "externalWecomBindings",
+                    label: "非本企业企微身份",
+                    children: (
+                      <Space orientation="vertical">
+                        {externalBindings.map((binding) => (
+                          <Space key={binding.id} wrap>
+                            <Typography.Text>
+                              {binding.maskedOpenId}（#{binding.id}）
+                            </Typography.Text>
+                            <Typography.Text type="secondary">
+                              {new Date(binding.createTime).toLocaleString()}
+                            </Typography.Text>
+                            <Button
+                              size="small"
+                              danger
+                              aria-label={`解除非本企业企微绑定 #${binding.id}`}
+                              onClick={() => onUnlinkWecom(binding)}
+                            >
+                              解绑
+                            </Button>
+                          </Space>
+                        ))}
+                      </Space>
+                    ),
+                  },
+                ]
+              : []),
           ]}
         />
       )}

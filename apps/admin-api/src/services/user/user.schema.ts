@@ -29,6 +29,12 @@ export const UserDetailDtoSchema = SharedUserDetailDtoSchema.pick({
   roleNames: z.record(z.string(), z.string()).default({}),
 });
 
+export const UserWecomExternalBindingSchema = z.object({
+  id: z.number().int().positive().max(2_147_483_647),
+  maskedOpenId: z.string(),
+  createTime: z.date(),
+});
+
 export {
   UserCreateDtoSchema,
   UserDtoSchema,

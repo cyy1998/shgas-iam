@@ -79,6 +79,48 @@ test("the upgrade normalizes current users, records durable publication work, an
   ]);
 });
 
+test("active external WeCom identities are unique within a corporation and can be reassigned after revocation", async () => {
+  await harness.sql`
+    INSERT INTO "user" (id, username, "name", "wxId")
+    VALUES (1, 'owner', 'Owner', 'identity-a'), (2, 'candidate', 'Candidate', NULL)
+  `;
+  await migrateFrom();
+
+  function bind(userId: number, corpId: string, openId: string) {
+    return harness.sql`
+      INSERT INTO user_wechat_external_binding (user_id, corp_id, open_id)
+      VALUES (${userId}, ${corpId}, ${openId})
+    `;
+  }
+
+  await bind(1, "corp-a", "identity-a");
+  await bind(1, "corp-a", "identity-b");
+  await bind(2, "corp-b", "identity-a");
+  const conflict = await bind(2, "corp-a", "identity-a").catch((error: unknown) => error);
+  expect(extractPostgresError(conflict)).toEqual({
+    code: "23505",
+    constraint: "user_wechat_external_binding_active_identity_idx",
+  });
+
+  await harness.sql`
+    UPDATE user_wechat_external_binding SET revoked_at = now()
+    WHERE corp_id = 'corp-a' AND open_id = 'identity-a'
+  `;
+  await bind(2, "corp-a", "identity-a");
+  const bindings = await harness.sql`
+    SELECT user_id, corp_id, open_id, revoked_at IS NOT NULL AS revoked
+    FROM user_wechat_external_binding ORDER BY id
+  `;
+  expect([...bindings]).toEqual([
+    { user_id: 1, corp_id: "corp-a", open_id: "identity-a", revoked: true },
+    { user_id: 1, corp_id: "corp-a", open_id: "identity-b", revoked: false },
+    { user_id: 2, corp_id: "corp-b", open_id: "identity-a", revoked: false },
+    { user_id: 2, corp_id: "corp-a", open_id: "identity-a", revoked: false },
+  ]);
+  const users = await registeredValues();
+  expect(users[0]?.wxId).toBe("identity-a");
+});
+
 test.each([
   [" 12345678 ", "12345678", " A ", "B", "user_mobile_phone_non_deleted_idx"],
   [" 12345678 ", "12345679", " A ", "A", "user_wx_id_non_deleted_idx"],

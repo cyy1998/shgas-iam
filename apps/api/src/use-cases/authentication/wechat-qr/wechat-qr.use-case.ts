@@ -1,13 +1,12 @@
 import { Buffer } from "node:buffer";
 import type { WechatQrState } from "@api/services/authentication/wechat-qr.state";
-import { normalizeRegisteredIdentifier } from "@iam/domain/user";
-import type { WechatQrConfig, WechatQrDirectoryPort } from "./wechat-qr.port";
+import type { WechatQrConfig, WechatQrDirectoryPort, WechatQrIdentityPort } from "./wechat-qr.port";
 
 export function createWechatQrUseCase(options: {
   config: WechatQrConfig;
   state: WechatQrState;
   directory: WechatQrDirectoryPort;
-  wechat: { getWxUserId: (code: string) => Promise<string> };
+  wechat: WechatQrIdentityPort;
 }) {
   const { config, state, directory, wechat } = options;
   const publicOrigin = new URL(config.callbackUrl).origin;
@@ -45,9 +44,9 @@ export function createWechatQrUseCase(options: {
       if (!requestId) return null;
       // Denial still consumes the matching OAuth state. Another phone may continue the QR request.
       if (input.code.length === 0 || Buffer.byteLength(input.code, "utf8") > 512) return null;
-      const wxId = normalizeRegisteredIdentifier(await wechat.getWxUserId(input.code));
-      if (wxId === null || Array.from(wxId).length > 255) return null;
-      return await state.prepareConfirmation(requestId, wxId);
+      const identity = await wechat.getQrIdentity(input.code);
+      if (identity.kind === "external" && identity.corpId !== config.corpId) return null;
+      return await state.prepareConfirmation(requestId, identity);
     },
     readConfirmation: state.readConfirmation,
     async decideMobile(input: { flowId: string; proof: string; action: "confirm" | "cancel" }) {
@@ -56,12 +55,17 @@ export function createWechatQrUseCase(options: {
       if (input.action === "cancel") {
         return await state.decide(input.flowId, input.proof, confirmation.requestId, { status: "restart" });
       }
-      const member = await directory.findRegisteredMember(confirmation.wxId);
+      const identity = confirmation.identity;
+      if (identity.kind === "external" && identity.corpId !== config.corpId) return false;
+      const member =
+        identity.kind === "member"
+          ? await directory.findRegisteredMember(identity.wxId)
+          : await directory.findRegisteredExternalIdentity(identity);
       return await state.decide(
         input.flowId,
         input.proof,
         confirmation.requestId,
-        member ? { status: "confirmed", member } : { status: "binding_required", wxId: confirmation.wxId },
+        member ? { status: "confirmed", member } : { status: "binding_required" },
       );
     },
   };

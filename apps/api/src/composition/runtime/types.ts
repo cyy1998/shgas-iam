@@ -1,4 +1,5 @@
 import type { Env } from "@api/env";
+import type { WechatQrIdentity } from "@api/services/authentication/wechat-qr-identity.type";
 import type { OidcHintVerificationPort, OidcSigningPort } from "@iam/oidc";
 import type { AfterCommitLoggerPort } from "@iam/unit-of-work";
 import type Redis from "ioredis";
@@ -81,6 +82,7 @@ export interface SmsIntegrationPort {
 
 export interface WechatIntegrationPort {
   getWxUserId: (code: string) => Promise<string>;
+  getQrIdentity: (code: string) => Promise<WechatQrIdentity>;
 }
 
 export interface ApiIntegrationPorts {

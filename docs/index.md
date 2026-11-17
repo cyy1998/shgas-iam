@@ -125,6 +125,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [ADR-0050](adr/0050-bind-image-captcha-to-the-required-operation.md)                    | decision | Current    | 2026-11-11    | 2026-12-11  | Cap 求解失败时使用图片验证码，并将证明绑定原操作。                                                         |
 | [ADR-0051](adr/0051-enforce-admission-before-issuing-application-login-grants.md)       | decision | Current    | 2026-11-13    | 2026-12-13  | 新应用授权的准入检查、已发布文档时效和协议拒绝行为。                                                       |
 | [ADR-0052](adr/0052-complete-wecom-qr-login-at-the-originating-browser.md)              | decision | Current    | 2026-11-14    | 2026-12-14  | 已确认的设计：跨设备完成企业微信登录、绑定与手机号唯一性。                                                 |
+| [ADR-0053](adr/0053-bind-wecom-identities-through-one-qr-flow.md)                       | decision | Current    | 2026-11-17    | 2026-12-17  | 已确认的设计：统一扫码流程、多身份绑定与旧接口兼容。                                                       |
 
 </details>
 

@@ -77,7 +77,9 @@ Redis 异常先恢复依赖；`login-credential-nonce:<digest>` 不能批量清�
    为扫码路由将 OpenTelemetry sampler 设置为 `always_off`。检查访问日志、错误日志及 tracing 的实际输出，
    回调里的授权码和 state、发起浏览器续接参数都不能进入采集。
    SSE 转发保留流式响应与 `X-Accel-Buffering: no`，代理读超时应长于心跳间隔。
-4. **部署与核验** 按[常规更新](deployment.md#常规更新)部署 API 和 SSO。用不同 hostname 的原电脑和手机验证公网登录守卫不提供出码，
+4. **部署与核验** 按[常规更新](deployment.md#常规更新)执行迁移并更新 API、Admin API 和 Admin。已有 `wxId` 原样保留并归属于当前配置的企业，
+   外部企微身份按授权应用的企业 ID 保存。开放新版扫码前，确保所有处理用户删除的 Admin API 副本都已更新，因为软删除会在同一事务内释放外部绑定。
+   回退扫码 API 时保留支持释放外部绑定的 Admin API。用不同 hostname 的原电脑和手机验证公网登录守卫不提供出码，
    手机没有 `global_session`，电脑能实时读到确认或取消。断开 SSE 后重连，核对已发生的结果仍可见，旧码在换码后不可用。
    在网关验证无 TLS 的回调和客户端伪造入口头均被拒绝，再放开流量。
 

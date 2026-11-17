@@ -7,6 +7,7 @@ import { HumanVerificationAction } from "@api/enums/humanVerification.action";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import { createAuditRepository } from "@api/services/audit/audit.repository";
 import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
+import type { WechatQrIdentity } from "@api/services/authentication/wechat-qr-identity.type";
 import { createCapService } from "@api/services/human-verification/cap.service";
 import { createHumanRiskService } from "@api/services/human-verification/human-risk.service";
 import { createImageCaptchaService } from "@api/services/human-verification/image-captcha.service";
@@ -16,7 +17,7 @@ import { createUserRepository } from "@api/services/user/user.repository";
 import { createUserPasswordHelper } from "@api/services/user/user-password.helper";
 import type { WechatQrDirectoryPort } from "@api/use-cases/authentication/wechat-qr/wechat-qr.port";
 import { ApiErrorCode, IMAGE_CAPTCHA_PROOF_HEADER, IMAGE_CAPTCHA_TICKET_HEADER, UserStatus } from "@iam/contracts";
-import { auditLogs, userDocumentOutboxEntries, users } from "@iam/db/schema";
+import { auditLogs, userDocumentOutboxEntries, users, userWechatExternalBindings } from "@iam/db/schema";
 import { createLoginRestriction } from "@iam/login-restriction";
 import { createRedisLoginRestrictionStore } from "@iam/login-restriction/redis";
 import { mapUnitOfWork } from "@iam/unit-of-work";
@@ -33,6 +34,7 @@ afterEach(resetApiRedisTestDatabase);
 const external = "https://external.example";
 const internal = "https://internal.example";
 const callback = `${external}/sso/wechat-qr/mobile/callback`;
+const testCorpId = "test-tenant";
 
 function requestCookie(response: Response) {
   return response.headers
@@ -56,12 +58,15 @@ async function setup(
     ...dependencies,
     customAdmission: { evaluate: async () => "no-match" },
     wechatQr: {
-      config: { corpId: "test-tenant", agentId: "1000001", callbackUrl: callback },
+      config: { corpId: testCorpId, agentId: "1000001", callbackUrl: callback },
       binding: dependencies?.wechatQr?.binding,
+      wechat: dependencies?.wechatQr?.wechat,
       directory: {
         lookupApplicationName: async () => "业务应用 <一>",
         findRegisteredMember:
           findRegisteredMember ?? (async (wxId) => (wxId === "wx-test" ? { userId: 1001, subjectIdentifier } : null)),
+        findRegisteredExternalIdentity:
+          dependencies?.wechatQr?.directory.findRegisteredExternalIdentity ?? (async () => null),
       },
     },
   });
@@ -429,6 +434,7 @@ type BindingDatabaseOptions = {
   continuationTtlSeconds?: number;
   cooldownMilliseconds?: number;
   realLoginRestriction?: boolean;
+  identitiesByCode?: ReadonlyMap<string, WechatQrIdentity>;
 };
 
 async function withBindingDatabase(
@@ -541,10 +547,18 @@ async function withBindingDatabase(
         auditLogWriter,
         wechatUsers: userRepository,
         wechatQr: {
-          config: { corpId: "test-tenant", agentId: "1000001", callbackUrl: callback },
+          config: { corpId: testCorpId, agentId: "1000001", callbackUrl: callback },
+          wechat: options.identitiesByCode && {
+            async getQrIdentity(code) {
+              const identity = options.identitiesByCode?.get(code);
+              if (!identity) throw new Error("invalid wx code");
+              return identity;
+            },
+          },
           directory: {
             lookupApplicationName: async () => "业务应用 <一>",
             findRegisteredMember: userRepository.findRegisteredWechatMember,
+            findRegisteredExternalIdentity: userRepository.findRegisteredWechatExternalIdentity,
           },
           binding: {
             users: userRepository,
@@ -595,6 +609,10 @@ async function startBinding(f: Awaited<ReturnType<typeof setup>>, code = "wx-unr
   expect((await confirm("confirm")).status).toBe(200);
   expect(await f.readStatus(qr.requestId)).toMatchObject({ event: { status: "binding_required" } });
   return qr.requestId as string;
+}
+
+function externalIdentity(openId: string) {
+  return { kind: "external", corpId: testCorpId, openId } as const;
 }
 
 test("the originating browser binds by its delivered SMS code and shares the mobile cooldown", async () => {
@@ -931,6 +949,186 @@ test("different QR requests cannot claim the same WeCom member for two accounts"
     expect(bindingAudits).toHaveLength(2);
     expect(await pg.db.select().from(userDocumentOutboxEntries)).toHaveLength(1);
   });
+});
+
+test("the same QR accepts multiple external identities without changing the existing member binding", async () => {
+  const firstOpenId = "OpenId-first";
+  const secondOpenId = "OpenId-second";
+  await withBindingDatabase(
+    async ({ pg, newBrowser, addAccount }) => {
+      const first = await newBrowser();
+      const second = await newBrowser();
+      const returning = await newBrowser();
+      const username = "existing-wecom-member";
+      const userId = await addAccount({
+        id: 1001,
+        username,
+        subjectIdentifier: first.subjectIdentifier,
+        wxId: "member",
+      });
+      const other = await addAccount({ id: 1002, username: "same-text-other-identity", wxId: firstOpenId });
+      await pg.db.insert(userWechatExternalBindings).values({
+        userId: other,
+        corpId: "different-corp",
+        openId: firstOpenId,
+      });
+
+      for (const [browser, code] of [
+        [first, "external-first"],
+        [second, "external-second"],
+      ] as const) {
+        const requestId = await startBinding(browser, code);
+        const response = await browser.bindPassword(
+          requestId,
+          browser.credential(accountPassword, username, requestId),
+        );
+        expect(await response.json()).toMatchObject({ data: { decision: "continue" } });
+        expect(requestCookie(response)).toMatch(/^global_session=/u);
+      }
+
+      const start = await returning.begin({ ...returning.desktop, "User-Agent": "Windows" });
+      const { data: qr } = await start.json();
+      const confirm = await authorizePhone(returning, qr.mobileUrl, "external-first");
+      expect((await confirm("confirm")).status).toBe(200);
+      const response = await returning.complete(qr.requestId);
+      expect(await response.json()).toMatchObject({ data: { decision: "continue" } });
+      const token = required(returning.cookie(response));
+      await returning.operations.run(async (operation) => {
+        const resolved = await returning.kernel.forOperation(operation).resolveUserSession(token);
+        expect(resolved).toMatchObject({
+          status: "resolved",
+          value: { userSession: { subjectIdentifier: first.subjectIdentifier, amr: ["wechat"] } },
+        });
+      });
+
+      const user = await pg.db.query.users.findFirst({ where: { id: userId } });
+      expect(user?.wxId).toBe("member");
+      const identities = await pg.db
+        .select()
+        .from(userWechatExternalBindings)
+        .where(eq(userWechatExternalBindings.userId, userId));
+      expect(identities).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ corpId: testCorpId, openId: firstOpenId, revokedAt: null }),
+          expect.objectContaining({ corpId: testCorpId, openId: secondOpenId, revokedAt: null }),
+        ]),
+      );
+      expect(identities).toHaveLength(2);
+      const bindingAudits = await pg.db.select().from(auditLogs).where(eq(auditLogs.action, "self.wecom.bind"));
+      expect(bindingAudits).toHaveLength(2);
+      for (const identity of identities) {
+        expect(bindingAudits).toContainEqual(
+          expect.objectContaining({
+            outcome: "success",
+            targetId: userId,
+            details: expect.objectContaining({
+              verificationMethod: "password",
+              identityType: "openid",
+              bindingId: identity.id,
+            }),
+          }),
+        );
+      }
+      expect(JSON.stringify(bindingAudits)).not.toContain(firstOpenId);
+      expect(await pg.db.select().from(userDocumentOutboxEntries)).toHaveLength(0);
+    },
+    {
+      identitiesByCode: new Map([
+        ["external-first", externalIdentity(firstOpenId)],
+        ["external-second", externalIdentity(secondOpenId)],
+      ]),
+    },
+  );
+});
+
+test("one external identity can only be bound to one account across concurrent QR requests", async () => {
+  const openId = "same-external-identity";
+  await withBindingDatabase(
+    async ({ pg, newBrowser, addAccount }) => {
+      const first = await newBrowser();
+      const second = await newBrowser();
+      const accounts = [
+        { id: 1001, username: "external-first", subjectIdentifier: first.subjectIdentifier },
+        { id: 1002, username: "external-second", subjectIdentifier: second.subjectIdentifier },
+      ] as const;
+      for (const account of accounts) await addAccount(account);
+      const [firstRequest, secondRequest] = await Promise.all([
+        startBinding(first, "external"),
+        startBinding(second, "external"),
+      ]);
+      const responses = await Promise.all([
+        first.bindPassword(firstRequest, first.credential(accountPassword, accounts[0].username, firstRequest)),
+        second.bindPassword(secondRequest, second.credential(accountPassword, accounts[1].username, secondRequest)),
+      ]);
+      expect(responses.map((response) => response.status).sort()).toEqual([200, 400]);
+      const rejected = responses.find((response) => !response.ok);
+      expect(await rejected?.json()).toMatchObject({
+        code: ApiErrorCode.LoginFailed,
+        message: "企业微信绑定冲突，请联系管理员",
+      });
+      const binding = await pg.db.select().from(userWechatExternalBindings);
+      expect(binding).toMatchObject([
+        { openId, corpId: testCorpId, userId: accounts[responses.findIndex((response) => response.ok)]?.id },
+      ]);
+    },
+    { identitiesByCode: new Map([["external", externalIdentity(openId)]]) },
+  );
+});
+
+test("binding a member after an external identity makes the same account usable through the legacy callback", async () => {
+  const wxId = "Wx-Member";
+  const openId = "external-before-member";
+  await withBindingDatabase(
+    async ({ pg, newBrowser, addAccount }) => {
+      const externalBrowser = await newBrowser();
+      const memberBrowser = await newBrowser();
+      const username = "external-then-member";
+      const userId = await addAccount({ id: 1001, username, subjectIdentifier: externalBrowser.subjectIdentifier });
+      const callbackUrl = (code: string) =>
+        `${internal}/sso/third-party/wx?${new URLSearchParams({
+          code,
+          client: "iam",
+          redirectUrl: "https://app.example/callback",
+        })}`;
+
+      const externalRequest = await startBinding(externalBrowser, "external");
+      const externalResult = await externalBrowser.bindPassword(
+        externalRequest,
+        externalBrowser.credential(accountPassword, username, externalRequest),
+      );
+      expect(await externalResult.json()).toMatchObject({ data: { decision: "continue" } });
+      const unregistered = await memberBrowser.app.request(callbackUrl("wx-pg-before"));
+      expect(memberBrowser.cookie(unregistered)).toBeUndefined();
+
+      const memberRequest = await startBinding(memberBrowser, "member");
+      const memberResult = await memberBrowser.bindPassword(
+        memberRequest,
+        memberBrowser.credential(accountPassword, username, memberRequest),
+      );
+      expect(await memberResult.json()).toMatchObject({ data: { decision: "continue" } });
+      const user = await pg.db.query.users.findFirst({ where: { id: userId } });
+      expect(user?.wxId).toBe(wxId);
+      const external = await pg.db.select().from(userWechatExternalBindings);
+      expect(external).toMatchObject([{ userId, corpId: testCorpId, openId, revokedAt: null }]);
+
+      const registered = await memberBrowser.app.request(callbackUrl("wx-pg-after"));
+      expect(registered.status).toBe(302);
+      const token = required(memberBrowser.cookie(registered));
+      await memberBrowser.operations.run(async (operation) => {
+        const resolved = await memberBrowser.kernel.forOperation(operation).resolveUserSession(token);
+        expect(resolved).toMatchObject({
+          status: "resolved",
+          value: { userSession: { subjectIdentifier: externalBrowser.subjectIdentifier, amr: ["wechat"] } },
+        });
+      });
+    },
+    {
+      identitiesByCode: new Map<string, WechatQrIdentity>([
+        ["external", externalIdentity(openId)],
+        ["member", { kind: "member", wxId }],
+      ]),
+    },
+  );
 });
 
 test("concurrent bindings cannot overwrite a user's WeCom identity", async () => {

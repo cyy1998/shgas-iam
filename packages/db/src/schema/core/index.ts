@@ -12,4 +12,5 @@ export * from "./roles";
 export * from "./subject-access-transitions";
 export * from "./user-document-rebuild-state";
 export * from "./user-documents";
+export * from "./user-wechat-external-bindings";
 export * from "./users";

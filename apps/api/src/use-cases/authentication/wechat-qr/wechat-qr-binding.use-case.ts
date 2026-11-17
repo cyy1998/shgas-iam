@@ -47,7 +47,7 @@ export function createWechatQrBindingUseCase(deps: WechatQrBindingPorts) {
       binding: {
         browser,
         requestId,
-        wxId: request.wxId,
+        identity: request.identity,
         expiresAt: Math.min(request.expiresAt, continuation.expiresAt),
       },
     } as const;
@@ -256,16 +256,28 @@ export function createWechatQrBindingUseCase(deps: WechatQrBindingPorts) {
           ) {
             throw new BindingRejected("account_changed");
           }
-          if (current.wxId === binding.wxId) throw new BindingRejected("already_bound");
-          if (current.wxId !== null) throw new BindingRejected("binding_conflict");
-          if ((await userRepository.setFirstWechatBinding(current.id, binding.wxId)) === "conflict") {
-            throw new BindingRejected("binding_conflict");
+          const identity = binding.identity;
+          let bindingId: number | undefined;
+          if (identity.kind === "member") {
+            if (current.wxId === identity.wxId) throw new BindingRejected("already_bound");
+            if (
+              current.wxId !== null ||
+              (await userRepository.setFirstWechatBinding(current.id, identity.wxId)) === "conflict"
+            ) {
+              throw new BindingRejected("binding_conflict");
+            }
+          } else {
+            const result = await userRepository.bindWechatExternalIdentity(current.id, identity);
+            if (result.kind !== "bound") throw new BindingRejected(result.kind);
+            bindingId = result.id;
           }
           await auditLogWriter.recordAuditLog({
             ...requestContext,
-            ...buildWechatBindingAudit({ user: current, method: account.method, verified: true }),
+            ...buildWechatBindingAudit({ user: current, method: account.method, verified: true, bindingId }),
           });
-          await userDocumentInvalidation.recordChanges([{ kind: "user", userId: current.id }]);
+          if (identity.kind === "member") {
+            await userDocumentInvalidation.recordChanges([{ kind: "user", userId: current.id }]);
+          }
         },
         { observability: requestContext },
       );

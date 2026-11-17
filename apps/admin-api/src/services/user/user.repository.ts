@@ -9,9 +9,10 @@ import {
   USER_MOBILE_UNIQUE_INDEX,
   USER_WX_ID_UNIQUE_INDEX,
   users,
+  userWechatExternalBindings,
 } from "@iam/db/schema";
 import { MobileAlreadyExistsError, UsernameAlreadyExistsError, WxIdAlreadyExistsError } from "@iam/domain/user";
-import { and, count, eq, inArray, or } from "drizzle-orm";
+import { and, count, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 function rethrowUserWriteError(error: unknown): never {
   const detail = extractPostgresError(error);
@@ -88,6 +89,47 @@ export function createUserRepository(db: DbClient) {
           .where(and(eq(users.id, userId), eq(users.isDelete, false)))
           .returning(),
       );
+    },
+    async listWecomExternalBindings(userId: number) {
+      const { id, openId, createTime, revokedAt } = userWechatExternalBindings;
+      return await db
+        .select({
+          id,
+          maskedOpenId: sql<string>`CASE WHEN char_length(${openId}) > 4 THEN '••••' || right(${openId}, 4) ELSE '••••' END`,
+          createTime,
+        })
+        .from(userWechatExternalBindings)
+        .where(and(eq(userWechatExternalBindings.userId, userId), isNull(revokedAt)))
+        .orderBy(id);
+    },
+    async lockWecomExternalBinding(userId: number, bindingId: number) {
+      return firstRow(
+        await db
+          .select({ revokedAt: userWechatExternalBindings.revokedAt })
+          .from(userWechatExternalBindings)
+          .where(and(eq(userWechatExternalBindings.userId, userId), eq(userWechatExternalBindings.id, bindingId)))
+          .for("update"),
+      );
+    },
+    async revokeWecomExternalBinding(userId: number, bindingId: number) {
+      const changed = await db
+        .update(userWechatExternalBindings)
+        .set({ revokedAt: sql`statement_timestamp()` })
+        .where(
+          and(
+            eq(userWechatExternalBindings.userId, userId),
+            eq(userWechatExternalBindings.id, bindingId),
+            isNull(userWechatExternalBindings.revokedAt),
+          ),
+        )
+        .returning({ id: userWechatExternalBindings.id });
+      return changed.length > 0;
+    },
+    async revokeAllWecomExternalBindings(userId: number) {
+      await db
+        .update(userWechatExternalBindings)
+        .set({ revokedAt: sql`statement_timestamp()` })
+        .where(and(eq(userWechatExternalBindings.userId, userId), isNull(userWechatExternalBindings.revokedAt)));
     },
     async getUserByUsernameForAdmin(username: string) {
       return (

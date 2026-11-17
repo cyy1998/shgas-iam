@@ -1,14 +1,42 @@
+import type { WechatExternalIdentity } from "@api/services/authentication/wechat-qr-identity.type";
 import type { UserCreateDto } from "@api/services/user/user.type";
 import { UserStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import { firstRow } from "@iam/db/query-utils";
-import { USER_MOBILE_UNIQUE_INDEX, USER_WX_ID_UNIQUE_INDEX, users } from "@iam/db/schema";
+import {
+  USER_MOBILE_UNIQUE_INDEX,
+  USER_WECHAT_EXTERNAL_BINDING_UNIQUE_INDEX,
+  USER_WX_ID_UNIQUE_INDEX,
+  users,
+  userWechatExternalBindings,
+} from "@iam/db/schema";
 import { MobileAlreadyExistsError, normalizeRegisteredIdentifier, UsernameAlreadyExistsError } from "@iam/domain/user";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 export function createUserRepository(db: DbClient) {
+  async function findRegisteredWechatExternalIdentity({ corpId, openId }: WechatExternalIdentity) {
+    return (
+      firstRow(
+        await db
+          .select({ userId: users.id, subjectIdentifier: users.subjectIdentifier })
+          .from(userWechatExternalBindings)
+          .innerJoin(users, eq(users.id, userWechatExternalBindings.userId))
+          .where(
+            and(
+              eq(userWechatExternalBindings.corpId, corpId),
+              eq(userWechatExternalBindings.openId, openId),
+              isNull(userWechatExternalBindings.revokedAt),
+              eq(users.isDelete, false),
+            ),
+          )
+          .limit(1),
+      ) ?? null
+    );
+  }
+
   return {
+    findRegisteredWechatExternalIdentity,
     async isMobileRegistered(mobile: string) {
       return (
         (await db.query.users.findFirst({
@@ -148,6 +176,28 @@ export function createUserRepository(db: DbClient) {
       } catch (error) {
         const detail = extractPostgresError(error);
         if (detail?.code === "23505" && detail.constraint === USER_WX_ID_UNIQUE_INDEX) return "conflict" as const;
+        throw error;
+      }
+    },
+    async bindWechatExternalIdentity(userId: number, identity: WechatExternalIdentity) {
+      const existing = await findRegisteredWechatExternalIdentity(identity);
+      if (existing) {
+        return existing.userId === userId ? { kind: "already_bound" as const } : { kind: "binding_conflict" as const };
+      }
+      try {
+        const binding = firstRow(
+          await db
+            .insert(userWechatExternalBindings)
+            .values({ userId, corpId: identity.corpId, openId: identity.openId })
+            .returning({ id: userWechatExternalBindings.id }),
+        );
+        if (!binding) throw new Error("WeCom external binding was not created");
+        return { kind: "bound" as const, id: binding.id };
+      } catch (error) {
+        const detail = extractPostgresError(error);
+        if (detail?.code === "23505" && detail.constraint === USER_WECHAT_EXTERNAL_BINDING_UNIQUE_INDEX) {
+          return { kind: "binding_conflict" as const };
+        }
         throw error;
       }
     },

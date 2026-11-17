@@ -171,6 +171,7 @@ function createService(
       ),
       setPassword: mock(async () => user()),
       unlinkWecom: mock(async () => user({ wxId: null })),
+      revokeAllWecomExternalBindings: mock(async (_userId: number) => undefined),
       setUserForAdmin: mock(async (input: Record<string, unknown>) => user(input)),
       softDeleteUserByUsername: mock(async () => user({ isDelete: true })),
       updateUserByUsername: mock(async (_username: string, input: Record<string, unknown>) => user(input)),
@@ -704,6 +705,7 @@ describe("createUserService", () => {
     expect(deleted).toEqual({ changed: true, result: null });
 
     expect(tx.userRepository.softDeleteUserByUsername).toHaveBeenCalledWith("zhangsan");
+    expect(tx.userRepository.revokeAllWecomExternalBindings).toHaveBeenCalledWith(1);
     expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "user", userId: 1 }]);
     expect(deps.sessionRevocation.revokeUserSessions).toHaveBeenCalledWith({
       userId: 1,

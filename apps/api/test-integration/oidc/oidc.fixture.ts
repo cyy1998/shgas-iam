@@ -252,10 +252,12 @@ export async function fixture(
               agentId: "1000001",
               callbackUrl: `${new URL(issuers.external).origin}/sso/wechat-qr/mobile/callback`,
             },
+            wechat: { getQrIdentity: async () => ({ kind: "member", wxId: "test" }) },
             directory: {
               lookupApplicationName: async () => "业务应用",
               findRegisteredMember: async (wxId) =>
                 wxId === user.wxId ? { userId: user.id, subjectIdentifier } : null,
+              findRegisteredExternalIdentity: async () => null,
             },
           }
         : undefined,

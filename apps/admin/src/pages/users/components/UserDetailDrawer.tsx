@@ -16,7 +16,9 @@ import {
   deleteUser,
   getUser,
   type UserDetailVo,
+  type UserWecomExternalBinding,
   unlinkUserWecom,
+  unlinkUserWecomExternalBinding,
   updateUser,
   updateUserStatus,
 } from "@admin/services/user";
@@ -225,18 +227,30 @@ function UserDetailDrawerContent({ open, username, onClose, onChanged }: Props) 
     }
   };
 
-  const onUnlinkWecom = () => {
-    if (!detail?.wxId || !detail.allowedActions.unlinkWecom?.allowed) return;
+  const onUnlinkWecom = (binding?: UserWecomExternalBinding) => {
+    if (!detail?.allowedActions.unlinkWecom?.allowed) return;
+    if (binding ? !detail.externalWecomBindings?.some(({ id }) => id === binding.id) : !detail.wxId) return;
     Modal.confirm({
       title: `解除 ${detail.name} 的企业微信绑定？`,
-      content: "员工可重新扫码验证 IAM 账号并建立绑定。现有会话按原规则继续，可在会话管理中撤销。",
+      content: (
+        <>
+          {binding && (
+            <div>
+              所选身份 {binding.maskedOpenId}（#{binding.id}）
+            </div>
+          )}
+          用户可重新扫码验证 IAM 账号并建立绑定。现有会话按原规则继续，可在会话管理中撤销。
+        </>
+      ),
       okText: "确认解绑",
       okType: "danger",
       onOk: async () => {
         try {
-          const outcome = await unlinkUserWecom(detail.username);
+          const outcome = binding
+            ? await unlinkUserWecomExternalBinding(detail.username, binding.id)
+            : await unlinkUserWecom(detail.username);
           if (outcome.changed) message.success("企业微信绑定已解除");
-          else message.info("该账号当前未绑定企业微信");
+          else message.info("所选企业微信绑定已解除");
         } catch (error) {
           if (error instanceof AdminMutationCommittedError) setCommittedWarning(error.message);
           else handleError(error);

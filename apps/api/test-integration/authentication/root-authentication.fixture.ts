@@ -59,8 +59,9 @@ export async function fixture(
     publicUser?: Pick<UserService, "getActiveUserBySubjectIdentifier" | "setMobile">;
     wechatQr?: Omit<
       NonNullable<RootAuthenticationCompositionOptions["wechatQr"]>,
-      "redis" | "namespace" | "binding"
+      "redis" | "namespace" | "binding" | "wechat"
     > & {
+      wechat?: NonNullable<RootAuthenticationCompositionOptions["wechatQr"]>["wechat"];
       binding?: Omit<
         NonNullable<NonNullable<RootAuthenticationCompositionOptions["wechatQr"]>["binding"]>,
         "credentials"
@@ -229,12 +230,25 @@ export async function fixture(
       },
       config: { privateKeysByKid: { test: keys.privateKey }, maxSkewMs: 60000, nonceTtlSeconds: 120 },
     });
+    async function getWxUserId(code: string) {
+      if (code === "wx-code") return "wx-test";
+      if (userDependencies?.wechatQr && code === "wx-unregistered-code") return "wx-unregistered";
+      if (userDependencies?.wechatQr?.binding && code === "wx-unregistered-other-code") return "wx-unregistered-other";
+      if (userDependencies?.wechatUsers && code.startsWith("wx-pg-")) return " Wx-Member ";
+      throw new Error("invalid wx code");
+    }
+
     const composition = createRootAuthenticationComposition({
       kernel,
       wechatQr: userDependencies?.wechatQr && {
         ...userDependencies.wechatQr,
         redis: codes.redis,
         namespace: codes.namespace,
+        wechat: userDependencies.wechatQr.wechat ?? {
+          async getQrIdentity(code) {
+            return { kind: "member", wxId: (await getWxUserId(code)).trim() };
+          },
+        },
         binding: userDependencies.wechatQr.binding && {
           ...userDependencies.wechatQr.binding,
           credentials: loginCredentialParser,
@@ -359,16 +373,7 @@ export async function fixture(
             set: async (key, value) => cache.set(key, value),
           },
           integrations: {
-            wechat: {
-              async getWxUserId(code) {
-                if (code === "wx-code") return "wx-test";
-                if (userDependencies?.wechatQr && code === "wx-unregistered-code") return "wx-unregistered";
-                if (userDependencies?.wechatQr?.binding && code === "wx-unregistered-other-code")
-                  return "wx-unregistered-other";
-                if (userDependencies?.wechatUsers && code.startsWith("wx-pg-")) return " Wx-Member ";
-                throw new Error("invalid wx code");
-              },
-            },
+            wechat: { getWxUserId },
           },
         },
         services: {

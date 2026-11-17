@@ -2,6 +2,7 @@ import type { HumanVerificationAction } from "@api/enums/humanVerification.actio
 import type { AuditLogInput } from "@api/services/audit/audit.context";
 import type { WechatBindingCodeScope } from "@api/services/authentication/wechat-binding.type";
 import type { AuthorizedWechatQrBinding, WechatQrState } from "@api/services/authentication/wechat-qr.state";
+import type { WechatExternalIdentity } from "@api/services/authentication/wechat-qr-identity.type";
 import type { HumanRiskServicePort } from "@api/services/human-verification/human-verification.port";
 import type { HumanVerificationContext } from "@api/services/human-verification/human-verification.type";
 import type { ApiUserDocumentChange } from "@api/services/user/user.port";
@@ -27,6 +28,10 @@ export interface WechatQrBindingTxPorts {
       userId: number,
     ) => Promise<(CredentialAccount & { mobile: string | null; wxId: string | null }) | null>;
     setFirstWechatBinding: (userId: number, wxId: string) => Promise<"bound" | "conflict">;
+    bindWechatExternalIdentity: (
+      userId: number,
+      identity: WechatExternalIdentity,
+    ) => Promise<{ kind: "bound"; id: number } | { kind: "already_bound" | "binding_conflict" }>;
   };
   auditLogWriter: { recordAuditLog: (input: AuditLogInput) => Promise<void> };
   userDocumentInvalidation: { recordChanges: (changes: readonly ApiUserDocumentChange[]) => Promise<void> };

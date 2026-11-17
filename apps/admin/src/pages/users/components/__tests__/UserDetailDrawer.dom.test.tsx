@@ -19,6 +19,8 @@ const lifecycle = vi.hoisted(() => ({
   endEmployment: vi.fn(),
   getUser: vi.fn(),
   deleteUser: vi.fn(),
+  unlinkUserWecom: vi.fn(),
+  unlinkUserWecomExternalBinding: vi.fn(),
   updateUserStatus: vi.fn(),
   updateUser: vi.fn(),
   pauseEmployment: vi.fn(),
@@ -60,6 +62,8 @@ vi.mock("@admin/services/employment", () => ({
 vi.mock("@admin/services/user", () => ({
   deleteUser: lifecycle.deleteUser,
   getUser: lifecycle.getUser,
+  unlinkUserWecom: lifecycle.unlinkUserWecom,
+  unlinkUserWecomExternalBinding: lifecycle.unlinkUserWecomExternalBinding,
   updateUserStatus: lifecycle.updateUserStatus,
   updateUser: lifecycle.updateUser,
 }));
@@ -214,6 +218,27 @@ describe("UserDetailDrawer Employment lifecycle actions", () => {
     view.rerender(<UserDetailDrawer {...props} username="second" />);
     expect(await screen.findByText("其他读取角色")).toBeInTheDocument();
     expect(screen.queryByText("编辑角色")).not.toBeInTheDocument();
+  });
+
+  it("revokes the selected external WeCom binding and refreshes the remaining bindings", async () => {
+    const first = { id: 12, maskedOpenId: "••••1234", createTime: now };
+    const second = { id: 34, maskedOpenId: "••••5678", createTime: now };
+    const current = { ...detail(EmploymentStatus.Enable), wxId: "member-id" };
+    lifecycle.getUser
+      .mockResolvedValueOnce({ ...current, externalWecomBindings: [first, second] })
+      .mockResolvedValue({ ...current, externalWecomBindings: [second] });
+    lifecycle.unlinkUserWecomExternalBinding.mockResolvedValue({ changed: true, result: null });
+    const { user } = render(<UserDetailDrawer open username="zhangsan" onClose={vi.fn()} onChanged={vi.fn()} />);
+
+    const firstAction = await screen.findByRole("button", { name: "解除非本企业企微绑定 #12" });
+    await user.click(firstAction);
+    await user.click(await screen.findByRole("button", { name: "确认解绑" }));
+
+    await waitFor(() => expect(firstAction).not.toBeInTheDocument());
+    expect(lifecycle.unlinkUserWecomExternalBinding).toHaveBeenCalledWith("zhangsan", 12);
+    expect(lifecycle.unlinkUserWecom).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "解除非本企业企微绑定 #34" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "解除企业微信绑定" })).toBeInTheDocument();
   });
 
   beforeEach(() => {

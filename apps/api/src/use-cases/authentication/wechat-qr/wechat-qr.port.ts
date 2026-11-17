@@ -1,6 +1,13 @@
 export interface WechatQrDirectoryPort {
   lookupApplicationName: (clientCode: string) => Promise<string | null>;
   findRegisteredMember: (wxId: string) => Promise<{ userId: number; subjectIdentifier: string } | null>;
+  findRegisteredExternalIdentity: (
+    identity: WechatExternalIdentity,
+  ) => Promise<{ userId: number; subjectIdentifier: string } | null>;
+}
+
+export interface WechatQrIdentityPort {
+  getQrIdentity: (code: string) => Promise<WechatQrIdentity>;
 }
 
 export interface WechatQrConfig {
@@ -10,6 +17,7 @@ export interface WechatQrConfig {
 }
 
 import type { AuditLogInput } from "@api/services/audit/audit.context";
+import type { WechatExternalIdentity, WechatQrIdentity } from "@api/services/authentication/wechat-qr-identity.type";
 import type { SessionOrigin } from "@api/services/session/session-origin";
 import type { PublishedUserLoginProfile } from "@iam/domain/user";
 import type { UserSessionObservation } from "@iam/session-kernel";

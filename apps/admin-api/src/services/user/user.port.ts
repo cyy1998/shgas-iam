@@ -5,7 +5,7 @@ import type { UnifiedSessionEffectSchema } from "@admin-api/services/session-man
 import type { SubjectAccessMutationReceipt, SubjectAccessTransitionTarget } from "@iam/subject-access";
 import type { UnitOfWorkPort } from "@iam/unit-of-work";
 import type { z } from "zod";
-import type { User, UserCreateDto, UserPaginationQueryDto, UserUpdateDto } from "./user.type";
+import type { User, UserCreateDto, UserPaginationQueryDto, UserUpdateDto, UserWecomExternalBinding } from "./user.type";
 
 export interface AdminUserDocumentChange {
   readonly kind: "user";
@@ -25,6 +25,9 @@ export interface AdminUserTransactionStorePort {
   softDeleteUserByUsername: (username: string) => Promise<User | null>;
   setPassword: (userId: number, password: string) => Promise<User | null>;
   unlinkWecom: (userId: number) => Promise<User | null>;
+  lockWecomExternalBinding: (userId: number, bindingId: number) => Promise<{ revokedAt: Date | null } | null>;
+  revokeWecomExternalBinding: (userId: number, bindingId: number) => Promise<boolean>;
+  revokeAllWecomExternalBindings: (userId: number) => Promise<void>;
 }
 
 export interface AdminUserReaderPort {
@@ -33,6 +36,7 @@ export interface AdminUserReaderPort {
   getUserBySubjectIdentifierForPermittedAdmin: (subjectIdentifier: string) => Promise<User | null>;
   getUserByUsernameForAdmin: (username: string) => Promise<User | null>;
   getUserByUsernameIncludingDeletedForAuthorization: (username: string) => Promise<User | null>;
+  listWecomExternalBindings: (userId: number) => Promise<UserWecomExternalBinding[]>;
   searchUsersFuzzyPaged: (query: UserPaginationQueryDto) => Promise<{
     rows: User[];
     total: number;

@@ -5,14 +5,15 @@ import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.co
 import { buildAdminUserAudit } from "@admin-api/services/audit/events/user.audit";
 import { EmploymentDetailDtoSchema, toEmploymentDto } from "@admin-api/services/employment/employment.schema";
 import { UserDetailDtoSchema, UserDtoSchema } from "@admin-api/services/user/user.schema";
-import { EmploymentStatus, UserStatus } from "@iam/contracts";
+import { ApiErrorCode, EmploymentStatus, UserStatus } from "@iam/contracts";
+import { HttpStatusCodes } from "@iam/contracts/http";
 import {
   UserHasOpenClientDelegationError,
   UserHasOpenEmploymentError,
   UserNotFoundError,
   UsernameAlreadyExistsError,
 } from "@iam/domain/user";
-import { BadRequestError } from "@iam/runtime/errors";
+import { BadRequestError, CustomError } from "@iam/runtime/errors";
 import type { SubjectAccessMutationReceipt, SubjectAccessOperation } from "@iam/subject-access";
 import { requireSubjectAccessOperation } from "@iam/subject-access";
 import type { AdminUserServiceDeps, AdminUserTransactionStorePort } from "./user.port";
@@ -339,6 +340,36 @@ export function createUserService(deps: AdminUserServiceDeps) {
     );
   }
 
+  async function unlinkWecomExternalBinding(username: string, bindingId: number, auditContext?: AdminAuditContext) {
+    return await adminMutation.locked(
+      (tx) => tx.userRepository.lockUserByUsername(username),
+      () => new UserNotFoundError("用户不存在"),
+      async (tx, current) => {
+        const binding = await tx.userRepository.lockWecomExternalBinding(current.id, bindingId);
+        if (binding === null) {
+          throw new CustomError("企业微信绑定不存在", {
+            code: ApiErrorCode.NotFound,
+            httpStatus: HttpStatusCodes.NOT_FOUND,
+          });
+        }
+        const changed = binding.revokedAt === null;
+        if (changed && !(await tx.userRepository.revokeWecomExternalBinding(current.id, bindingId))) {
+          throw new Error("Locked external WeCom binding unlink returned no row");
+        }
+        await tx.auditService.recordAuditLog(
+          buildAdminUserAudit(
+            "admin.user.unlink_wecom",
+            current,
+            { changed, bindingId, identityType: "openid" },
+            auditContext,
+          ),
+        );
+        return { changed, result: null };
+      },
+      adminAuditTransactionOptions(auditContext),
+    );
+  }
+
   async function deleteUser(username: string, auditContext?: AdminAuditContext) {
     const existing = await deps.userRepository.getUserByUsernameForAdmin(username);
     if (existing === null) {
@@ -364,6 +395,7 @@ export function createUserService(deps: AdminUserServiceDeps) {
                 }
                 const deletedUser = await tx.userRepository.softDeleteUserByUsername(username);
                 if (deletedUser === null) throw new Error("Locked User delete returned no row");
+                await tx.userRepository.revokeAllWecomExternalBindings(current.id);
                 await tx.auditService.recordAuditLog(
                   buildAdminUserAudit(
                     "admin.user.delete",
@@ -462,10 +494,12 @@ export function createUserService(deps: AdminUserServiceDeps) {
     deleteUser,
     getUserDetailForPermittedAdmin,
     getUserDetailByUsernameForAdmin,
+    listWecomExternalBindings: deps.userRepository.listWecomExternalBindings,
     resetPasswordByUsername,
     searchUsersFuzzyForAdmin,
     setUserForAdmin,
     unlinkWecom,
+    unlinkWecomExternalBinding,
     updateUser,
     updateUserStatus,
   };

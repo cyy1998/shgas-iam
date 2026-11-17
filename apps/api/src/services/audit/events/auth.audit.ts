@@ -81,8 +81,9 @@ export function buildWechatBindingAudit(input: {
   user?: UserAuditTarget;
   reason?: string;
   verified: boolean;
+  bindingId?: number;
 }): AuditLogInput {
-  const { method, user, reason, verified } = input;
+  const { method, user, reason, verified, bindingId } = input;
   return {
     action: AuditActions["self.wecom.bind"],
     outcome: reason ? "failure" : "success",
@@ -93,7 +94,11 @@ export function buildWechatBindingAudit(input: {
     targetId: user?.id,
     targetCode: user?.username,
     targetName: user?.name,
-    details: { verificationMethod: method, ...(reason && { reason }) },
+    details: {
+      verificationMethod: method,
+      ...(reason && { reason }),
+      ...(bindingId !== undefined && { bindingId, identityType: "openid" }),
+    },
   };
 }
 

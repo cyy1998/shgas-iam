@@ -5,6 +5,7 @@ import {
   UserPaginationQueryDtoSchema,
   UserStatusUpdateDtoSchema,
   UserUpdateDtoSchema,
+  UserWecomExternalBindingSchema,
 } from "@admin-api/services/user/user.schema";
 import { createRoute, z } from "@hono/zod-openapi";
 import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
@@ -137,6 +138,29 @@ export const usersUnlinkWecom = createRoute({
     [HttpStatusCodes.OK]: jsonContent(
       createSuccessResponseSchema(createAdminMutationResultSchema(z.null())),
       "企业微信解绑结果",
+    ),
+  },
+});
+
+export const usersUnlinkWecomExternalBinding = createRoute({
+  method: "delete",
+  path: "/:username/wecom-external-bindings/:bindingId",
+  tags,
+  request: {
+    params: z.object({
+      username: z.string(),
+      bindingId: z
+        .string()
+        .regex(/^[1-9]\d*$/)
+        .transform(Number)
+        .pipe(UserWecomExternalBindingSchema.shape.id),
+    }),
+  },
+  responses: {
+    ...commonErrorResponses,
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(createAdminMutationResultSchema(z.null())),
+      "非本企业企业微信身份解绑结果",
     ),
   },
 });

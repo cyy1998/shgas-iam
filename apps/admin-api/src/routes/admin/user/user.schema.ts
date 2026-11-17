@@ -1,6 +1,11 @@
 import type { AdminEmploymentAuthorization } from "@admin-api/services/admin-authorization/admin-employment-authorization.type";
 import { EmploymentDetailDtoSchema } from "@admin-api/services/employment/employment.schema";
-import { UserDetailDtoSchema, UserDtoSchema } from "@admin-api/services/user/user.schema";
+import {
+  UserDetailDtoSchema,
+  UserDtoSchema,
+  UserWecomExternalBindingSchema,
+} from "@admin-api/services/user/user.schema";
+import type { UserWecomExternalBinding } from "@admin-api/services/user/user.type";
 import { z } from "@hono/zod-openapi";
 import type { AdminEmploymentAllowedActions } from "@iam/contracts";
 import {
@@ -42,6 +47,7 @@ export const UserDetailVoSchema = UserVoSchema.extend({
   roleNames: UserDetailDtoSchema.shape.roleNames,
 
   allowedActions: AdminUserAllowedActionsSchema,
+  externalWecomBindings: z.array(UserWecomExternalBindingSchema).optional(),
   employments: z.array(
     EmploymentDetailDtoSchema.extend({
       allowedActions: AdminEmploymentAllowedActionsSchema,
@@ -56,11 +62,13 @@ export function toUserDetailVo(
   input: unknown,
   allowedActions: unknown,
   employmentAuthorization: AdminEmploymentAuthorization,
+  externalWecomBindings?: UserWecomExternalBinding[],
 ) {
   const dto = UserDetailDtoSchema.parse(input);
   return UserDetailVoSchema.parse({
     ...dto,
     allowedActions,
+    ...(externalWecomBindings === undefined ? {} : { externalWecomBindings }),
     employments: dto.employments.map((employment) => {
       const isInScope =
         employmentAuthorization.kind === "full" || employmentAuthorization.organizationIds.includes(employment.orgId);

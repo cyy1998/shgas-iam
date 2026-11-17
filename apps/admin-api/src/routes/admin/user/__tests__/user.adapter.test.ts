@@ -227,6 +227,7 @@ describe("admin User adapter authorization projection", () => {
       const adapter = createUserAdapter({
         random: { password: mock(() => "unused") },
         userService: {
+          listWecomExternalBindings: mock(async () => []),
           getUserDetailByUsernameForAdmin: mock(async () =>
             userDetail(
               [employment(1, 10, EmploymentStatus.Enable), employment(2, 20, EmploymentStatus.Enable)],
@@ -454,6 +455,7 @@ describe("admin User adapter authorization projection", () => {
       random: { password: mock(() => "unused") },
       userService: {
         getUserDetailByUsernameForAdmin: mock(async () => userDetail()),
+        listWecomExternalBindings: mock(async () => []),
       },
     } as never);
 
@@ -469,6 +471,37 @@ describe("admin User adapter authorization projection", () => {
       delete: allowed,
       resign: allowed,
     });
+  });
+
+  test("exposes masked external WeCom bindings only to complete administrators", async () => {
+    const binding = { id: 19, maskedOpenId: "••••1234", createTime: createdAt };
+    const listWecomExternalBindings = mock(async () => [{ ...binding, openId: "Private-OpenId-1234" }]);
+    const unlinkWecomExternalBinding = mock(async () => ({ changed: true, result: null }));
+    const adapter = createUserAdapter({
+      random: { password: () => "unused" },
+      userService: {
+        getUserDetailByUsernameForAdmin: async () => userDetail(),
+        listWecomExternalBindings,
+        unlinkWecomExternalBinding,
+      },
+    } as never);
+    const hr = adapter.userAdminRouter.createCaller({ hono: createContext(["iam:hr-admin"]) });
+    const scoped = await hr.detail({ username: "target" });
+    expect(scoped.externalWecomBindings).toBeUndefined();
+    expect(listWecomExternalBindings).not.toHaveBeenCalled();
+    let failure: unknown;
+    try {
+      await hr.unlinkWecomExternalBinding({ username: "target", bindingId: binding.id });
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toMatchObject({ code: "FORBIDDEN" });
+    expect(unlinkWecomExternalBinding).not.toHaveBeenCalled();
+
+    const admin = adapter.userAdminRouter.createCaller({ hono: createContext(["iam:admin"]) });
+    const detail = await admin.detail({ username: "target" });
+    expect(detail.externalWecomBindings).toEqual([binding]);
+    expect(listWecomExternalBindings).toHaveBeenCalledWith(42);
   });
 
   test("passes request-time User authorization to profile and password mutations", async () => {

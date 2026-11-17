@@ -8,6 +8,7 @@ type AdminUserOutputs = inferRouterOutputs<AppRouter>["admin"]["user"];
 export type UserVo = AdminUserOutputs["search"]["result"][number];
 export type UserDetailVo = AdminUserOutputs["detail"];
 export type UserCreateResult = AdminUserOutputs["create"];
+export type UserWecomExternalBinding = NonNullable<UserDetailVo["externalWecomBindings"]>[number];
 
 export type UserSearchParams = AdminUserInputs["search"];
 
@@ -41,6 +42,10 @@ export function resetUserPassword(username: string) {
 
 export function unlinkUserWecom(username: string) {
   return runAdminMutation(() => apiClient.admin.user.unlinkWecom.mutate({ username }));
+}
+
+export function unlinkUserWecomExternalBinding(username: string, bindingId: number) {
+  return runAdminMutation(() => apiClient.admin.user.unlinkWecomExternalBinding.mutate({ username, bindingId }));
 }
 
 export function generateRandomPassword() {

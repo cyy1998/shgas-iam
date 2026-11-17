@@ -39,6 +39,7 @@ import type {
   WechatQrCompletionPorts,
   WechatQrConfig,
   WechatQrDirectoryPort,
+  WechatQrIdentityPort,
 } from "@api/use-cases/authentication/wechat-qr/wechat-qr.port";
 import { createWechatQrUseCase } from "@api/use-cases/authentication/wechat-qr/wechat-qr.use-case";
 import type { WechatQrBindingPorts } from "@api/use-cases/authentication/wechat-qr/wechat-qr-binding.port";
@@ -114,6 +115,7 @@ export interface RootAuthenticationCompositionOptions {
     namespace: string;
     config: WechatQrConfig;
     directory: WechatQrDirectoryPort;
+    wechat: WechatQrIdentityPort;
     binding?: Pick<
       WechatQrBindingPorts,
       "users" | "sms" | "uow" | "verifyUserPassword" | "credentials" | "humanRisk" | "humanVerification"
@@ -273,7 +275,7 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
       config: options.wechatQr.config,
       state: wechatQrState,
       directory: options.wechatQr.directory,
-      wechat: options.authentication.runtime.integrations.wechat,
+      wechat: options.wechatQr.wechat,
     });
   if (wechatQr) ssoRouter.route("/wechat-qr/mobile", createWechatQrMobileRouter(wechatQr));
   if (customAccess) {
