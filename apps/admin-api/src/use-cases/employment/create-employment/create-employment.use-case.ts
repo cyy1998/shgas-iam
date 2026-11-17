@@ -62,8 +62,8 @@ export function createCreateEmploymentUseCase(deps: CreateEmploymentUseCaseDeps)
         "任职组织不属于期望组织范围",
       );
 
-      const period = { startTime: input.startTime ?? null, endTime: input.endTime ?? null };
-      assertValidEmploymentPeriod(period);
+      const { startTime, endTime = null } = input;
+      assertValidEmploymentPeriod({ startTime: startTime ?? null, endTime });
       const existing = await tx.employmentStore.getOpenEmploymentByUserOrgPosId(user.id, organization.id, position.id);
       if (existing !== null) {
         throw new EmploymentAlreadyExistsError();
@@ -76,7 +76,9 @@ export function createCreateEmploymentUseCase(deps: CreateEmploymentUseCaseDeps)
           )
         : [];
       const observedAt = deps.clock.nowDate();
-      const status = getEmploymentStatusForDate(period, getEmploymentDate(observedAt));
+      const operationDate = getEmploymentDate(observedAt);
+      const period = { startTime: startTime === undefined ? operationDate : startTime, endTime };
+      const status = getEmploymentStatusForDate(period, operationDate);
       if (status === EmploymentStatus.Disable) {
         throw new EmploymentInvalidPeriodError("任职截止日必须晚于今天");
       }

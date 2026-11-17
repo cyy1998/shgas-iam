@@ -18,7 +18,7 @@ const calendarDay = (page: Page, date: string) =>
   page.locator(`.ant-picker-dropdown:visible .ant-picker-cell-in-view[title="${date}"]`);
 
 test("Employment filters and creation selectors use the granted organization scope", async ({ page }) => {
-  await page.clock.setFixedTime(new Date(2090, 2, 1, 12));
+  await page.clock.setFixedTime(new Date("2090-03-01T16:30:00Z"));
   const { employmentSearchInputs } = await mockScopedManagementApi(page);
   const requests: unknown[] = [];
   const pending = {
@@ -100,6 +100,7 @@ test("Employment filters and creation selectors use the granted organization sco
   await createDialog.getByRole("combobox", { name: /岗位/ }).click();
   await page.getByText("财务经理 (FIN-001)").last().click();
   const startDate = createDialog.getByPlaceholder("开始日");
+  await expect(startDate).toHaveValue("2090-03-02");
   await startDate.click();
   await calendarDay(page, pending.startTime).click();
   await calendarDay(page, pending.startTime).click();

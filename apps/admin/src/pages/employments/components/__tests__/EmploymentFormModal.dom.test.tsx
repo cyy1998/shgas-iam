@@ -1,7 +1,7 @@
 import EmploymentFormModal from "@admin/pages/employments/components/EmploymentFormModal";
 import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
 import { UserStatus } from "@iam/contracts";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "~admin/test/render";
 
 const createEmployment = vi.hoisted(() => vi.fn());
@@ -33,10 +33,17 @@ vi.mock("@admin/lib/api-client", () => ({
 
 describe("EmploymentFormModal", () => {
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-01-01T16:30:00Z"));
     createEmployment.mockReset();
     searchUsers.mockReset();
     searchPositions.mockReset();
   });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("keeps disabled users unselectable while allowing Enable and Pause candidates", async () => {
     searchPositions.mockResolvedValue({
       result: [{ posCode: "DEV", posName: "Developer" }],
@@ -92,7 +99,7 @@ describe("EmploymentFormModal", () => {
     expect(screen.queryByLabelText("状态")).not.toBeInTheDocument();
   });
 
-  it("submits only administrator-controlled create facts", async () => {
+  it("submits the Beijing date as the default start date", async () => {
     createEmployment.mockResolvedValue({ changed: true, result: { id: 10 } });
     searchPositions.mockResolvedValue({
       result: [{ posCode: "DEV", posName: "Developer" }],
@@ -123,7 +130,7 @@ describe("EmploymentFormModal", () => {
           posCode: "DEV",
           isPrimary: false,
           description: null,
-          startTime: null,
+          startTime: "2026-01-02",
           endTime: null,
         },
       ]);
@@ -131,7 +138,7 @@ describe("EmploymentFormModal", () => {
     expect(onSuccess).toHaveBeenCalledOnce();
   });
 
-  it("keeps a rejected stale create editable and retries only after an explicit submit", async () => {
+  it("keeps a cleared start date when an administrator retries a rejected create", async () => {
     createEmployment
       .mockRejectedValueOnce(new Error("用户已停用，不能新增任职或转岗"))
       .mockResolvedValueOnce({ changed: true, result: { id: 10 } });
@@ -153,6 +160,8 @@ describe("EmploymentFormModal", () => {
     );
     await user.click(screen.getByRole("combobox", { name: "岗位" }));
     await user.click(await screen.findByTitle("Developer (DEV)"));
+    await user.click(screen.getByPlaceholderText("开始日"));
+    await user.click(screen.getByText("清空开始日", { exact: true }));
     await user.type(screen.getByRole("textbox", { name: "备注" }), "Preserved");
     await user.click(screen.getByRole("button", { name: /确 定|提交/ }));
     await screen.findByText("用户已停用，不能新增任职或转岗");
@@ -164,6 +173,7 @@ describe("EmploymentFormModal", () => {
     await user.click(screen.getByRole("button", { name: /确 定|提交/ }));
     await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce());
     expect(createEmployment).toHaveBeenCalledTimes(2);
+    expect(createEmployment).toHaveBeenLastCalledWith(expect.objectContaining({ startTime: null }));
   });
 
   it("hands committed creation to the owner for refresh without replaying", async () => {
@@ -199,7 +209,7 @@ describe("EmploymentFormModal", () => {
           posCode: "DEV",
           isPrimary: false,
           description: null,
-          startTime: null,
+          startTime: "2026-01-02",
           endTime: null,
         },
       ]);

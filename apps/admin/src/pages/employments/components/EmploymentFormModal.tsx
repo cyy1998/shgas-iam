@@ -5,7 +5,7 @@ import { searchPositions } from "@admin/services/position";
 import { searchUsers } from "@admin/services/user";
 import type { ProFormInstance } from "@ant-design/pro-components";
 import { ModalForm, ProForm, ProFormSelect, ProFormSwitch, ProFormTextArea } from "@ant-design/pro-components";
-import { PositionStatus, UserStatus } from "@iam/contracts";
+import { getEmploymentDate, PositionStatus, UserStatus } from "@iam/contracts";
 import { Alert, message } from "antd";
 import { useRef } from "react";
 import EmploymentPeriodField, { type EmploymentPeriodValue } from "./EmploymentPeriodField";
@@ -56,6 +56,7 @@ export default function EmploymentFormModal({
         username: presetUsername ?? undefined,
         orgCode: presetOrgCode ?? undefined,
         isPrimary: false,
+        period: [getEmploymentDate(new Date()), null],
       }}
       modalProps={{
         destroyOnHidden: true,
@@ -149,7 +150,7 @@ export default function EmploymentFormModal({
         }}
       />
       <ProFormSwitch name="isPrimary" label="设为主岗" tooltip="若选 true，将自动把该用户其它主岗置为非主" />
-      <EmploymentPeriodField />
+      <EmploymentPeriodField item={ProForm.Item} />
       <ProFormTextArea name="description" label="备注" />
     </ModalForm>
   );

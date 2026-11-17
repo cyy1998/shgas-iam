@@ -99,7 +99,7 @@ function createLifecycle() {
 }
 
 describe("Employment Lifecycle", () => {
-  test("creates an immediately effective employment with no date limits", async () => {
+  test("creates an immediately effective employment starting today when dates are omitted", async () => {
     const { useCase, tx } = createLifecycle();
 
     await expect(
@@ -117,7 +117,7 @@ describe("Employment Lifecycle", () => {
       orgId: 2,
       posId: 3,
       isPrimary: true,
-      startTime: null,
+      startTime: "2026-01-01",
       endTime: null,
       description: "new employment",
       status: EmploymentStatus.Enable,
@@ -126,7 +126,7 @@ describe("Employment Lifecycle", () => {
       expect.objectContaining({
         action: "admin.employment.create",
         targetId: 10,
-        details: expect.objectContaining({ startTime: null }),
+        details: expect.objectContaining({ startTime: "2026-01-01" }),
       }),
     );
     expect(tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "employment", userId: 1 }]);

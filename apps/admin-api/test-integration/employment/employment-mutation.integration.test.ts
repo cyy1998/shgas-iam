@@ -1063,7 +1063,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
       expect(await facts()).toEqual(before);
     });
     const periods = [
-      { input: {}, startTime: null, endTime: null, status: EmploymentStatus.Enable },
+      { input: {}, startTime: today, endTime: null, status: EmploymentStatus.Enable },
       { input: { startTime: today }, startTime: today, endTime: null, status: EmploymentStatus.Enable },
       {
         input: { startTime: "2026-09-06", endTime: "2026-09-08" },
@@ -1453,13 +1453,13 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
     });
   }
 
-  test("creates an enabled Employment with both dates unset when the Admin command omits them", async () => {
+  test("creates an enabled Employment with both dates unset when the Admin command clears the start date", async () => {
     const fixture = await seed(false);
     const app = employmentApp(commands(), fixture.user.id);
     const response = await app.request("/admin/employments", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ username: "holder", orgCode: "ORG", posCode: "POS" }),
+      body: JSON.stringify({ username: "holder", orgCode: "ORG", posCode: "POS", startTime: null }),
     });
     expect(response.status).toBe(200);
     const created = await facts();
@@ -1621,14 +1621,11 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
       endTime: today,
     });
     // Newly inserted rows were absent from both selected write sets; no phantom protection is claimed.
-    for (const [id, startTime] of [
-      [created.result.id, null],
-      [transferred!.result.id, today],
-    ] as const) {
+    for (const id of [created.result.id, transferred!.result.id]) {
       expect(after.employments.find((row) => row.id === id)).toMatchObject({
         isPrimary: true,
         status: EmploymentStatus.Enable,
-        startTime,
+        startTime: today,
         endTime: null,
       });
     }
@@ -1669,7 +1666,7 @@ describe("Employment mutations through production PostgreSQL UnitOfWork", () => 
           orgCode: "ORG",
           posCode: "NEW",
           isPrimary: true,
-          ...(expired ? { endTime: "2026-09-08" } : { startTime: "2026-09-08" }),
+          ...(expired ? { endTime: "2026-09-08" } : {}),
         }),
       });
       try {

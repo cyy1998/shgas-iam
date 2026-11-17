@@ -1,9 +1,10 @@
 import "dayjs/locale/zh-cn";
 import { EmploymentDateSchema } from "@iam/contracts";
-import { DatePicker, Form } from "antd";
+import { DatePicker, Form, type FormItemProps } from "antd";
 import type { RangePickerProps } from "antd/es/date-picker";
 import zhCN from "antd/es/date-picker/locale/zh_CN";
 import dayjs from "dayjs";
+import type { ComponentType } from "react";
 
 export type EmploymentPeriodValue = [start: string | null, end: string | null];
 
@@ -32,16 +33,14 @@ function EmploymentPeriodPicker({ id, value, onChange }: RangeInputProps) {
       inputReadOnly
       style={{ width: "100%" }}
       presets={presets}
-      onChange={(dates, dateStrings) =>
-        onChange?.(dates ? [dateStrings[0] || null, dateStrings[1] || null] : [null, null])
-      }
+      onChange={(_, dateStrings) => onChange?.([dateStrings?.[0] || null, dateStrings?.[1] || null])}
     />
   );
 }
 
-export default function EmploymentPeriodField() {
+export default function EmploymentPeriodField({ item: FormItem = Form.Item }: { item?: ComponentType<FormItemProps> }) {
   return (
-    <Form.Item
+    <FormItem
       name="period"
       label="有效期"
       extra="按北京时间，包含开始日，截止日当天不生效。任一端可留空。"
@@ -61,6 +60,6 @@ export default function EmploymentPeriodField() {
       ]}
     >
       <EmploymentPeriodPicker />
-    </Form.Item>
+    </FormItem>
   );
 }
