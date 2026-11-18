@@ -1,13 +1,8 @@
 # 数据维护
 
-Type: runbook
-Status: Current
-Last verified: 2026-11-03
-Next review: 2026-12-03
-
-本页维护 User Document / Organization Document schema 1 与 Subject Access。命令名称以当前候选代码为准；
-完整 Spec 的目标环境硬切换、备份和受控开放仍由部署侧执行，本地测试不表示目标环境已经迁移。
-两个读模型分别修复、重建和核验；一次性退役或旧代升级见[迁移入口](README.md#一次性迁移与旧版本)。
+用于分别修复、重建和核验 schema 1 的 User Document 和 Organization Document，也用于恢复 Subject Access。
+先核对目标实例，确认 Ops 与目标制品版本匹配，再检查所选操作的 Worker、备份和停流要求。旧代升级或一次性退役见[迁移入口](README.md#一次性迁移与旧版本)。
+手册状态与复核日期见[索引条目](../index.md#runbook-data-maintenance)。
 
 ## 准备资源与选择操作
 

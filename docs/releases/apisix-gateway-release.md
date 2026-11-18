@@ -1,9 +1,7 @@
 # 网关管理
 
-Type: runbook
-Status: Current
-Last verified: 2026-10-25
-Next review: 2026-11-25
+用于首次配置网关、发布应用配置、检查数据面和处理发布失败。开始前确认目标环境与 scope，准备配套配置和受控管理面访问权限。
+手册状态与复核日期见[索引条目](../index.md#runbook-gateway)。
 
 ## 服务与首次配置
 

@@ -58,6 +58,7 @@
     函数、字段、错误码、参数和算法细节链接代码，测试场景由测试维护。只保留关键验证入口。
     实施流水账与退役过程从 issue 和 Git 历史追溯，当前兼容与恢复限制仍须保留。
   - `releases` 按运维任务组织为入口和五个专题。操作保留适用情况、前提、步骤、完成标准与失败处理。
+    文档类型、状态、最近核验和下次复核日期统一维护在[发布与维护](#发布与维护)，每篇手册开头链接对应条目。
     验收按影响选择，不要求额外留证。机制说明归对应契约。一次性升级和旧代切换通过入口中的固定 Git 版本追溯。
   - ADR 按独立决策组织，保留当前决定、理由、拒绝方案与代价，不按实施切片新增。
     合并时承接独有理由，不能因功能契约已存在而删掉取舍。算法和操作步骤引用对应权威文档。
@@ -79,7 +80,7 @@ git diff --check
 
 ## 文档清单
 
-按主题展开相关目录即可。features 保存功能与业务规则，guides 保存管理员操作与应用接入，字段与协议细节沿指南查代码；旧候选和设计从上方固定快照追溯。
+按主题查找文档。features 保存功能与业务规则，guides 保存管理员操作与应用接入，字段与协议细节沿指南查代码；旧候选和设计从上方固定快照追溯。
 releases 维护当前代操作；一次性迁移与更早版本从[运维入口](releases/README.md#一次性迁移与旧版本)按来源查找。
 其他目录阅读前仍须核对 Status 及适用限制。
 
@@ -231,18 +232,13 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 
 ### 发布与维护
 
-<details>
-<summary>展开发布与维护</summary>
+从运维操作入口选择任务。各手册列出执行前提、完成标准和失败处理。
 
-从操作入口选择任务，核对必要前提、完成标准和失败处理；接口定义见代码，实现边界见架构文档。
-
-| Document                                             | Type    | Status  | Last verified | Next review | Notes                                                           |
-| ---------------------------------------------------- | ------- | ------- | ------------- | ----------- | --------------------------------------------------------------- |
-| [运维操作入口](releases/README.md)                   | runbook | Current | 2026-11-13    | 2026-12-13  | 任务导航、简短通用约定、独立迁移与历史版本入口。                |
-| [网关管理](releases/apisix-gateway-release.md)       | runbook | Current | 2026-10-25    | 2026-11-25  | 首次配置、HTTP 发布、数据面检查和失败恢复。                     |
-| [登录与会话](releases/authentication-and-session.md) | runbook | Current | 2026-11-02    | 2026-12-02  | 密码配置、OIDC 双入口与密钥、会话清理和 Snapshot 恢复。         |
-| [数据维护](releases/data-maintenance.md)             | runbook | Current | 2026-11-03    | 2026-12-03  | Document、Subject Access 的两阶段修复、全量重建及完整核验。     |
-| [部署与发布](releases/deployment.md)                 | runbook | Current | 2026-11-13    | 2026-12-13  | 首次部署、常规更新、任职有效期协调发布、一次性 Ops 制品与回退。 |
-| [日志与排障](releases/observability-system-logs.md)  | runbook | Current | 2026-10-25    | 2026-11-25  | 日志栈、Grafana、Trace 关联、告警与采集恢复。                   |
-
-</details>
+| Document                                                                                              | Type    | Status  | Last verified | Next review | Notes                                                           |
+| ----------------------------------------------------------------------------------------------------- | ------- | ------- | ------------- | ----------- | --------------------------------------------------------------- |
+| [运维操作入口](releases/README.md)<a name="runbook-operations"></a>                                   | runbook | Current | 2026-11-13    | 2026-12-13  | 任务导航、简短通用约定、独立迁移与历史版本入口。                |
+| [网关管理](releases/apisix-gateway-release.md)<a name="runbook-gateway"></a>                          | runbook | Current | 2026-10-25    | 2026-11-25  | 首次配置、HTTP 发布、数据面检查和失败恢复。                     |
+| [登录与会话](releases/authentication-and-session.md)<a name="runbook-authentication-and-session"></a> | runbook | Current | 2026-11-02    | 2026-12-02  | 密码配置、OIDC 双入口与密钥、会话清理和 Snapshot 恢复。         |
+| [数据维护](releases/data-maintenance.md)<a name="runbook-data-maintenance"></a>                       | runbook | Current | 2026-11-03    | 2026-12-03  | Document、Subject Access 的两阶段修复、全量重建及完整核验。     |
+| [部署与发布](releases/deployment.md)<a name="runbook-deployment"></a>                                 | runbook | Current | 2026-11-13    | 2026-12-13  | 首次部署、常规更新、任职有效期协调发布、一次性 Ops 制品与回退。 |
+| [日志与排障](releases/observability-system-logs.md)<a name="runbook-observability"></a>               | runbook | Current | 2026-10-25    | 2026-11-25  | 日志栈、Grafana、Trace 关联、告警与采集恢复。                   |

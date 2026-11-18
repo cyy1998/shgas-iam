@@ -1,9 +1,7 @@
 # 日志与排障
 
-Type: runbook
-Status: Current
-Last verified: 2026-10-25
-Next review: 2026-11-25
+用于部署日志栈、关联请求与 Trace、处理采集故障。先确认目标环境、主机和服务。部署前按[日志栈部署](#日志栈部署)准备私有 `docker/.env`。
+手册状态与复核日期见[索引条目](../index.md#runbook-observability)。
 
 系统日志经 Docker stdout/stderr → Alloy → Loki → Grafana，采集带 `shgas-iam.logs.enabled=true` 的容器。
 当前包括 API、Admin API、两个 Worker、Worker dashboard 与 APISIX；Admin/SSO 前端未启用采集。

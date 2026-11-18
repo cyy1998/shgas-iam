@@ -1,12 +1,8 @@
 # 登录与会话
 
-Type: runbook
-Status: Current
-Last verified: 2026-11-02
-Next review: 2026-12-02
-
-按[通用约定](README.md#通用约定)确认环境。当前密码登录、OIDC、会话清理和 Snapshot 恢复分别操作；
+用于更新登录配置、轮换 OIDC 密钥、清理会话或修复 Client Snapshot。先按[通用约定](README.md#通用约定)确认目标环境，再核对所选操作的配置与停流要求。
 日常配置更新不自动清空会话。旧代升级先查[独立迁移指引](README.md#一次性迁移与旧版本)。
+手册状态与复核日期见[索引条目](../index.md#runbook-authentication-and-session)。
 
 ## 密码登录配置
 

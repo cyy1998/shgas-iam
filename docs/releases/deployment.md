@@ -1,12 +1,9 @@
 # 部署与发布
 
-Type: runbook
-Status: Current
-Last verified: 2026-11-13
-Next review: 2026-12-13
-
-本页覆盖当前版本首次部署、常规更新和兼容版本回退。旧 Profile/Organization Search 升级先按[统一 Document 硬切换](data-maintenance.md#统一-document-硬切换)，其他跨代来源见[独立迁移指引](README.md#一次性迁移与旧版本)。
-本地开发见[项目快速开始](../../README.md#快速开始)；网关、登录密钥、数据重建和日志栈按[专题入口](README.md)操作。
+用于当前版本的首次部署、常规更新和兼容版本回退。先确认目标环境，按[部署输入](#部署输入)核对镜像版本与各主机配置。
+旧 Profile/Organization Search 升级先按[统一 Document 硬切换](data-maintenance.md#统一-document-硬切换)，其他跨代来源见[独立迁移指引](README.md#一次性迁移与旧版本)。
+本地开发见[项目快速开始](../../README.md#快速开始)。网关、登录密钥、数据重建和日志栈按[专题入口](README.md)操作。
+手册状态与复核日期见[索引条目](../index.md#runbook-deployment)。
 
 ## 部署输入
 
