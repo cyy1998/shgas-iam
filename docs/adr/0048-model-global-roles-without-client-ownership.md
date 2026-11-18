@@ -39,4 +39,4 @@ status: accepted
 
 本决定扩展 [ADR-0046](0046-unify-user-and-organization-read-documents.md) 的 Internal 角色可见范围，沿用
 [ADR-0032](0032-consume-published-subject-facts-for-authorization.md) 的已发布事实与披露边界，以及
-[ADR-0002](0002-centralize-role-assignment-resolution.md) 的有效角色解析。领域术语见 [CONTEXT.md](../../CONTEXT.md)。
+[ADR-0002](0002-centralize-role-assignment-resolution.md) 的有效角色解析。领域术语见 [GLOSSARY.md](../../GLOSSARY.md)。

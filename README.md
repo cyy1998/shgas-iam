@@ -74,7 +74,7 @@ pnpm --filter @iam/sso dev
 
 - [构建、测试与开发命令](docs/engineering/commands.md)提供构建、定向测试和验证入口，[测试与验证](docs/engineering/testing.md)说明何时使用各通道。
 - [文档索引](docs/index.md)登记工程规范、功能规则、接入指南、运维手册和 ADR。[AGENTS.md](AGENTS.md)按任务指向适用规则。
-- [功能与业务规则](docs/features/README.md)和 [CONTEXT.md](CONTEXT.md)维护业务行为与领域术语。
+- [功能与业务规则](docs/features/README.md)和 [GLOSSARY.md](GLOSSARY.md)维护业务行为与领域术语。
 - [使用与接入指南](docs/guides/README.md)面向管理员和接入应用，[运维操作入口](docs/releases/README.md)覆盖部署、维护和恢复。
 
 ## 贡献指南

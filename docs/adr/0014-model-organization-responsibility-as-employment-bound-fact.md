@@ -24,7 +24,7 @@ Type Catalog 由 IAM 代码拥有，采用只增不减、没有运行时生命�
 
 ## 当前契约与历史
 
-模型词汇见[CONTEXT](../../CONTEXT.md)，解析与写入归属见
+模型词汇见[领域术语表](../../GLOSSARY.md)，解析与写入归属见
 [组织责任解析](../../packages/assignment-resolution/README.md#organization-responsibility-解析)。
 HR 管理范围由 [ADR-0017](0017-centralize-admin-role-policy-with-request-time-scope.md) 决定，
 功能见[组织责任管理](../features/directory-management.md#组织责任管理)。

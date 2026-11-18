@@ -10,7 +10,7 @@ OIDC、User Document 与目录搜索共享这一身份，不各自生成协议�
 这避免协议迁移或投影变化造成主体漂移。数据库 numeric ID 不作为公开主体身份；标识属于用户，不属于会话或某次授权。
 旧 Principal Session / Snapshot 的存储安排不再是身份决定的一部分。
 
-当前词汇见[CONTEXT](../../CONTEXT.md)，两类会话如何引用主体见
+当前词汇见[领域术语表](../../GLOSSARY.md)，两类会话如何引用主体见
 [Kernel 契约](../../packages/session-kernel/README.md#会话与可信观察)。
 
 历史来源：[ADR-0006 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0006-elevate-user-subject-identifier.md)。原始决定与后续修订按各版本追溯。

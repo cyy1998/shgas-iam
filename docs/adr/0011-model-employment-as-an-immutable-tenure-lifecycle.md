@@ -66,7 +66,7 @@ Legacy Employment Tombstone 保留原事实，不推断结束时间，也不由�
 Profile 构建触及的记录，不能被单个 builder 的守卫替代；异常通过正式业务入口修复。此处承接原维护支持决定中仍有效的
 诊断责任，不恢复旧升级步骤。
 
-当前领域语言见[CONTEXT](../../CONTEXT.md)，写入和发布边界见
+当前领域语言见[领域术语表](../../GLOSSARY.md)，写入和发布边界见
 [后端架构](../engineering/backend-architecture.md#admin-同对象写入规范)，维护与完整校验见
 [Profile 手册](../releases/data-maintenance.md)。
 

@@ -22,7 +22,7 @@
 这些证据不一致时，应记录并调查差异，不得用 spec、ADR 或其他文档声明覆盖已观察到的行为。`openspec/`、`Historical` 和
 `Stale` 文档不能单独证明当前行为。
 
-判断本次修改目标时，以用户当前授权的目标和适用 spec/ticket 的验收要求界定范围，以 `CONTEXT.md`、已接受 ADR 和当前
+判断本次修改目标时，以用户当前授权的目标和适用 spec/ticket 的验收要求界定范围，以 `GLOSSARY.md`、已接受 ADR 和当前
 工程文档约束实现。现有代码只是修改基线，不会自动否定目标；目标依据彼此冲突或范围不清时，必须先澄清再实施。
 
 仓库级指令从 `AGENTS.md` 进入，运行和环境入口见 `README.md`。
@@ -35,7 +35,7 @@
 | 修改代码或开展设计           | [仓库规则路由](../AGENTS.md)、[系统架构](engineering/system-architecture.md)                                                                           |
 | 修改 Admin 写入              | [事务与锁序](engineering/backend-architecture.md#admin-同对象写入规范)、[响应与失败恢复](engineering/backend-architecture.md#admin-写入结果与失败恢复) |
 | 运行开发命令、编写或排查测试 | [命令入口](engineering/commands.md)、[测试与验证](engineering/testing.md)                                                                              |
-| 理解功能或修改业务规则       | [功能与业务规则](features/README.md)、[领域语言](../CONTEXT.md)、[ADR 清单](#架构决策)                                                                 |
+| 理解功能或修改业务规则       | [功能与业务规则](features/README.md)、[领域语言](../GLOSSARY.md)、[ADR 清单](#架构决策)                                                                |
 | 管理 IAM                     | [管理员操作](guides/README.md#管理员操作)                                                                                                              |
 | 接入第三方应用               | [第三方接入](guides/README.md#第三方接入)，接口字段与响应沿指南查代码                                                                                  |
 | 升级、恢复或发布             | [运维操作入口](releases/README.md)、[数据维护](releases/data-maintenance.md)、[发布手册清单](#发布与维护)                                              |
@@ -43,7 +43,7 @@
 
 ## 维护方式
 
-- **单一权威出处**。同一规则保留一个权威出处：领域术语在 `CONTEXT.md`，决策及理由在 ADR，工程约束在专题指南，
+- **单一权威出处**。同一规则保留一个权威出处：领域术语在 `GLOSSARY.md`，决策及理由在 ADR，工程约束在专题指南，
   环境运维步骤在 runbook，功能与业务规则在 features，管理员操作和应用接入步骤在 guides。字段与接口定义以代码为准，其他页面链接出处。
 - **索引与交付记录**。索引只登记用途、状态和必要的替代关系；实施进度、候选 SHA、测试次数与验收结论留在对应 issue 或验收记录。
   `Current` 表示文档可用，不代表目标已经实现、合入或部署；`Last verified` 也不是部署日期。
@@ -73,7 +73,7 @@ pnpm check:docs
 git diff --check
 ```
 
-文档检查覆盖登记和元数据，并从 `docs/`、根目录的 `README.md`、`AGENTS.md`、`CONTEXT.md` 及 `apps/*/README.md`、
+文档检查覆盖登记和元数据，并从 `docs/`、根目录的 `README.md`、`AGENTS.md`、`GLOSSARY.md` 及 `apps/*/README.md`、
 `packages/*/README.md` 出发，检查仓库内的链接目标和 Markdown 标题及 HTML 锚点。链接到的仓库内 Markdown 继续检查，
 `openspec/` 和 `.scratch/` 的历史文件只核对作为链接目标时的路径和锚点。复核日期逾期会提示，内容准确性由相关变更的评审确认。
 

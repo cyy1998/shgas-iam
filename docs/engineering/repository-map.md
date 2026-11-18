@@ -18,7 +18,7 @@ APISIX 和可观测性配置属于仓库级运行和运维资产，不是 worksp
 ├── docker/           # dev/prod Compose、APISIX 与可观测性配置
 ├── scripts/          # 仓库级检查、canonical test collection/Integration 编排和辅助脚本
 ├── docs/             # 当前架构、功能、runbook、ADR 与历史记录
-├── CONTEXT.md        # 稳定领域语言
+├── GLOSSARY.md       # 稳定领域语言
 ├── .sandcastle/      # AFK prompts、Docker 镜像与本地运行配置
 ├── .scratch/         # 已退役本地 tracker 的只读历史归档
 └── openspec/         # 冻结的历史需求与设计记录
@@ -101,7 +101,7 @@ Use case 由 root 的 `useCases` 交给路由。Admin API 的入口与审计实�
 - `docs/guides/` 供管理员和接入方查操作步骤、配置、调用示例与失败处理。
 - `docs/engineering/` 保存系统与模块设计、工程约定和验证入口。`docs/releases/` 保存运维操作。
   其他工作流、ADR 和历史记录以及文档状态见[文档索引](../index.md)。
-- `CONTEXT.md`：IAM 的稳定领域语言；长期架构决策位于 `docs/adr/`。
+- `GLOSSARY.md`：IAM 的稳定领域语言；长期架构决策位于 `docs/adr/`。
 - GitHub Issues：新建 spec、tickets 与跨会话状态的 tracker。仓库与操作约定见
   [GitHub 议题跟踪](../agents/issue-tracker.md)。
 - `.scratch/`：已退役本地 tracker 的历史归档；保留原路径和 release 链接。

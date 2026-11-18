@@ -26,6 +26,6 @@ status: accepted
 标识与名称统一在写入前修剪首尾空白，保留既有大小写、查询匹配与软删除记录的唯一性语义。
 输入字段和长度由当前 schema 定义，原存量前提与本次范围限制由历史决定和 Spec 保留。
 Admin 详情继续展示合法角色事实。权限点及旧详情字段由 [ADR-0045](0045-retire-privilege-permission-points.md) 退役。
-[用户、组织与任职](../features/directory-management.md) · [领域语言](../../CONTEXT.md)
+[用户、组织与任职](../features/directory-management.md) · [领域语言](../../GLOSSARY.md)
 
 固定历史版本：[ADR-0026 历史原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0026-serialize-privilege-delegation-writes-by-delegator.md)、[整理前 ADR-0039](https://github.com/cyy1998/shgas-iam/blob/cbfd4aa60fd6000662026b68576f1aa1409b6ce4/docs/adr/0039-tighten-admin-reference-integrity-and-preserve-history.md)。
