@@ -1,165 +1,29 @@
-# APISIX 网关配置管理
+# APISIX 网关配置 API
 
-`@iam/gateway-apisix` 是独立 Bun + Hono 配置 API，IAM 和第三方应用统一通过 HTTP 发布。
-调用方保管 YAML，APISIX 保存实际配置；Gateway 不保存期望配置、版本历史或持久发布任务。
-调用方式、配置示例和结果处理见[接入指南](../../docs/guides/gateway.md)，
-部署、首次发布和人工恢复见[发布手册](../../docs/releases/apisix-gateway-release.md)。
+`@iam/gateway-apisix` 是独立的 Bun + Hono 服务。调用方保管 YAML，Gateway 按请求读取 IAM 的 Client 记录、计算配置差异并调用 APISIX Admin API。生效配置在 APISIX，服务只在本次操作期间保留补偿所需的前态。
 
-## 启动与调用
+## 本地启动
 
-按 [.env.example](.env.example) 提供 `IAM_GATEWAY_DATABASE_URL`、`IAM_GATEWAY_APISIX_ADMIN_URL`、
-`IAM_GATEWAY_APISIX_ADMIN_KEY`，再运行：
+按[环境模板](.env.example)在 `apps/gateway/.env` 填写 Gateway 专用的 PostgreSQL 只读连接、APISIX Admin API 地址和 Admin Key。从仓库根目录执行：
 
 ```bash
-pnpm --filter @iam/gateway-apisix start
-# 开发时监听源码变化
 pnpm --filter @iam/gateway-apisix dev
 ```
 
-- **监听与健康检查** 正式入口为 `src/main.ts`，start 执行 `bun src/main.ts`，默认监听 `0.0.0.0:30004`。
-  Compose 的 `gateway-api` 默认只向宿主 `127.0.0.1:30004` 映射，应限制在可信管理网络。
-  `GET /health` 返回 200 只证明 HTTP 就绪，不检查 PostgreSQL 或 APISIX；关闭期间返回 503。
+`dev` 监听源码变更，`start` 直接启动。默认端口为 `30004`，`GET /health` 可检查 HTTP 进程是否就绪。数据库权限和 APISIX 连通性见[服务与首次配置](../../docs/releases/apisix-gateway-release.md#服务与首次配置)。要验证一次调用，使用[接入指南的最小请求](../../docs/guides/gateway.md#第一次校验)。
 
-- **数据库连接** Gateway 不依赖 Redis。自有 PostgreSQL pool 最多 4 条连接并设置默认只读，部署仍需专用 reader role。
-  启动参数、权限和执行/关闭预算见[服务配置](../../docs/releases/apisix-gateway-release.md#服务与首次配置)。
+## 按改动定位代码
 
-- **请求认证** 三种操作均要求 `Content-Type: application/json`，通过 `apikey` header 提交 scope 对应 Client 的
-  Internal API Secret。例如 `prod:tender` 要求 code 为 tender、Enable 且未删除的 Client。
-  每次请求读取当前数据库记录，不缓存、不使用 SSO Secret；已认证的在途操作继续完成。
-  缺失、错误、跨应用或状态不允许统一返回 401，数据库不可用返回 503，均不访问 APISIX。
-  首次提交 iam scope 前需准备 `iam` Client，`iam-admin` 不能替代它。
-
-共同请求体：
-
-```json
-{
-  "scope": "dev:tender",
-  "yaml": "service: {}",
-  "variables": {}
-}
-```
-
-| 请求             | 作用                                                                       |
-| ---------------- | -------------------------------------------------------------------------- |
-| `POST /validate` | 校验 YAML，返回资源数量和安全问题，不访问 APISIX。                         |
-| `POST /diff`     | 读取远端，返回 `data.outcome: "preview"` 与 `data.plan`，不写入。          |
-| `POST /apply`    | 可加 dryRun、prune，均默认 false；重新读取并规划，正式执行写入及必要补偿。 |
-
-响应使用 `{code,data,message}` envelope。正式成功区分 `applied`（written:true）和
-`no_change`（written:false）；dry-run 为 preview。计划只含 kind/id 和忽略原因，不返回完整资源或秘密。
-APISIX SSL list 的私钥是加密值，同一份含明文私钥变量的源配置再次提交时，仍可能规划 SSL update 并重写。
-no_change 仅表示当前计划没有实际写集，不保证七类资源重复提交都不写入；Gateway 不解密私钥作等价比较。
-变量只从本次 variables 映射解析，省略为空；不回退进程环境，不接受服务器文件路径或请求指定的远端地址。
-Secret 字段必须使用占位符或外部秘密引用。请求示例见[发布流程](../../docs/releases/apisix-gateway-release.md#发布配置)。
-旧 CLI、根 `gateway:apisix:*` 命令及其 env/file 参数已退役。
-
-## 目录与 YAML
-
-```text
-apps/gateway/
-  src/
-    main.ts               # 正式进程入口
-    runtime.ts            # HTTP 监听与关闭
-    http/                 # 请求、envelope 与生命周期
-    composition/          # 只读数据库与 APISIX adapter 接线
-    services/gateway/     # 认证、规划、发布与恢复
-    repositories/         # Client 窄读取
-    validators/           # YAML 规则
-  Dockerfile
-  .env.example
-```
-
-manifest 是调用方维护的 app-centric 单文件源，仓库示例位于 `tmp/gateway-config/apisix/manifests/<env>/<app>.yaml`。
-`dev:iam` 为本地基线，`prod:iam` 为生产示例；生产地址、证书和秘密通过本次请求变量提供。
-YAML 支持 service、upstreams、routes、consumers、ssls、service plugin_configs 和 plugin_metadata，
-物化为七类 APISIX 资源。例如：
-
-```yaml
-service:
-  desc: Tender gateway app service
-  plugin_configs:
-    - key: api-ip-rate-limit
-      plugins:
-        limit-req:
-          rate: 10
-          burst: 20
-upstreams:
-  - key: api
-    nodes:
-      ${DEV_TENDER_API_UPSTREAM_HOST}:${DEV_TENDER_API_UPSTREAM_PORT}: 1
-routes:
-  - key: api
-    uri: /api/tender/*
-    upstream: api
-    plugin_config: api-ip-rate-limit
-```
-
-- app service 的 id/name 为 `<app>.<env>`；route、upstream、plugin_config 的 id/name 为 `<app>.<key>.<env>`。
-- **标识生成** Consumer 的 username 为 `<app>_<key>_<env>`，例如 tender_reader_dev；其余标识保持既有规则，plugin_metadata 仍以插件 key 标识。
-- SSL 的 id 沿点号规则，不生成 name；`ssls[].key` 为本地名，`private_key: ${TLS_PRIVATE_KEY}` 映射 APISIX 私钥 key，证书与私钥均必填。
-- 非 terminal route 声明 `upstream: <key>`，物化时注入 service/upstream 引用；`plugin_config: <key>` 引用同文件策略。
-- `terminal: true` 不注入 service/upstream，适用于 redirect；源文件不手写物化后的 id/name 或资源引用 ID。
-
-- **受管标签与安全清理** 物化时注入 managed_by:shgas-iam、source:repo-manifest、env、app 标签，源自定义 labels 不得覆盖它们。
-  发布只管理当前 scope 的 repo-manifest 对象，避让 dynamic-registry、其他 scope 和未管理对象。
-  删除候选默认只展示，不执行。存在独立 credential 子资源的 Consumer 不允许 prune；无法确认子列表为空时，
-  整次 apply 在任何写入前拒绝。子凭据先由实际 owner 处理，不属于七类 YAML 或恢复集合。
-
-## 本地与生产基线
-
-Gateway 配置由调用方在 Git 忽略目录 `tmp/gateway-config/apisix/` 保管，不随 clone 提供。
-运行 Compose 或准备发布前，须在该目录准备 `config.dev.yaml`、
-`config.prod.example.yaml` 及 `manifests/dev/`、`manifests/prod/` 中的应用配置。
-缺失时相关入口会失败；应用源码本身不读取此目录。不要将发布变量、凭据或现场快照加入 Git。
-Unit 使用 `src/__tests__/` 内的合成 manifest 验证解析、资源物化与 HTTP 输入，不依赖部署配置。
-Gateway Integration 使用 `test-integration/support/` 内的一套固定 APISIX 配置与合成发布输入验证 Gateway 功能。
-每条命令首次需要时启动一次 APISIX/etcd，串行用例在停止本例进程和代理后清空并回读七类资源；重置失败立即停止。
-命令结束由父 runner 清理环境，中断时由 root 按本次登记记录兜底回收，不跨命令复用。
-Full-system E2E 独立维护 `e2e/system/test-assets/` 中的启动配置和 IAM 路由。
-这些测试资产不作为部署模板；现场配置仍须由部署方准备并按发布手册验收。
-
-- **开发与生产编排** 开发编排为 `docker/compose.dev.yaml`，模板为 `docker/.env.dev.example`；Gateway 数据库 URL
-  必须显式提供，不能继承其他 app 的读写连接。生产 `gateway-api` 位于 `docker/compose.prod.apps.yaml`，
-  镜像由 `apps/gateway/Dockerfile` 构建；APISIX 与 etcd 位于 `docker/compose.prod.gateway.yaml`。
-  APISIX 启动配置位于 `tmp/gateway-config/apisix/`，发布基线位于 `tmp/gateway-config/apisix/manifests/<env>/<app>.yaml`。
-  生产 Gateway API 可独立启动，通过 `IAM_GATEWAY_APISIX_ADMIN_URL` 连接 APISIX；发布前须按
-  [发布手册](../../docs/releases/apisix-gateway-release.md)核验数据库权限与 APISIX 可用性。
-  首次配置通过直连 API 完成，不依赖尚未创建的 IAM 路由。
-  APISIX Admin API 固定使用 v3，Admin Key 只留在服务部署配置。
-
-本机 dev 发布变量示例为 `tmp/gateway-config/apisix/variables.dev.example.json`，
-作为请求的 `variables` 字段提交，不由 Compose 自动加载。示例保留本机 IAM 和 GDS 主应用地址，
-GDS 子应用、dashboard、Tender、Contract 与 MinIO 使用远程 dev 上游；发布前按实际运行位置调整。
-SSO/OIDC 的两个 Host 必须与 API 的 internal/external origin 一致，示例为 `localhost:30080` 和
-`localhost:39999`；变量本身不创建端口映射，外部入口还需相应的监听或代理。
-
-dev manifests 包含 `iam`、`gds`、`tender`、`contract`。Contract API 和 Tender 的 MinIO 路由来自
-远程 dev 的未管理配置，纳入 manifest 后使用生成的资源 ID；Contract 的内嵌上游改为独立上游。
-MinIO 保留远程的路径重写与无网关鉴权插件配置；Contract/Tender 鉴权仍指向远程 IAM，
-GDS 示例鉴权指向本机 IAM。发布各 scope 前均需准备同名、已启用的 Client；不能为同步配置绕过禁用状态。
-这两条路由在远程仍是未管理对象，不会被 `prune` 清除，不能直接将新增 manifest 发布到远程造成重叠路由。
-
-- **本地开发变量与路由基线** 本地数据面为 `http://localhost:30080` / `https://localhost:30443`，Admin API 为
-  `http://127.0.0.1:9180/apisix/admin`。IAM 的 `/api/iam` 前缀经 proxy-rewrite 去除：
-  public/open/internal/auth 转 API，admin/rpc 转 Admin API；`/portal`、`/iam-admin` 转前端。
-  SSO/OIDC 使用受控内外网 host，分别覆盖 X-IAM-Entry-Network，无未知 host 的协议兜底。
-  双入口发布见[OIDC 手册](../../docs/releases/authentication-and-session.md#oidc-双入口配置)。
-
-API routes 经 route 级 plugin_config 绑定 limit-req，普通 API 为 rate 10 / burst 20，
-IAM internal 为 rate 50 / burst 100；前端、静态和文件入口不使用本 API 限流策略。
-real-ip 只信任 `${TENCENT_NGINX_TRUSTED_CIDR}` 指定的最小腾讯云 Nginx CIDR，禁止全网段。
-当前 APISIX 单节点使用 policy:local，扩容前需评估共享计数。发布前复核 forward-auth、proxy-rewrite、CORS 和 host，
-详细步骤由发布手册维护。
+| 要改什么             | 从哪里开始                                                                                                                                                                                                       |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 监听、关闭与依赖装配 | [进程入口](src/main.ts)、[运行时](src/runtime.ts)、[生产装配](src/composition/index.ts)。每次配置请求通过专用只读连接查询当前 Client 凭据。                                                                      |
+| HTTP 请求与响应      | [HTTP 路由](src/http/app.ts)选择各端点的[请求 schema](src/services/gateway/gateway.schema.ts)，将业务错误映射为 HTTP 状态和响应体。                                                                              |
+| YAML 与差异计划      | [manifest](src/manifest.ts) 将本地 key 转成 APISIX 资源标识，[校验器](src/validators/index.ts)检查源配置，[planner](src/planner.ts)对比期望配置和远端状态。                                                      |
+| 发布与补偿           | [Gateway 服务](src/services/gateway/gateway.service.ts)编排认证和预览，[发布逻辑](src/services/gateway/gateway-publication.ts)计算实际写集并在失败后补偿，[APISIX adapter](src/apisix-admin-client.ts)读写远端。 |
 
 ## 故障与验证
 
-apply 从 fresh read 到发布或补偿结束持有本实例执行权，重叠请求返回 GATEWAY_BUSY，不排队。
-首错停止正向写入并补偿所有已尝试目标；恢复失败或作用未知保留内存阻断，后续 apply 返回 GATEWAY_BLOCKED。
-客户端断连后原操作继续，不自动重试；没有收到结果时不能自动重发。
-人工先确认在途与迟到写入结束，核对并修复 APISIX，再重启 Gateway 并明确提交新请求。
-重启只清除阻断，不证明恢复完成；多实例和外部写者不受本实例串行控制。
-正常关闭在关闭预算内等待在途发布或补偿，超时强制关闭时结果可能未知。
-[运行时关闭](src/runtime.ts) · [发布生命周期测试](test-integration/runtime/publication-lifecycle.integration.test.ts)
+每个实例同时只允许一个 `/apply`（含 dry-run）。写入失败后，服务在原操作预算内尝试恢复已触及的资源。结果未知或补偿失败会阻断该实例后续发布。关闭期间先等待在途请求。设计取舍见 [ADR-0044](../../docs/adr/0044-publish-gateway-configurations-through-a-stateless-api.md)，现场处置见[失败与恢复](../../docs/releases/apisix-gateway-release.md#失败与恢复)。
 
 ```bash
 pnpm --filter @iam/gateway-apisix test:unit
@@ -167,6 +31,4 @@ pnpm --filter @iam/gateway-apisix typecheck
 pnpm test:integration --workspace apps/gateway
 ```
 
-Integration 由根编排准备 PostgreSQL，Gateway fixture 管理 APISIX/etcd 与正式进程并准确清理。
-聚焦验证通过真实 HTTP 发布并回读 APISIX，不连接开发数据库或启动完整 IAM 系统。
-完整系统 E2E publisher 也通过 HTTP；既有旅程的存在不表示本次执行了系统或浏览器 E2E。
+[Unit](src/__tests__/) 使用合成 YAML 检查输入、规划和补偿分支。[Integration](test-integration/) 由根 runner 准备 PostgreSQL，并在独立 APISIX/etcd 上启动 Gateway、发布和回读配置。完整系统旅程使用[自己的网关配置](../../e2e/system/test-assets/)。

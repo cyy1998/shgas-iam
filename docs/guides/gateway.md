@@ -1,65 +1,64 @@
 # 网关配置接入
 
-调用方保管完整 YAML，通过 Gateway API 校验、预览和发布。业务边界见[网关配置发布](../features/application-integration.md#网关配置发布)，部署与人工恢复见[网关手册](../releases/apisix-gateway-release.md)。
+向运维取得目标环境的 Gateway 配置服务地址，向 IAM 管理员取得本应用的 Internal API Secret。每次请求把该凭据放在 `apikey` 请求头。对应的 Client 须启用且未删除。凭据保存在调用方服务端。[应用与凭据](README.md#应用与凭据)
 
-## 准备配置和凭据
+## 第一次校验
 
-- **Scope 与认证** `scope` 使用 `<env>:<app>`，app 为 IAM Client code；两段以小写字母或数字开头，其余仅限小写字母、数字、连字符。
-  按 [Internal API 认证](README.md#internal-api-认证)准备凭据和服务地址。
-  首次发布 `prod:iam` 需要 iam Client 的凭据，不能使用 iam-admin。
+以下示例使用测试环境的 `tender` Client。设置 `IAM_GATEWAY_URL` 和 `IAM_GATEWAY_CLIENT_SECRET`，将 `test:tender` 换成自己获准使用的环境与应用。用最小 YAML 验证地址、凭据和请求格式：
 
-scope 只匹配应用身份，环境仍由部署目标校验；当前没有域名/路径配额、插件审批或完整多租户隔离。
-同一 APISIX 集群须保持一个写入口，发布期间也不能从其他工具修改配置。
+```bash
+curl --fail-with-body -sS -X POST "${IAM_GATEWAY_URL}/validate" \
+  -H "Content-Type: application/json" -H "apikey: ${IAM_GATEWAY_CLIENT_SECRET}" \
+  --data-binary '{"scope":"test:tender","yaml":"service: {}","variables":{}}'
+```
 
-- **YAML 模板与变量** 按调用方保管的 YAML（例如 `tmp/gateway-config/apisix/manifests/dev/iam.yaml`）准备资源；配置不随 clone 提供，准备方式见[网关手册](../releases/apisix-gateway-release.md#服务与首次配置)。占位符仅从本次 variables 取值，缺失时报错；秘密使用变量或外部秘密引用。
-  资源名按以下规则生成，跨应用接管资源前须核对归属：
+HTTP 200 且 `data.valid=true` 表示校验成功。示例只声明了一个 Service，`data.resources.services` 应为 1。校验不访问 APISIX。发布时换成本应用的完整配置。以 `iam` Client 校验或发布时，还需满足 [IAM 路由的日志和追踪规则](../../apps/gateway/src/validators/index.ts)。
 
-| YAML 资源                                                  | 远端标识                          |
-| ---------------------------------------------------------- | --------------------------------- |
-| service                                                    | `<app>.<env>`                     |
-| routes、upstreams、service.plugin_configs、ssls 的本地 key | `<app>.<key>.<env>`               |
-| consumers 的本地 key                                       | `<app>_<key>_<env>`               |
-| plugin_metadata 的 key                                     | 插件名，全局共享，不按 scope 隔离 |
+## 准备应用配置
 
-普通路由自动关联本 scope 的 Service，本地 upstream/plugin_config 按 key 引用；terminal 路由不自动添加 Service/Upstream。
-SSL 的 `private_key` 对应 APISIX 私钥。Consumer 子凭据由其负责方管理，不写入此 YAML。
+`scope` 格式为 `<env>:<app>`，两段以小写字母或数字开头，其余字符可用小写字母、数字或连字符。`app` 必须匹配认证 Client 的编码。调用方还需核对目标服务地址所对应的环境。域名、路径和插件的使用范围由部署方管理。[网关配置发布的业务边界](../features/application-integration.md#网关配置发布)
+
+将完整 YAML 作为 `yaml` 字符串提交。`variables` 是可省略的字符串映射，YAML 中的 `${NAME}` 从本次请求取值，缺失会导致校验失败。私钥等秘密使用变量或外部秘密引用。以下配置将 `/api/tender/*` 转给 `api` upstream。请求时传入 `{"API_NODE":"tender.example.test:8080"}` 作为 `variables`。
+
+```yaml
+service: {}
+upstreams:
+  - key: api
+    nodes: { "${API_NODE}": 1 }
+routes:
+  - key: api
+    uri: /api/tender/*
+    upstream: api
+```
+
+| YAML 资源                                                          | 生成的远端标识       |
+| ------------------------------------------------------------------ | -------------------- |
+| `service`                                                          | `<app>.<env>`        |
+| `routes`、`upstreams`、`service.plugin_configs`、`ssls` 的本地 key | `<app>.<key>.<env>`  |
+| `consumers` 的本地 key                                             | `<app>_<key>_<env>`  |
+| `plugin_metadata` 的 key                                           | 插件名，在集群内共享 |
+
+普通路由用本地 key 引用 upstream 或 plugin_config，自动关联本应用的 Service。`terminal: true` 的路由可直接返回重定向。SSL 声明提供 `cert` 和 `private_key`。Gateway 生成资源 ID 和归属标签，发布前核对会创建或更新的资源，尤其是集群共享的插件元数据。[配置校验器](../../apps/gateway/src/validators/index.ts)
 
 ## 校验、预览、发布
 
-三类请求均直接发送到 Gateway API，并携带 apikey。以校验为例：
+三个端点均用 `POST` 提交 JSON。响应为 `{code,data,message}`。先判断 HTTP 状态，再读取相应端点的结果。
 
-```http
-POST /validate
-Content-Type: application/json
-apikey: <Internal API Secret>
+| 端点        | 请求体                                                         | 成功时如何判断                                                                                               |
+| ----------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `/validate` | `scope`、`yaml`、可选 `variables`                              | 读 `data.valid` 和资源数量。                                                                                 |
+| `/diff`     | 与校验相同                                                     | `data.outcome=preview`。核对 `data.plan` 中的创建、更新、删除候选与忽略项。                                  |
+| `/apply`    | 在共同字段上可加布尔值 `dryRun`、`prune`，两者默认均为 `false` | 试运行返回 `preview`。正式发布重新读取远端并规划，返回 `applied`（发生写入）或 `no_change`（实际写集为空）。 |
 
-{"scope":"test:tender","yaml":"<完整 YAML 文本>","variables":{}}
-```
-
-1. `/validate` 只校验输入。按返回问题修正 YAML；变量值必须为字符串。
-2. 同样的请求发往 `/diff`，检查远端差异；不会修改配置。
-3. `/apply` 可先加 `dryRun:true` 预览。正式发布时使用 `dryRun:false`；服务会重新读取配置并规划，旧 diff 不锁定远端状态。
-
-dryRun、prune 均默认 false。需要删除源配置已移除的资源时，明确提交 `prune:true`。
-删除仅覆盖当前 app/env 下由 repo-manifest 管理的资源，忽略 dynamic-registry、其他 scope 和未管理对象；此规则不限制创建或更新权限。
-待删 Consumer 必须没有独立子凭据；有子凭据或无法可靠读取时，整次发布在写入前拒绝。先由负责方清理子凭据。
-
-请求不能指定服务器文件路径、APISIX 地址或 Admin Key。完整字段和校验规则查
-[请求 schema](../../apps/gateway/src/services/gateway/gateway.schema.ts)与[配置校验器](../../apps/gateway/src/validators/index.ts)。
+`plan.deletes` 在预览中列出删除候选。仅正式 `/apply` 同时指定 `prune:true` 才删除本 scope 下已从 YAML 移除的 `repo-manifest` 资源。动态注册、其他 scope 和未受管的资源排除在清理范围外。待删 Consumer 有独立子凭据或无法确认子列表为空时，正式发布会在写入前拒绝。APISIX 回读的 SSL 私钥已加密，重复提交同一证书配置仍可能触发更新。[请求 schema](../../apps/gateway/src/services/gateway/gateway.schema.ts)
 
 ## 判断结果与恢复
 
-响应使用 `{ code, data, message }`，按 data.outcome 判断：
+| 响应                                                                                            | 接入方动作                                                                                                                                |
+| ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| 400 输入或 YAML 校验失败，401 认证失败                                                          | 按顶层 `code` 修正请求或凭据。若返回 `data.issues`，按其中的位置修正 YAML，再校验。                                                       |
+| 409 `GATEWAY_BUSY`                                                                              | 等原发布结束，再决定是否发起新请求。                                                                                                      |
+| 502 `GATEWAY_APPLY_ROLLED_BACK`                                                                 | 本次发布失败，已确认补偿。查明原因后重新预览。                                                                                            |
+| 503 `GATEWAY_ROLLBACK_FAILED`、`GATEWAY_APPLY_UNKNOWN`、`GATEWAY_BLOCKED`，或正式发布超时、断连 | 停止重发，向运维提供目标 scope 和已知结果，按[失败与恢复](../releases/apisix-gateway-release.md#失败与恢复)核对现场。原请求可能仍在执行。 |
 
-- **`preview` / `no_change` / `applied`** preview：仅预览；no_change：没有实际写入；applied：本次 Admin API 操作已完成。
-- rolled_back：发布失败，已恢复本次尝试修改的资源；仍应按发布失败处理。
-- **`rollback_failed` / `unknown`** rollback_failed 或 unknown：停止发布，按[人工恢复](../releases/apisix-gateway-release.md#失败与恢复)核对 APISIX，再重启解除阻断。
-- busy 或 blocked：本次未读取或修改 APISIX；前态无法可靠恢复时也会在写入前拒绝。
-
-writeAttempted 只表示尝试过写入。超时、响应丢失或未确认完成的响应不能当作失败且未生效，也不能自动重发。
-调用方断连后，服务仍会在原期限内继续发布或补偿；没有任务查询或持久历史可供找回结果。
-一次回读匹配仍不能排除迟到写入。重启只清除阻断，不证明恢复完成。
-
-发布和补偿不是跨资源事务，数据面可能短暂混用新旧配置，已处理的业务请求无法撤销。
-SSL 加密私钥不能与输入明文直接比较，重复发布同一证书配置仍可能触发更新。
-`GET /health` 只检查 HTTP 服务；数据库认证、APISIX 和业务路由须分别验证。
+错误响应的 `data` 可能为空。补偿结果中的 `writeAttempted` 只表示尝试过写入。业务路由是否已按预期生效，由运维完成[数据面检查](../releases/apisix-gateway-release.md#数据面检查)。
