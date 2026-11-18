@@ -1,6 +1,6 @@
 name = "spec_reviewer"
 description = "当前一轮 code-review 的 Spec 轴，只读核对固定候选与完整 Spec、相关 tickets 的验收要求。"
-model = "gpt-6.1-sol"
+model = "gpt-6.2-sol"
 model_reasoning_effort = "xhigh"
 sandbox_mode = "read-only"
 

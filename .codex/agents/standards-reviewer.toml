@@ -1,6 +1,6 @@
 name = "standards_reviewer"
 description = "当前一轮 code-review 的 Standards 轴，只读检查固定基线到固定候选的完整改动。"
-model = "gpt-6.1-sol"
+model = "gpt-6.2-sol"
 model_reasoning_effort = "xhigh"
 sandbox_mode = "read-only"
 
