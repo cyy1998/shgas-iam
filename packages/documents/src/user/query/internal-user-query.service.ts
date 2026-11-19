@@ -1,5 +1,4 @@
 import { UserNotFoundError } from "@iam/domain/user";
-import { PublishedUserDocumentSchema } from "../document";
 import { projectPublishedUserDocument } from "../document-query";
 import {
   InternalUserDocumentDetailIntegrityError,
@@ -20,7 +19,7 @@ export function createInternalUserDocumentQueryService(deps: InternalUserDocumen
       }
       if (row === null) throw new UserNotFoundError("当前用户目录不可见");
       try {
-        const document = projectPublishedUserDocument(PublishedUserDocumentSchema.parse(row), authenticatedClientCode);
+        const document = projectPublishedUserDocument(row, authenticatedClientCode);
         if (document === null) throw new UserNotFoundError("当前用户目录不可见");
         return document;
       } catch (error) {

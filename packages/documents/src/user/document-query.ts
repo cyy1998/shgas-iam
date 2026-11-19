@@ -12,9 +12,10 @@ import type { FilterForShape } from "@iam/filter-engine";
 import { createFilterEngine, createFilterTransportSchemas, searchStructureFromSchema } from "@iam/filter-engine";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { sql } from "drizzle-orm";
-import type { PublishedUserDocument, StoredUserDocument } from "./document";
+import type { StoredUserDocument } from "./document";
 import { PublishedUserDocumentMetadataSchema, PublishedUserDocumentSchema, StoredUserDocumentSchema } from "./document";
 
+const ClientCodeSchema = z.string().min(1);
 const structure = searchStructureFromSchema(UserDocumentSchema);
 const engine = createFilterEngine(structure);
 const transport = createFilterTransportSchemas({
@@ -42,9 +43,9 @@ export function compileUserDocumentFilter(filter: unknown, document: SQLWrapper,
   return engine.compile(filter, createClientUserDocumentSql(document, clientCode));
 }
 
-/** A filter view; serialize responses through projectUserDocument's public schema. */
+/** A filter view with the same Client role visibility as the public projection. */
 export function createClientUserDocumentSql(document: SQLWrapper, clientCode: string): SQL {
-  z.string().min(1).parse(clientCode);
+  ClientCodeSchema.parse(clientCode);
   return sql`jsonb_build_object(
     'subjectIdentifier', ${document}->'subjectIdentifier',
     'username', ${document}->'username',
@@ -78,9 +79,7 @@ export function createClientUserDocumentSql(document: SQLWrapper, clientCode: st
   )`;
 }
 
-export function projectUserDocument(input: StoredUserDocument, clientCode: string): UserDocument {
-  z.string().min(1).parse(clientCode);
-  const document = StoredUserDocumentSchema.parse(input);
+function projectStoredUserDocument(document: StoredUserDocument, clientCode: string): UserDocument {
   return UserDocumentSchema.parse({
     ...document,
     employments: document.employments.map((employment) => ({
@@ -98,9 +97,16 @@ export function projectUserDocument(input: StoredUserDocument, clientCode: strin
   });
 }
 
-export function projectPublishedUserDocument(input: PublishedUserDocument, clientCode: string): UserDocument | null {
-  const publication = PublishedUserDocumentSchema.parse(input);
-  return publication.document === null ? null : projectUserDocument(publication.document, clientCode);
+export function projectUserDocument(input: StoredUserDocument, clientCode: string): UserDocument {
+  ClientCodeSchema.parse(clientCode);
+  return projectStoredUserDocument(StoredUserDocumentSchema.parse(input), clientCode);
+}
+
+export function projectPublishedUserDocument(input: unknown, clientCode: string): UserDocument | null {
+  const { document } = PublishedUserDocumentSchema.parse(input);
+  if (document === null) return null;
+  ClientCodeSchema.parse(clientCode);
+  return projectStoredUserDocument(document, clientCode);
 }
 
 const LoginPublicationSchema = PublishedUserDocumentMetadataSchema.extend({

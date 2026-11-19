@@ -1,6 +1,5 @@
 import { resolveDocumentPagination, userDocumentSelection } from "@iam/contracts";
 import { FilterValidationError } from "@iam/filter-engine";
-import { PublishedUserDocumentSchema } from "../document";
 import { projectPublishedUserDocument, UserDocumentSearchRequestSchema } from "../document-query";
 import {
   UserDocumentDocumentIntegrityError,
@@ -35,10 +34,7 @@ export function createUserDocumentSearchService(deps: UserDocumentSearchServiceD
         throw new UserDocumentSearchResultTooLargeError();
       try {
         const items = result.rows.map((row) => {
-          const document = projectPublishedUserDocument(
-            PublishedUserDocumentSchema.parse(row),
-            authenticatedClientCode,
-          );
+          const document = projectPublishedUserDocument(row, authenticatedClientCode);
           if (document === null) throw new Error("Directory query returned a tombstone");
           return userDocumentSelection.select(document, request.data.select);
         });

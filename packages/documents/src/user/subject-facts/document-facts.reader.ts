@@ -4,7 +4,6 @@ import { eq } from "drizzle-orm";
 import {
   createDocumentFactsCacheRecord,
   type DocumentFactsCacheRecord,
-  DocumentFactsCacheRecordSchema,
   type DocumentFactsReadResult,
   readDocumentFactsRecord,
   USER_DOCUMENT_SCHEMA_VERSION,
@@ -69,20 +68,21 @@ export function createDocumentFactsReader(options: CreateSubjectFactsReaderOptio
     async read(subjectIdentifier: string): Promise<DocumentFactsReadResult> {
       const started = now();
       const serialized = await options.cache.read(subjectIdentifier);
-      let record: DocumentFactsCacheRecord | null = null;
+      let cached: DocumentFactsReadResult = { kind: "missing" };
       try {
-        record = serialized === null ? null : DocumentFactsCacheRecordSchema.parse(JSON.parse(serialized));
+        cached = readDocumentFactsRecord(serialized);
       } catch {
         /* Read through malformed cache only. */
       }
-      const hit = record?.subjectIdentifier === subjectIdentifier;
+      const hit = cached.kind !== "missing" && cached.record.subjectIdentifier === subjectIdentifier;
       observe({
         operation: "cache-read",
         outcome: hit ? "hit" : serialized === null ? "miss" : "invalid",
         durationMs: Math.max(0, now() - started),
       });
-      if (!hit) record = await load(subjectIdentifier);
-      return record === null ? { kind: "missing" } : readDocumentFactsRecord(JSON.stringify(record));
+      if (hit) return cached;
+      const record = await load(subjectIdentifier);
+      return readDocumentFactsRecord(record === null ? null : JSON.stringify(record));
     },
   };
 }
