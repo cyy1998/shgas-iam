@@ -19,20 +19,44 @@ const descriptor: RunDescriptor = {
 };
 
 describe("exact-project Docker infrastructure", () => {
-  test("uses the registered snapshot and exact project for startup, migration, and cleanup", async () => {
+  test("builds the registered project's images serially before startup, migration, and cleanup", async () => {
     const commands: string[][] = [];
+    let buildsInFlight = 0;
     const operations = await createOperations({
       runCommand: async (command, args) => {
         commands.push([command, ...args]);
+        if (args.includes("build")) {
+          buildsInFlight++;
+          expect(buildsInFlight).toBe(1);
+          await Promise.resolve();
+          buildsInFlight--;
+        }
       },
     });
 
+    await operations.prepareDiagnostics(descriptor);
+    await operations.buildImages(descriptor);
     await operations.startHealthyInfrastructure(descriptor);
     await operations.runMigrations(descriptor);
     await operations.cleanup(descriptor);
 
     const composeCommands = commands.filter((command) => command[1] === "compose");
     expect(composeCommands.every((command) => command.includes(descriptor.project))).toBe(true);
+    expect(composeCommands.map((command) => command.slice(command.indexOf("--file") + 2))).toEqual([
+      ["build", "gateway-sync"],
+      ["build", "apisix"],
+      ["build", "migrate"],
+      ["build", "api"],
+      ["build", "admin-api"],
+      ["build", "worker"],
+      ["build", "admin"],
+      ["build", "sso"],
+      ["build", "gateway-api"],
+      ["build", "seed"],
+      ["up", "--detach", "--wait", "--wait-timeout", "180", "--no-build", "postgres", "redis", "apisix-etcd", "apisix"],
+      ["run", "--rm", "--no-deps", "--pull", "never", "migrate"],
+      ["down", "--volumes", "--remove-orphans", "--rmi", "local"],
+    ]);
     expect(commands.at(-1)?.slice(-5)).toEqual(["down", "--volumes", "--remove-orphans", "--rmi", "local"]);
     const snapshot = commands[0]?.[commands[0].indexOf("--file") + 1];
     expect(snapshot).toEndWith("compose.json");
@@ -64,10 +88,23 @@ describe("exact-project Docker infrastructure", () => {
     await operations.renderGatewayRoutes(descriptor);
     await operations.awaitGatewayRouteReadiness(descriptor);
 
-    const runtime = commands.find((command) => command.includes("api"));
-    for (const service of ["api", "admin-api", "worker", "admin", "sso"]) {
-      expect(runtime).toContain(service);
-    }
+    expect(commands.map((command) => command.slice(command.indexOf("--file") + 2))).toEqual([
+      [
+        "up",
+        "--detach",
+        "--wait",
+        "--wait-timeout",
+        "300",
+        "--no-build",
+        "api",
+        "admin-api",
+        "worker",
+        "admin",
+        "sso",
+        "gateway-api",
+      ],
+      ["run", "--rm", "--no-deps", "--pull", "never", "gateway-sync"],
+    ]);
     expect(new Set(probes)).toEqual(
       new Set([
         "/portal/login:200",
@@ -91,8 +128,15 @@ describe("exact-project Docker infrastructure", () => {
     });
     try {
       await operations.seedE2EScenario({ ...descriptor, artifactDirectory });
-      expect(commands[0]).toContain(`${descriptor.project}-seed`);
-      expect(commands[0]).not.toContain("--rm");
+      expect(commands[0]?.slice(-7)).toEqual([
+        "run",
+        "--name",
+        `${descriptor.project}-seed`,
+        "--no-deps",
+        "--pull",
+        "never",
+        "seed",
+      ]);
       expect(commands.slice(1)).toEqual([
         [
           "docker",
@@ -187,8 +231,8 @@ describe("exact-project Docker infrastructure", () => {
       repositoryRoot: root,
       composeFile: join(root, "e2e/system/compose.yaml"),
       requiredPaths: [],
-      runCommand: async (_command, args) => {
-        if (!args.includes("build")) throw new Error("registration must not create resources");
+      runCommand: async () => {
+        throw new Error("registration and diagnostic preparation must not create resources");
       },
       captureCommand: async () => ({ stdout: JSON.stringify(renderedComposeContract()), stderr: "" }),
       probeGateway: async () => undefined,

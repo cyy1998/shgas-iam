@@ -1,4 +1,5 @@
 import { runBoundedOperation } from "./bounded-operation.ts";
+import type { E2eStage, StageMemoryProfile } from "./host-memory.ts";
 
 export interface RunDescriptor {
   version: 1;
@@ -28,6 +29,7 @@ export interface ExactProjectInfraLifecycle {
 
 export interface ExactProjectRuntimeLifecycle extends ExactProjectInfraLifecycle {
   prepareDiagnostics: (descriptor: RunDescriptor, signal?: AbortSignal) => Promise<unknown>;
+  buildImages: (descriptor: RunDescriptor, signal?: AbortSignal) => Promise<unknown>;
   startRepoRuntimes: (descriptor: RunDescriptor, signal?: AbortSignal) => Promise<unknown>;
   verifyCanonicalOriginConfiguration: (descriptor: RunDescriptor, signal?: AbortSignal) => Promise<unknown>;
   seedE2EScenario: (descriptor: RunDescriptor, signal?: AbortSignal) => Promise<unknown>;
@@ -43,7 +45,9 @@ export interface ExactProjectJourneyLifecycle extends ExactProjectRuntimeLifecyc
 export interface RuntimeLifecycleOptions {
   warn?: (message: string) => void;
   abortSettleTimeoutMs?: number;
+  buildTimeoutMs?: number;
   cleanupTimeoutMs?: number;
+  createMemoryProfile?: () => Promise<StageMemoryProfile>;
   diagnosticsTimeoutMs?: number;
   preflightTimeoutMs?: number;
   signal?: AbortSignal;
@@ -53,6 +57,7 @@ export interface RuntimeLifecycleOptions {
 const defaultDiagnosticsTimeoutMs = 30_000;
 const defaultCleanupTimeoutMs = 120_000;
 const defaultPreflightTimeoutMs = 60_000;
+const defaultBuildTimeoutMs = 20 * 60_000;
 
 export async function runExactProjectRuntimeLifecycle(
   lifecycle: ExactProjectRuntimeLifecycle,
@@ -83,21 +88,47 @@ async function runRuntimeLifecycle(
   const descriptor = await lifecycle.createDescriptor();
   await lifecycle.persistDescriptor(descriptor);
   await lifecycle.initializeMigrationReceipt(descriptor);
+  const memoryProfile = await options.createMemoryProfile?.();
+  const enter = (stage: E2eStage, signal?: AbortSignal) => {
+    signal?.throwIfAborted();
+    memoryProfile?.enter(stage);
+  };
 
   let failure: unknown;
   let failed = false;
   try {
+    const buildTimeoutMs = options.buildTimeoutMs ?? defaultBuildTimeoutMs;
     await runBoundedOperation(
       async (signal) => {
+        enter("build", signal);
         await lifecycle.prepareDiagnostics(descriptor, signal);
+        await lifecycle.buildImages(descriptor, signal);
+      },
+      {
+        abortSettleTimeoutMs: options.abortSettleTimeoutMs,
+        parentSignal: options.signal,
+        timeoutMessage: `E2E image build timed out after ${buildTimeoutMs}ms`,
+        timeoutMs: buildTimeoutMs,
+      },
+    );
+    await runBoundedOperation(
+      async (signal) => {
+        enter("infrastructure", signal);
         await lifecycle.startHealthyInfrastructure(descriptor, signal);
+        enter("migration", signal);
         await lifecycle.runMigrations(descriptor, signal);
+        enter("application-startup", signal);
         await lifecycle.startRepoRuntimes(descriptor, signal);
         await lifecycle.verifyCanonicalOriginConfiguration(descriptor, signal);
+        enter("seed", signal);
         await lifecycle.seedE2EScenario(descriptor, signal);
+        enter("gateway-readiness", signal);
         await lifecycle.renderGatewayRoutes(descriptor, signal);
         await lifecycle.awaitGatewayRouteReadiness(descriptor, signal);
-        await runJourney?.(descriptor, signal);
+        if (runJourney) {
+          enter("browser", signal);
+          await runJourney(descriptor, signal);
+        }
       },
       {
         abortSettleTimeoutMs: options.abortSettleTimeoutMs,
@@ -113,6 +144,7 @@ async function runRuntimeLifecycle(
   }
 
   try {
+    enter("diagnostics");
     const timeoutMs = options.diagnosticsTimeoutMs ?? defaultDiagnosticsTimeoutMs;
     await runBoundedOperation((signal) => lifecycle.collectDiagnostics(descriptor, signal), {
       abortSettleTimeoutMs: options.abortSettleTimeoutMs,
@@ -126,6 +158,7 @@ async function runRuntimeLifecycle(
   }
 
   try {
+    enter("cleanup");
     const timeoutMs = options.cleanupTimeoutMs ?? defaultCleanupTimeoutMs;
     await runBoundedOperation((signal) => lifecycle.cleanup(descriptor, signal), {
       abortSettleTimeoutMs: options.abortSettleTimeoutMs,
@@ -139,6 +172,14 @@ async function runRuntimeLifecycle(
       throw new AggregateError(errors, "E2E run failed and exact-project cleanup also failed");
     }
     throw cleanupFailure;
+  } finally {
+    try {
+      await memoryProfile?.finish(descriptor.artifactDirectory);
+    } catch (error) {
+      (options.warn ?? console.warn)(
+        `Warning: E2E host memory profile could not be saved (${error instanceof Error ? error.name : "UnknownError"})`,
+      );
+    }
   }
 
   if (!failed && options.signal?.aborted) {

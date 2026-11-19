@@ -21,18 +21,10 @@ import { createE2EScenarioIdentity } from "./seed.ts";
 import { readAppliedSeedReferences } from "./seed-receipt.ts";
 import { wecomAgent, wecomMobileCallbackPath } from "./wecom-provider.ts";
 
-const diagnosticLogServices = [
-  "postgres",
-  "redis",
-  "apisix-etcd",
-  "apisix",
-  "api",
-  "admin-api",
-  "worker",
-  "admin",
-  "sso",
-  "gateway-api",
-];
+const infrastructureServices = ["postgres", "redis", "apisix-etcd", "apisix"];
+const repoRuntimeServices = ["api", "admin-api", "worker", "admin", "sso", "gateway-api"];
+const imageBuildServices = ["gateway-sync", "apisix", "migrate", ...repoRuntimeServices, "seed"];
+const diagnosticLogServices = [...infrastructureServices, ...repoRuntimeServices];
 const maxDiagnosticLogBytesPerService = 5 * 1024;
 
 export interface CommandOptions {
@@ -118,6 +110,7 @@ export function descriptorEnvironment(descriptor: RunDescriptor) {
 
 export function createDockerInfraOperations(options: CreateDockerInfraOperationsOptions) {
   const managedRuns = new Map<string, ManagedResourceRun>();
+  const startedInfrastructure = new Set<string>();
   const requireManagedRun = (descriptor: RunDescriptor) => {
     const run = managedRuns.get(descriptor.project);
     if (!run) throw new Error(`E2E project ${descriptor.project} has no registered managed resource record`);
@@ -282,6 +275,19 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
       );
     },
 
+    async buildImages(descriptor: RunDescriptor, signal?: AbortSignal) {
+      const buildOptions = {
+        cwd: options.repositoryRoot,
+        env: descriptorEnvironment(descriptor),
+        inheritOutput: true,
+        signal: signal ?? options.signal,
+      };
+      for (const service of imageBuildServices) {
+        buildOptions.signal?.throwIfAborted();
+        await options.runCommand("docker", projectArguments(descriptor, ["build", service]), buildOptions);
+      }
+    },
+
     async startHealthyInfrastructure(descriptor: RunDescriptor, signal?: AbortSignal) {
       await options.runCommand(
         "docker",
@@ -291,10 +297,8 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
           "--wait",
           "--wait-timeout",
           "180",
-          "postgres",
-          "redis",
-          "apisix-etcd",
-          "apisix",
+          "--no-build",
+          ...infrastructureServices,
         ]),
         {
           cwd: options.repositoryRoot,
@@ -302,18 +306,14 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
           signal: signal ?? options.signal,
         },
       );
+      startedInfrastructure.add(descriptor.runId);
       await options.probeGateway(descriptor.origin, signal ?? options.signal);
     },
 
-    async prepareDiagnostics(descriptor: RunDescriptor, signal?: AbortSignal) {
+    async prepareDiagnostics(descriptor: RunDescriptor) {
       const run = requireManagedRun(descriptor);
       run.record.status = "initializing";
       await saveManagedResourceRun(run);
-      await options.runCommand("docker", projectArguments(descriptor, ["build", "gateway-sync"]), {
-        cwd: options.repositoryRoot,
-        env: descriptorEnvironment(descriptor),
-        signal: signal ?? options.signal,
-      });
     },
 
     async runMigrations(descriptor: RunDescriptor, signal?: AbortSignal) {
@@ -328,7 +328,7 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
       try {
         await options.runCommand(
           "docker",
-          projectArguments(descriptor, ["run", "--rm", "--no-deps", "--build", "migrate"]),
+          projectArguments(descriptor, ["run", "--rm", "--no-deps", "--pull", "never", "migrate"]),
           {
             cwd: options.repositoryRoot,
             env: descriptorEnvironment(descriptor),
@@ -373,13 +373,8 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
           "--wait",
           "--wait-timeout",
           "300",
-          "--build",
-          "api",
-          "admin-api",
-          "worker",
-          "admin",
-          "sso",
-          "gateway-api",
+          "--no-build",
+          ...repoRuntimeServices,
         ]),
         {
           cwd: options.repositoryRoot,
@@ -423,7 +418,7 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
       try {
         await options.runCommand(
           "docker",
-          projectArguments(descriptor, ["run", "--name", container, "--no-deps", "--build", "seed"]),
+          projectArguments(descriptor, ["run", "--name", container, "--no-deps", "--pull", "never", "seed"]),
           {
             cwd: options.repositoryRoot,
             env: descriptorEnvironment(descriptor),
@@ -478,7 +473,7 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
     async renderGatewayRoutes(descriptor: RunDescriptor, signal?: AbortSignal) {
       await options.runCommand(
         "docker",
-        projectArguments(descriptor, ["run", "--rm", "--no-deps", "--build", "gateway-sync"]),
+        projectArguments(descriptor, ["run", "--rm", "--no-deps", "--pull", "never", "gateway-sync"]),
         {
           cwd: options.repositoryRoot,
           env: descriptorEnvironment(descriptor),
@@ -561,11 +556,16 @@ export function createDockerInfraOperations(options: CreateDockerInfraOperations
           };
         },
         readGatewayState: async (sourceSignal) => {
+          if (!startedInfrastructure.has(descriptor.runId)) {
+            return JSON.stringify({ status: "unavailable", reason: "infrastructure startup did not complete" });
+          }
           const result = await capture(
             [
               "run",
               "--rm",
               "--no-deps",
+              "--pull",
+              "never",
               "gateway-sync",
               "bun",
               "-e",

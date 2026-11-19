@@ -19,7 +19,7 @@
     "test:e2e": "turbo test:e2e --concurrency=1",
     "e2e:install": "pnpm --filter @iam/admin exec playwright install --with-deps chromium",
     "e2e:install:browsers": "pnpm --filter @iam/admin exec playwright install chromium",
-    "typecheck": "turbo typecheck typecheck:root --concurrency=3",
+    "typecheck": "turbo typecheck typecheck:root --concurrency=1",
     "typecheck:root": "tsc --project scripts/sandcastle/tsconfig.json && tsc --project scripts/tsconfig.json",
     "sandcastle": "tsx scripts/sandcastle/main.mts",
     "sandcastle:check": "tsx scripts/sandcastle/main.mts --check",

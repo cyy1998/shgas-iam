@@ -5,6 +5,7 @@ import { createAdminJourneyOperations } from "./admin-journey.ts";
 import { createRunDescriptor, persistRunDescriptor } from "./descriptor.ts";
 import { createDockerInfraOperations } from "./docker-infra.ts";
 import { createFullSystemJourneyOperations } from "./full-system-journey.ts";
+import { createStageMemoryProfile } from "./host-memory.ts";
 import { createHrAdminJourneyOperations } from "./hr-admin-journey.ts";
 import { runExactProjectJourneyLifecycle, runExactProjectRuntimeLifecycle } from "./lifecycle.ts";
 import { createOidcJourneyOperations } from "./oidc-journey.ts";
@@ -98,6 +99,7 @@ async function runRuntimeLifecycle() {
         signal,
         timeoutMs: runtimeTimeoutMs,
         abortSettleTimeoutMs: 60_000,
+        createMemoryProfile: createStageMemoryProfile,
       },
     );
     console.log(
@@ -181,6 +183,7 @@ async function runJourneyLifecycle(
         signal,
         timeoutMs: runtimeTimeoutMs,
         abortSettleTimeoutMs: 60_000,
+        createMemoryProfile: createStageMemoryProfile,
       },
     );
     console.log(

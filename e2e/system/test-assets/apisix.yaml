@@ -27,6 +27,7 @@ apisix:
       - port: 9443
 
 nginx_config:
+  worker_processes: 2
   # NGINX error log entries may include the full request line, including OAuth parameters.
   error_log_level: crit
   http_configuration_snippet: |

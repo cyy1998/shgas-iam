@@ -129,13 +129,15 @@ Timeout 用于限制悬挂。进程测试等待实际 readiness，同时观察�
 
 ### 初始化与就绪
 
-前置检查在独立期限内确认 Chromium 和 Docker 条件，再创建并持久化 descriptor、初始化迁移 receipt。以上步骤失败时尚未启动运行资源。进入运行阶段后，从空卷迁移并启动正式 runtime，用合成数据 seed，等待 Worker 发布并回读 Document、Facts 版本及访问屏障。必要的 seed receipt 缺失、入口配置不符或路由 readiness 失败都会阻止旅程启动。[CLI 接线](../../e2e/system/src/cli.ts) · [生命周期顺序](../../e2e/system/src/lifecycle.ts)
+前置检查在独立期限内确认 Chromium 和 Docker 条件，再创建并持久化 descriptor、初始化迁移 receipt。随后在独立的构建预算内逐个构建本次 project 的镜像。镜像就绪后才启动容器，从空卷迁移并启动正式 runtime，用合成数据 seed，等待 Worker 发布并回读 Document、Facts 版本及访问屏障。必要的 seed receipt 缺失、入口配置不符或路由 readiness 失败都会阻止旅程启动。[CLI 接线](../../e2e/system/src/cli.ts) · [生命周期顺序](../../e2e/system/src/lifecycle.ts)
 
 通过正式 Gateway 发布本次测试路由并检查真实代理后的协议入口。两个 hostname 在测试环境解析到 loopback，以便检验浏览器的 Cookie 作用域与入口隔离。镜像携带本次所需配置，业务旅程通过正式系统建立和观察状态，人工 Ops 命令由独立 Integration 验证。[完整系统配置](../../e2e/system/compose.yaml) · [网关测试资源](../../e2e/system/test-assets/)
 
 ### 失败诊断与清理
 
-进入运行阶段后，无论成功、失败、超时或收到可捕获信号，均先尝试有界的辅助诊断，再用独立预算清理本次 project（显式保留除外）。辅助诊断失败只告警，必要输入、断言证据或清理失败则返回失败。运行和清理均失败时保留两者。收尾期间收到信号仍完成清理尝试并报告失败。[生命周期验证](../../e2e/system/src/__tests__/lifecycle.test.ts)
+构建开始后，无论成功、失败、超时或收到可捕获信号，均先尝试有界的辅助诊断，再用独立预算清理本次 project（显式保留除外）。辅助诊断失败只告警，必要输入、断言证据或清理失败则返回失败。运行和清理均失败时保留两者。收尾期间收到信号仍完成清理尝试并报告失败。[生命周期验证](../../e2e/system/src/__tests__/lifecycle.test.ts)
+
+`host-memory.json` 按阶段记录采样区间、采样数和最低可用物理内存。Windows 正常读取系统性能计数器时还记录阶段起始和最低提交余量，以及系统提交量峰值。比较构建或浏览器峰值时使用同一候选，并核对各轮的起始余量。[宿主内存采样](../../e2e/system/src/host-memory.ts)
 
 清理失败时保留 descriptor，供按准确 project 重试。清理限于该 Compose project，不另行扫描全机镜像或资源。诊断和浏览器产物限制数量、大小和路径，原始 trace、截图、视频可能含合成凭据，按运行目录控制访问与保留期。显式恢复只接受一份 descriptor 或一个完整 project 名。[诊断采集](../../e2e/system/src/diagnostics.ts) · [产物归档](../../e2e/system/src/playwright-evidence.ts) · [恢复入口](../../e2e/system/src/recovery.ts)
 

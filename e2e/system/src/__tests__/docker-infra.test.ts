@@ -16,7 +16,7 @@ const descriptor: RunDescriptor = {
 };
 
 describe("exact-project Docker infrastructure", () => {
-  test("rejects an unregistered run before starting Docker resources", async () => {
+  test.each(["buildImages", "startHealthyInfrastructure"] as const)("%s rejects an unregistered run", async (stage) => {
     const commands: string[][] = [];
     const operations = createDockerInfraOperations({
       repositoryRoot: "D:/repo",
@@ -31,7 +31,7 @@ describe("exact-project Docker infrastructure", () => {
       probeSsoConfiguration: async () => undefined,
       probeRoute: async () => undefined,
     });
-    const failure = await operations.startHealthyInfrastructure(descriptor).then(
+    const failure = await operations[stage](descriptor).then(
       () => undefined,
       (error) => error,
     );

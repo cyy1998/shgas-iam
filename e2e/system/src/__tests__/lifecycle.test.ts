@@ -18,6 +18,7 @@ const descriptor: RunDescriptor = {
 function createRuntimeLifecycle(overrides: Partial<ExactProjectRuntimeLifecycle> = {}): ExactProjectRuntimeLifecycle {
   return {
     awaitGatewayRouteReadiness: async () => undefined,
+    buildImages: async () => undefined,
     cleanup: async () => undefined,
     collectDiagnostics: async () => undefined,
     createDescriptor: async () => descriptor,
@@ -95,7 +96,7 @@ describe("exact-project runtime lifecycle", () => {
     expect(events).toEqual(["descriptor", "receipt:not-attempted"]);
   });
 
-  test("seeds after runtime readiness and before canonical Gateway route probes", async () => {
+  test("builds before starting resources and seeds before canonical Gateway route probes", async () => {
     const events: string[] = [];
 
     const result = await runExactProjectRuntimeLifecycle(
@@ -105,6 +106,7 @@ describe("exact-project runtime lifecycle", () => {
         persistDescriptor: async () => events.push("descriptor"),
         initializeMigrationReceipt: async () => events.push("receipt:not-attempted"),
         prepareDiagnostics: async (value) => events.push(`prepare:${value.project}`),
+        buildImages: async (value) => events.push(`build:${value.project}`),
         startHealthyInfrastructure: async (value) => events.push(`infra:${value.project}`),
         runMigrations: async (value) => events.push(`migrate:${value.project}`),
         startRepoRuntimes: async (value) => events.push(`runtimes:${value.project}`),
@@ -123,6 +125,7 @@ describe("exact-project runtime lifecycle", () => {
       "descriptor",
       "receipt:not-attempted",
       "prepare:iam-e2e-run-contract-01",
+      "build:iam-e2e-run-contract-01",
       "infra:iam-e2e-run-contract-01",
       "migrate:iam-e2e-run-contract-01",
       "runtimes:iam-e2e-run-contract-01",
@@ -132,6 +135,39 @@ describe("exact-project runtime lifecycle", () => {
       "ready:http://127.0.0.1:43123",
       "diagnostics",
       "cleanup:iam-e2e-run-contract-01",
+    ]);
+  });
+
+  test("uses the build deadline before startup and saves memory stages after failure cleanup", async () => {
+    const events: string[] = [];
+    const run = runExactProjectRuntimeLifecycle(
+      createRuntimeLifecycle({
+        buildImages: async () => new Promise(() => undefined),
+        startHealthyInfrastructure: async () => events.push("infrastructure started"),
+        collectDiagnostics: async () => events.push("diagnostics collected"),
+        cleanup: async () => events.push("resources cleaned"),
+      }),
+      {
+        buildTimeoutMs: 5,
+        abortSettleTimeoutMs: 10,
+        createMemoryProfile: async () => ({
+          enter: (stage) => events.push(stage),
+          finish: async () => void events.push("profile saved"),
+        }),
+      },
+    );
+    const rejection = await run.then(
+      () => undefined,
+      (error) => error,
+    );
+    expect(rejection).toMatchObject({ message: "E2E image build timed out after 5ms" });
+    expect(events).toEqual([
+      "build",
+      "diagnostics",
+      "diagnostics collected",
+      "cleanup",
+      "resources cleaned",
+      "profile saved",
     ]);
   });
 

@@ -42,6 +42,8 @@ AFK 的逐轮复审要求由 [AFK 工作流](sandcastle-afk.md#双轴评审子�
   仅当完整差异满足[纯文档验证](../engineering/commands.md#纯文档验证)的范围，且验收只涉及文档时，使用
   `pnpm verify:docs --base <target-commit>` 完成基础门禁。其余改动完成 `pnpm verify` 覆盖的全部检查。
   按 Spec 和改动风险补齐所需 Integration、E2E、Gateway 等检查。小任务准备本地合入时使用同一规则。
+- **同宿主串行验证** 在同一宿主上串行运行 `pnpm verify`、全量 Integration 和 Full-system E2E，跨会话和工作树也适用。
+  等上一轮命令退出并完成所需的测试资源清理后，再启动下一轮。需要一次完成全部发布验证时可用 `pnpm verify:release`。
 - **验证结果复用** 同一候选已有通过结果时，核对候选 SHA、实际命令和检查范围，确认相关依赖、配置与环境仍一致。
   只通过独立入口补跑缺失或失效的检查。
   - `pnpm verify` 已通过，只缺 Integration 时，运行 `pnpm test:integration`，按验收范围选择全量或定向。

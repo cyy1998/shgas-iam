@@ -45,6 +45,7 @@ function renderedComposeContract() {
 function createRuntimeLifecycle(overrides: Partial<ExactProjectRuntimeLifecycle> = {}): ExactProjectRuntimeLifecycle {
   return {
     awaitGatewayRouteReadiness: async () => undefined,
+    buildImages: async () => undefined,
     cleanup: async () => undefined,
     collectDiagnostics: async () => undefined,
     createDescriptor: async () => descriptor,

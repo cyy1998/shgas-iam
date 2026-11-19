@@ -73,6 +73,7 @@ describe("complete Full-system E2E journey", () => {
     const lifecycle: ExactProjectJourneyLifecycle = {
       ...journeys,
       awaitGatewayRouteReadiness: async () => undefined,
+      buildImages: async () => undefined,
       cleanup: async () => {
         events.push("cleanup");
         throw cleanupFailure;
