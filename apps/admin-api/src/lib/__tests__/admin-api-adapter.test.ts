@@ -181,9 +181,17 @@ function createWideJson(width: number) {
 }
 
 describe("defineAdminApiOperation", () => {
-  test("rejects the same unauthorized mutation before REST or tRPC side effects", async () => {
+  test.each([
+    { name: "top-level username", trpcInput: { username: "zhangsan" }, trpcIdentifier: "zhangsan" },
+    {
+      name: "REST-shaped input",
+      trpcInput: { operationInputSource: "rest-request", params: { username: "misplaced" } },
+      trpcIdentifier: "collection",
+    },
+  ])("rejects the mutation and logs the expected identifier for $name", async ({ trpcInput, trpcIdentifier }) => {
     const handler = mock(async () => true);
-    const policy = createPolicy({ warn: mock() });
+    const warn = mock();
+    const policy = createPolicy({ warn });
     const context = {
       get: mock((key: string) => {
         if (key === "adminAuthorizationPolicy") return policy;
@@ -218,12 +226,13 @@ describe("defineAdminApiOperation", () => {
     });
     let trpcFailure: unknown;
     try {
-      await caller.remove({ username: "zhangsan" });
+      await caller.remove(trpcInput as never);
     } catch (error) {
       trpcFailure = error;
     }
     expect(trpcFailure).toMatchObject({ code: "FORBIDDEN" });
     expect(handler).toHaveBeenCalledTimes(0);
+    expect(warn.mock.calls.map(([fields]) => fields.resourceIdentifier)).toEqual(["zhangsan", trpcIdentifier]);
   });
 
   test("rejects malformed REST and tRPC mutation input before schema disclosure", async () => {
@@ -371,7 +380,41 @@ describe("defineAdminApiOperation", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  test("authorizes an actual REST route before OpenAPI request validation", async () => {
+  test.each([
+    {
+      name: "deeply nested body",
+      method: "POST",
+      path: "/admin/users",
+      body: createDeeplyNestedJson(20_000),
+      action: "admin.user.create",
+      resourceIdentifier: "collection",
+    },
+    {
+      name: "misplaced username",
+      method: "POST",
+      path: "/admin/users?username=query-user",
+      body: JSON.stringify({ extra: { username: "nested-user" } }),
+      action: "admin.user.create",
+      resourceIdentifier: "collection",
+    },
+    {
+      name: "body username",
+      method: "POST",
+      path: "/admin/users",
+      body: JSON.stringify({ username: "body-user" }),
+      action: "admin.user.create",
+      resourceIdentifier: "body-user",
+    },
+    {
+      name: "path username",
+      method: "DELETE",
+      path: "/admin/users/path-user",
+      body: JSON.stringify({ username: "body-user" }),
+      action: "admin.user.delete",
+      resourceIdentifier: "path-user",
+    },
+  ])("rejects REST before validation and logs the identifier for $name", async (scenario) => {
+    const { method, path, body, action, resourceIdentifier } = scenario;
     const handler = mock(async () => true);
     const warn = mock();
     const policy = createPolicy({ warn });
@@ -397,12 +440,13 @@ describe("defineAdminApiOperation", () => {
     });
     app.use("/admin/*", createAdminRestAuthorizationHandler(createProductionRestOperationSurface()));
     app.route("/admin", route);
+    app.delete("/admin/users/:username", async (c) => c.json(await handler()));
     app.onError((error, c) => c.text(error.message, ("httpStatus" in error ? error.httpStatus : 500) as never));
 
-    const response = await app.request("http://localhost/admin/users", {
-      method: "POST",
+    const response = await app.request(path, {
+      method,
       headers: { "content-type": "application/json" },
-      body: createDeeplyNestedJson(20_000),
+      body,
     });
 
     expect(response.status).toBe(403);
@@ -410,8 +454,8 @@ describe("defineAdminApiOperation", () => {
     expect(handler).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledWith(
       expect.objectContaining({
-        action: "admin.user.create",
-        resourceIdentifier: "collection",
+        action,
+        resourceIdentifier,
         resourceType: "user",
       }),
       "admin mutation authorization denied",

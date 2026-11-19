@@ -1,5 +1,10 @@
 import type { AdminModuleCode } from "@iam/contracts";
 
+export interface AdminOperationInput {
+  operationInput: unknown;
+  operationInputSource?: "rest-request";
+}
+
 interface AdminQueryOperationClassification {
   module: AdminModuleCode;
   type: "query";
@@ -10,7 +15,7 @@ interface AdminMutationOperationClassification {
   module: AdminModuleCode;
   type: "mutation";
   resourceType: string;
-  resourceIdentifier: (input: unknown) => string | number;
+  resourceIdentifier: (input: AdminOperationInput) => string | number;
 }
 
 const maximumResourceIdentifierLength = 128;
@@ -22,35 +27,12 @@ function normalizePrimitiveIdentifier(value: string | number) {
 
 type AdminOperationClassification = AdminQueryOperationClassification | AdminMutationOperationClassification;
 
-function findPrimitiveIdentifier(input: unknown, keys: readonly string[]): string | number | undefined {
-  const pending = [input];
-  const visited = new Set<object>();
-  const maximumInspectedObjects = 1_024;
-  const maximumInspectedProperties = 1_024;
-  let inspectedObjects = 0;
-  let inspectedProperties = 0;
-  let pendingIndex = 0;
+type RestIdentifierLocation = "params" | "body";
 
+function readOwnProperty(input: unknown, key: string): unknown {
   try {
-    while (pendingIndex < pending.length && inspectedObjects < maximumInspectedObjects) {
-      const current = pending[pendingIndex];
-      pendingIndex += 1;
-      if (!current || typeof current !== "object" || visited.has(current)) continue;
-      visited.add(current);
-      inspectedObjects += 1;
-
-      const record = current as Record<string, unknown>;
-      for (const key of keys) {
-        const value = record[key];
-        if (typeof value === "string" || typeof value === "number") return normalizePrimitiveIdentifier(value);
-      }
-      for (const property in record) {
-        if (!Object.hasOwn(record, property)) continue;
-        inspectedProperties += 1;
-        if (inspectedProperties > maximumInspectedProperties) return undefined;
-        const value = record[property];
-        if (value && typeof value === "object") pending.push(value);
-      }
+    if (input && typeof input === "object" && Object.hasOwn(input, key)) {
+      return (input as Record<string, unknown>)[key];
     }
   } catch {
     return undefined;
@@ -58,89 +40,57 @@ function findPrimitiveIdentifier(input: unknown, keys: readonly string[]): strin
   return undefined;
 }
 
-function identify(...keys: string[]) {
-  return (input: unknown) => findPrimitiveIdentifier(input, keys) ?? "collection";
+function readResourceInput(
+  { operationInput, operationInputSource }: AdminOperationInput,
+  restLocation: RestIdentifierLocation,
+) {
+  return operationInputSource === "rest-request" ? readOwnProperty(operationInput, restLocation) : operationInput;
 }
 
-function userMutation(keys: string[]) {
-  return {
-    module: "user",
-    type: "mutation",
-    resourceType: "user",
-    resourceIdentifier: identify(...keys),
-  } as const;
+function readResourceIdentifier(input: unknown, keys: readonly string[]) {
+  for (const key of keys) {
+    const value = readOwnProperty(input, key);
+    if (typeof value === "string" || typeof value === "number") return normalizePrimitiveIdentifier(value);
+  }
+  return "collection";
 }
-function organizationMutation(keys: string[]) {
-  return {
-    module: "organization",
-    type: "mutation",
-    resourceType: "organization",
-    resourceIdentifier: identify(...keys),
-  } as const;
+
+function identifySessionRevocation(input: AdminOperationInput) {
+  const target = readOwnProperty(readResourceInput(input, "body"), "target");
+  switch (readOwnProperty(target, "type")) {
+    case "session":
+      return readResourceIdentifier(target, ["principalSessionId"]);
+    case "user":
+      return readResourceIdentifier(target, ["userId"]);
+    default:
+      return "collection";
+  }
 }
-function responsibilityMutation(keys: string[]) {
-  return {
-    module: "organizationResponsibility",
+
+function mutationFor(module: AdminModuleCode, resourceType: string = module) {
+  return (restLocation: RestIdentifierLocation, ...keys: string[]): AdminMutationOperationClassification => ({
+    module,
     type: "mutation",
-    resourceType: "organizationResponsibilityAssignment",
-    resourceIdentifier: identify(...keys),
-  } as const;
+    resourceType,
+    resourceIdentifier: (input) => readResourceIdentifier(readResourceInput(input, restLocation), keys),
+  });
 }
-function positionMutation(keys: string[]) {
-  return {
-    module: "position",
-    type: "mutation",
-    resourceType: "position",
-    resourceIdentifier: identify(...keys),
-  } as const;
-}
-function employmentMutation(keys: string[]) {
-  return {
-    module: "employment",
-    type: "mutation",
-    resourceType: "employment",
-    resourceIdentifier: identify(...keys),
-  } as const;
-}
-function clientMutation(keys: string[]) {
-  return {
-    module: "client",
-    type: "mutation",
-    resourceType: "client",
-    resourceIdentifier: identify(...keys),
-  } as const;
-}
-function roleMutation(keys: string[]) {
-  return {
-    module: "role",
-    type: "mutation",
-    resourceType: "role",
-    resourceIdentifier: identify(...keys),
-  } as const;
-}
-function roleAssignmentMutation(keys: string[]) {
-  return {
-    module: "role",
-    type: "mutation",
-    resourceType: "roleAssignment",
-    resourceIdentifier: identify(...keys),
-  } as const;
-}
+
+const clientMutation = mutationFor("client");
+const delegationMutation = mutationFor("delegation");
+const employmentMutation = mutationFor("employment");
+const loginRestrictionMutation = mutationFor("sessionManagement", "loginRestriction");
+const organizationMutation = mutationFor("organization");
+const positionMutation = mutationFor("position");
+const responsibilityMutation = mutationFor("organizationResponsibility", "organizationResponsibilityAssignment");
+const roleAssignmentMutation = mutationFor("role", "roleAssignment");
+const roleMutation = mutationFor("role");
+const userMutation = mutationFor("user");
 
 export const ADMIN_OPERATION_REGISTRY = {
   "admin.delegation.search": { module: "delegation", type: "query", resourceType: "delegation" },
-  "admin.delegation.create": {
-    module: "delegation",
-    type: "mutation",
-    resourceType: "delegation",
-    resourceIdentifier: identify("delegatorUsername"),
-  },
-  "admin.delegation.update": {
-    module: "delegation",
-    type: "mutation",
-    resourceType: "delegation",
-    resourceIdentifier: identify("id"),
-  },
+  "admin.delegation.create": delegationMutation("body", "delegatorUsername"),
+  "admin.delegation.update": delegationMutation("params", "id"),
   "admin.delegation.selectUsers": { module: "delegation", type: "query", resourceType: "delegationUserOption" },
   "admin.delegation.selectClients": { module: "delegation", type: "query", resourceType: "delegationClientOption" },
   "admin.delegation.selectOrganizations": {
@@ -153,43 +103,43 @@ export const ADMIN_OPERATION_REGISTRY = {
 
   "admin.client.search": { module: "client", type: "query", resourceType: "client" },
   "admin.client.detail": { module: "client", type: "query", resourceType: "client" },
-  "admin.client.create": clientMutation(["clientCode"]),
-  "admin.client.update": clientMutation(["clientCode"]),
-  "admin.client.updateLegacy": clientMutation(["clientCode", "id"]),
-  "admin.client.updateStatus": clientMutation(["clientCode"]),
-  "admin.client.delete": clientMutation(["clientCode"]),
+  "admin.client.create": clientMutation("body", "clientCode"),
+  "admin.client.update": clientMutation("params", "clientCode"),
+  "admin.client.updateLegacy": clientMutation("body", "clientCode", "id"),
+  "admin.client.updateStatus": clientMutation("params", "clientCode"),
+  "admin.client.delete": clientMutation("params", "clientCode"),
   "admin.clientAdmission.preview": { module: "client", type: "query", resourceType: "client" },
-  "admin.clientAdmission.save": clientMutation(["clientCode"]),
-  "admin.clientAdmission.setEnabled": clientMutation(["clientCode"]),
+  "admin.clientAdmission.save": clientMutation("params", "clientCode"),
+  "admin.clientAdmission.setEnabled": clientMutation("params", "clientCode"),
   "admin.clientAdmission.detail": { module: "client", type: "query", resourceType: "client" },
-  "admin.clientSso.delete": clientMutation(["clientCode"]),
+  "admin.clientSso.delete": clientMutation("params", "clientCode"),
   "admin.clientSso.detail": { module: "client", type: "query", resourceType: "client" },
-  "admin.clientSso.save": clientMutation(["clientCode"]),
-  "admin.clientSso.selectProtocol": clientMutation(["clientCode"]),
-  "admin.clientSso.setEnabled": clientMutation(["clientCode"]),
-  "admin.clientSso.rotateSecret": clientMutation(["clientCode"]),
-  "admin.clientSso.readSecret": clientMutation(["clientCode"]),
+  "admin.clientSso.save": clientMutation("params", "clientCode"),
+  "admin.clientSso.selectProtocol": clientMutation("params", "clientCode"),
+  "admin.clientSso.setEnabled": clientMutation("params", "clientCode"),
+  "admin.clientSso.rotateSecret": clientMutation("params", "clientCode"),
+  "admin.clientSso.readSecret": clientMutation("params", "clientCode"),
 
   "admin.employment.search": { module: "employment", type: "query", resourceType: "employment" },
   "admin.employment.detail": { module: "employment", type: "query", resourceType: "employment" },
-  "admin.employment.create": employmentMutation(["username"]),
-  "admin.employment.update": employmentMutation(["id"]),
-  "admin.employment.pause": employmentMutation(["id"]),
-  "admin.employment.resume": employmentMutation(["id"]),
-  "admin.employment.end": employmentMutation(["id"]),
-  "admin.employment.transfer": employmentMutation(["id"]),
-  "admin.employment.setPrimary": employmentMutation(["id"]),
-  "admin.employment.clearPrimary": employmentMutation(["id"]),
-  "admin.employment.resignUser": userMutation(["username"]),
+  "admin.employment.create": employmentMutation("body", "username"),
+  "admin.employment.update": employmentMutation("params", "id"),
+  "admin.employment.pause": employmentMutation("params", "id"),
+  "admin.employment.resume": employmentMutation("params", "id"),
+  "admin.employment.end": employmentMutation("params", "id"),
+  "admin.employment.transfer": employmentMutation("params", "id"),
+  "admin.employment.setPrimary": employmentMutation("params", "id"),
+  "admin.employment.clearPrimary": employmentMutation("params", "id"),
+  "admin.employment.resignUser": userMutation("params", "username"),
 
   "admin.organization.search": { module: "organization", type: "query", resourceType: "organization" },
   "admin.organization.children": { module: "organization", type: "query", resourceType: "organization" },
   "admin.organization.selector": { module: "organization", type: "query", resourceType: "organization" },
   "admin.organization.detail": { module: "organization", type: "query", resourceType: "organization" },
-  "admin.organization.create": organizationMutation(["orgCode", "parentOrgCode"]),
-  "admin.organization.update": organizationMutation(["orgCode"]),
-  "admin.organization.updateStatus": organizationMutation(["orgCode"]),
-  "admin.organization.delete": organizationMutation(["orgCode"]),
+  "admin.organization.create": organizationMutation("body", "orgCode"),
+  "admin.organization.update": organizationMutation("params", "orgCode"),
+  "admin.organization.updateStatus": organizationMutation("params", "orgCode"),
+  "admin.organization.delete": organizationMutation("params", "orgCode"),
 
   "admin.organizationResponsibility.listTypes": {
     module: "organizationResponsibility",
@@ -222,27 +172,27 @@ export const ADMIN_OPERATION_REGISTRY = {
     resourceType: "organizationResponsibilityAssignment",
     resourceIdentifier: () => "create-request",
   },
-  "admin.organizationResponsibility.pauseAssignment": responsibilityMutation(["id"]),
-  "admin.organizationResponsibility.resumeAssignment": responsibilityMutation(["id"]),
-  "admin.organizationResponsibility.endAssignment": responsibilityMutation(["id"]),
+  "admin.organizationResponsibility.pauseAssignment": responsibilityMutation("params", "id"),
+  "admin.organizationResponsibility.resumeAssignment": responsibilityMutation("params", "id"),
+  "admin.organizationResponsibility.endAssignment": responsibilityMutation("params", "id"),
 
   "admin.position.search": { module: "position", type: "query", resourceType: "position" },
   "admin.position.detail": { module: "position", type: "query", resourceType: "position" },
-  "admin.position.create": positionMutation(["posCode"]),
-  "admin.position.update": positionMutation(["posCode"]),
-  "admin.position.updateStatus": positionMutation(["posCode"]),
-  "admin.position.delete": positionMutation(["posCode"]),
+  "admin.position.create": positionMutation("body", "posCode"),
+  "admin.position.update": positionMutation("params", "posCode"),
+  "admin.position.updateStatus": positionMutation("params", "posCode"),
+  "admin.position.delete": positionMutation("params", "posCode"),
 
   "admin.role.search": { module: "role", type: "query", resourceType: "role" },
   "admin.role.detail": { module: "role", type: "query", resourceType: "role" },
-  "admin.role.create": roleMutation(["roleCode"]),
-  "admin.role.update": roleMutation(["roleCode"]),
-  "admin.role.updateStatus": roleMutation(["roleCode"]),
-  "admin.role.delete": roleMutation(["roleCode"]),
+  "admin.role.create": roleMutation("body", "roleCode"),
+  "admin.role.update": roleMutation("params", "roleCode"),
+  "admin.role.updateStatus": roleMutation("params", "roleCode"),
+  "admin.role.delete": roleMutation("params", "roleCode"),
   "admin.role.assignments.search": { module: "role", type: "query", resourceType: "roleAssignment" },
-  "admin.role.assignments.create": roleAssignmentMutation(["roleCode"]),
-  "admin.role.assignments.updateScope": roleAssignmentMutation(["assignmentId", "roleCode"]),
-  "admin.role.assignments.delete": roleAssignmentMutation(["assignmentId", "roleCode"]),
+  "admin.role.assignments.create": roleAssignmentMutation("params", "roleCode"),
+  "admin.role.assignments.updateScope": roleAssignmentMutation("params", "assignmentId", "roleCode"),
+  "admin.role.assignments.delete": roleAssignmentMutation("params", "assignmentId", "roleCode"),
 
   "admin.sessionManagement.listLoginRestrictions": {
     module: "sessionManagement",
@@ -250,29 +200,24 @@ export const ADMIN_OPERATION_REGISTRY = {
     resourceType: "loginRestriction",
   },
   "admin.sessionManagement.listSessions": { module: "sessionManagement", type: "query", resourceType: "session" },
-  "admin.sessionManagement.releaseLoginRestriction": {
-    module: "sessionManagement",
-    type: "mutation",
-    resourceType: "loginRestriction",
-    resourceIdentifier: identify("userId"),
-  },
+  "admin.sessionManagement.releaseLoginRestriction": loginRestrictionMutation("params", "userId"),
   "admin.sessionManagement.revokeSessions": {
     module: "sessionManagement",
     type: "mutation",
     resourceType: "session",
-    resourceIdentifier: identify("principalSessionId", "userId", "clientCode"),
+    resourceIdentifier: identifySessionRevocation,
   },
 
   "admin.user.search": { module: "user", type: "query", resourceType: "user" },
   "admin.user.detail": { module: "user", type: "query", resourceType: "user" },
   "admin.user.generatePassword": { module: "user", type: "query", resourceType: "passwordCandidate" },
-  "admin.user.create": userMutation(["username"]),
-  "admin.user.update": userMutation(["username"]),
-  "admin.user.updateStatus": userMutation(["username"]),
-  "admin.user.delete": userMutation(["username"]),
-  "admin.user.resetPassword": userMutation(["username"]),
-  "admin.user.unlinkWecom": userMutation(["username"]),
-  "admin.user.unlinkWecomExternalBinding": userMutation(["username"]),
+  "admin.user.create": userMutation("body", "username"),
+  "admin.user.update": userMutation("params", "username"),
+  "admin.user.updateStatus": userMutation("params", "username"),
+  "admin.user.delete": userMutation("params", "username"),
+  "admin.user.resetPassword": userMutation("params", "username"),
+  "admin.user.unlinkWecom": userMutation("params", "username"),
+  "admin.user.unlinkWecomExternalBinding": userMutation("params", "username"),
 } as const satisfies Record<string, AdminOperationClassification>;
 
 export const ADMIN_AUTHORIZATION_OPERATION_REGISTRY = ADMIN_OPERATION_REGISTRY;

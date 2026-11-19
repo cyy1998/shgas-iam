@@ -5,7 +5,7 @@ import type {
   AdminAuthorizationPolicy,
   AdminOperationAuthorization,
 } from "./admin-authorization.policy";
-import type { AdminOperationId } from "./admin-operation.registry";
+import type { AdminOperationId, AdminOperationInput } from "./admin-operation.registry";
 import type { AdminRestOperationSurface } from "./admin-rest-operation.surface";
 
 const operationAuthorizationsByContext = new WeakMap<Context, Map<AdminOperationId, AdminOperationAuthorization>>();
@@ -43,26 +43,18 @@ export function createAdminAuthorizationContextHandler(policy: AdminAuthorizatio
 
 export async function authorizeAdminOperationForContext(
   c: Context,
-  input: {
+  input: AdminOperationInput & {
     operationId: AdminOperationId;
-    operationInput: unknown;
   },
 ) {
   const { actor, policy } = getAdminAuthorizationContext(c);
-  policy.assertOperationInputAllowed({
-    actor,
-    operationId: input.operationId,
-    operationInput: input.operationInput,
-  });
+  const authorizationInput = { ...input, actor };
+  policy.assertOperationInputAllowed(authorizationInput);
   let authorizations = operationAuthorizationsByContext.get(c);
   const cached = authorizations?.get(input.operationId);
   if (cached) return cached;
 
-  const authorization = await policy.assertOperationAllowed({
-    actor,
-    operationId: input.operationId,
-    operationInput: input.operationInput,
-  });
+  const authorization = await policy.assertOperationAllowed(authorizationInput);
   authorizations ??= new Map();
   authorizations.set(input.operationId, authorization);
   operationAuthorizationsByContext.set(c, authorizations);
@@ -100,6 +92,7 @@ export function createAdminRestAuthorizationHandler(surface: AdminRestOperationS
     const requestInput = await readRequestInput(c);
     await authorizeAdminOperationForContext(c, {
       operationId: operation.operationId,
+      operationInputSource: "rest-request",
       operationInput: {
         params: operation.params,
         query: requestInput.query,

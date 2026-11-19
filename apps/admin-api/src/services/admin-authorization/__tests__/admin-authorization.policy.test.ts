@@ -699,6 +699,51 @@ describe("Admin Authorization Policy", () => {
     expect(JSON.stringify(warn.mock.calls)).not.toContain("scope");
   });
 
+  test.each([
+    { target: { type: "session", principalSessionId: "ps-42" }, resourceIdentifier: "ps-42" },
+    { target: { type: "user", userId: 42 }, resourceIdentifier: 42 },
+    {
+      target: {
+        type: "captured",
+        targets: [
+          {
+            kind: "userSession",
+            id: "00000000-0000-4000-8000-000000000001",
+            instance: "00000000-0000-4000-8000-000000000002",
+            userSessionId: "00000000-0000-4000-8000-000000000001",
+            subjectIdentifier: "00000000-0000-4000-8000-000000000003",
+          },
+        ],
+      },
+      resourceIdentifier: "collection",
+    },
+  ])("logs the expected denied session revocation target for $target.type", async ({ target, resourceIdentifier }) => {
+    const warn = mock();
+    const policy = createAdminAuthorizationPolicy({
+      logger: { warn },
+      hrAdministrationScopeResolver: { resolveForActor: async () => null },
+    });
+
+    for (const input of [
+      { operationInput: { target } },
+      { operationInputSource: "rest-request" as const, operationInput: { body: { target } } },
+    ]) {
+      const failure = await policy
+        .assertOperationAllowed({
+          actor: actor(["iam:user"]),
+          operationId: "admin.sessionManagement.revokeSessions",
+          ...input,
+        })
+        .catch((error) => error);
+
+      expect(failure).toMatchObject({ httpStatus: 403 });
+    }
+    expect(warn.mock.calls.map(([fields]) => fields.resourceIdentifier)).toEqual([
+      resourceIdentifier,
+      resourceIdentifier,
+    ]);
+  });
+
   test("uses a safe Create identifier when the operation gate rejects Organization Responsibility input", async () => {
     const warn = mock();
     const policy = createAdminAuthorizationPolicy({

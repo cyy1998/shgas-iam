@@ -26,7 +26,7 @@ import type {
   AdminEmploymentAuthorization,
   AdminEmploymentMutationDenial,
 } from "./admin-employment-authorization.type";
-import type { AdminOperationId } from "./admin-operation.registry";
+import type { AdminOperationId, AdminOperationInput } from "./admin-operation.registry";
 import { ADMIN_AUTHORIZATION_OPERATION_REGISTRY } from "./admin-operation.registry";
 import type {
   AdminOrganizationActionFacts,
@@ -53,6 +53,11 @@ export interface AdminAuthorizationActor {
 
 export interface AdminOperationAuthorization {
   hrAdministrationScope: HrAdministrationScope | null;
+}
+
+interface AdminOperationAuthorizationInput extends AdminOperationInput {
+  actor: AdminAuthorizationActor;
+  operationId: string;
 }
 
 interface AdminAuthorizationLogger {
@@ -514,11 +519,7 @@ export function createAdminAuthorizationPolicy(deps: CreateAdminAuthorizationPol
     };
   }
 
-  async function assertOperationAllowed(input: {
-    actor: AdminAuthorizationActor;
-    operationId: AdminOperationId | string;
-    operationInput: unknown;
-  }) {
+  async function assertOperationAllowed(input: AdminOperationAuthorizationInput) {
     assertOperationInputAllowed(input);
     const evaluation = await evaluateOperation(input);
     if (evaluation.authorization !== null) return evaluation.authorization;
@@ -530,18 +531,14 @@ export function createAdminAuthorizationPolicy(deps: CreateAdminAuthorizationPol
       logMutationDenial(input.actor, {
         operationId: input.operationId,
         resourceType: operation.resourceType,
-        resourceIdentifier: operation.resourceIdentifier(input.operationInput),
+        resourceIdentifier: operation.resourceIdentifier(input),
         reason: evaluation.decision.reason,
       });
     }
     throw new AuthzForbiddenError("无管理端操作权限");
   }
 
-  function assertOperationInputAllowed(input: {
-    actor: AdminAuthorizationActor;
-    operationId: AdminOperationId | string;
-    operationInput: unknown;
-  }) {
+  function assertOperationInputAllowed(input: AdminOperationAuthorizationInput) {
     if (
       hasFullAdminCapability(input.actor) ||
       input.operationId !== "admin.user.update" ||
@@ -553,7 +550,7 @@ export function createAdminAuthorizationPolicy(deps: CreateAdminAuthorizationPol
     logMutationDenial(input.actor, {
       operationId: input.operationId,
       resourceType: operation.resourceType,
-      resourceIdentifier: operation.resourceIdentifier(input.operationInput),
+      resourceIdentifier: operation.resourceIdentifier(input),
       reason: actionNotGrantedDecision.reason,
     });
     throw new AuthzForbiddenError("无管理端操作权限");
