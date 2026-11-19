@@ -290,10 +290,11 @@ describe("OIDC candidate logout HTTP and real Redis", () => {
       subjectIdentifier: f.subjectIdentifier,
     });
   });
-  it("clears logout state without TTL and unknown owner keys with independent verification", async () => {
+  it("clears logout state without TTL, a legacy token index and unknown owner keys", async () => {
     const f = await setup();
     await begin(f);
     await f.oidcState.removeLogoutTtl(f.cookies.get("oidc_logout_request")!);
+    await f.oidcState.seedLegacyTokenIndex(f.tokens.access_token);
     await f.oidcState.addUnknown();
     const maintenance = createOidcMaintenance(f.oidcState.redis, f.oidcState.namespace);
     const rootBefore = await rootStatus(f);
