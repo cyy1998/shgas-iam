@@ -14,7 +14,8 @@ import { shellQuote } from "./codex-provider.mts";
 import { command } from "./commands.ts";
 import { type ExecutorResources, recoverExecutorResources, withExecutorResources } from "./resources.ts";
 import { checkedExec } from "./runtime.mts";
-import { dockerPreflight, dockerSandbox, withDockerPreflight } from "./sandbox.mts";
+import { dockerPreflight, dockerSandbox, withDockerPreflight, workspacePreparation } from "./sandbox.mts";
+import { dependencyVolumeTargets } from "./workspace-dependencies.mts";
 
 const complete = "<promise>COMPLETE</promise>";
 const completionCommand = `printf '%s\\n' ${shellQuote(JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: complete } }))}`;
@@ -146,6 +147,7 @@ export async function smokeExecutorRecovery(options: {
   signal: AbortSignal;
 }): Promise<void> {
   const { cwd, image, signal } = options;
+  const anonymousVolumes = await dependencyVolumeTargets(cwd);
   let retained: ManagedResourceRun | undefined;
   let orphan: ManagedResourceRun | undefined;
   let orphanDescriptor = "";
@@ -159,48 +161,44 @@ export async function smokeExecutorRecovery(options: {
     ready = resolve;
     failed = reject;
   });
-  const start = async (resources: ExecutorResources, keep: boolean) => {
-    const provider = dockerSandbox({
-      ...resources,
-      imageName: image,
-      mounts: [
-        ...resources.mounts,
-        {
-          hostPath: join(cwd, ".sandcastle/dependencies/node_modules"),
-          sandboxPath: "/home/agent/workspace/node_modules",
-          readonly: true,
-        },
-      ],
-    });
+  const start = async (
+    resources: ExecutorResources,
+    keep: boolean,
+    registerHandle: (handle: BindMountSandboxHandle) => void,
+  ) => {
+    const provider = dockerSandbox({ ...resources, imageName: image });
     const handle = await provider.create({
       hostRepoPath: cwd,
       worktreePath: cwd,
       mounts: [{ hostPath: cwd, sandboxPath: "/home/agent/workspace" }],
       env: provider.env,
     });
-    const preflight = await handle.exec(dockerPreflight);
-    if (preflight.exitCode !== 0) throw new Error(preflight.stderr || "Executor Docker preflight failed");
+    registerHandle(handle);
     const program = `import {createManagedResourceRun,startManagedResources} from './scripts/test-resources/managed-resources.mjs';
       const run=await createManagedResourceRun({root:process.cwd(),composeFile:'scripts/test-resources/compose.yaml',services:['redis'],keep:${keep},registryFile:process.env.IAM_TEST_RESOURCE_REGISTRY});
       await startManagedResources(run);`;
-    const result = await handle.exec(`node --input-type=module -e ${shellQuote(program)}`);
-    if (result.exitCode !== 0) throw new Error(result.stderr || result.stdout);
+    await checkedExec(
+      handle,
+      `${dockerPreflight} && ${workspacePreparation} && node --input-type=module -e ${shellQuote(program)}`,
+      signal,
+    );
     const records = await readManagedResourceRegistry(cwd, resources.registryFile);
     if (records.length !== 1) throw new Error("异常执行器未交付准确资源记录。");
-    return { handle, run: await readManagedResourceRun(cwd, records[0]!) };
+    return readManagedResourceRun(cwd, records[0]!);
   };
   let keptHandle: BindMountSandboxHandle | undefined;
   const kept = withExecutorResources(
     {
       ...options,
+      anonymousVolumes,
       close: async () => {
         await keptHandle?.close();
       },
     },
     async (resources) => {
-      const created = await start(resources, true);
-      keptHandle = created.handle;
-      retained = created.run;
+      retained = await start(resources, true, (handle) => {
+        keptHandle = handle;
+      });
       ready();
       await finished;
     },
@@ -218,14 +216,15 @@ export async function smokeExecutorRecovery(options: {
       await withExecutorResources(
         {
           ...options,
+          anonymousVolumes,
           close: async () => {
             await orphanHandle?.close();
           },
         },
         async (resources) => {
-          const created = await start(resources, false);
-          orphanHandle = created.handle;
-          orphan = created.run;
+          orphan = await start(resources, false, (handle) => {
+            orphanHandle = handle;
+          });
           orphanDescriptor = resources.registryFile.replace("registry.jsonl", "executor.json");
           if (orphan.record.project === retained!.record.project) throw new Error("并行执行器复用了 project。");
           // A run-scoped invalid Compose path forces outer cleanup to fail, without

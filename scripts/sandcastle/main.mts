@@ -9,16 +9,20 @@ import { checkCodexAuth } from "./auth.ts";
 import { command } from "./commands.ts";
 import { checkDockerConfig } from "./docker-config.ts";
 import { smokeDocker } from "./docker-smoke.mts";
+import { connectGitHubProject } from "./projects.ts";
 import { hasUnstoppedExecutor, recoverExecutorResources } from "./resources.ts";
 import { createRuntime, smoke } from "./runtime.mts";
 import { runWorkflow, workflowLimits } from "./workflow.ts";
 
 const cwd = resolve(fileURLToPath(new URL("../..", import.meta.url)));
+const projectToken = process.env.SANDCASTLE_PROJECT_TOKEN?.trim();
 try {
   process.loadEnvFile(join(cwd, ".sandcastle", ".env"));
 } catch (error) {
   if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") throw error;
 }
+// Only accept a Project token from the host, outside the checkout mounted by the runner.
+delete process.env.SANDCASTLE_PROJECT_TOKEN;
 
 const { values } = parseArgs({
   options: {
@@ -50,6 +54,7 @@ async function main() {
     console.log(
       "运行模式读取全仓 ready-for-agent Spec，逐票集成后进入整个 Spec 的最终验收；本地交付后更新 GitHub issues。",
     );
+    console.log("设置 SANDCASTLE_PROJECT_URL 可将 AFK 阶段同步到 GitHub Projects。");
     return;
   }
   const actions = [values.check, values.build, values.smoke, values["smoke-docker"], values["recover-executor"]].filter(
@@ -61,6 +66,7 @@ async function main() {
     return;
   }
   const model = values.model ?? process.env.SANDCASTLE_MODEL ?? "gpt-6-astra";
+  const projectUrl = process.env.SANDCASTLE_PROJECT_URL?.trim();
   const image = process.env.SANDCASTLE_IMAGE ?? "iam-sandcastle:local";
   const { maxSpecs, maxParallel } = workflowLimits({
     maxSpecs: Number(values.iterations ?? process.env.SANDCASTLE_ITERATIONS ?? "1"),
@@ -105,6 +111,10 @@ async function main() {
   }
   if (values.check) {
     await loadAgentRoles(cwd);
+    if (projectUrl) {
+      await connectGitHubProject({ url: projectUrl, token: projectToken, cwd });
+      console.log(`GitHub Project 与 AFK Stage 字段预检通过：${projectUrl}`);
+    }
     console.log(
       `本机预检通过：分支 ${branch}，镜像 ${image}，模型 ${model}，Codex 认证 ${authMode}，Docker registry 配置${dockerConfigProvided ? "已提供" : "未提供"}。联网认证待实际调用验证。`,
     );
@@ -146,7 +156,16 @@ async function main() {
       console.log("Sandbox、skills、共享 Docker 与每命令独立资源 smoke 通过；未调用模型或修改 issues。");
     } else {
       console.log(`Sandcastle：${branch}，最多尝试 ${maxSpecs} 个 Spec，并行实施 ${maxParallel} 张 ticket，${model}。`);
-      const runtime = await createRuntime(options);
+      const reportProjectStage = projectUrl
+        ? await connectGitHubProject({ url: projectUrl, token: projectToken, cwd }).catch((error: unknown) => {
+            console.warn(
+              `Sandcastle 本次无法连接 GitHub Project。${error instanceof Error ? error.message : String(error)}`,
+            );
+            return undefined;
+          })
+        : undefined;
+      if (reportProjectStage) console.log(`GitHub Project：${projectUrl}`);
+      const runtime = await createRuntime({ ...options, reportProjectStage });
       const failures: unknown[] = [];
       try {
         const result = await runWorkflow({ maxSpecs, maxParallel }, runtime);

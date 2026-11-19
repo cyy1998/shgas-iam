@@ -38,6 +38,7 @@ export function createSpecDelivery(options: {
   creatorsStopped: () => boolean;
   recordHandoff: (number: number, body: string) => Promise<void>;
   closeIssue: (number: number) => Promise<void>;
+  onIssueClosed?: (number: number) => Promise<void>;
   signal?: AbortSignal;
 }) {
   const attempted = new Set<number>();
@@ -206,15 +207,14 @@ export function createSpecDelivery(options: {
           `${deliveryHandoff}\n\n下一动作：统一记录并关闭 tickets，最后关闭父 Spec。`,
         );
         for (const issue of workspace.graph.tickets) {
-          if (recovery && issue.state === "CLOSED") {
-            closed.push(issue.number);
-            continue;
+          if (!recovery || issue.state !== "CLOSED") {
+            await observe(squashSha);
+            await options.recordHandoff(issue.number, `${deliveryHandoff}\n\n本票已随整个 Spec 交付，执行关票。`);
+            await observe(squashSha);
+            await options.closeIssue(issue.number);
           }
-          await observe(squashSha);
-          await options.recordHandoff(issue.number, `${deliveryHandoff}\n\n本票已随整个 Spec 交付，执行关票。`);
-          await observe(squashSha);
-          await options.closeIssue(issue.number);
           closed.push(issue.number);
+          await options.onIssueClosed?.(issue.number);
         }
         await observe(squashSha);
         if (!recovery || workspace.graph.spec.state !== "CLOSED") {
@@ -224,6 +224,7 @@ export function createSpecDelivery(options: {
         }
         closed.push(number);
         stage = "squash 与关票已完成，清理尚未完成";
+        await options.onIssueClosed?.(number);
         // Validate every checkout before the first removal. Git removes only exact,
         // clean, unlocked registrations; expected-old-value ref deletion prevents drift.
         const cleanups = [

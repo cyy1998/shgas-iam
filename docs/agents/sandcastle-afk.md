@@ -25,6 +25,30 @@ pnpm sandcastle --iterations 2 --parallel 2 --model <model>
   `--parallel` / `SANDCASTLE_PARALLEL` 接受正整数，CLI 优先，恢复也计一次 Spec 额度。
   `--model` / `SANDCASTLE_MODEL` 只覆盖 Planner 和最终评审协调者，CLI 优先。角色自身的模型和思考程度见 `.codex/agents/`。
 
+### 在 GitHub Projects 查看进度
+
+在本机 `.sandcastle/.env` 设置 `SANDCASTLE_PROJECT_URL=https://github.com/users/cyy1998/projects/1`，使用
+[Sandcastle AFK](https://github.com/users/cyy1998/projects/1) 看板。使用其他个人或组织 Project 时，创建 `AFK Stage` 单选字段，
+按下表添加选项并让看板按该字段分组。运行 `pnpm sandcastle:check` 可预检 Project 和字段配置。
+
+Projects 使用宿主的 `gh` 登录，可用 `gh auth refresh --hostname github.com --scopes project` 授权。
+使用独立令牌时，将有 Projects 写入和源仓库读取权限的 `SANDCASTLE_PROJECT_TOKEN` 注入宿主进程环境。
+Projects 凭据留在宿主，`GH_TOKEN` 继续用于 Issues。
+
+| `AFK Stage`       | 同步时机                                              |
+| ----------------- | ----------------------------------------------------- |
+| `Implementing`    | Spec 已选定并准备好集成工作树，或 ticket 开始实施     |
+| `Accepting`       | ticket 开始票级验收                                   |
+| `Integrated`      | ticket 已验收并合入 Spec 集成分支                     |
+| `Reviewing`       | Spec 进入集中评审、修复与最终验证                     |
+| `Delivering`      | Spec 通过最终门禁，开始本地 squash 交付或恢复交付收尾 |
+| `Needs Attention` | ticket 实施或集成失败，或尚未关票的 Spec 暂停         |
+| `Done`            | 本地 squash 已核验且该 issue 已确认关闭               |
+
+Runner 把实际处理的 Spec 和 ticket 加入看板，并在恢复时补报已确认的集成或关票进度。任务准入、依赖、恢复和关票仍以 GitHub Issues
+和 Git 为依据。看板同步失败会输出告警，AFK 继续执行，界面可能保留最近一次成功同步的阶段。强制结束后，看板也可能保留旧阶段。
+详细模型输出和验证日志仍从本地查看。
+
 ### 认证与宿主资源
 
 默认先执行 `codex login` 并使用文件凭据存储。`CODEX_AUTH_FILE` 可指定来源；使用 API 计费时设置 `CODEX_AUTH=api-key`

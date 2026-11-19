@@ -3,10 +3,16 @@ import { promisify } from "node:util";
 
 const exec = promisify(execFile);
 
-export async function command(file: string, args: string[], cwd: string, timeout = 60_000): Promise<string> {
+export async function command(
+  file: string,
+  args: string[],
+  cwd: string,
+  timeout = 60_000,
+  env?: NodeJS.ProcessEnv,
+): Promise<string> {
   try {
     const commandArgs = file === "git" && process.platform === "win32" ? ["-c", "core.longpaths=true", ...args] : args;
-    const result = await exec(file, commandArgs, { cwd, timeout, maxBuffer: 8 * 1024 * 1024, windowsHide: true });
+    const result = await exec(file, commandArgs, { cwd, env, timeout, maxBuffer: 8 * 1024 * 1024, windowsHide: true });
     return result.stdout.trim();
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);

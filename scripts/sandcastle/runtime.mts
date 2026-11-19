@@ -11,6 +11,7 @@ import { createFinalizationLifecycle, type FinalizedSpec } from "./finalization.
 import { createFinalizationExecutor } from "./finalization-runtime.mts";
 import { createGitHubIssueTracker, githubRepo } from "./github.ts";
 import { hookCommitProbe, hookSmokeEnvironment, snapshotHostHooks } from "./hook-smoke.mts";
+import type { ReportProjectStage } from "./projects.ts";
 import { createSpecRecovery, type RecoveredSpec } from "./recovery.ts";
 import { smokeCommandResources, smokeExecutorRecovery } from "./resource-smoke.mts";
 import { ExecutorTerminationError, withExecutorResources } from "./resources.ts";
@@ -46,9 +47,14 @@ export type RuntimeOptions = {
   model: string;
   image: string;
   signal: AbortSignal;
+  reportProjectStage?: ReportProjectStage;
 };
 
-export async function checkedExec(sandbox: Sandbox, script: string, signal?: AbortSignal): Promise<string> {
+export async function checkedExec(
+  sandbox: Pick<Sandbox, "exec">,
+  script: string,
+  signal?: AbortSignal,
+): Promise<string> {
   signal?.throwIfAborted();
   const quoted = shellQuote(script);
   const pending = sandbox.exec(`timeout --kill-after=10s 1200s sh -lc ${quoted}`);
@@ -76,7 +82,7 @@ export type RuntimeDependencies = ExecutorDependencies & {
 };
 
 export async function createRuntime(options: RuntimeOptions, dependencies: RuntimeDependencies = {}) {
-  const { cwd, branch, model, image, signal } = options;
+  const { cwd, branch, model, image, signal, reportProjectStage } = options;
   const runGh = dependencies.runGh ?? ((args: string[]) => command("gh", args, cwd));
   const actor = await runGh(["api", "user", "--jq", ".login"]);
   if (!actor.trim()) throw new ExecutorInfrastructureError("无法确认当前 GitHub 认领身份，停止启动。");
@@ -106,28 +112,36 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
   let selectedSpec: SpecGraph | undefined;
   let specWorkspace: SpecWorkspace | undefined;
   let recovered: RecoveredSpec | undefined;
+  const closedIssues = new Set<number>();
   let unsafeCreator = false;
   const onUnsafeClose = () => {
     unsafeCreator = true;
   };
 
+  const runTicket = createTicketExecutor({
+    ...dependencies,
+    cwd,
+    model,
+    image,
+    signal,
+    roles,
+    auth,
+    mounts,
+    githubCredentials,
+    onUnsafeClose,
+    canClose: () => !unsafeCreator,
+  });
   const tickets = createTicketLifecycle({
     cwd,
     invocationBranch: branch,
     signal,
-    runTicket: createTicketExecutor({
-      ...dependencies,
-      cwd,
-      model,
-      image,
-      signal,
-      roles,
-      auth,
-      mounts,
-      githubCredentials,
-      onUnsafeClose,
-      canClose: () => !unsafeCreator,
-    }),
+    runTicket: async (input) => {
+      await reportProjectStage?.(
+        input.context.ticket.number,
+        input.phase === "implement" ? "Implementing" : "Accepting",
+      );
+      return runTicket(input);
+    },
     recordHandoff,
   });
   const recovery = createSpecRecovery({
@@ -228,7 +242,17 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
     creatorsStopped: () => !unsafeCreator,
     recordHandoff,
     closeIssue: (number) => closeDeliveredIssue(cwd, number, runGh),
+    onIssueClosed: async (number) => {
+      closedIssues.add(number);
+      await reportProjectStage?.(number, "Done");
+    },
   });
+
+  async function reportSpecPaused(graph: SpecGraph) {
+    if (graph.spec.state === "OPEN" && !closedIssues.has(graph.spec.number)) {
+      await reportProjectStage?.(graph.spec.number, "Needs Attention");
+    }
+  }
 
   return {
     get selectedSpec() {
@@ -247,11 +271,15 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
       if (!workspace) throw new Error("尚未准备 Spec 集成工作树。");
       await assertTarget();
       if (recovered?.workspace === workspace && recovered.finalized) return recovered.finalized;
+      await reportProjectStage?.(workspace.graph.spec.number, "Reviewing");
       return finalization.finalize(workspace, tickets.contexts, tickets.integrated);
     },
     deliver: async (finalized: FinalizedSpec) => {
       await assertTarget();
       if (finalized.workspace !== specWorkspace) throw new GitStateError("最终验收交接不属于当前 Spec，保留现场。");
+      if (finalized.workspace.graph.spec.state === "OPEN") {
+        await reportProjectStage?.(finalized.workspace.graph.spec.number, "Delivering");
+      }
       return delivery.deliver(
         finalized,
         tickets.contexts,
@@ -265,11 +293,19 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
     },
     integrate: async (ticket: Ticket) => {
       if (!specWorkspace) throw new Error("尚未准备 Spec 集成工作树。");
-      return tickets.integrate(specWorkspace, ticket);
+      try {
+        const integrated = await tickets.integrate(specWorkspace, ticket);
+        await reportProjectStage?.(ticket.number, "Integrated");
+        return integrated;
+      } catch (error) {
+        await reportProjectStage?.(ticket.number, "Needs Attention");
+        throw error;
+      }
     },
     signal,
     report: (message: string) => console.log(message),
     close: async () => {
+      if (specWorkspace) await reportSpecPaused(specWorkspace.graph);
       if (unsafeCreator)
         throw new ExecutorTerminationError(
           "创建者 sandbox 尚未确认停止；保留 Codex auth/config 挂载，先按 executor.json 恢复。",
@@ -308,6 +344,14 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
       if (recovered) {
         selectedSpec = recovered.workspace.graph;
         specWorkspace = recovered.workspace;
+        if (reportProjectStage && !recovered.squashSha) {
+          await reportProjectStage(selectedSpec.spec.number, recovered.finalized ? "Delivering" : "Implementing");
+          for (const issue of selectedSpec.tickets) {
+            if (issue.state === "OPEN" && tickets.integrated.has(issue.number)) {
+              await reportProjectStage(issue.number, "Integrated");
+            }
+          }
+        }
         const plan = recovered.squashSha
           ? { tickets: [] }
           : await planFrontier(
@@ -325,6 +369,7 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
       if (!plan.graph) return undefined;
       selectedSpec = plan.graph;
       specWorkspace = await tickets.prepareSpec(selectedSpec);
+      await reportProjectStage?.(selectedSpec.spec.number, "Implementing");
       return { workspace: specWorkspace, tickets: plan.tickets };
     },
 
@@ -345,6 +390,7 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
       workspace: SpecWorkspace,
       outcome: { integrated: number[]; failed: number[]; blocked: { number: number; reasons: string[] }[] },
     ): Promise<void> {
+      await reportSpecPaused(workspace.graph);
       const contexts = workspace.graph.tickets.flatMap((entry) => {
         const context = tickets.contexts.get(entry.number);
         return context
@@ -374,7 +420,14 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
 
     async execute(ticket: Ticket): Promise<boolean> {
       if (!specWorkspace) throw new Error("尚未准备 Spec 集成工作树。");
-      return recovery.execute(specWorkspace, ticket);
+      try {
+        const executed = await recovery.execute(specWorkspace, ticket);
+        if (!executed) await reportProjectStage?.(ticket.number, "Needs Attention");
+        return executed;
+      } catch (error) {
+        await reportProjectStage?.(ticket.number, "Needs Attention");
+        throw error;
+      }
     },
   };
 }
