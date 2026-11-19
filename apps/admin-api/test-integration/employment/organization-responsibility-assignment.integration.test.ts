@@ -2572,20 +2572,83 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     await expectAssignmentReadsToFailClosed(service, created.result.id, "has no valid target Organization");
   });
 
-  test("fails list and detail closed when the target Organization reference is missing", async () => {
+  test("isolates a missing target Organization to reads that select the Assignment", async () => {
     const fixture = await seedScenario();
     const producer = mock(async () => ({ enqueued: 1, jobIds: ["job-1"] }));
-    const created = await createUseCase(fixture.now, producer).execute({
+    const create = createUseCase(fixture.now, producer);
+    const orphan = await create.execute({
       employmentId: fixture.employmentId,
       targetOrganizationCode: "TARGET",
       typeCode: OrganizationResponsibilityTypeCode.Head,
     });
+    const healthy = await create.execute({
+      employmentId: fixture.employmentId,
+      targetOrganizationCode: "HOLDER",
+      typeCode: OrganizationResponsibilityTypeCode.Head,
+    });
     await harness!.db.delete(organizations).where(eq(organizations.id, fixture.targetOrganizationId));
+    const service = createOrganizationResponsibilityService({
+      repository: createAdminApiRepositories(harness!.db).organizationResponsibility,
+    });
+    const full = testFullOrganizationResponsibilityAuthorization;
+
+    const missingTarget = await service.listAssignments({ orgCode: "TARGET", limit: 20 }, full);
+    const page = await service.listAssignments({ orgCode: "HOLDER", limit: 20 }, full);
+    const detail = await service.detailAssignment({ orgCode: "HOLDER", id: healthy.result.id }, full);
+    expect(missingTarget).toEqual({ items: [], nextCursor: null });
+    expect(page.items.map((item) => item.id)).toEqual([healthy.result.id]);
+    expect(detail.id).toBe(healthy.result.id);
+
+    for (const read of [
+      () => service.searchAssignments({ limit: 20 }, full),
+      () => service.detailAssignment({ id: orphan.result.id }, full),
+      () => service.detailAssignment({ orgCode: "TARGET", id: orphan.result.id }, full),
+    ]) {
+      const failure = await captureFailure(read);
+      expect(failure).toMatchObject({
+        message: expect.stringContaining(`assignment ${orphan.result.id} has no valid target Organization`),
+      });
+    }
+    const hr = await createHrOrganizationResponsibilityAuthorization([
+      fixture.holderOrganizationId,
+      fixture.targetOrganizationId,
+    ]);
+    const hidden = await captureFailure(() => service.detailAssignment({ id: orphan.result.id }, hr));
+    expect(hidden).toBeInstanceOf(OrganizationResponsibilityAssignmentNotFoundError);
+  });
+
+  test("validates the selected page including the cursor lookahead row", async () => {
+    const fixture = await seedScenario();
+    const create = createUseCase(
+      fixture.now,
+      mock(async () => ({ enqueued: 1, jobIds: ["job-1"] })),
+    );
+    const damaged = await create.execute({
+      employmentId: fixture.secondEmploymentId,
+      targetOrganizationCode: "TARGET",
+      typeCode: OrganizationResponsibilityTypeCode.Supervising,
+    });
+    const healthy = await create.execute({
+      employmentId: fixture.employmentId,
+      targetOrganizationCode: "TARGET",
+      typeCode: OrganizationResponsibilityTypeCode.Head,
+    });
+    await harness!.db
+      .update(employments)
+      .set({ status: EmploymentStatus.Pending })
+      .where(eq(employments.id, fixture.secondEmploymentId));
     const service = createFullAdminOrganizationResponsibilityService({
       repository: createAdminApiRepositories(harness!.db).organizationResponsibility,
     });
 
-    await expectAssignmentReadsToFailClosed(service, created.result.id, "has no valid target Organization");
+    const numberedPage = await service.listAssignments({ orgCode: "TARGET", limit: 1, pageNum: 1, pageSize: 1 });
+    const detail = await service.detailAssignment({ id: healthy.result.id });
+    expect(numberedPage).toEqual({ items: [detail], total: 2, nextCursor: null });
+
+    const cursorFailure = await captureFailure(() => service.listAssignments({ orgCode: "TARGET", limit: 1 }));
+    expect(cursorFailure).toMatchObject({
+      message: expect.stringContaining(`assignment ${damaged.result.id} parent lifecycle is invalid`),
+    });
   });
 
   test("fails stable-ID detail closed when an Ended Assignment target reference is missing", async () => {
