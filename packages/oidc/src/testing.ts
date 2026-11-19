@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import Redis from "ioredis";
 import { codeDigest, createOidcState, digest, parseOidcCode, statePrefix } from "./state";
+import type { OidcTokenRecord } from "./token-state";
 import { createOidcTokenState } from "./token-state";
 
 export { createOidcMaintenanceTestFixture } from "./offline/testing";
@@ -49,7 +50,7 @@ export async function createOidcRedisTestScope(url: string, trackStop?: (stop: (
         ? "logout"
         : script.includes("GETDEL")
           ? "takeCode"
-          : count === 2
+          : args[0]?.startsWith(`${prefix}token:`) && script.includes("'NX'")
             ? "saveToken"
             : undefined;
       const current = action && fault?.action === action ? fault : undefined;
@@ -91,6 +92,9 @@ export async function createOidcRedisTestScope(url: string, trackStop?: (stop: (
     namespace,
     readCode: state.readCode,
     readToken: tokens.read,
+    async saveToken(bearer: string, record: OidcTokenRecord) {
+      await tokens.save(bearer, { ...record, digest: digest(bearer) });
+    },
     failNext(action: Action, after = false) {
       fault = { action, after };
     },
@@ -106,16 +110,19 @@ export async function createOidcRedisTestScope(url: string, trackStop?: (stop: (
       if (!raw) throw new Error("Missing Code fixture");
       await redis.set(key, JSON.stringify({ ...JSON.parse(raw), ...patch }), "KEEPTTL");
     },
-    async forgetTokenIndex(bearer: string) {
+    async seedLegacyTokenIndex(bearer: string) {
       const record = await tokens.read(bearer);
-      if (record) await redis.del(`${prefix}token-id:${record.id}`);
+      if (!record) throw new Error("Token fixture missing");
+      await redis.set(`${prefix}token-id:${record.id}`, record.digest, "PXAT", record.expiresAt);
+    },
+    async tokenKeyExpiries(bearer: string, tokenId: string) {
+      return await Promise.all([
+        redis.pexpiretime(`${prefix}token:${digest(bearer)}`),
+        redis.pexpiretime(`${prefix}token-id:${tokenId}`),
+      ]);
     },
     async removeTokenTtl(bearer: string) {
-      const record = await tokens.read(bearer);
-      if (record) {
-        await redis.persist(`${prefix}token:${record.digest}`);
-        await redis.persist(`${prefix}token-id:${record.id}`);
-      }
+      await redis.persist(`${prefix}token:${digest(bearer)}`);
     },
     async corruptToken(bearer: string) {
       await redis.set(`${prefix}token:${digest(bearer)}`, "corrupt", "KEEPTTL");

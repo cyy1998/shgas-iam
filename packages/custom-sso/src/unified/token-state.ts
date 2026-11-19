@@ -26,9 +26,9 @@ export function createCustomSsoTokenState(redis: CustomSsoStateRedis, namespace:
     .string()
     .regex(/^[\w:-]+$/u)
     .parse(namespace)}:custom-sso:v1:`;
-  async function execute(script: string, keys: string[], ...args: string[]) {
+  async function execute(script: string, key: string, ...args: string[]) {
     try {
-      return await redis.eval(script, keys.length, ...keys, ...args);
+      return await redis.eval(script, 1, key, ...args);
     } catch {
       throw new CustomSsoStateUnavailableError();
     }
@@ -36,21 +36,19 @@ export function createCustomSsoTokenState(redis: CustomSsoStateRedis, namespace:
   return {
     async save(bearer: string, input: CustomSsoTokenRecord) {
       const record = tokenRecordSchema.parse(input);
-      const digest = tokenDigest(bearer);
       const result = await execute(
-        `if redis.call('EXISTS',KEYS[1],KEYS[2])>0 then return 'collision' end; redis.call('SET',KEYS[1],ARGV[1],'PXAT',ARGV[3]); redis.call('SET',KEYS[2],ARGV[2],'PXAT',ARGV[3]); return 'saved'`,
-        [`${prefix}token:${digest}`, `${prefix}token-id:${record.tokenId}`],
+        "return redis.call('SET',KEYS[1],ARGV[1],'PXAT',ARGV[2],'NX')",
+        `${prefix}token:${tokenDigest(bearer)}`,
         JSON.stringify(record),
-        digest,
         String(record.expiresAt),
       );
-      if (result !== "saved") throw new CustomSsoStateUnavailableError("corrupt");
+      if (result !== "OK") throw new CustomSsoStateUnavailableError("corrupt");
     },
     async read(bearer: string) {
       if (bearer.length > 4096 || !bearer) return null;
       const raw = await execute(
         `local v=redis.call('GET',KEYS[1]); if not v then return nil end; local t=redis.call('TIME'); return {v,t[1]*1000+math.floor(t[2]/1000)}`,
-        [`${prefix}token:${tokenDigest(bearer)}`],
+        `${prefix}token:${tokenDigest(bearer)}`,
       );
       if (raw === null) return null;
       try {
@@ -63,12 +61,10 @@ export function createCustomSsoTokenState(redis: CustomSsoStateRedis, namespace:
       }
     },
     async remove(bearer: string, record: CustomSsoTokenRecord) {
-      const digest = tokenDigest(bearer);
       const result = await execute(
-        `local v=redis.call('GET',KEYS[1]); if not v then return 'missing' end; if v~=ARGV[1] then return 'replaced' end; redis.call('DEL',KEYS[1]); if redis.call('GET',KEYS[2])==ARGV[2] then redis.call('DEL',KEYS[2]) end; return 'removed'`,
-        [`${prefix}token:${digest}`, `${prefix}token-id:${record.tokenId}`],
+        "local v=redis.call('GET',KEYS[1]); if not v then return 'missing' end; if v~=ARGV[1] then return 'replaced' end; redis.call('DEL',KEYS[1]); return 'removed'",
+        `${prefix}token:${tokenDigest(bearer)}`,
         JSON.stringify(record),
-        digest,
       );
       return z.enum(["removed", "missing", "replaced"]).parse(result);
     },

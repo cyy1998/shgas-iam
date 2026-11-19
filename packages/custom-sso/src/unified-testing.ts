@@ -38,15 +38,24 @@ export async function createUnifiedCustomSsoRedisTestScope(
     throw error;
   }
   const namespace = `test:custom:${randomUUID()}`;
-  let fault: { after: boolean; match?: string } | undefined;
-  let interception: { match: string; callback: () => Promise<void> } | undefined;
+  const prefix = `${namespace}:custom-sso:v1:`;
+  type Action = "consume" | "saveToken" | "removeToken";
+  let fault: { after: boolean; action?: Action } | undefined;
+  let interception: { action: "consume" | "saveToken"; callback: () => Promise<void> } | undefined;
   const adapter = {
     async eval(script: string, keyCount: number, ...args: string[]) {
-      const current = fault && (!fault.match || script.includes(fault.match)) ? fault : undefined;
+      const action = script.includes("return 'consumed'")
+        ? "consume"
+        : script.includes("return 'removed'")
+          ? "removeToken"
+          : args[0]?.startsWith(`${prefix}token:`) && script.includes("'NX'")
+            ? "saveToken"
+            : undefined;
+      const current = fault && (!fault.action || fault.action === action) ? fault : undefined;
       if (current) fault = undefined;
       if (current && !current.after) throw new Error("Injected protocol state transport failure");
       const result = await redis.eval(script, keyCount, ...args);
-      if (interception && script.includes(interception.match)) {
+      if (interception && interception.action === action) {
         const callback = interception.callback;
         interception = undefined;
         await callback();
@@ -62,19 +71,17 @@ export async function createUnifiedCustomSsoRedisTestScope(
     failNext(after = false) {
       fault = { after };
     },
-    failAction(action: "consume" | "saveToken" | "removeToken", after = false) {
-      fault = {
-        after,
-        match:
-          action === "consume" ? "return 'consumed'" : action === "saveToken" ? "return 'saved'" : "return 'removed'",
-      };
+    failAction(action: Action, after = false) {
+      fault = { after, action };
     },
     afterAction(action: "consume" | "saveToken", callback: () => Promise<void>) {
-      interception = { match: action === "consume" ? "return 'consumed'" : "return 'saved'", callback };
+      interception = { action, callback };
     },
     namespace,
     inspectCode: state.readCode,
     inspectToken: tokens.read,
+    saveToken: tokens.save,
+    removeToken: tokens.remove,
     maintenance: createUnifiedCustomSsoMaintenance(redis, namespace),
     async independentInventory() {
       const reader = new Redis(url, { maxRetriesPerRequest: 0, retryStrategy: () => null });
@@ -84,10 +91,16 @@ export async function createUnifiedCustomSsoRedisTestScope(
         reader.disconnect();
       }
     },
-    async removeTokenIndex(bearer: string) {
+    async seedLegacyTokenIndex(bearer: string) {
       const token = await tokens.read(bearer);
       if (!token) throw new Error("Token fixture missing");
-      await redis.del(`${namespace}:custom-sso:v1:token-id:${token.record.tokenId}`);
+      await redis.set(`${prefix}token-id:${token.record.tokenId}`, tokenDigest(bearer), "PXAT", token.record.expiresAt);
+    },
+    async tokenKeyExpiries(bearer: string, tokenId: string) {
+      return await Promise.all([
+        redis.pexpiretime(`${prefix}token:${tokenDigest(bearer)}`),
+        redis.pexpiretime(`${prefix}token-id:${tokenId}`),
+      ]);
     },
     async removeTokenTtl(bearer: string) {
       await redis.persist(`${namespace}:custom-sso:v1:token:${tokenDigest(bearer)}`);

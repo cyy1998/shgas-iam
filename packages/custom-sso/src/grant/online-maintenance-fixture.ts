@@ -57,10 +57,7 @@ export function createCustomSsoMaintenanceTestFixture(redis: Redis, namespace: s
         clientCode,
       };
       await tokens.save(bearer, token);
-      await redis.del(`${prefix}token-id:${token.tokenId}`);
-      const orphanBearer = randomHandle();
-      await tokens.save(orphanBearer, { ...token, tokenId: randomUUID() });
-      await redis.del(`${prefix}token:${tokenDigest(orphanBearer)}`);
+      await redis.set(`${prefix}token-id:${randomUUID()}`, tokenDigest(randomHandle()));
       await state.saveCode({
         ...identity,
         version: 1,

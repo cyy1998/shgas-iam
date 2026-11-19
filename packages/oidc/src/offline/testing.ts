@@ -49,10 +49,7 @@ export function createOidcMaintenanceTestFixture(redis: Redis, namespace: string
         scope: "openid",
       };
       await tokens.save(bearer, token);
-      await redis.del(`${prefix}token-id:${token.id}`);
-      const orphanBearer = `oa_${randomHandle()}`;
-      await tokens.save(orphanBearer, { ...token, id: randomUUID(), digest: digest(orphanBearer) });
-      await redis.del(`${prefix}token:${digest(orphanBearer)}`);
+      await redis.set(`${prefix}token-id:${randomUUID()}`, digest(`oa_${randomHandle()}`));
       const authorization = {
         issuer: "https://iam.example/oidc",
         clientId,

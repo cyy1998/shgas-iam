@@ -795,19 +795,43 @@ test("managed Token cannot authorize another Client", async () => {
   }
 });
 
-test("owner maintenance recognizes and removes a managed Token", async () => {
+test("managed Token storage prevents overwrite, compensates exactly and retains the legacy index for maintenance", async () => {
   const f = await managedFixture();
   try {
     const code = await f.authorize();
     const callback = await f.callback(code);
     expect(callback.status).toBe(302);
-    const token = new URL(callback.headers.get("Location")!).searchParams.get("token")!;
+    const bearer = new URL(callback.headers.get("Location")!).searchParams.get("token");
+    if (!bearer) throw new Error("Expected managed Token in the redirect");
+    const stored = await f.codes.inspectToken(bearer);
+    if (!stored) throw new Error("Expected issued Custom SSO Token");
+    const { record } = stored;
+
+    const differentRecord = { ...record, expiresAt: record.expiresAt - 1000 };
+    const failure = await f.codes.saveToken(bearer, differentRecord).catch((error) => error);
+    const afterCollision = await f.codes.inspectToken(bearer);
+    const expiries = await f.codes.tokenKeyExpiries(bearer, record.tokenId);
+    expect(failure).toMatchObject({ outcome: "corrupt" });
+    expect(afterCollision?.record).toEqual(record);
+    expect(expiries).toEqual([record.expiresAt, -2]);
+
+    await f.codes.seedLegacyTokenIndex(bearer);
+    const otherBearer = randomUUID();
+    await f.codes.saveToken(otherBearer, differentRecord);
+    const access = await f.use(bearer);
+    expect(access.status).toBe(200);
+
+    const staleCompensation = await f.codes.removeToken(bearer, differentRecord);
+    expect(staleCompensation).toBe("replaced");
+    const compensation = await f.codes.removeToken(bearer, record);
+    expect(compensation).toBe("removed");
+    const retainedIndex = await f.codes.tokenKeyExpiries(bearer, record.tokenId);
+    expect(retainedIndex).toEqual([-2, record.expiresAt]);
+    const otherToken = await f.codes.inspectToken(otherBearer);
+    expect(otherToken?.record).toEqual(differentRecord);
     const report = await f.codes.maintenance.apply({ limit: 1000 });
-    expect(report.removed).toBe(2);
-    expect(report.unknown).toBe(0);
-    const stored = await f.codes.inspectToken(token);
-    expect(stored).toBeNull();
     const verification = await f.codes.independentInventory();
+    expect(report).toMatchObject({ matching: 2, removed: 2, unknown: 0 });
     expect(verification.matching).toBe(0);
   } finally {
     await f.close();
@@ -832,9 +856,9 @@ test.each([
     });
     expect(response.status).toBe(503);
     const report = await f.codes.maintenance.inventory({ limit: 1000 });
-    expect(report).toMatchObject({ matching: 2, unknown: 0 });
+    expect(report).toMatchObject({ matching: 1, unknown: 0 });
     const applied = await f.codes.maintenance.apply({ limit: 1000 });
-    expect(applied).toMatchObject({ matching: 2, removed: 2, unknown: 0 });
+    expect(applied).toMatchObject({ matching: 1, removed: 1, unknown: 0 });
     const verification = await f.codes.independentInventory();
     expect(verification.matching).toBe(0);
   } finally {
@@ -1707,7 +1731,7 @@ for (const after of [false, true]) {
       expect(inventory).toHaveLength(1);
       expect((await f.scope.inspect(target)).record?.state).toBe(after ? "terminated" : "active");
       const report = await f.codes.maintenance.apply({ limit: 1000 });
-      expect(report.removed).toBe(2);
+      expect(report.removed).toBe(1);
       expect(report.unknown).toBe(0);
       const verification = await f.codes.independentInventory();
       expect(verification.matching).toBe(0);
@@ -1717,7 +1741,7 @@ for (const after of [false, true]) {
   });
 }
 
-test("owner maintenance clears unindexed/no-TTL tokens, all Clients and malformed Code while preserving sessions", async () => {
+test("owner maintenance clears Tokens, a legacy index and malformed Code while preserving sessions", async () => {
   const f = await businessFixture();
   try {
     const code = await f.authorize();
@@ -1730,8 +1754,8 @@ test("owner maintenance clears unindexed/no-TTL tokens, all Clients and malforme
     const target = await f.target(malformed);
     const sessionBefore = await f.scope.inspect(target);
     await f.codes.corruptCode("app", malformed);
-    await f.codes.removeTokenIndex(token.data.sid);
     await f.codes.removeTokenTtl(token.data.sid);
+    await f.codes.seedLegacyTokenIndex(other.data.sid);
     const report = await f.codes.maintenance.apply({ limit: 1000 });
     expect(report).toMatchObject({ matching: 4, removed: 4, unknown: 0 });
     expect((await f.use(token.data.sid)).status).not.toBe(200);
@@ -2030,7 +2054,7 @@ test("maintenance inventory carries SCAN overflow without exceeding the per-page
       pages++;
       expect(pages).toBeLessThan(30);
     } while (cursor !== "0");
-    expect(matching).toBe(4);
+    expect(matching).toBe(3);
   } finally {
     await f.close();
   }

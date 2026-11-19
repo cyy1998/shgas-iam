@@ -30,15 +30,13 @@ export function createOidcTokenState(redis: OidcStateRedis, namespace: string) {
       if (value.digest !== digest(bearer)) throw new OidcStateUnavailableError("corrupt");
       try {
         const result = await redis.eval(
-          "if redis.call('EXISTS',KEYS[1],KEYS[2])>0 then return 0 end; redis.call('SET',KEYS[1],ARGV[1],'PXAT',ARGV[2]); redis.call('SET',KEYS[2],ARGV[3],'PXAT',ARGV[2]); return 1",
-          2,
+          "return redis.call('SET',KEYS[1],ARGV[1],'PXAT',ARGV[2],'NX')",
+          1,
           `${prefix}token:${value.digest}`,
-          `${prefix}token-id:${value.id}`,
           JSON.stringify(value),
           String(value.expiresAt),
-          value.digest,
         );
-        if (result !== 1) throw new OidcStateUnavailableError();
+        if (result !== "OK") throw new OidcStateUnavailableError();
       } catch {
         throw new OidcStateUnavailableError();
       }

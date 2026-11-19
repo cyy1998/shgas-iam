@@ -4,7 +4,7 @@ import { createPublicKey, randomBytes, randomUUID, verify } from "node:crypto";
 import { connect, createServer } from "node:net";
 import process from "node:process";
 import { ClientSsoCallbackType, ClientSsoProtocol, ClientStatus, OidcClientType } from "@iam/contracts";
-import { createOidcClientAuthRateLimiter, OidcExchangeFailure } from "@iam/oidc";
+import { createOidcClientAuthRateLimiter, OidcExchangeFailure, OidcStateUnavailableError } from "@iam/oidc";
 import { createOidcInventory, createOidcMaintenance, createOidcVerifier } from "@iam/oidc/maintenance";
 import type { OidcTokenResponse } from "@iam/oidc/wire";
 import Redis from "ioredis";
@@ -126,13 +126,14 @@ for (const confidential of [false, true]) {
         ),
       ).toBe(true);
       const record = await f.oidcState.readToken(value.access_token);
+      if (!record) throw new Error("Expected issued OIDC Token");
       const resolved = await f.resolve(value.access_token);
       expect(JSON.parse(Buffer.from(payload!, "base64url").toString())).toEqual({
         sub: f.subjectIdentifier,
         iss: "https://iam.example/oidc",
         aud: f.clientId,
-        iat: Math.floor(record!.issuedAt / 1000),
-        exp: Math.floor(record!.expiresAt / 1000),
+        iat: Math.floor(record.issuedAt / 1000),
+        exp: Math.floor(record.expiresAt / 1000),
         auth_time: Math.floor(resolved.observation.userSession.authTime / 1000),
         nonce: "bound-nonce",
         preferred_username: "test",
@@ -145,7 +146,7 @@ for (const confidential of [false, true]) {
         userSessionId: issued.record.userSessionId,
         clientSessionId: issued.record.clientSessionId,
       });
-      expect(record!.id).not.toBe(value.access_token);
+      expect(record.id).not.toBe(value.access_token);
       const consumed = await f.oidcState.readCode(f.clientId, issued.code);
       expect(consumed).toBeNull();
       const original = await f.scope.inspect(issued.target);
@@ -161,6 +162,24 @@ for (const confidential of [false, true]) {
         token_endpoint_auth_methods_supported: ["none", "client_secret_basic"],
         id_token_signing_alg_values_supported: ["RS256"],
       });
+
+      const differentRecord = { ...record, expiresAt: record.expiresAt - 1000 };
+      const failure = await f.oidcState.saveToken(value.access_token, differentRecord).catch((error) => error);
+      const afterCollision = await f.oidcState.readToken(value.access_token);
+      const expiries = await f.oidcState.tokenKeyExpiries(value.access_token, record.id);
+      expect(failure).toBeInstanceOf(OidcStateUnavailableError);
+      expect(afterCollision).toEqual(record);
+      expect(expiries).toEqual([record.expiresAt, -2]);
+
+      await f.oidcState.seedLegacyTokenIndex(value.access_token);
+      const otherBearer = `oa_${randomBytes(32).toString("base64url")}`;
+      await f.oidcState.saveToken(otherBearer, differentRecord);
+      const accessWithLegacyIndex = await f.resolve(value.access_token);
+      const otherToken = await f.oidcState.readToken(otherBearer);
+      const expiriesWithLegacyIndex = await f.oidcState.tokenKeyExpiries(otherBearer, record.id);
+      expect(accessWithLegacyIndex.observation.clientSession.clientSessionId).toBe(record.clientSessionId);
+      expect(otherToken).toMatchObject({ id: record.id, expiresAt: differentRecord.expiresAt });
+      expect(expiriesWithLegacyIndex).toEqual([differentRecord.expiresAt, record.expiresAt]);
     } finally {
       await f.close();
     }
@@ -506,7 +525,7 @@ test("OIDC Token ignores mutable protocol marker, uses current config and denies
   }
 });
 
-test("OIDC Token maintenance clears no-TTL/index and unknown state while preserving session owner state", async () => {
+test("OIDC Token maintenance clears a Token without TTL and unknown state while preserving session owner state", async () => {
   const f = await setup();
   const independent = new Redis(process.env.IAM_API_TEST_REDIS_URL!, { maxRetriesPerRequest: 0 });
   const closeIndependent = ownApiTestExecutor(() => closeApiRedisConnection(independent));
@@ -514,7 +533,6 @@ test("OIDC Token maintenance clears no-TTL/index and unknown state while preserv
     const issued = await f.authorizeCode();
     const value: OidcTokenResponse = await (await f.exchange(issued.code)).json();
     await f.oidcState.removeTokenTtl(value.access_token);
-    await f.oidcState.forgetTokenIndex(value.access_token);
     await f.oidcState.addUnknown();
     const maintenance = createOidcMaintenance(f.oidcState.redis, f.oidcState.namespace);
     const verifier = createOidcInventory(independent, f.oidcState.namespace);
@@ -719,7 +737,7 @@ test("OIDC same-root Client isolation preserves the other client Code and Token"
   }
 });
 
-for (const fault of ["expired", "corrupt", "missing-index"] as const) {
+for (const fault of ["expired", "corrupt"] as const) {
   test(`OIDC Token ${fault} is resolved from the digest authority without renewal`, async () => {
     const f = await setup(false, 30, undefined, fault === "expired" ? 1 : 45);
     try {
@@ -728,16 +746,13 @@ for (const fault of ["expired", "corrupt", "missing-index"] as const) {
       const before = await f.scope.inspect(issued.target);
       if (fault === "expired") await Bun.sleep(1100);
       if (fault === "corrupt") await f.oidcState.corruptToken(value.access_token);
-      if (fault === "missing-index") await f.oidcState.forgetTokenIndex(value.access_token);
       let failure: unknown;
-      let resolved: unknown;
       try {
-        resolved = await f.resolve(value.access_token);
+        await f.resolve(value.access_token);
       } catch (error) {
         failure = error;
       }
-      expect(Boolean(resolved)).toBe(fault === "missing-index");
-      expect(Boolean(failure)).toBe(fault !== "missing-index");
+      expect(failure).toBeDefined();
       expect(await f.scope.inspect(issued.target)).toEqual(before);
     } finally {
       await f.close();
@@ -767,14 +782,14 @@ test("OIDC Token maintenance reports unlink failure and rerun clears all clients
       f.oidcState.namespace,
     );
     const failed = await failing.apply();
-    expect(failed).toMatchObject({ matching: 3, removed: 0, unknown: 3 });
+    expect(failed).toMatchObject({ matching: 2, removed: 0, unknown: 2 });
     const tokenAfterFailure = await f.oidcState.readToken(value.access_token);
     expect(tokenAfterFailure).not.toBeNull();
     const codeAfterFailure = await f.oidcState.readCode(otherClient, otherCode);
     expect(codeAfterFailure).not.toBeNull();
     const maintenance = createOidcMaintenance(f.oidcState.redis, f.oidcState.namespace);
     const rerun = await maintenance.apply();
-    expect(rerun).toMatchObject({ matching: 3, removed: 3, unknown: 0 });
+    expect(rerun).toMatchObject({ matching: 2, removed: 2, unknown: 0 });
     const verifier = createOidcInventory(independent, f.oidcState.namespace);
     const after = await verifier.inventory();
     expect(after).toMatchObject({ matching: 0, unknown: 0 });

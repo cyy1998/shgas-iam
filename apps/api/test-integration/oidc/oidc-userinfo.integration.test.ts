@@ -156,7 +156,6 @@ test("UserInfo checks the original root even when the child index is missing", a
   const f = await userInfoFixture();
   try {
     const issued = await f.issue();
-    await f.oidcState.forgetTokenIndex(issued.access_token);
     expect((await f.me(issued.access_token)).status).toBe(200);
     await f.scope.forgetChildIndex(issued.record.userSessionId);
     await f.operations.run(async (operation) => {
