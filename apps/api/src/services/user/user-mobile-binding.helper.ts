@@ -6,7 +6,7 @@ import { InvalidVerificationCodeError } from "../mobile/mobile.error";
 import type { UserMobileBindingDeps, UserRequestOptions } from "./user.port";
 
 export function createUserMobileBinding(deps: UserMobileBindingDeps) {
-  async function assertCanBindMobile(
+  async function consumeBindingCode(
     userId: number,
     phoneNumber: string,
     code: string,
@@ -18,21 +18,20 @@ export function createUserMobileBinding(deps: UserMobileBindingDeps) {
     if (await deps.userRepository.isMobileRegistered(phoneNumber)) {
       throw new MobileAlreadyExistsError("手机号已存在");
     }
-    const reservation = await deps.mobileService.reserveVerificationCode(
+    const codeValid = await deps.mobileService.consumeVerificationCode(
       VerificationCodeUsage.BindPhone,
       phoneNumber,
       code,
     );
-    if (reservation === null) {
+    if (!codeValid) {
       await deps.auditLogWriter.recordAuditLog(
         withApiRequestContext(options.requestContext, buildMobileBindInvalidCodeAudit(userId, phoneNumber)),
       );
       throw new InvalidVerificationCodeError("验证码错误");
     }
-    return reservation;
   }
 
-  return { assertCanBindMobile };
+  return { consumeBindingCode };
 }
 
 export type UserMobileBinding = ReturnType<typeof createUserMobileBinding>;

@@ -17,9 +17,3 @@ export interface AccountRecoveryUser {
   name?: string | null;
   mobile: string | null;
 }
-
-export interface PasswordResetCodeReservation {
-  usage: string;
-  phone: string;
-  token: string;
-}

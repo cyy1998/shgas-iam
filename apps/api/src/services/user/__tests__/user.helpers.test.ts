@@ -21,17 +21,18 @@ describe("user helper factories", () => {
       recordAuditLog: mock(async () => undefined),
       recordAuditLogFromContext: mock(async () => undefined),
     };
-    const reservation = { usage: "bindPhone", phone: "13800000000", token: "reservation-1" };
+    const consumeVerificationCode = mock(async () => true);
     const mobileBinding = createUserMobileBinding({
       userRepository: { isMobileRegistered: async () => false },
       auditLogWriter,
       mobileService: {
         checkValidPhoneNumber: mock(() => true),
-        reserveVerificationCode: mock(async () => reservation),
+        consumeVerificationCode,
       },
     });
 
-    await expect(mobileBinding.assertCanBindMobile(1, "13800000000", "1234")).resolves.toEqual(reservation);
+    await mobileBinding.consumeBindingCode(1, "13800000000", "1234");
+    expect(consumeVerificationCode).toHaveBeenCalledWith("bindPhone", "13800000000", "1234");
   });
 
   test("records mobile binding failures with request context", async () => {
@@ -44,12 +45,12 @@ describe("user helper factories", () => {
       auditLogWriter,
       mobileService: {
         checkValidPhoneNumber: mock(() => true),
-        reserveVerificationCode: mock(async () => null),
+        consumeVerificationCode: mock(async () => false),
       },
     });
 
     await expect(
-      mobileBinding.assertCanBindMobile(1, "13800000000", "bad-code", {
+      mobileBinding.consumeBindingCode(1, "13800000000", "bad-code", {
         requestContext: {
           sourceApp: "iam",
           requestId: "req-mobile-bind",

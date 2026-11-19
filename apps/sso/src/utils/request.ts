@@ -13,6 +13,7 @@ export class ServiceError extends Error {
     code: ApiErrorCode | number | string,
     public readonly retryAfterSeconds?: number,
     public readonly imageCaptchaTicket?: string,
+    public readonly httpStatus?: number,
   ) {
     super(msg);
     this.name = "ServiceError";
@@ -111,7 +112,7 @@ export async function request<T>(path: string, init: RequestInitExt = {}): Promi
       throw new ServiceError(msg, errorBody.code, undefined, res.headers.get(IMAGE_CAPTCHA_TICKET_HEADER) ?? undefined);
     }
     if (!init.suppressErrorMessage) message.error(msg);
-    throw new ServiceError(msg, errorBody?.code ?? res.status, readRetryAfter(res));
+    throw new ServiceError(msg, errorBody?.code ?? res.status, readRetryAfter(res), undefined, res.status);
   }
 
   const body = (await res.json()) as ApiEnvelope<T>;

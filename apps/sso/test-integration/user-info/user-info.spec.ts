@@ -4,6 +4,37 @@ import { expect, test } from "@playwright/test";
 import { currentUserInfo } from "../../test/mocks/fixtures";
 import { mockSsoApi } from "../fixtures";
 
+test("mobile binding guides recovery from a missing response and from a spent code", async ({ page }) => {
+  await mockSsoApi(page);
+  await page.route("**/public/user-info", (route) => route.fulfill({ json: { code: 200, data: currentUserInfo } }));
+  let attempts = 0;
+  await page.route("**/public/mobile/set", (route) => {
+    attempts++;
+    if (attempts === 1) return route.abort("timedout");
+    if (attempts === 2) {
+      return route.fulfill({ status: 400, json: { code: ApiErrorCode.InvalidVerificationCode, data: null } });
+    }
+    return route.fulfill({ json: { code: 200, data: null } });
+  });
+
+  await page.goto("/portal/userInfo");
+  await page.getByRole("tab", { name: /绑定手机号/ }).click();
+  await page.getByPlaceholder("请输入手机号").fill("13900000001");
+  await page.getByPlaceholder("请输入验证码").fill("123456");
+  const submit = page.getByRole("button", { name: "保存设置" });
+  await submit.click();
+  await expect(page.getByText(/请先确认变更是否已生效.*重新获取验证码/)).toBeVisible();
+  expect(attempts).toBe(1);
+
+  await submit.click();
+  await expect(page.getByText("验证码无效，请检查输入，或重新获取验证码。")).toBeVisible();
+  await expect(page.getByRole("button", { name: "获取验证码" })).toBeEnabled();
+  await page.getByRole("button", { name: "获取验证码" }).click();
+  await page.getByPlaceholder("请输入验证码").fill("234567");
+  await submit.click();
+  await expect(page.getByText("更换成功！")).toBeVisible();
+});
+
 test("a malformed shared organization path stays unavailable until a valid projection is retried", async ({ page }) => {
   await mockSsoApi(page);
   let requests = 0;

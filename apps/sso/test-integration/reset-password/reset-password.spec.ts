@@ -1,11 +1,9 @@
 // Browser Integration uses a mocked backend; this is not a full-system journey.
-import { IMAGE_CAPTCHA_PROOF_HEADER } from "@iam/contracts";
-import { expect, test } from "@playwright/test";
+import { ApiErrorCode, IMAGE_CAPTCHA_PROOF_HEADER } from "@iam/contracts";
+import { expect, type Page, test } from "@playwright/test";
 import { mockImageCaptchaFallback, mockSsoApi, requireImageCaptcha } from "../fixtures";
 
-test("reset password page completes mocked verification flow", async ({ page }) => {
-  await mockSsoApi(page);
-
+async function fillPasswordReset(page: Page) {
   await page.goto("/portal/reset-password?client=iam-admin");
 
   await page.getByPlaceholder("请输入用户名").fill("zhangsan");
@@ -19,9 +17,41 @@ test("reset password page completes mocked verification flow", async ({ page }) 
 
   await page.getByPlaceholder("请输入新密码").fill("Abc12345");
   await page.getByPlaceholder("请再次输入新密码").fill("Abc12345");
+}
+
+test("reset password page completes mocked verification flow", async ({ page }) => {
+  await mockSsoApi(page);
+  await fillPasswordReset(page);
   await page.getByRole("button", { name: /确\s*定/ }).click();
 
   await expect(page.getByRole("dialog", { name: "密码重置完成" })).toBeVisible();
+});
+
+test("password reset guides recovery and keeps the countdown on return to the SMS step", async ({ page }) => {
+  await mockSsoApi(page);
+  let attempts = 0;
+  await page.route("**/open/password/reset", (route) => {
+    attempts++;
+    return route.fulfill({
+      status: attempts === 1 ? 500 : 400,
+      json: {
+        code: attempts === 1 ? ApiErrorCode.InternalError : ApiErrorCode.InvalidVerificationCode,
+        message: attempts === 1 ? "服务器内部错误" : "验证码错误",
+        data: null,
+      },
+    });
+  });
+  await fillPasswordReset(page);
+  const submit = page.getByRole("button", { name: /确\s*定/ });
+  await submit.click();
+  await expect(page.getByText(/请先确认变更是否已生效.*返回上一步重新获取验证码/)).toBeVisible();
+  expect(attempts).toBe(1);
+
+  await submit.click();
+  await expect(page.getByText("验证码无效，请检查输入，或返回上一步重新获取验证码。")).toBeVisible();
+  await page.getByRole("button", { name: /上一步/ }).click();
+  await expect(page.getByRole("button", { name: /秒后重试/ })).toBeDisabled();
+  await expect(page.getByRole("dialog", { name: "密码重置完成" })).toHaveCount(0);
 });
 
 test("keeps the inline captcha usable during phone lookup and SMS sending", async ({ page }) => {

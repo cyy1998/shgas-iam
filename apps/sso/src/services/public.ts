@@ -1,5 +1,6 @@
 import { CustomSsoSubjectProjectionSchema } from "@iam/custom-sso/wire";
 import { request } from "@sso/utils/request";
+import { submitSmsCode } from "./submit-sms-code";
 
 export async function getCurrentUserInfo() {
   const response = await request<unknown>("/public/user-info", { suppressErrorMessage: true });
@@ -14,8 +15,5 @@ export function passwordChange(body: { oldPassword: string; newPassword: string 
 }
 
 export function mobileSet(body: { phoneNumber: string; code: string }) {
-  return request<void>("/public/mobile/set", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  return submitSmsCode("/public/mobile/set", body, "重新获取验证码");
 }

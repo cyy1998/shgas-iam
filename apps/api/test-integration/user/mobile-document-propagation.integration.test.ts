@@ -5,8 +5,8 @@ import { createApiUnitOfWork } from "@api/composition/tx";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import { createMobileService } from "@api/services/mobile/mobile.service";
-import type { MobileVerificationCodeReservation } from "@api/services/mobile/mobile.type";
 import { createMobileCodeCooldown } from "@api/services/mobile/mobile-code-cooldown";
+import type { UserMobileBindingPort } from "@api/services/user/user.port";
 import { createUserService } from "@api/services/user/user.service";
 import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.helper";
 import { ApiErrorCode, UserStatus } from "@iam/contracts";
@@ -33,69 +33,63 @@ function unused(): never {
   throw new Error("Unused mobile-binding test dependency");
 }
 
-test("a mobile binding that updates no account releases its reservation without recording document work", async () => {
+test("a failed mobile write leaves the code spent and keeps the sending cooldown", async () => {
   const [user] = await pg.db
     .insert(users)
     .values({ username: "holder", name: "Holder", mobile: "13800000000" })
     .returning();
   if (!user) throw new Error("User fixture was not inserted");
-  const reserved = Promise.withResolvers<void>();
-  const release = Promise.withResolvers<void>();
-  const reservation = { usage: "bind-phone", phone: "13900000000", token: "synthetic-reservation" };
-  let confirmed = false;
-  let returnedReservation: MobileVerificationCodeReservation | undefined;
+  const consumed = Promise.withResolvers<void>();
+  const continueWrite = Promise.withResolvers<void>();
+  const phone = "13900000000";
+  const { mobileService, closeRedis } = createSmsFixture("1234");
   const repositories = createApiRepositories(pg.db);
   const service = makeUserService({
-    checkValidPhoneNumber: () => true,
-    async reserveVerificationCode() {
-      reserved.resolve();
-      await release.promise;
-      return reservation;
-    },
-    async confirmReservedVerificationCode() {
-      confirmed = true;
-      return true;
-    },
-    async releaseReservedVerificationCode(value) {
-      returnedReservation = value;
+    ...mobileService,
+    async consumeVerificationCode(...args) {
+      const valid = await mobileService.consumeVerificationCode(...args);
+      if (valid) {
+        consumed.resolve();
+        await continueWrite.promise;
+      }
+      return valid;
     },
   });
-  const pending = service.setMobile(user.id, reservation.phone, "1234");
-  let result: unknown;
   try {
-    await Promise.race([reserved.promise, pending]);
-    const paused = await repositories.user.updateEnabledUserStatus(user.id, UserStatus.Pause);
-    expect(paused?.status).toBe(UserStatus.Pause);
-    release.resolve();
+    await mobileService.sendCode(phone, VerificationCodeUsage.BindPhone);
+    const pending = service.setMobile(user.id, phone, "1234");
     try {
-      result = await pending;
-    } catch (error) {
-      result = error;
+      await Promise.race([consumed.promise, pending]);
+      const paused = await repositories.user.updateEnabledUserStatus(user.id, UserStatus.Pause);
+      expect(paused?.status).toBe(UserStatus.Pause);
+      continueWrite.resolve();
+      const [failed] = await Promise.allSettled([pending]);
+      expect(failed).toEqual({ status: "rejected", reason: expect.any(UserNotFoundError) });
+    } finally {
+      continueWrite.resolve();
+      await Promise.allSettled([pending]);
     }
-    expect(result).toBeInstanceOf(UserNotFoundError);
     const account = await pg.db.query.users.findFirst({ where: { id: user.id } });
     const audits = await pg.db.select().from(auditLogs);
     const work = await pg.db.select().from(userDocumentOutboxEntries);
     expect(account?.mobile).toBe("13800000000");
     expect(audits).toEqual([]);
     expect(work).toEqual([]);
-    expect(confirmed).toBe(false);
-    expect(returnedReservation).toEqual(reservation);
+    const [repeat, resend] = await Promise.allSettled([
+      service.setMobile(user.id, phone, "1234"),
+      mobileService.sendCode(phone, VerificationCodeUsage.BindPhone),
+    ]);
+    expect(repeat).toMatchObject({ status: "rejected", reason: { code: ApiErrorCode.InvalidVerificationCode } });
+    expect(resend).toMatchObject({ status: "rejected", reason: { code: ApiErrorCode.SmsCooldown } });
+    if (resend?.status !== "rejected") throw new Error("The SMS cooldown was lost");
+    expect(resend.reason.retryAfterSeconds).toBeGreaterThan(0);
+    expect(resend.reason.retryAfterSeconds).toBeLessThanOrEqual(60);
   } finally {
-    release.resolve();
-    await Promise.allSettled([pending]);
+    await closeRedis();
   }
 });
 
-type MobileBindingService = Pick<
-  ReturnType<typeof createMobileService>,
-  | "checkValidPhoneNumber"
-  | "reserveVerificationCode"
-  | "confirmReservedVerificationCode"
-  | "releaseReservedVerificationCode"
->;
-
-function makeUserService(mobileService: MobileBindingService) {
+function makeUserService(mobileService: UserMobileBindingPort) {
   const repositories = createApiRepositories(pg.db);
   const auditLogWriter = createApiAuditLogWriter({ auditRepository: repositories.audit });
   const uow = createApiUnitOfWork({
@@ -121,7 +115,6 @@ function makeUserService(mobileService: MobileBindingService) {
       auditLogWriter,
       mobileService,
     }),
-    mobileService,
     passwordHelper: { assertStrongPassword: unused, hashUserPassword: unused, verifyUserPassword: unused },
     sessionRevocation: { revokeUserSessions: unused },
     subjectAccessLifecycle: { run: unused },
@@ -134,30 +127,44 @@ function makeUserService(mobileService: MobileBindingService) {
   });
 }
 
-test("self-binding verifies and stores the trimmed mobile with PostgreSQL and Redis", async () => {
-  const phone = "13900000001";
-  const code = "1234";
+function createSmsFixture(code: string) {
   const redisUrl = process.env.IAM_API_TEST_REDIS_URL;
   if (!redisUrl) throw new Error("IAM_API_TEST_REDIS_URL is required");
   const redis = new Redis(redisUrl, { lazyConnect: true, maxRetriesPerRequest: 0 });
   const closeRedis = ownApiTestExecutor(() => closeApiRedisConnection(redis));
-  try {
-    const sentTo: string[] = [];
-    const mobileService = createMobileService({
-      cooldown: createMobileCodeCooldown(redis),
-      redis,
-      smsSender: {
-        async sendVerificationCode(phoneNumber) {
-          sentTo.push(phoneNumber);
-          return { success: true, code };
-        },
-        sendMessage: unused,
+  const sentTo: string[] = [];
+  const mobileService = createMobileService({
+    cooldown: createMobileCodeCooldown(redis),
+    redis,
+    smsSender: {
+      async sendVerificationCode(phoneNumber) {
+        sentTo.push(phoneNumber);
+        return { success: true, code };
       },
-      userRepository: createApiRepositories(pg.db).user,
-      config: { verificationCodeTtlSeconds: 60 },
-    });
+      sendMessage: unused,
+    },
+    userRepository: createApiRepositories(pg.db).user,
+    config: { verificationCodeTtlSeconds: 180 },
+  });
+  return { mobileService, closeRedis, sentTo };
+}
+
+test("concurrent self-binding requests write the trimmed mobile only once", async () => {
+  const phone = "13900000001";
+  const code = "1234";
+  const { mobileService, closeRedis, sentTo } = createSmsFixture(code);
+  try {
+    const bothReady = Promise.withResolvers<void>();
+    let submissions = 0;
     const f = await createRootAuthenticationFixture(undefined, undefined, undefined, undefined, undefined, undefined, {
-      publicUser: makeUserService(mobileService),
+      publicUser: makeUserService({
+        ...mobileService,
+        async consumeVerificationCode(...args) {
+          if (++submissions === 2) bothReady.resolve();
+          await bothReady.promise;
+          return mobileService.consumeVerificationCode(...args);
+        },
+      }),
     });
     try {
       await pg.db.insert(users).values([
@@ -182,8 +189,10 @@ test("self-binding verifies and stores the trimmed mobile with PostgreSQL and Re
       await pg.db.update(users).set({ isDelete: true }).where(eq(users.username, "owner"));
       await mobileService.sendCode(` ${phone}\t`, VerificationCodeUsage.BindPhone);
       expect(sentTo).toEqual([phone]);
-      const success = await bind(`\t${phone} `);
-      expect(success.status).toBe(200);
+      const responses = await Promise.all([bind(`\t${phone} `), bind(phone)]);
+      expect(responses.map(({ status }) => status).sort()).toEqual([200, 400]);
+      const rejected = responses.find(({ status }) => status === 400);
+      expect(await rejected?.json()).toMatchObject({ code: ApiErrorCode.InvalidVerificationCode });
       expect(await mobileService.checkVerificationCode(VerificationCodeUsage.BindPhone, phone, code)).toBe(false);
       expect(await pg.db.select().from(users).orderBy(users.id)).toMatchObject([
         { username: "self", mobile: phone, isDelete: false },

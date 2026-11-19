@@ -1,13 +1,10 @@
-import { randomUUID } from "node:crypto";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import type { WechatBindingCodeScope } from "@api/services/authentication/wechat-binding.type";
 import { InvalidMobileError, UserNotFoundError } from "@iam/domain/user";
 import { SmsCooldownError, SmsSendFailedError, SmsUnavailableError } from "./mobile.error";
 import type { MobileServiceDeps } from "./mobile.port";
-import type { MobileVerificationCodeReservation } from "./mobile.type";
 
 const MOBILE_REGEX = /^1[3-9]\d{9}$/;
-const CONFIRM_RESERVED_VERIFICATION_CODE_KEY_COUNT = 2;
 const consumeVerificationCodeScript = `
 local saved = redis.call("GET", KEYS[1])
 if not saved then
@@ -19,26 +16,8 @@ end
 redis.call("DEL", KEYS[1])
 return 1
 `;
-const confirmReservedVerificationCodeScript = `
-local saved = redis.call("GET", KEYS[1])
-local reserved = redis.call("GET", KEYS[2])
-if not saved or not reserved then
-  return 0
-end
-if saved ~= reserved then
-  return 0
-end
-redis.call("DEL", KEYS[1])
-redis.call("DEL", KEYS[2])
-return 1
-`;
-
 function mobileCodeKey(usage: string, phone: string) {
   return `mobile-code:${usage}:${phone}`;
-}
-
-function mobileCodeReservationKey(reservation: MobileVerificationCodeReservation) {
-  return `mobile-code-reservation:${reservation.usage}:${reservation.phone}:${reservation.token}`;
 }
 
 function wechatBindingCodeKey(scope: WechatBindingCodeScope) {
@@ -149,34 +128,6 @@ export function createMobileService(deps: MobileServiceDeps) {
     return result === 1;
   }
 
-  async function reserveVerificationCode(
-    usage: string,
-    phone: string,
-    code: string,
-  ): Promise<MobileVerificationCodeReservation | null> {
-    const codeKey = mobileCodeKey(usage, phone);
-    const [savedCode, ttl] = await Promise.all([deps.redis.get(codeKey), deps.redis.ttl(codeKey)]);
-    if (savedCode !== code || ttl <= 0) return null;
-
-    const reservation = { usage, phone, token: randomUUID() };
-    const reserved = await deps.redis.set(mobileCodeReservationKey(reservation), code, "EX", ttl, "NX");
-    return reserved === "OK" ? reservation : null;
-  }
-
-  async function confirmReservedVerificationCode(reservation: MobileVerificationCodeReservation): Promise<boolean> {
-    const result = await deps.redis.eval(
-      confirmReservedVerificationCodeScript,
-      CONFIRM_RESERVED_VERIFICATION_CODE_KEY_COUNT,
-      mobileCodeKey(reservation.usage, reservation.phone),
-      mobileCodeReservationKey(reservation),
-    );
-    return result === 1;
-  }
-
-  async function releaseReservedVerificationCode(reservation: MobileVerificationCodeReservation): Promise<void> {
-    await deps.redis.del(mobileCodeReservationKey(reservation));
-  }
-
   return {
     sendCode,
     sendMessage,
@@ -186,9 +137,6 @@ export function createMobileService(deps: MobileServiceDeps) {
     consumeVerificationCode,
     sendWechatBindingCode,
     consumeWechatBindingCode,
-    reserveVerificationCode,
-    confirmReservedVerificationCode,
-    releaseReservedVerificationCode,
   };
 }
 

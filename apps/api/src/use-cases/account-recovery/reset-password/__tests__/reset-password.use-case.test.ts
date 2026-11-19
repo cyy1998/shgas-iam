@@ -5,7 +5,6 @@ import { createResetPasswordUseCase } from "@api/use-cases/account-recovery/rese
 
 function createDeps() {
   const user = { id: 1, username: "zhangsan", name: "张三", mobile: "17721462865" };
-  const reservation = { usage: "resetPassword", phone: "17721462865", token: "reservation-1" };
   const auditLogWriter = { recordAuditLog: mock(async (_input: AuditLogInput) => undefined) };
   const txAuditLogWriter = { recordAuditLog: mock(async (_input: AuditLogInput) => undefined) };
   const userWriter = { setPassword: mock(async () => undefined) };
@@ -15,16 +14,14 @@ function createDeps() {
     passwordHasher: { hashUserPassword: mock(async () => "hashed:newPass123") },
     userLookup: { getActiveUserByUsername: mock(async () => user) },
     verificationCodes: {
-      reserveVerificationCode: mock(async () => reservation),
-      confirmReservedVerificationCode: mock(async () => true),
-      releaseReservedVerificationCode: mock(async () => undefined),
+      consumeVerificationCode: mock(async () => true),
     },
     uow: createImmediateUnitOfWork({ auditLogWriter: txAuditLogWriter, userWriter }),
   };
-  return { auditLogWriter, deps, reservation, txAuditLogWriter, user, userWriter };
+  return { auditLogWriter, deps, txAuditLogWriter, user, userWriter };
 }
 
-test("resets the password in a transaction before confirming the verification code", async () => {
+test("consumes the verification code before resetting the password in a transaction", async () => {
   const events: string[] = [];
   const useCase = createResetPasswordUseCase({
     auditLogWriter: { recordAuditLog: async () => undefined },
@@ -47,16 +44,9 @@ test("resets the password in a transaction before confirming the verification co
       },
     },
     verificationCodes: {
-      reserveVerificationCode: async () => {
-        events.push("reserve");
-        return { usage: "resetPassword", phone: "17721462865", token: "reservation-1" };
-      },
-      confirmReservedVerificationCode: async () => {
-        events.push("confirm");
+      consumeVerificationCode: async () => {
+        events.push("consume");
         return true;
-      },
-      releaseReservedVerificationCode: async () => {
-        events.push("release");
       },
     },
     uow: createImmediateUnitOfWork({
@@ -81,7 +71,7 @@ test("resets the password in a transaction before confirming the verification co
   });
 
   expect({ events, result }).toEqual({
-    events: ["resolve", "lookup", "reserve", "hash", "tx:password", "tx:audit", "confirm"],
+    events: ["resolve", "lookup", "consume", "hash", "tx:password", "tx:audit"],
     result: true,
   });
 });
@@ -109,12 +99,12 @@ test("audits a live mobile mismatch before rejecting Account Recovery", async ()
       details: expect.objectContaining({ reason: "mobile_mismatch" }),
     }),
   );
-  expect(context.deps.verificationCodes.reserveVerificationCode).not.toHaveBeenCalled();
+  expect(context.deps.verificationCodes.consumeVerificationCode).not.toHaveBeenCalled();
 });
 
 test("audits an invalid password-reset code before rejecting Account Recovery", async () => {
   const context = createDeps();
-  context.deps.verificationCodes.reserveVerificationCode.mockResolvedValue(null as never);
+  context.deps.verificationCodes.consumeVerificationCode.mockResolvedValue(false);
   const useCase = createResetPasswordUseCase(context.deps);
 
   await expect(
@@ -135,7 +125,7 @@ test("audits an invalid password-reset code before rejecting Account Recovery", 
   expect(context.userWriter.setPassword).not.toHaveBeenCalled();
 });
 
-test("releases the reserved code when the password transaction fails", async () => {
+test("propagates a failed password write after consuming the code", async () => {
   const context = createDeps();
   context.userWriter.setPassword.mockRejectedValue(new Error("db failed"));
   const useCase = createResetPasswordUseCase(context.deps);
@@ -148,24 +138,12 @@ test("releases the reserved code when the password transaction fails", async () 
     }),
   ).rejects.toThrow("db failed");
 
-  expect(context.deps.verificationCodes.releaseReservedVerificationCode).toHaveBeenCalledWith(context.reservation);
-  expect(context.deps.verificationCodes.confirmReservedVerificationCode).not.toHaveBeenCalled();
-});
-
-test("does not release the code when confirmation fails after password commit", async () => {
-  const context = createDeps();
-  context.deps.verificationCodes.confirmReservedVerificationCode.mockRejectedValue(new Error("confirm failed"));
-  const useCase = createResetPasswordUseCase(context.deps);
-
-  await expect(
-    useCase.execute({
-      code: "123456",
-      newPassword: "newPass123",
-      username: "zhangsan",
-    }),
-  ).rejects.toThrow("confirm failed");
-
-  expect(context.deps.verificationCodes.releaseReservedVerificationCode).not.toHaveBeenCalled();
+  expect(context.deps.verificationCodes.consumeVerificationCode).toHaveBeenCalledWith(
+    "resetPassword",
+    "17721462865",
+    "123456",
+  );
+  expect(context.txAuditLogWriter.recordAuditLog).not.toHaveBeenCalled();
 });
 
 test("records the existing password-reset success audit inside the transaction", async () => {
@@ -217,5 +195,5 @@ test("rejects when the active user disappears before password reset", async () =
     }),
   ).rejects.toThrow("用户不存在");
 
-  expect(context.deps.verificationCodes.reserveVerificationCode).not.toHaveBeenCalled();
+  expect(context.deps.verificationCodes.consumeVerificationCode).not.toHaveBeenCalled();
 });

@@ -154,41 +154,4 @@ describe("createMobileService", () => {
     expect(first).toBe(true);
     expect(second).toBe(false);
   });
-
-  test("reserves a matching verification code without deleting it and confirms it once", async () => {
-    const { redis, service } = createService();
-
-    await service.sendCode("13800000000", VerificationCodeUsage.ResetPassword);
-    const reservation = await service.reserveVerificationCode(
-      VerificationCodeUsage.ResetPassword,
-      "13800000000",
-      "1234",
-    );
-
-    expect(reservation).toEqual({
-      usage: VerificationCodeUsage.ResetPassword,
-      phone: "13800000000",
-      token: expect.any(String),
-    });
-    expect(redis.__values.get("mobile-code:resetPassword:13800000000")).toBe("1234");
-    const confirmed = await service.confirmReservedVerificationCode(reservation!);
-    expect(confirmed).toBe(true);
-    expect(redis.__values.get("mobile-code:resetPassword:13800000000")).toBeUndefined();
-    const repeated = await service.confirmReservedVerificationCode(reservation!);
-    expect(repeated).toBe(false);
-  });
-
-  test("releases a reservation without consuming the original verification code", async () => {
-    const { redis, service } = createService();
-
-    await service.sendCode("13800000000", VerificationCodeUsage.BindPhone);
-    const reservation = await service.reserveVerificationCode(VerificationCodeUsage.BindPhone, "13800000000", "1234");
-    expect(reservation).not.toBeNull();
-
-    await service.releaseReservedVerificationCode(reservation!);
-
-    expect(redis.__values.get("mobile-code:bindPhone:13800000000")).toBe("1234");
-    const reserved = await service.reserveVerificationCode(VerificationCodeUsage.BindPhone, "13800000000", "1234");
-    expect(reserved).toEqual(expect.objectContaining({ usage: VerificationCodeUsage.BindPhone }));
-  });
 });

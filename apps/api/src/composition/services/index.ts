@@ -183,7 +183,6 @@ export function createApiServices(options: CreateApiServicesOptions) {
 
   const userService = createUserService({
     userRepository: repositories.user,
-    mobileService,
     documentQuery: userDocumentQuery,
     mobileBinding: userMobileBinding,
     passwordHelper: userPasswordHelper,

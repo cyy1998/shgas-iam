@@ -15,11 +15,11 @@ import type { SessionOrigin } from "@api/services/session/session-origin";
 import type {
   UserDocumentReaderPort,
   UserMobileBindingPort,
-  UserMobileVerificationPort,
   UserStorePort,
   UserTransactionStorePort,
 } from "@api/services/user/user.port";
 import type { UserRepository } from "@api/services/user/user.repository";
+import type { ResetPasswordVerificationCodePort } from "@api/use-cases/account-recovery/reset-password/reset-password.port";
 import type {
   MobileLoginRestrictionPort,
   MobilePrincipalSessionPort,
@@ -97,7 +97,7 @@ type _ClientDelegationResolutionPort = AssertAssignable<
 
 type _UserDocumentReaderPort = AssertAssignable<UserDocumentReaderPort, UserDocumentQueryService>;
 type _UserMobileBindingPort = AssertAssignable<UserMobileBindingPort, MobileService>;
-type _UserMobileVerificationPort = AssertAssignable<UserMobileVerificationPort, MobileService>;
+type _ResetPasswordVerificationCodePort = AssertAssignable<ResetPasswordVerificationCodePort, MobileService>;
 type _UserStorePort = AssertAssignable<UserStorePort, UserRepository>;
 type _UserTransactionStorePort = AssertAssignable<UserTransactionStorePort, UserRepository>;
 

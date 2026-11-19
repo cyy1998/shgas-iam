@@ -25,12 +25,12 @@ export function createResetPasswordUseCase(deps: ResetPasswordUseCaseDeps) {
       );
       throw new UserNotFoundError("用户名与手机号不匹配");
     }
-    const reservation = await deps.verificationCodes.reserveVerificationCode(
+    const codeValid = await deps.verificationCodes.consumeVerificationCode(
       VerificationCodeUsage.ResetPassword,
       phoneNumber,
       input.code,
     );
-    if (reservation === null) {
+    if (!codeValid) {
       await deps.auditLogWriter.recordAuditLog(
         withApiRequestContext(
           options.requestContext,
@@ -40,28 +40,17 @@ export function createResetPasswordUseCase(deps: ResetPasswordUseCaseDeps) {
       throw new InvalidVerificationCodeError("验证码错误");
     }
 
-    let transactionSucceeded = false;
-    try {
-      const newPasswordHash = await deps.passwordHasher.hashUserPassword(input.newPassword);
-      const result = await deps.uow.transaction(
-        async (tx) => {
-          await tx.userWriter.setPassword(user.id, newPasswordHash);
-          await tx.auditLogWriter.recordAuditLog(
-            withApiRequestContext(options.requestContext, buildPasswordResetSuccessAudit(user, phoneNumber)),
-          );
-          return true;
-        },
-        { observability: options.requestContext },
-      );
-      transactionSucceeded = true;
-      await deps.verificationCodes.confirmReservedVerificationCode(reservation);
-      return result;
-    } catch (error) {
-      if (!transactionSucceeded) {
-        await deps.verificationCodes.releaseReservedVerificationCode(reservation);
-      }
-      throw error;
-    }
+    const newPasswordHash = await deps.passwordHasher.hashUserPassword(input.newPassword);
+    return deps.uow.transaction(
+      async (tx) => {
+        await tx.userWriter.setPassword(user.id, newPasswordHash);
+        await tx.auditLogWriter.recordAuditLog(
+          withApiRequestContext(options.requestContext, buildPasswordResetSuccessAudit(user, phoneNumber)),
+        );
+        return true;
+      },
+      { observability: options.requestContext },
+    );
   }
 
   return { execute };

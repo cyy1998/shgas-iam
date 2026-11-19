@@ -1,6 +1,6 @@
 import type { AuditLogInput } from "@api/services/audit/audit.context";
 import type { UnitOfWorkPort } from "@iam/unit-of-work";
-import type { AccountRecoveryUser, PasswordResetCodeReservation } from "./reset-password.type";
+import type { AccountRecoveryUser } from "./reset-password.type";
 
 export interface ResetPasswordAuditWriterPort {
   recordAuditLog: (input: AuditLogInput) => Promise<void>;
@@ -15,13 +15,7 @@ export interface ResetPasswordUserLookupPort {
 }
 
 export interface ResetPasswordVerificationCodePort {
-  reserveVerificationCode: (
-    usage: string,
-    phoneNumber: string,
-    code: string,
-  ) => Promise<PasswordResetCodeReservation | null>;
-  confirmReservedVerificationCode: (reservation: PasswordResetCodeReservation) => Promise<boolean>;
-  releaseReservedVerificationCode: (reservation: PasswordResetCodeReservation) => Promise<void>;
+  consumeVerificationCode: (usage: "resetPassword", phoneNumber: string, code: string) => Promise<boolean>;
 }
 
 export interface ResetPasswordHasherPort {

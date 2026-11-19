@@ -69,7 +69,7 @@ export default function ResetPasswordPage() {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [maskedMobile, setMaskedMobile] = useState<string | null>(null);
-  const { countdown, isCounting, startCountdown, resetCountdown, restoreCountdown } = useSmsCodeCountdown();
+  const { countdown, isCounting, startCountdown, restoreCountdown } = useSmsCodeCountdown();
   const [form1] = Form.useForm<Step1>();
   const [form2] = Form.useForm<Step2>();
   const [form3] = Form.useForm<Step3>();
@@ -106,7 +106,7 @@ export default function ResetPasswordPage() {
           code: v.code,
         });
         if (!verification.result) {
-          message.error("验证码错误");
+          message.error("验证码无效，请检查输入或重新获取验证码。");
           return;
         }
         setCurrent(2);
@@ -132,10 +132,7 @@ export default function ResetPasswordPage() {
   const handlePrev = () => {
     cancelVerification();
     if (current === 1) setCurrent(0);
-    else if (current === 2) {
-      setCurrent(1);
-      resetCountdown();
-    }
+    else if (current === 2) setCurrent(1);
   };
 
   const sendCode = async () => {

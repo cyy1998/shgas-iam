@@ -110,27 +110,19 @@ export function createUserService(deps: UserServiceDeps) {
 
   async function setMobile(userId: number, inputPhoneNumber: string, code: string, options: UserRequestOptions = {}) {
     const phoneNumber = inputPhoneNumber.trim();
-    const reservation = await deps.mobileBinding.assertCanBindMobile(userId, phoneNumber, code, options);
-    let transactionSucceeded = false;
-    try {
-      await deps.uow.transaction(
-        async (tx) => {
-          const updated = await tx.userRepository.setMobile(userId, phoneNumber);
-          if (updated === null) throw new UserNotFoundError("用户不存在或未启用");
-          await tx.auditLogWriter.recordAuditLog(
-            withApiRequestContext(options.requestContext, buildMobileBindSuccessAudit(userId, phoneNumber)),
-          );
-          await tx.userDocumentInvalidation.recordChanges([{ kind: "user", userId: updated.id }]);
-        },
-        { observability: options.requestContext },
-      );
-      transactionSucceeded = true;
-      await deps.mobileService.confirmReservedVerificationCode(reservation);
-      return true;
-    } catch (error) {
-      if (!transactionSucceeded) await deps.mobileService.releaseReservedVerificationCode(reservation);
-      throw error;
-    }
+    await deps.mobileBinding.consumeBindingCode(userId, phoneNumber, code, options);
+    await deps.uow.transaction(
+      async (tx) => {
+        const updated = await tx.userRepository.setMobile(userId, phoneNumber);
+        if (updated === null) throw new UserNotFoundError("用户不存在或未启用");
+        await tx.auditLogWriter.recordAuditLog(
+          withApiRequestContext(options.requestContext, buildMobileBindSuccessAudit(userId, phoneNumber)),
+        );
+        await tx.userDocumentInvalidation.recordChanges([{ kind: "user", userId: updated.id }]);
+      },
+      { observability: options.requestContext },
+    );
+    return true;
   }
 
   async function getLoginProfileById(userId: number) {

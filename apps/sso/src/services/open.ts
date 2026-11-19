@@ -2,6 +2,7 @@ import type { ClientStatusResult, MaskedMobile, SmsUsage } from "@sso/types/api"
 import { request } from "@sso/utils/request";
 import { toQueryString } from "@sso/utils/url";
 import { imageCaptchaProofOptions } from "./image-captcha";
+import { submitSmsCode } from "./submit-sms-code";
 
 export function sendMessage(
   body: { phoneNumber?: string; username?: string; usage: SmsUsage; capToken?: string },
@@ -29,10 +30,7 @@ export function codeVerify(body: { phoneNumber?: string; username?: string; usag
 }
 
 export function passwordReset(body: { username: string; phoneNumber?: string; code: string; newPassword: string }) {
-  return request<void>("/open/password/reset", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  return submitSmsCode("/open/password/reset", body, "返回上一步重新获取验证码");
 }
 
 export function clientStatus(

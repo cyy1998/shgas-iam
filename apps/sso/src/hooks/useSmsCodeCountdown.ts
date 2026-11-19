@@ -14,11 +14,6 @@ export function useSmsCodeCountdown() {
     timerRef.current = null;
   }, []);
 
-  const resetCountdown = useCallback(() => {
-    clearTimer();
-    setCountdown(0);
-  }, [clearTimer]);
-
   const startCountdown = useCallback(
     (seconds = DEFAULT_COUNTDOWN_SECONDS) => {
       clearTimer();
@@ -61,7 +56,6 @@ export function useSmsCodeCountdown() {
     countdown,
     isCounting: countdown > 0,
     startCountdown,
-    resetCountdown,
     restoreCountdown,
   };
 }

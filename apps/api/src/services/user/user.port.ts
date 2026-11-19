@@ -1,7 +1,6 @@
 import type { PasswordHasherPort } from "@api/composition/runtime";
 import type { ApiRequestContext } from "@api/services/audit/audit.context";
 import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
-import type { MobileVerificationCodeReservation } from "@api/services/mobile/mobile.type";
 import type { PublishedUserLoginProfile } from "@iam/domain/user";
 import type { SubjectAccessMutationReceipt, SubjectAccessTransitionTarget } from "@iam/subject-access";
 import type { UnitOfWorkPort } from "@iam/unit-of-work";
@@ -19,16 +18,7 @@ export interface UserDocumentReaderPort {
 
 export interface UserMobileBindingPort {
   checkValidPhoneNumber: (phone: string) => boolean;
-  reserveVerificationCode: (
-    usage: string,
-    phone: string,
-    code: string,
-  ) => Promise<MobileVerificationCodeReservation | null>;
-}
-
-export interface UserMobileVerificationPort {
-  confirmReservedVerificationCode: (reservation: MobileVerificationCodeReservation) => Promise<boolean>;
-  releaseReservedVerificationCode: (reservation: MobileVerificationCodeReservation) => Promise<void>;
+  consumeVerificationCode: (usage: "bindPhone", phone: string, code: string) => Promise<boolean>;
 }
 
 export interface UserStorePort {
@@ -107,15 +97,14 @@ export type UserUnitOfWorkPort = UnitOfWorkPort<UserTransactionPorts>;
 
 export interface UserServiceDeps {
   userRepository: UserStorePort;
-  mobileService: UserMobileVerificationPort;
   documentQuery: UserDocumentReaderPort;
   mobileBinding: {
-    assertCanBindMobile: (
+    consumeBindingCode: (
       userId: number,
       phoneNumber: string,
       code: string,
       options?: UserRequestOptions,
-    ) => Promise<MobileVerificationCodeReservation>;
+    ) => Promise<void>;
   };
   passwordHelper: {
     assertStrongPassword: (password: string) => void;

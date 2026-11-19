@@ -15,7 +15,7 @@ export interface MobileServiceDeps {
     acquire: (phone: string) => Promise<number>;
     remainingSeconds: (phone: string) => Promise<number>;
   };
-  redis: Pick<RedisPort, "del" | "eval" | "get" | "set" | "ttl">;
+  redis: Pick<RedisPort, "eval" | "get" | "set">;
   smsSender: SmsSenderPort;
   userRepository: MobileUserReaderPort;
   config: {

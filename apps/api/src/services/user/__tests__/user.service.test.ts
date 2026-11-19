@@ -15,7 +15,6 @@ const subjectAccessMutationReceipt: SubjectAccessMutationReceipt = {
 };
 
 function createDeps(overrides: Record<string, unknown> = {}) {
-  const bindPhoneReservation = { usage: "bindPhone", phone: "13900000000", token: "bind-token" };
   const user = {
     id: 1,
     subjectIdentifier: "11111111-1111-4111-8111-111111111111",
@@ -47,11 +46,7 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     },
   };
   return {
-    mobileBinding: { assertCanBindMobile: mock(async () => bindPhoneReservation) },
-    mobileService: {
-      confirmReservedVerificationCode: mock(async () => true),
-      releaseReservedVerificationCode: mock(async () => undefined),
-    },
+    mobileBinding: { consumeBindingCode: mock(async () => undefined) },
     passwordHelper: {
       assertStrongPassword: mock(() => undefined),
       hashUserPassword: mock(async (password: string) => `hashed:${password}`),
@@ -93,7 +88,6 @@ function createDeps(overrides: Record<string, unknown> = {}) {
       getUserByUsername: mock(async () => user),
       getUserByWxId: mock(async () => user),
     },
-    bindPhoneReservation,
     ...overrides,
   } as any;
 }
@@ -195,20 +189,18 @@ describe("createUserService", () => {
     await expect(service.setMobile(1, "13900000000", "1234")).resolves.toBe(true);
 
     expect(deps.documentQuery.getLoginProfileByUserId).not.toHaveBeenCalled();
-    expect(deps.mobileService.confirmReservedVerificationCode).toHaveBeenCalledWith(deps.bindPhoneReservation);
-    expect(deps.mobileService.releaseReservedVerificationCode).not.toHaveBeenCalled();
+    expect(deps.mobileBinding.consumeBindingCode).toHaveBeenCalledWith(1, "13900000000", "1234", {});
     expect(deps.tx.userDocumentInvalidation.recordChanges).toHaveBeenCalledWith([{ kind: "user", userId: 1 }]);
   });
 
-  test("releases mobile binding verification reservation when transaction fails", async () => {
+  test("propagates a failed mobile write without recording document work", async () => {
     const deps = createDeps();
     const service = createUserService(deps);
     deps.tx.userRepository.setMobile.mockRejectedValue(new Error("db failed"));
 
     await expect(service.setMobile(1, "13900000000", "1234")).rejects.toThrow("db failed");
 
-    expect(deps.mobileService.confirmReservedVerificationCode).not.toHaveBeenCalled();
-    expect(deps.mobileService.releaseReservedVerificationCode).toHaveBeenCalledWith(deps.bindPhoneReservation);
+    expect(deps.tx.userDocumentInvalidation.recordChanges).not.toHaveBeenCalled();
   });
 
   test("marks profile dirty when pausing an enabled user", async () => {
