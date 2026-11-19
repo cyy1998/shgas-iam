@@ -24,6 +24,15 @@ function entryOrigin(context: ProcessSmokeAttemptContext) {
   return `http://${context.hostname}:${context.port}`;
 }
 
+function startEntry(context: ProcessSmokeAttemptContext, nodeEnv: "development" | "production") {
+  return spawnOwnedProcessTree({
+    executable: process.execPath,
+    args: ["--no-env-file", "run", "src/index.ts"],
+    cwd: apiRoot,
+    env: createEntryEnvironment(context, { NODE_ENV: nodeEnv }),
+  });
+}
+
 async function probeApiDocs(origin: string, signal: AbortSignal) {
   const publicDocument = await readOpenApiDocument(`${origin}/public/doc`, "通用用户API", signal);
   const authDocument = await readOpenApiDocument(`${origin}/auth/doc`, "认证API", signal);
@@ -61,24 +70,40 @@ async function readOpenApiDocument(url: string, expectedTitle: string, signal: A
 
 describe("API entry", () => {
   test(
-    "starts the production entry with canonical Internal User routes",
+    "starts in production with operational routes available and documentation closed",
     async () => {
       let capture: ReturnType<typeof createBoundedProcessLogCapture> | undefined;
       const result = await entrySmoke.run({
         start: (context) => {
-          const child = spawnOwnedProcessTree({
-            executable: process.execPath,
-            args: ["--no-env-file", "run", "src/index.ts"],
-            cwd: apiRoot,
-            env: createEntryEnvironment(context),
-          });
+          const child = startEntry(context, "production");
           capture = createBoundedProcessLogCapture(child, { maxBytes: 128 * 1024 });
           return child;
         },
         async probe(context, signal) {
           const origin = entryOrigin(context);
-          const docs = await probeApiDocs(origin, signal);
-          const [health, ready, protocol, dependency, ssoSchema] = await Promise.all([
+          const paths = [
+            "/",
+            "/doc",
+            "/public/doc",
+            "/open/doc",
+            "/internal/doc",
+            "/sso/doc",
+            "/auth/doc",
+            "/oidc/doc",
+          ];
+          const docsStatuses = Object.fromEntries(
+            await Promise.all(
+              paths.map(async (path) => {
+                const response = await fetch(`${origin}${path}`, {
+                  headers: { Client: "iam", "X-IAM-Entry-Network": "external" },
+                  signal,
+                });
+                await response.body?.cancel();
+                return [path, response.status] as const;
+              }),
+            ),
+          );
+          const [health, ready, protocol, dependency] = await Promise.all([
             fetch(`${origin}/oidc/health`, { signal }),
             fetch(`${origin}/ready`, { signal }),
             fetch(`${origin}/oidc/auth`, {
@@ -91,11 +116,9 @@ describe("API entry", () => {
               `${origin}/oidc/auth?client_id=fixture-client&response_type=code&redirect_uri=https%3A%2F%2Frp.example%2Fcallback&scope=openid&state=private-state`,
               { headers: { "X-IAM-Entry-Network": "external" }, signal },
             ),
-            fetch(`${origin}/sso/doc`, { signal }),
           ]);
           return {
-            ...docs,
-            ssoSchema: { status: ssoSchema.status, body: await ssoSchema.json() },
+            docsStatuses,
             health: health.status,
             ready: ready.status,
             protocol: { status: protocol.status, body: await protocol.json() },
@@ -109,19 +132,19 @@ describe("API entry", () => {
         childReadinessEvidence: (context) => `server: ${entryOrigin(context)}`,
       });
 
-      expect(result.health).toBe(503);
-      expect(result.ssoSchema.status).toBe(200);
-      expect(result.ssoSchema.body.components.securitySchemes.CustomSsoBasic).toEqual({
-        type: "http",
-        scheme: "basic",
-        description:
-          "Basic username is the UTF-8 percent-encoded Client Code; password is the Custom SSO Client Secret.",
+      const logs = capture?.snapshot() ?? "";
+      capture?.dispose();
+      expect(result.docsStatuses).toEqual({
+        "/": 404,
+        "/doc": 404,
+        "/public/doc": 401, // The Public tier still requires a session.
+        "/open/doc": 404,
+        "/internal/doc": 401, // The Internal tier still requires client authentication.
+        "/sso/doc": 404,
+        "/auth/doc": 404,
+        "/oidc/doc": 404,
       });
-      expect(result.ssoSchema.body.paths["/sso/token"].post.security).toEqual([{ CustomSsoBasic: [] }]);
-      expect(result.ssoSchema.body.paths["/sso/token"].post.requestBody.content).toHaveProperty(
-        "application/x-www-form-urlencoded",
-      );
-      expect(result.ssoSchema.body.paths["/sso/token"]).not.toHaveProperty("get");
+      expect(result.health).toBe(503);
       expect(result.ready).toBe(503);
       expect(result.protocol).toMatchObject({ status: 400, body: { error: "invalid_request" } });
       expect(result.dependency).toMatchObject({
@@ -129,11 +152,29 @@ describe("API entry", () => {
         retryAfter: "3",
         body: { error: "temporarily_unavailable" },
       });
-      const logs = capture?.snapshot() ?? "";
-      capture?.dispose();
       expect(logs).toContain('"event":"oidc_protocol_error"');
       expect(logs).toContain('"event":"oidc_server_error"');
       expect(logs).not.toContain("private-state");
+    },
+    PROCESS_SMOKE_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "serves Scalar and canonical OpenAPI routes in development",
+    async () => {
+      const result = await entrySmoke.run({
+        start: (context) => startEntry(context, "development"),
+        async probe(context, signal) {
+          const origin = entryOrigin(context);
+          const docs = await probeApiDocs(origin, signal);
+          const page = await fetch(`${origin}/`, { signal });
+          return { ...docs, scalar: { status: page.status, html: await page.text() } };
+        },
+        childReadinessEvidence: (context) => `server: ${entryOrigin(context)}`,
+      });
+
+      expect(result.scalar.status).toBe(200);
+      expect(result.scalar.html).toContain("/public/doc");
       expect(result.publicDocument).toMatchObject({
         openapi: "3.1.0",
         info: { title: "通用用户API", version: "1.0.0" },
@@ -145,7 +186,26 @@ describe("API entry", () => {
       expect(result.ssoDocument).toMatchObject({
         openapi: "3.1.0",
         info: { title: "单点登录API", version: "1.0.0" },
+        components: {
+          securitySchemes: {
+            CustomSsoBasic: {
+              type: "http",
+              scheme: "basic",
+              description:
+                "Basic username is the UTF-8 percent-encoded Client Code; password is the Custom SSO Client Secret.",
+            },
+          },
+        },
+        paths: {
+          "/sso/token": {
+            post: {
+              security: [{ CustomSsoBasic: [] }],
+              requestBody: { content: { "application/x-www-form-urlencoded": expect.any(Object) } },
+            },
+          },
+        },
       });
+      expect(result.ssoDocument.paths).not.toHaveProperty(["/sso/token", "get"]);
       expect(result.internalDocument.paths).toMatchObject({
         "/internal/users/:username": { get: expect.any(Object) },
         "/internal/users/search-dsl": { post: expect.any(Object) },

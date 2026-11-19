@@ -5,7 +5,6 @@ import type { ProcessSmokeAttemptContext } from "@iam/test-support/process-smoke
 import {
   createProcessSmokeEnvironment,
   createProcessSmokeSuite,
-  PortCollisionError,
   PROCESS_SMOKE_TEST_TIMEOUT_MS,
   spawnOwnedProcessTree,
 } from "@iam/test-support/process-smoke-harness";
@@ -23,12 +22,12 @@ function entryOrigin(context: ProcessSmokeAttemptContext) {
   return `http://${context.hostname}:${context.port}`;
 }
 
-function createEntryEnvironment(context: ProcessSmokeAttemptContext) {
+function createEntryEnvironment(context: ProcessSmokeAttemptContext, nodeEnv: "development" | "production") {
   return createProcessSmokeEnvironment({
     source: process.env,
     temporaryDirectory: context.temporaryDirectory,
     overrides: {
-      NODE_ENV: "production",
+      NODE_ENV: nodeEnv,
       IAM_ADMIN_API_DATABASE_URL: "postgresql://iam:password@127.0.0.1:1/iam",
       IAM_ADMIN_API_PASSWORD_HASH_ROUNDS: "4",
       IAM_ADMIN_API_PORT: String(context.port),
@@ -44,50 +43,65 @@ function createEntryEnvironment(context: ProcessSmokeAttemptContext) {
   });
 }
 
-async function probeAdminApiDocs(origin: string, signal: AbortSignal) {
-  const response = await fetch(`${origin}/admin/doc`, { signal });
-  if (response.status !== 200) {
-    throw new PortCollisionError(
-      `port served an unexpected Admin API readiness status: expected 200, received ${response.status}`,
-    );
-  }
-
-  let document: Record<string, unknown>;
-  try {
-    document = (await response.json()) as Record<string, unknown>;
-  } catch (error) {
-    throw new PortCollisionError("port did not serve the Admin API OpenAPI document", { cause: error });
-  }
-  const info = document.info;
-  if (
-    document.openapi !== "3.1.0" ||
-    typeof info !== "object" ||
-    info === null ||
-    (info as Record<string, unknown>).title !== "管理端API" ||
-    (info as Record<string, unknown>).version !== "1.0.0"
-  ) {
-    throw new PortCollisionError("port served an unexpected Admin API OpenAPI document");
-  }
-  return document;
+function runEntry<T>(
+  nodeEnv: "development" | "production",
+  probe: (origin: string, signal: AbortSignal) => Promise<T>,
+) {
+  return entrySmoke.run({
+    start: (context) =>
+      spawnOwnedProcessTree({
+        executable: process.execPath,
+        args: ["--no-env-file", "run", "src/index.ts"],
+        cwd: adminApiRoot,
+        env: createEntryEnvironment(context, nodeEnv),
+      }),
+    probe: (context, signal) => probe(entryOrigin(context), signal),
+    childReadinessEvidence: (context) => `server: ${entryOrigin(context)}`,
+  });
 }
 
 describe("Admin API entry", () => {
   test(
-    "starts the production entry and exposes its OpenAPI readiness document",
+    "keeps Scalar and OpenAPI endpoints closed in production",
     async () => {
-      const document = await entrySmoke.run({
-        start: (context) =>
-          spawnOwnedProcessTree({
-            executable: process.execPath,
-            args: ["--no-env-file", "run", "src/index.ts"],
-            cwd: adminApiRoot,
-            env: createEntryEnvironment(context),
-          }),
-        probe: (context, signal) => probeAdminApiDocs(entryOrigin(context), signal),
-        childReadinessEvidence: (context) => `server: ${entryOrigin(context)}`,
+      const statuses = await runEntry("production", async (origin, signal) => {
+        const paths = ["/", "/admin/doc", "/rpc/doc"];
+        return Object.fromEntries(
+          await Promise.all(
+            paths.map(async (path) => {
+              const response = await fetch(`${origin}${path}`, { signal });
+              await response.body?.cancel();
+              return [path, response.status] as const;
+            }),
+          ),
+        );
       });
 
-      expect(document).toMatchObject({
+      // Ordinary Admin and RPC authentication still applies when the schema routes are absent.
+      expect(statuses).toEqual({ "/": 404, "/admin/doc": 403, "/rpc/doc": 403 });
+    },
+    PROCESS_SMOKE_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "serves Scalar and the Admin OpenAPI schema in development",
+    async () => {
+      const result = await runEntry("development", async (origin, signal) => {
+        const [page, schema] = await Promise.all([
+          fetch(`${origin}/`, { signal }),
+          fetch(`${origin}/admin/doc`, { signal }),
+        ]);
+        return {
+          scalar: { status: page.status, html: await page.text() },
+          status: schema.status,
+          document: await schema.json(),
+        };
+      });
+
+      expect(result.scalar.status).toBe(200);
+      expect(result.scalar.html).toContain("/admin/doc");
+      expect(result.status).toBe(200);
+      expect(result.document).toMatchObject({
         openapi: "3.1.0",
         info: { title: "管理端API", version: "1.0.0" },
       });

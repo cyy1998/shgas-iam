@@ -68,7 +68,11 @@ pnpm --filter @iam/sso dev
 - 管理后台：<http://localhost:8001/iam-admin/>
 - SSO 门户：<http://localhost:8000/portal/>
 
-生产环境默认关闭 Scalar 和 OpenAPI 文档。Gateway 与人工维护命令分别见 [Gateway README](apps/gateway/README.md) 和 [Ops README](apps/ops/README.md)。
+源码开发默认启用 Scalar 首页和 OpenAPI JSON，例如 API 的 `/public/doc` 和 Admin API 的 `/admin/doc`。
+两套 API 在 `NODE_ENV=production` 时关闭文档。开发 Compose 默认以生产模式运行两套 API，
+本地调试文档时，可在 `docker/.env` 中用 `IAM_API_NODE_ENV=development` 或 `IAM_ADMIN_API_NODE_ENV=development` 切换对应服务。
+
+Gateway 与人工维护命令分别见 [Gateway README](apps/gateway/README.md) 和 [Ops README](apps/ops/README.md)。
 
 ## 开发与项目文档
 
