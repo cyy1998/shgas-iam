@@ -1,6 +1,6 @@
 # Build context: monorepo root
 
-FROM 176.169.99.124:16030/xxzx/node:24.18.0-alpine AS base
+FROM 176.169.99.124:16030/xxzx/node-pnpm:24.18.0-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 ARG HTTP_PROXY
