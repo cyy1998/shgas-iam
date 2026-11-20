@@ -1,6 +1,6 @@
 # Build context: monorepo root
 
-FROM docker.io/library/node:24.18.0-alpine AS base
+FROM 176.169.99.124:16030/xxzx/node:24.18.0-alpine AS base
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 ARG HTTP_PROXY
@@ -69,7 +69,7 @@ COPY apps/worker/ ./apps/worker/
 RUN --mount=type=cache,id=iam-pnpm-v12,target=/pnpm/store \
     pnpm --config.inject-workspace-packages=true --filter @iam/worker deploy --prod /deploy/worker
 
-FROM docker.io/oven/bun:1.4.2-alpine AS runner
+FROM 176.169.99.124:16030/xxzx/bun:1.4.2-alpine AS runner
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=builder /deploy/worker ./
