@@ -1,6 +1,6 @@
 # Build context: monorepo root.
-ARG NODE_IMAGE=docker.io/library/node:24.18.0-alpine
-ARG BUN_IMAGE=docker.io/oven/bun:1.4.2-alpine
+ARG NODE_IMAGE=176.169.99.124:16030/xxzx/node:24.18.0-alpine
+ARG BUN_IMAGE=176.169.99.124:16030/xxzx/bun:1.4.2-alpine
 FROM ${NODE_IMAGE} AS workspace
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
