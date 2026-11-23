@@ -102,7 +102,7 @@ backfill、部分 repair 只登记或唤醒工作，仍须匹配版本的 consum
    docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml up -d api admin-api worker-user-document worker-organization-document sso admin gateway-api
    ```
 
-   通过已有的受控初始化/管理流程准备管理员与 Client 配置。不能使用测试 seed 或假定空库会自动创建生产账号。
+   按[新空环境首次初始化](initial-installation.md)使用一次性 Ops 命令准备管理员与 Client 配置。
    有导入源数据时，按[数据维护](data-maintenance.md)完成对应读模型构建及核验。
 
 4. **发布网关路由并放流** 按[网关发布流程](apisix-gateway-release.md)发布目标环境配置。经受限入口完成[完成检查](#完成检查与回退)，再开放公共流量。

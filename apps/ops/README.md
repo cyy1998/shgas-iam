@@ -16,6 +16,7 @@ pnpm --filter @iam/ops iam-ops employment verify
 | `user-document`         | `repair`                          | `--limit`、`--stale-before`、`--subject-access-only`、`--force`、`--retry-user-id` 与 `--retry-version`、`--deadline-ms`                                  |
 | `user-document`         | `verify-postgres`、`verify-redis` | `--batch-size`、`--deadline-ms`                                                                                                                           |
 | `organization-document` | `backfill`、`repair`、`verify`    | backfill 的 `--batch-size`；repair 的 `--limit` 与 `--stale-before`；均支持 `--deadline-ms`                                                               |
+| `initialize`            | `source`、`access`                | `--input <file>`、`--deadline-ms`                                                                                                                         |
 | `session`               | `inventory`、`apply`、`verify`    | `--layout unified`、`--owner`、各 owner 的 `--kernel-namespace`／`--custom-namespace`／`--oidc-namespace`、`--writers-stopped --drained`、`--deadline-ms` |
 | `client-snapshot`       | `repair`、`verify`                | 定向 repair 使用 `--client-code`；全量使用 `--all --writers-stopped --drained`；`--deadline-ms`                                                           |
 | `employment`            | `verify`                          | 全库只读诊断，无范围或修复选项                                                                                                                            |
@@ -34,6 +35,7 @@ Subject Access-only 会写 PostgreSQL transition intent，不是 Redis-only 操�
 
 操作前阅读[Document 与 Subject Access 维护](../../docs/releases/data-maintenance.md)、[会话与 Snapshot 维护](../../docs/releases/authentication-and-session.md)及[历史审计维护](../../docs/releases/README.md#历史审计规范化)。
 数据库迁移继续通过 `@iam/db db:migrate`，Gateway 发布继续使用 HTTP API。
+空环境的初始化顺序和凭据输入见[新空环境首次初始化](../../docs/releases/initial-installation.md)。
 
 独立镜像和生产维护 Compose 使用相同的分组、操作与参数，见[一次性 Ops 维护环境](../../docs/releases/deployment.md#一次性-ops-维护环境)。
 镜像须与目标应用匹配发布版本；不依赖宿主源码、pnpm 或运行中的 Worker 容器。

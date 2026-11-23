@@ -78,7 +78,7 @@ COPY packages/contracts/ ./packages/contracts/
 COPY apps/sso/ ./apps/sso/
 RUN pnpm rebuild && pnpm --filter @iam/sso run build
 
-FROM docker.xuanyuan.run/nginx:1.27.5-alpine AS runtime
+FROM docker.xuanyuan.run/nginx:1.31.9-alpine AS runtime
 COPY apps/sso/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/apps/sso/dist/ /usr/share/nginx/html/portal/
 EXPOSE 80

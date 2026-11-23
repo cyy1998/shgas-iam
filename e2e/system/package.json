@@ -9,6 +9,7 @@
     "@iam/db": "workspace:*",
     "@iam/documents": "workspace:*",
     "@iam/domain": "workspace:*",
+    "@iam/jobs": "workspace:*",
     "@iam/runtime": "workspace:*",
     "@iam/subject-access": "workspace:*",
     "drizzle-orm": "1.0.0-rc.2",

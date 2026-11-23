@@ -195,7 +195,7 @@ services:
       <<: *runtime-common
       IAM_WORKER_DATABASE_URL: postgresql://iam_e2e:iam_e2e_local_password@postgres:5432/iam_e2e
       IAM_WORKER_REDIS_URL: redis://redis:6379/0
-      IAM_WORKER_ENABLED_MODULES: user-document
+      IAM_WORKER_ENABLED_MODULES: user-document,organization-document
       IAM_WORKER_USER_DOCUMENT_REPAIR_ENABLED: "true"
       IAM_WORKER_HTTP_ENABLED: "true"
       IAM_WORKER_HTTP_PORT: "30003"

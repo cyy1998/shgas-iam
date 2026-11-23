@@ -242,4 +242,5 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [登录与会话](releases/authentication-and-session.md)<a name="runbook-authentication-and-session"></a> | runbook | Current | 2026-11-02    | 2026-12-02  | 密码配置、OIDC 双入口与密钥、会话清理和 Snapshot 恢复。         |
 | [数据维护](releases/data-maintenance.md)<a name="runbook-data-maintenance"></a>                       | runbook | Current | 2026-11-03    | 2026-12-03  | Document、Subject Access 的两阶段修复、全量重建及完整核验。     |
 | [部署与发布](releases/deployment.md)<a name="runbook-deployment"></a>                                 | runbook | Current | 2026-11-13    | 2026-12-13  | 首次部署、常规更新、任职有效期协调发布、一次性 Ops 制品与回退。 |
+| [新空环境首次初始化](releases/initial-installation.md)                                                | runbook | Current | 2026-11-23    | 2026-12-23  | Ops 初始化、发布核验与托管环境验收。                            |
 | [日志与排障](releases/observability-system-logs.md)<a name="runbook-observability"></a>               | runbook | Current | 2026-10-25    | 2026-11-25  | 日志栈、Grafana、Trace 关联、告警与采集恢复。                   |

@@ -39,11 +39,12 @@ export async function expectClientDelegationJourney(input: DelegationJourneyInpu
     await dialog.getByLabel("结束时间", { exact: true }).fill(localDateTime(now + 7_200_000));
     await dialog.getByLabel("结束时间", { exact: true }).press("Enter");
     await dialog.getByLabel("说明", { exact: true }).fill(description);
-    const createdResponse = page.waitForResponse((response) =>
-      isSuccessfulRpcResponse(response, "admin.delegation.create"),
-    );
+    const createProcedure = "admin.delegation.create";
+    const createdResponse = page.waitForResponse((response) => response.url().includes(createProcedure));
     await dialog.getByRole("button", { name: /确\s*定/u }).click();
-    await expectRpcMutationResult(await createdResponse, "admin.delegation.create", true, expect.any(Object));
+    const creation = await createdResponse;
+    expect(creation.ok(), await creation.text()).toBe(true);
+    await expectRpcMutationResult(creation, createProcedure, true, expect.any(Object));
     await expectResolution(input, input.delegateeUsername);
   });
 
@@ -241,7 +242,10 @@ async function selectIdentity(page: Page, dialog: Locator, label: string, code: 
   const listbox = await field.getAttribute("aria-controls");
   if (!listbox) throw new Error(`Selector ${label} did not expose its controlled listbox`);
   const popup = page.locator(".ant-select-dropdown").filter({ has: page.locator(`[id="${listbox}"]`) });
-  await popup.getByTitle(new RegExp(`（${escapeRegExp(code)}）$`, "u")).click();
+  const option = new RegExp(`（${escapeRegExp(code)}）$`, "u");
+  await popup.getByTitle(option).hover();
+  await field.press("Enter");
+  await expect(dialog.getByTitle(option)).toBeVisible();
 }
 
 async function editPeriod(page: Page, id: number, description: string, start: number, end: number) {

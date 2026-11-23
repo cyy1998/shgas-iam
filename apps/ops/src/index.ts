@@ -28,6 +28,10 @@ const commands = {
     verify: { load: () => import("./commands/client-runtime/client-snapshot-maintenance"), prefix: ["verify"] },
   },
   employment: { verify: { load: () => import("./commands/employment-verifier"), prefix: [] } },
+  initialize: {
+    source: { load: () => import("./commands/initialization/initialize"), prefix: ["source"] },
+    access: { load: () => import("./commands/initialization/initialize"), prefix: ["access"] },
+  },
   "audit-action": {
     inventory: { load: () => import("./commands/audit-action-maintenance"), prefix: ["inventory"] },
     apply: { load: () => import("./commands/audit-action-maintenance"), prefix: ["apply"] },
@@ -53,6 +57,7 @@ function help(group?: keyof typeof commands, operation?: string) {
     "client-snapshot":
       "repair: --client-code <code>; full repair / verify: --all --writers-stopped --drained; --deadline-ms <ms>",
     employment: "verify is a read-only full inventory diagnostic; no repair or filtering options",
+    initialize: "source / access: --input <file> [--deadline-ms <ms>]",
     "audit-action": "inventory / verify are read-only; apply requires --writers-stopped",
   };
   if (group) console.log(options[group]);

@@ -1,7 +1,7 @@
 import { UserDocumentSchema } from "@iam/contracts";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
-import { isSuccessfulRpcResponse, readCreatedResourceId } from "./admin-client-journey.ts";
+import { readCreatedResourceId } from "./admin-client-journey.ts";
 
 const publicationTimeoutMs = 45_000;
 
@@ -33,12 +33,18 @@ export async function createHeadResponsibility(input: {
   await input.page.getByRole("tab", { name: "责任任命" }).click();
   await input.page.getByRole("button", { name: "新建责任任命" }).click();
   const modal = input.page.getByRole("dialog");
-  await modal.getByRole("combobox", { name: "任职" }).fill(input.adminUsername);
-  await input.page.getByTitle(new RegExp(input.positionCode, "u")).click();
+  const employment = modal.getByRole("combobox", { name: "任职" });
+  const option = new RegExp(input.positionCode, "u");
+  await employment.fill(input.adminUsername);
+  await input.page.getByTitle(option).hover();
+  await employment.press("Enter");
+  await expect(modal.getByTitle(option)).toBeVisible();
   const procedure = "admin.organizationResponsibility.createAssignment";
-  const creation = input.page.waitForResponse((response) => isSuccessfulRpcResponse(response, procedure));
+  const creation = input.page.waitForResponse((response) => response.url().includes(procedure));
   await modal.getByRole("button", { name: /确\s*定/u }).click();
-  return await readCreatedResourceId(await creation, procedure);
+  const response = await creation;
+  expect(response.ok(), await response.text()).toBe(true);
+  return await readCreatedResourceId(response, procedure);
 }
 
 export async function waitForInternalResponsibility(input: ResponsibilityJourneyInput & { expected: boolean }) {

@@ -46,7 +46,7 @@ export async function exerciseDatedEmployment(input: JourneyInput) {
   await changeDisplayName(adminPage, adminUsername, markerName);
   await waitForPublicEmployment(input, { visible: false, responsibility: false, name: markerName });
 
-  await editPeriod(adminPage, id, null);
+  await editPeriod(adminPage, id, null, futureEnd);
   await expectEmployment(adminPage, id, { status: EmploymentStatus.Enable, startTime: null, endTime: futureEnd });
   await waitForPublicEmployment(input, { visible: true, responsibility: false });
 
@@ -59,7 +59,7 @@ export async function exerciseDatedEmployment(input: JourneyInput) {
   });
   await waitForPublicEmployment(input, { visible: true, responsibility: true });
 
-  await editPeriod(adminPage, id, futureStart);
+  await editPeriod(adminPage, id, futureStart, futureEnd);
   await expectEmployment(adminPage, id, {
     status: EmploymentStatus.Pending,
     startTime: futureStart,
@@ -68,7 +68,7 @@ export async function exerciseDatedEmployment(input: JourneyInput) {
   await expectAssignment(adminPage, assignmentId, AssignmentStatus.Pause);
   await waitForPublicEmployment(input, { visible: false, responsibility: false });
 
-  await editPeriod(adminPage, id, null);
+  await editPeriod(adminPage, id, null, futureEnd);
   await expectEmployment(adminPage, id, { status: EmploymentStatus.Enable, startTime: null, endTime: futureEnd });
   await expectAssignment(adminPage, assignmentId, AssignmentStatus.Pause);
   await waitForPublicEmployment(input, { visible: true, responsibility: false });
@@ -99,30 +99,36 @@ async function createEmployment(input: JourneyInput, startTime: string, endTime:
   await page.goto("/iam-admin/employments");
   await page.getByRole("button", { name: "新增雇佣" }).click();
   const dialog = page.getByRole("dialog", { name: "新增雇佣" });
-  const select = (label: string) => dialog.locator(".ant-form-item").filter({ hasText: label }).getByRole("combobox");
-  await select("用户").fill(input.adminUsername);
-  await page
-    .locator(".ant-select-dropdown:visible")
-    .getByTitle(new RegExp(`\\(${input.adminUsername}\\)$`, "u"))
-    .click();
-  await select("任职组织").fill(input.organizationCode);
-  await page
-    .getByText(new RegExp(`\\(${input.organizationCode}\\)$`, "u"))
-    .last()
-    .click();
-  await select("岗位").fill(input.positionCode);
-  await page
-    .locator(".ant-select-dropdown:visible")
-    .getByTitle(new RegExp(`\\(${input.positionCode}\\)$`, "u"))
-    .click();
+  const field = (label: string) => dialog.locator(".ant-form-item").filter({ hasText: label });
+  const dropdown = page.locator(".ant-select-dropdown:visible");
+  const pickOption = async (label: string, code: string) => {
+    const item = field(label);
+    const select = item.getByRole("combobox");
+    const option = new RegExp(`\\(${code}\\)$`, "u");
+    await select.fill(code);
+    await dropdown.getByTitle(option).hover();
+    await select.press("Enter");
+    await expect(item.getByTitle(option)).toBeVisible();
+  };
+  await pickOption("用户", input.adminUsername);
+  const organization = field("任职组织");
+  const organizationOption = new RegExp(`\\(${input.organizationCode}\\)$`, "u");
+  await organization.getByRole("combobox").fill(input.organizationCode);
+  await expect(async () => {
+    await dropdown.getByText(organizationOption).click({ timeout: 2_000 });
+    await expect(organization.getByTitle(organizationOption)).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 10_000 });
+  await pickOption("岗位", input.positionCode);
   await dialog.getByPlaceholder("开始日").click();
   await chooseCalendarDay(page, startTime);
   await chooseCalendarDay(page, endTime);
 
   const procedure = "admin.employment.create";
-  const saved = page.waitForResponse((response) => isSuccessfulRpcResponse(response, procedure));
+  const saved = page.waitForResponse((response) => response.url().includes(procedure));
   await dialog.getByRole("button", { name: /确\s*定/u }).click();
-  return await readCreatedResourceId(await saved, procedure);
+  const response = await saved;
+  expect(response.ok(), await response.text()).toBe(true);
+  return await readCreatedResourceId(response, procedure);
 }
 
 async function openEmployment(page: Page, id: number) {
@@ -130,17 +136,21 @@ async function openEmployment(page: Page, id: number) {
   return page.getByRole("dialog");
 }
 
-async function editPeriod(page: Page, id: number, startTime: string | null) {
+async function editPeriod(page: Page, id: number, startTime: string | null, endTime: string) {
   const drawer = await openEmployment(page, id);
   await drawer.getByRole("button", { name: /^编\s*辑$/u }).click();
-  await drawer.getByPlaceholder("开始日").click();
+  const start = drawer.getByPlaceholder("开始日");
+  const end = drawer.getByPlaceholder("截止日");
+  await start.click();
   if (startTime) {
     await chooseCalendarDay(page, startTime);
-    await drawer.getByRole("heading", { name: "基本信息" }).click();
-    await expect(drawer.getByPlaceholder("开始日")).toHaveValue(startTime);
+    await end.click();
+    await chooseCalendarDay(page, endTime);
   } else {
     await page.getByText("清空开始日", { exact: true }).click();
   }
+  await expect(start).toHaveValue(startTime ?? "");
+  await expect(end).toHaveValue(endTime);
   const procedure = "admin.employment.update";
   const saved = page.waitForResponse((response) => isSuccessfulRpcResponse(response, procedure));
   await drawer.getByRole("button", { name: /保\s*存/u }).click();

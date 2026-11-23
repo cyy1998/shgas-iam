@@ -853,6 +853,9 @@ importers:
       '@iam/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@iam/jobs':
+        specifier: workspace:*
+        version: link:../../packages/jobs
       '@iam/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime

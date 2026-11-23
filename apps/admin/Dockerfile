@@ -86,7 +86,7 @@ COPY apps/admin-api/ ./apps/admin-api/
 COPY apps/admin/ ./apps/admin/
 RUN pnpm --filter @iam/admin run build
 
-FROM docker.xuanyuan.run/nginx:1.27.5-alpine AS runner
+FROM docker.xuanyuan.run/nginx:1.31.9-alpine AS runner
 COPY apps/admin/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/apps/admin/dist/ /usr/share/nginx/html/iam-admin/
 EXPOSE 80

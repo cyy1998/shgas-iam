@@ -48,24 +48,30 @@ test("HR Admin manages cross-root responsibilities without widening either endpo
     .last()
     .click();
 
-  await formItem("责任类型").getByRole("combobox").click();
-  await page.getByTitle("分管领导").click();
-  const employmentSelector = formItem("任职").getByRole("combobox");
+  const responsibilityType = formItem("责任类型");
+  const typeSelector = responsibilityType.getByRole("combobox");
+  await typeSelector.click();
+  await typeSelector.press("ArrowDown");
+  await typeSelector.press("Enter");
+  await expect(responsibilityType.getByTitle("分管领导", { exact: true })).toBeVisible();
+  const employment = formItem("任职");
+  const employmentSelector = employment.getByRole("combobox");
   const employmentSearch = waitForRpc(page, "admin.employment.search");
   await employmentSelector.fill(scenario.adminUsername);
   const employmentChoices = await readRpcData(await employmentSearch, "admin.employment.search");
   expect(containsScalarValue(employmentChoices, scenario.outsideResponsibilityHolderPositionCode)).toBe(false);
-  await page.getByTitle(new RegExp(escapeRegExp(scenario.responsibilityHolderPositionCode), "u")).click();
-  const createResponse = page.waitForResponse((response) =>
-    isSuccessfulRpcResponse(response, "admin.organizationResponsibility.createAssignment"),
-  );
+  const holderOption = new RegExp(escapeRegExp(scenario.responsibilityHolderPositionCode), "u");
+  await page.getByTitle(holderOption).hover();
+  await employmentSelector.press("Enter");
+  await expect(employment.getByTitle(holderOption)).toBeVisible();
+  const createProcedure = "admin.organizationResponsibility.createAssignment";
+  const createResponse = page.waitForResponse((response) => response.url().includes(createProcedure));
   await createDialog.getByRole("button", { name: /确\s*定/u }).click();
   const creation = await createResponse;
+  expect(creation.ok(), await creation.text()).toBe(true);
 
   const created = await findCreatedAssignment(context.request, scenario);
-  await expectRpcMutationResult(creation, "admin.organizationResponsibility.createAssignment", true, {
-    id: created.id,
-  });
+  await expectRpcMutationResult(creation, createProcedure, true, { id: created.id });
   await expectManualTransportMatrix(context.request, scenario);
   await expectContextPanels(page, scenario, created.id);
   await manageLifecycle(page, context.request, scenario, created.id);
