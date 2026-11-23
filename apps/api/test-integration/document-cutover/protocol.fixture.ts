@@ -202,7 +202,7 @@ const employment = {
 export function expectedCustom(subject: string, client: string) {
   const roles = client === clients.empty ? [] : [`${client}-reader`];
   return {
-    version: 4,
+    version: 5,
     subjectIdentifier: subject,
     profile: { username: "alice", name: "Alice", employments: [{ ...employment, responsibilities: [] }] },
     authorization: { employments: [{ ...employment, roles }], roles },
@@ -216,7 +216,7 @@ export async function verifyNewProtocolState(api: Protocol, state: OldProtocolSt
     same(
       (await response.json()).data,
       expectedCustom(subject, client),
-      "Custom UserInfo must deliver complete wire4 shape",
+      "Custom UserInfo must deliver complete Wire v5 shape",
     );
   }
   await custom(state.customToken);

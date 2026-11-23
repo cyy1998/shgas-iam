@@ -163,7 +163,7 @@ export function createOrganizationDocumentVerifier(input: { db: typeof database;
             failures.push({
               code: "unprocessed-outbox",
               count: unprocessedChanges.length,
-              organizationIds: [...new Set(unprocessedChanges.map((row) => row.organizationId))].sort((a, b) => a - b),
+              organizationIds: outboxOrganizationIds(unprocessedChanges),
               outboxIds: unprocessedChanges.map((row) => row.id).sort(),
             });
           const invalidDirtyReceipts = dirty
@@ -183,7 +183,6 @@ export function createOrganizationDocumentVerifier(input: { db: typeof database;
               z
                 .object({ targetId: z.number().int().positive(), version: z.string().regex(/^[1-9]\d*$/u) })
                 .array()
-                .min(1)
                 .safeParse(row.rebuildRequests),
             ]),
           );
@@ -193,7 +192,8 @@ export function createOrganizationDocumentVerifier(input: { db: typeof database;
             return (
               !hasCompletedReceipt(row) ||
               !requests?.success ||
-              !requests.data.some((request) => request.targetId === row.organizationId) ||
+              (row.organizationId !== null &&
+                !requests.data.some((request) => request.targetId === row.organizationId)) ||
               new Set(requests.data.map((request) => request.targetId)).size !== requests.data.length
             );
           });
@@ -201,9 +201,7 @@ export function createOrganizationDocumentVerifier(input: { db: typeof database;
             failures.push({
               code: "invalid-outbox-receipt",
               count: invalidChangeReceipts.length,
-              organizationIds: [...new Set(invalidChangeReceipts.map((row) => row.organizationId))].sort(
-                (a, b) => a - b,
-              ),
+              organizationIds: outboxOrganizationIds(invalidChangeReceipts),
               outboxIds: invalidChangeReceipts.map((row) => row.id).sort(),
             });
           const unfulfilledChanges = changes.filter((row) => {
@@ -227,7 +225,7 @@ export function createOrganizationDocumentVerifier(input: { db: typeof database;
             failures.push({
               code: "unfulfilled-outbox",
               count: unfulfilledChanges.length,
-              organizationIds: [...new Set(unfulfilledChanges.map((row) => row.organizationId))].sort((a, b) => a - b),
+              organizationIds: outboxOrganizationIds(unfulfilledChanges),
               outboxIds: unfulfilledChanges.map((row) => row.id).sort(),
             });
           const sourceIds = new Set(source.map((row) => row.id));
@@ -242,12 +240,14 @@ export function createOrganizationDocumentVerifier(input: { db: typeof database;
             if (organizationIds.length)
               failures.push({ code, count: organizationIds.length, organizationIds, outboxIds: [] });
           }
-          const orphanChanges = changes.filter((row) => !sourceIds.has(row.organizationId));
+          const orphanChanges = changes.filter(
+            (row) => row.organizationId !== null && !sourceIds.has(row.organizationId),
+          );
           if (orphanChanges.length)
             failures.push({
               code: "orphan-outbox",
               count: orphanChanges.length,
-              organizationIds: [...new Set(orphanChanges.map((row) => row.organizationId))].sort((a, b) => a - b),
+              organizationIds: outboxOrganizationIds(orphanChanges),
               outboxIds: orphanChanges.map((row) => row.id).sort(),
             });
           signal?.throwIfAborted();
@@ -272,6 +272,11 @@ export function createOrganizationDocumentVerifier(input: { db: typeof database;
       );
     },
   };
+}
+
+function outboxOrganizationIds(changes: readonly { organizationId: number | null }[]) {
+  const ids = changes.flatMap(({ organizationId }) => (organizationId === null ? [] : [organizationId]));
+  return [...new Set(ids)].sort((left, right) => left - right);
 }
 
 function hasCompletedReceipt(row: {

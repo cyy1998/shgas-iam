@@ -22,6 +22,7 @@
 ## 一次性迁移与旧版本
 
 任职时间戳升级为自然日使用[按日任职有效期的协调发布](deployment.md#启用按日任职有效期)。
+已使用统一 Document 的环境按[目录自定义属性和 Wire v5 的协调发布](deployment.md#启用目录自定义属性和-custom-sso-wire-v5)升级。
 旧 Profile/Organization Search → Document 的升级使用[统一 Document 硬切换](data-maintenance.md#统一-document-硬切换)。
 以下更早指引保存在整理前的固定版本中，按实际来源环境选择；本次整理不表示目标环境已经执行迁移。
 尚待迁移的环境先完成对应独立流程，再使用当前代日常维护步骤；不能把当前命令直接套到其他旧布局。

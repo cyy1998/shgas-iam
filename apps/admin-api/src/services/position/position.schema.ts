@@ -2,6 +2,11 @@ import { EmploymentSchema } from "@admin-api/services/employment/employment.sche
 import { z } from "@hono/zod-openapi";
 import { createPageQuerySchema } from "@iam/api-core/core/pagination/schema";
 import { PositionStatus } from "@iam/contracts";
+import {
+  CustomAttributeDefinitionSchema,
+  CustomAttributePatchSchema,
+  CustomAttributeValuesSchema,
+} from "@iam/contracts/custom-attributes";
 import { insertPositionSchema, updatePositionSchema } from "@iam/db/schema";
 import { PositionDtoSchema } from "@iam/domain/position";
 
@@ -13,6 +18,8 @@ export const PositionDetailSchema = PositionDtoSchema.extend({
 
 export const PositionMemberCountDetailSchema = PositionDtoSchema.extend({
   memberNumber: z.number().int().nonnegative(),
+  customAttributes: CustomAttributeValuesSchema.optional(),
+  customAttributeDefinitions: z.array(CustomAttributeDefinitionSchema).optional(),
 });
 
 const PositionCodeInputSchema = z.string().trim().min(1, "岗位编码不能为空").max(64, "岗位编码最多64个字符");
@@ -29,6 +36,7 @@ export const PositionCreateDtoSchema = insertPositionSchema
   .extend({
     posCode: PositionCodeInputSchema,
     posName: PositionNameInputSchema,
+    customAttributes: CustomAttributePatchSchema.optional(),
   })
   .openapi("PositionCreateDto");
 
@@ -58,6 +66,7 @@ export const PositionUpdateDtoSchema = updatePositionSchema
   .extend({
     posCode: PositionCodeInputSchema.optional(),
     posName: PositionNameInputSchema.optional(),
+    customAttributes: CustomAttributePatchSchema.optional(),
   })
   .openapi("PositionUpdateDto");
 

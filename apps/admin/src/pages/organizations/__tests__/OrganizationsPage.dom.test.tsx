@@ -64,8 +64,22 @@ const organization = {
 };
 const reads = { detail: vi.fn(), children: vi.fn() };
 let fullPath: { orgCode: string; orgName: string }[];
+const costCenter = {
+  entityType: "organization",
+  code: "cost_center",
+  displayName: "成本中心",
+  description: null,
+  orderNum: 0,
+  enabled: true,
+  valueType: "text",
+  options: [],
+} as const;
+let definitions: Array<typeof costCenter>;
+let detailAttributes: Record<string, string>;
 beforeEach(() => {
   fullPath = [organization];
+  definitions = [];
+  detailAttributes = {};
   setTestAccess({
     canCreateOrganizationRoot: true,
     canAccessOrganizationResponsibility: false,
@@ -80,7 +94,14 @@ beforeEach(() => {
         procedures.map((procedure, index) => {
           if (procedure === "admin.organization.detail") {
             reads.detail();
-            return { result: { data: organization } };
+            return {
+              result: {
+                data: { ...organization, customAttributeDefinitions: definitions, customAttributes: detailAttributes },
+              },
+            };
+          }
+          if (procedure === "admin.customAttribute.list") {
+            return { result: { data: definitions } };
           }
           if (procedure === "admin.organization.selector") {
             return {
@@ -154,6 +175,52 @@ async function page() {
 }
 
 describe("OrganizationsPage mutation results through the organization service", () => {
+  it("creates an organization attribute definition and applies it to the creation form", async () => {
+    const creationRequests = mutation("create");
+    const definitionRequests: unknown[] = [];
+    server.use(
+      http.post("*/rpc/admin.customAttribute.create", async ({ request }) => {
+        definitionRequests.push(await request.json());
+        definitions = [costCenter];
+        return HttpResponse.json([{ result: { data: { changed: true, result: costCenter } } }]);
+      }),
+    );
+    const { user } = await page();
+    await user.click(screen.getByRole("button", { name: "自定义属性" }));
+    const drawer = within(await screen.findByRole("dialog", { name: "自定义属性定义" }));
+    await user.click(await drawer.findByRole("button", { name: "新建属性定义" }));
+    await user.type(drawer.getByRole("textbox", { name: /属性编码/ }), "cost_center");
+    await user.type(drawer.getByRole("textbox", { name: /显示名称/ }), "成本中心");
+    await user.click(drawer.getByRole("button", { name: "保存定义" }));
+    expect(await drawer.findByText("成本中心")).toBeInTheDocument();
+    expect(definitionRequests).toMatchObject([{ "0": { entityType: "organization", code: "cost_center" } }]);
+    await user.click(drawer.getByRole("button", { name: "关闭" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "新建根组织" }));
+    const form = within(await screen.findByRole("dialog"));
+    await user.type(form.getByRole("textbox", { name: "组织编码" }), "NEW");
+    await user.type(form.getByRole("textbox", { name: "组织名称" }), "新组织");
+    await user.type(await form.findByRole("textbox", { name: "成本中心" }), "FIN-2");
+    await user.click(form.getByRole("button", { name: "确 定" }));
+    expect(await screen.findByText("创建成功")).toBeInTheDocument();
+    expect(creationRequests).toMatchObject([{ "0": { customAttributes: { cost_center: "FIN-2" } } }]);
+  });
+
+  it("shows the current organization value in details and submits a clear from edit", async () => {
+    const requests = mutation("update");
+    definitions = [costCenter];
+    detailAttributes = { cost_center: "FIN-1" };
+    const { user } = await page();
+    expect(await screen.findByText("FIN-1")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /编\s*辑/ }));
+    const form = within(await screen.findByRole("dialog", { name: "编辑组织" }));
+    const costCenterField = await form.findByRole("textbox", { name: "成本中心" });
+    expect(costCenterField).toHaveValue("FIN-1");
+    await user.clear(costCenterField);
+    await user.click(form.getByRole("button", { name: "确 定" }));
+    expect(await screen.findByText("更新成功")).toBeInTheDocument();
+    expect(requests).toMatchObject([{ "0": { data: { customAttributes: { cost_center: null } } } }]);
+  });
   it.each([
     [[organization], "ROOT-A（Root A）"],
     [

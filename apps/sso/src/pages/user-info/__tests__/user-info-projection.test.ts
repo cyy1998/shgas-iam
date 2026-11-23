@@ -36,7 +36,7 @@ const employment = {
   responsibilities: [],
 } as const;
 
-describe("Custom SSO V4 user-info projection presentation", () => {
+describe("Custom SSO V5 user-info projection presentation", () => {
   it("formats company, organization path and position from the shared organization structure", () => {
     expect(formatProjectionCompany(employment)).toBe("集团");
     expect(formatProjectionOrganizationPath(employment)).toBe("集团 / 财务部");

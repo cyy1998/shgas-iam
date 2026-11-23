@@ -1,5 +1,6 @@
 import UsersPage from "@admin/pages/users";
 import UserFormModal from "@admin/pages/users/components/UserFormModal";
+import type { UserDetailVo } from "@admin/services/user";
 import { ApiErrorCode } from "@iam/contracts";
 import { ConfigProvider, Modal, message } from "antd";
 import { HttpResponse, http } from "msw";
@@ -76,8 +77,22 @@ function mutation(procedure: string, data: unknown, committed = false) {
   );
   return requests;
 }
-function renderPage() {
-  const details = vi.fn((_info: { request: Request }) => HttpResponse.json([{ result: { data: adminUserDetail } }]));
+const locationAttribute = {
+  entityType: "user",
+  code: "office_location",
+  valueType: "text",
+  displayName: "办公地点",
+  enabled: true,
+  orderNum: 0,
+  description: null,
+  options: [],
+} as const;
+
+function renderPage(
+  detail: typeof adminUserDetail &
+    Pick<UserDetailVo, "customAttributes" | "customAttributeDefinitions"> = adminUserDetail,
+) {
+  const details = vi.fn((_info: { request: Request }) => HttpResponse.json([{ result: { data: detail } }]));
   const searches = vi.fn(() => HttpResponse.json([{ result: { data: adminUserSearchResult } }]));
   server.use(
     http.get("*/rpc/:procedures", ({ params }) => {
@@ -165,6 +180,98 @@ function renderForm() {
 }
 
 describe("UsersPage mutation outcomes", () => {
+  it("creates, edits, and disables a user attribute definition", async () => {
+    const requests: unknown[] = [];
+    let definitions: Array<
+      Omit<typeof locationAttribute, "displayName" | "enabled"> & { displayName: string; enabled: boolean }
+    > = [];
+    server.use(
+      http.get("*/rpc/admin.customAttribute.list", () => HttpResponse.json([{ result: { data: definitions } }])),
+      http.post("*/rpc/admin.customAttribute.create", async ({ request }) => {
+        requests.push(await request.json());
+        definitions = [{ ...locationAttribute }];
+        return HttpResponse.json([{ result: { data: { changed: true, result: definitions[0] } } }]);
+      }),
+      http.post("*/rpc/admin.customAttribute.update", async ({ request }) => {
+        requests.push(await request.json());
+        definitions = [{ ...locationAttribute, displayName: "办公区域" }];
+        return HttpResponse.json([{ result: { data: { changed: true, result: null } } }]);
+      }),
+      http.post("*/rpc/admin.customAttribute.setEnabled", async ({ request }) => {
+        requests.push(await request.json());
+        definitions = [{ ...locationAttribute, displayName: "办公区域", enabled: false }];
+        return HttpResponse.json([{ result: { data: { changed: true, result: null } } }]);
+      }),
+    );
+    const { user } = renderPage();
+    await screen.findByText(adminUserSearchResult.result[0].name);
+    await user.click(screen.getByRole("button", { name: "自定义属性" }));
+    const drawer = within(await screen.findByRole("dialog", { name: "自定义属性定义" }));
+    await drawer.findByText("暂无自定义属性定义");
+    await user.click(drawer.getByRole("button", { name: "新建属性定义" }));
+    await user.type(drawer.getByRole("textbox", { name: /属性编码/ }), "office_location");
+    await user.type(drawer.getByRole("textbox", { name: /显示名称/ }), "办公地点");
+    await user.click(drawer.getByRole("button", { name: "保存定义" }));
+    expect(await drawer.findByText("办公地点")).toBeInTheDocument();
+    await user.click(drawer.getByRole("button", { name: "编辑定义" }));
+    expect(drawer.getByRole("textbox", { name: /属性编码/ })).toBeDisabled();
+    const label = drawer.getByRole("textbox", { name: /显示名称/ });
+    await user.clear(label);
+    await user.type(label, "办公区域");
+    await user.click(drawer.getByRole("button", { name: "保存定义" }));
+    expect(await drawer.findByText("办公区域")).toBeInTheDocument();
+    await user.click(drawer.getByRole("button", { name: "停用" }));
+    expect(await drawer.findByText("已停用")).toBeInTheDocument();
+    expect(requests).toMatchObject([
+      { "0": { entityType: "user", code: "office_location", valueType: "text", displayName: "办公地点" } },
+      { "0": { entityType: "user", code: "office_location", patch: { displayName: "办公区域" } } },
+      { "0": { entityType: "user", code: "office_location", enabled: false } },
+    ]);
+  });
+
+  it("fills a configured attribute on create and clears it from user details", async () => {
+    const createRequests = mutation("create", {
+      changed: true,
+      result: { username: "created-user", user: { username: "created-user" }, generatedPassword: null },
+    });
+    const updateRequests = mutation("update", { changed: true, result: null });
+    server.use(
+      http.get("*/rpc/admin.customAttribute.list", () =>
+        HttpResponse.json([{ result: { data: [locationAttribute] } }]),
+      ),
+    );
+    const { user } = renderPage({
+      ...adminUserDetail,
+      username: "created-user",
+      customAttributeDefinitions: [{ ...locationAttribute, options: [] }],
+      customAttributes: { office_location: "总部" },
+    });
+    await screen.findByText(adminUserSearchResult.result[0].name);
+    await user.click(screen.getByRole("button", { name: "新建用户" }));
+    const form = within(await screen.findByRole("dialog", { name: "新建用户" }));
+    await user.type(form.getByRole("textbox", { name: "用户名" }), "created-user");
+    await user.type(form.getByRole("textbox", { name: "姓名" }), "新用户");
+    await user.click(form.getAllByRole("combobox")[0]);
+    await user.click(await screen.findByText("正式员工", { selector: ".ant-select-item-option-content" }));
+    await user.type(await form.findByRole("textbox", { name: "办公地点" }), "总部");
+    await user.click(form.getByRole("button", { name: "确 定" }));
+    expect(await screen.findByText("总部")).toBeInTheDocument();
+    expect(createRequests).toMatchObject([{ "0": { customAttributes: { office_location: "总部" } } }]);
+    await user.click(await screen.findByRole("button", { name: /编\s*辑/ }));
+    const profile = within(screen.getByRole("region", { name: "基本信息" }));
+    const location = await profile.findByRole("textbox", { name: "办公地点" });
+    expect(location).toHaveValue("总部");
+    await user.clear(location);
+    await user.click(profile.getByRole("button", { name: /保\s*存/ }));
+    await waitFor(() =>
+      expect(updateRequests).toEqual([
+        {
+          "0": { username: "created-user", data: { customAttributes: { office_location: null } } },
+        },
+      ]),
+    );
+  });
+
   it("saves only edited fields in the detail and refreshes the detail and list", async () => {
     const requests = mutation("update", { changed: true, result: null });
     const { user, searches, details } = renderPage();

@@ -10,6 +10,7 @@ const descriptor: RunDescriptor = {
   gatewayPort: 43123,
   origin: "http://127.0.0.1:43123",
   artifactDirectory: "C:/tmp/iam-e2e/oidc-journey-01",
+  resourceRecord: "test-results/integration/oidc-journey-01/run.json",
   labels: {
     "com.docker.compose.project": "iam-e2e-oidc-journey-01",
     "com.shgas-iam.e2e.run-id": "oidc-journey-01",
@@ -40,6 +41,7 @@ describe("OIDC PKCE journey operations", () => {
     expect(new Set(checkedPaths.map((path) => path.replaceAll("\\", "/")))).toEqual(
       new Set([
         "D:/repo/e2e/system/oidc-pkce.spec.ts",
+        "D:/repo/e2e/system/directory-custom-attributes.spec.ts",
         "D:/repo/e2e/system/wecom-qr.spec.ts",
         "D:/repo/e2e/system/wecom-qr-oidc.spec.ts",
         "D:/repo/e2e/system/wecom-qr-binding.spec.ts",
@@ -67,6 +69,7 @@ describe("OIDC PKCE journey operations", () => {
       IAM_E2E_JOURNEY: "oidc",
       IAM_E2E_ORIGIN: descriptor.origin,
       IAM_E2E_RUN_ID: descriptor.runId,
+      IAM_E2E_RESOURCE_RECORD: descriptor.resourceRecord,
       IAM_E2E_ADMIN_USERNAME: "e2e-admin-oidc-journey-01",
       IAM_E2E_DELEGATEE_USERNAME: "e2e-delegatee-oidc-journey-01",
       IAM_E2E_HR_ADMIN_USERNAME: "e2e-hr-admin-oidc-journey-01",
@@ -75,6 +78,7 @@ describe("OIDC PKCE journey operations", () => {
       IAM_E2E_OIDC_REDIRECT_URI: "http://127.0.0.1:43123/e2e/oidc/callback",
       IAM_E2E_INTERNAL_API_KEY: "iam-e2e-internal-api-key-oidc-journey-01",
       IAM_E2E_ORGANIZATION_CODE: "e2e-org-oidc-journey-01",
+      IAM_E2E_POSITION_CODE: "e2e-pos-oidc-journey-01",
       IAM_E2E_GLOBAL_POSITION_CODE: "e2e-global-pos-oidc-journey-01",
       IAM_E2E_PLAYWRIGHT_OUTPUT_DIR: playwrightStagingDirectory(descriptor),
     });

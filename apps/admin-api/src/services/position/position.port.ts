@@ -1,18 +1,22 @@
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
+import type {
+  CustomAttributeDefinitionReader,
+  CustomAttributeValueWritePort,
+} from "@admin-api/services/custom-attribute/custom-attribute.port";
 import type { UnitOfWorkPort } from "@iam/unit-of-work";
 import type {
   Position,
-  PositionCreateDto,
+  PositionCreateValues,
   PositionFuzzyQueryDto,
   PositionMemberCountDetail,
   PositionSearchResult,
-  PositionUpdateDto,
+  PositionUpdateValues,
 } from "./position.type";
 
 export interface AdminPositionTransactionStorePort {
   lockPositionByCode: (posCode: string) => Promise<Position | null>;
-  setPosition: (input: PositionCreateDto) => Promise<Position | null>;
-  updatePositionByCode: (posCode: string, input: PositionUpdateDto) => Promise<Position | null>;
+  setPosition: (input: PositionCreateValues) => Promise<Position | null>;
+  updatePositionByCode: (posCode: string, input: PositionUpdateValues) => Promise<Position | null>;
   countOpenEmploymentsByPosCode: (posCode: string) => Promise<number>;
   softDeletePositionByCode: (posCode: string) => Promise<Position | null>;
 }
@@ -29,6 +33,7 @@ export interface AdminPositionProfileChange {
 
 export interface AdminPositionTransactionPorts {
   positionRepository: AdminPositionTransactionStorePort;
+  customAttributeDefinitions: CustomAttributeValueWritePort;
   auditService: AuditLogWriterPort;
   userDocumentInvalidation: {
     recordChanges: (changes: readonly AdminPositionProfileChange[]) => Promise<void>;
@@ -39,5 +44,6 @@ export type AdminPositionUnitOfWorkPort = UnitOfWorkPort<AdminPositionTransactio
 
 export interface AdminPositionServiceDeps {
   positionRepository: AdminPositionReaderPort;
+  customAttributeDefinitions: CustomAttributeDefinitionReader;
   uow: AdminPositionUnitOfWorkPort;
 }

@@ -1,5 +1,7 @@
 import { OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
-import { boolean, index, integer, snakeCase, text } from "drizzle-orm/pg-core";
+import { type CustomAttributeValues, CustomAttributeValuesSchema } from "@iam/contracts/custom-attributes";
+import { sql } from "drizzle-orm";
+import { boolean, check, index, integer, jsonb, snakeCase, text } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "zod";
 import { baseColumns } from "../_shard/base-columns";
@@ -18,25 +20,32 @@ export const organizations = snakeCase.table(
     orderNum: integer().notNull().default(0),
     isVirtual: boolean().notNull().default(false),
     isEntity: boolean().notNull().default(false),
+    customAttributes: jsonb().$type<CustomAttributeValues>().notNull().default(sql`'{}'::jsonb`),
     status: integer().$type<OrganizationStatus>().notNull().default(OrganizationStatus.Enable),
     isDelete: baseColumns.isDelete,
     createTime: baseColumns.createTime,
     updateTime: baseColumns.updateTime,
   },
-  (table) => [index("idx_parentId").on(table.parentId)],
+  (table) => [
+    index("idx_parentId").on(table.parentId),
+    check("organization_custom_attributes_object_check", sql`jsonb_typeof(${table.customAttributes}) = 'object'`),
+  ],
 );
 
 export const selectOrganizationSchema = createSelectSchema(organizations, {
+  customAttributes: () => CustomAttributeValuesSchema,
   level: () => z.enum(OrganizationLevel),
   orgType: () => z.enum(OrganizationType),
   status: () => z.enum(OrganizationStatus),
 });
 export const insertOrganizationSchema = createInsertSchema(organizations, {
+  customAttributes: () => CustomAttributeValuesSchema,
   level: () => z.enum(OrganizationLevel),
   orgType: () => z.enum(OrganizationType),
   status: () => z.enum(OrganizationStatus),
 }).omit({ id: true, createTime: true, updateTime: true, isDelete: true });
 export const updateOrganizationSchema = createUpdateSchema(organizations, {
+  customAttributes: () => CustomAttributeValuesSchema,
   level: () => z.enum(OrganizationLevel),
   orgType: () => z.enum(OrganizationType),
   status: () => z.enum(OrganizationStatus),

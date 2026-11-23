@@ -3,10 +3,13 @@ import { createAdminMutation, runAdminSubjectAccessMutation } from "@admin-api/s
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildAdminUserAudit } from "@admin-api/services/audit/events/user.audit";
+import { prepareCustomAttributeWrite } from "@admin-api/services/custom-attribute/custom-attribute-values";
 import { EmploymentDetailDtoSchema, toEmploymentDto } from "@admin-api/services/employment/employment.schema";
-import { UserDetailDtoSchema, UserDtoSchema } from "@admin-api/services/user/user.schema";
+import { UserDtoSchema, UserProfileDetailSchema } from "@admin-api/services/user/user.schema";
 import { ApiErrorCode, EmploymentStatus, UserStatus } from "@iam/contracts";
+import { CustomAttributeDefinitionSchema } from "@iam/contracts/custom-attributes";
 import { HttpStatusCodes } from "@iam/contracts/http";
+import { selectActiveCustomAttributeValues } from "@iam/domain/custom-attributes";
 import {
   UserHasOpenClientDelegationError,
   UserHasOpenEmploymentError,
@@ -64,12 +67,23 @@ export function createUserService(deps: AdminUserServiceDeps) {
     return auditContext.principalSessionId ?? undefined;
   }
 
-  async function getUserDetailByUsernameForAdmin(username: string): Promise<UserDetailDto> {
+  async function getUserDetailByUsernameForAdmin(
+    username: string,
+    includeCustomAttributes = false,
+  ): Promise<UserDetailDto> {
     const user = await deps.userRepository.getUserByUsernameForAdmin(username);
     if (user === null) {
       throw new UserNotFoundError("用户不存在");
     }
-    return await getUserDetailForAdmin(user);
+    const detail = await getUserDetailForAdmin(user);
+    if (includeCustomAttributes) {
+      const definitions = await deps.customAttributeDefinitions.list("user", true);
+      detail.customAttributeDefinitions = definitions.map((definition) =>
+        CustomAttributeDefinitionSchema.parse(definition),
+      );
+      detail.customAttributes = selectActiveCustomAttributeValues(user.customAttributes ?? {}, definitions);
+    }
+    return detail;
   }
 
   async function getUserDetailForPermittedAdmin(
@@ -84,8 +98,8 @@ export function createUserService(deps: AdminUserServiceDeps) {
     return detail;
   }
 
-  async function getUserDetailForAdmin(user: Parameters<typeof UserDetailDtoSchema.parse>[0]) {
-    const userDto = UserDetailDtoSchema.parse(user);
+  async function getUserDetailForAdmin(user: User): Promise<UserDetailDto> {
+    const userDto = UserProfileDetailSchema.parse(user);
     const employments = await deps.employmentRepository.getAllEmploymentsByUserIdForAdmin(userDto.id);
     const rolesByEmployment = await deps.roleAssignmentResolver.resolveEffectiveRoles({
       employmentIds: employments.map((employment) => employment.id),
@@ -147,6 +161,12 @@ export function createUserService(deps: AdminUserServiceDeps) {
                 if (existing !== null) {
                   throw new UsernameAlreadyExistsError("用户名已存在");
                 }
+                const attributes = await prepareCustomAttributeWrite(
+                  tx.customAttributeDefinitions,
+                  "user",
+                  {},
+                  dto.customAttributes,
+                );
                 const plainPassword = dto.password ?? deps.random.password(8);
                 const passwordHash = await deps.passwordHasher.hashPassword(plainPassword);
                 const createdUser = await tx.userRepository.setUserForAdmin({
@@ -159,6 +179,7 @@ export function createUserService(deps: AdminUserServiceDeps) {
                   status: dto.status ?? UserStatus.Enable,
                   orderNum: dto.orderNum ?? 0,
                   subjectIdentifier,
+                  ...(attributes.changes.length > 0 ? { customAttributes: attributes.values } : {}),
                 });
                 if (createdUser === null) throw new Error("User insert returned no row");
                 await tx.auditService.recordAuditLog(
@@ -171,6 +192,7 @@ export function createUserService(deps: AdminUserServiceDeps) {
                       status: dto.status ?? UserStatus.Enable,
                       orderNum: dto.orderNum ?? 0,
                       passwordProvided: dto.password !== undefined,
+                      ...(attributes.changes.length > 0 ? { customAttributeChanges: attributes.changes } : {}),
                     },
                     auditContext,
                   ),
@@ -203,7 +225,18 @@ export function createUserService(deps: AdminUserServiceDeps) {
     authorization?: AdminUserAuthorization,
     authorizationAction: "editProfile" | "changeStatus" = "editProfile",
   ) {
-    if (!Object.values(data).some((value) => value !== undefined))
+    const { customAttributes, ...profilePatch } = data;
+    if (customAttributes !== undefined && authorization?.kind === "scoped") {
+      authorization.denyMutation({
+        operationId: "admin.user.update",
+        resourceIdentifier: username,
+        reason: "ACTION_NOT_GRANTED",
+      });
+    }
+    if (
+      Object.keys(customAttributes ?? {}).length === 0 &&
+      !Object.values(profilePatch).some((value) => value !== undefined)
+    )
       throw new BadRequestError("至少提交一个用户更新字段");
     const existing =
       authorization?.kind === "scoped" && data.status !== undefined
@@ -220,13 +253,22 @@ export function createUserService(deps: AdminUserServiceDeps) {
         async (tx, current) => {
           const mutation = async () => {
             await assertUserActionAllowed(tx.userRepository, current, authorization, authorizationAction);
-            const changed =
-              (data.name !== undefined && data.name !== current.name) ||
-              (data.mobile !== undefined && data.mobile !== current.mobile) ||
-              (data.userType !== undefined && data.userType !== current.userType) ||
-              (data.status !== undefined && data.status !== current.status) ||
-              (data.orderNum !== undefined && data.orderNum !== current.orderNum);
-            const updatedUser = changed ? await tx.userRepository.updateUserByUsername(username, data) : current;
+            const attributes = await prepareCustomAttributeWrite(
+              tx.customAttributeDefinitions,
+              "user",
+              current.customAttributes ?? {},
+              customAttributes,
+            );
+            const changes = {
+              name: profilePatch.name !== current.name ? profilePatch.name : undefined,
+              mobile: profilePatch.mobile !== current.mobile ? profilePatch.mobile : undefined,
+              userType: profilePatch.userType !== current.userType ? profilePatch.userType : undefined,
+              status: profilePatch.status !== current.status ? profilePatch.status : undefined,
+              orderNum: profilePatch.orderNum !== current.orderNum ? profilePatch.orderNum : undefined,
+              customAttributes: attributes.changes.length > 0 ? attributes.values : undefined,
+            };
+            const changed = Object.values(changes).some((value) => value !== undefined);
+            const updatedUser = changed ? await tx.userRepository.updateUserByUsername(username, changes) : current;
             if (updatedUser === null) {
               if (authorization?.kind === "scoped") {
                 authorization.denyMutation({
@@ -243,8 +285,9 @@ export function createUserService(deps: AdminUserServiceDeps) {
                   userMutationActions[authorizationAction].auditAction,
                   updatedUser,
                   {
-                    patch: data,
+                    patch: profilePatch,
                     changed,
+                    ...(attributes.changes.length > 0 ? { customAttributeChanges: attributes.changes } : {}),
                   },
                   auditContext,
                 ),

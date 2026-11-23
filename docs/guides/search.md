@@ -61,6 +61,21 @@ select 使用公开字段路径数组，例如用户请求 `{"select":["name","m
 选择父对象或数组字段返回其完整公开子树，重复路径合并，父路径覆盖子路径。
 需要完整文档时显式选择公开 schema 的全部根字段；默认值只用于省略 select。
 
+自定义属性按整个 `customAttributes` 对象选择。组织搜索选 `customAttributes`，用户搜索可同时选择用户和有效任职对象的属性。
+
+```json
+{
+  "select": [
+    "username",
+    "customAttributes",
+    "employments.organization.customAttributes",
+    "employments.position.customAttributes"
+  ]
+}
+```
+
+属性对象以稳定编码索引已发布值。未填写的键和没有值的属性对象省略。筛选和排序使用既有目录字段。
+
 select 去重后最多 64 个路径。空数组、非法或内部路径、通配符、别名、计算字段、数组索引和切片均返回 422。
 服务按认证 Client 生成公开内容后裁剪字段。文档完整性校验见[处理结果](#处理结果)。
 本次响应和默认字段直接切换，调用方应读取 data.items，不保留旧数组格式。

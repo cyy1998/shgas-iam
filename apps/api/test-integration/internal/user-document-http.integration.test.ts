@@ -388,6 +388,86 @@ test("select preserves all employments, paths, nulls and empty arrays after Clie
   });
 });
 
+test("Internal selects published custom attribute objects while preserving legacy summaries and query fields", async () => {
+  const row = publication(1);
+  const legacy = publication(2);
+  const organization = {
+    code: "DIRECT",
+    name: "Direct",
+    type: OrganizationType.Department,
+    path: [{ code: "DIRECT", name: "Direct", type: OrganizationType.Department, level: 1, distanceToTarget: 0 }],
+    customAttributes: { cost_center: 0 },
+  };
+  await pg.db.insert(userDocuments).values([
+    {
+      ...row,
+      document: {
+        ...row.document,
+        customAttributes: { remote: false, sites: ["second", "first"] },
+        employments: [
+          {
+            isPrimary: true,
+            organization,
+            position: { code: "POS", name: "Position", customAttributes: { grade: "senior" } },
+            responsibilities: [],
+            clientAuthorizations: [],
+          },
+        ],
+      },
+    },
+    legacy,
+  ]);
+  const chosen = await request("/search-dsl", {
+    select: ["customAttributes", "employments.organization.customAttributes", "employments.position.customAttributes"],
+  });
+  expect(chosen.status).toBe(200);
+  expect(chosen.body.data.items).toEqual([
+    {
+      customAttributes: { remote: false, sites: ["second", "first"] },
+      employments: [
+        {
+          organization: { customAttributes: { cost_center: 0 } },
+          position: { customAttributes: { grade: "senior" } },
+        },
+      ],
+    },
+    { employments: [] },
+  ]);
+  const current = await request("/user-1");
+  expect(current.status).toBe(200);
+  expect(current.body.data).toMatchObject({
+    customAttributes: { remote: false, sites: ["second", "first"] },
+    employments: [{ organization, position: { customAttributes: { grade: "senior" } } }],
+  });
+  const prior = await request("/user-2");
+  expect(prior.status).toBe(200);
+  expect(prior.body.data).not.toHaveProperty("customAttributes");
+  const defaults = await request("/search-dsl", {});
+  expect(defaults.body.data.items).toEqual([
+    { subjectIdentifier: row.subjectIdentifier, username: "user-1" },
+    { subjectIdentifier: legacy.subjectIdentifier, username: "user-2" },
+  ]);
+
+  for (const invalid of [
+    { select: ["customAttributes.remote"] },
+    { select: ["employments.organization.path.customAttributes"] },
+    { filter: { field: "customAttributes.remote", op: "eq", value: false } },
+    {
+      filter: {
+        exists: {
+          path: "employments",
+          where: { field: "organization.customAttributes.cost_center", op: "eq", value: 0 },
+        },
+      },
+    },
+    { sort: [{ field: "customAttributes", direction: "asc" }] },
+    { sort: [{ field: "customAttributes.remote", direction: "asc" }] },
+  ]) {
+    const rejected = await request("/search-dsl", invalid);
+    expect(rejected.status).toBe(422);
+  }
+});
+
 function createPublicationFixture() {
   const redisUrl = process.env.IAM_API_TEST_REDIS_URL;
   if (!redisUrl) throw new Error("IAM_API_TEST_REDIS_URL is required");

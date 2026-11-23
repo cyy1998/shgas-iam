@@ -4,17 +4,19 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
+import { createCustomAttributeAdapter } from "@admin-api/routes/admin/custom-attribute/custom-attribute.index";
 import { createUserAdapter } from "@admin-api/routes/admin/user/user.adapter";
 import { createUserRoute } from "@admin-api/routes/admin/user/user.index";
 import { createAdminAuthorizationContextHandler } from "@admin-api/services/admin-authorization/admin-authorization.context";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import { AdminMutationCommittedError } from "@admin-api/services/admin-mutation/admin-mutation";
+import { createCustomAttributeDefinitionService } from "@admin-api/services/custom-attribute/custom-attribute.service";
 import type { AdminUserTransactionPorts } from "@admin-api/services/user/user.port";
 import { createUserService } from "@admin-api/services/user/user.service";
 import { createCreateEmploymentUseCase } from "@admin-api/use-cases/employment/create-employment/create-employment.use-case";
 import { createEndEmploymentUseCase } from "@admin-api/use-cases/employment/end-employment/end-employment.use-case";
 import { createErrorHandler } from "@iam/api-core/middlewares";
-import { createTRPCContext } from "@iam/api-core/trpc";
+import { createTRPCContext, router } from "@iam/api-core/trpc";
 import {
   ApiErrorCode,
   ClientDelegationStatus,
@@ -24,6 +26,7 @@ import {
   UserStatus,
   UserType,
 } from "@iam/contracts";
+import type { CustomAttributeDefinition } from "@iam/contracts/custom-attributes";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import {
   auditLogs,
@@ -50,7 +53,10 @@ import { Hono } from "hono";
 import { addTestAdminAuthorizationMiddleware } from "../../src/testing/admin-authorization";
 import type { AdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";
-import { createUserDocumentSourceConsumer } from "../support/user-document-workflow";
+import {
+  createUserDocumentPublicationFixture,
+  createUserDocumentSourceConsumer,
+} from "../support/user-document-workflow";
 
 let harness: AdminApiPostgresTestHarness;
 beforeAll(async () => {
@@ -118,8 +124,18 @@ function createCommand(
     revokeUserSessions,
     warn,
     random,
+    definitions: createCustomAttributeDefinitionService({
+      reader: repositories.customAttribute,
+      uow: mapUnitOfWork(uow, (tx) => ({
+        definitions: tx.repositories.customAttribute,
+        audit: tx.auditService,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
+        organizationDocumentInvalidation: tx.organizationDocumentInvalidation,
+      })),
+    }),
     service: createUserService({
       userRepository: repositories.user,
+      customAttributeDefinitions: repositories.customAttribute,
       employmentRepository: repositories.employment,
       roleAssignmentResolver: { resolveEffectiveRoles: async () => new Map() },
       roleRepository: repositories.role,
@@ -143,6 +159,7 @@ function createCommand(
       uow: mapUnitOfWork(uow, (tx) =>
         decorate({
           userRepository: tx.repositories.user,
+          customAttributeDefinitions: tx.repositories.customAttribute,
           auditService: tx.auditService,
           subjectAccessMutation: tx.subjectAccessMutation,
           userDocumentInvalidation: tx.userDocumentInvalidation,
@@ -157,6 +174,7 @@ const userWriteProtocols: UserWriteProtocol[] = ["REST", "tRPC"];
 
 function createUserWriteApp(command = createCommand(), hrOrganizationId?: number) {
   const adapter = createUserAdapter({ userService: command.service, random: command.random });
+  const definitions = createCustomAttributeAdapter(command.definitions);
   const app = new Hono();
   app.onError(createErrorHandler({ info() {}, warn() {}, error() {} }));
   addTestAdminAuthorizationMiddleware(app, hrOrganizationId === undefined ? ["iam:admin"] : ["iam:hr-admin"]);
@@ -177,15 +195,37 @@ function createUserWriteApp(command = createCommand(), hrOrganizationId?: number
     );
   }
   app.route("/admin", createUserRoute(adapter));
+  app.route("/admin", definitions.rest);
+  const definitionRouter = router({ admin: router({ customAttribute: definitions.trpc }) });
   app.all("/rpc/*", (c) =>
     fetchRequestHandler({
       endpoint: "/rpc",
       req: c.req.raw,
-      router: adapter.userAdminRouter,
+      router: c.req.path.startsWith("/rpc/admin.customAttribute.") ? definitionRouter : adapter.userAdminRouter,
       createContext: () => createTRPCContext({ honoCtx: c }),
     }),
   );
   return { app, command };
+}
+
+const userDefinition = (code: string, valueType: CustomAttributeDefinition["valueType"]) => ({
+  entityType: "user" as const,
+  code,
+  valueType,
+  displayName: code,
+});
+
+async function createDefinition(app: Hono, definition: Record<string, unknown>) {
+  const response = await requestDefinition(app, "", definition);
+  expect(response.status).toBe(200);
+}
+
+function requestDefinition(app: Hono, action: string, input: Record<string, unknown>) {
+  return app.request(`/admin/custom-attribute-definitions${action}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
 }
 
 function requestUserUnlinkWecom(app: Hono, protocol: UserWriteProtocol, username: string) {
@@ -496,15 +536,18 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
       await seedDelegation(user.id, "delegatee", ClientDelegationStatus.Enable, "past");
       const command = createCommand(undefined, undefined, stableStore(user.subjectIdentifier));
       const adapter = createUserAdapter({ userService: command.service, random: command.random });
+      const definitions = createCustomAttributeAdapter(command.definitions);
       const app = new Hono();
       app.onError(createErrorHandler({ info() {}, warn() {}, error() {} }));
       addTestAdminAuthorizationMiddleware(app);
       app.route("/admin", createUserRoute(adapter));
+      app.route("/admin", definitions.rest);
+      const definitionRouter = router({ admin: router({ customAttribute: definitions.trpc }) });
       app.all("/rpc/*", (c) =>
         fetchRequestHandler({
           endpoint: "/rpc",
           req: c.req.raw,
-          router: adapter.userAdminRouter,
+          router: c.req.path.startsWith("/rpc/admin.customAttribute.") ? definitionRouter : adapter.userAdminRouter,
           createContext: () => createTRPCContext({ honoCtx: c }),
         }),
       );
@@ -867,7 +910,353 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
   }
 });
 
+describe("User custom attributes through Admin and PostgreSQL", () => {
+  test("publishes user attributes and preserves their exact values in Subject Facts", async () => {
+    const { app } = createUserWriteApp();
+    await createDefinition(app, userDefinition("remote", "boolean"));
+    const username = "attribute-target";
+    const created = await requestUserCreate(app, "REST", { username, name: "Target", userType: UserType.Formal });
+    expect(created.status).toBe(200);
+
+    const publication = createUserDocumentPublicationFixture(harness.db);
+    await publication.publishPending();
+    const before = await publication.get(username);
+    expect(before.customAttributes).toBeUndefined();
+
+    const changed = await requestUserUpdate(app, "REST", username, { customAttributes: { remote: false } });
+    expect(changed.status).toBe(200);
+    const current = await app.request(`/admin/users/${username}`);
+    const detail = await current.json();
+    expect(detail).toMatchObject({ data: { customAttributes: { remote: false } } });
+    const prior = await publication.get(username);
+    expect(prior).toEqual(before);
+
+    await publication.publishPending();
+    const published = await publication.get(username);
+    expect(published.customAttributes).toEqual({ remote: false });
+    expect(publication.facts.get(published.subjectIdentifier ?? "")).toMatchObject({
+      facts: { profile: { customAttributes: { remote: false } } },
+    });
+
+    for (const enabled of [false, true]) {
+      const toggled = await requestDefinition(app, "/enabled", { entityType: "user", code: "remote", enabled });
+      expect(toggled.status).toBe(200);
+      const prior = await publication.get(username);
+      expect(prior.customAttributes).toEqual(enabled ? undefined : { remote: false });
+      await publication.publishPending();
+      const next = await publication.get(username);
+      expect(next.customAttributes).toEqual(enabled ? { remote: false } : undefined);
+    }
+    const cleared = await requestUserUpdate(app, "REST", username, { customAttributes: { remote: null } });
+    expect(cleared.status).toBe(200);
+    await publication.publishPending();
+    const afterClear = await publication.get(username);
+    expect(afterClear).toEqual(before);
+  });
+
+  test("persists six optional types and redacts value content from audit", async () => {
+    const { app } = createUserWriteApp();
+    for (const [code, valueType] of [
+      ["building", "text"],
+      ["desk", "number"],
+      ["remote", "boolean"],
+      ["start", "date"],
+      ["zone", "single_select"],
+      ["sites", "text_list"],
+    ] as const) {
+      await createDefinition(app, {
+        ...userDefinition(code, valueType),
+        ...(code === "zone" ? { options: [{ code: "north", displayName: "北区", enabled: true }] } : {}),
+      });
+    }
+    const values = {
+      building: "private room",
+      desk: 0,
+      remote: false,
+      start: "2024-02-29",
+      zone: "north",
+      sites: ["Building Z", "Building A", "Building Z"],
+    };
+    const created = await requestUserCreate(app, "REST", {
+      username: "attribute-target",
+      name: "Target",
+      userType: UserType.Formal,
+      customAttributes: values,
+    });
+    expect(created.status).toBe(200);
+    const detail = await app.request("/admin/users/attribute-target");
+    expect(detail.status).toBe(200);
+    expect(await detail.json()).toMatchObject({ data: { customAttributes: values } });
+    const empty = await requestUserUpdate(app, "REST", "attribute-target", { customAttributes: {} });
+    expect(empty.status).toBe(400);
+    expect(await empty.json()).toMatchObject({ message: "至少提交一个用户更新字段" });
+    const same = await requestUserUpdate(app, "REST", "attribute-target", { customAttributes: values });
+    expect(await same.json()).toMatchObject({ data: { changed: false } });
+    const invalid = await requestUserUpdate(app, "tRPC", "attribute-target", {
+      name: "must roll back",
+      customAttributes: { building: "must roll back too", start: "2026-02-29" },
+    });
+    expect(invalid.status).toBe(400);
+    for (const customAttributes of [
+      { building: 1 },
+      { desk: "0" },
+      { remote: "false" },
+      { zone: "not_an_option" },
+      { sites: "Building Z" },
+    ]) {
+      const response = await requestUserUpdate(app, "REST", "attribute-target", { customAttributes });
+      expect(response.status).toBe(400);
+    }
+    const nonFinite = await app.request("/admin/users/attribute-target", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: '{"customAttributes":{"desk":1e999}}',
+    });
+    expect(nonFinite.status).toBe(422);
+    const unchanged = await app.request("/admin/users/attribute-target");
+    expect(await unchanged.json()).toMatchObject({ data: { name: "Target", customAttributes: values } });
+    const cleared = await requestUserUpdate(app, "tRPC", "attribute-target", {
+      name: "Updated target",
+      customAttributes: { building: "", zone: null, sites: [] },
+    });
+    expect(cleared.status).toBe(200);
+    const current = await app.request("/admin/users/attribute-target");
+    expect(await current.json()).toMatchObject({
+      data: { name: "Updated target", customAttributes: { desk: 0, remote: false, start: "2024-02-29" } },
+    });
+    const currentRow = await harness.db.query.users.findFirst({ where: { username: "attribute-target" } });
+    expect(currentRow?.customAttributes).toEqual({ desk: 0, remote: false, start: "2024-02-29" });
+    const audit = (await harness.db.select().from(auditLogs).orderBy(auditLogs.id)).filter(
+      ({ targetType }) => targetType === "user",
+    );
+    expect(audit.map(({ action }) => action)).toEqual(["admin.user.create", "admin.user.update"]);
+    expect(audit[0]).toMatchObject({
+      targetCode: "attribute-target",
+      details: {
+        customAttributeChanges: [
+          { attributeCode: "building", action: "set" },
+          { attributeCode: "desk", action: "set" },
+          { attributeCode: "remote", action: "set" },
+          { attributeCode: "start", action: "set" },
+          { attributeCode: "zone", action: "set" },
+          { attributeCode: "sites", action: "set" },
+        ],
+      },
+    });
+    expect(audit[1]).toMatchObject({
+      details: {
+        customAttributeChanges: [
+          { attributeCode: "building", action: "clear" },
+          { attributeCode: "zone", action: "clear" },
+          { attributeCode: "sites", action: "clear" },
+        ],
+      },
+    });
+    expect(JSON.stringify(audit)).not.toMatch(/private room|2024-02-29|Building Z|Building A|must roll back/u);
+  });
+
+  test("validates definition identity, option availability and definition reactivation", async () => {
+    const { app } = createUserWriteApp();
+    await seedUser();
+    const key = { entityType: "user", code: "zone" };
+    await createDefinition(app, {
+      ...userDefinition("zone", "single_select"),
+      options: [{ code: "north", displayName: "北区", enabled: true }],
+    });
+    const duplicate = await requestDefinition(app, "", userDefinition("zone", "text"));
+    expect(duplicate.status).toBe(409);
+    await createDefinition(app, { ...userDefinition("zone", "text"), entityType: "position" });
+    const immutable = await requestDefinition(app, "/update", { ...key, patch: { valueType: "text" } });
+    expect(immutable.status).toBe(422);
+    const assigned = await requestUserUpdate(app, "REST", "user", { customAttributes: { zone: "north" } });
+    expect(assigned.status).toBe(200);
+    const edited = await requestDefinition(app, "/update", {
+      ...key,
+      patch: {
+        displayName: "办公区域",
+        description: "工作地点所在区域",
+        orderNum: -3,
+        options: [
+          { code: "north", displayName: "北区旧址", enabled: false },
+          { code: "south", displayName: "南区", enabled: true },
+        ],
+      },
+    });
+    expect(edited.status).toBe(200);
+    const listed = await app.request("/admin/custom-attribute-definitions/user");
+    expect(await listed.json()).toMatchObject({
+      data: [{ ...key, valueType: "single_select", displayName: "办公区域" }],
+    });
+    const retained = await requestUserUpdate(app, "REST", "user", { customAttributes: { zone: "north" } });
+    expect(await retained.json()).toMatchObject({ data: { changed: false } });
+    const invalidNew = await requestUserCreate(app, "tRPC", {
+      username: "other-user",
+      name: "Other",
+      userType: UserType.Formal,
+      customAttributes: { zone: "north" },
+    });
+    expect(invalidNew.status).toBe(400);
+    const readActive = await app.request("/admin/users/user");
+    expect(await readActive.json()).toMatchObject({
+      data: {
+        customAttributes: { zone: "north" },
+        customAttributeDefinitions: [
+          {
+            displayName: "办公区域",
+            description: "工作地点所在区域",
+            orderNum: -3,
+            options: [
+              { code: "north", displayName: "北区旧址", enabled: false },
+              { code: "south", enabled: true },
+            ],
+          },
+        ],
+      },
+    });
+    const disabled = await requestDefinition(app, "/enabled", { ...key, enabled: false });
+    expect(disabled.status).toBe(200);
+    const disabledValue = await requestUserUpdate(app, "REST", "user", { customAttributes: { zone: "south" } });
+    expect(disabledValue.status).toBe(400);
+    const hidden = await app.request("/admin/users/user");
+    expect(await hidden.json()).toMatchObject({ data: { customAttributes: {}, customAttributeDefinitions: [] } });
+    const reenabled = await requestDefinition(app, "/enabled", { ...key, enabled: true });
+    expect(reenabled.status).toBe(200);
+    const shown = await app.request("/admin/users/user");
+    expect(await shown.json()).toMatchObject({ data: { customAttributes: { zone: "north" } } });
+    const cleared = await requestUserUpdate(app, "REST", "user", { customAttributes: { zone: null } });
+    expect(cleared.status).toBe(200);
+    const replaced = await requestUserUpdate(app, "REST", "user", { customAttributes: { zone: "south" } });
+    expect(replaced.status).toBe(200);
+    const operations = (await harness.db.select().from(auditLogs).orderBy(auditLogs.id)).filter(
+      ({ targetType, details }) =>
+        targetType === "custom_attribute_definition" &&
+        details &&
+        typeof details === "object" &&
+        "entityType" in details &&
+        details.entityType === "user",
+    );
+    expect(operations.map(({ action, targetCode }) => [action, targetCode])).toEqual([
+      ["admin.custom_attribute_definition.create", "zone"],
+      ["admin.custom_attribute_definition.update", "zone"],
+      ["admin.custom_attribute_definition.disable", "zone"],
+      ["admin.custom_attribute_definition.enable", "zone"],
+    ]);
+  });
+
+  test("denies HR definition access and hides and protects stored user values", async () => {
+    const command = createCommand();
+    const { app } = createUserWriteApp(command);
+    const hr = createUserWriteApp(command, 1).app;
+    await seedUser();
+    await createDefinition(app, userDefinition("building", "text"));
+    const set = await requestUserUpdate(app, "REST", "user", { customAttributes: { building: "private room" } });
+    expect(set.status).toBe(200);
+    const blockedList = await hr.request("/admin/custom-attribute-definitions/user");
+    const requestInput = encodeURIComponent(JSON.stringify({ entityType: "user" }));
+    const blockedTrpcList = await hr.request(`/rpc/admin.customAttribute.list?input=${requestInput}`);
+    const blockedCreate = await requestDefinition(hr, "", userDefinition("another", "text"));
+    const blockedWrite = await requestUserUpdate(hr, "REST", "user", { customAttributes: { building: null } });
+    expect([blockedList.status, blockedTrpcList.status, blockedCreate.status, blockedWrite.status]).toEqual([
+      403, 403, 403, 403,
+    ]);
+    const hrDetail = await hr.request("/admin/users/user");
+    expect(hrDetail.status).toBe(200);
+    const body = await hrDetail.text();
+    expect(body).not.toMatch(/customAttributes|customAttributeDefinitions|private room/u);
+    const fullDetail = await app.request("/admin/users/user");
+    expect(await fullDetail.json()).toMatchObject({ data: { customAttributes: { building: "private room" } } });
+  });
+
+  test("rolls back the user edit and audit together, then allows an explicit retry", async () => {
+    const { app } = createUserWriteApp();
+    await seedUser();
+    await createDefinition(app, userDefinition("building", "text"));
+    const failedApp = createUserWriteApp(
+      createCommand((tx) => ({
+        ...tx,
+        auditService: {
+          ...tx.auditService,
+          async recordAuditLog(log) {
+            await tx.auditService.recordAuditLog(log);
+            throw new Error("Injected audit failure after writing to the audit log");
+          },
+        },
+      })),
+    ).app;
+    const patch = { name: "Updated", customAttributes: { building: "West" } };
+    const failed = await requestUserUpdate(failedApp, "tRPC", "user", patch);
+    expect(failed.status).toBe(500);
+    const unchanged = await app.request("/admin/users/user");
+    expect(await unchanged.json()).toMatchObject({ data: { name: "Original", customAttributes: {} } });
+    const afterFailure = await facts();
+    expect(afterFailure.audits.map(({ action }) => action)).toEqual(["admin.custom_attribute_definition.create"]);
+    expect(afterFailure.dirty).toEqual([]);
+    const retry = await requestUserUpdate(app, "tRPC", "user", patch);
+    expect(retry.status).toBe(200);
+    const updated = await app.request("/admin/users/user");
+    expect(await updated.json()).toMatchObject({ data: { name: "Updated", customAttributes: { building: "West" } } });
+  });
+
+  test("keeps independently patched keys when two edits overlap", async () => {
+    const command = createCommand();
+    const { app } = createUserWriteApp(command);
+    await seedUser();
+    await createDefinition(app, userDefinition("building", "text"));
+    await createDefinition(app, userDefinition("desk", "number"));
+    const firstHasLock = Promise.withResolvers<void>();
+    const allowFirstSave = Promise.withResolvers<void>();
+    const first = createUserWriteApp(
+      createCommand((tx) => ({
+        ...tx,
+        userRepository: {
+          ...tx.userRepository,
+          async updateUserByUsername(username, data) {
+            firstHasLock.resolve();
+            await allowFirstSave.promise;
+            return await tx.userRepository.updateUserByUsername(username, data);
+          },
+        },
+      })),
+    ).app;
+    const firstWrite = requestUserUpdate(first, "REST", "user", { customAttributes: { building: "West" } });
+    await firstHasLock.promise;
+    const secondTakingLock = Promise.withResolvers<void>();
+    const second = createUserWriteApp(
+      createCommand((tx) => ({
+        ...tx,
+        userRepository: {
+          ...tx.userRepository,
+          async lockUserByUsername(username, includeDeleted) {
+            secondTakingLock.resolve();
+            return await tx.userRepository.lockUserByUsername(username, includeDeleted);
+          },
+        },
+      })),
+    ).app;
+    const secondWrite = requestUserUpdate(second, "tRPC", "user", { customAttributes: { desk: 0 } });
+    await secondTakingLock.promise;
+    allowFirstSave.resolve();
+    const writes = await Promise.all([firstWrite, secondWrite]);
+    expect(writes.map(({ status }) => status)).toEqual([200, 200]);
+    const latest = await app.request("/admin/users/user");
+    expect(await latest.json()).toMatchObject({ data: { customAttributes: { building: "West", desk: 0 } } });
+  });
+});
+
 describe("User mutations through production PostgreSQL UnitOfWork", () => {
+  test.each(userWriteProtocols)("%s rejects unknown custom attributes without creating a user", async (protocol) => {
+    const { app } = createUserWriteApp();
+    const response = await requestUserCreate(app, protocol, {
+      username: "attribute-target",
+      name: "Target",
+      userType: UserType.Formal,
+      customAttributes: { unknown_code: "private value" },
+    });
+    expect(response.status).toBe(400);
+    const user = await harness.db.query.users.findFirst({ where: { username: "attribute-target" } });
+    expect(user).toBeUndefined();
+  });
+
   test.each(userWriteProtocols)("%s unlinks WeCom from a disabled user and audits both results", async (protocol) => {
     const { app, command } = createUserWriteApp();
     const [target] = await harness.db

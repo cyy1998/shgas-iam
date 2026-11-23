@@ -112,7 +112,10 @@ test("formal retirement removes the populated permission source while preserving
   expect(inventory).toEqual({ privilege: null, role_privilege: null, privilege_index: null });
   expect(after).toEqual({
     ...before,
+    users: before.users.map((user) => ({ ...user, custom_attributes: {} })),
     clients: before.clients.map((client) => ({ ...client, admission_enabled: false, admission_filter: null })),
+    organizations: before.organizations.map((organization) => ({ ...organization, custom_attributes: {} })),
+    positions: before.positions.map((position) => ({ ...position, custom_attributes: {} })),
   });
   expect([...(await h.sql`SELECT role_type FROM role ORDER BY id`)]).toEqual([
     { role_type: "client" },

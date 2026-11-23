@@ -7,6 +7,7 @@ import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import { getApiRuntimeErrorFormatterData } from "@iam/api-core/trpc";
 import { OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
+import type { CustomAttributeDefinition } from "@iam/contracts/custom-attributes";
 import type { Organization } from "@iam/domain/organization";
 import type { Context } from "hono";
 import { Hono } from "hono";
@@ -15,9 +16,12 @@ import {
   getTestAdminAuthorizationValue,
 } from "../../../../testing/admin-authorization";
 
-function surface(roles = ["iam:admin"]) {
+function surface(roles = ["iam:admin"], definitions: CustomAttributeDefinition[] = []) {
   const now = new Date("2026-09-07T00:00:00Z");
   let row: Organization | null = null;
+  const updateOrganizationByCode = mock(
+    async (_code: string, data: object) => (row = row ? { ...row, ...data } : null),
+  );
   const repository = {
     getAnyOrganizationByCode: async (code: string) => (row?.orgCode === code ? row : null),
     lockOrganizationByCode: async (code: string) => (row?.orgCode === code && !row.isDelete ? row : null),
@@ -40,7 +44,7 @@ function surface(roles = ["iam:admin"]) {
       };
       return { ...row, parent: null, children: [] };
     },
-    updateOrganizationByCode: async (_code: string, data: object) => (row = row ? { ...row, ...data } : null),
+    updateOrganizationByCode,
     softDeleteOrganizationByCode: async () => (row = row ? { ...row, isDelete: true } : null),
     hasOpenDelegationsByOrganizationId: async () => false,
     countActiveChildrenByOrgCode: async () => 0,
@@ -50,10 +54,12 @@ function surface(roles = ["iam:admin"]) {
   };
   const recordAuditLog = mock(async () => undefined);
   const service = createOrganizationService({
+    customAttributeDefinitions: { list: async () => [] },
     organizationRepository: {} as never,
     responsibilityReader: {} as never,
     uow: createImmediateUnitOfWork({
       organizationRepository: repository,
+      customAttributeDefinitions: { lockForValues: async () => definitions },
       responsibilityParentLifecycle: { assertNoOpenAssignmentsTargetingOrganizationSubtree: async () => undefined },
       auditService: {
         recordAuditLog,
@@ -82,10 +88,45 @@ function surface(roles = ["iam:admin"]) {
     });
     return { status: response.status, body: await response.json() };
   }
-  return { request, caller, recordAuditLog };
+  return { request, caller, recordAuditLog, updateOrganizationByCode };
 }
 
 describe("Organization mutation public adapters", () => {
+  test("REST writes the changed organization fields along with the attribute value", async () => {
+    const { request, updateOrganizationByCode } = surface(
+      ["iam:admin"],
+      [
+        {
+          entityType: "organization",
+          code: "grade",
+          valueType: "number",
+          displayName: "Grade",
+          enabled: true,
+          orderNum: 0,
+          description: null,
+          options: [],
+        },
+      ],
+    );
+    const created = await request("POST", "", {
+      orgCode: "DEV",
+      orgName: "Developer",
+      orgType: OrganizationType.Company,
+    });
+    expect(created.status).toBe(200);
+
+    const result = await request("PUT", "/DEV", {
+      orgCode: "  DEV  ",
+      orgName: "New Developer",
+      status: OrganizationStatus.Enable,
+      customAttributes: { grade: 0 },
+    });
+    expect(result).toMatchObject({ status: 200, body: { data: { changed: true } } });
+    expect(updateOrganizationByCode.mock.calls).toEqual([
+      ["DEV", { orgName: "New Developer", customAttributes: { grade: 0 } }],
+    ]);
+  });
+
   test("REST normalizes organization code and name before creating", async () => {
     const { request } = surface();
     const created = await request("POST", "", {

@@ -320,6 +320,7 @@ function createService(revokeUserSessions: AdminSessionRevocationPort["revokeUse
   };
   const service = createUserService({
     userRepository: repositories.user,
+    customAttributeDefinitions: repositories.customAttribute,
     employmentRepository: repositories.employment,
     roleAssignmentResolver: {
       resolveEffectiveRoles: mock(async () => new Map()),
@@ -334,6 +335,7 @@ function createService(revokeUserSessions: AdminSessionRevocationPort["revokeUse
     subjectAccessLifecycle: subjectAccessLifecycle as never,
     uow: mapUnitOfWork(unitOfWork, (tx) => ({
       userRepository: tx.repositories.user,
+      customAttributeDefinitions: tx.repositories.customAttribute,
       auditService: tx.auditService,
       subjectAccessMutation: {
         async runMutation<T>(

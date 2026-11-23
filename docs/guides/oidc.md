@@ -118,8 +118,14 @@ IAM 按请求的响应模式向已登记的回调返回 `access_denied`、`iss` 
 自定义任职响应包含 `isPrimary`、`organization` 和 `position`，组织与责任目标采用[共用资料结构](README.md#单点登录的共同处理)。角色去重并稳定排序。
 `iam:authorization` 的顶层和各任职仅含角色；不再返回权限点字段或空数组占位。Scope 名称和 allowedScopes 保持不变，无角色时返回空数组。接入应用须适配新响应，并清理或停用旧权限副本。
 不返回数据库 ID、密码、状态、软删除字段或时间戳，也不混入 Custom wire。
-UserInfo 按 Client 当前 allowedScopes 返回字段，范围变化也适用于旧 Token；原请求 scope 和调用方传入的 scope 均不改变该范围。ID Token 内容在签名后固定：显式映射 iss/aud/sub/iat/exp/auth_time、可选 nonce 及
-profile/phone；仅 sub 或 IAM 扩展 scope 不读取完整 Facts。没有 Claims Snapshot。
+
+具备 UserInfo 调用资格的应用可通过 `iam:custom_attributes` 读取用户已发布的目录自定义属性，仅配置 `openid` 的应用也适用。
+获准披露任职时，直属 `organization` 和 `position` 各自在 `customAttributes` 提供属性值。键使用稳定的属性编码，单选值使用稳定的选项编码。
+未填写的键与空属性对象均省略。值变更和定义启停随目录文档发布生效，已有有效 Token 的后续 UserInfo 查询会读取已发布版本。
+[披露与发布时效](../adr/0054-disclose-directory-custom-attributes-to-all-eligible-clients.md)
+
+UserInfo 的标准资料、任职和角色声明由 Client 当前 `allowedScopes` 决定。范围变化也适用于旧 Token，无论原请求 `scope` 或调用方传入的 `scope` 为何。
+ID Token 在签名时固定 `iss`、`aud`、`sub`、`iat`、`exp`、`auth_time`，以及可选的 `nonce` 和 `profile`、`phone` 对应的声明。签发 ID Token 时，`profile` 和 `phone` 对应的披露使用完整 Facts。
 可以返回已发布的旧角色；必要 Facts 缺失时整次交付失败。详见[事实契约](../features/application-integration.md#用户信息共享)。
 
 - **JWKS** ID Token 使用 RS256，JWKS 仅公开 kty/kid/alg/use/n/e，不交付私钥。

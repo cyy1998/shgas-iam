@@ -2,7 +2,7 @@ import { z } from "@hono/zod-openapi";
 import { selectUserSchema } from "@iam/db/schema";
 import { EmploymentDetailDtoSchema } from "../employment";
 
-const DbUserSchema = z.object(selectUserSchema.shape);
+const DbUserSchema = z.object(selectUserSchema.omit({ customAttributes: true }).shape);
 
 export const UserSchema = DbUserSchema;
 

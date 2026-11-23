@@ -1,3 +1,5 @@
+import CustomAttributeFields from "@admin/components/custom-attributes/CustomAttributeFields";
+import { getCustomAttributeFormPatch } from "@admin/components/custom-attributes/custom-attribute-form";
 import styles from "@admin/components/detail/DetailDrawer.module.less";
 import type { UserDetailVo, updateUser } from "@admin/services/user";
 import { ProForm } from "@ant-design/pro-components";
@@ -13,14 +15,16 @@ type Props = {
   onDirtyChange: (dirty: boolean) => void;
 };
 
-type ProfileValues = Pick<UserDetailVo, "name" | "mobile" | "userType">;
+type ProfileValues = Pick<UserDetailVo, "name" | "mobile" | "userType" | "customAttributes">;
 
 export default function UserProfileForm({ detail, saving, onCancel, onSave, onDirtyChange }: Props) {
   const [form] = Form.useForm<ProfileValues>();
+  const definitions = detail.customAttributeDefinitions ?? [];
   const initialValues = useRef<ProfileValues>({
     name: detail.name,
     mobile: detail.mobile ?? "",
     userType: detail.userType,
+    customAttributes: detail.customAttributes,
   });
 
   return (
@@ -37,9 +41,15 @@ export default function UserProfileForm({ detail, saving, onCancel, onSave, onDi
         initialValues={initialValues.current}
         onValuesChange={(_, values) => {
           onDirtyChange(
-            (Object.keys(initialValues.current) as (keyof ProfileValues)[]).some(
+            (["name", "mobile", "userType"] as const).some(
               (key) => (values[key] ?? "") !== (initialValues.current[key] ?? ""),
-            ),
+            ) ||
+              definitions.some(
+                ({ code, enabled }) =>
+                  enabled &&
+                  JSON.stringify(values.customAttributes?.[code] ?? null) !==
+                    JSON.stringify(initialValues.current.customAttributes?.[code] ?? null),
+              ),
           );
         }}
         onFinish={async (values) => {
@@ -47,6 +57,12 @@ export default function UserProfileForm({ detail, saving, onCancel, onSave, onDi
           if (form.isFieldTouched("name")) data.name = values.name.trim();
           if (form.isFieldTouched("mobile")) data.mobile = values.mobile || null;
           if (form.isFieldTouched("userType")) data.userType = values.userType;
+          const attributeChanges = getCustomAttributeFormPatch(
+            form,
+            definitions,
+            form.getFieldsValue().customAttributes,
+          );
+          if (attributeChanges) data.customAttributes = attributeChanges;
           if (Object.keys(data).length === 0) {
             message.info("请先编辑需要保存的字段");
             return false;
@@ -67,6 +83,7 @@ export default function UserProfileForm({ detail, saving, onCancel, onSave, onDi
         }}
       >
         <UserProfileFields />
+        <CustomAttributeFields definitions={definitions} />
       </ProForm>
     </ConfigProvider>
   );

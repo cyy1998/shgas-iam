@@ -506,7 +506,7 @@ async function main() {
           oidcTokenBefore,
           "Protocol delivery renewed or replaced old OIDC Token",
         );
-        await mark("new-artifact-reuses-old-state-wire4-oidc-client-isolation-and-once-consumption");
+        await mark("new-artifact-reuses-old-state-wire5-oidc-client-isolation-and-once-consumption");
         await command(false, "user", "repair");
         await command(false, "organization", "repair");
         await consume(false);
@@ -522,7 +522,7 @@ async function main() {
           oldProfileSchema: 4,
           newDocumentSchema: 1,
           oldCustomWire: 3,
-          newCustomWire: 4,
+          newCustomWire: 5,
           sourceHmacBefore: sourceBefore,
           sourceHmacAfter: await sourceFingerprint(h, audit.id),
           migrationJournalBefore: journalBefore.length,

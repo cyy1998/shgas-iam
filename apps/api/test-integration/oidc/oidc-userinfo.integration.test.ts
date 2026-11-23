@@ -119,7 +119,7 @@ test("UserInfo current added and removed scopes affect old Tokens, preserve ID T
     const originalSession = await f.scope.inspect(issued.target);
     const first = await f.me(issued.access_token);
     expect(await first.json()).toEqual({ sub: f.subjectIdentifier });
-    expect(f.state.factReads).toBe(0);
+    expect(f.state.factReads).toBe(1);
     await f.scopes([
       OidcScope.OpenId,
       OidcScope.Profile,
@@ -140,9 +140,12 @@ test("UserInfo current added and removed scopes affect old Tokens, preserve ID T
     expect(f.state.acquisitions - before.acquisitions).toBe(1);
     await f.scopes([OidcScope.OpenId]);
     f.state.factFailure = true;
+    const unavailable = await f.me(issued.access_token);
+    expect(unavailable.status).toBe(503);
+    expect(await unavailable.json()).toMatchObject({ error: "temporarily_unavailable" });
+    f.state.factFailure = false;
     const removed = await f.me(issued.access_token);
     expect(await removed.json()).toEqual({ sub: f.subjectIdentifier });
-    expect(f.state.factReads).toBe(1);
     expect(await f.oidcState.readToken(issued.access_token)).toEqual(originalToken);
     expect(await f.scope.inspect(issued.target)).toEqual(originalSession);
     const idClaims = JSON.parse(Buffer.from(issued.id_token.split(".")[1]!, "base64url").toString());

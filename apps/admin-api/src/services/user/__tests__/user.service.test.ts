@@ -151,6 +151,7 @@ function createService(
   const getUserByUsernameForAdmin = mock(async (_username: string) => null as ReturnType<typeof user> | null);
   const tx = {
     auditService: { recordAuditLog: mock(async () => undefined) },
+    customAttributeDefinitions: { lockForValues: async () => [] },
     subjectAccessMutation: createSubjectAccessMutation(),
     userDocumentInvalidation: {
       recordChanges: mock(async () => undefined),
@@ -178,6 +179,7 @@ function createService(
     },
   };
   const deps = {
+    customAttributeDefinitions: { list: async () => [] },
     employmentRepository: {
       getAllEmploymentsByUserIdForAdmin: mock(async () => []),
     },
@@ -1014,6 +1016,7 @@ describe("createUserService", () => {
     const createdUser = user({ subjectIdentifier });
     const tx = {
       auditService: { recordAuditLog: mock(async () => undefined) },
+      customAttributeDefinitions: { lockForValues: async () => [] },
       subjectAccessMutation: createSubjectAccessMutation(),
       userDocumentInvalidation: { recordChanges: mock(async () => undefined) },
       userRepository: {
@@ -1128,6 +1131,7 @@ function createLifecycleService(options: {
     });
   const tx = {
     auditService: { recordAuditLog: mock(async () => undefined) },
+    customAttributeDefinitions: { lockForValues: async () => [] },
     subjectAccessMutation: createSubjectAccessMutation(),
     userDocumentInvalidation: { recordChanges: mock(async () => undefined) },
     userRepository: {
@@ -1140,6 +1144,7 @@ function createLifecycleService(options: {
     revokeUserSessions: mock(async () => revokeSummary()),
   };
   const service = createUserService({
+    customAttributeDefinitions: { list: async () => [] },
     employmentRepository: {
       getAllEmploymentsByUserIdForAdmin: mock(async () => []),
     },

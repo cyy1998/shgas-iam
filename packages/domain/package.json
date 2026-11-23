@@ -22,6 +22,7 @@
     "./role": "./src/role/index.ts",
     "./role/*": "./src/role/*.ts",
     "./user": "./src/user/index.ts",
+    "./custom-attributes": "./src/custom-attributes/custom-attribute.rules.ts",
     "./user/*": "./src/user/*.ts"
   },
   "scripts": {

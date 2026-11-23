@@ -5,7 +5,8 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./http": "./src/http/index.ts"
+    "./http": "./src/http/index.ts",
+    "./custom-attributes": "./src/custom-attributes.ts"
   },
   "scripts": {
     "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",

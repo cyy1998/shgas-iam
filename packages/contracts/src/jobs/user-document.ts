@@ -15,6 +15,7 @@ export enum UserDocumentRebuildReason {
   OrganizationResponsibilityAssignmentUpdated = "organization-responsibility-assignment-updated",
   OrganizationUpdated = "organization-updated",
   PositionUpdated = "position-updated",
+  CustomAttributeDefinitionUpdated = "custom-attribute-definition-updated",
   RoleUpdated = "role-updated",
   ManualRebuild = "manual-rebuild",
   Backfill = "backfill",

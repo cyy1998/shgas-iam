@@ -278,6 +278,7 @@ function createSubjects() {
   };
   const userService = createUserService({
     userRepository: repositories.user,
+    customAttributeDefinitions: repositories.customAttribute,
     employmentRepository: repositories.employment,
     roleAssignmentResolver,
     roleRepository: repositories.role,
@@ -294,6 +295,7 @@ function createSubjects() {
       (tx) =>
         ({
           userRepository: tx.repositories.user,
+          customAttributeDefinitions: tx.repositories.customAttribute,
           auditService: tx.auditService,
           subjectAccessMutation: {
             async runMutation<T>(

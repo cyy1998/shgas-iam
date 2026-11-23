@@ -53,6 +53,7 @@ export function createOidcUserInfo(options: {
               subjectIdentifier: observation.userSession.subjectIdentifier,
               clientCode: token.clientId,
               selection: { catalogVersion: 3, optionalClaims: claims },
+              includeCustomAttributes: true,
             },
             operation,
           );
@@ -61,13 +62,18 @@ export function createOidcUserInfo(options: {
             ...(subject.username === undefined ? {} : { preferred_username: subject.username }),
             ...(subject.name === undefined ? {} : { name: subject.name }),
             ...(subject.phone ? { phone_number: subject.phone } : {}),
+            ...(subject.customAttributes === undefined ? {} : { "iam:custom_attributes": subject.customAttributes }),
             ...(subject.employments === undefined
               ? {}
               : {
-                  "iam:employments": subject.employments.map((employment) => ({
-                    ...employmentBase(employment),
-                    responsibilities: employment.responsibilities,
-                  })),
+                  "iam:employments": subject.employments.map(
+                    ({ isPrimary, organization, position, responsibilities }) => ({
+                      isPrimary,
+                      organization,
+                      position,
+                      responsibilities,
+                    }),
+                  ),
                 }),
             ...(subject.authorization === undefined
               ? {}

@@ -3,6 +3,10 @@ import { createAdminMutation } from "@admin-api/services/admin-mutation/admin-mu
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import { adminAuditTransactionOptions } from "@admin-api/services/audit/audit.context";
 import { buildOrganizationAudit } from "@admin-api/services/audit/events/organization.audit";
+import {
+  prepareCustomAttributeWrite,
+  readActiveCustomAttributes,
+} from "@admin-api/services/custom-attribute/custom-attribute-values";
 import { toOrganizationDto } from "@admin-api/services/organization/organization.schema";
 import type {
   OrganizationCreateDto,
@@ -10,6 +14,7 @@ import type {
   OrganizationSelectorQueryDto,
   OrganizationTreeNodeDto,
   OrganizationUpdateDto,
+  OrganizationUpdateValues,
 } from "@admin-api/services/organization/organization.type";
 import { paginate } from "@iam/api-core/core/pagination/paginate";
 import { OrganizationLevel, OrganizationStatus, organizationStatusToString } from "@iam/contracts";
@@ -43,7 +48,15 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
     auditContext?: AdminAuditContext,
     authorization?: AdminOrganizationAuthorization,
   ) {
-    if (organizationCreateDto.status !== undefined && organizationCreateDto.status !== OrganizationStatus.Enable)
+    const { customAttributes, ...profile } = organizationCreateDto;
+    if (authorization?.kind === "scoped" && customAttributes !== undefined) {
+      authorization.denyMutation({
+        operationId: "admin.organization.create",
+        resourceIdentifier: profile.orgCode,
+        reason: "ACTION_NOT_GRANTED",
+      });
+    }
+    if (profile.status !== undefined && profile.status !== OrganizationStatus.Enable)
       throw new BadRequestError("组织只允许以 Enable 创建");
     try {
       return await mutation.transaction(async (tx) => {
@@ -95,8 +108,18 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
         }
         if (organizationCreateDto.parentCode && parentOrg === null)
           throw new OrganizationNotFoundError("父组织不存在或未启用");
+        const attributes = await prepareCustomAttributeWrite(
+          tx.customAttributeDefinitions,
+          "organization",
+          {},
+          customAttributes,
+        );
         const created = await tx.organizationRepository.setOrganization(
-          { ...organizationCreateDto, status: OrganizationStatus.Enable },
+          {
+            ...profile,
+            status: OrganizationStatus.Enable,
+            ...(attributes.changes.length > 0 ? { customAttributes: attributes.values } : {}),
+          },
           parentOrg,
         );
         if (created === null) throw new Error("Organization insert returned no row");
@@ -108,12 +131,19 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
             {
               changed: true,
               parentCode: organizationCreateDto.parentCode ?? null,
-              orgType: organizationCreateDto.orgType,
+              orgType: profile.orgType,
+              ...(attributes.changes.length > 0 ? { customAttributeChanges: attributes.changes } : {}),
             },
             auditContext,
           ),
         );
-        return { changed: true, result: toOrganizationDto(created) };
+        return {
+          changed: true,
+          result: {
+            ...toOrganizationDto(created),
+            ...(attributes.changes.length > 0 ? { customAttributes: attributes.values } : {}),
+          },
+        };
       }, adminAuditTransactionOptions(auditContext));
     } catch (error) {
       if (authorization?.kind === "scoped" && error instanceof OrganizationCodeExistsError) {
@@ -184,8 +214,13 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
           : Promise.resolve(false),
       ]);
     const dto = toOrganizationDto(org);
+    const attributes =
+      authorization?.kind === "full"
+        ? await readActiveCustomAttributes(deps.customAttributeDefinitions, "organization", org.customAttributes ?? {})
+        : undefined;
     return {
       ...dto,
+      ...attributes,
       statusText: organizationStatusToString[dto.status] ?? "未知",
       childrenCount: org.children.length,
       employmentCount,
@@ -225,12 +260,20 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
 
   async function updateOrganization(
     orgCode: string,
-    data: OrganizationUpdateDto,
+    input: OrganizationUpdateDto,
     auditContext?: AdminAuditContext,
     authorization?: AdminOrganizationAuthorization,
     action = "admin.organization.update",
   ) {
-    if (!Object.values(data).some((value) => value !== undefined))
+    const { customAttributes, ...data } = input;
+    if (authorization?.kind === "scoped" && customAttributes !== undefined) {
+      authorization.denyMutation({
+        operationId: "admin.organization.update",
+        resourceIdentifier: orgCode,
+        reason: "ACTION_NOT_GRANTED",
+      });
+    }
+    if (Object.keys(customAttributes ?? {}).length === 0 && !Object.values(data).some((value) => value !== undefined))
       throw new BadRequestError("至少提交一个组织更新字段");
     return await mutation.locked(
       (tx) => tx.organizationRepository.lockOrganizationByCode(orgCode),
@@ -254,20 +297,44 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
             reason: "ACTION_NOT_GRANTED",
           });
         }
+        const updates: OrganizationUpdateValues = {};
         const changedFields: AdminOrganizationDocumentChangedField[] = [];
-        if (data.orgCode !== undefined && data.orgCode !== existing.orgCode) changedFields.push("code");
-        if (data.orgName !== undefined && data.orgName !== existing.orgName) changedFields.push("name");
-        if (data.orgType !== undefined && data.orgType !== existing.orgType) changedFields.push("type");
-        if (data.status !== undefined && data.status !== existing.status) changedFields.push("status");
+        if (data.orgCode !== undefined && data.orgCode !== existing.orgCode) {
+          updates.orgCode = data.orgCode;
+          changedFields.push("code");
+        }
+        if (data.orgName !== undefined && data.orgName !== existing.orgName) {
+          updates.orgName = data.orgName;
+          changedFields.push("name");
+        }
+        if (data.orgType !== undefined && data.orgType !== existing.orgType) {
+          updates.orgType = data.orgType;
+          changedFields.push("type");
+        }
+        if (data.status !== undefined && data.status !== existing.status) {
+          updates.status = data.status;
+          changedFields.push("status");
+        }
+        const attributes = await prepareCustomAttributeWrite(
+          tx.customAttributeDefinitions,
+          "organization",
+          existing.customAttributes ?? {},
+          customAttributes,
+        );
+        if (attributes.changes.length > 0) {
+          updates.customAttributes = attributes.values;
+          changedFields.push("customAttributes");
+        }
         const changed = changedFields.length > 0;
         if (!changed && data.status === undefined) return { changed: false, result: null };
-        if (data.orgCode && data.orgCode !== orgCode) {
-          const conflict = await tx.organizationRepository.getAnyOrganizationByCode(data.orgCode);
+        if (updates.orgCode !== undefined) {
+          const conflict = await tx.organizationRepository.getAnyOrganizationByCode(updates.orgCode);
           if (conflict !== null) {
-            throw new OrganizationCodeExistsError(`组织编码已存在: ${data.orgCode}`);
+            throw new OrganizationCodeExistsError(`组织编码已存在: ${updates.orgCode}`);
           }
         }
-        if (data.status !== undefined && data.status !== existing.status && data.status !== OrganizationStatus.Enable) {
+        const becomesInactive = updates.status !== undefined && updates.status !== OrganizationStatus.Enable;
+        if (becomesInactive) {
           await tx.responsibilityParentLifecycle.assertNoOpenAssignmentsTargetingOrganizationSubtree({
             organizationId: existing.id,
           });
@@ -277,7 +344,7 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
           }
         }
         if (changed) {
-          const updated = await tx.organizationRepository.updateOrganizationByCode(orgCode, data);
+          const updated = await tx.organizationRepository.updateOrganizationByCode(orgCode, updates);
           if (updated === null) throw new Error("Locked Organization update returned no row");
         }
         await tx.auditService.recordAuditLog(
@@ -291,6 +358,7 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
             },
             {
               patch: data,
+              ...(attributes.changes.length > 0 ? { customAttributeChanges: attributes.changes } : {}),
               previousOrgCode: orgCode,
               changed,
             },
@@ -301,12 +369,11 @@ export function createOrganizationService(deps: AdminOrganizationServiceDeps) {
           await tx.organizationDocumentInvalidation.recordChanges([
             { kind: "updated", organizationId: existing.id, changedFields },
           ]);
-          await tx.userDocumentInvalidation.recordChanges([{ kind: "organization", organizationId: existing.id }]);
-          if (
-            data.status !== undefined &&
-            data.status !== existing.status &&
-            data.status !== OrganizationStatus.Enable
-          ) {
+          const kind = changedFields.some((field) => field !== "customAttributes")
+            ? "organization"
+            : "organization-custom-attributes";
+          await tx.userDocumentInvalidation.recordChanges([{ kind, organizationId: existing.id }]);
+          if (becomesInactive) {
             await tx.responsibilityParentLifecycle.assertNoOpenAssignmentsTargetingOrganizationSubtree({
               organizationId: existing.id,
             });

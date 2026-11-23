@@ -1,11 +1,11 @@
 import type { AdminOrganizationReadScope } from "@admin-api/services/organization/organization.port";
 import type {
-  OrganizationCreateDto,
+  OrganizationCreateValues,
   OrganizationPaginationQueryDto,
   OrganizationPathNode,
   OrganizationSelectorNode,
   OrganizationSelectorQueryDto,
-  OrganizationUpdateDto,
+  OrganizationUpdateValues,
 } from "@admin-api/services/organization/organization.type";
 import {
   ClientDelegationStatus,
@@ -16,8 +16,8 @@ import {
 import type { DbClient } from "@iam/db";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
-import type { Organization } from "@iam/db/schema";
 import { clientDelegations, employments, organizationClosures, organizations } from "@iam/db/schema";
+import type { Organization } from "@iam/domain/organization";
 import { OrganizationCodeExistsError } from "@iam/domain/organization";
 import { and, count, eq, exists, gt, inArray, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -64,7 +64,7 @@ export function createOrganizationRepository(db: DbClient) {
         .limit(1);
       return firstRow(await attachOrganizationRelations(rows, db)) ?? null;
     },
-    async setOrganization(organizationCreateDto: OrganizationCreateDto, parentOrganization: Organization | null) {
+    async setOrganization(organizationCreateDto: OrganizationCreateValues, parentOrganization: Organization | null) {
       const { parentCode, ...org } = organizationCreateDto;
       const newOrganization = await write(async () => firstRow(await db.insert(organizations).values(org).returning()));
       if (newOrganization === null) throw new Error("Organization insert returned no row");
@@ -340,7 +340,7 @@ export function createOrganizationRepository(db: DbClient) {
         .limit(1);
       return rows.length > 0;
     },
-    async updateOrganizationByCode(orgCode: string, data: OrganizationUpdateDto) {
+    async updateOrganizationByCode(orgCode: string, data: OrganizationUpdateValues) {
       return write(async () =>
         firstRow(
           await db

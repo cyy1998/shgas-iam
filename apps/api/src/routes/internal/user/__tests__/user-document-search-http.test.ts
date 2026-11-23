@@ -238,7 +238,9 @@ test("describes one generic recursive Filter AST without enumerating field and o
     required?: string[];
   };
   const fields = ["employments", "mobile", "name", "status", "subjectIdentifier", "userType", "username", "wxId"];
-  expect(Object.keys(schema.properties ?? {}).sort()).toEqual(fields);
+  expect(Object.keys(schema.properties ?? {}).sort()).toEqual(["customAttributes", ...fields]);
+  expect(schema.properties?.customAttributes).toMatchObject({ type: "object" });
+  expect(schema.required).not.toContain("customAttributes");
   expect(schema.required).toEqual(expect.arrayContaining(fields));
 });
 

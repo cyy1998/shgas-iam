@@ -7,6 +7,10 @@ export const auditActionCatalog = [
   { action: "admin.client.admission.enabled", label: "开启或关闭应用准入策略" },
   { action: "admin.client.sso_secret_rotate", label: "轮换 SSO Secret" },
   { action: "admin.client.sso_secret_read", label: "读取当前 SSO Secret" },
+  { action: "admin.custom_attribute_definition.create", label: "创建自定义属性定义" },
+  { action: "admin.custom_attribute_definition.update", label: "编辑自定义属性定义" },
+  { action: "admin.custom_attribute_definition.enable", label: "启用自定义属性定义" },
+  { action: "admin.custom_attribute_definition.disable", label: "停用自定义属性定义" },
   {
     action: "auth.login",
     label: "登录",

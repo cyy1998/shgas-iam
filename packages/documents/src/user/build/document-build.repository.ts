@@ -4,10 +4,16 @@ import type {
 } from "@iam/assignment-resolution/organization-responsibility";
 import type { DocumentResponsibility } from "@iam/contracts";
 import { ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG } from "@iam/contracts";
+import type { CustomAttributeEntityType } from "@iam/contracts/custom-attributes";
 import type { DbClient } from "@iam/db";
 import { organizationClosures, organizations } from "@iam/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import {
+  type DocumentCustomAttributeDefinition,
+  hasCustomAttributeValues,
+  loadEnabledDocumentCustomAttributeDefinitions,
+} from "../../custom-attributes";
 import { UserDocumentSourceIntegrityError } from "./document-build.error";
 import { compareCodes, groupItemsBy } from "./user-document-build.helpers";
 import type { UserDocumentBuildDataset, UserDocumentEffectiveRoleResolverPort } from "./user-document-build.repository";
@@ -20,6 +26,7 @@ export interface DocumentResponsibilityRow extends Omit<DocumentResponsibility, 
 
 export type DocumentBuildDataset = UserDocumentBuildDataset & {
   responsibilityRows: DocumentResponsibilityRow[];
+  customAttributeDefinitions: DocumentCustomAttributeDefinition[];
 };
 
 export interface DocumentBuildRepository {
@@ -50,11 +57,22 @@ export function createDocumentBuildRepository(
         })),
       );
       const targetOrganizationIds = unique(identities.map((row) => row.targetOrganizationId));
-      const targetPaths = await loadTargetOrganizationPaths(db, targetOrganizationIds);
+      const entityTypes: CustomAttributeEntityType[] = [];
+      if (dataset.users.some(({ customAttributes }) => hasCustomAttributeValues(customAttributes)))
+        entityTypes.push("user");
+      if (dataset.positions.some(({ customAttributes }) => hasCustomAttributeValues(customAttributes)))
+        entityTypes.push("position");
+      if (dataset.orgPathRows.some(({ customAttributes }) => hasCustomAttributeValues(customAttributes)))
+        entityTypes.push("organization");
+      const [targetPaths, customAttributeDefinitions] = await Promise.all([
+        loadTargetOrganizationPaths(db, targetOrganizationIds),
+        loadEnabledDocumentCustomAttributeDefinitions(db, entityTypes),
+      ]);
       signal?.throwIfAborted();
       const typeByCode = new Map(ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG.map((type) => [type.code, type]));
       return {
         ...dataset,
+        customAttributeDefinitions,
         responsibilityRows: identities.map((identity) => {
           const type = typeByCode.get(identity.typeCode);
           const path = targetPaths.get(identity.targetOrganizationId);

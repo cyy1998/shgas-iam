@@ -46,7 +46,7 @@ function createProductionMountedSurfaces() {
 test("classifies every production-mounted Admin REST endpoint exactly once", () => {
   const { restOperationSurface } = createProductionMountedSurfaces();
 
-  expect(restOperationSurface.endpoints).toHaveLength(85);
+  expect(restOperationSurface.endpoints).toHaveLength(89);
   expect<string[]>([...new Set(restOperationSurface.endpoints.map((endpoint) => endpoint.operationId))].sort()).toEqual(
     Object.keys(ADMIN_OPERATION_REGISTRY).sort(),
   );
@@ -126,7 +126,7 @@ test("classifies every production-mounted Admin tRPC procedure and excludes REST
   const restOnly = new Set<string>(ADMIN_REST_ONLY_OPERATION_IDS);
   const expected = Object.keys(ADMIN_OPERATION_REGISTRY).filter((id) => !restOnly.has(id));
 
-  expect(procedureIds).toHaveLength(82);
+  expect(procedureIds).toHaveLength(86);
   expect([...new Set<string>(procedureIds)].sort()).toEqual(expected.sort());
 });
 

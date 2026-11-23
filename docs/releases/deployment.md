@@ -219,6 +219,30 @@ Internal API、Worker 及涉及任职诊断、构建或修复的 Ops 制品使�
 源转换未提交时，恢复依赖后重启匹配 Worker 触发补扫。确需回退时，恢复兼容的制品、配置和一致数据，核对备份后的业务变更
 及会话撤销，避免恢复已撤销的访问。日期改型已提交后，旧镜像需要配对可恢复的旧数据才能启用。
 
+### 启用目录自定义属性和 Custom SSO Wire v5
+
+从已使用 User Document 和 Organization Document schema 1 的版本升级。两类文档和 Redis Subject Facts 保持 schema 1，
+新增可选属性对象。新制品可读取省略这些属性的存量记录。旧 reader 的严格解析可能拒绝带属性的文档和 Facts，
+旧 Worker 也无法处理新增的 Outbox 事件类型。Custom SSO 主体响应统一使用 Wire v5，严格 v4 调用方需要协调切换。
+
+1. **固定配套制品并停流** 准备 PostgreSQL 与 Redis 的一致备份、同一候选的 API、Admin API、两类 Document Worker、Ops、
+   Admin 与 SSO Portal，并协调第三方 UserInfo 和业务兑换解析器。关闭受影响的目录、属性写入及主体交付入口和直连重试，
+   排空请求、源写入、文档发布与回填，停用旧 Worker 和旧版人工或定时维护。
+2. **迁移并验证存量** 用候选运行正式 `db:migrate`，启动匹配的服务和 Worker，继续关闭公共流量和属性写入。
+   先用存量文档和 Redis Facts 验证 Internal、OIDC UserInfo 以及经新版解析器的 Custom SSO UserInfo 和业务兑换。
+   核对未配置属性时对象省略、已有合法凭据继续使用。独立执行 `iam-ops user-document verify-postgres`、
+   `iam-ops user-document verify-redis` 和 `iam-ops organization-document verify`，三项均通过才进入受控业务验收。
+3. **受控验收并放流** 确认所有旧消费者与写入方已停止，再通过 Admin 写入验收属性，检查真实 Worker 发布后的
+   Internal、OIDC UserInfo、Custom SSO UserInfo 与业务兑换。停用验收定义，等待两类文档重新发布并检查属性省略。
+   关闭并排空受控入口，等待 Outbox、Rebuild State 与 Facts 后续工作收敛，重新通过三项完整核验，
+   再开放目录写入、读取与主体交付，并观察解析失败、Worker 失败和持续积压。
+4. **失败恢复** 保持受影响入口关闭，保留已提交的业务数据和发布义务。依赖恢复后使用候选的
+   [用户修复](data-maintenance.md#user-document-日常修复)与[组织修复](data-maintenance.md#组织搜索日常修复)，收敛后重跑核验和受影响场景。
+   存量文档或缓存缺失、损坏或内容不一致时，按相应[用户](data-maintenance.md#user-document-全量重建)与
+   [组织](data-maintenance.md#组织搜索全量重建)流程重建和核验。开始写入属性后，回退前须确认旧版能够消费当前持久事件、
+   文档和 Facts。无法证明兼容时优先修复候选，确需回退则按下节恢复匹配的旧制品、调用方、配置和一致数据，
+   另行处理备份后的业务变更与会话撤销。现有会话与协议凭据沿用原期限和绑定。
+
 ## 完成检查与回退
 
 | 检查       | 通过条件                                                                                                                               |

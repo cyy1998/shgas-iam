@@ -186,6 +186,7 @@ async function fixture() {
       config: { allowedClientCodes: ["iam-admin"] },
       user: {
         userRepository: repositories.user,
+        customAttributeDefinitions: repositories.customAttribute,
         employmentRepository: repositories.employment,
         roleRepository: repositories.role,
 
@@ -195,6 +196,7 @@ async function fixture() {
         subjectAccessLifecycle,
         uow: mapUnitOfWork(unitOfWork, (tx) => ({
           userRepository: tx.repositories.user,
+          customAttributeDefinitions: tx.repositories.customAttribute,
           auditService: tx.auditService,
           subjectAccessMutation: tx.subjectAccessMutation,
           userDocumentInvalidation: tx.userDocumentInvalidation,

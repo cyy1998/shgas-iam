@@ -3,9 +3,8 @@ import { getChildOrganizationLevel, OrganizationStatus } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import { compactUpdate, firstRow } from "@iam/db/query-utils";
-import type { Organization } from "@iam/db/schema";
 import { organizationClosures, organizations } from "@iam/db/schema";
-import { OrganizationCodeExistsError } from "@iam/domain/organization";
+import { type Organization, OrganizationCodeExistsError } from "@iam/domain/organization";
 import { and, eq, inArray } from "drizzle-orm";
 
 export function createOrganizationRepository(db: DbClient) {

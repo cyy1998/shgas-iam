@@ -545,7 +545,6 @@ describe("createOrganizationService", () => {
     expect(tx.organizationRepository.countOpenEmploymentsByOrgCode).not.toHaveBeenCalled();
     expect(tx.organizationRepository.updateOrganizationByCode).toHaveBeenCalledWith("ORG", {
       orgName: "Renamed Organization",
-      status: OrganizationStatus.Pause,
     });
   });
 

@@ -1,18 +1,30 @@
 import { useAccess } from "@admin/admin-access";
+import CustomAttributeDefinitionsDrawer from "@admin/components/custom-attributes/CustomAttributeDefinitionsDrawer";
+import CustomAttributeDetails from "@admin/components/custom-attributes/CustomAttributeDetails";
 import StatusTag from "@admin/components/StatusTag";
 import PositionFormModal from "@admin/pages/positions/components/PositionFormModal";
-import { deletePosition, type PositionVo, searchPositions, updatePositionStatus } from "@admin/services/position";
+import {
+  deletePosition,
+  getPosition,
+  type PositionDetailVo,
+  type PositionVo,
+  searchPositions,
+  updatePositionStatus,
+} from "@admin/services/position";
 import { PlusOutlined } from "@ant-design/icons";
 import { type ActionType, PageContainer, type ProColumns, ProTable } from "@ant-design/pro-components";
 import { getPositionStatusOptions } from "@iam/contracts";
-import { Button, Dropdown, Input, Modal, message } from "antd";
+import { Button, Descriptions, Drawer, Dropdown, Input, Modal, message } from "antd";
 import { useRef, useState } from "react";
 
 export default function PositionsPage() {
   const access = useAccess();
   const actionRef = useRef<ActionType>(undefined);
   const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<PositionVo | null>(null);
+  const [editing, setEditing] = useState<PositionDetailVo | null>(null);
+  const [detail, setDetail] = useState<PositionDetailVo | null>(null);
+  const [loadingPosition, setLoadingPosition] = useState(false);
+  const [attributeDefinitionsOpen, setAttributeDefinitionsOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [filters, setFilters] = useState<{ text?: string }>({});
 
@@ -20,9 +32,22 @@ export default function PositionsPage() {
     message.error(err instanceof Error ? err.message : "操作失败");
   };
 
-  const onEdit = (row: PositionVo) => {
-    setEditing(row);
-    setModalOpen(true);
+  const openPosition = async (posCode: string, mode: "details" | "edit") => {
+    if (loadingPosition) return;
+    setLoadingPosition(true);
+    try {
+      const position = await getPosition(posCode);
+      if (mode === "edit") {
+        setEditing(position);
+        setModalOpen(true);
+      } else {
+        setDetail(position);
+      }
+    } catch (error) {
+      handleError(error);
+    } finally {
+      setLoadingPosition(false);
+    }
   };
 
   const onDelete = (row: PositionVo) => {
@@ -68,11 +93,28 @@ export default function PositionsPage() {
       title: "操作",
       fixed: "right",
       valueType: "option",
-      width: 160,
+      width: 200,
       render: (_, row) =>
         [
+          <Button
+            key="details"
+            type="link"
+            size="small"
+            style={{ paddingInline: 0 }}
+            disabled={loadingPosition}
+            onClick={() => openPosition(row.posCode, "details")}
+          >
+            详情
+          </Button>,
           access.canEditPosition && (
-            <Button key="edit" type="link" size="small" style={{ paddingInline: 0 }} onClick={() => onEdit(row)}>
+            <Button
+              key="edit"
+              type="link"
+              size="small"
+              style={{ paddingInline: 0 }}
+              disabled={loadingPosition}
+              onClick={() => openPosition(row.posCode, "edit")}
+            >
               编辑
             </Button>
           ),
@@ -168,24 +210,57 @@ export default function PositionsPage() {
           }
         }}
         toolBarRender={() =>
-          access.canCreatePosition
-            ? [
-                <Button
-                  key="create"
-                  type="primary"
-                  icon={<PlusOutlined aria-hidden />}
-                  onClick={() => {
-                    setEditing(null);
-                    setModalOpen(true);
-                  }}
-                >
-                  新建岗位
-                </Button>,
-              ]
-            : []
+          [
+            access.canEditPosition && (
+              <Button key="custom-attributes" onClick={() => setAttributeDefinitionsOpen(true)}>
+                自定义属性
+              </Button>
+            ),
+            access.canCreatePosition && (
+              <Button
+                key="create"
+                type="primary"
+                icon={<PlusOutlined aria-hidden />}
+                onClick={() => {
+                  setEditing(null);
+                  setModalOpen(true);
+                }}
+              >
+                新建岗位
+              </Button>
+            ),
+          ].filter(Boolean)
         }
       />
+      {access.canEditPosition && (
+        <CustomAttributeDefinitionsDrawer
+          entityType="position"
+          open={attributeDefinitionsOpen}
+          onClose={() => setAttributeDefinitionsOpen(false)}
+        />
+      )}
+      <Drawer title="岗位详情" open={detail !== null} onClose={() => setDetail(null)}>
+        {detail && (
+          <>
+            <Descriptions
+              column={1}
+              items={[
+                { key: "code", label: "岗位编码", children: detail.posCode },
+                { key: "name", label: "岗位名称", children: detail.posName },
+                { key: "description", label: "描述", children: detail.description ?? "—" },
+                { key: "status", label: "状态", children: <StatusTag domain="position" status={detail.status} /> },
+                { key: "members", label: "雇佣人数", children: detail.memberNumber },
+              ]}
+            />
+            <CustomAttributeDetails
+              definitions={detail.customAttributeDefinitions ?? []}
+              values={detail.customAttributes ?? {}}
+            />
+          </>
+        )}
+      </Drawer>
       <PositionFormModal
+        canManageCustomAttributes={access.canEditPosition}
         open={modalOpen}
         initialValues={editing}
         onOpenChange={setModalOpen}

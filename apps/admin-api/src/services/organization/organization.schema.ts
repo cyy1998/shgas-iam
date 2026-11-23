@@ -2,14 +2,26 @@ import { z } from "@hono/zod-openapi";
 import { createPageQuerySchema } from "@iam/api-core/core/pagination/schema";
 import { OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
 
+import { CustomAttributePatchSchema } from "@iam/contracts/custom-attributes";
+import {
+  OrganizationCreateDtoSchema as BaseOrganizationCreateDtoSchema,
+  OrganizationUpdateDtoSchema as BaseOrganizationUpdateDtoSchema,
+} from "@iam/domain/organization";
+
 export {
-  OrganizationCreateDtoSchema,
   OrganizationDetailSchema,
   OrganizationDtoSchema,
   OrganizationSchema,
-  OrganizationUpdateDtoSchema,
   toOrganizationDto,
 } from "@iam/domain/organization";
+
+export const OrganizationCreateDtoSchema = BaseOrganizationCreateDtoSchema.extend({
+  customAttributes: CustomAttributePatchSchema.optional(),
+}).openapi("AdminOrganizationCreateDto");
+
+export const OrganizationUpdateDtoSchema = BaseOrganizationUpdateDtoSchema.extend({
+  customAttributes: CustomAttributePatchSchema.optional(),
+}).openapi("AdminOrganizationUpdateDto");
 
 export const OrganizationPaginationQueryDtoSchema = createPageQuerySchema(
   z.object({

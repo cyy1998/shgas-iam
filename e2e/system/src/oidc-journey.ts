@@ -7,7 +7,13 @@ export type CreateOidcJourneyOperationsOptions = PlaywrightJourneyRuntimeOptions
 export function createOidcJourneyOperations(options: CreateOidcJourneyOperationsOptions) {
   return createPlaywrightJourneyOperations({
     ...options,
-    specPaths: ["oidc-pkce.spec.ts", "wecom-qr.spec.ts", "wecom-qr-oidc.spec.ts", "wecom-qr-binding.spec.ts"],
+    specPaths: [
+      "oidc-pkce.spec.ts",
+      "directory-custom-attributes.spec.ts",
+      "wecom-qr.spec.ts",
+      "wecom-qr-oidc.spec.ts",
+      "wecom-qr-binding.spec.ts",
+    ],
     environment: (descriptor, scenario) => ({
       IAM_E2E_JOURNEY: "oidc",
       IAM_E2E_WECHAT_QR_MOBILE_ORIGIN: descriptor.wecomMobileOrigin,
@@ -20,6 +26,7 @@ export function createOidcJourneyOperations(options: CreateOidcJourneyOperations
       IAM_E2E_OIDC_REDIRECT_URI: `${descriptor.origin}/e2e/oidc/callback`,
       IAM_E2E_INTERNAL_API_KEY: createE2EScenarioInternalApiKey(descriptor.runId),
       IAM_E2E_ORGANIZATION_CODE: scenario.organizationCode,
+      IAM_E2E_POSITION_CODE: scenario.positionCode,
       IAM_E2E_GLOBAL_POSITION_CODE: scenario.globalPositionCode,
     }),
   });

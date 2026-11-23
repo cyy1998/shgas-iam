@@ -1,22 +1,41 @@
-import { createPosition, type PositionVo, updatePosition } from "@admin/services/position";
+import CustomAttributeFields from "@admin/components/custom-attributes/CustomAttributeFields";
+import { getCustomAttributeFormPatch } from "@admin/components/custom-attributes/custom-attribute-form";
+import { useCustomAttributeDefinitions } from "@admin/components/custom-attributes/useCustomAttributeDefinitions";
+import { createPosition, type PositionDetailVo, updatePosition } from "@admin/services/position";
 import { ModalForm, ProFormSelect, ProFormText, ProFormTextArea } from "@ant-design/pro-components";
 import { getPositionStatusOptions } from "@iam/contracts";
-import { message } from "antd";
+import { Alert, Button, Form, message } from "antd";
 
 type Props = {
   open: boolean;
-  initialValues?: PositionVo | null;
+  initialValues?: PositionDetailVo | null;
+  canManageCustomAttributes?: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
 };
 
 const trimInput = (value: string | undefined) => value?.trim();
 
-export default function PositionFormModal({ open, initialValues, onOpenChange, onSuccess }: Props) {
+export default function PositionFormModal({
+  open,
+  initialValues,
+  canManageCustomAttributes = false,
+  onOpenChange,
+  onSuccess,
+}: Props) {
   const isEdit = !!initialValues;
+  const [form] = Form.useForm<Parameters<typeof createPosition>[0]>();
+  const loadDefinitions = open && canManageCustomAttributes && !isEdit;
+  const { state: attributes, reload } = useCustomAttributeDefinitions("position", loadDefinitions);
+  const definitions = isEdit
+    ? (initialValues?.customAttributeDefinitions ?? [])
+    : loadDefinitions && attributes.status === "ready"
+      ? attributes.definitions
+      : [];
 
   return (
     <ModalForm
+      form={form}
       title={isEdit ? "编辑岗位" : "新建岗位"}
       open={open}
       onOpenChange={onOpenChange}
@@ -27,6 +46,7 @@ export default function PositionFormModal({ open, initialValues, onOpenChange, o
               posName: initialValues.posName,
               description: initialValues.description ?? "",
               status: initialValues.status,
+              customAttributes: initialValues.customAttributes,
             }
           : { status: 1 }
       }
@@ -36,16 +56,20 @@ export default function PositionFormModal({ open, initialValues, onOpenChange, o
         okText: "确定",
       }}
       onFinish={async (values) => {
+        const customAttributes = getCustomAttributeFormPatch(form, definitions, form.getFieldsValue().customAttributes);
+        const attributePatch = customAttributes === undefined ? {} : { customAttributes };
         try {
-          if (isEdit) {
-            const outcome = await updatePosition(initialValues!.posCode, {
+          if (initialValues) {
+            const outcome = await updatePosition(initialValues.posCode, {
+              ...attributePatch,
               posName: values.posName.trim(),
               description: values.description || null,
-              ...(values.status !== initialValues!.status ? { status: values.status } : {}),
+              ...(values.status !== initialValues.status ? { status: values.status } : {}),
             });
             message.success(outcome.changed ? "更新成功" : "无需修改");
           } else {
             const outcome = await createPosition({
+              ...attributePatch,
               posCode: values.posCode.trim(),
               posName: values.posName.trim(),
               description: values.description || undefined,
@@ -106,6 +130,11 @@ export default function PositionFormModal({ open, initialValues, onOpenChange, o
         }))}
         rules={[{ required: true }]}
       />
+      {loadDefinitions && attributes.status === "loading" && <p role="status">正在加载自定义属性…</p>}
+      {loadDefinitions && attributes.status === "error" && (
+        <Alert type="error" title="自定义属性加载失败" action={<Button onClick={reload}>重试</Button>} />
+      )}
+      <CustomAttributeFields definitions={definitions} />
     </ModalForm>
   );
 }

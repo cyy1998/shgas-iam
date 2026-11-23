@@ -106,20 +106,20 @@ code={urlencoded_code}&redirect_uri={urlencoded_original_redirect_url}
     "sid": "opaque-custom-token",
     "ttl": 300,
     "subject": {
-      "version": 4,
+      "version": 5,
       "subjectIdentifier": "00000000-0000-4000-8000-000000001001",
-      "profile": { "username": "138550", "name": "张三" }
+      "profile": { "username": "138550", "name": "张三", "customAttributes": { "office_location": "二楼" } }
     }
   }
 }
 ```
 
-- **主体投影格式（Wire v4）** subject 仅包含当前 Client 选择的字段，授权交付本 Client 的有效角色和任职上的有效全局角色，公开结构排除数据库 ID 和兼容别名。
-  完整主体仅接受 wire v4，`authorization` 及其每条任职只交付角色。
-  任职与责任目标的组织使用[共用资料结构](README.md#单点登录的共同处理)。
-  `subjectClaims` 的名称和选项保持不变；接入方须适配新响应，并在恢复访问前清理或停用旧权限副本。
-  业务后端自行建立本地会话、关联 sid、设置自己的 HttpOnly Cookie，再跳回原 redirectUrl；
-  IAM 不建立或存储第三方自有 session。
+- **主体投影格式（Wire v5）** 业务兑换的 `data.subject` 与应用 UserInfo 的 `data` 使用[同一严格 Schema](../../packages/custom-sso/src/wire.ts)。
+  `subjectClaims` 继续控制可选基础资料、任职和角色。`profile.customAttributes` 提供当前用户的已发布自定义属性，
+  获准披露的有效任职在直属 `organization` 和 `position` 上各自提供 `customAttributes`。属性按稳定编码索引，未填写的键和空属性对象省略。
+  任职与责任目标的组织使用[共用资料结构](README.md#单点登录的共同处理)。`authorization` 及其任职继续承载本 Client 的有效角色和有效全局角色。
+  严格解析主体的调用方按[协调发布](../releases/deployment.md#启用目录自定义属性和-custom-sso-wire-v5)切换到 v5。
+  业务后端自行建立本地会话、关联 sid、设置自己的 HttpOnly Cookie，再跳回原 redirectUrl。
 
 - **异常与诊断 Header** 遇 500、503 或响应结果未知时，按[共同处理流程](README.md#单点登录的共同处理)重新授权。
   认证、参数或配置错误应先修正。认证并定位会话后发生的拒绝，即使是消费前的 Maintenance，也会尝试终止原 ClientSession。
@@ -158,8 +158,8 @@ Authorization: {sid}
 Authorization 直接使用 sid，不加 Bearer 前缀。服务端优先读取该 Client 的局部 Cookie，缺少 Cookie 才使用 Header。
 `Client: iam` 专用于根 UserInfo，须使用 global_session/UserSession Token，不能传应用 Custom Token。
 
-响应 data 是当前 Client 获准接收的 V4 主体。旧 Token 同样采用当前 subjectClaims；
-主体资料可能落后于源事实，接入方负责自己副本的刷新；根、原实例或账号失效仍独立阻止访问。
+应用 UserInfo 的 `data` 是 Wire v5 主体，已有有效 Token 使用当前披露范围和已发布资料。根 UserInfo 同样使用 v5，
+披露范围仍由 IAM Client 的 `subjectClaims` 控制。接入方负责刷新自己的资料副本；根、原实例或账号失效仍独立阻止访问。
 共有披露与时效保证见[主体信息交付](../features/application-integration.md#用户信息共享)。
 
 网关请求：

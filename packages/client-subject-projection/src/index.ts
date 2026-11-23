@@ -1,3 +1,5 @@
+import type { CustomAttributeValues } from "@iam/contracts/custom-attributes";
+
 export { SubjectProjectionNotReadyError } from "./errors";
 export {
   parseSubjectClaimSelection,
@@ -75,6 +77,7 @@ export interface SubjectFactsSnapshotBase {
     readonly username: string;
     readonly name: string;
     readonly phone: string | null;
+    readonly customAttributes?: CustomAttributeValues;
   };
 }
 

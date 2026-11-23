@@ -1,5 +1,6 @@
 import { createAuditRepository } from "@admin-api/services/audit/audit.repository";
 import { createClientRepository } from "@admin-api/services/client/client.repository";
+import { createCustomAttributeRepository } from "@admin-api/services/custom-attribute/custom-attribute.repository";
 import { createEmploymentRepository } from "@admin-api/services/employment/employment.repository";
 import { createOrganizationRepository } from "@admin-api/services/organization/organization.repository";
 import { createOrganizationResponsibilityRepository } from "@admin-api/services/organization-responsibility/organization-responsibility.repository";
@@ -12,6 +13,7 @@ export function createAdminApiRepositories(client: DbClient) {
   return {
     audit: createAuditRepository(client),
     client: createClientRepository(client),
+    customAttribute: createCustomAttributeRepository(client),
     employment: createEmploymentRepository(client),
     organization: createOrganizationRepository(client),
     organizationResponsibility: createOrganizationResponsibilityRepository(client),

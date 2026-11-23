@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { OrganizationDocumentSchema, UserDocumentSchema } from "./document";
+import {
+  OrganizationDocumentQueryableSchema,
+  OrganizationDocumentSchema,
+  UserDocumentQueryableSchema,
+  UserDocumentSchema,
+} from "./document";
 
 export const DOCUMENT_SELECT_PATH_LIMIT = 64;
 export const DOCUMENT_SORT_FIELD_LIMIT = 3;
@@ -36,7 +41,7 @@ export function resolveDocumentPagination(request: z.infer<typeof DocumentPagina
   return { page, pageSize, offset: (page - 1) * pageSize };
 }
 
-/** Root scalar types and legal sort fields have the same source as the public document. */
+/** Derive root scalar sort fields from the queryable public document shape. */
 export function createDocumentSorting(schema: z.ZodObject) {
   const types = new Map<string, "string" | "number" | "boolean">();
   for (const [field, child] of Object.entries(schema.shape)) {
@@ -79,8 +84,8 @@ export function createDocumentSorting(schema: z.ZodObject) {
 }
 
 export type DocumentSort = z.infer<ReturnType<typeof createDocumentSorting>["sortSchema"]>;
-export const userDocumentSorting = createDocumentSorting(UserDocumentSchema);
-export const organizationDocumentSorting = createDocumentSorting(OrganizationDocumentSchema);
+export const userDocumentSorting = createDocumentSorting(UserDocumentQueryableSchema);
+export const organizationDocumentSorting = createDocumentSorting(OrganizationDocumentQueryableSchema);
 
 export type SelectedDocument<Value> = Value extends readonly (infer Item)[]
   ? SelectedDocument<Item>[]

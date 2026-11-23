@@ -157,7 +157,7 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   const initialUserInfoBody = await initialUserInfo.json();
   expect(initialUserInfoBody).toMatchObject({
     data: {
-      version: 4,
+      version: 5,
       profile: {
         username: adminUsername,
       },

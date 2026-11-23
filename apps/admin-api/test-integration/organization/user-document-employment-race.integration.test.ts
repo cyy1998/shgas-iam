@@ -81,9 +81,11 @@ function runtime(pause?: { reached: () => void; released: Promise<void> }) {
   const repositories = createAdminApiRepositories(pg.db);
   const organization = createOrganizationService({
     organizationRepository: repositories.organization,
+    customAttributeDefinitions: repositories.customAttribute,
     responsibilityReader: repositories.organizationResponsibility,
     uow: mapUnitOfWork(uow, (tx) => ({
       organizationRepository: tx.repositories.organization,
+      customAttributeDefinitions: tx.repositories.customAttribute,
       auditService: tx.auditService,
       responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
       organizationDocumentInvalidation: tx.organizationDocumentInvalidation,

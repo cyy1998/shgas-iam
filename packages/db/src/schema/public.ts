@@ -1,5 +1,6 @@
 export * from "./core/client-delegations";
 export * from "./core/clients";
+export * from "./core/custom-attribute-definitions";
 export * from "./core/employments";
 export * from "./core/organization-closures";
 export * from "./core/organization-document";

@@ -8,4 +8,6 @@ function trpc<T>(data: T) {
 export const handlers = [
   http.get("*/rpc/admin.user.search", () => trpc(adminUserSearchResult)),
   http.get("*/rpc/admin.position.search", () => trpc(adminPositionSearchResult)),
+  http.get("*/rpc/admin.position.detail", () => trpc(adminPositionSearchResult.result[0])),
+  http.get("*/rpc/admin.customAttribute.list", () => trpc([])),
 ];

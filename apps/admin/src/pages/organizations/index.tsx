@@ -1,4 +1,5 @@
 import { useAccess } from "@admin/admin-access";
+import CustomAttributeDefinitionsDrawer from "@admin/components/custom-attributes/CustomAttributeDefinitionsDrawer";
 import OrgDetailPanel from "@admin/pages/organizations/components/OrgDetailPanel";
 import OrgFormModal from "@admin/pages/organizations/components/OrgFormModal";
 import OrgSearchPanel from "@admin/pages/organizations/components/OrgSearchPanel";
@@ -27,6 +28,7 @@ const DETAIL_CHILDREN_DEFAULT_SIZE = 20;
 
 export default function OrganizationsPage() {
   const access = useAccess();
+  const [attributeDefinitionsOpen, setAttributeDefinitionsOpen] = useState(false);
   const [selectedCode, setSelectedCode] = useState<string | undefined>();
   const [committedWarning, setCommittedWarning] = useState<string>();
   const [formState, setFormState] = useState<FormState>({ open: false });
@@ -150,6 +152,9 @@ export default function OrganizationsPage() {
                 >
                   新建根组织
                 </Button>
+                <Button type="text" onClick={() => setAttributeDefinitionsOpen(true)}>
+                  自定义属性
+                </Button>
               </div>
             )}
           </Card>
@@ -190,7 +195,18 @@ export default function OrganizationsPage() {
         </Col>
       </Row>
 
+      {access.canCreateOrganizationRoot && (
+        <CustomAttributeDefinitionsDrawer
+          entityType="organization"
+          open={attributeDefinitionsOpen}
+          onClose={() => {
+            setAttributeDefinitionsOpen(false);
+            if (selectedCode) refreshAll();
+          }}
+        />
+      )}
       <OrgFormModal
+        canManageCustomAttributes={access.canCreateOrganizationRoot}
         open={formState.open}
         mode={formState.open ? formState.mode : "create-root"}
         initialValues={formState.open && formState.mode === "edit" ? formState.initialValues : null}

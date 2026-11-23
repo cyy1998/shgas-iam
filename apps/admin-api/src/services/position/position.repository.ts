@@ -5,7 +5,7 @@ import { compactUpdate, firstRow } from "@iam/db/query-utils";
 import { employments, positions } from "@iam/db/schema";
 import { PositionCodeExistsError } from "@iam/domain/position";
 import { and, count, eq, getTableColumns, inArray } from "drizzle-orm";
-import type { PositionCreateDto, PositionFuzzyQueryDto, PositionUpdateDto } from "./position.type";
+import type { PositionCreateValues, PositionFuzzyQueryDto, PositionUpdateValues } from "./position.type";
 
 export function createPositionRepository(db: DbClient) {
   async function write<T>(operation: () => Promise<T>, conflictMessage: string): Promise<T> {
@@ -51,7 +51,7 @@ export function createPositionRepository(db: DbClient) {
         .groupBy(positions.id);
       return firstRow(rows) ?? null;
     },
-    async setPosition(positionCreateDto: PositionCreateDto) {
+    async setPosition(positionCreateDto: PositionCreateValues) {
       return write(
         async () => firstRow(await db.insert(positions).values(positionCreateDto).returning()),
         "重复岗位code代码",
@@ -80,7 +80,7 @@ export function createPositionRepository(db: DbClient) {
         },
       });
     },
-    async updatePositionByCode(posCode: string, data: PositionUpdateDto) {
+    async updatePositionByCode(posCode: string, data: PositionUpdateValues) {
       return write(
         async () =>
           firstRow(

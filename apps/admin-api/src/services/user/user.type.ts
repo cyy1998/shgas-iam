@@ -1,4 +1,6 @@
 import type { z } from "@hono/zod-openapi";
+import type { CustomAttributeValues } from "@iam/contracts/custom-attributes";
+import type { User as SharedUser } from "@iam/domain/user";
 import type {
   UserAdminCreateDtoSchema,
   UserDetailDtoSchema,
@@ -7,7 +9,8 @@ import type {
   UserWecomExternalBindingSchema,
 } from "./user.schema";
 
-export type { User, UserCreateDto } from "@iam/domain/user";
+export type { UserCreateDto } from "@iam/domain/user";
+export type User = SharedUser & { customAttributes?: CustomAttributeValues };
 export type UserDetailDto = z.infer<typeof UserDetailDtoSchema>;
 export type UserWecomExternalBinding = z.infer<typeof UserWecomExternalBindingSchema>;
 export interface UserPaginationQueryDto extends z.infer<typeof UserPaginationQueryDtoSchema> {}

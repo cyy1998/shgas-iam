@@ -1,3 +1,4 @@
+import CustomAttributeDetails from "@admin/components/custom-attributes/CustomAttributeDetails";
 import styles from "@admin/components/detail/DetailDrawer.module.less";
 import type { UserDetailVo, UserWecomExternalBinding, updateUser } from "@admin/services/user";
 import { Button, Descriptions, Space, Tag, Typography, theme } from "antd";
@@ -101,6 +102,12 @@ export default function UserBasicInformation({
                 ]
               : []),
           ]}
+        />
+      )}
+      {!editing && detail.customAttributeDefinitions && (
+        <CustomAttributeDetails
+          definitions={detail.customAttributeDefinitions}
+          values={detail.customAttributes ?? {}}
         />
       )}
       <div className={styles["role-row"]}>

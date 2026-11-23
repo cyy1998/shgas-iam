@@ -65,6 +65,7 @@ export function createPlaywrightJourneyOperations(options: CreatePlaywrightJourn
             IAM_E2E_PLAYWRIGHT_OUTPUT_DIR: playwrightStagingDirectory(descriptor),
             IAM_E2E_RUN_ID: descriptor.runId,
             ...environment,
+            IAM_E2E_RESOURCE_RECORD: descriptor.resourceRecord,
           },
           signal,
         },

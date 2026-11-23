@@ -35,6 +35,7 @@ describe("OrganizationCreateDtoSchema", () => {
       isEntity: false,
       parentCode: "PARENT",
       storageSecret: "private",
+      customAttributes: { grade: "private" },
     });
 
     expect(input).toStrictEqual({
@@ -64,6 +65,7 @@ describe("toOrganizationDto", () => {
       parent,
       children: [],
       storageSecret: "private",
+      customAttributes: { grade: "private" },
     });
 
     expect(output).toStrictEqual({

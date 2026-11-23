@@ -1,4 +1,5 @@
 import { defineAdminApiMutationOperation, defineAdminApiQueryOperation } from "@admin-api/lib/admin-api-adapter";
+import { authorizeAdminOperationForContext } from "@admin-api/services/admin-authorization/admin-authorization.context";
 import { resolveAdminAuditContext } from "@admin-api/services/audit/audit.context";
 import {
   PositionCreateDtoSchema,
@@ -41,8 +42,15 @@ export function createPositionAdapter(deps: CreatePositionAdapterDeps) {
     operationId: "admin.position.detail",
     input: z.object({ posCode: z.string() }),
     restInput: (c) => c.req.valid("param") as { posCode: string },
-    handler: async ({ posCode }) =>
-      toPositionMemberCountVo(await deps.positionService.getPositionDetailByCode(posCode)),
+    handler: async ({ posCode }, { hono }) => {
+      const authorization = await authorizeAdminOperationForContext(hono, {
+        operationId: "admin.position.detail",
+        operationInput: undefined,
+      });
+      return toPositionMemberCountVo(
+        await deps.positionService.getPositionDetailByCode(posCode, authorization.hrAdministrationScope === null),
+      );
+    },
   });
 
   const createPosition = defineAdminApiMutationOperation({

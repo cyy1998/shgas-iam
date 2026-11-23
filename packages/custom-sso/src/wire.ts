@@ -8,24 +8,39 @@ import type {
 } from "@iam/client-subject-projection";
 import { EmploymentResponsibilitySnapshotSchema, parseSubjectClaimSelection } from "@iam/client-subject-projection";
 import type { SubjectClaimName } from "@iam/contracts";
-import { OrganizationReferenceSchema, SubjectClaim } from "@iam/contracts";
+import {
+  OrganizationLevel,
+  OrganizationPathNodeSchema,
+  OrganizationReferenceSchema,
+  SubjectClaim,
+} from "@iam/contracts";
+import { PublishedCustomAttributesSchema } from "@iam/contracts/custom-attributes";
 import { z } from "zod";
 
-const CustomSsoEmploymentBaseObjectSchema = z
-  .object({
-    isPrimary: z.boolean(),
-    organization: OrganizationReferenceSchema.strict().readonly(),
-    position: z
-      .object({
-        code: z.string(),
-        name: z.string(),
-      })
-      .strict()
-      .readonly(),
-  })
-  .strict();
+const CUSTOM_SSO_SUBJECT_WIRE_VERSION = 5;
+
+const CustomSsoOrganizationReferenceSchema = OrganizationReferenceSchema.safeExtend({
+  path: z.array(OrganizationPathNodeSchema.strict()).min(1).max(OrganizationLevel.Five),
+}).strict();
+
+const CustomSsoPositionReferenceSchema = z.strictObject({
+  code: z.string(),
+  name: z.string(),
+});
+
+const CustomSsoEmploymentBaseObjectSchema = z.strictObject({
+  isPrimary: z.boolean(),
+  organization: CustomSsoOrganizationReferenceSchema.readonly(),
+  position: CustomSsoPositionReferenceSchema.readonly(),
+});
 
 export const CustomSsoEmploymentSchema = CustomSsoEmploymentBaseObjectSchema.extend({
+  organization: CustomSsoOrganizationReferenceSchema.safeExtend({
+    customAttributes: PublishedCustomAttributesSchema,
+  }).readonly(),
+  position: CustomSsoPositionReferenceSchema.extend({
+    customAttributes: PublishedCustomAttributesSchema,
+  }).readonly(),
   responsibilities: z.array(EmploymentResponsibilitySnapshotSchema).readonly(),
 })
   .strict()
@@ -39,13 +54,14 @@ const CustomSsoAuthorizationEmploymentSchema = CustomSsoEmploymentBaseObjectSche
 
 export const CustomSsoSubjectProjectionSchema = z
   .object({
-    version: z.literal(4),
+    version: z.literal(CUSTOM_SSO_SUBJECT_WIRE_VERSION),
     subjectIdentifier: z.uuid(),
     profile: z
       .object({
         username: z.string().optional(),
         name: z.string().optional(),
         phone: z.string().optional(),
+        customAttributes: PublishedCustomAttributesSchema,
         employments: z.array(CustomSsoEmploymentSchema).readonly().optional(),
       })
       .strict()
@@ -106,7 +122,7 @@ export function buildCustomSsoPlaceholderPreview(subjectClaims: readonly Subject
   });
   const selected = new Set(selection.optionalClaims);
   return CustomSsoSubjectProjectionSchema.parse({
-    version: 4,
+    version: CUSTOM_SSO_SUBJECT_WIRE_VERSION,
     subjectIdentifier: PLACEHOLDER_SUBJECT_IDENTIFIER,
     ...(selected.has(SubjectClaim.ProfileUsername) ||
     selected.has(SubjectClaim.ProfileName) ||
@@ -134,23 +150,19 @@ export function buildCustomSsoPlaceholderPreview(subjectClaims: readonly Subject
 
 function mapClientSubjectProjectionToCustomSso(projection: ClientSubjectProjection): CustomSsoSubjectProjection {
   const wire: {
-    version: 4;
+    version: typeof CUSTOM_SSO_SUBJECT_WIRE_VERSION;
     subjectIdentifier: string;
     profile?: CustomSsoSubjectProfile;
     authorization?: CustomSsoClientAuthorization;
   } = {
-    version: 4,
+    version: CUSTOM_SSO_SUBJECT_WIRE_VERSION,
     subjectIdentifier: projection.subjectIdentifier,
   };
-  const profile: {
-    username?: string;
-    name?: string;
-    phone?: string;
-    employments?: readonly CustomSsoEmployment[];
-  } = {};
+  const profile: { -readonly [Key in keyof CustomSsoSubjectProfile]: CustomSsoSubjectProfile[Key] } = {};
   if (projection.username !== undefined) profile.username = projection.username;
   if (projection.name !== undefined) profile.name = projection.name;
   if (projection.phone !== undefined && projection.phone !== null) profile.phone = projection.phone;
+  if (projection.customAttributes !== undefined) profile.customAttributes = projection.customAttributes;
   if (projection.employments !== undefined) {
     profile.employments = projection.employments.map(mapEmploymentProfile);
   }
@@ -172,8 +184,17 @@ function mapAuthorization(authorization: ClientAuthorization): CustomSsoClientAu
 }
 
 function mapEmploymentProfile(employment: EmploymentProfile): CustomSsoEmployment {
+  const base = mapEmploymentBase(employment);
+  const organizationAttributes = employment.organization.customAttributes;
+  const positionAttributes = employment.position.customAttributes;
   return {
-    ...mapEmploymentBase(employment),
+    ...base,
+    organization:
+      organizationAttributes === undefined
+        ? base.organization
+        : { ...base.organization, customAttributes: organizationAttributes },
+    position:
+      positionAttributes === undefined ? base.position : { ...base.position, customAttributes: positionAttributes },
     responsibilities: employment.responsibilities.map((responsibility) => ({
       type: {
         code: responsibility.type.code,

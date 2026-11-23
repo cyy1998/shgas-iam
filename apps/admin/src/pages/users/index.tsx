@@ -1,4 +1,5 @@
 import { useAccess } from "@admin/admin-access";
+import CustomAttributeDefinitionsDrawer from "@admin/components/custom-attributes/CustomAttributeDefinitionsDrawer";
 import StatusTag from "@admin/components/StatusTag";
 import UserDetailDrawer from "@admin/pages/users/components/UserDetailDrawer";
 import UserFormModal from "@admin/pages/users/components/UserFormModal";
@@ -18,6 +19,7 @@ export default function UsersPage() {
   const actionRef = useRef<ActionType>(undefined);
   const [committedWarning, setCommittedWarning] = useState<string>();
   const [createFormOpen, setCreateFormOpen] = useState(false);
+  const [definitionsOpen, setDefinitionsOpen] = useState(false);
   const [drawerUsername, setDrawerUsername] = useState<string | null>(null);
   const [filters, setFilters] = useState<UserFilters>({});
   const [searchText, setSearchText] = useState("");
@@ -166,6 +168,9 @@ export default function UsersPage() {
           toolBarRender={() =>
             access.canCreateUser
               ? [
+                  <Button key="definitions" onClick={() => setDefinitionsOpen(true)}>
+                    自定义属性
+                  </Button>,
                   <Button
                     key="create"
                     type="primary"
@@ -230,8 +235,16 @@ export default function UsersPage() {
         />
       </section>
 
+      {access.canCreateUser && (
+        <CustomAttributeDefinitionsDrawer
+          entityType="user"
+          open={definitionsOpen}
+          onClose={() => setDefinitionsOpen(false)}
+        />
+      )}
+
       <UserFormModal
-        open={createFormOpen}
+        open={createFormOpen && access.canCreateUser}
         onOpenChange={setCreateFormOpen}
         onCommitted={(error, username, generatedPasswordMissing) => {
           setCommittedWarning(

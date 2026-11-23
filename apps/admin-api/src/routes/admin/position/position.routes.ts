@@ -1,6 +1,5 @@
 import {
   PositionCreateDtoSchema,
-  PositionDtoSchema,
   PositionPaginationQueryDtoSchema,
   PositionStatusUpdateDtoSchema,
   PositionUpdateDtoSchema,
@@ -13,7 +12,7 @@ import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/crea
 import { createPageResultSchema } from "@iam/api-core/core/pagination/schema";
 import { createAdminMutationResultSchema } from "@iam/contracts";
 import { HttpStatusCodes } from "@iam/contracts/http";
-import { PositionVoSchema } from "./position.schema";
+import { PositionCreatedVoSchema, PositionDetailVoSchema, PositionVoSchema } from "./position.schema";
 
 const tags = ["Admin/Position"];
 
@@ -42,7 +41,7 @@ export const positionDetail = createRoute({
   },
   responses: {
     ...commonErrorResponses,
-    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(PositionDtoSchema), "岗位详情"),
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(PositionDetailVoSchema), "岗位详情"),
   },
 });
 
@@ -56,7 +55,7 @@ export const positionCreate = createRoute({
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(createAdminMutationResultSchema(PositionDtoSchema)),
+      createSuccessResponseSchema(createAdminMutationResultSchema(PositionCreatedVoSchema)),
       "岗位创建成功",
     ),
   },

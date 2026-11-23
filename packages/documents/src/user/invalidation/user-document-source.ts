@@ -5,6 +5,7 @@ import {
   RoleAssignmentTargetType,
   UserDocumentRebuildReason,
 } from "@iam/contracts";
+import { CustomAttributeCodeSchema, CustomAttributeEntityTypeSchema } from "@iam/contracts/custom-attributes";
 import type { DbClient } from "@iam/db";
 import { z } from "zod";
 import { createUserDocumentAffectedUserRepository } from "./affected-user.repository";
@@ -20,6 +21,12 @@ export const UserDocumentSourceChangeSchema = z.discriminatedUnion("kind", [
   }),
   z.strictObject({ kind: z.literal("organization"), organizationId: positiveId }),
   z.strictObject({ kind: z.literal("position"), positionId: positiveId }),
+  z.strictObject({ kind: z.literal("organization-custom-attributes"), organizationId: positiveId }),
+  z.strictObject({
+    kind: z.literal("custom-attribute-definition"),
+    entityType: CustomAttributeEntityTypeSchema,
+    attributeCode: CustomAttributeCodeSchema,
+  }),
   z.strictObject({ kind: z.literal("role"), roleId: positiveId }),
   z.strictObject({
     kind: z.literal("role-assignment"),
@@ -43,7 +50,10 @@ export function userDocumentSourceReason(kind: UserDocumentSourceChange["kind"])
     case "employment":
       return UserDocumentRebuildReason.EmploymentUpdated;
     case "organization":
+    case "organization-custom-attributes":
       return UserDocumentRebuildReason.OrganizationUpdated;
+    case "custom-attribute-definition":
+      return UserDocumentRebuildReason.CustomAttributeDefinitionUpdated;
     case "position":
       return UserDocumentRebuildReason.PositionUpdated;
     case "role":
@@ -73,6 +83,10 @@ export async function expandUserDocumentSource(db: DbClient, source: UserDocumen
           ...(await repository.findResponsibilityHoldersByOrganizationIds([source.organizationId], observedAt)),
         ]),
       ];
+    case "organization-custom-attributes":
+      return await repository.findByDirectOrganizationId(source.organizationId);
+    case "custom-attribute-definition":
+      return await repository.findByCustomAttributeDefinition(source.entityType, source.attributeCode);
     case "position":
       return await repository.findByPositionIds([source.positionId]);
     case "role":

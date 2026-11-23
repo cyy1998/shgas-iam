@@ -1,8 +1,11 @@
 import type { OrganizationResponsibilityTypeCode } from "@iam/contracts";
 import { EmploymentStatus } from "@iam/contracts";
+import type { CustomAttributeEntityType } from "@iam/contracts/custom-attributes";
 import type { DbClient } from "@iam/db";
-import { employments, organizationClosures } from "@iam/db/schema";
+import { employments, organizationClosures, organizations, positions, users } from "@iam/db/schema";
+import type { SQL } from "drizzle-orm";
 import { and, eq, inArray } from "drizzle-orm";
+import { customAttributeKeyExists } from "../../custom-attributes";
 
 const SQL_TARGET_BATCH_SIZE = 1_000;
 
@@ -34,7 +37,48 @@ export function createUserDocumentAffectedUserRepository(
     );
   }
 
+  async function findByDirectAssignment(match: SQL) {
+    const rows = await db
+      .selectDistinct({ userId: employments.userId })
+      .from(employments)
+      .innerJoin(users, eq(users.id, employments.userId))
+      .where(
+        and(
+          eq(users.isDelete, false),
+          eq(employments.isDelete, false),
+          eq(employments.status, EmploymentStatus.Enable),
+          match,
+        ),
+      );
+    return rows.map(({ userId }) => userId);
+  }
+
   return {
+    async findByDirectOrganizationId(organizationId: number) {
+      return await findByDirectAssignment(eq(employments.orgId, organizationId));
+    },
+
+    async findByCustomAttributeDefinition(entityType: CustomAttributeEntityType, attributeCode: string) {
+      if (entityType === "user") {
+        const rows = await db
+          .select({ userId: users.id })
+          .from(users)
+          .where(and(eq(users.isDelete, false), customAttributeKeyExists(users.customAttributes, attributeCode)));
+        return rows.map(({ userId }) => userId);
+      }
+      const source = entityType === "organization" ? organizations : positions;
+      const assignedId = entityType === "organization" ? employments.orgId : employments.posId;
+      return await findByDirectAssignment(
+        inArray(
+          assignedId,
+          db
+            .select({ id: source.id })
+            .from(source)
+            .where(and(eq(source.isDelete, false), customAttributeKeyExists(source.customAttributes, attributeCode))),
+        ),
+      );
+    },
+
     async findByOrganizationIds(organizationIds: readonly number[]) {
       return await findInBatches(
         organizationIds,

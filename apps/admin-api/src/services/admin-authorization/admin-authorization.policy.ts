@@ -128,6 +128,14 @@ function hasForbiddenHrUserDocumentField(operationInput: unknown) {
   return Object.keys(patch).some((key) => !HR_USER_DOCUMENT_UPDATE_FIELDS.has(key));
 }
 
+function hasOrganizationCustomAttributes(input: unknown, operationId: string, isRestRequest: boolean) {
+  if (input === null || typeof input !== "object") return false;
+  let payload: unknown = input;
+  if (isRestRequest) payload = "body" in input ? input.body : undefined;
+  else if (operationId === "admin.organization.update") payload = "data" in input ? input.data : undefined;
+  return payload !== null && typeof payload === "object" && Object.hasOwn(payload, "customAttributes");
+}
+
 function userAllowedActions(decision: AdminAuthorizationDecision): AdminUserAllowedActions {
   return {
     editProfile: decision,
@@ -539,14 +547,14 @@ export function createAdminAuthorizationPolicy(deps: CreateAdminAuthorizationPol
   }
 
   function assertOperationInputAllowed(input: AdminOperationAuthorizationInput) {
-    if (
-      hasFullAdminCapability(input.actor) ||
-      input.operationId !== "admin.user.update" ||
-      !hasForbiddenHrUserDocumentField(input.operationInput)
-    ) {
-      return;
-    }
-    const operation = ADMIN_AUTHORIZATION_OPERATION_REGISTRY["admin.user.update"];
+    if (hasFullAdminCapability(input.actor)) return;
+    const { operationId, operationInput, operationInputSource } = input;
+    const denied =
+      (operationId === "admin.user.update" && hasForbiddenHrUserDocumentField(operationInput)) ||
+      ((operationId === "admin.organization.create" || operationId === "admin.organization.update") &&
+        hasOrganizationCustomAttributes(operationInput, operationId, operationInputSource === "rest-request"));
+    if (!denied) return;
+    const operation = ADMIN_AUTHORIZATION_OPERATION_REGISTRY[operationId];
     logMutationDenial(input.actor, {
       operationId: input.operationId,
       resourceType: operation.resourceType,

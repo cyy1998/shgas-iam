@@ -156,14 +156,15 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
       async function project(
         clientCode: string,
         access: Awaited<ReturnType<typeof permitted>>,
-        claims: SubjectClaimName[],
+        delivery: { claims: readonly SubjectClaimName[]; includeCustomAttributes: boolean },
       ) {
         return await resolveCustomSsoSubjectProjection(
           { resolve: (input) => options.projection.resolve(input, operation) },
           {
             subjectIdentifier: access.observation.userSession.subjectIdentifier,
             clientCode,
-            selection: parseSubjectClaimSelection({ catalogVersion: 3, claims }),
+            selection: parseSubjectClaimSelection({ catalogVersion: 3, claims: [...delivery.claims] }),
+            includeCustomAttributes: delivery.includeCustomAttributes,
           },
         );
       }
@@ -354,7 +355,10 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
             consumption = "unknown";
             consumption = await codes.consumeCode(code);
             if (consumption !== "consumed") throw new BadRequestError("Code 已失效，请重新授权");
-            const subject = await project(input.clientCode, access, [...config.subjectClaims]);
+            const subject = await project(input.clientCode, access, {
+              claims: config.subjectClaims,
+              includeCustomAttributes: true,
+            });
             const prepared = await prepareToken(access, "business");
             knownToken = prepared;
             await tokens.save(prepared.bearer, prepared.record);
@@ -432,22 +436,22 @@ export function createUnifiedCustomSsoOperations(options: UnifiedCustomSsoOperat
               authenticatedClientCode: clientCode,
             },
             subjectDeliveryCapability: Object.freeze({
-              resolveUserInfo: () => project(clientCode, access, [...config.subjectClaims]),
+              resolveUserInfo: () =>
+                project(clientCode, access, { claims: config.subjectClaims, includeCustomAttributes: true }),
             }),
           };
         },
         async authorizeLocalSession(bearer: string, clientCode: string, purpose?: "business" | "managed") {
           const { access, config } = await authenticateToken(bearer, clientCode, purpose);
-          const subject = await project(
-            clientCode,
-            access,
-            config.subjectClaims.filter(
+          const subject = await project(clientCode, access, {
+            claims: config.subjectClaims.filter(
               (claim) =>
                 claim === SubjectClaim.SubjectIdentifier ||
                 claim === SubjectClaim.ProfileUsername ||
                 claim === SubjectClaim.ProfileName,
             ),
-          );
+            includeCustomAttributes: false,
+          });
           return Buffer.from(
             JSON.stringify({ version: 1, subjectIdentifier: subject.subjectIdentifier, ...subject.profile }),
             "utf8",

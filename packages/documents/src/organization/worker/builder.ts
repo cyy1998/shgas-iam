@@ -1,12 +1,19 @@
 import type { DbClient, db as database } from "@iam/db";
 import { organizationClosures, organizations } from "@iam/db/schema";
 import { desc, eq } from "drizzle-orm";
+import {
+  type DocumentCustomAttributeDefinition,
+  documentCustomAttributeFields,
+  hasCustomAttributeValues,
+  loadEnabledDocumentCustomAttributeDefinitions,
+} from "../../custom-attributes";
 import { type OrganizationDocument, OrganizationDocumentSchema } from "../schema";
 
 export class OrganizationDocumentSourceIntegrityError extends Error {}
 
 /** A transaction-bound reader; maintenance can reuse it within one complete read-only snapshot. */
 export function createOrganizationDocumentSourceReader(db: DbClient) {
+  let definitions: Promise<DocumentCustomAttributeDefinition[]> | undefined;
   return {
     async readDocument(organizationId: number, signal?: AbortSignal): Promise<OrganizationDocument | null> {
       signal?.throwIfAborted();
@@ -46,6 +53,14 @@ export function createOrganizationDocumentSourceReader(db: DbClient) {
       });
       if (pathIds.at(-1) !== target.id)
         throw new OrganizationDocumentSourceIntegrityError("Organization Search path does not end at target");
+      if (hasCustomAttributeValues(target.customAttributes)) {
+        definitions ??= loadEnabledDocumentCustomAttributeDefinitions(db, ["organization"]);
+      }
+      const customAttributeFields = documentCustomAttributeFields(
+        target.customAttributes,
+        definitions === undefined ? [] : await definitions,
+      );
+      signal?.throwIfAborted();
       return OrganizationDocumentSchema.parse({
         code: target.orgCode,
         name: target.orgName,
@@ -55,6 +70,7 @@ export function createOrganizationDocumentSourceReader(db: DbClient) {
         isVirtual: target.isVirtual,
         isEntity: target.isEntity,
         path,
+        ...customAttributeFields,
       });
     },
   };

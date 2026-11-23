@@ -26,6 +26,7 @@ export default defineConfig({
     journey === "oidc"
       ? [
           "oidc-pkce.spec.ts",
+          "directory-custom-attributes.spec.ts",
           "dual-entry.spec.ts",
           "application-admission.spec.ts",
           "wecom-qr.spec.ts",

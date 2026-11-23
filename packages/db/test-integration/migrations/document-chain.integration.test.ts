@@ -108,8 +108,10 @@ test("the fixed 95dc4871 inventory upgrades through the complete chain without c
     await harness.sql`SELECT organization_id,version,status FROM organization_document_rebuild_state`;
   const receipt = await harness.sql`SELECT rebuild_requests,status FROM organization_document_outbox`;
   const documents = await harness.sql`SELECT * FROM user_document`;
-  expect([...usersAfter]).toEqual([...users]);
-  expect([...organizationsAfter]).toEqual([...organizations]);
+  expect([...usersAfter]).toStrictEqual(users.map((user) => ({ ...user, custom_attributes: {} })));
+  expect([...organizationsAfter]).toStrictEqual(
+    organizations.map((organization) => ({ ...organization, custom_attributes: {} })),
+  );
   expect([...journalAfter].slice(0, journal.length)).toEqual([...journal]);
   const appliedMigrations = journalAfter.slice(journal.length).map((entry) => entry.name);
   expect(appliedMigrations.filter((name) => documentMigrations.includes(name))).toEqual(documentMigrations);

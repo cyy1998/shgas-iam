@@ -11,8 +11,9 @@ export const organizationDocumentOutboxEntries = snakeCase.table(
   "organization_document_outbox",
   {
     id: uuid().primaryKey(),
-    organizationId: integer().notNull(),
-    scope: text().$type<OrganizationDocumentSourceScope>().notNull(),
+    organizationId: integer(),
+    scope: text().$type<OrganizationDocumentSourceScope>(),
+    attributeCode: text(),
     status: text().$type<OrganizationDocumentWorkStatus>().notNull().default("pending"),
     processingToken: uuid(),
     processingStartedAt: timestamp(),
@@ -31,6 +32,15 @@ export const organizationDocumentOutboxEntries = snakeCase.table(
     check(
       "organization_document_outbox_status_check",
       sql`${table.status} IN ('pending', 'processing', 'processed', 'failed')`,
+    ),
+    check(
+      "organization_document_outbox_source_check",
+      sql`(
+        ${table.organizationId} IS NOT NULL AND ${table.scope} IS NOT NULL AND ${table.attributeCode} IS NULL
+      ) OR (
+        ${table.organizationId} IS NULL AND ${table.scope} IS NULL AND ${table.attributeCode} IS NOT NULL
+        AND ${table.attributeCode} ~ '^[a-z][a-z0-9_]{0,63}$'
+      )`,
     ),
     check("organization_document_outbox_attempts_check", sql`${table.attempts} >= 0`),
     check(

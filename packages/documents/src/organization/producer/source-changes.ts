@@ -1,3 +1,4 @@
+import { CustomAttributeCodeSchema } from "@iam/contracts/custom-attributes";
 import type { DbClient } from "@iam/db";
 import type { OrganizationDocumentSourceScope } from "@iam/db/schema";
 import { organizationDocumentOutboxEntries } from "@iam/db/schema";
@@ -5,10 +6,18 @@ import { z } from "zod";
 import { createDocumentOutboxWakeUp, persistDocumentOutboxEntries } from "../../update";
 import type { OrganizationDocumentClock, OrganizationDocumentJobProducerPort } from "../work.types";
 
-const changedFieldSchema = z.enum(["code", "name", "type", "status", "isVirtual", "isEntity"]);
+const organizationIdSchema = z.number().int().positive();
+export const OrganizationDocumentOutboxSourceSchema = z.union([
+  z.strictObject({ organizationId: organizationIdSchema, scope: z.enum(["self", "subtree"]) }),
+  z.strictObject({ attributeCode: CustomAttributeCodeSchema }),
+]);
+type OrganizationDocumentOutboxSource = z.infer<typeof OrganizationDocumentOutboxSourceSchema>;
+
+const changedFieldSchema = z.enum(["code", "name", "type", "status", "isVirtual", "isEntity", "customAttributes"]);
 export type OrganizationDocumentChangedField = z.infer<typeof changedFieldSchema>;
 export type OrganizationDocumentSourceChange =
   | { kind: "created" | "deleted"; organizationId: number }
+  | { kind: "custom-attribute-definition"; attributeCode: string }
   | { kind: "updated"; organizationId: number; changedFields: readonly OrganizationDocumentChangedField[] };
 
 export interface CreateOrganizationDocumentInvalidationInput {
@@ -29,8 +38,13 @@ export function createOrganizationDocumentInvalidation(input: CreateOrganization
   return {
     async recordChanges(changes: readonly OrganizationDocumentSourceChange[]): Promise<void> {
       const scopes = new Map<number, OrganizationDocumentSourceScope>();
+      const attributeCodes = new Set<string>();
       for (const change of changes) {
-        z.number().int().positive().parse(change.organizationId);
+        if (change.kind === "custom-attribute-definition") {
+          attributeCodes.add(CustomAttributeCodeSchema.parse(change.attributeCode));
+          continue;
+        }
+        organizationIdSchema.parse(change.organizationId);
         let scope: OrganizationDocumentSourceScope = "self";
         if (change.kind === "updated") {
           const fields = z.array(changedFieldSchema).parse(change.changedFields);
@@ -41,7 +55,10 @@ export function createOrganizationDocumentInvalidation(input: CreateOrganization
       }
       const payloads = await persistOrganizationDocumentChanges(
         input.db,
-        [...scopes].sort(([a], [b]) => a - b).map(([organizationId, scope]) => ({ organizationId, scope })),
+        [
+          ...[...scopes].sort(([a], [b]) => a - b).map(([organizationId, scope]) => ({ organizationId, scope })),
+          ...[...attributeCodes].sort().map((attributeCode) => ({ attributeCode })),
+        ],
         clock.nowDate(),
       );
       wakeUp.register(payloads);
@@ -53,7 +70,7 @@ export type OrganizationDocumentInvalidation = ReturnType<typeof createOrganizat
 
 export async function persistOrganizationDocumentChanges(
   db: DbClient,
-  changes: { organizationId: number; scope: OrganizationDocumentSourceScope }[],
+  changes: OrganizationDocumentOutboxSource[],
   now: Date,
 ) {
   return await persistDocumentOutboxEntries(

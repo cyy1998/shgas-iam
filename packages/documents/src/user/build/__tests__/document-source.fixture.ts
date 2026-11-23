@@ -23,6 +23,7 @@ export function user(id = 1, overrides: Partial<User> = {}): User {
     mobile: null,
     wxId: null,
     password: null,
+    customAttributes: {},
     userType: UserType.Formal,
     orderNum: 9,
     status: UserStatus.Enable,
@@ -48,6 +49,7 @@ export function position(id = 1, overrides: Partial<UserDocumentBuildPosition> =
   return {
     ...base,
     id,
+    customAttributes: {},
     posCode: `POS-${id}`,
     posName: `Position ${id}`,
     description: null,
@@ -60,6 +62,7 @@ export function org(id = 1, overrides: Partial<UserDocumentBuildOrgPathRow> = {}
     ...base,
     id,
     descendantId: id,
+    customAttributes: {},
     depth: 0,
     orgCode: `ORG-${id}`,
     orgName: `Organization ${id}`,
@@ -80,6 +83,7 @@ export function dataset(overrides: Partial<DocumentBuildDataset> = {}): Document
     orgPathRows: [],
     roleRows: [],
     responsibilityRows: [],
+    customAttributeDefinitions: [],
     ...overrides,
   };
 }

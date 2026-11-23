@@ -8,6 +8,7 @@ import {
   RoleType,
 } from "@iam/contracts";
 import type { User } from "@iam/db/schema";
+import { documentCustomAttributeFields } from "../../custom-attributes";
 import { type PublishedUserDocument, PublishedUserDocumentSchema, USER_DOCUMENT_SCHEMA_VERSION } from "../document";
 import { UserDocumentSourceIntegrityError } from "./document-build.error";
 import type { DocumentBuildDataset } from "./document-build.repository";
@@ -73,6 +74,7 @@ function createDocumentAssembler(
   const paths = groupItemsBy(dataset.orgPathRows, (row) => row.descendantId);
   const roles = groupItemsBy(dataset.roleRows, (row) => row.employmentId);
   const responsibilities = groupItemsBy(dataset.responsibilityRows, (row) => row.employmentId);
+  const definitions = groupItemsBy(dataset.customAttributeDefinitions, (row) => row.entityType);
   const employmentIds = new Set(dataset.employments.map(({ id }) => id));
   if (dataset.responsibilityRows.some((row) => !employmentIds.has(row.employmentId)))
     throw new Error("Document responsibility references an unexpected Employment");
@@ -134,8 +136,15 @@ function createDocumentAssembler(
           employment,
           document: {
             isPrimary: employment.isPrimary,
-            organization,
-            position: { code: position.posCode, name: position.posName },
+            organization: {
+              ...organization,
+              ...documentCustomAttributeFields(target.customAttributes, definitions.get("organization") ?? []),
+            },
+            position: {
+              code: position.posCode,
+              name: position.posName,
+              ...documentCustomAttributeFields(position.customAttributes, definitions.get("position") ?? []),
+            },
             responsibilities: responsibilityItems,
             clientAuthorizations,
             ...(globalRoles.length > 0 ? { globalRoles } : {}),
@@ -160,6 +169,7 @@ function createDocumentAssembler(
         wxId: user.wxId,
         userType: user.userType,
         status: user.status,
+        ...documentCustomAttributeFields(user.customAttributes, definitions.get("user") ?? []),
         employments: items,
       },
     });

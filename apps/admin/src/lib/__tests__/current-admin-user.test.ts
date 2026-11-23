@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { mapCurrentAdminUser } from "../current-admin-user";
 
 describe("mapCurrentAdminUser", () => {
-  it("reads identity and roles only from the nested Custom SSO V4 projection", () => {
+  it("reads identity and roles only from the nested Custom SSO V5 projection", () => {
     expect(
       mapCurrentAdminUser({
-        version: 4,
+        version: 5,
         subjectIdentifier: "00000000-0000-4000-8000-000000000001",
         profile: {
           username: "admin",

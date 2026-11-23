@@ -28,7 +28,11 @@ function fixture() {
     async (): Promise<CustomSsoExchangeResult> => ({
       sid: "token",
       ttl: 37,
-      subject: { version: 4, subjectIdentifier: randomUUID() },
+      subject: {
+        version: 5,
+        subjectIdentifier: randomUUID(),
+        profile: { customAttributes: { floor: 0 } },
+      },
     }),
   );
   const callback = mock(
@@ -111,7 +115,11 @@ test.each(["client", "legacy:client/中文", "legacy%3Aclient", "😀".repeat(33
     expect(body.data).toEqual({
       sid: "token",
       ttl: 37,
-      subject: { version: 4, subjectIdentifier: expect.any(String) },
+      subject: {
+        version: 5,
+        subjectIdentifier: expect.any(String),
+        profile: { customAttributes: { floor: 0 } },
+      },
     });
     expect(f.calls[0]).toMatchObject({
       clientCode: client,
@@ -182,5 +190,8 @@ test("OpenAPI retains POST Basic and form token contract", async () => {
   expect(document.components.securitySchemes.CustomSsoBasic).toMatchObject({ type: "http", scheme: "basic" });
   expect(document.paths["/token"].post.security).toEqual([{ CustomSsoBasic: [] }]);
   expect(document.paths["/token"].post.requestBody.content).toHaveProperty("application/x-www-form-urlencoded");
+  expect(document.components.schemas.SsoTokenResult).toMatchObject({
+    properties: { subject: { $ref: "#/components/schemas/CustomSsoSubjectProjectionV5" } },
+  });
   expect(document.paths["/token"]).not.toHaveProperty("get");
 });

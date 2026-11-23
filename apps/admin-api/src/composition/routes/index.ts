@@ -9,6 +9,7 @@ import { createClientRoute } from "@admin-api/routes/admin/client/client.index";
 import { createClientAdminRouter } from "@admin-api/routes/admin/client/client.trpc";
 import { createClientAdmissionAdapter } from "@admin-api/routes/admin/client-admission/client-admission.adapter";
 import { createClientSsoAdapter } from "@admin-api/routes/admin/client-sso/client-sso.adapter";
+import { createCustomAttributeAdapter } from "@admin-api/routes/admin/custom-attribute/custom-attribute.index";
 import { createDelegationAdapter } from "@admin-api/routes/admin/delegation/delegation.adapter";
 import { createDelegationRoute } from "@admin-api/routes/admin/delegation/delegation.index";
 import { createDelegationAdminRouter } from "@admin-api/routes/admin/delegation/delegation.trpc";
@@ -91,10 +92,12 @@ export function createAdminApiRouteComposition(options: CreateAdminApiRoutesOpti
 
   const clientAdmissionAdapter = createClientAdmissionAdapter(services.clientAdmission);
   const clientSsoAdapter = createClientSsoAdapter(services.clientSso.service);
+  const customAttributeAdapter = createCustomAttributeAdapter(services.customAttribute);
   const adminRouter = createAdminRouter({
     delegation: createDelegationAdminRouter(delegationAdapter),
     clientAdmission: clientAdmissionAdapter.trpc,
     clientSso: clientSsoAdapter.trpc,
+    customAttribute: customAttributeAdapter.trpc,
     authorization: createAdminAuthorizationAdminRouter(authorizationAdapter),
     audit: createAuditAdminRouter(auditAdapter),
     client: createClientAdminRouter(clientAdapter),
@@ -114,6 +117,7 @@ export function createAdminApiRouteComposition(options: CreateAdminApiRoutesOpti
     "./src/routes/admin/delegation/delegation.index.ts": { default: createDelegationRoute(delegationAdapter) },
     "./src/routes/admin/client-admission/client-admission.index.ts": { default: clientAdmissionAdapter.rest },
     "./src/routes/admin/client-sso/client-sso.index.ts": { default: clientSsoAdapter.rest },
+    "./src/routes/admin/custom-attribute/custom-attribute.index.ts": { default: customAttributeAdapter.rest },
     "./src/routes/admin/authorization/authorization.index.ts": {
       default: createAdminAuthorizationRoute(authorizationAdapter),
     },

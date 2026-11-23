@@ -1,6 +1,7 @@
 import { useAccess } from "@admin/admin-access";
 import AuthorizationActionButton from "@admin/components/AuthorizationActionButton";
 import AuthorizationActionDropdown from "@admin/components/AuthorizationActionDropdown";
+import CustomAttributeDetails from "@admin/components/custom-attributes/CustomAttributeDetails";
 import StatusTag from "@admin/components/StatusTag";
 import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
 import {
@@ -10,9 +11,8 @@ import {
   type OrganizationTreeNode,
   updateOrganizationStatus,
 } from "@admin/services/organization";
-import { ProDescriptions } from "@ant-design/pro-components";
 import { getOrganizationStatusOptions, OrganizationStatus } from "@iam/contracts";
-import { Button, Empty, Modal, message, Space, Table, Tabs } from "antd";
+import { Button, Empty, Modal, message, Space, Spin, Table, Tabs } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import styles from "../OrganizationsPage.module.less";
 import OrganizationResponsibilityAssignmentsPanel from "./OrganizationResponsibilityAssignmentsPanel";
@@ -74,6 +74,19 @@ export default function OrgDetailPanel({
     );
   }
 
+  const overviewFields = [
+    { label: "编码", value: detail.orgCode },
+    { label: "名称", value: detail.orgName },
+    { label: "类型", value: detail.orgType },
+    { label: "层级", value: detail.level },
+    { label: "上级", value: detail.parentCode ? `${detail.parentName} (${detail.parentCode})` : "—" },
+    { label: "状态", value: <StatusTag domain="org" status={detail.status} /> },
+    { label: "下级数", value: detail.childrenCount },
+    { label: "在职雇佣", value: detail.employmentCount },
+    { label: "创建时间", value: new Date(detail.createTime).toLocaleString() },
+    { label: "更新时间", value: new Date(detail.updateTime).toLocaleString() },
+  ];
+
   const handleError = (err: unknown) => {
     if (err instanceof AdminMutationCommittedError) {
       onCommitted?.(err);
@@ -122,7 +135,7 @@ export default function OrgDetailPanel({
   };
 
   return (
-    <div style={{ padding: 16 }}>
+    <div className={styles["detail-panel"]}>
       <div className={styles["detail-header"]}>
         <Space size={8} className={styles.identity}>
           <h3>
@@ -165,49 +178,28 @@ export default function OrgDetailPanel({
             label: "组织详情",
             children: (
               <>
-                <ProDescriptions<OrganizationDetailVo>
-                  size="small"
-                  column={{ xs: 1, sm: 2 }}
-                  dataSource={detail}
-                  loading={loading}
-                  columns={[
-                    { title: "编码", dataIndex: "orgCode" },
-                    { title: "名称", dataIndex: "orgName" },
-                    { title: "类型", dataIndex: "orgType" },
-                    { title: "层级", dataIndex: "level" },
-                    {
-                      title: "路径",
-                      dataIndex: "path",
-                      span: 2,
-                      render: () => <span style={{ overflowWrap: "anywhere" }}>{pathLabel || "—"}</span>,
-                    },
-                    {
-                      title: "上级",
-                      dataIndex: "parentName",
-                      render: (_, row) => (row.parentCode ? `${row.parentName} (${row.parentCode})` : "—"),
-                    },
-                    {
-                      title: "状态",
-                      dataIndex: "status",
-                      render: (_, row) => <StatusTag domain="org" status={row.status} />,
-                    },
-                    { title: "下级数", dataIndex: "childrenCount" },
-                    { title: "在职雇佣", dataIndex: "employmentCount" },
-                    {
-                      title: "创建时间",
-                      dataIndex: "createTime",
-                      render: (_, row) => new Date(row.createTime).toLocaleString(),
-                    },
-                    {
-                      title: "更新时间",
-                      dataIndex: "updateTime",
-                      render: (_, row) => new Date(row.updateTime).toLocaleString(),
-                    },
-                  ]}
+                <Spin spinning={loading}>
+                  <dl className={styles.overview}>
+                    {overviewFields.map(({ label, value }) => (
+                      <div key={label}>
+                        <dt>{label}</dt>
+                        <dd>{value}</dd>
+                      </div>
+                    ))}
+                    <div className={styles["overview-path"]}>
+                      <dt>路径</dt>
+                      <dd>{pathLabel || "—"}</dd>
+                    </div>
+                  </dl>
+                </Spin>
+
+                <CustomAttributeDetails
+                  definitions={detail.customAttributeDefinitions ?? []}
+                  values={detail.customAttributes ?? {}}
                 />
 
-                <div style={{ marginTop: 16 }}>
-                  <h4>
+                <div className={styles["children-section"]}>
+                  <h4 className={styles["section-title"]}>
                     下级组织
                     {childrenPage && childrenPage.total > 0 && (
                       <span className={styles.secondary}>共 {childrenPage.total} 条</span>

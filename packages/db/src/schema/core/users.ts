@@ -1,6 +1,7 @@
 import { UserStatus, UserType } from "@iam/contracts";
+import { type CustomAttributeValues, CustomAttributeValuesSchema } from "@iam/contracts/custom-attributes";
 import { sql } from "drizzle-orm";
-import { integer, snakeCase, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
+import { check, integer, jsonb, snakeCase, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from "drizzle-orm/zod";
 import { z } from "zod";
 import { baseColumns } from "../_shard/base-columns";
@@ -21,11 +22,13 @@ export const users = snakeCase.table(
     userType: varchar({ length: 20 }).$type<UserType>().notNull().default(UserType.Formal),
     orderNum: integer().notNull().default(999999),
     status: integer().$type<UserStatus>().notNull().default(UserStatus.Enable),
+    customAttributes: jsonb().$type<CustomAttributeValues>().notNull().default(sql`'{}'::jsonb`),
     isDelete: baseColumns.isDelete,
     createTime: baseColumns.createTime,
     updateTime: baseColumns.updateTime,
   },
   (table) => [
+    check("user_custom_attributes_object_check", sql`jsonb_typeof(${table.customAttributes}) = 'object'`),
     uniqueIndex(USER_MOBILE_UNIQUE_INDEX)
       .on(table.mobile)
       .where(sql`${table.isDelete} = false AND ${table.mobile} IS NOT NULL`),
@@ -38,14 +41,17 @@ export const users = snakeCase.table(
 export const selectUserSchema = createSelectSchema(users, {
   userType: () => z.enum(UserType),
   status: () => z.enum(UserStatus),
+  customAttributes: () => CustomAttributeValuesSchema,
 });
 export const insertUserSchema = createInsertSchema(users, {
   userType: () => z.enum(UserType),
   status: () => z.enum(UserStatus),
+  customAttributes: () => CustomAttributeValuesSchema,
 }).omit({ id: true, subjectIdentifier: true, createTime: true, updateTime: true, isDelete: true });
 export const updateUserSchema = createUpdateSchema(users, {
   userType: () => z.enum(UserType),
   status: () => z.enum(UserStatus),
+  customAttributes: () => CustomAttributeValuesSchema,
 }).omit({ id: true, subjectIdentifier: true, createTime: true, updateTime: true, isDelete: true });
 
 export type User = z.infer<typeof selectUserSchema>;

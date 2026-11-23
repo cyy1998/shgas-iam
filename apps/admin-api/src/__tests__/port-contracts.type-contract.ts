@@ -3,6 +3,12 @@ import type { AdminClientReaderPort, AdminClientTransactionStorePort } from "@ad
 import type { ClientRepository } from "@admin-api/services/client/client.repository";
 import type { ClientAdmissionEvaluatorPort } from "@admin-api/services/client-admission/client-admission.port";
 import type {
+  CustomAttributeDefinitionReader,
+  CustomAttributeDefinitionStore,
+  CustomAttributeValueWritePort,
+} from "@admin-api/services/custom-attribute/custom-attribute.port";
+import type { createCustomAttributeRepository } from "@admin-api/services/custom-attribute/custom-attribute.repository";
+import type {
   AdminEmploymentEffectiveRoleResolverPort,
   AdminEmploymentReaderPort,
 } from "@admin-api/services/employment/employment.port";
@@ -64,6 +70,11 @@ type _ClientAdmissionEvaluatorPort = AssertAssignable<
   ClientAdmissionEvaluatorPort,
   ReturnType<typeof createApplicationAdmissionEvaluator>
 >;
+
+type CustomAttributeRepository = ReturnType<typeof createCustomAttributeRepository>;
+type _CustomAttributeDefinitionReader = AssertAssignable<CustomAttributeDefinitionReader, CustomAttributeRepository>;
+type _CustomAttributeDefinitionStore = AssertAssignable<CustomAttributeDefinitionStore, CustomAttributeRepository>;
+type _CustomAttributeValueWritePort = AssertAssignable<CustomAttributeValueWritePort, CustomAttributeRepository>;
 
 type _AdminEmploymentReaderPort = AssertAssignable<AdminEmploymentReaderPort, EmploymentRepository>;
 type _UpdateEmploymentStorePort = AssertAssignable<

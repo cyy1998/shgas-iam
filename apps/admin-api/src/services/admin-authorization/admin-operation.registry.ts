@@ -77,6 +77,7 @@ function mutationFor(module: AdminModuleCode, resourceType: string = module) {
 }
 
 const clientMutation = mutationFor("client");
+const definitionMutation = mutationFor("user", "custom_attribute_definition");
 const delegationMutation = mutationFor("delegation");
 const employmentMutation = mutationFor("employment");
 const loginRestrictionMutation = mutationFor("sessionManagement", "loginRestriction");
@@ -207,6 +208,11 @@ export const ADMIN_OPERATION_REGISTRY = {
     resourceType: "session",
     resourceIdentifier: identifySessionRevocation,
   },
+
+  "admin.customAttribute.list": { module: "user", type: "query", resourceType: "custom_attribute_definition" },
+  "admin.customAttribute.create": definitionMutation("body", "code"),
+  "admin.customAttribute.update": definitionMutation("body", "code"),
+  "admin.customAttribute.setEnabled": definitionMutation("body", "code"),
 
   "admin.user.search": { module: "user", type: "query", resourceType: "user" },
   "admin.user.detail": { module: "user", type: "query", resourceType: "user" },

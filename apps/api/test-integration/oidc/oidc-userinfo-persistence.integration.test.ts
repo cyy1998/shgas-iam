@@ -13,6 +13,7 @@ import {
 import { relations } from "@iam/db/relations";
 import {
   clients,
+  customAttributeDefinitions,
   employments,
   organizationClosures,
   organizations,
@@ -82,6 +83,7 @@ test("UserInfo HTTP uses real published Facts cache, canonical PostgreSQL fallba
         subjectIdentifier: f.subjectIdentifier,
         username: "published",
         name: "已发布旧资料",
+        customAttributes: { worksite: "field" },
       })
       .returning({ id: users.id });
     const [organization] = await pg.db
@@ -92,12 +94,13 @@ test("UserInfo HTTP uses real published Facts cache, canonical PostgreSQL fallba
         orgType: OrganizationType.Department,
         level: OrganizationLevel.One,
         path: "org",
+        customAttributes: { cost_center: "CC01" },
       })
       .returning({ id: organizations.id });
     const [position, secondaryPosition] = await pg.db
       .insert(positions)
       .values([
-        { posCode: "position", posName: "岗位" },
+        { posCode: "position", posName: "岗位", customAttributes: { grade: 0 } },
         { posCode: "secondary", posName: "副岗" },
       ])
       .returning({ id: positions.id });
@@ -132,6 +135,20 @@ test("UserInfo HTTP uses real published Facts cache, canonical PostgreSQL fallba
     await pg.db
       .insert(roleAssignments)
       .values({ roleId: role.id, targetType: RoleAssignmentTargetType.Employment, targetId: employment.id });
+    await pg.db.insert(customAttributeDefinitions).values([
+      {
+        entityType: "user",
+        code: "worksite",
+        valueType: "single_select",
+        displayName: "办公地点",
+        options: [
+          { code: "field", displayName: "现场", enabled: true },
+          { code: "office", displayName: "办公室", enabled: true },
+        ],
+      },
+      { entityType: "organization", code: "cost_center", valueType: "text", displayName: "成本中心" },
+      { entityType: "position", code: "grade", valueType: "number", displayName: "职级" },
+    ]);
     await publishUserDocument(pg.db, user.id);
     const first = await f.me(issued.access_token);
     expect(first.status).toBe(200);
@@ -139,6 +156,7 @@ test("UserInfo HTTP uses real published Facts cache, canonical PostgreSQL fallba
     expect(firstPayload).toMatchObject({
       sub: f.subjectIdentifier,
       name: "已发布旧资料",
+      "iam:custom_attributes": { worksite: "field" },
       "iam:authorization": {
         roles: ["published-role"],
         employments: [
@@ -151,11 +169,28 @@ test("UserInfo HTTP uses real published Facts cache, canonical PostgreSQL fallba
       code: "org",
       name: "组织",
       type: OrganizationType.Department,
+      customAttributes: { cost_center: "CC01" },
       path: [{ code: "org", name: "组织", type: OrganizationType.Department, level: 1, distanceToTarget: 0 }],
     });
+    expect(firstPayload["iam:employments"][0].position).toEqual({
+      code: "position",
+      name: "岗位",
+      customAttributes: { grade: 0 },
+    });
+    expect(firstPayload["iam:employments"][1].position).not.toHaveProperty("customAttributes");
+    const authorizedEmployment = firstPayload["iam:authorization"].employments[0];
+    expect(authorizedEmployment.organization).not.toHaveProperty("customAttributes");
+    expect(authorizedEmployment.position).not.toHaveProperty("customAttributes");
     expect(queries).toHaveLength(1);
     queries.length = 0;
-    await pg.db.update(users).set({ name: "较新发布资料" }).where(eq(users.id, user.id));
+    await pg.db
+      .update(users)
+      .set({ name: "较新发布资料", customAttributes: { worksite: "office" } })
+      .where(eq(users.id, user.id));
+    await pg.db
+      .update(customAttributeDefinitions)
+      .set({ enabled: false })
+      .where(eq(customAttributeDefinitions.code, "grade"));
     await pg.db.delete(roleAssignments).where(eq(roleAssignments.roleId, role.id));
     const [nextRole, otherRole, bridge, reviewer, shared] = await pg.db
       .insert(roles)
@@ -185,14 +220,18 @@ test("UserInfo HTTP uses real published Facts cache, canonical PostgreSQL fallba
     ]);
     const published = await publishUserDocument(pg.db, user.id, "2");
     const warm = await f.me(issued.access_token);
-    expect(await warm.json()).toMatchObject({
+    const warmPayload = await warm.json();
+    expect(warmPayload).toMatchObject({
       name: "已发布旧资料",
+      "iam:custom_attributes": { worksite: "field" },
       "iam:authorization": { roles: ["published-role"] },
     });
+    expect(warmPayload["iam:employments"][0].position.customAttributes).toEqual({ grade: 0 });
     expect(queries).toHaveLength(0);
     expect(ownedKeys.size).toBe(1);
     const updated = {
       name: "较新发布资料",
+      "iam:custom_attributes": { worksite: "office" },
       "iam:authorization": {
         roles: ["app-role", "global:reviewer", "global:shared"],
         employments: [
@@ -204,7 +243,9 @@ test("UserInfo HTTP uses real published Facts cache, canonical PostgreSQL fallba
     await cache.publish(createDocumentFactsCacheRecord(published));
     const refreshed = await f.me(issued.access_token);
     expect(refreshed.status).toBe(200);
-    expect(await refreshed.json()).toMatchObject(updated);
+    const refreshedPayload = await refreshed.json();
+    expect(refreshedPayload).toMatchObject(updated);
+    expect(refreshedPayload["iam:employments"][0].position).not.toHaveProperty("customAttributes");
     const otherInfo = await f.me(otherIssued.access_token);
     expect(otherInfo.status).toBe(200);
     expect(await otherInfo.json()).toMatchObject({
@@ -225,15 +266,15 @@ test("UserInfo HTTP uses real published Facts cache, canonical PostgreSQL fallba
     const claims = JSON.parse(Buffer.from(freshToken.id_token.split(".")[1]!, "base64url").toString());
     expect(claims).toMatchObject({ sub: f.subjectIdentifier, name: "较新发布资料" });
     expect(claims).not.toHaveProperty("iam:authorization");
+    expect(claims).not.toHaveProperty("iam:custom_attributes");
     expect(claims).not.toHaveProperty("roles");
 
-    await f.scopes([OidcScope.OpenId, OidcScope.Profile]);
+    await f.scopes([OidcScope.OpenId]);
     const trimmed = await f.me(issued.access_token);
     expect(trimmed.status).toBe(200);
     expect(await trimmed.json()).toEqual({
       sub: f.subjectIdentifier,
-      preferred_username: "published",
-      name: "较新发布资料",
+      "iam:custom_attributes": { worksite: "office" },
     });
     await f.scopes([OidcScope.OpenId, OidcScope.Profile, OidcScope.IamAuthorization]);
     const key = [...ownedKeys][0]!;
@@ -243,6 +284,18 @@ test("UserInfo HTTP uses real published Facts cache, canonical PostgreSQL fallba
     expect(await repaired.json()).toMatchObject(updated);
     expect(queries).toHaveLength(1);
     queries.length = 0;
+
+    await pg.db
+      .update(customAttributeDefinitions)
+      .set({ enabled: false })
+      .where(eq(customAttributeDefinitions.code, "worksite"));
+    const withoutUserAttributes = await publishUserDocument(pg.db, user.id, "3");
+    await cache.publish(createDocumentFactsCacheRecord(withoutUserAttributes));
+    await f.scopes([OidcScope.OpenId]);
+    const onlySub = await f.me(issued.access_token);
+    expect(onlySub.status).toBe(200);
+    expect(await onlySub.json()).toEqual({ sub: f.subjectIdentifier });
+
     await cleanup.del(key);
     await pg.sql`UPDATE user_document SET document = '{}'::jsonb WHERE user_id = ${user.id}`;
     const corrupt = await f.me(issued.access_token);
@@ -252,12 +305,8 @@ test("UserInfo HTTP uses real published Facts cache, canonical PostgreSQL fallba
     await pg.sql`DELETE FROM user_document WHERE user_id = ${user.id}`;
     const missing = await f.me(issued.access_token);
     expect(missing.status).toBe(503);
-    await f.scopes([OidcScope.OpenId]);
+    expect(await missing.json()).toMatchObject({ error: "temporarily_unavailable" });
     queries.length = 0;
-    const onlySub = await f.me(issued.access_token);
-    expect(await onlySub.json()).toEqual({ sub: f.subjectIdentifier });
-    expect(queries).toHaveLength(0);
-    await f.scopes([OidcScope.OpenId, OidcScope.Profile]);
     redis.disconnect();
     const redisFailure = await f.me(issued.access_token);
     expect(redisFailure.status).toBe(503);

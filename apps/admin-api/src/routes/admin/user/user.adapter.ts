@@ -69,7 +69,6 @@ export function createUserAdapter(deps: CreateUserAdapterDeps) {
     input: z.object({ username: z.string() }),
     restInput: (c) => c.req.valid("param") as { username: string },
     handler: async ({ username }, context) => {
-      const detail = await deps.userService.getUserDetailByUsernameForAdmin(username);
       const { actor, policy } = getAdminAuthorizationContext(context.hono);
       const operationAuthorization = await authorizeAdminOperationForContext(context.hono, {
         operationId: "admin.user.detail",
@@ -79,6 +78,10 @@ export function createUserAdapter(deps: CreateUserAdapterDeps) {
         policy.getUserAuthorization(actor, operationAuthorization.hrAdministrationScope),
         policy.getEmploymentAuthorization(actor, operationAuthorization.hrAdministrationScope),
       ]);
+      const detail = await deps.userService.getUserDetailByUsernameForAdmin(
+        username,
+        userAuthorization.kind === "full",
+      );
       const allowedActions = userAuthorization.getAllowedActions({
         status: detail.status,
         isDelete: detail.isDelete,

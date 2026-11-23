@@ -90,6 +90,93 @@ function renderForm(editing = false) {
 }
 
 describe("PositionsPage mutation results through the position service", () => {
+  const careerLevel = {
+    entityType: "position",
+    code: "career_level",
+    displayName: "岗位职级",
+    description: null,
+    orderNum: 0,
+    enabled: true,
+    valueType: "text",
+    options: [],
+  } as const;
+
+  it("creates a position with a definition configured from the position list", async () => {
+    const requests = mutationResponse("create", true);
+    const definitionRequests: unknown[] = [];
+    let definitions: Array<typeof careerLevel> = [];
+    server.use(
+      http.get("*/rpc/admin.customAttribute.list", () => HttpResponse.json([{ result: { data: definitions } }])),
+      http.post("*/rpc/admin.customAttribute.create", async ({ request }) => {
+        definitionRequests.push(await request.json());
+        definitions = [careerLevel];
+        return HttpResponse.json([{ result: { data: { changed: true, result: careerLevel } } }]);
+      }),
+    );
+    const { user } = render(
+      <ConfigProvider theme={{ token: { motion: false } }}>
+        <PositionsPage />
+      </ConfigProvider>,
+    );
+    await screen.findByText(adminPositionSearchResult.result[0].posName);
+    await user.click(screen.getByRole("button", { name: "自定义属性" }));
+    const drawer = within(await screen.findByRole("dialog", { name: "自定义属性定义" }));
+    await drawer.findByText("暂无自定义属性定义");
+    await user.click(drawer.getByRole("button", { name: "新建属性定义" }));
+    await user.type(drawer.getByRole("textbox", { name: /属性编码/ }), "career_level");
+    await user.type(drawer.getByRole("textbox", { name: /显示名称/ }), "岗位职级");
+    await user.click(drawer.getByRole("button", { name: "保存定义" }));
+    expect(await drawer.findByText("岗位职级")).toBeInTheDocument();
+    expect(definitionRequests).toMatchObject([{ "0": { entityType: "position", code: "career_level" } }]);
+    await user.click(drawer.getByRole("button", { name: "关闭" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "新建岗位" }));
+    const form = within(await screen.findByRole("dialog"));
+    await user.type(form.getByRole("textbox", { name: "岗位编码" }), "POS-2");
+    await user.type(form.getByRole("textbox", { name: "岗位名称" }), "新岗位");
+    await user.type(await form.findByRole("textbox", { name: "岗位职级" }), "P5");
+    await user.click(form.getByRole("button", { name: "确 定" }));
+    expect(await screen.findByText("创建成功")).toBeInTheDocument();
+    expect(requests).toMatchObject([{ "0": { customAttributes: { career_level: "P5" } } }]);
+  });
+
+  it("reads and clears a configured position attribute from the existing position entry", async () => {
+    const requests = mutationResponse("update", true);
+    server.use(
+      http.get("*/rpc/admin.position.detail", () =>
+        HttpResponse.json([
+          {
+            result: {
+              data: {
+                ...adminPositionSearchResult.result[0],
+                customAttributeDefinitions: [careerLevel],
+                customAttributes: { career_level: "P5" },
+              },
+            },
+          },
+        ]),
+      ),
+    );
+    const { user } = render(
+      <ConfigProvider theme={{ token: { motion: false } }}>
+        <PositionsPage />
+      </ConfigProvider>,
+    );
+    const details = await screen.findAllByRole("button", { name: "详情" });
+    await user.click(details[0]);
+    const drawer = within(await screen.findByRole("dialog", { name: "岗位详情" }));
+    expect(await drawer.findByText("P5")).toBeInTheDocument();
+    await user.click(drawer.getByRole("button", { name: "关闭" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await user.click((await screen.findAllByText("编辑"))[0]);
+    const dialog = within(await screen.findByRole("dialog"));
+    const input = await dialog.findByRole("textbox", { name: "岗位职级" });
+    expect(input).toHaveValue("P5");
+    await user.clear(input);
+    await user.click(dialog.getByRole("button", { name: "确 定" }));
+    expect(await screen.findByText("更新成功")).toBeInTheDocument();
+    expect(requests).toMatchObject([{ "0": { data: { customAttributes: { career_level: null } } } }]);
+  });
   it("creates a position, closes the form and refreshes the list", async () => {
     const requests = mutationResponse("create", true);
     const searches = vi.fn(() => HttpResponse.json([{ result: { data: adminPositionSearchResult } }]));

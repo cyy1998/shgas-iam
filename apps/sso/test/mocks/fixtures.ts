@@ -4,7 +4,7 @@ export const authenticationConfig = {
 };
 
 export const currentUserInfo = {
-  version: 4,
+  version: 5,
   subjectIdentifier: "00000000-0000-4000-8000-000000000001",
   profile: {
     username: "zhangsan",

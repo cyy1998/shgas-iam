@@ -4,9 +4,11 @@ import {
   organizationDocumentOutboxEntries,
   organizationDocumentRebuildStates,
   organizationDocuments,
+  organizations,
 } from "@iam/db/schema";
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
+import { customAttributeKeyExists } from "../../custom-attributes";
 import {
   createDocumentUpdateProcessor,
   type DocumentBuildResult,
@@ -14,6 +16,7 @@ import {
   type DocumentRepairStageReport,
   type PreparedDocumentPublication,
 } from "../../update";
+import { OrganizationDocumentOutboxSourceSchema } from "../producer/source-changes";
 import {
   ORGANIZATION_DOCUMENT_SCHEMA_VERSION,
   type OrganizationDocument,
@@ -46,10 +49,6 @@ export type OrganizationDocumentRepairOptions = DocumentRepairOptions;
 export type OrganizationDocumentRepairStageReport = DocumentRepairStageReport;
 
 export function createOrganizationDocumentProcessor(input: CreateOrganizationDocumentProcessorInput) {
-  const sourceSchema = z.strictObject({
-    organizationId: z.number().int().positive(),
-    scope: z.enum(["self", "subtree"]),
-  });
   async function publishDocuments(
     tx: DbTransaction,
     prepared: readonly PreparedDocumentPublication<OrganizationDocument | null>[],
@@ -90,15 +89,32 @@ export function createOrganizationDocumentProcessor(input: CreateOrganizationDoc
     clock: input.clock,
     tables: {
       outbox: organizationDocumentOutboxEntries,
-      source: sql<
-        z.infer<typeof sourceSchema>
-      >`jsonb_build_object('organizationId', ${organizationDocumentOutboxEntries.organizationId}, 'scope', ${organizationDocumentOutboxEntries.scope})`,
+      source: sql<z.infer<typeof OrganizationDocumentOutboxSourceSchema>>`CASE
+        WHEN ${organizationDocumentOutboxEntries.attributeCode} IS NOT NULL
+          THEN jsonb_build_object('attributeCode', ${organizationDocumentOutboxEntries.attributeCode})
+        ELSE jsonb_build_object(
+          'organizationId', ${organizationDocumentOutboxEntries.organizationId},
+          'scope', ${organizationDocumentOutboxEntries.scope}
+        )
+      END`,
       rebuildState: organizationDocumentRebuildStates,
       targetId: organizationDocumentRebuildStates.organizationId,
       requestedAt: organizationDocumentRebuildStates.dirtyAt,
     },
-    parseSource: (source) => sourceSchema.parse(source),
+    parseSource: (source) => OrganizationDocumentOutboxSourceSchema.parse(source),
     async expand(tx, source) {
+      if ("attributeCode" in source) {
+        const targets = await tx
+          .select({ id: organizations.id })
+          .from(organizations)
+          .where(
+            and(
+              eq(organizations.isDelete, false),
+              customAttributeKeyExists(organizations.customAttributes, source.attributeCode),
+            ),
+          );
+        return targets.map(({ id }) => id);
+      }
       const descendants =
         source.scope === "subtree"
           ? await tx

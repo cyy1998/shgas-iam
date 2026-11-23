@@ -99,7 +99,7 @@ function createContractApp() {
 }
 
 describe("Custom SSO delivery OpenAPI", () => {
-  test("publishes the shared V4 user-info projection and retryable 503", async () => {
+  test("publishes the shared V5 user-info projection and retryable 503", async () => {
     const app = createContractApp();
     const response = await app.request("/public/doc");
     const document = (await response.json()) as {
@@ -131,7 +131,7 @@ describe("Custom SSO delivery OpenAPI", () => {
     });
     const contract = JSON.stringify({
       operation,
-      projection: document.components.schemas.CustomSsoSubjectProjectionV4,
+      projection: document.components.schemas.CustomSsoSubjectProjectionV5,
       unavailable: document.components.schemas.CustomSsoUnavailableResponse,
     });
     expect(contract).toContain("subjectIdentifier");
@@ -141,16 +141,19 @@ describe("Custom SSO delivery OpenAPI", () => {
     expect(contract).toContain(ApiErrorCode.InternalError);
     expect(contract).not.toContain('"id"');
     expect(contract).not.toContain("userInfo");
-    expect(document.components.schemas.CustomSsoSubjectProjectionV4).toMatchObject({
+    expect(document.components.schemas.CustomSsoSubjectProjectionV5).toMatchObject({
       additionalProperties: false,
       properties: {
-        version: { enum: [4] },
+        version: { enum: [5] },
         profile: {
           additionalProperties: false,
           properties: {
+            customAttributes: { type: "object" },
             employments: {
               items: {
                 properties: {
+                  organization: { properties: { customAttributes: { type: "object" } } },
+                  position: { properties: { customAttributes: { type: "object" } } },
                   responsibilities: { type: "array" },
                 },
               },

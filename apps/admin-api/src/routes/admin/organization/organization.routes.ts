@@ -1,6 +1,5 @@
 import {
   OrganizationCreateDtoSchema,
-  OrganizationDtoSchema,
   OrganizationPaginationQueryDtoSchema,
   OrganizationSelectorNodeSchema,
   OrganizationSelectorQueryDtoSchema,
@@ -17,7 +16,7 @@ import { createPageResultSchema } from "@iam/api-core/core/pagination/schema";
 import { createAdminMutationResultSchema } from "@iam/contracts";
 import { HttpStatusCodes } from "@iam/contracts/http";
 
-import { OrganizationDetailVoSchema, OrganizationVoSchema } from "./organization.schema";
+import { OrganizationCreatedVoSchema, OrganizationDetailVoSchema, OrganizationVoSchema } from "./organization.schema";
 
 const tags = ["Admin/Organization"];
 
@@ -96,7 +95,7 @@ export const organizationCreate = createRoute({
   responses: {
     ...commonErrorResponses,
     [HttpStatusCodes.OK]: jsonContent(
-      createSuccessResponseSchema(createAdminMutationResultSchema(OrganizationDtoSchema)),
+      createSuccessResponseSchema(createAdminMutationResultSchema(OrganizationCreatedVoSchema)),
       "组织创建成功",
     ),
   },

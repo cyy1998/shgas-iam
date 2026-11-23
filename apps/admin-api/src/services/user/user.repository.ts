@@ -1,5 +1,6 @@
 import type { UserCreateDto, UserPaginationQueryDto, UserUpdateDto } from "@admin-api/services/user/user.type";
 import { ClientDelegationStatus, EmploymentStatus, OPEN_EMPLOYMENT_STATUSES, UserStatus } from "@iam/contracts";
+import type { CustomAttributeValues } from "@iam/contracts/custom-attributes";
 import type { DbClient } from "@iam/db";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import { compactUpdate, firstRow, ilikeContainsIf, inArrayIf } from "@iam/db/query-utils";
@@ -204,7 +205,10 @@ export function createUserRepository(db: DbClient) {
       ]);
       return { rows, total: firstRow(totalRows)?.value ?? 0 };
     },
-    async updateUserByUsername(username: string, data: UserUpdateDto) {
+    async updateUserByUsername(
+      username: string,
+      data: Omit<UserUpdateDto, "customAttributes"> & { customAttributes?: CustomAttributeValues },
+    ) {
       try {
         return firstRow(
           await db
@@ -216,6 +220,7 @@ export function createUserRepository(db: DbClient) {
                 userType: data.userType,
                 status: data.status,
                 orderNum: data.orderNum,
+                customAttributes: data.customAttributes,
               }),
             )
             .where(and(eq(users.username, username), eq(users.isDelete, false)))
@@ -262,7 +267,9 @@ export function createUserRepository(db: DbClient) {
         );
       return firstRow(rows)?.value ?? 0;
     },
-    async setUserForAdmin(userCreateDto: UserCreateDto & { subjectIdentifier: string }) {
+    async setUserForAdmin(
+      userCreateDto: UserCreateDto & { subjectIdentifier: string; customAttributes?: CustomAttributeValues },
+    ) {
       try {
         return firstRow(await db.insert(users).values(userCreateDto).returning());
       } catch (error) {

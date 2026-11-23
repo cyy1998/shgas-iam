@@ -47,9 +47,11 @@ function createCommand(
     warn,
     service: createPositionService({
       positionRepository: createAdminApiRepositories(harness.db).position,
+      customAttributeDefinitions: createAdminApiRepositories(harness.db).customAttribute,
       uow: mapUnitOfWork(uow, (tx) =>
         decorate({
           positionRepository: tx.repositories.position,
+          customAttributeDefinitions: tx.repositories.customAttribute,
           auditService: tx.auditService,
           userDocumentInvalidation: tx.userDocumentInvalidation,
         }),

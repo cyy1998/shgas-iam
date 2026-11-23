@@ -1,15 +1,26 @@
 import type { EffectiveRole } from "@iam/assignment-resolution/role-assignment";
 import { OPEN_EMPLOYMENT_STATUSES, RoleType } from "@iam/contracts";
+import type { CustomAttributeValues } from "@iam/contracts/custom-attributes";
 import type { DbClient } from "@iam/db";
 import type { Employment, Organization, User } from "@iam/db/schema";
 import { clients, employments, organizationClosures, organizations, positions, roles, users } from "@iam/db/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { UserDocumentSourceIntegrityError } from "./document-build.error";
 
 export type UserDocumentBuildOrgPathRow = Pick<
   Organization,
-  "id" | "orgCode" | "orgName" | "orgType" | "level" | "parentId" | "isVirtual" | "isEntity" | "status" | "isDelete"
+  | "id"
+  | "orgCode"
+  | "orgName"
+  | "orgType"
+  | "level"
+  | "parentId"
+  | "isVirtual"
+  | "isEntity"
+  | "status"
+  | "isDelete"
+  | "customAttributes"
 > & {
   descendantId: number;
   depth: number;
@@ -134,6 +145,8 @@ async function loadOrganizationPaths(db: DbClient, organizationIds: number[]) {
       isEntity: ancestor.isEntity,
       status: ancestor.status,
       isDelete: ancestor.isDelete,
+      customAttributes: sql<CustomAttributeValues>`CASE WHEN ${organizationClosures.depth} = 0
+        THEN ${ancestor.customAttributes} ELSE '{}'::jsonb END`,
     })
     .from(organizationClosures)
     .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))

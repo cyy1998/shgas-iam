@@ -139,8 +139,10 @@ function runtime(
   });
   const position = createPositionService({
     positionRepository: repositories.position,
+    customAttributeDefinitions: repositories.customAttribute,
     uow: mapUnitOfWork(uow, (tx) => ({
       positionRepository: tx.repositories.position,
+      customAttributeDefinitions: tx.repositories.customAttribute,
       auditService: tx.auditService,
       userDocumentInvalidation: {
         async recordChanges(changes) {
@@ -174,9 +176,11 @@ function runtime(
   });
   const organization = createOrganizationService({
     organizationRepository: repositories.organization,
+    customAttributeDefinitions: repositories.customAttribute,
     responsibilityReader: repositories.organizationResponsibility,
     uow: mapUnitOfWork(uow, (tx) => ({
       organizationRepository: tx.repositories.organization,
+      customAttributeDefinitions: tx.repositories.customAttribute,
       auditService: tx.auditService,
       responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
       organizationDocumentInvalidation: tx.organizationDocumentInvalidation,

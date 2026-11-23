@@ -45,6 +45,8 @@ export function toUserVo(input: unknown) {
 
 export const UserDetailVoSchema = UserVoSchema.extend({
   roleNames: UserDetailDtoSchema.shape.roleNames,
+  customAttributes: UserDetailDtoSchema.shape.customAttributes,
+  customAttributeDefinitions: UserDetailDtoSchema.shape.customAttributeDefinitions,
 
   allowedActions: AdminUserAllowedActionsSchema,
   externalWecomBindings: z.array(UserWecomExternalBindingSchema).optional(),

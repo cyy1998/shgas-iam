@@ -306,6 +306,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     const repositories = createAdminApiRepositories(harness!.db);
     const organizationService = createOrganizationService({
       organizationRepository: repositories.organization,
+      customAttributeDefinitions: repositories.customAttribute,
       responsibilityReader: repositories.organizationResponsibility,
       uow: mapUnitOfWork(unitOfWork, (tx) => ({
         auditService: tx.auditService,
@@ -313,6 +314,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         organizationDocumentInvalidation: tx.organizationDocumentInvalidation,
         userDocumentInvalidation: tx.userDocumentInvalidation,
         organizationRepository: tx.repositories.organization,
+        customAttributeDefinitions: tx.repositories.customAttribute,
       })),
     });
     const organizationAuthorization = await policy.getOrganizationAuthorization(actor);
@@ -1545,6 +1547,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     let guardCalls = 0;
     const organizationService = createOrganizationService({
       organizationRepository,
+      customAttributeDefinitions: createAdminApiRepositories(harness!.db).customAttribute,
       responsibilityReader: createAdminApiRepositories(harness!.db).organizationResponsibility,
       uow: mapUnitOfWork(parentUnitOfWork, (tx) => ({
         auditService: tx.auditService,
@@ -1561,6 +1564,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         organizationDocumentInvalidation: tx.organizationDocumentInvalidation,
         userDocumentInvalidation: tx.userDocumentInvalidation,
         organizationRepository: tx.repositories.organization,
+        customAttributeDefinitions: tx.repositories.customAttribute,
       })),
     });
 
@@ -1631,6 +1635,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
     let guardCalls = 0;
     const organizationService = createOrganizationService({
       organizationRepository,
+      customAttributeDefinitions: createAdminApiRepositories(harness!.db).customAttribute,
       responsibilityReader: createAdminApiRepositories(harness!.db).organizationResponsibility,
       uow: mapUnitOfWork(parentUnitOfWork, (tx) => ({
         auditService: tx.auditService,
@@ -1647,6 +1652,7 @@ describe("Organization Responsibility Assignment PostgreSQL command", () => {
         organizationDocumentInvalidation: tx.organizationDocumentInvalidation,
         userDocumentInvalidation: tx.userDocumentInvalidation,
         organizationRepository: tx.repositories.organization,
+        customAttributeDefinitions: tx.repositories.customAttribute,
       })),
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -3236,6 +3242,7 @@ function createHistoryParentCommands(
     }),
     organization: createOrganizationService({
       organizationRepository: repositories.organization,
+      customAttributeDefinitions: repositories.customAttribute,
       responsibilityReader: repositories.organizationResponsibility,
       uow: mapUnitOfWork(uow, (tx) => ({
         auditService: tx.auditService,
@@ -3243,18 +3250,22 @@ function createHistoryParentCommands(
         organizationDocumentInvalidation: tx.organizationDocumentInvalidation,
         userDocumentInvalidation: tx.userDocumentInvalidation,
         organizationRepository: tx.repositories.organization,
+        customAttributeDefinitions: tx.repositories.customAttribute,
       })),
     }),
     position: createPositionService({
       positionRepository: repositories.position,
+      customAttributeDefinitions: repositories.customAttribute,
       uow: mapUnitOfWork(uow, (tx) => ({
         positionRepository: tx.repositories.position,
+        customAttributeDefinitions: tx.repositories.customAttribute,
         auditService: tx.auditService,
         userDocumentInvalidation: tx.userDocumentInvalidation,
       })),
     }),
     user: createUserService({
       userRepository: repositories.user,
+      customAttributeDefinitions: repositories.customAttribute,
       employmentRepository: repositories.employment,
       roleAssignmentResolver: { resolveEffectiveRoles: async () => new Map() },
       roleRepository: repositories.role,
@@ -3265,6 +3276,7 @@ function createHistoryParentCommands(
       subjectAccessLifecycle: createPostgresSubjectAccessLifecycle(fixture.subjectIdentifier, now),
       uow: mapUnitOfWork(uow, (tx) => ({
         userRepository: tx.repositories.user,
+        customAttributeDefinitions: tx.repositories.customAttribute,
         auditService: tx.auditService,
         subjectAccessMutation: tx.subjectAccessMutation,
         userDocumentInvalidation: tx.userDocumentInvalidation,

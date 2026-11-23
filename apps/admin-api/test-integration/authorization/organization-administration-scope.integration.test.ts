@@ -237,9 +237,11 @@ function createService() {
   });
   return createOrganizationService({
     organizationRepository: repositories.organization,
+    customAttributeDefinitions: repositories.customAttribute,
     responsibilityReader: repositories.organizationResponsibility,
     uow: mapUnitOfWork(unitOfWork, (tx) => ({
       organizationRepository: tx.repositories.organization,
+      customAttributeDefinitions: tx.repositories.customAttribute,
       auditService: tx.auditService,
       responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
       userDocumentInvalidation: tx.userDocumentInvalidation,

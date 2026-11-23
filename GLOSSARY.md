@@ -68,6 +68,16 @@ _Avoid_: published document change, queue delivery receipt, document rebuild sta
 目标文档应达到的版本及其处理进度，完成后仍可用来判断已发布文档是否满足最新重建要求。[文档更新的发布与恢复](packages/documents/README.md#共享发布与恢复)
 _Avoid_: queue job, business status, event checkpoint
 
+### 目录自定义属性
+
+**Custom Attribute Definition**（自定义属性定义）:
+管理员为用户、组织或岗位其中一类配置的资料项，在该类对象中全局适用，规定属性的名称和取值规则。
+_Avoid_: Custom Attribute Value
+
+**Custom Attribute Value**（自定义属性值）:
+一个用户、组织或岗位按其适用的自定义属性定义填写的资料。每个对象独立取值，允许未填写。
+_Avoid_: Custom Attribute Definition
+
 ### 用户生命周期与任职
 
 任职的日期通过状态转换生效。[状态计算](docs/features/directory-management.md#任职状态计算) · [按日有效期决策](docs/adr/0011-model-employment-as-an-immutable-tenure-lifecycle.md#按日有效期)

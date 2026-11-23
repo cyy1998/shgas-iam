@@ -2,6 +2,11 @@ import { z } from "@hono/zod-openapi";
 import { createPageQuerySchema } from "@iam/api-core/core/pagination/schema";
 import { UserStatus, UserType } from "@iam/contracts";
 import {
+  CustomAttributeDefinitionSchema,
+  CustomAttributePatchSchema,
+  CustomAttributeValuesSchema,
+} from "@iam/contracts/custom-attributes";
+import {
   UserDetailDtoSchema as SharedUserDetailDtoSchema,
   UserSchema as SharedUserSchema,
   UserMobileWriteSchema,
@@ -11,7 +16,7 @@ import {
 } from "@iam/domain/user";
 import { EmploymentDetailDtoSchema } from "../employment/employment.schema";
 
-export const UserDetailDtoSchema = SharedUserDetailDtoSchema.pick({
+export const UserProfileDetailSchema = SharedUserDetailDtoSchema.pick({
   id: true,
   username: true,
   name: true,
@@ -27,6 +32,11 @@ export const UserDetailDtoSchema = SharedUserDetailDtoSchema.pick({
 }).extend({
   employments: z.array(EmploymentDetailDtoSchema).default([]),
   roleNames: z.record(z.string(), z.string()).default({}),
+});
+
+export const UserDetailDtoSchema = UserProfileDetailSchema.extend({
+  customAttributes: CustomAttributeValuesSchema.optional(),
+  customAttributeDefinitions: z.array(CustomAttributeDefinitionSchema).optional(),
 });
 
 export const UserWecomExternalBindingSchema = z.object({
@@ -94,6 +104,7 @@ export const UserAdminCreateDtoSchema = SharedUserSchema.pick({
   .extend({
     username: UsernameWriteSchema,
     name: UserNameWriteSchema,
+    customAttributes: CustomAttributePatchSchema.optional(),
     mobile: UserMobileWriteSchema.optional(),
     wxId: UserWxIdWriteSchema.optional(),
     password: z.string().min(8).optional().openapi({
@@ -114,6 +125,7 @@ export const UserUpdateDtoSchema = SharedUserSchema.partial()
   })
   .extend({
     name: UserNameWriteSchema.optional(),
+    customAttributes: CustomAttributePatchSchema.optional(),
     mobile: UserMobileWriteSchema.optional(),
   })
   .openapi("UserUpdateDto");

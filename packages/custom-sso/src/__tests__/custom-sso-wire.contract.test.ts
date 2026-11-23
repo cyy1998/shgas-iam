@@ -11,8 +11,8 @@ import {
 
 const subjectIdentifier = "00000000-0000-4000-8000-000000000001";
 
-describe("Custom SSO V4 subject wire mapping contract", () => {
-  test("maps responsibilities only into profile employments", async () => {
+describe("Custom SSO V5 subject wire mapping contract", () => {
+  test("maps attributes and responsibilities only into the applicable profile fields", async () => {
     const employment = {
       isPrimary: true,
       organization: {
@@ -49,11 +49,19 @@ describe("Custom SSO V4 subject wire mapping contract", () => {
         },
       },
     ];
+    const organizationWithAttributes = {
+      ...employment.organization,
+      customAttributes: { cost_center: "north" },
+    };
+    const positionWithAttributes = { ...employment.position, customAttributes: { grade: "p2" } };
     const projection: ClientSubjectProjection = {
       subjectIdentifier,
+      customAttributes: { floor: 0, remote: false, locations: ["east", "west"] },
       employments: [
         {
           ...employment,
+          organization: organizationWithAttributes,
+          position: positionWithAttributes,
           responsibilities,
         },
       ],
@@ -61,6 +69,8 @@ describe("Custom SSO V4 subject wire mapping contract", () => {
         employments: [
           {
             ...employment,
+            organization: organizationWithAttributes,
+            position: positionWithAttributes,
             roles: ["admin"],
           },
         ],
@@ -83,12 +93,13 @@ describe("Custom SSO V4 subject wire mapping contract", () => {
     );
 
     expect(wire).toMatchObject({
-      version: 4,
+      version: 5,
       profile: {
+        customAttributes: { floor: 0, remote: false, locations: ["east", "west"] },
         employments: [
           {
-            organization: { code: "org-a" },
-            position: { code: "position-a" },
+            organization: { code: "org-a", customAttributes: { cost_center: "north" } },
+            position: { code: "position-a", customAttributes: { grade: "p2" } },
             responsibilities: [
               {
                 type: { code: OrganizationResponsibilityTypeCode.Head },
@@ -120,7 +131,50 @@ describe("Custom SSO V4 subject wire mapping contract", () => {
       { level: 2, distanceToTarget: 0, code: "target-a", name: "目标甲", type: OrganizationType.Department },
     ]);
     expect(wire.authorization?.employments[0]).not.toHaveProperty("responsibilities");
+    expect(wire.authorization?.employments[0]?.organization).not.toHaveProperty("customAttributes");
+    expect(wire.authorization?.employments[0]?.position).not.toHaveProperty("customAttributes");
+
+    const profileEmployment = wire.profile?.employments?.[0];
+    if (!profileEmployment) throw new Error("Expected a profile employment");
+    const invalidOrganization = {
+      ...profileEmployment.organization,
+      path: profileEmployment.organization.path.map((node) => ({
+        ...node,
+        customAttributes: { cost_center: "north" },
+      })),
+    };
+    expect(
+      CustomSsoSubjectProjectionSchema.safeParse({
+        ...wire,
+        profile: { employments: [{ ...profileEmployment, organization: invalidOrganization }] },
+      }).success,
+    ).toBe(false);
+    expect(
+      CustomSsoSubjectProjectionSchema.safeParse({
+        ...wire,
+        authorization: {
+          roles: [],
+          employments: [{ ...employment, organization: organizationWithAttributes, roles: [] }],
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      CustomSsoSubjectProjectionSchema.safeParse({
+        ...wire,
+        profile: {
+          employments: [{ ...profileEmployment, position: { ...employment.position, customAttributes: {} } }],
+        },
+      }).success,
+    ).toBe(false);
   });
+
+  test.each([{}, { "bad-code": true }, { unknown_value: null }, { mixed_list: [false, "area"] }])(
+    "rejects invalid or empty published attribute map %j",
+    (customAttributes) => {
+      const invalid = { version: 5, subjectIdentifier, profile: { customAttributes } };
+      expect(CustomSsoSubjectProjectionSchema.safeParse(invalid).success).toBe(false);
+    },
+  );
 
   test("fails the whole wire for missing, unknown, or malformed responsibilities", async () => {
     const baseEmployment = {
@@ -135,12 +189,12 @@ describe("Custom SSO V4 subject wire mapping contract", () => {
     };
     const invalidWires = [
       {
-        version: 4,
+        version: 5,
         subjectIdentifier,
         profile: { employments: [baseEmployment] },
       },
       {
-        version: 4,
+        version: 5,
         subjectIdentifier,
         profile: {
           employments: [
@@ -173,7 +227,7 @@ describe("Custom SSO V4 subject wire mapping contract", () => {
         },
       },
       {
-        version: 4,
+        version: 5,
         subjectIdentifier,
         profile: {
           employments: [
@@ -207,7 +261,7 @@ describe("Custom SSO V4 subject wire mapping contract", () => {
         },
       },
       {
-        version: 4,
+        version: 5,
         subjectIdentifier,
         profile: {
           employments: [
@@ -351,14 +405,14 @@ describe("Custom SSO V4 subject wire mapping contract", () => {
     expect(result).toBe(error);
   });
 
-  test("owns one strict runtime schema for every Custom SSO V4 consumer", async () => {
+  test("owns one strict runtime schema for every Custom SSO V5 consumer", async () => {
     const wire = await resolveWire({
       subjectIdentifier,
       username: "zhangsan",
     });
 
     expect(CustomSsoSubjectProjectionSchema.safeParse(wire).success).toBe(true);
-    expect(CustomSsoSubjectProjectionSchema.safeParse({ ...wire, version: 2 }).success).toBe(false);
+    expect(CustomSsoSubjectProjectionSchema.safeParse({ ...wire, version: 4 }).success).toBe(false);
     expect(() =>
       CustomSsoSubjectProjectionSchema.parse({
         ...wire,
@@ -369,7 +423,7 @@ describe("Custom SSO V4 subject wire mapping contract", () => {
 
   test("accepts an omitted profile parent and rejects an empty profile parent", () => {
     const wire = {
-      version: 4 as const,
+      version: 5 as const,
       subjectIdentifier,
     };
 
@@ -388,7 +442,7 @@ describe("Custom SSO V4 subject wire mapping contract", () => {
     });
 
     expect(wire).toEqual({
-      version: 4,
+      version: 5,
       subjectIdentifier,
     });
   });
@@ -409,7 +463,7 @@ describe("Custom SSO V4 subject wire mapping contract", () => {
 
     expect([populated, empty]).toEqual([
       {
-        version: 4,
+        version: 5,
         subjectIdentifier,
         profile: {
           username: "zhangsan",
@@ -417,7 +471,7 @@ describe("Custom SSO V4 subject wire mapping contract", () => {
         },
       },
       {
-        version: 4,
+        version: 5,
         subjectIdentifier,
       },
     ]);
@@ -434,7 +488,7 @@ describe("Custom SSO V4 subject wire mapping contract", () => {
     });
 
     expect(wire).toEqual({
-      version: 4,
+      version: 5,
       subjectIdentifier,
       profile: {
         employments: [],
@@ -543,7 +597,7 @@ describe("Custom SSO V4 subject wire mapping contract", () => {
       },
     };
     expect(wire).toEqual({
-      version: 4,
+      version: 5,
       subjectIdentifier,
       profile: {
         username: "zhangsan",

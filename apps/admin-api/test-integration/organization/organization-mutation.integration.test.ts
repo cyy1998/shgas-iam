@@ -86,10 +86,12 @@ function createCommand(
     warn,
     service: createOrganizationService({
       organizationRepository: createAdminApiRepositories(harness.db).organization,
+      customAttributeDefinitions: createAdminApiRepositories(harness.db).customAttribute,
       responsibilityReader: createAdminApiRepositories(harness.db).organizationResponsibility,
       uow: mapUnitOfWork(uow, (tx) =>
         decorate({
           organizationRepository: tx.repositories.organization,
+          customAttributeDefinitions: tx.repositories.customAttribute,
           auditService: tx.auditService,
           responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
           userDocumentInvalidation: tx.userDocumentInvalidation,

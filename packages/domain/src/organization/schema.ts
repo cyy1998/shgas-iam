@@ -2,7 +2,7 @@ import { z } from "@hono/zod-openapi";
 import { OrganizationLevel, OrganizationStatus, OrganizationType } from "@iam/contracts";
 import { selectOrganizationSchema } from "@iam/db/schema";
 
-export const OrganizationSchema = z.object(selectOrganizationSchema.shape);
+export const OrganizationSchema = z.object(selectOrganizationSchema.omit({ customAttributes: true }).shape);
 
 export const OrganizationDetailSchema = OrganizationSchema.extend({
   parent: OrganizationSchema.nullable(),

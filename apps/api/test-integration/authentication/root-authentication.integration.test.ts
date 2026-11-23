@@ -23,8 +23,10 @@ import {
   UserStatus,
 } from "@iam/contracts";
 import { CustomSsoManagedFailure } from "@iam/custom-sso";
+import { CustomSsoSubjectProjectionSchema } from "@iam/custom-sso/wire";
 import {
   clients,
+  customAttributeDefinitions,
   employments,
   organizationClosures,
   organizationResponsibilityAssignments,
@@ -1253,7 +1255,7 @@ test.each(["", "#/djDesk/orgStruct?tab=1"])(
   },
 );
 
-test("Custom SSO delivers published nested Roles through V4 and refreshes an existing Token", async () => {
+test("Custom SSO delivers published custom attributes and nested Roles through Wire v5 and refreshes an existing Token", async () => {
   const employment = {
     isPrimary: true,
     organization: {
@@ -1293,7 +1295,13 @@ test("Custom SSO delivers published nested Roles through V4 and refreshes an exi
       subjectIdentifier: f.subjectIdentifier,
       username: "published",
       name: "已发布角色",
+      customAttributes: { remote: false },
     });
+    await db.insert(customAttributeDefinitions).values([
+      { entityType: "user", code: "remote", displayName: "Remote", valueType: "boolean" },
+      { entityType: "organization", code: "cost_center", displayName: "Cost center", valueType: "number" },
+      { entityType: "position", code: "grade", displayName: "Grade", valueType: "text" },
+    ]);
     await db.insert(organizations).values({
       id: 1,
       orgCode: "org",
@@ -1301,10 +1309,11 @@ test("Custom SSO delivers published nested Roles through V4 and refreshes an exi
       orgType: OrganizationType.Department,
       level: OrganizationLevel.One,
       path: "/1",
+      customAttributes: { cost_center: 0 },
     });
     await db.insert(organizationClosures).values({ ancestorId: 1, descendantId: 1, depth: 0 });
     await db.insert(positions).values([
-      { id: 1, posCode: "position", posName: "岗位" },
+      { id: 1, posCode: "position", posName: "岗位", customAttributes: { grade: "p2" } },
       { id: 2, posCode: "secondary", posName: "副岗" },
     ]);
     const startTime = new Date("2026-01-01T00:00:00Z");
@@ -1363,12 +1372,22 @@ test("Custom SSO delivers published nested Roles through V4 and refreshes an exi
     expect(response.status).toBe(200);
     const { data } = await response.json();
     const expected = {
-      version: 4,
+      version: 5 as const,
       subjectIdentifier: f.subjectIdentifier,
       profile: {
+        customAttributes: { remote: false },
         employments: [
-          { ...employment, responsibilities },
-          { ...secondaryEmployment, responsibilities: [] },
+          {
+            ...employment,
+            organization: { ...employment.organization, customAttributes: { cost_center: 0 } },
+            position: { ...employment.position, customAttributes: { grade: "p2" } },
+            responsibilities,
+          },
+          {
+            ...secondaryEmployment,
+            organization: { ...secondaryEmployment.organization, customAttributes: { cost_center: 0 } },
+            responsibilities: [],
+          },
         ],
       },
       authorization: {
@@ -1379,11 +1398,11 @@ test("Custom SSO delivers published nested Roles through V4 and refreshes an exi
         roles: ["global:reviewer", "global:shared", "viewer"],
       },
     };
-    expect(data.subject).toEqual(expected);
+    expect(CustomSsoSubjectProjectionSchema.parse(data.subject)).toEqual(expected);
     const originalToken = await f.codes.inspectToken(data.sid);
     const info = await f.use(data.sid);
     expect(info.status).toBe(200);
-    expect((await info.json()).data).toEqual(expected);
+    expect(CustomSsoSubjectProjectionSchema.parse((await info.json()).data)).toEqual(expected);
     const authz = await f.use(data.sid, f.businessClientCode, true);
     expect(authz.status).toBe(200);
     expect(JSON.parse(Buffer.from(authz.headers.get("X-User-Info")!, "base64").toString())).toEqual({
@@ -1422,10 +1441,24 @@ test("Custom SSO delivers published nested Roles through V4 and refreshes an exi
     const trimmed = await f.use(data.sid);
     expect(trimmed.status).toBe(200);
     expect((await trimmed.json()).data).toEqual({
-      version: 4,
+      version: 5,
       subjectIdentifier: f.subjectIdentifier,
       profile: expected.profile,
     });
+    f.setClient({
+      ...client,
+      ssoConfig: { ...client.ssoConfig, subjectClaims: [SubjectClaim.SubjectIdentifier] },
+    });
+    const attributesOnly = await f.use(data.sid);
+    expect(attributesOnly.status).toBe(200);
+    expect((await attributesOnly.json()).data).toEqual({
+      version: 5,
+      subjectIdentifier: f.subjectIdentifier,
+      profile: { customAttributes: { remote: false } },
+    });
+    const root = await f.use(f.root, "iam");
+    expect(root.status).toBe(200);
+    expect((await root.json()).data).toEqual({ version: 5, subjectIdentifier: f.subjectIdentifier });
     expect(await f.codes.inspectToken(data.sid)).toEqual(originalToken);
   } catch (failure) {
     await cleanupAfterFixtureFailure(failure, close);
@@ -1452,7 +1485,7 @@ test("SSO disablement pauses Token use and re-enablement restores the same Token
   }
 });
 
-test("current sub-only disclosure trims UserInfo and Gateway output without reading Facts", async () => {
+test("application UserInfo reads Facts for attributes while sub-only Gateway authorization skips Facts", async () => {
   const f = await businessFixture();
   try {
     const code = await f.authorize();
@@ -1478,15 +1511,16 @@ test("current sub-only disclosure trims UserInfo and Gateway output without read
     const reads = f.state.factsReads;
     const minimalResponse = await f.use(data.sid);
     expect((await minimalResponse.json()).data).toEqual({
-      version: 4,
+      version: 5,
       subjectIdentifier: f.subjectIdentifier,
     });
+    expect(f.state.factsReads).toBe(reads + 1);
     const authz = await f.use(data.sid, "app", true);
     expect(JSON.parse(Buffer.from(authz.headers.get("X-User-Info")!, "base64").toString())).toEqual({
       version: 1,
       subjectIdentifier: f.subjectIdentifier,
     });
-    expect(f.state.factsReads).toBe(reads);
+    expect(f.state.factsReads).toBe(reads + 1);
   } finally {
     await f.close();
   }

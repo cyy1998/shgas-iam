@@ -127,6 +127,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [ADR-0051](adr/0051-enforce-admission-before-issuing-application-login-grants.md)       | decision | Current    | 2026-11-13    | 2026-12-13  | 新应用授权的准入检查、已发布文档时效和协议拒绝行为。                                                       |
 | [ADR-0052](adr/0052-complete-wecom-qr-login-at-the-originating-browser.md)              | decision | Current    | 2026-11-14    | 2026-12-14  | 已确认的设计：跨设备完成企业微信登录、绑定与手机号唯一性。                                                 |
 | [ADR-0053](adr/0053-bind-wecom-identities-through-one-qr-flow.md)                       | decision | Current    | 2026-11-17    | 2026-12-17  | 已确认的设计：统一扫码流程、多身份绑定与旧接口兼容。                                                       |
+| [ADR-0054](adr/0054-disclose-directory-custom-attributes-to-all-eligible-clients.md)    | decision | Current    | 2026-11-22    | 2026-12-22  | 已确认的设计：目录自定义属性向具备入口调用资格的应用统一披露。                                             |
 
 </details>
 

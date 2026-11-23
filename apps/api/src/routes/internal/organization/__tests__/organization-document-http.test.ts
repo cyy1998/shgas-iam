@@ -81,6 +81,13 @@ test("publishes the recursive DSL request and the common public document shape i
   expect(document.components.schemas.OrganizationDocument.required).toEqual(
     expect.arrayContaining(["code", "name", "type", "status", "level", "isVirtual", "isEntity", "path"]),
   );
+  expect(document.components.schemas.OrganizationDocument.properties.customAttributes).toMatchObject({
+    type: "object",
+  });
+  expect(document.components.schemas.OrganizationDocument.required).not.toContain("customAttributes");
+  expect(document.components.schemas.OrganizationDocument.properties.path.items.properties).not.toHaveProperty(
+    "customAttributes",
+  );
   expect(document.components.schemas.OrganizationDocument.properties.path.items.required).toEqual(
     expect.arrayContaining(["code", "name", "type", "level", "distanceToTarget"]),
   );

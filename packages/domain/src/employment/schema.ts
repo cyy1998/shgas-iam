@@ -6,6 +6,7 @@ import { PositionDtoSchema } from "../position";
 export const EmploymentSchema = z.object(selectEmploymentSchema.shape);
 const DbUserSchema = z.object(selectUserSchema.shape).omit({
   subjectIdentifier: true,
+  customAttributes: true,
 });
 
 export const EmploymentUserSummarySchema = DbUserSchema.pick({

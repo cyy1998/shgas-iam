@@ -1,7 +1,12 @@
 import type { PasswordHasherPort, RandomPort } from "@admin-api/composition/runtime";
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
+import type {
+  CustomAttributeDefinitionReader,
+  CustomAttributeValueWritePort,
+} from "@admin-api/services/custom-attribute/custom-attribute.port";
 import type { UnifiedSessionEffectSchema } from "@admin-api/services/session-management/session-management.schema";
+import type { CustomAttributeValues } from "@iam/contracts/custom-attributes";
 import type { SubjectAccessMutationReceipt, SubjectAccessTransitionTarget } from "@iam/subject-access";
 import type { UnitOfWorkPort } from "@iam/unit-of-work";
 import type { z } from "zod";
@@ -18,8 +23,13 @@ export interface AdminUserTransactionStorePort {
   getUserByUsernameForAdmin: (username: string) => Promise<User | null>;
   getUserByUsernameIncludingDeletedForAuthorization: (username: string) => Promise<User | null>;
   getOpenEmploymentOrganizationIdsByUserId: (userId: number) => Promise<number[]>;
-  setUserForAdmin: (input: UserCreateDto & { subjectIdentifier: string }) => Promise<User | null>;
-  updateUserByUsername: (username: string, input: UserUpdateDto) => Promise<User | null>;
+  setUserForAdmin: (
+    input: UserCreateDto & { subjectIdentifier: string; customAttributes?: CustomAttributeValues },
+  ) => Promise<User | null>;
+  updateUserByUsername: (
+    username: string,
+    input: Omit<UserUpdateDto, "customAttributes"> & { customAttributes?: CustomAttributeValues },
+  ) => Promise<User | null>;
   hasOpenClientDelegationsByUserId: (userId: number) => Promise<boolean>;
   countOpenEmploymentsByUsername: (username: string) => Promise<number>;
   softDeleteUserByUsername: (username: string) => Promise<User | null>;
@@ -61,6 +71,7 @@ export interface AdminUserEffectiveRoleResolverPort {
 
 export interface AdminUserTransactionPorts {
   userRepository: AdminUserTransactionStorePort;
+  customAttributeDefinitions: CustomAttributeValueWritePort;
   auditService: AuditLogWriterPort;
   subjectAccessMutation: {
     runMutation: <T>(
@@ -100,6 +111,7 @@ export interface AdminSubjectAccessLifecyclePort {
 
 export interface AdminUserServiceDeps {
   userRepository: AdminUserReaderPort;
+  customAttributeDefinitions: CustomAttributeDefinitionReader;
   employmentRepository: AdminUserEmploymentReaderPort;
   roleAssignmentResolver: AdminUserEffectiveRoleResolverPort;
   roleRepository: { getRoleNamesByIds: (ids: number[]) => Promise<Array<{ roleCode: string; roleName: string }>> };

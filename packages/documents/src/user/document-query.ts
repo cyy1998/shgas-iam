@@ -2,6 +2,7 @@ import { z } from "@hono/zod-openapi";
 import type { UserDocument } from "@iam/contracts";
 import {
   DocumentPaginationSchema,
+  UserDocumentQueryableSchema,
   UserDocumentSchema,
   userDocumentSelection,
   userDocumentSorting,
@@ -16,7 +17,7 @@ import type { StoredUserDocument } from "./document";
 import { PublishedUserDocumentMetadataSchema, PublishedUserDocumentSchema, StoredUserDocumentSchema } from "./document";
 
 const ClientCodeSchema = z.string().min(1);
-const structure = searchStructureFromSchema(UserDocumentSchema);
+const structure = searchStructureFromSchema(UserDocumentQueryableSchema);
 const engine = createFilterEngine(structure);
 const transport = createFilterTransportSchemas({
   annotateExpression: (schema) => schema.openapi("UserDocumentFilterExpression"),

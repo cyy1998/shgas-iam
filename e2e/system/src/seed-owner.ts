@@ -219,7 +219,11 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
           callbackType: ClientSsoCallbackType.Business,
           callbackEndpoint: `${scenario.canonicalOrigin}/e2e/business/callback?registered=1`,
           validRedirectUrls: entryOrigins.map((origin) => `${origin}/e2e/business/*`),
-          subjectClaims: [SubjectClaim.SubjectIdentifier, SubjectClaim.ProfileUsername],
+          subjectClaims: [
+            SubjectClaim.SubjectIdentifier,
+            SubjectClaim.ProfileUsername,
+            SubjectClaim.ProfileEmployments,
+          ],
         },
         ssoSecret: "e2e-business-secret-local-only",
         ssoCredentialId: input.random.uuid(),

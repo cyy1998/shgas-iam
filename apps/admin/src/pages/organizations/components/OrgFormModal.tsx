@@ -1,15 +1,19 @@
+import CustomAttributeFields from "@admin/components/custom-attributes/CustomAttributeFields";
+import { getCustomAttributeFormPatch } from "@admin/components/custom-attributes/custom-attribute-form";
+import { useCustomAttributeDefinitions } from "@admin/components/custom-attributes/useCustomAttributeDefinitions";
 import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
 import { getAdminAuthorizationReasonText } from "@admin/services/authorization";
 import { createOrganization, type OrganizationDetailVo, updateOrganization } from "@admin/services/organization";
 import { ModalForm, ProFormSelect, ProFormText } from "@ant-design/pro-components";
 import { getOrganizationStatusOptions, OrganizationStatus, OrganizationType } from "@iam/contracts";
-import { Alert, message } from "antd";
+import { Alert, Button, Form, message } from "antd";
 
 type Props = {
   open: boolean;
   mode: "create-root" | "create-child" | "edit";
   initialValues?: OrganizationDetailVo | null;
   parentCode?: string | null;
+  canManageCustomAttributes?: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
   onCommitted?: (error: AdminMutationCommittedError) => void;
@@ -31,11 +35,20 @@ export default function OrgFormModal({
   mode,
   initialValues,
   parentCode,
+  canManageCustomAttributes = false,
   onOpenChange,
   onSuccess,
   onCommitted,
 }: Props) {
   const isEdit = mode === "edit";
+  const [form] = Form.useForm<Parameters<typeof createOrganization>[0]>();
+  const loadDefinitions = open && canManageCustomAttributes && !isEdit;
+  const { state: attributes, reload } = useCustomAttributeDefinitions("organization", loadDefinitions);
+  const definitions = isEdit
+    ? (initialValues?.customAttributeDefinitions ?? [])
+    : loadDefinitions && attributes.status === "ready"
+      ? attributes.definitions
+      : [];
   const canChangeStatus = !isEdit || initialValues?.allowedActions.changeStatus.allowed !== false;
   const changeStatusReason = isEdit
     ? getAdminAuthorizationReasonText(initialValues?.allowedActions.changeStatus.reason ?? null)
@@ -43,6 +56,7 @@ export default function OrgFormModal({
 
   return (
     <ModalForm
+      form={form}
       title={titleMap[mode]}
       open={open}
       onOpenChange={onOpenChange}
@@ -53,6 +67,7 @@ export default function OrgFormModal({
               orgName: initialValues.orgName,
               orgType: initialValues.orgType,
               status: initialValues.status,
+              customAttributes: initialValues.customAttributes,
             }
           : {
               orgType: OrganizationType.Department,
@@ -65,10 +80,13 @@ export default function OrgFormModal({
         okText: "确定",
       }}
       onFinish={async (values) => {
+        const customAttributes = getCustomAttributeFormPatch(form, definitions, form.getFieldsValue().customAttributes);
+        const attributePatch = customAttributes === undefined ? {} : { customAttributes };
         try {
           const orgName = values.orgName.trim();
           if (isEdit && initialValues) {
             const outcome = await updateOrganization(initialValues.orgCode, {
+              ...attributePatch,
               orgName,
               orgType: values.orgType,
               ...(canChangeStatus && values.status !== initialValues.status ? { status: values.status } : {}),
@@ -76,6 +94,7 @@ export default function OrgFormModal({
             message.success(outcome.changed ? "更新成功" : "无需修改");
           } else {
             const outcome = await createOrganization({
+              ...attributePatch,
               orgCode: values.orgCode.trim(),
               orgName,
               orgType: values.orgType,
@@ -150,6 +169,11 @@ export default function OrgFormModal({
           }))}
         rules={[{ required: true }]}
       />
+      {loadDefinitions && attributes.status === "loading" && <p role="status">正在加载自定义属性…</p>}
+      {loadDefinitions && attributes.status === "error" && (
+        <Alert type="error" title="自定义属性加载失败" action={<Button onClick={reload}>重试</Button>} />
+      )}
+      <CustomAttributeFields definitions={definitions} />
     </ModalForm>
   );
 }

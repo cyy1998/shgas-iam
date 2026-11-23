@@ -308,6 +308,36 @@ describe("Client Subject Projection Interface", () => {
     }
   });
 
+  test("projects published user attributes without selecting standard profile claims", async () => {
+    const service = createService({
+      subjectFacts: {
+        read: async () => ({
+          subjectIdentifier,
+          sourceVersion: "8",
+          profile: {
+            username: "zhangsan",
+            name: "张三",
+            phone: null,
+            customAttributes: { office: "east", remote: false, floor: 0 },
+          },
+          employments: [],
+        }),
+      },
+    });
+
+    const projection = await service.resolve({
+      subjectIdentifier,
+      clientCode: "client-a",
+      selection: { catalogVersion: 3, optionalClaims: [] },
+      includeCustomAttributes: true,
+    });
+
+    expect(projection).toEqual({
+      subjectIdentifier,
+      customAttributes: { office: "east", remote: false, floor: 0 },
+    });
+  });
+
   test("resolves the mandatory Subject Identifier without requiring Subject Facts", async () => {
     let factsReads = 0;
     const service = createService({

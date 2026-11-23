@@ -1,8 +1,10 @@
+import CustomAttributeFields from "@admin/components/custom-attributes/CustomAttributeFields";
+import { useCustomAttributeDefinitions } from "@admin/components/custom-attributes/useCustomAttributeDefinitions";
 import { AdminMutationCommittedError } from "@admin/services/admin-mutation";
 import { createUser } from "@admin/services/user";
 import { ModalForm, ProFormSelect, ProFormText } from "@ant-design/pro-components";
 import { getUserStatusOptions } from "@iam/contracts";
-import { message } from "antd";
+import { Alert, Button, Form, message } from "antd";
 import { showGeneratedPassword } from "./GeneratedPasswordModal";
 import UserProfileFields from "./UserProfileFields";
 
@@ -16,10 +18,14 @@ type Props = {
 const trimInput = (value: string | undefined) => value?.trim() ?? "";
 
 export default function UserFormModal({ open, onOpenChange, onSuccess, onCommitted }: Props) {
+  const [form] = Form.useForm<Parameters<typeof createUser>[0]>();
+  const { state: attributes, reload } = useCustomAttributeDefinitions("user", open);
   const handleError = (err: unknown) => message.error(err instanceof Error ? err.message : "操作失败");
 
   return (
     <ModalForm
+      name="new-user"
+      form={form}
       title="新建用户"
       open={open}
       onOpenChange={onOpenChange}
@@ -41,6 +47,7 @@ export default function UserFormModal({ open, onOpenChange, onSuccess, onCommitt
             mobile: values.mobile || null,
             wxId: values.wxId || null,
             status: values.status,
+            customAttributes: form.getFieldsValue().customAttributes,
           });
           message.success("创建成功");
           if (res.result.generatedPassword) {
@@ -90,6 +97,11 @@ export default function UserFormModal({ open, onOpenChange, onSuccess, onCommitt
         }))}
         rules={[{ required: true }]}
       />
+      {attributes.status === "loading" && <p role="status">正在加载自定义属性…</p>}
+      {attributes.status === "error" && (
+        <Alert type="error" title="自定义属性加载失败" action={<Button onClick={reload}>重试</Button>} />
+      )}
+      {attributes.status === "ready" && <CustomAttributeFields definitions={attributes.definitions} />}
     </ModalForm>
   );
 }

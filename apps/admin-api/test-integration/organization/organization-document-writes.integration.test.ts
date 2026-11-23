@@ -165,9 +165,11 @@ test("a stalled real Redis wake preserves committed source work and the same que
     });
     const service = createOrganizationService({
       organizationRepository: repositories.organization,
+      customAttributeDefinitions: repositories.customAttribute,
       responsibilityReader: repositories.organizationResponsibility,
       uow: mapUnitOfWork(uow, (tx) => ({
         organizationRepository: tx.repositories.organization,
+        customAttributeDefinitions: tx.repositories.customAttribute,
         auditService: tx.auditService,
         responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
         userDocumentInvalidation: tx.userDocumentInvalidation,

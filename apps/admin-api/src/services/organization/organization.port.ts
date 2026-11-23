@@ -1,14 +1,18 @@
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
+import type {
+  CustomAttributeDefinitionReader,
+  CustomAttributeValueWritePort,
+} from "@admin-api/services/custom-attribute/custom-attribute.port";
 import type { UnitOfWorkPort } from "@iam/unit-of-work";
 import type {
   AdminOrganizationChildRecord,
   AdminOrganizationRecord,
   Organization,
-  OrganizationCreateDto,
+  OrganizationCreateValues,
   OrganizationPaginationQueryDto,
   OrganizationSelectorNode,
   OrganizationSelectorQueryDto,
-  OrganizationUpdateDto,
+  OrganizationUpdateValues,
 } from "./organization.type";
 
 export interface AdminOrganizationTransactionStorePort {
@@ -16,8 +20,8 @@ export interface AdminOrganizationTransactionStorePort {
   getAnyOrganizationByCode: (orgCode: string) => Promise<Organization | null>;
   getOrganizationByCode: (orgCode: string) => Promise<AdminOrganizationRecord | null>;
   getOrganizationByCodeForAdmin: (orgCode: string) => Promise<AdminOrganizationRecord | null>;
-  setOrganization: (input: OrganizationCreateDto, parent: Organization | null) => Promise<AdminOrganizationRecord>;
-  updateOrganizationByCode: (orgCode: string, input: OrganizationUpdateDto) => Promise<Organization | null>;
+  setOrganization: (input: OrganizationCreateValues, parent: Organization | null) => Promise<AdminOrganizationRecord>;
+  updateOrganizationByCode: (orgCode: string, input: OrganizationUpdateValues) => Promise<Organization | null>;
   hasOpenDelegationsByOrganizationId: (organizationId: number) => Promise<boolean>;
   countActiveChildrenByOrgCode: (orgCode: string) => Promise<number>;
   countOpenEmploymentsByOrgCode: (orgCode: string) => Promise<number>;
@@ -53,17 +57,18 @@ export interface AdminOrganizationReadScope {
 }
 
 export interface AdminOrganizationProfileChange {
-  readonly kind: "organization";
+  readonly kind: "organization" | "organization-custom-attributes";
   readonly organizationId: number;
 }
 
-export type AdminOrganizationDocumentChangedField = "code" | "name" | "type" | "status";
+export type AdminOrganizationDocumentChangedField = "code" | "name" | "type" | "status" | "customAttributes";
 export type AdminOrganizationDocumentChange =
   | { kind: "created" | "deleted"; organizationId: number }
   | { kind: "updated"; organizationId: number; changedFields: readonly AdminOrganizationDocumentChangedField[] };
 
 export interface AdminOrganizationTransactionPorts {
   organizationRepository: AdminOrganizationTransactionStorePort;
+  customAttributeDefinitions: CustomAttributeValueWritePort;
   auditService: AuditLogWriterPort;
   responsibilityParentLifecycle: {
     assertNoOpenAssignmentsTargetingOrganizationSubtree: (input: { organizationId: number }) => Promise<void>;
@@ -80,6 +85,7 @@ export type AdminOrganizationUnitOfWorkPort = UnitOfWorkPort<AdminOrganizationTr
 
 export interface AdminOrganizationServiceDeps {
   organizationRepository: AdminOrganizationReaderPort;
+  customAttributeDefinitions: CustomAttributeDefinitionReader;
   responsibilityReader: {
     hasOpenAssignmentTargetingOrganizationSubtree: (organizationId: number) => Promise<boolean>;
     hasOpenAssignmentTargetingOrganizationSubtreeOutsideScope: (

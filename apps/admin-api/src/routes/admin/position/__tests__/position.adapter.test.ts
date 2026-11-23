@@ -79,6 +79,7 @@ describe("admin position adapter", () => {
       },
     ]);
     const positionService = createPositionService({
+      customAttributeDefinitions: { list: async () => [] },
       positionRepository: {
         getPositionDetailByCode: mock(async () => null),
         getPositionByCode: mock(async () => null),
@@ -128,6 +129,7 @@ describe("admin position adapter", () => {
 
   test("returns memberNumber in Position detail without loading Employment rows", async () => {
     const positionService = createPositionService({
+      customAttributeDefinitions: { list: async () => [] },
       positionRepository: {
         getPositionDetailByCode: mock(async () => ({
           id: 2,

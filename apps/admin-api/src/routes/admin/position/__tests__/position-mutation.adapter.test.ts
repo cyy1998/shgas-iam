@@ -7,6 +7,7 @@ import { createImmediateUnitOfWork } from "@admin-api/test/fakes";
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import { getApiRuntimeErrorFormatterData } from "@iam/api-core/trpc";
 import { PositionStatus } from "@iam/contracts";
+import type { CustomAttributeDefinition } from "@iam/contracts/custom-attributes";
 import type { Position } from "@iam/domain/position";
 import { PositionCodeExistsError } from "@iam/domain/position";
 import type { Context } from "hono";
@@ -16,9 +17,10 @@ import {
   getTestAdminAuthorizationValue,
 } from "../../../../testing/admin-authorization";
 
-function surface(roles = ["iam:admin"]) {
+function surface(roles = ["iam:admin"], definitions: CustomAttributeDefinition[] = []) {
   const now = new Date("2026-09-07T00:00:00Z");
   let row: Position | null = null;
+  const updatePositionByCode = mock(async (_code: string, data: object) => (row = row ? { ...row, ...data } : null));
   const repository = {
     lockPositionByCode: async (code: string) => (row?.posCode === code && !row.isDelete ? row : null),
     setPosition: async (data: { posCode: string; posName: string }) => {
@@ -34,15 +36,17 @@ function surface(roles = ["iam:admin"]) {
       };
       return row;
     },
-    updatePositionByCode: async (_code: string, data: object) => (row = row ? { ...row, ...data } : null),
+    updatePositionByCode,
     softDeletePositionByCode: async () => (row = row ? { ...row, isDelete: true } : null),
     countOpenEmploymentsByPosCode: async () => 0,
   };
   const recordAuditLog = mock(async () => undefined);
   const service = createPositionService({
+    customAttributeDefinitions: { list: async () => [] },
     positionRepository: { getPositionDetailByCode: async () => null, searchPositionsFuzzy: async () => [] },
     uow: createImmediateUnitOfWork({
       positionRepository: repository,
+      customAttributeDefinitions: { lockForValues: async () => definitions },
       auditService: {
         recordAuditLog,
         recordAuditLogFromContext: async () => undefined,
@@ -69,10 +73,45 @@ function surface(roles = ["iam:admin"]) {
     });
     return { status: response.status, body: await response.json() };
   }
-  return { request, caller, recordAuditLog };
+  return { request, caller, recordAuditLog, updatePositionByCode };
 }
 
 describe("Position mutation public adapters", () => {
+  test("REST writes the changed position fields along with the attribute value", async () => {
+    const { request, updatePositionByCode } = surface(
+      ["iam:admin"],
+      [
+        {
+          entityType: "position",
+          code: "grade",
+          valueType: "number",
+          displayName: "Grade",
+          enabled: true,
+          orderNum: 0,
+          description: null,
+          options: [],
+        },
+      ],
+    );
+    const created = await request("POST", "", {
+      posCode: "DEV",
+      posName: "Developer",
+      status: PositionStatus.Enable,
+    });
+    expect(created.status).toBe(200);
+
+    const result = await request("PUT", "/DEV", {
+      posCode: "  DEV  ",
+      posName: "New Developer",
+      status: PositionStatus.Enable,
+      customAttributes: { grade: 0 },
+    });
+    expect(result).toMatchObject({ status: 200, body: { data: { changed: true } } });
+    expect(updatePositionByCode.mock.calls).toEqual([
+      ["DEV", { posName: "New Developer", customAttributes: { grade: 0 } }],
+    ]);
+  });
+
   test("REST normalizes position create inputs", async () => {
     const { request } = surface();
     const created = await request("POST", "", {

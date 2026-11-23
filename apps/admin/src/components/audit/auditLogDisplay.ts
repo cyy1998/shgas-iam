@@ -22,6 +22,7 @@ export const targetTypeLabels: Record<string, string> = {
   mobile: "手机号",
   principal_session: "Principal Session",
   organization_responsibility_assignment: "组织责任任命",
+  custom_attribute_definition: "自定义属性定义",
 };
 
 export const outcomeLabels: Record<string, string> = {

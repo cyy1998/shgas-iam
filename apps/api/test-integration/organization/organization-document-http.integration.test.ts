@@ -6,7 +6,7 @@ import { createOrganizationHandlers } from "@api/routes/internal/organization/or
 import { createOrganizationRoute } from "@api/routes/internal/organization/organization.index";
 import createApp from "@iam/api-core/core/create-app";
 import { ClientStatus, OrganizationDocumentSchema, OrganizationStatus, OrganizationType } from "@iam/contracts";
-import { organizationClosures, organizationDocuments, organizations } from "@iam/db/schema";
+import { customAttributeDefinitions, organizationClosures, organizationDocuments, organizations } from "@iam/db/schema";
 import {
   createOrganizationDocumentQueryRepository,
   createOrganizationDocumentQueryService,
@@ -98,6 +98,50 @@ describe("Organization Filter DSL through authenticated Internal HTTP and Postgr
     const explicitOff = await searchRequest({ paginate: false });
     expect(explicitOff.body.data).toEqual({ ...defaults.body.data, page: null, pageSize: null });
   });
+  test("Internal exposes only the published organization attribute object and excludes it from matching and sorting", async () => {
+    await seedTree();
+    await publishAll();
+    const prior = await detail("DEPT");
+    expect(prior.status).toBe(200);
+    expect(prior.body.data).not.toHaveProperty("customAttributes");
+
+    await harness.db.insert(customAttributeDefinitions).values({
+      entityType: "organization",
+      code: "cost_center",
+      displayName: "Cost center",
+      valueType: "number",
+    });
+    await harness.db
+      .update(organizations)
+      .set({ customAttributes: { cost_center: 0 } })
+      .where(eq(organizations.orgCode, "DEPT"));
+    const beforePublication = await detail("DEPT");
+    expect(beforePublication).toEqual(prior);
+
+    await publishAll();
+    const current = await detail("DEPT");
+    expect(current.status).toBe(200);
+    expect(current.body.data.customAttributes).toEqual({ cost_center: 0 });
+    expect(current.body.data.path.at(-1)).not.toHaveProperty("customAttributes");
+
+    const filter = { field: "code", op: "eq", value: "DEPT" };
+    const chosen = await searchRequest({ filter, select: ["customAttributes"] });
+    expect(chosen.status).toBe(200);
+    expect(chosen.body.data.items).toEqual([{ customAttributes: { cost_center: 0 } }]);
+    const defaults = await searchRequest({ filter });
+    expect(defaults.body.data.items).toEqual([{ code: "DEPT", name: "已发布部门" }]);
+    for (const invalid of [
+      { select: ["customAttributes.cost_center"] },
+      { select: ["path.customAttributes"] },
+      { filter: { field: "customAttributes.cost_center", op: "eq", value: 0 } },
+      { sort: [{ field: "customAttributes", direction: "asc" }] },
+      { sort: [{ field: "customAttributes.cost_center", direction: "asc" }] },
+    ]) {
+      const rejected = await searchRequest(invalid);
+      expect(rejected.status).toBe(422);
+    }
+  });
+
   test("rejects invalid or conflicting pagination parameters without coercion", async () => {
     for (const value of [0, -1, 1.5, "1", null, true, Number.MAX_SAFE_INTEGER + 1]) {
       for (const field of ["page", "pageSize"]) {

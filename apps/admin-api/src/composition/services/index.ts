@@ -2,6 +2,7 @@ import { createAuditRepository } from "@admin-api/services/audit/audit.repositor
 import type { AdminAuditService } from "@admin-api/services/audit/audit.service";
 import { createAdminAuditService } from "@admin-api/services/audit/audit.service";
 import { createClientService } from "@admin-api/services/client/client.service";
+import { createCustomAttributeDefinitionService } from "@admin-api/services/custom-attribute/custom-attribute.service";
 import { createEmploymentService } from "@admin-api/services/employment/employment.service";
 import { createOrganizationService } from "@admin-api/services/organization/organization.service";
 import { createOrganizationResponsibilityService } from "@admin-api/services/organization-responsibility/organization-responsibility.service";
@@ -48,6 +49,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
     },
     user: {
       userRepository: repositories.user,
+      customAttributeDefinitions: repositories.customAttribute,
       employmentRepository: repositories.employment,
       roleAssignmentResolver,
       roleRepository: repositories.role,
@@ -56,6 +58,7 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
       subjectAccessLifecycle: session.subjectAccessLifecycle,
       uow: mapUnitOfWork(unitOfWork, (tx) => ({
         userRepository: tx.repositories.user,
+        customAttributeDefinitions: tx.repositories.customAttribute,
         auditService: tx.auditService,
         subjectAccessMutation: tx.subjectAccessMutation,
         userDocumentInvalidation: tx.userDocumentInvalidation,
@@ -90,9 +93,11 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
 
   const organizationService = createOrganizationService({
     organizationRepository: repositories.organization,
+    customAttributeDefinitions: repositories.customAttribute,
     responsibilityReader: repositories.organizationResponsibility,
     uow: mapUnitOfWork(unitOfWork, (tx) => ({
       organizationRepository: tx.repositories.organization,
+      customAttributeDefinitions: tx.repositories.customAttribute,
       auditService: tx.auditService,
       responsibilityParentLifecycle: tx.responsibilityParentLifecycle,
       userDocumentInvalidation: tx.userDocumentInvalidation,
@@ -105,8 +110,10 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
 
   const positionService = createPositionService({
     positionRepository: repositories.position,
+    customAttributeDefinitions: repositories.customAttribute,
     uow: mapUnitOfWork(unitOfWork, (tx) => ({
       positionRepository: tx.repositories.position,
+      customAttributeDefinitions: tx.repositories.customAttribute,
       auditService: tx.auditService,
       userDocumentInvalidation: tx.userDocumentInvalidation,
     })),
@@ -142,6 +149,15 @@ export function createAdminApiServices(options: CreateAdminApiServicesOptions) {
       logger: runtime.logger,
     }),
     clientSso: clientSso.management,
+    customAttribute: createCustomAttributeDefinitionService({
+      reader: repositories.customAttribute,
+      uow: mapUnitOfWork(unitOfWork, (tx) => ({
+        definitions: tx.repositories.customAttribute,
+        audit: tx.auditService,
+        userDocumentInvalidation: tx.userDocumentInvalidation,
+        organizationDocumentInvalidation: tx.organizationDocumentInvalidation,
+      })),
+    }),
     employment: employmentService,
     organization: organizationService,
     organizationResponsibility: organizationResponsibilityService,

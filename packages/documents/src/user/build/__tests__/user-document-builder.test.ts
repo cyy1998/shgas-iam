@@ -34,6 +34,7 @@ test("builds one canonical document without management or duplicated business fi
               status: UserStatus.Pause,
               isDelete: false,
               password: "must-not-publish",
+              customAttributes: { building: "must-not-publish-before-projection" },
               orderNum: 9,
               createTime: observedAt,
               updateTime: observedAt,
@@ -44,6 +45,7 @@ test("builds one canonical document without management or duplicated business fi
           orgPathRows: [],
           roleRows: [],
           responsibilityRows: [],
+          customAttributeDefinitions: [],
         };
       },
     },

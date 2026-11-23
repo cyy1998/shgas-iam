@@ -53,6 +53,7 @@ export async function createAdminApiPostgresTestHarness(): Promise<AdminApiPostg
             organization_document,
             organization_responsibility_assignment,
             client_delegation,
+            custom_attribute_definition,
             audit_log,
             user_document_outbox,
             user_document_rebuild_state,

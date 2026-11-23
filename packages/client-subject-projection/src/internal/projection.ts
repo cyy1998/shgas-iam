@@ -1,4 +1,5 @@
 import { OrganizationReferenceSchema, SubjectClaim } from "@iam/contracts";
+import type { CustomAttributeValues } from "@iam/contracts/custom-attributes";
 import { z } from "zod";
 import { SubjectProjectionNotReadyError } from "../errors";
 import type { EmploymentProfileBase, SubjectFactsEmploymentBase } from "../index";
@@ -38,12 +39,13 @@ async function resolveProjection(
     username?: string;
     name?: string;
     phone?: string | null;
+    customAttributes?: CustomAttributeValues;
     employments?: EmploymentProfile[];
     authorization?: ClientAuthorization;
   } = {
     subjectIdentifier: input.subjectIdentifier,
   };
-  if (input.selection.optionalClaims.length === 0) return projection;
+  if (!input.includeCustomAttributes && input.selection.optionalClaims.length === 0) return projection;
 
   const facts = await options.subjectFacts.read(input.subjectIdentifier);
   if (facts === null || facts.subjectIdentifier !== input.subjectIdentifier) throw new SubjectProjectionNotReadyError();
@@ -52,9 +54,12 @@ async function resolveProjection(
     projection.username = facts.profile.username;
   if (input.selection.optionalClaims.includes(SubjectClaim.ProfileName)) projection.name = facts.profile.name;
   if (input.selection.optionalClaims.includes(SubjectClaim.ProfilePhone)) projection.phone = facts.profile.phone;
+  if (input.includeCustomAttributes && facts.profile.customAttributes !== undefined) {
+    projection.customAttributes = facts.profile.customAttributes;
+  }
   if (input.selection.optionalClaims.includes(SubjectClaim.ProfileEmployments)) {
     projection.employments = facts.employments
-      .map(toEmploymentProfileWithResponsibilities)
+      .map((employment) => toEmploymentProfile(employment, input.includeCustomAttributes))
       .sort(compareEmploymentProfiles);
   }
   if (input.selection.optionalClaims.includes(SubjectClaim.IamAuthorization)) {
@@ -64,9 +69,18 @@ async function resolveProjection(
   return projection;
 }
 
-function toEmploymentProfileWithResponsibilities(employment: SubjectFactsEmployment): EmploymentProfile {
+function toEmploymentProfile(employment: SubjectFactsEmployment, includeCustomAttributes = false): EmploymentProfile {
+  const profile = toEmploymentBase(employment);
   return {
-    ...toEmploymentProfile(employment),
+    ...profile,
+    organization: withCustomAttributes(
+      profile.organization,
+      includeCustomAttributes ? employment.organization.customAttributes : undefined,
+    ),
+    position: withCustomAttributes(
+      profile.position,
+      includeCustomAttributes ? employment.position.customAttributes : undefined,
+    ),
     responsibilities: z.array(EmploymentResponsibilitySnapshotSchema).parse(
       employment.responsibilities.map((responsibility) => ({
         type: responsibility.type,
@@ -74,6 +88,10 @@ function toEmploymentProfileWithResponsibilities(employment: SubjectFactsEmploym
       })),
     ),
   };
+}
+
+function withCustomAttributes<T>(reference: T, customAttributes: CustomAttributeValues | undefined) {
+  return customAttributes === undefined ? reference : { ...reference, customAttributes };
 }
 
 function toClientAuthorization(facts: SubjectFactsSnapshot, clientCode: string): ClientAuthorization {
@@ -89,7 +107,7 @@ function toClientAuthorization(facts: SubjectFactsSnapshot, clientCode: string):
     for (const code of roles) topLevelRoles.add(code);
 
     return {
-      ...toEmploymentProfile(employment),
+      ...toEmploymentBase(employment),
       roles: [...roles].sort(compareCodes),
     };
   });
@@ -100,7 +118,7 @@ function toClientAuthorization(facts: SubjectFactsSnapshot, clientCode: string):
   };
 }
 
-function toEmploymentProfile(employment: SubjectFactsEmploymentBase): EmploymentProfileBase {
+function toEmploymentBase(employment: SubjectFactsEmploymentBase): EmploymentProfileBase {
   return {
     isPrimary: employment.isPrimary,
     organization: OrganizationReferenceSchema.parse(employment.organization),

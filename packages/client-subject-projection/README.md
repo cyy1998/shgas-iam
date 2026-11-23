@@ -1,7 +1,8 @@
 # @iam/client-subject-projection
 
 `@iam/client-subject-projection` 拥有协议中性的 Catalog、披露裁剪与投影。调用方传入主体、Client、披露选择和本操作许可，
-核心通过注入接口使用同一份合法 Facts，与数据库、运行时及协议实现解耦，无需重读 Client 配置或认证。仅交付 Subject Identifier 时无需 Facts。
+核心通过注入接口使用同一份合法 Facts，与数据库、运行时及协议实现解耦，无需重读 Client 配置或认证。
+仅请求 Subject Identifier 时无需 Facts。提供应用资料的入口可以请求自定义属性，用户属性独立于 Catalog 声明，组织和岗位属性随所选任职资料交付。
 
 ## 已发布 Facts 与披露
 

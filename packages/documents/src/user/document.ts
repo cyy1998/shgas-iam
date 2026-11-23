@@ -1,4 +1,5 @@
 import { DocumentEmploymentSchema, DocumentUserSchema, isGlobalRoleCode } from "@iam/contracts";
+import { PublishedCustomAttributesSchema } from "@iam/contracts/custom-attributes";
 import { z } from "zod";
 
 export const USER_DOCUMENT_SCHEMA_VERSION = 1;
@@ -50,7 +51,14 @@ export const PublishedUserDocumentSchema = PublishedUserDocumentMetadataSchema.e
 
 export const DocumentSubjectFactsSchema = z
   .object({
-    profile: z.object({ username: z.string().min(1), name: z.string().min(1), phone: z.string().nullable() }).strict(),
+    profile: z
+      .object({
+        username: z.string().min(1),
+        name: z.string().min(1),
+        phone: z.string().nullable(),
+        customAttributes: PublishedCustomAttributesSchema,
+      })
+      .strict(),
     employments: z.array(StoredDocumentEmploymentSchema),
   })
   .strict();
@@ -111,6 +119,9 @@ export function createDocumentFactsCacheRecord(input: unknown): DocumentFactsCac
         username: publication.document.username,
         name: publication.document.name,
         phone: publication.document.mobile,
+        ...(publication.document.customAttributes === undefined
+          ? {}
+          : { customAttributes: publication.document.customAttributes }),
       },
       employments: publication.document.employments,
     },

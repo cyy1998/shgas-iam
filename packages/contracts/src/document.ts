@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PublishedCustomAttributesSchema } from "./custom-attributes";
 import { OrganizationLevel } from "./enums/organization.level";
 import { OrganizationStatus } from "./enums/organization.status";
 import { OrganizationType } from "./enums/organization.type";
@@ -40,7 +41,8 @@ export const OrganizationReferenceSchema = OrganizationNodeSchema.extend({
   }
 });
 
-export const OrganizationDocumentSchema = OrganizationReferenceSchema.safeExtend({
+// Filters and sorting use the fixed directory shape. Custom Attributes are only selected and returned.
+export const OrganizationDocumentQueryableSchema = OrganizationReferenceSchema.safeExtend({
   level: z.enum(OrganizationLevel),
   status: z.enum(OrganizationStatus),
   isVirtual: z.boolean(),
@@ -49,6 +51,10 @@ export const OrganizationDocumentSchema = OrganizationReferenceSchema.safeExtend
   if (organization.level !== organization.path.length) {
     context.addIssue({ code: "custom", path: ["level"], message: "组织层级必须与完整路径一致" });
   }
+});
+
+export const OrganizationDocumentSchema = OrganizationDocumentQueryableSchema.safeExtend({
+  customAttributes: PublishedCustomAttributesSchema,
 });
 
 export const DocumentResponsibilitySchema = z.object({
@@ -67,7 +73,7 @@ export const DocumentResponsibilitySchema = z.object({
   targetOrganization: OrganizationReferenceSchema,
 });
 
-export const DocumentUserSchema = z.object({
+const documentUserQueryableSchema = z.object({
   subjectIdentifier: z.uuid(),
   username: z.string().min(1).max(64),
   name: z.string().min(1).max(64),
@@ -77,12 +83,27 @@ export const DocumentUserSchema = z.object({
   status: z.enum(UserStatus),
 });
 
-export const DocumentEmploymentSchema = z.object({
+const documentEmploymentQueryableSchema = z.object({
   isPrimary: z.boolean(),
   organization: OrganizationReferenceSchema,
   position: z.object({ code: z.string().min(1), name: z.string().min(1) }),
   responsibilities: z.array(DocumentResponsibilitySchema),
   roles: z.array(z.string().min(1)),
+});
+
+export const UserDocumentQueryableSchema = documentUserQueryableSchema.extend({
+  employments: z.array(documentEmploymentQueryableSchema),
+});
+
+export const DocumentUserSchema = documentUserQueryableSchema.extend({
+  customAttributes: PublishedCustomAttributesSchema,
+});
+
+export const DocumentEmploymentSchema = documentEmploymentQueryableSchema.extend({
+  organization: OrganizationReferenceSchema.safeExtend({ customAttributes: PublishedCustomAttributesSchema }),
+  position: documentEmploymentQueryableSchema.shape.position.extend({
+    customAttributes: PublishedCustomAttributesSchema,
+  }),
 });
 
 export const UserDocumentSchema = DocumentUserSchema.extend({

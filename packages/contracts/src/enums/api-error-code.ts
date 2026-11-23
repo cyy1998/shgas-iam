@@ -90,4 +90,5 @@ export enum ApiErrorCode {
   ClientDelegationResolutionInputNotFound = "CLIENT_DELEGATION.RESOLUTION_INPUT_NOT_FOUND",
   ClientDelegationResolutionUnavailable = "CLIENT_DELEGATION.RESOLUTION_UNAVAILABLE",
   ClientDelegationConflict = "CLIENT_DELEGATION.CONFLICT",
+  CustomAttributeDefinitionCodeConflict = "CUSTOM_ATTRIBUTE.DEFINITION_CODE_CONFLICT",
 }
