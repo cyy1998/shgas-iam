@@ -10,7 +10,6 @@
     "includes": [
       "**/*.{cjs,css,cts,js,json,jsonc,jsx,mjs,mts,ts,tsx}",
       "!!.agents/skills",
-      "!!.codex/skills",
       "!!.scratch",
       "!!apps/admin-api/static",
       "!!apps/api/static",

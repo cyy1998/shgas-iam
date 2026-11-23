@@ -1,6 +1,6 @@
 # 仓库指引入口
 
-本文件是 Codex 和其他 Agent 的仓库级导航入口，具体规范集中维护在 `docs/` 下。本页只保留按任务查找规范的指引。
+本文件是 Antigravity、Codex 及其他 Agent 的仓库级导航入口，具体规范集中维护在 `docs/` 下。本页只保留按任务查找规范的指引。
 
 ## 阅读顺序
 
@@ -34,9 +34,11 @@
 ## Agent 交互与 Shell 约定
 
 - 在聊天 UI 中，面向用户的回复默认使用自然、地道的中文。代码标识符、命令、文件路径、API 名称和引用的源文本保持原语言。
-- 本仓库明确授权 Codex 使用子代理功能并行调查或拆分边界清晰的任务；主代理仍负责整合结论、执行改动和最终验证。
-- 跨文件、跨模块或高搜索噪声的只读代码调查优先使用项目级 `code_researcher`；事务一致性、并发、安全边界或证据冲突等
-  复杂问题再升级到 `deep_researcher`。调用边界、返回契约和外置记忆规则见
+- 本仓库明确授权在 T3 Code 下由 Antigravity 与 Codex 协作使用原生子代理及 `delegate_task` 并行调查或拆分边界清晰的任务；
+  主代理仍负责整合结论、执行集成和最终串行验证。角色选型、模型与思考档位、工作树约束见
+  [双引擎角色与评审编排](docs/agents/workflow.md#双引擎角色与评审编排)。
+- 跨文件、跨模块或高搜索噪声的只读代码调查优先使用 `code_researcher`（Antigravity 主会话优先用原生只读 `research`）；
+  事务一致性、并发、安全边界或证据冲突等复杂问题再升级到 `deep_researcher`。调用边界、返回契约和外置记忆规则见
   [docs/agents/code-investigation.md](docs/agents/code-investigation.md)。
 - Windows 环境默认使用 PowerShell 7（`pwsh`）执行命令；只有目标脚本明确要求时才切换到 Windows PowerShell 5.1、
   `cmd.exe` 或其他 shell。
@@ -54,9 +56,14 @@
 
 ## 开发方法与 Issue 路由
 
-- 完整 Spec 的手动实施使用 [`implement-spec`](.agents/skills/implement-spec/SKILL.md)，仓库差异见[工作流补充](docs/agents/workflow.md)。
-- 小型明确任务直接实施；显式调用 [`implement`](.agents/skills/implement/SKILL.md) 时才走该 skill 的双轴评审流程。
-- 运行或维护 Sandcastle AFK 时读 [AFK 工作流](docs/agents/sandcastle-afk.md)。
+- 本仓库将**分析与设计（T3 Code）**和**执行与交付（Sandcastle AFK）**分离，详见[工作流补充](docs/agents/workflow.md)：
+  - **分析与设计**：在 T3 Code 完成代码调查、澄清、原型与文档落盘（候选集成分支 `feat/<feature-slug>`），发布 Spec/tickets 并由当前引擎的新鲜只读 subagent 通过 `ready-for-agent` 轻量门禁后交接。
+  - **完整 Spec 执行**：默认交由 [Sandcastle AFK](docs/agents/sandcastle-afk.md) 无人值守实施、双轴评审与本地 squash 交付；仅在用户明确指定时才在手动会话中运行 [`implement-spec`](.agents/skills/implement-spec/SKILL.md)。
+  - **轻量直改与异常介入**：小型明确任务、文档/配置更新、紧急 bugfix 及 AFK 暂停排障直接在 T3 Code 单会话完成；显式调用 [`implement`](.agents/skills/implement/SKILL.md) 时才走该 skill 的双轴评审流程。
+- 上游高频流程 skills 需用户点名后直接读取对应 `SKILL.md`：
+  [`to-spec`](.agents/skills/to-spec/SKILL.md)、[`to-tickets`](.agents/skills/to-tickets/SKILL.md)、[`wayfinder`](.agents/skills/wayfinder/SKILL.md)、
+  [`grill-with-docs`](.agents/skills/grill-with-docs/SKILL.md)、[`grill-me`](.agents/skills/grill-me/SKILL.md)、[`triage`](.agents/skills/triage/SKILL.md)。
+  正文中的 `Call the Skill tool with "<name>"` 在无独立 `Skill` 工具的环境中等效于直接读取对应 `.agents/skills/<name>/SKILL.md`。
 - 跨会话 feature 使用 `cyy1998/shgas-iam` GitHub Issues 保存 spec、tickets 和状态。
   创建、读取、更新 issue 或恢复跨会话工作前，先读[议题跟踪规则](docs/agents/issue-tracker.md)。
 - 执行 triage 或设置 issue 标签前，先读[标签约定](docs/agents/triage-labels.md)，沿用默认 canonical labels。

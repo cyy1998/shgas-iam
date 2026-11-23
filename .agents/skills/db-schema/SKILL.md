@@ -119,7 +119,7 @@ for (const item of items) {
 
 ### 数据库 Schema
 
-参考 [db-schema.md](../_shared/templates/db-schema.md)
+参考 [db-schema.md](templates/db-schema.md)
 
 包含：
 - 标准表定义
@@ -136,7 +136,7 @@ for (const item of items) {
 
 ### Zod Schema
 
-参考 [zod-schema.md](../_shared/templates/zod-schema.md)
+参考 [zod-schema.md](templates/zod-schema.md)
 
 包含：
 - 标准 Schema 文件结构

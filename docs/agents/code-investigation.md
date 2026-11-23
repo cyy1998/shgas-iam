@@ -7,7 +7,11 @@
 - `deep_researcher`：裁决高风险、高歧义或证据冲突的复杂行为；定义位于
   [`.codex/agents/deep-researcher.toml`](../../.codex/agents/deep-researcher.toml)。
 
-模型、推理档位与 sandbox 配置以对应 TOML 为准；本页维护调查职责、调用策略与返回契约。
+T3 Code 双引擎协作下的引擎路由、模型与思考档位统一见[双引擎角色与评审编排](workflow.md#双引擎角色与评审编排)；
+Codex 原生执行与 AFK 的角色定义以对应 TOML 为准，本页维护调查职责、调用策略与返回契约。
+
+- Antigravity 主会话进行常规只读调查时，优先使用原生硬只读 `research` 子代理并遵守本页返回契约；
+- 经 T3 `delegate_task` 跨引擎派发 `deep_researcher` 时，在 `task` 中明确限定只读调查范围，返回后由主会话核对 `git status` 干净。
 
 ## 调用策略
 
@@ -68,7 +72,7 @@ protocol entry
 ```
 
 与问题相关时，同时确认 transaction boundary、`UnitOfWork`/`afterCommit`、error path、retry、同步/异步副作用和测试证据。
-先用 `rg`、`rg --files`、package manifest、public export、entry point 与 composition root 缩小范围，避免无目标全库遍历、
+先用 `rg` / `rg --files`（本机未安装 `rg` 时改用 `git grep` 或 PowerShell `Select-String`）、package manifest、public export、entry point 与 composition root 缩小范围，避免无目标全库遍历、
 重复完整读取文件或把原始命令日志带回主线程。
 
 ## 返回契约与外置记忆
@@ -83,6 +87,6 @@ protocol entry
 
 `deep_researcher` 还必须返回关键 `Invariants and failure modes`，以及用于挑战主假设的 `Counterevidence`。
 
-结果只返回压缩后的证据摘要，不返回原始搜索日志或大段源码。两个调查 agent 都使用硬只读 sandbox，因此需要跨上下文
-恢复时，由主代理把摘要、已排除假设、无需重读的文件和下一步动作写入当前 GitHub issue 的评论，或用户明确指定的调查
-报告路径；恢复后优先读取该记录，不重新扫描已完成范围。
+结果只返回压缩后的证据摘要，不返回原始搜索日志或大段源码。调查子代理保持只读（原生子代理受只读 sandbox 约束，经 T3 `delegate_task` 派发时由指令限定并由主会话核对工作区）；需要跨上下文
+恢复时，由主代理把摘要、已排除假设、已覆盖文件和下一步动作写入当前 GitHub issue 的评论，或用户明确指定的调查
+报告路径；恢复后优先沿该记录继续。

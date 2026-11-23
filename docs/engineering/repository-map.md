@@ -90,7 +90,7 @@ Use case 由 root 的 `useCases` 交给路由。Admin API 的入口与审计实�
 | `scripts/`                   | 文档和架构守卫、测试编排、验证入口及 tooling performance helpers。                                                                                         |
 | `scripts/sandcastle/`        | AFK runner、宿主预检与临时测试资源编排。                                                                                                                   |
 | `.sandcastle/`               | Sandcastle 规划、票级实施与验收、Spec 最终评审与修复 prompts、Dockerfile 和 `.env.example`；运行命令见[命令入口](../agents/sandcastle-afk.md#启动与诊断)。 |
-| `.codex/agents/`             | Codex 调查角色、手动与 AFK 共用的三档实施者、Standards/Spec 只读评审角色；AFK runner 配置容器内 Spec 最终评审。                                            |
+| `.codex/agents/`             | 仓库 7 个角色契约定义（调查角色、手动与 AFK 共用的三档实施者、Standards/Spec 只读评审角色）；供 Codex 原生子代理、T3 跨引擎委派与 AFK runner 复用。        |
 | `.husky/`                    | Git hooks 与安装脚本。                                                                                                                                     |
 | `patches/`                   | pnpm 管理的固定依赖补丁；Sandcastle signal 适配允许宿主 runner 等待中断清理。                                                                              |
 
@@ -105,7 +105,7 @@ Use case 由 root 的 `useCases` 交给路由。Admin API 的入口与审计实�
 - GitHub Issues：新建 spec、tickets 与跨会话状态的 tracker。仓库与操作约定见
   [GitHub 议题跟踪](../agents/issue-tracker.md)。
 - `.scratch/`：已退役本地 tracker 的历史归档；保留原路径和 release 链接。
-- `.agents/`、`.codex/`：仓库随附的 agent skills 与 Codex 配置，不属于 runtime source。
+- `.agents/`、`.codex/`：`.agents/skills/` 存放上游与仓库自有 agent skills（Antigravity 与 Codex 共同发现），`.codex/` 存放角色契约与 Codex 环境配置，均不属于 runtime source。
 - `openspec/`：冻结的只读历史需求与设计记录，不是当前事实来源；使用前先阅读
   [冻结说明](../../openspec/README.md)。
 

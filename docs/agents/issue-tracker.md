@@ -1,10 +1,17 @@
 # GitHub 议题跟踪
 
 本仓库新建的 spec、implementation ticket 和 wayfinding 记录统一存放在
-[`cyy1998/shgas-iam`](https://github.com/cyy1998/shgas-iam) 的 GitHub Issues 中。所有操作使用 `gh` CLI。
+[`cyy1998/shgas-iam`](https://github.com/cyy1998/shgas-iam) 的 GitHub Issues 中。仓库统一使用 GitHub，远端
+remote 通常命名为 `github`；所有 `gh` 命令显式传入 `--repo cyy1998/shgas-iam`。
 
-本地 `origin` 指向 Gitee，GitHub remote 名为 `github`。为避免命令解析到错误仓库，所有 `gh` 命令都必须显式传入
-`--repo cyy1998/shgas-iam`，不能依赖当前目录自动推断 remote。
+## T3 Code 工具与 Remote 约定
+
+- **Issue 创建与任务图维护** 涉及 GitHub 原生父子关系（`--parent`）、阻塞边（`--blocked-by` / `--add-blocked-by`）及依赖 REST API 的操作统一通过 `gh` CLI 执行。
+- **T3 线程绑定** 在 T3 Code 会话中接手或新建 issue 后（包括经 `gh` CLI 操作），补调 `link_issue` 将其关联到当前线程。
+- **PR 操作** 涉及 PR 读取、创建、评审、评论、合入或 CI 日志排查时，在 T3 Code 环境下优先使用 `pull_request_*`、`ci_logs`、
+  `ci_rerun` 等内置工具。
+- **Worktree Remote 基线** 调用 `t3_worktree_handoff` 或 `t3_thread_launch` 创建 worktree 时，显式传入
+  `baseRef: "github/main"`，或基于本地分支设 `startFromOrigin: false`。
 
 ## 常用操作
 
@@ -76,8 +83,10 @@ Spec 与 implementation ticket 使用[互斥类型标签](triage-labels.md#spec-
 
 ## Sandcastle AFK 交接
 
-AFK 使用上述类型与原生任务图，沿用 triage、assignee 和普通交接，不另建 tracker schema。手动路径的功能分支记录仍保留，
-AFK 评论另记录本次调用分支、ticket 分支、基线与候选提交。交接材料、恢复与关票职责见 [AFK 工作流](sandcastle-afk.md)。
+AFK 使用上述类型与原生任务图，沿用 triage、assignee 和普通交接，不另建 tracker schema。设计产物落在候选集成分支并在
+Spec 正文唯一声明 `集成分支：feat/<feature-slug>`；标为 `ready-for-agent` 前的轻量门禁与交接分支前提见
+[设计与执行交接](workflow.md#设计与执行交接)。AFK 评论另记录本次调用分支、ticket 分支、基线与候选提交，恢复与关票职责见
+[AFK 工作流](sandcastle-afk.md)。
 
 ## 当 skill 要求“fetch the relevant ticket”
 

@@ -1,7 +1,6 @@
 export default {
   ignoreFiles: [
     ".agents/skills/**",
-    ".codex/skills/**",
     ".scratch/**",
     ".sandcastle/{auth,dependencies,locks,logs,patches,resources,worktrees}/**",
     "apps/admin-api/static/**",

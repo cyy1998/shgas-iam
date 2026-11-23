@@ -1,104 +1,118 @@
 # 开发工作流补充
 
-完整 Spec 的手动实施以 [`implement-spec`](../../.agents/skills/implement-spec/SKILL.md) 为主流程；本页只补充仓库特有约束。
-需求澄清、拆票、调度和评审等通用步骤由对应 skill 维护，不在项目文档中复述。
+本仓库采用**分析设计与执行交付分离**的工作流：
 
-小型明确任务直接实施和验证，无需创建 issue，也不自动调用 `implement` 或双轴评审。只有用户显式调用
-[`implement`](../../.agents/skills/implement/SKILL.md) 时，小任务才执行该 skill 的评审流程；用户也可单独要求
-[`code-review`](../../.agents/skills/code-review/SKILL.md)。
+- **Stage 1：分析与设计（T3 Code，Antigravity + Codex 协作）** 负责只读代码调查、需求澄清、原型验证、在候选集成分支落盘
+  `ADR`/`GLOSSARY.md`/设计文档，以及产出带原生任务图的 Spec 与 tickets。
+- **Stage 2：执行与交付（Sandcastle AFK）** 承担完整 Spec 的无人值守实施、双轴评审（`gpt-6.2-astra` `xhigh`）、集中修复、
+  全量验证、本地 squash 合入与资源回收，详见[AFK 工作流](sandcastle-afk.md)。
+- **Fast Track：轻量直改与异常介入（T3 Code 单会话）** 负责小型明确改动、文档/配置修改、紧急 bugfix、主观 UI/交互微调，
+  以及 AFK 暂停（`Needs Attention`）时的人工排障回流，在单会话内直接完成。
 
-运行或维护 Sandcastle AFK 时另读 [AFK 工作流](sandcastle-afk.md)；本页的手动授权与收尾规则不适用于 AFK。
+小型明确任务在单会话内直接实施并验证；需要额外流程时，由用户显式调用
+[`implement`](../../.agents/skills/implement/SKILL.md)、[`code-review`](../../.agents/skills/code-review/SKILL.md) 或
+[`implement-spec`](../../.agents/skills/implement-spec/SKILL.md)。
 需求与恢复记录见[议题跟踪](issue-tracker.md)，当前行为与修改目标的判断见[文档索引](../index.md#当前事实与修改目标)。
 
 ## 授权与分支
 
-- **按授权范围推进** 按用户已授权的范围连续推进。只要求拆票时止于拆票；已明确授权拆票并实施时，发布 tickets 后直接继续。
-  范围扩大、需求冲突或关键设计未定时，先澄清对应问题。
-- **功能分支复用** 同一 feature 从讨论落盘到实施复用同一功能分支；在 `implement-spec` 中它就是集成分支。
-  首次落盘前核对目标分支、工作区和已有分支；没有可复用分支时创建 `codex/<feature-slug>`。
-  只读调查不建分支，用户指定的分支或 worktree 安排优先。
-- **跨会话恢复** 文档随相关工作正常提交。跨会话按[议题跟踪](issue-tracker.md#当-skill-要求publish-to-the-issue-tracker)恢复分支和基线，
-  不因阶段变化另建功能分支。未知改动原样保留，发生覆盖风险时先解决重叠。
-- **合入确认** 实施授权包含集成分支内的提交、合并和修复；目标分支的本地合入按[收尾约定](#完成与本地合入)单独确认。
+- **按授权范围推进** 按用户已授权的范围连续推进。要求设计或拆票时止于设计落盘与发布 tickets；范围扩大、需求冲突或关键设计未定时先澄清。
+- **候选集成分支复用** 同一 feature 的设计产物（`ADR`、`GLOSSARY.md`、设计文档等）直接提交在候选集成分支中，待实现、评审与验证全部通过后再整体合入目标分支。
+  首次落盘改动前核对目标分支、工作区和已有分支，优先复用已有或用户指定分支，否则创建引擎无关前缀的 `feat/<feature-slug>`。
+- **跨会话恢复** 文档随相关工作正常提交。跨会话按[议题跟踪](issue-tracker.md#当-skill-要求publish-to-the-issue-tracker)恢复同一分支与基线，保留未知改动并在覆盖前先解决重叠。
+- **合入确认** 手动单会话或异常收尾任务合入目标分支前，按[收尾约定](#完成与本地合入)单独确认；Sandcastle AFK 的本地合入授权在启动
+  AFK 时统一授予。
 
-## 实施者与评审适配
+## 设计与执行交接
 
-手动编排按角色描述选择 [`implementer_light`](../../.codex/agents/implementer-light.toml)、
-[`implementer_standard`](../../.codex/agents/implementer-standard.toml) 或
-[`implementer_deep`](../../.codex/agents/implementer-deep.toml)，信息不足时选 standard。
-角色配置持有模型与思考档位，协调者在委派时标明手动或 AFK 模式。
+在 T3 Code 完成分析设计、准备为 Spec 与 tickets 标记 `ready-for-agent` 并交接给 Sandcastle AFK 前，按顺序完成以下门禁与 Git 准备：
 
-调用 `code-review` 时提供当前工作起始基线、固定候选 SHA 和已确认的需求来源；已确认的测试 seam 直接传给实施者。
-评审期间保持候选不变。手动 `implement-spec` 按原始 skill 完成评审与修复后继续后续步骤，修复验证遵守下文验证节奏。
-AFK 的逐轮复审要求由 [AFK 工作流](sandcastle-afk.md#双轴评审子代理生命周期)维护。
+1. **`ready-for-agent` 轻量门禁** 标记 `ready-for-agent` 前，由当前主会话启动一个**同引擎的新鲜只读 subagent**
+   （Antigravity 用原生 `research`，Codex 用原生 `code_researcher`）独立核查四项：
+   - 每张 ticket 的验收条件客观可测，且已明确测试 seam 与所需验证层级（Unit / Integration / E2E / Gateway）；
+   - GitHub 原生父子关系（`--parent`）与阻塞边（`--blocked-by`）完整、无环且覆盖全部前置依赖；
+   - 阻塞实现的 `ADR`、`GLOSSARY.md` 与设计决策均已提交到候选集成分支；
+   - Spec 正文与本地 Git 状态满足下方 AFK 分支契约。
+2. **AFK 候选集成分支契约**（与 [`scripts/sandcastle/tickets.ts`](../../scripts/sandcastle/tickets.ts) 对齐）：
+   - **唯一分支声明**：存在设计产物分支时，在 Spec 正文仅声明一行 `集成分支：feat/<feature-slug>`（runner 据此确定唯一归属）；
+   - **祖先关系成立**：确保候选集成分支包含当前调用分支（满足 `git merge-base --is-ancestor main feat/<feature-slug>`）；若期间
+     `main` 前进，交接前先将最新 `main` 合入候选集成分支；
+   - **切回调用分支且工作区干净**：启动 `pnpm sandcastle` 前，将主仓库工作区切回目标调用分支（如 `main`）并保持工作区干净；
+     设计阶段若使用独立 worktree，保持该 worktree 干净或先移除 worktree（保留分支）。
+3. **AFK 异常回流（`Needs Attention`）** Sandcastle 因设计歧义或难解失败暂停时，切回 T3 Code 处理：
+   - 读取对应 Spec/ticket 的交接评论与集成分支现场；
+   - 复杂问题交给 `deep_researcher` 定位根因；
+   - 补齐 Spec 或修复阻塞点并重新满足上述分支契约后继续运行 AFK，或经用户确认在 T3 单会话完成收口并走[完成与本地合入](#完成与本地合入)。
+
+## 双引擎角色与评审编排
+
+仓库的 7 个角色契约统一维护在 `.codex/agents/*.toml`（供 Codex 原生子代理与 Sandcastle AFK 直接加载）。
+在 T3 Code 交互阶段，Antigravity 与 Codex 按下表分工：
+
+| 角色                                                                | 适用场景                                                                | 引擎与模型                                                                                                                 | 思考档位                                                                                             | 调用方式与隔离                                                               |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| [`code_researcher`](../../.codex/agents/code-researcher.toml)       | 跨文件入口定位、调用链追踪、隔离搜索噪声、`ready-for-agent` 轻量门禁    | 同引擎原生优先：Antigravity 用 `research`（默认 `inherit`，轻扫可选 `flash`）；Codex 用 `code_researcher`（`gpt-6.2-sol`） | Antigravity 默认 `high`；Codex `reasoningEffort: "high"`                                             | 同引擎原生子代理，`shared`（硬只读沙箱）                                     |
+| [`deep_researcher`](../../.codex/agents/deep-researcher.toml)       | 事务边界、并发/幂等、安全边界、证据冲突反证、AFK 难解失败定位           | 默认 Codex `gpt-6.2-sol`（Codex 主会话需异构复核时可选 Antigravity `gemini-4-neon`）                                       | Codex `reasoningEffort: "xhigh"`（极端疑难可由用户指定 `max`）；Antigravity `thought_level: "xhigh"` | 跨引擎走 `delegate_task`（`isolation: "shared"`）；同引擎走原生              |
+| [`standards_reviewer`](../../.codex/agents/standards-reviewer.toml) | 显式 `code-review` 的 Standards 轴（仓库规范 + Fowler smell baseline）  | **固定** Codex `gpt-6.2-astra`                                                                                             | `reasoningEffort: "xhigh"`                                                                           | 与 `spec_reviewer` 并发走 `delegate_task`（`isolation: "shared"`）           |
+| [`spec_reviewer`](../../.codex/agents/spec-reviewer.toml)           | 显式 `code-review` 的 Spec 轴（完整 Spec、tickets、验收与 scope creep） | **固定** Codex `gpt-6.2-astra`                                                                                             | `reasoningEffort: "xhigh"`                                                                           | 与 `standards_reviewer` 并发走 `delegate_task`（`isolation: "shared"`）      |
+| 浏览器与 UI 视觉验收（按需）                                        | 仅用户明确要求页面检查、交互验证、截图或可视化原型时                    | **固定** Antigravity `gemini-4-neon`                                                                                       | `thought_level: "high"`                                                                              | Antigravity 主会话或独立 `delegate_task`（使用 `preview_*` / `html_render`） |
+
+`implementer_light`、`implementer_standard`、`implementer_deep`（见 `.codex/agents/implementer-*.toml`）由 Sandcastle AFK
+按票风险自动调度；T3 Code 下的 Fast Track 轻量直改由主会话单线完成。
+
+编排约定：
+
+1. **能力探测与阻塞上报** 每条线程首次调用 `delegate_task` 前先调用一次 `orchestrator_capabilities`。
+   目标 provider 或模型不可用时直接报告阻塞并交由用户决策。
+2. **跨引擎角色契约与只读核验** 通过 `delegate_task` 委派角色时，`task` 传递稀疏上下文指针（对应 `.codex/agents/<role>.toml`、
+   `AGENTS.md`、issue/spec 编号、固定 base/candidate SHA 与范围）。经 `delegate_task` 执行的只读角色
+   （`deep_researcher`、`standards_reviewer`、`spec_reviewer`）在 `task` 中明确限定为只读范围，返回后由主会话核对 `git status` 干净。
+3. **显式双轴评审** 调用 `code-review` 时提供起始基线、固定候选 SHA 和已确认需求来源，评审期间保持候选固定。
+   两轴并发启动两个独立的 Codex `gpt-6.2-astra`（`reasoningEffort: "xhigh"`）`delegate_task`；每轮复审均新建独立
+   `delegate_task`，评审 findings 由主会话直接修复并验证。
+4. **T3 Code 工作树与子任务管理** 主会话需要脱离主目录隔离工作时使用 `t3_worktree_handoff`。
+   用户显式要求在 T3 Code 派发独立工作树子任务时，先提交父分支基线，再由父会话通过 `delegate_task(isolation: "worktree")`
+   创建隔离 checkout；异步任务等待系统通知推进，需要停止时调用 `task_cancel`。
 
 ## 验证节奏
 
 - **实施过程验证** 实施中按改动运行相关测试、受影响 workspace 的 typecheck；文档变化运行 `pnpm check:docs` 和 `git diff --check`。
-  显式调用 `implement` 时，其中的完整测试指当前任务的完整受影响范围。
+  显式调用 `implement` 时，完整测试覆盖当前任务的全部受影响范围。
 - **提交时检查** 格式与 lint 修复由[提交 Hook](../engineering/commands.md#commit-前检查)处理暂存文件；核对修复 diff，
   按实际变化重跑失效的类型或行为检查。
-- 手动 tickets 不逐票要求 `verify:static`。最终集成内容交付前，以合入目标的固定提交与候选比较。
-  仅当完整差异满足[纯文档验证](../engineering/commands.md#纯文档验证)的范围，且验收只涉及文档时，使用
-  `pnpm verify:docs --base <target-commit>` 完成基础门禁。其余改动完成 `pnpm verify` 覆盖的全部检查。
-  按 Spec 和改动风险补齐所需 Integration、E2E、Gateway 等检查。小任务准备本地合入时使用同一规则。
-- **同宿主串行验证** 在同一宿主上串行运行 `pnpm verify`、全量 Integration 和 Full-system E2E，跨会话和工作树也适用。
-  等上一轮命令退出并完成所需的测试资源清理后，再启动下一轮。需要一次完成全部发布验证时可用 `pnpm verify:release`。
-- **验证结果复用** 同一候选已有通过结果时，核对候选 SHA、实际命令和检查范围，确认相关依赖、配置与环境仍一致。
-  只通过独立入口补跑缺失或失效的检查。
-  - `pnpm verify` 已通过，只缺 Integration 时，运行 `pnpm test:integration`，按验收范围选择全量或定向。
-  - `pnpm verify` 和全量 Integration 已通过，只缺 E2E 时，运行 `pnpm test:e2e`。
-  - `pnpm verify` 的静态检查、typecheck 和 Unit 已通过，仅 build 失败时，补跑 `pnpm build`。
-- 候选后续有修改时，按代码、依赖、配置或环境变化判断哪些结果仍有效，无法判断时扩大验证。
-  最终证据必须覆盖当前候选的全部受影响范围，记录候选 SHA、实际命令及检查范围、结果和未执行项。
-- 必需检查失败或未执行时保持工作未完成。认定基线失败需在固定基线、可比环境复现并记录证据；
-  维护者明确接受后才可作为例外，创建 issue 本身不构成豁免。
+- **门禁分级** 手动交付前以合入目标的固定提交与候选比较：差异仅属[纯文档验证](../engineering/commands.md#纯文档验证)范围且验收只涉及文档时运行
+  `pnpm verify:docs --base <target-commit>`；其余改动完成 `pnpm verify` 覆盖的全部检查，并按 Spec 与风险补齐所需 Integration、E2E、Gateway 检查。
+  设计产物先落候选集成分支交接给 Sandcastle 时，完成文档格式化、`pnpm check:docs` 与 `git diff --check`，完整门禁由 AFK 最终验证统一覆盖。
+- **同宿主串行验证** 在同一宿主上串行运行 `pnpm verify`、全量 Integration 和 Full-system E2E，跨会话、工作树及 Sandcastle AFK 均适用；
+  待上一轮命令退出并完成测试资源清理后再启动下一轮。需要一次完成全部发布验证时使用 `pnpm verify:release`。
+- **验证结果复用** 同一候选已有通过结果时，核对候选 SHA、实际命令与检查范围，确认依赖、配置与环境一致后，只通过独立入口补跑缺失或失效项：
+  - `pnpm verify` 已通过、只缺 Integration 时，按验收范围运行全量或定向 `pnpm test:integration`；
+  - `pnpm verify` 和全量 Integration 已通过、只缺 E2E 时，运行 `pnpm test:e2e`；
+  - `pnpm verify` 的静态检查、typecheck 和 Unit 已通过、仅 build 失败时，补跑 `pnpm build`。
+- 候选后续有修改时，按代码、依赖、配置或环境变化判断有效范围，存疑时扩大验证。最终证据覆盖当前候选的全部受影响范围，记录候选 SHA、实际命令、范围、结果与未执行项。
+- 必需检查全部通过方可视为完成。认定基线失败须在固定基线与可比环境复现并记录证据，经维护者明确接受后方可作为例外。
 
 命令见[命令入口](../engineering/commands.md)，验证的证明范围见[验证结果与交付](../engineering/testing.md#验证结果与交付)，
 临时 PostgreSQL/Redis 的创建与清理见[专用资源与隔离](../engineering/testing.md#专用资源与隔离)。
 
-## 子代理与工作树收尾
-
-手动任务使用 Codex managed worktree 时，由主会话记录子代理 ID、父子关系、工作树路径、所属会话和本次创建的临时分支。
-实施、调查、评审子代理及其后代都纳入清单。子代理可能继承工作树附件，返回结果或停止运行不等于释放引用。
-
-完成集成、评审和适用验证后，按以下顺序回收：
-
-1. 确认子代理及相关进程已停止，所需提交已集成或另有可恢复记录，交接结果和需保留的 ignored 文件已外置。
-   尚需继续修复的子代理及工作树保留；中断的子代理须先核对其工作已接管。
-2. 对本任务创建且不再需要的子代理，用 `set_thread_archived` 从后代到父级归档会话，保留主会话。
-   核对持有目标工作树附件的调查和评审子代理，不能只处理实际在该目录写代码的实施者。
-3. 由工作树所属主会话通过 `list_artifacts` 取得准确 identityKey，再调用 `archive_worktree`。
-   不同主会话的工作树分别由各自所属会话处理；每个目标提交一次请求后等待结果。
-4. 退避核验应用附件变为 `archived_worktree`、`git worktree list` 中目标登记消失、原 checkout 目录消失，
-   三项均满足才报告工作树回收完成。`queued`、Git 命令退出成功或附件已归档都不能单独证明目录已回收。
-5. 工作树回收后，按清单删除本次创建且已无用途的本地实施票分支和评审修复分支。逐个核对分支 tip 已包含在集成候选中，
-   且未被任何工作树检出。若已 squash 合入，另核对该合入提交仍在目标分支历史中，且其文件树与已验收的集成候选一致。
-   普通删除因 squash 历史而拒绝时，在这些核验通过后用 `git branch -D -- <分支名>` 删除准确目标。
-   用 `git branch --list <分支名>` 逐个回查，确认应清理的分支均已消失。归属不明、含未集成提交或仍被使用的分支保留，并记录原因。
-   功能分支按[本地合入流程](#完成与本地合入)处理。
-
-状态持续不变或失败时，保留准确路径、所属会话、子代理归档状态和已完成阶段，检查仍未归档的附件引用与后台错误。
-区分代码交付和环境回收结果，恢复时只继续未完成步骤。managed worktree 保持通过应用归档，
-不在请求尚未结算时改用 `git worktree remove` 或直接删除目录。手工创建的普通 Git worktree 使用 Git 回收并核验目录；
-已失去 Git 登记的孤立目录单独核对所有权和保留内容，不能作为正常工作树反复请求归档。
-
 ## 完成与本地合入
 
-本仓库默认本地交付。父 Spec 在最终合入前保持 open；tickets 的完成按所用 skill 执行，GitHub 操作见[议题跟踪](issue-tracker.md)。
+本仓库默认本地交付。父 Spec 在最终合入前保持 open；tickets 的完成按所用流程执行，GitHub 操作见[议题跟踪](issue-tracker.md)。
+完整 Spec 的合入与关票默认由 Sandcastle AFK 自动完成；以下流程用于 Fast Track 手动任务或 AFK 异常介入后的人工收口。
 
 完成适用评审和最终验证后，提出一次收尾确认，列明 feature、适用 Spec、目标分支、固定候选 SHA，以及
-本地 squash 合入、关闭父 Spec、删除本地功能分支的完整范围。没有 Spec 时跳过关票。
+本地 squash 合入、关闭父 Spec、删除本地功能分支的完整范围（无 Spec 时跳过关票）。
 Push、远端分支删除、PR 和部署须另行授权。
 
 取得授权后连续完成：
 
-1. 核对候选与目标分支 tip；发生漂移时先整合、完成适用复审并重跑失效的验证。
+1. 核对候选与目标分支 tip；发生漂移时先整合、完成适用复审并重跑失效验证。
 2. 用 `git merge --squash` 和一个聚合提交本地合入目标分支。
 3. 确认目标分支只新增一个 squash commit、文件树符合最终候选且工作区干净。
-4. 在父 Spec 记录本地合入 SHA 并关闭，再删除本地功能分支。
+4. 在父 Spec 记录本地合入 SHA 并关闭，再删除本地功能分支（及本次创建且确认已集成、未被工作树检出的临时分支；
+   因 squash 历史被 `git branch -d` 拒绝时，在核验树一致后用 `git branch -D -- <分支名>`）。
 
-失败时保留功能分支和实际进度，停止后续收尾动作并报告恢复点；恢复时先核对 Git 与 issue 状态，避免重复合入。
+失败时保留功能分支与实际进度，停止后续收尾并报告恢复点；恢复时先核对 Git 与 issue 状态再继续。
 
 ## 文档与历史
 

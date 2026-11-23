@@ -136,14 +136,14 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 <details>
 <summary>展开Agent 工作流</summary>
 
-| Document                                          | Type         | Status  | Last verified | Next review | Notes                                                       |
-| ------------------------------------------------- | ------------ | ------- | ------------- | ----------- | ----------------------------------------------------------- |
-| [代码调查子代理](agents/code-investigation.md)    | agent-config | Current | 2026-11-16    | 2026-12-16  | 只读调查路由、子代理返回契约与跨会话记忆。                  |
-| [Domain Docs](agents/domain.md)                   | agent-config | Current | 2026-11-16    | 2026-12-16  | 工程 skills 的领域文档消费规则。                            |
-| [GitHub 议题跟踪](agents/issue-tracker.md)        | agent-config | Current | 2026-10-25    | 2026-11-25  | GitHub spec、ticket 类型、原生任务图与手动/AFK 交接。       |
-| [Sandcastle AFK 工作流](agents/sandcastle-afk.md) | agent-config | Current | 2026-10-26    | 2026-11-25  | 原生 Spec 图选票，以及无人值守实施、评审、合入与验证。      |
-| [Triage Labels](agents/triage-labels.md)          | agent-config | Current | 2026-10-25    | 2026-11-25  | 默认 canonical triage labels 与 Spec/ticket 互斥类型。      |
-| [工作流补充](agents/workflow.md)                  | agent-config | Current | 2026-11-16    | 2026-12-16  | implement-spec 与直接小任务的仓库分支、验证和本地收尾补充。 |
+| Document                                          | Type         | Status  | Last verified | Next review | Notes                                                                             |
+| ------------------------------------------------- | ------------ | ------- | ------------- | ----------- | --------------------------------------------------------------------------------- |
+| [代码调查子代理](agents/code-investigation.md)    | agent-config | Current | 2026-11-23    | 2026-12-23  | 双引擎只读调查路由、沙箱约束、返回契约与跨会话记忆。                              |
+| [Domain Docs](agents/domain.md)                   | agent-config | Current | 2026-11-16    | 2026-12-16  | 工程 skills 的领域文档消费规则。                                                  |
+| [GitHub 议题跟踪](agents/issue-tracker.md)        | agent-config | Current | 2026-11-23    | 2026-12-23  | GitHub spec、ticket 类型、原生任务图、T3 绑定与手动/AFK 交接。                    |
+| [Sandcastle AFK 工作流](agents/sandcastle-afk.md) | agent-config | Current | 2026-10-26    | 2026-11-25  | 原生 Spec 图选票，以及无人值守实施、评审、合入与验证。                            |
+| [Triage Labels](agents/triage-labels.md)          | agent-config | Current | 2026-10-25    | 2026-11-25  | 默认 canonical triage labels 与 Spec/ticket 互斥类型。                            |
+| [工作流补充](agents/workflow.md)                  | agent-config | Current | 2026-11-23    | 2026-12-23  | 分析设计（T3 Code）与执行交付（Sandcastle AFK）分离、双引擎角色、验证与收尾约束。 |
 
 </details>
 
@@ -156,7 +156,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 
 | Document                                           | Type         | Status  | Last verified | Next review | Notes                                |
 | -------------------------------------------------- | ------------ | ------- | ------------- | ----------- | ------------------------------------ |
-| [仓库地图](engineering/repository-map.md)          | architecture | Current | 2026-11-02    | 2026-12-02  | 代码、基础设施、工具与生成目录定位。 |
+| [仓库地图](engineering/repository-map.md)          | architecture | Current | 2026-11-23    | 2026-12-23  | 代码、基础设施、工具与生成目录定位。 |
 | [系统架构视图](engineering/system-architecture.md) | architecture | Current | 2026-11-02    | 2026-12-02  | 拓扑、信任边界、数据权威与恢复分工。 |
 
 #### 修改应用或共享契约
@@ -165,7 +165,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | --------------------------------------------------------- | ------------ | ------- | ------------- | ----------- | -------------------------------------------------- |
 | [后端架构与实现约定](engineering/backend-architecture.md) | architecture | Current | 2026-11-03    | 2026-12-03  | 依赖与装配、接口响应、事务与恢复、审计与后台协作。 |
 | [前端架构](engineering/frontend-architecture.md)          | architecture | Current | 2026-10-25    | 2026-11-25  | 页面、请求、权限、状态与失败恢复的职责。           |
-| [共享契约与数据库](engineering/contracts-and-database.md) | architecture | Current | 2026-10-26    | 2026-11-26  | 代码选址、包出口、运行环境、DTO 演进与持久化边界。 |
+| [共享契约与数据库](engineering/contracts-and-database.md) | architecture | Current | 2026-11-23    | 2026-12-23  | 代码选址、包出口、运行环境、DTO 演进与持久化边界。 |
 
 #### 编写、运行或排查测试
 

@@ -60,8 +60,8 @@ Repository 通过 factory 接收 root 或 transaction `DbClient`；事务由调�
 [Documents 发布与恢复](../../packages/documents/README.md#共享发布与恢复)
 
 修改 PostgreSQL schema、索引、约束或 Drizzle 派生 schema 前使用
-[db-schema skill](../../.codex/skills/db-schema/SKILL.md)；涉及 Relations v2 或 RQB v2 时另用
-[drizzle-v1 skill](../../.codex/skills/drizzle-v1/SKILL.md)。操作命令见[命令入口](commands.md#workspace-命令)。
+[db-schema skill](../../.agents/skills/db-schema/SKILL.md)；涉及 Relations v2 或 RQB v2 时另用
+[drizzle-v1 skill](../../.agents/skills/drizzle-v1/SKILL.md)。操作命令见[命令入口](commands.md#workspace-命令)。
 
 ### 数据库文件约定
 
