@@ -1,6 +1,6 @@
 FROM docker.xuanyuan.run/library/node:24.22.3-bookworm
 
-ARG CODEX_VERSION=0.154.0
+ARG CODEX_VERSION=0.171.0
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl git gh ripgrep unzip postgresql-client redis-tools \
     && rm -rf /var/lib/apt/lists/*
