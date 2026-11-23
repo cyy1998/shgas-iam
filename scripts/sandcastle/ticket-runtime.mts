@@ -134,11 +134,11 @@ export function createTicketExecutor(options: ExecutorOptions): TicketRun {
     const result = await execute({
       worktreePath: context.worktreePath,
       role,
-      name: `${phase === "implement" ? "Implementer" : "Ticket acceptance"} #${context.ticket.number}`,
+      name: `${phase === "implement" ? "Implementer" : "Merge conflict"} #${context.ticket.number}`,
       promptFile: join(
         options.cwd,
         ".sandcastle",
-        `${phase === "implement" ? "implement" : "ticket-accept"}-prompt.md`,
+        `${phase === "implement" ? "implement" : "ticket-merge-conflict"}-prompt.md`,
       ),
       promptArgs: {
         REPO: githubRepo,

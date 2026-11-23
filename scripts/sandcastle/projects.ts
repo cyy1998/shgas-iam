@@ -2,15 +2,7 @@ import { command } from "./commands.ts";
 import { githubRepo } from "./github.ts";
 
 const fieldName = "AFK Stage";
-const stages = [
-  "Implementing",
-  "Accepting",
-  "Integrated",
-  "Reviewing",
-  "Delivering",
-  "Needs Attention",
-  "Done",
-] as const;
+const stages = ["Implementing", "Integrated", "Reviewing", "Delivering", "Needs Attention", "Done"] as const;
 type Stage = (typeof stages)[number];
 export type ReportProjectStage = (issue: number, stage: Stage) => Promise<void>;
 

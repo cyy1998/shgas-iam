@@ -21,14 +21,13 @@ export type TicketContext = {
   baseSha: string;
   candidate?: string;
   handoff?: string;
-  acceptance?: string;
+  conflictResolution?: string;
   mergedSha?: string;
 };
 
 export type IntegratedTicket = TicketContext & {
   candidate: string;
   handoff: string;
-  acceptance: string;
   mergedSha: string;
 };
 
@@ -37,17 +36,18 @@ export type TicketRecovery = {
   worktreePath?: string;
   candidate?: string;
   handoff?: string;
-  acceptOnly?: boolean;
+  conflictResolution?: string;
+  readyToMerge?: boolean;
 };
 
 function integratedTicket(context: TicketContext): IntegratedTicket {
-  const { candidate, handoff, acceptance, mergedSha } = context;
-  if (!candidate || !handoff || !acceptance || !mergedSha) throw new GitStateError("缺少完整票级集成交接，保留现场。");
-  return { ...context, candidate, handoff, acceptance, mergedSha };
+  const { candidate, handoff, mergedSha } = context;
+  if (!candidate || !handoff || !mergedSha) throw new GitStateError("缺少完整票级集成交接，保留现场。");
+  return { ...context, candidate, handoff, mergedSha };
 }
 
 export type TicketRun = (input: {
-  phase: "implement" | "accept";
+  phase: "implement" | "resolve-conflict";
   context: Readonly<TicketContext>;
   integrationSha: string;
 }) => Promise<{ completed: boolean; handoff: string }>;
@@ -169,74 +169,99 @@ export function createTicketLifecycle(options: {
     if (integrated.has(ticket.number)) return integratedTicket(context);
     if (!context.mergedSha) {
       const integrationSha = await gitAt(workspace.worktreePath, "rev-parse", "HEAD");
-      if (
-        context.candidate !== integrationSha &&
-        (await gitAt(workspace.worktreePath, "rev-list", `${integrationSha}..${context.candidate}`)) === ""
-      ) {
-        // A previous process may have merged before its ordinary acceptance record was written.
-        // Advance only by fast-forward, then obtain the missing real acceptance at the existing snapshot.
-        await gitAt(context.worktreePath, "merge", "--ff-only", integrationSha);
-        context.candidate = await observed(context, context.candidate);
-      }
-      try {
-        const accepted = await options.runTicket({ phase: "accept", context: { ...context }, integrationSha });
-        context.acceptance = accepted.handoff;
-        if (!accepted.completed || !accepted.handoff.trim())
-          throw new Error(`#${ticket.number} 票级验收或必需验证未完成，保留现场。${accepted.handoff}`);
-      } catch (error) {
-        const actual = await gitAt(context.worktreePath, "rev-parse", "HEAD");
-        if ((await gitAt(context.worktreePath, "branch", "--show-current")) !== ticket.branch)
-          throw new GitStateError("验收失败后的分支归属无法确认，保留现场。", { cause: error });
-        await gitAt(context.worktreePath, "merge-base", "--is-ancestor", context.candidate, actual);
+      const alreadyMerged =
+        context.candidate !== context.baseSha &&
+        (await gitAt(workspace.worktreePath, "rev-list", `${integrationSha}..${context.candidate}`)) === "";
+      if (alreadyMerged) {
+        context.mergedSha = integrationSha;
+      } else {
+        signal?.throwIfAborted();
+        let merged = false;
         try {
+          await command("git", ["merge", "--no-ff", "--no-edit", context.candidate], workspace.worktreePath);
+          merged = true;
+        } catch (cause) {
+          const unmerged = await command(
+            "git",
+            ["diff", "--name-only", "--diff-filter=U"],
+            workspace.worktreePath,
+          ).catch(() => "");
+          if (!unmerged.trim()) {
+            throw new GitStateError(
+              `合并 #${ticket.number} 到 ${workspace.branch} 失败，保留现场。${cause instanceof Error ? cause.message : String(cause)}`,
+              { cause },
+            );
+          }
+          await gitAt(workspace.worktreePath, "merge", "--abort");
+          await assertCheckout(workspace.worktreePath, workspace.branch);
+        }
+        if (!merged) {
+          try {
+            const resolved = await options.runTicket({
+              phase: "resolve-conflict",
+              context: { ...context },
+              integrationSha,
+            });
+            context.conflictResolution = resolved.handoff;
+            if (!resolved.completed || !resolved.handoff.trim())
+              throw new Error(`#${ticket.number} 合并冲突解决或必需验证未完成，保留现场。${resolved.handoff}`);
+          } catch (error) {
+            const actual = await gitAt(context.worktreePath, "rev-parse", "HEAD");
+            if ((await gitAt(context.worktreePath, "branch", "--show-current")) !== ticket.branch)
+              throw new GitStateError("冲突解决失败后的分支归属无法确认，保留现场。", { cause: error });
+            await gitAt(context.worktreePath, "merge-base", "--is-ancestor", context.candidate, actual);
+            try {
+              await options.recordHandoff(
+                ticket.number,
+                `Spec #${workspace.graph.spec.number} 的 ticket #${ticket.number} 合并冲突解决尚未完成，保留分支与 worktree。\n\n` +
+                  `启动分支：${invocationBranch}；Spec 启动基线：${workspace.invocationBase}；Spec 分支：${workspace.branch}；` +
+                  `ticket 分支：${ticket.branch}；ticket 工作树：${context.worktreePath}；实施基线：${context.baseSha}；候选：${actual}；实际 HEAD：${actual}。\n\n` +
+                  `实施交接：\n${context.handoff}\n\n冲突解决：\n${context.conflictResolution ?? "冲突解决会话未返回完整报告。"}\n\n` +
+                  `失败：${error instanceof Error ? error.message : String(error)}\n\n` +
+                  "下一动作：下次启动核对实际 HEAD 与已有日志，重新解决合并冲突并完成受影响验证；本轮不重开失败会话。",
+              );
+            } catch (handoffError) {
+              throw new AggregateError([error, handoffError], "冲突解决与准确失败交接同时失败，保留 Git 和已有日志。");
+            }
+            throw error;
+          }
+          await observed(context, context.candidate);
+          context.candidate = await observed(context, integrationSha);
+          await assertInvocation(workspace.invocationBase);
+          await assertCheckout(workspace.worktreePath, workspace.branch);
+          if ((await gitAt(workspace.worktreePath, "rev-parse", "HEAD")) !== integrationSha)
+            throw new GitStateError(`Spec #${workspace.graph.spec.number} 冲突解决期间集成候选漂移，保留现场。`);
+          if ((await observed(context, context.baseSha)) !== context.candidate)
+            throw new GitStateError(`#${ticket.number} 冲突解决后的候选已漂移，保留现场。`);
           await options.recordHandoff(
             ticket.number,
-            `Spec #${workspace.graph.spec.number} 的 ticket #${ticket.number} 票级验收尚未完成，保留分支与 worktree。\n\n` +
+            `Spec #${workspace.graph.spec.number} 的 ticket #${ticket.number} 合并冲突已解决，等待普通合入。\n\n` +
               `启动分支：${invocationBranch}；Spec 启动基线：${workspace.invocationBase}；Spec 分支：${workspace.branch}；` +
-              `ticket 分支：${ticket.branch}；ticket 工作树：${context.worktreePath}；实施基线：${context.baseSha}；候选：${actual}；实际 HEAD：${actual}。\n\n` +
-              `实施交接：\n${context.handoff}\n\n票级验收：\n${context.acceptance ?? "验收会话未返回完整报告。"}\n\n` +
-              `失败：${error instanceof Error ? error.message : String(error)}\n\n` +
-              "下一动作：下次启动核对实际 HEAD 与已有日志，重新完成票级验收和必需验证；本轮不重开失败会话。",
+              `ticket 分支：${ticket.branch}；ticket 工作树：${context.worktreePath}；实施基线：${context.baseSha}；候选：${context.candidate}。\n\n` +
+              `实施交接：\n${context.handoff}\n\n冲突解决：\n${context.conflictResolution}`,
           );
-        } catch (handoffError) {
-          throw new AggregateError([error, handoffError], "票级验收与准确失败交接同时失败，保留 Git 和已有日志。");
+          await assertInvocation(workspace.invocationBase);
+          if (
+            (await assertCheckout(workspace.worktreePath, workspace.branch)) !== integrationSha ||
+            (await observed(context, context.baseSha)) !== context.candidate
+          )
+            throw new GitStateError("冲突解决记录期间候选漂移，保留现场。");
+          signal?.throwIfAborted();
+          await gitAt(workspace.worktreePath, "merge", "--no-ff", "--no-edit", context.candidate);
         }
-        throw error;
+        await assertCheckout(workspace.worktreePath, workspace.branch);
+        await gitAt(workspace.worktreePath, "merge-base", "--is-ancestor", context.candidate, "HEAD");
+        context.mergedSha = await gitAt(workspace.worktreePath, "rev-parse", "HEAD");
       }
-      await observed(context, context.candidate);
-      context.candidate = await observed(context, integrationSha);
-      await assertInvocation(workspace.invocationBase);
-      await assertCheckout(workspace.worktreePath, workspace.branch);
-      if ((await gitAt(workspace.worktreePath, "rev-parse", "HEAD")) !== integrationSha)
-        throw new GitStateError(`Spec #${workspace.graph.spec.number} 验收期间集成候选漂移，保留现场。`);
-      if ((await observed(context, context.baseSha)) !== context.candidate)
-        throw new GitStateError(`#${ticket.number} 票级验收后的候选已漂移，保留现场。`);
-      await options.recordHandoff(
-        ticket.number,
-        `Spec #${workspace.graph.spec.number} 的 ticket #${ticket.number} 票级验收完成，等待普通合入。\n\n` +
-          `启动分支：${invocationBranch}；Spec 启动基线：${workspace.invocationBase}；Spec 分支：${workspace.branch}；` +
-          `ticket 分支：${ticket.branch}；ticket 工作树：${context.worktreePath}；实施基线：${context.baseSha}；候选：${context.candidate}。\n\n` +
-          `实施交接：\n${context.handoff}\n\n票级验收：\n${context.acceptance}`,
-      );
-      await assertInvocation(workspace.invocationBase);
-      if (
-        (await assertCheckout(workspace.worktreePath, workspace.branch)) !== integrationSha ||
-        (await observed(context, context.baseSha)) !== context.candidate
-      )
-        throw new GitStateError("票级验收记录期间候选漂移，保留现场。");
-      signal?.throwIfAborted();
-      await gitAt(workspace.worktreePath, "merge", "--no-ff", "--no-edit", context.candidate);
-      await assertCheckout(workspace.worktreePath, workspace.branch);
-      await gitAt(workspace.worktreePath, "merge-base", "--is-ancestor", context.candidate, "HEAD");
-      context.mergedSha = await gitAt(workspace.worktreePath, "rev-parse", "HEAD");
     }
     signal?.throwIfAborted();
+    const conflictSection = context.conflictResolution ? `\n\n冲突解决：\n${context.conflictResolution}` : "";
     await options.recordHandoff(
       ticket.number,
       `Spec #${workspace.graph.spec.number} 的票级集成已完成，等待整个 Spec 的最终评审、验证与交付；ticket 和父 Spec 保持 open。\n\n` +
         `启动分支：${invocationBranch}；Spec 启动基线：${workspace.invocationBase}；Spec 分支：${workspace.branch}；ticket 分支：${ticket.branch}。\n` +
         `实施基线：${context.baseSha}；候选：${context.candidate}；普通合入：${context.mergedSha}。\n\n` +
-        `实施交接：\n${context.handoff}\n\n票级验收：\n${context.acceptance}\n\n下一动作：继续 Spec 内可执行切片，最终门禁通过后再交付和关票。`,
+        `实施交接：\n${context.handoff}${conflictSection}\n\n下一动作：继续 Spec 内可执行切片，最终门禁通过后再交付和关票。`,
     );
     integrated.add(ticket.number);
     return integratedTicket(context);
@@ -324,11 +349,12 @@ export function createTicketLifecycle(options: {
         ticket: { ...ticket },
         worktreePath,
         baseSha,
-        candidate: recovery?.acceptOnly ? previous : undefined,
+        candidate: recovery?.readyToMerge ? previous : undefined,
         handoff: recovery?.handoff,
+        conflictResolution: recovery?.conflictResolution,
       };
       contexts.set(ticket.number, context);
-      if (recovery?.acceptOnly) {
+      if (recovery?.readyToMerge) {
         await assertCheckout(worktreePath, ticket.branch);
         return true;
       }
@@ -336,7 +362,7 @@ export function createTicketLifecycle(options: {
         ticket.number,
         `开始 Spec #${workspace.graph.spec.number} 的票级实施。启动分支：${invocationBranch}；Spec 启动基线：${workspace.invocationBase}；` +
           `Spec 分支：${workspace.branch}；ticket 分支：${ticket.branch}；ticket 工作树：${worktreePath}；实施基线：${baseSha}；当前集成快照：${current}。\n\n` +
-          `实施者：${ticket.implementer}；选择依据：${ticket.reason}。下一动作：在本票 worktree 完成实施及聚焦验证，尚未验收、集成或交付。`,
+          `实施者：${ticket.implementer}；选择依据：${ticket.reason}。下一动作：在本票 worktree 完成实施及聚焦验证，尚未集成或交付。`,
       );
       try {
         const result = await options.runTicket({
@@ -351,7 +377,7 @@ export function createTicketLifecycle(options: {
         context.candidate = await observed(context, baseSha);
         await options.recordHandoff(
           ticket.number,
-          `Spec #${workspace.graph.spec.number} 的 ticket #${ticket.number} 实施完成，等待票级验收。\n\n` +
+          `Spec #${workspace.graph.spec.number} 的 ticket #${ticket.number} 实施完成，等待合入集成分支。\n\n` +
             `启动分支：${invocationBranch}；Spec 启动基线：${workspace.invocationBase}；Spec 分支：${workspace.branch}；` +
             `ticket 分支：${ticket.branch}；ticket 工作树：${worktreePath}；实施基线：${baseSha}；候选：${context.candidate}。\n\n实施交接：\n${context.handoff}`,
         );
@@ -362,7 +388,7 @@ export function createTicketLifecycle(options: {
           const actual = await gitAt(worktreePath, "rev-parse", "HEAD");
           await options.recordHandoff(
             ticket.number,
-            `Spec #${workspace.graph.spec.number} 的 ticket #${ticket.number} 尚未验收或集成；保留分支与 worktree。\n\n` +
+            `Spec #${workspace.graph.spec.number} 的 ticket #${ticket.number} 尚未集成；保留分支与 worktree。\n\n` +
               `启动分支：${invocationBranch}；Spec 启动基线：${workspace.invocationBase}；Spec 分支：${workspace.branch}；ticket 分支：${ticket.branch}；ticket 工作树：${worktreePath}；实施基线：${baseSha}；实际 HEAD：${actual}。\n` +
               `失败：${error instanceof Error ? error.message : String(error)}\n\n${context.handoff ?? "会话未返回验证交接。"}\n\n` +
               `下一动作：下次启动核对 Git、issue 与已有日志后恢复，本次不重开失败实施会话。`,

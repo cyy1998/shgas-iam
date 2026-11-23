@@ -15,14 +15,14 @@ import { runWorkflow, type WorkflowResult } from "./workflow.ts";
 import { workspaceDependencyPaths } from "./workspace-dependencies.mts";
 
 const complete = "<promise>COMPLETE</promise>";
-type Scenario = "complete" | "interrupt" | "close-interrupt";
+type Scenario = "complete" | "conflict" | "interrupt" | "close-interrupt";
 
 /** A controlled external model, shared by host Integration and real SDK/Docker smoke. */
 function modelProgram() {
   const fs = require("node:fs");
   const path = require("node:path");
   const { execFileSync } = require("node:child_process");
-  const { control, stage, args, firstRun, docker, dependencyPaths } = JSON.parse(process.argv[2]!);
+  const { control, stage, args, firstRun, docker, dependencyPaths, scenario } = JSON.parse(process.argv[2]!);
   const git = (...values: string[]) => execFileSync("git", values, { encoding: "utf8" }).trim();
   const mark = (name: string) => fs.writeFileSync(path.join(control, name), "observed\n");
   const exists = (name: string) => fs.existsSync(path.join(control, name));
@@ -97,14 +97,27 @@ function modelProgram() {
             "Recovery discarded unfinished work",
           );
         git("merge", "--no-edit", args.INTEGRATION_SHA);
+        if (scenario === "conflict" && (number === 41 || number === 42)) {
+          fs.writeFileSync("shared.txt", `from ${number}\n`);
+          git("add", "shared.txt");
+        }
         commit(`${number}.txt`, `implemented ${number}\n`);
         mark(`finished-${number}`);
-      } else if (stage === "ticket-accept") {
-        check(git("rev-parse", "HEAD") === args.CANDIDATE_SHA, "Acceptance candidate drifted");
-        git("merge", "--no-edit", args.INTEGRATION_SHA);
+      } else if (stage === "ticket-merge-conflict") {
+        check(git("rev-parse", "HEAD") === args.CANDIDATE_SHA, "Conflict resolution candidate drifted");
+        let conflicted = false;
+        try {
+          git("merge", "--no-edit", args.INTEGRATION_SHA);
+        } catch {
+          conflicted = true;
+        }
+        check(conflicted, "Expected merge conflict when entering ticket-merge-conflict");
+        fs.writeFileSync("shared.txt", "from 41\nfrom 42\n");
+        git("add", "shared.txt");
+        git("commit", "--no-edit");
         check(
           fs.readFileSync(`${args.ISSUE_NUMBER}.txt`, "utf8") === `implemented ${args.ISSUE_NUMBER}\n`,
-          "Acceptance lost implementation",
+          "Conflict resolution lost implementation",
         );
       } else {
         check(git("rev-parse", "HEAD") === args.REVIEW_CANDIDATE, "Final review/repair candidate mismatch");
@@ -299,14 +312,16 @@ export async function controlledWorkflowJourney(options: {
       if (mode === "docker")
         verify(
           input.role?.name ===
-            (["implement", "ticket-accept", "spec-repair-and-verify"].includes(stage) ? "implementer_deep" : undefined),
+            (["implement", "ticket-merge-conflict", "spec-repair-and-verify"].includes(stage)
+              ? "implementer_deep"
+              : undefined),
           "The effective execution role did not match the Spec risk and stage",
         );
       if (stage === "implement") {
         records.get(Number(input.promptArgs.ISSUE_NUMBER))!.assignees = ["controlled-runner"];
         records.get(40)!.assignees = ["controlled-runner"];
       }
-      return { stage, args: input.promptArgs, firstRun, docker: mode === "docker", dependencyPaths };
+      return { stage, args: input.promptArgs, firstRun, docker: mode === "docker", dependencyPaths, scenario };
     };
     const observeExecutionStart = async (input: RunOptions) => {
       const args = input.promptArgs as Record<string, string>;
@@ -430,7 +445,7 @@ export async function controlledWorkflowJourney(options: {
     } catch (error) {
       failure = error;
     }
-    if (scenario !== "complete") {
+    if (scenario !== "complete" && scenario !== "conflict") {
       verify(failure, "Interruption did not stop the first invocation");
       if (scenario === "interrupt") {
         verify(interrupted, "Partial integration interruption was not reached");
@@ -450,12 +465,29 @@ export async function controlledWorkflowJourney(options: {
       await rm(join(control, "interrupt"), { force: true });
       result = await execute();
       const resumed = stages.slice(beforeStages);
-      verify(!resumed.includes("implement:41"), "Recovery repeated accepted A implementation");
+      verify(!resumed.includes("implement:41"), "Recovery repeated integrated A implementation");
       if (scenario === "close-interrupt") {
         verify((await git("rev-parse", "HEAD")) === before, "Recovery repeated squash");
         verify(resumed.length === 0, "Delivered recovery restarted a model session");
       }
     } else if (failure) throw failure;
+    if (scenario === "complete") {
+      verify(
+        !stages.some((entry) => entry.startsWith("ticket-merge-conflict:")),
+        "Non-conflicting tickets unexpectedly triggered conflict resolution sessions",
+      );
+    }
+    if (scenario === "conflict") {
+      verify(stages.includes("ticket-merge-conflict:42"), "Conflicting ticket #42 did not trigger conflict resolution");
+      verify(
+        !stages.includes("ticket-merge-conflict:41"),
+        "First ticket #41 unexpectedly triggered conflict resolution",
+      );
+      verify(
+        (await git("show", "main:shared.txt")) === "from 41\nfrom 42",
+        "Merged shared.txt did not preserve both tickets' changes",
+      );
+    }
     verify(result?.delivered.join(",") === "40", "The production runtime did not deliver exactly the selected Spec");
     const squash = await git("rev-parse", "HEAD");
     verify(

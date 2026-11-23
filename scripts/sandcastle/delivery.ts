@@ -145,7 +145,6 @@ export function createSpecDelivery(options: {
             context.spec !== workspace ||
             context.ticket.number !== issue.number ||
             !context.candidate ||
-            !context.acceptance?.trim() ||
             !context.handoff?.trim() ||
             !context.mergedSha
           )

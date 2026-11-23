@@ -26,7 +26,8 @@ export function createFinalizationExecutor(options: ExecutorOptions): Finalizati
           .map(
             (entry) =>
               `#${entry.ticket.number} (${entry.ticket.title})；base ${entry.baseSha}；candidate ${entry.candidate}；merged ${entry.mergedSha}\n` +
-              `实施：${entry.handoff}\n票级验收：${entry.acceptance}`,
+              `实施：${entry.handoff}` +
+              (entry.conflictResolution ? `\n冲突解决：${entry.conflictResolution}` : ""),
           )
           .join("\n\n"),
         ...(phase === "repair-and-verify" ? { REVIEW_REPORT: reviewReport ?? "缺少双轴报告，保持未完成。" } : {}),

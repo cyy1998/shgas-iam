@@ -277,7 +277,7 @@ export function createSpecRecovery(options: {
           title: issue.title,
           branch: field(body, "ticket 分支")!,
           implementer: originalRole ?? "implementer_standard",
-          reason: "复用已核验的普通票级验收交接",
+          reason: "复用已核验的普通票级集成交接",
         };
         const baseSha = hash(body, "实施基线");
         if (!baseSha) throw new GitStateError("恢复的票级实施基线缺失，保留现场。");
@@ -297,9 +297,9 @@ export function createSpecRecovery(options: {
         const recordedCandidate = hash(body, "候选");
         const recordedHead = recordedCandidate ?? hash(body, "实际 HEAD");
         if (recordedHead && recordedHead !== candidate)
-          throw new GitStateError(`#${issue.number} 候选漂移，旧验收失效，保留现场。`);
-        const handoff = body.split("实施交接：\n")[1]?.split("\n\n票级验收：\n")[0];
-        const acceptance = body.split("票级验收：\n")[1]?.split("\n\n下一动作：")[0];
+          throw new GitStateError(`#${issue.number} 候选漂移，旧交接失效，保留现场。`);
+        const handoff = body.split("实施交接：\n")[1]?.split(/\n\n(?:票级验收|冲突解决|下一动作)：/)[0];
+        const conflictResolution = body.split("冲突解决：\n")[1]?.split("\n\n下一动作：")[0];
         if (body.startsWith(`Spec #${graph.spec.number} 的票级集成已完成`)) {
           if (!worktreePath && (!closing || !ticketPath))
             throw new GitStateError("已集成票缺少准确 worktree 登记，保留现场。");
@@ -310,7 +310,7 @@ export function createSpecRecovery(options: {
             candidate: recordedCandidate,
             mergedSha: hash(body, "普通合入"),
             handoff,
-            acceptance,
+            conflictResolution,
             worktreePath: worktreePath ?? ticketPath!,
           };
           await options.tickets.restoreIntegrated(context);
@@ -323,16 +323,16 @@ export function createSpecRecovery(options: {
             if (resolve(worktreePath) === resolve(canonical)) confirmedPath = worktreePath;
           }
           if (status && !confirmedPath) throw new GitStateError("未提交工作缺少准确归属路径，保留现场。");
-          // Ancestry avoids replaying a merge but never supplies acceptance evidence.
           const alreadyMerged = candidate !== baseSha && (await git("rev-list", `${tip}..${candidate}`)) === "";
           resumable.set(issue.number, {
             baseSha,
             worktreePath: confirmedPath,
             candidate: recordedCandidate,
-            acceptOnly: !status && (Boolean(recordedCandidate) || alreadyMerged),
+            readyToMerge: !status && Boolean(handoff?.trim()) && (Boolean(recordedCandidate) || alreadyMerged),
             handoff:
               handoff ??
-              "恢复发现保留的候选；核对普通 issue 和已有日志，重新完成实施报告及全部票级验收，不以 Git 祖先关系代替验证。",
+              "恢复发现保留的候选；核对普通 issue 和已有日志，继续完成实施、聚焦验证及交接，不以 Git 祖先关系代替验证。",
+            conflictResolution,
           });
         }
         recoverable.add(issue.number);

@@ -136,10 +136,7 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
     invocationBranch: branch,
     signal,
     runTicket: async (input) => {
-      await reportProjectStage?.(
-        input.context.ticket.number,
-        input.phase === "implement" ? "Implementing" : "Accepting",
-      );
+      await reportProjectStage?.(input.context.ticket.number, "Implementing");
       return runTicket(input);
     },
     recordHandoff,

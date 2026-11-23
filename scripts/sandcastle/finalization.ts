@@ -73,15 +73,13 @@ export function createFinalizationLifecycle(options: {
             context.ticket.number !== issue.number ||
             !context.candidate ||
             !context.handoff?.trim() ||
-            !context.acceptance?.trim() ||
             !context.mergedSha
           )
-            throw new Error(`#${issue.number} 尚无完整验收和集成证据，Spec 保持未完成。`);
+            throw new Error(`#${issue.number} 尚无完整集成证据，Spec 保持未完成。`);
           tickets.push({
             ...context,
             candidate: context.candidate,
             handoff: context.handoff,
-            acceptance: context.acceptance,
             mergedSha: context.mergedSha,
           });
         }
