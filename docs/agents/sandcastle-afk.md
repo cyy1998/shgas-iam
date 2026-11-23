@@ -96,15 +96,15 @@ PR 或部署。
 
 ## 双轴评审子代理生命周期
 
-正式双轴评审在整个 Spec 的全部必要 tickets 已验收且普通合入集成分支后执行。部分集成、空子票列表、
+正式双轴评审在整个 Spec 的全部必要 tickets 已完成实施并普通合入集成分支后执行。部分集成、空子票列表、
 issue 的 closed 状态或单票成功声明均不能代替完整集成证据。宿主核对每票交接和 Git 祖先关系，固定本次
 review base 与集成 candidate SHA；评审期间工作区和候选保持不变。
 
 1. **并行只读评审**。最终评审协调会话按 `.agents/skills/code-review/SKILL.md` 新建相互独立的只读 Standards 与 Spec 子代理，
-   向两轴提供同一完整 diff、提交列表和固定 SHA。Standards 按仓库规范审查，Spec 对照完整父 Spec、全部必要
+   通过稀疏上下文指针提供同一固定 base/candidate、diff 命令、提交列表与规范来源。Standards 按仓库规范审查，Spec 对照完整父 Spec、全部必要
    tickets、评论与已确认验收。两轴都实际结束并取得真实报告才完成评审收集，任一报告缺失、失败或候选不符均保持未完成。
 
-2. **集中修复与验证**。由一个实施者会话阅读两轴报告，集中处理全部 findings、提交修复，并按[验证节奏](#验证节奏)执行最终验证。
+2. **集中修复与验证**。由一个实施者会话阅读两轴报告，按票级集成索引与 GitHub Issue 评论核对必要上下文，集中处理全部 findings、提交修复，并按[验证节奏](#验证节奏)执行最终验证。
    沿用手动 `implement-spec` 节奏，不默认循环双轴全量复审。涉及 deep 票时使用 deep 档，其余使用 standard 档，
    模型与思考档位由角色文件定义。评审协调者使用调用者配置的模型，两个只读子代理使用各自角色配置。
 
@@ -121,22 +121,29 @@ review base 与集成 candidate SHA；评审期间工作区和候选保持不变
 批量路径参考作者自用的
 [Sandcastle runner](https://github.com/mattpocock/sandcastle/blob/e99f832f26dc9d245c019a9ddd19fa5dee792427/.sandcastle/run.ts)，
 由本机 runner 调用 Docker 中的 Codex CLI，无需聊天主会话持续协调。Spec 选择、动态集成和集中最终验收采用本仓库适配，
-实施和评审方法复用既有 skills。三个阶段如下：
+实施和评审方法复用既有 skills。主要阶段如下：
 
 1. **Planner**：宿主分页读取全仓 open `type:spec` 候选、完整原生子票及 blocking 关系，校验父子类型、准入和认领，
-   将可信任务图、可执行切片与阻塞原因传给 Planner。父 Spec 与待实施子票均需 `ready-for-agent`；
+   将可信任务图、当前可执行切片（`ready`）、本轮可解锁切片（`plannable`）与阻塞原因传给 Planner。父 Spec 与待实施子票均需 `ready-for-agent`；
    父子关系决定归属，原生依赖决定先后，正文只提供需求和解释。缺失/冲突类型、关系矛盾、循环依赖或未满足的
    前置条件阻止受影响切片，独立切片仍可选择；全部受阻时不尝试受阻票。assignee 用于保护他人工作，
-   经过普通 Git/issue 交接确认的本 runner 工作可恢复。Planner 每次只选择一个 Spec 的可执行子票，
-   宿主再次校验计划；父 Spec 不进入实施列表，空子票也不构成已完成的依据。
+   经过普通 Git/issue 交接确认的本 runner 工作可恢复。Planner 每次只选择一个 Spec，并一次性为该 Spec 本轮可执行及随前置集成将解锁的全部计划切片选择实施者与理由，
+   同时评估是否需要执行一次可选的共享只读代码探索（`explore.needed`：小 Spec ≤ 2 票、模块独立或父 Spec 评论已有代码地图时跳过；
+   ≥ 3 票共享同一跨层/复杂模块时启用并指明 `focus`）。
+   宿主再次校验计划；父 Spec 不进入实施列表，空子票也不构成已完成的依据。后续前置票集成后，宿主直接按本次计划确定性派发解锁切片，不再重复启动 Planner。
    Planner 为每票从仓库定义的 `implementer_light`、`implementer_standard`、
    `implementer_deep` 中选择实施者并说明理由：范围明确的小修改可选 light，常规功能或信息不足选 standard，
    涉及安全边界、并发、一致性或复杂重构选 deep。Runner 校验角色名称并加载对应配置。
-2. **Implementer**：每票在独立分支、worktree 和全新会话中读取 `AGENTS.md`、ticket、父 Spec 与相关评论，
-   认领后按 `tdd` skill 实施、运行完整受影响范围的聚焦验证并创建正常提交，报告完成前确认包含当前集成分支且工作区干净。
+2. **可选 Explorer（共享代码探索）**：仅当 Planner 标记 `explore.needed` 为 `true` 时，在准备好 Spec 集成工作树后、启动首批 Implementer 前运行一次只读
+   `code_researcher` 会话（跳过依赖安装，宿主校验集成工作树保持干净且 `HEAD` 未变）。宿主将产出的紧凑 Markdown 笔记写入 repo 外
+   `.sandcastle/resources/spec-<N>-exploration-<base>.md` 并以只读挂载提供给所有 Implementer（仅传递稀疏路径指针），同时写入父 Spec 评论供中断恢复复用。
+   探索失败时打印告警并安全降级跳过，不阻断实施；Spec 交付完成后清理该本地笔记。
+3. **Implementer**：每票在独立分支、worktree 和全新会话中读取 `AGENTS.md`、ticket、父 Spec 与相关评论（有共享探索笔记指针时优先读取），
+   认领后按 `tdd` skill 实施、运行完整受影响范围的聚焦验证并创建正常提交，报告完成前将当前最新集成分支 tip 合入本票分支，
+   引入新提交时重跑失效的受影响检查并确认工作区干净。
    交接保留独立基线、候选、真实命令与结果、未执行项和剩余问题；不逐票运行正式双轴评审、独立验收会话或固定全仓静态检查。
    必需检查失败或未执行时保持未完成，保留分支和工作树。
-3. **Spec 集成与最终验收**：宿主在串行队列中将已完成的候选直接普通 merge 到 Spec 集成分支；无冲突时零额外模型会话完成集成，
+4. **Spec 集成与最终验收**：宿主在串行队列中将已完成的候选直接普通 merge 到 Spec 集成分支；无冲突时零额外模型会话完成集成，
    仅在遇真实 Git 合并冲突时先 `git merge --abort` 并按需在本票 worktree 启动一次冲突解决会话（遵循
    `resolving-merge-conflicts` 并重跑受影响验证），完成后再由宿主合入。Spec 内依赖以票已集成为解锁依据，ticket 仍 open。
    单票失败后继续独立切片；所有必要票集成后，按上一节执行一次集中双轴评审、单实施者修复与最终验证。

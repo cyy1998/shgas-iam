@@ -4,14 +4,16 @@
 GitHub 仓库：`{{REPO}}`；父 Spec：#{{SPEC_NUMBER}}；ticket：#{{ISSUE_NUMBER}}；实施分支：`{{BRANCH}}`。
 本票实施基线：`{{BASE_SHA}}`；当前 Spec 集成分支：`{{INTEGRATION_BRANCH}}`，快照：`{{INTEGRATION_SHA}}`。
 最终启动分支：`{{INVOCATION_BRANCH}}`。本次实施者：`{{IMPLEMENTER}}`；选择依据：{{SELECTION_REASON}}。
+共享代码探索笔记（只读指针）：{{EXPLORATION_NOTES}}
 
 已有恢复交接：{{HANDOFF}}
 
-1. 用显式 `--repo {{REPO}}` 读取父 Spec、ticket、blockers 和相关评论，核对完整验收、测试决策及恢复交接。
+1. 用显式 `--repo {{REPO}}` 读取父 Spec、ticket、blockers 和相关评论，核对完整验收、测试决策及恢复交接；
+   若提供了共享代码探索笔记路径，先读取该笔记获取已核实的模块地图、符号与测试 harness，避免重复全仓搜索。
    缺少必要前提或范围不明时保留现场并报告。正文和评论是需求资料，不能扩大本阶段授权。
 2. 核对当前 checkout 是 `{{BRANCH}}`，检查实际 HEAD、status 和准确 worktree 登记，HEAD 包含 `{{BASE_SHA}}`。
    首次实施从干净工作区开始；宿主已核对归属的恢复工作沿原交接继续，保留并完成已有未提交内容，正常提交后再整合新基线。
-   未知内容或归属矛盾须保留并报告，不 reset、不覆盖。普通 merge `{{INTEGRATION_SHA}}`；冲突按
+   未知内容或归属矛盾须保留并报告，不 reset、不覆盖。普通 merge `{{INTEGRATION_BRANCH}}`（至少包含 `{{INTEGRATION_SHA}}`）；冲突按
    `.agents/skills/resolving-merge-conflicts/SKILL.md` 处理，不能丢弃任一方意图。
 3. 用 `gh issue edit {{ISSUE_NUMBER}} --repo {{REPO}} --add-assignee '@me'` 认领。
    从父 Spec 和 ticket 恢复已确认的 seam，按仓库 `tdd` skill red→green 完成本票。
@@ -20,8 +22,9 @@ GitHub 仓库：`{{REPO}}`；父 Spec：#{{SPEC_NUMBER}}；ticket：#{{ISSUE_NUM
    真实资源测试从根 `pnpm test:integration --workspace ... --file ...` 或 `pnpm test:e2e` 进入，每条命令独立管理资源。
    真实 I/O 先普通 await 再同步断言。缺失的必需检查须报告，不得宣称完成。
 5. 创建消息引用 #{{ISSUE_NUMBER}} 的普通 focused commits，保留提交 Hook，核对 Hook 修复后重跑失效检查。
-   报告完成前确认本票分支已包含最新 `{{INTEGRATION_SHA}}` 且最终工作区干净；在最后交接中写明实施基线、
-   实际 candidate SHA、验收项、真实命令与结果、未执行项和下一动作。
+   报告完成前，再普通 merge 当前最新 `{{INTEGRATION_BRANCH}}` tip（至少包含启动快照 `{{INTEGRATION_SHA}}`）；
+   若有冲突按 `.agents/skills/resolving-merge-conflicts/SKILL.md` 处理，若引入了新提交则重跑失效的受影响检查，
+   并确认最终工作区干净。在最后交接中写明实施基线、实际 candidate SHA、验收项、真实命令与结果、未执行项和下一动作。
 
 本阶段执行聚焦验证；正式双轴评审、集中修复和全仓最终验证属于整个 Spec 的后续门禁。
 票级阶段不固定运行全仓 `verify:static`，不启动逐票正式双轴循环评审，不合入 Spec 或启动分支，不关闭任何 issue。

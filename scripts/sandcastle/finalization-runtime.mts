@@ -25,11 +25,10 @@ export function createFinalizationExecutor(options: ExecutorOptions): Finalizati
         TICKETS: tickets
           .map(
             (entry) =>
-              `#${entry.ticket.number} (${entry.ticket.title})；base ${entry.baseSha}；candidate ${entry.candidate}；merged ${entry.mergedSha}\n` +
-              `实施：${entry.handoff}` +
-              (entry.conflictResolution ? `\n冲突解决：${entry.conflictResolution}` : ""),
+              `- #${entry.ticket.number} (${entry.ticket.title}) | role: ${entry.ticket.implementer} | branch: ${entry.ticket.branch} | base: ${entry.baseSha} | candidate: ${entry.candidate} | merged: ${entry.mergedSha}` +
+              (entry.conflictResolution ? " | conflict-resolved: yes" : ""),
           )
-          .join("\n\n"),
+          .join("\n"),
         ...(phase === "repair-and-verify" ? { REVIEW_REPORT: reviewReport ?? "缺少双轴报告，保持未完成。" } : {}),
       },
       logName: `spec-${workspace.graph.spec.number}-${phase}`,

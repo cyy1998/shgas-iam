@@ -49,6 +49,8 @@ export type ExecutorDependencies = {
   runGh?: (args: string[]) => Promise<string>;
 };
 
+export const sandboxExplorationNotesPath = "/home/agent/.iam-afk/exploration.md";
+
 export type ExecutorOptions = ExecutorDependencies & {
   cwd: string;
   model: string;
@@ -58,12 +60,15 @@ export type ExecutorOptions = ExecutorDependencies & {
   auth: CodexAuth;
   mounts: NonNullable<DockerOptions["mounts"]>;
   githubCredentials: Record<string, string>;
+  explorationNotesPath?: () => string | undefined;
   onUnsafeClose: () => void;
   canClose: () => boolean;
 };
 
 export function createWorkspaceExecutor(options: ExecutorOptions) {
-  return async (input: WorkspaceAgentInput & { logName: string }) => {
+  return async (
+    input: WorkspaceAgentInput & { logName: string; extraMounts?: NonNullable<DockerOptions["mounts"]> },
+  ) => {
     const { cwd, image, signal, roles, auth } = options;
     if (!options.canClose()) throw new ExecutorInfrastructureError("创建者尚未确认停止，禁止启动后续执行器。");
     let executionFailure: unknown;
@@ -81,7 +86,7 @@ export function createWorkspaceExecutor(options: ExecutorOptions) {
               imageName: image,
               anonymousVolumes,
               env: { ...options.githubCredentials, ...auth.env, ...resources.env },
-              mounts: [...options.mounts, ...resources.mounts],
+              mounts: [...options.mounts, ...(input.extraMounts ?? []), ...resources.mounts],
             });
             const result = await (options.run ?? run)({
               cwd: input.worktreePath,
@@ -131,6 +136,7 @@ export function createTicketExecutor(options: ExecutorOptions): TicketRun {
   const execute = createWorkspaceExecutor(options);
   return async ({ phase, context, integrationSha }) => {
     const role = options.roles[context.ticket.implementer];
+    const notesPath = options.explorationNotesPath?.();
     const result = await execute({
       worktreePath: context.worktreePath,
       role,
@@ -140,6 +146,9 @@ export function createTicketExecutor(options: ExecutorOptions): TicketRun {
         ".sandcastle",
         `${phase === "implement" ? "implement" : "ticket-merge-conflict"}-prompt.md`,
       ),
+      extraMounts: notesPath
+        ? [{ hostPath: notesPath, sandboxPath: sandboxExplorationNotesPath, readonly: true }]
+        : undefined,
       promptArgs: {
         REPO: githubRepo,
         INVOCATION_BRANCH: context.spec.invocationBranch,
@@ -151,6 +160,7 @@ export function createTicketExecutor(options: ExecutorOptions): TicketRun {
         BASE_SHA: context.baseSha,
         CANDIDATE_SHA: context.candidate ?? "not-yet-implemented",
         HANDOFF: context.handoff ?? "首次实施；读取父 Spec 和 ticket 的实际正文及评论。",
+        EXPLORATION_NOTES: notesPath ? sandboxExplorationNotesPath : "无（按父 Spec、ticket 与仓库地图直接定位）",
         IMPLEMENTER: role.name,
         SELECTION_REASON: context.ticket.reason,
       },

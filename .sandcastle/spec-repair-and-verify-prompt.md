@@ -5,7 +5,7 @@
 仓库 `{{REPO}}`；父 Spec #{{SPEC_NUMBER}}；集成分支 `{{INTEGRATION_BRANCH}}`；启动分支 `{{INVOCATION_BRANCH}}`。
 固定 review base：`{{REVIEW_BASE}}`；已评审 candidate：`{{REVIEW_CANDIDATE}}`。
 
-完整票级集成交接：
+全部必要 tickets 的集成索引（详细验收、验证命令与冲突解决记录按需用 `gh` 读取对应 issue 及评论）：
 
 {{TICKETS}}
 

@@ -22,7 +22,9 @@ function modelProgram() {
   const fs = require("node:fs");
   const path = require("node:path");
   const { execFileSync } = require("node:child_process");
-  const { control, stage, args, firstRun, docker, dependencyPaths, scenario } = JSON.parse(process.argv[2]!);
+  const { control, stage, args, firstRun, docker, dependencyPaths, scenario, hostNotesPath } = JSON.parse(
+    process.argv[2]!,
+  );
   const git = (...values: string[]) => execFileSync("git", values, { encoding: "utf8" }).trim();
   const mark = (name: string) => fs.writeFileSync(path.join(control, name), "observed\n");
   const exists = (name: string) => fs.existsSync(path.join(control, name));
@@ -53,17 +55,23 @@ function modelProgram() {
       check(prompt.length > 0, "Model command received no prompt on stdin");
       fs.writeFileSync(path.join(control, `${stage}-${args.ISSUE_NUMBER ?? "spec"}-${firstRun}.prompt.md`), prompt);
       if (docker) check(process.getuid?.() === 1000, "Model command must run as UID 1000");
-      if (docker && stage !== "plan")
+      if (docker && stage !== "plan" && stage !== "explore")
         for (const directory of dependencyPaths)
           check(!fs.existsSync(path.join(directory, "host-sentinel")), "Host dependencies leaked into the sandbox");
       let response = "Controlled executor: focused checks passed.";
       if (stage === "plan") {
         const backlog = JSON.parse(args.SPEC_BACKLOG);
-        const graph = backlog.find((entry: { frontier: { ready: unknown[] } }) => entry.frontier.ready.length);
+        const graph = backlog.find(
+          (entry: { frontier: { ready: unknown[]; plannable: unknown[] } }) => entry.frontier.ready.length,
+        );
+        const exploreNeeded = scenario !== "conflict";
         response = `<plan>${JSON.stringify({
           spec: graph?.spec.number ?? null,
+          explore: exploreNeeded
+            ? { needed: true, focus: "Controlled shared module map for #41, #42, #43" }
+            : { needed: false, focus: "" },
           issues:
-            graph?.frontier.ready.map((issue: { number: number; title: string }) => ({
+            graph?.frontier.plannable.map((issue: { number: number; title: string }) => ({
               number: issue.number,
               title: issue.title,
               branch: `codex/sandcastle/issue-${issue.number}`,
@@ -71,8 +79,31 @@ function modelProgram() {
               reason: "Controlled cross-stage lifecycle fixture",
             })) ?? [],
         })}</plan>`;
+      } else if (stage === "explore") {
+        check(git("rev-parse", "HEAD") === args.BASE_SHA, "Explore base SHA mismatch");
+        check(git("status", "--porcelain") === "", "Explore started on dirty worktree");
+        check(args.EXPLORE_FOCUS.includes("Controlled shared module map"), "Explore missing Planner focus");
+        check(args.PLANNED_TICKETS.includes("#41"), "Explore missing planned ticket index");
+        response = "## 涉及模块与关键文件\n- Controlled shared exploration map verified.\n";
       } else if (stage === "implement") {
         const number = Number(args.ISSUE_NUMBER);
+        if (scenario === "conflict") {
+          check(
+            args.EXPLORATION_NOTES.startsWith("无"),
+            "Skipped exploration unexpectedly injected exploration notes path",
+          );
+        } else {
+          check(
+            args.EXPLORATION_NOTES === "/home/agent/.iam-afk/exploration.md",
+            "Implementer missing sparse exploration notes pointer",
+          );
+          const readableNotesPath = docker ? args.EXPLORATION_NOTES : hostNotesPath;
+          check(
+            Boolean(readableNotesPath) &&
+              fs.readFileSync(readableNotesPath, "utf8").includes("Controlled shared exploration map verified."),
+            "Implementer could not read mounted exploration notes",
+          );
+        }
         mark(`started-${number}`);
         if (number === 41) await wait("started-42");
         if (number === 42 && firstRun) {
@@ -122,8 +153,21 @@ function modelProgram() {
       } else {
         check(git("rev-parse", "HEAD") === args.REVIEW_CANDIDATE, "Final review/repair candidate mismatch");
         check(git("status", "--porcelain") === "", "Final candidate must be clean");
-        for (const number of [41, 42, 43])
+        for (const number of [41, 42, 43]) {
           check(fs.existsSync(`${number}.txt`), "Final review saw partial integration");
+          check(args.TICKETS.includes(`#${number} `), `Final stage missing sparse pointer for #${number}`);
+        }
+        check(args.TICKETS.includes("merged:"), "Final stage TICKETS missing merged SHA pointers");
+        check(
+          !args.TICKETS.includes("Controlled executor: focused checks passed."),
+          "Final stage TICKETS inlined verbose ticket handoff prose instead of sparse pointers",
+        );
+        if (scenario === "conflict") {
+          check(
+            args.TICKETS.includes("conflict-resolved: yes"),
+            "Final stage TICKETS missing conflict-resolved pointer marker",
+          );
+        }
         if (stage === "spec-review") {
           response = `Controlled Standards report: candidate ${args.REVIEW_CANDIDATE}; add repair.txt.\nControlled Spec report: ABC integrated at ${args.REVIEW_CANDIDATE}.`;
         } else {
@@ -309,19 +353,31 @@ export async function controlledWorkflowJourney(options: {
     const modelInput = (input: WorkspaceAgentInput) => {
       const stage = basename(input.promptFile, "-prompt.md");
       stages.push(`${stage}:${input.promptArgs.ISSUE_NUMBER ?? "spec"}`);
-      if (mode === "docker")
-        verify(
-          input.role?.name ===
-            (["implement", "ticket-merge-conflict", "spec-repair-and-verify"].includes(stage)
-              ? "implementer_deep"
-              : undefined),
-          "The effective execution role did not match the Spec risk and stage",
-        );
+      if (mode === "docker") {
+        const expectedRole = ["implement", "ticket-merge-conflict", "spec-repair-and-verify"].includes(stage)
+          ? "implementer_deep"
+          : stage === "explore"
+            ? "code_researcher"
+            : undefined;
+        verify(input.role?.name === expectedRole, "The effective execution role did not match the Spec risk and stage");
+      }
       if (stage === "implement") {
         records.get(Number(input.promptArgs.ISSUE_NUMBER))!.assignees = ["controlled-runner"];
         records.get(40)!.assignees = ["controlled-runner"];
       }
-      return { stage, args: input.promptArgs, firstRun, docker: mode === "docker", dependencyPaths, scenario };
+      const hostNotesPath =
+        mode === "host" && input.promptArgs.EXPLORATION_NOTES === "/home/agent/.iam-afk/exploration.md"
+          ? join(cwd, ".sandcastle", "resources", `spec-40-exploration-${base.slice(0, 12)}.md`)
+          : undefined;
+      return {
+        stage,
+        args: input.promptArgs,
+        firstRun,
+        docker: mode === "docker",
+        dependencyPaths,
+        scenario,
+        hostNotesPath,
+      };
     };
     const observeExecutionStart = async (input: RunOptions) => {
       const args = input.promptArgs as Record<string, string>;
@@ -402,7 +458,7 @@ export async function controlledWorkflowJourney(options: {
             : {
                 run: async (input: RunOptions) => {
                   await observeExecutionStart(input);
-                  const workspace = basename(input.promptFile!, "-prompt.md") !== "plan";
+                  const workspace = !["plan", "explore"].includes(basename(input.promptFile!, "-prompt.md"));
                   if (workspace)
                     for (const path of dependencyPaths) {
                       await mkdir(join(input.cwd!, path), { recursive: true });
@@ -466,18 +522,42 @@ export async function controlledWorkflowJourney(options: {
       result = await execute();
       const resumed = stages.slice(beforeStages);
       verify(!resumed.includes("implement:41"), "Recovery repeated integrated A implementation");
+      if (scenario === "interrupt") {
+        verify(
+          resumed.filter((entry) => entry.startsWith("plan:")).length === 1,
+          "Recovered Spec should invoke Planner once and advance unlocked frontier deterministically",
+        );
+        verify(
+          !resumed.some((entry) => entry.startsWith("explore:")),
+          "Recovered Spec unexpectedly re-ran Explorer instead of reusing cached exploration notes",
+        );
+      }
       if (scenario === "close-interrupt") {
         verify((await git("rev-parse", "HEAD")) === before, "Recovery repeated squash");
         verify(resumed.length === 0, "Delivered recovery restarted a model session");
       }
     } else if (failure) throw failure;
+    if (scenario === "complete" || scenario === "conflict") {
+      verify(
+        stages.filter((entry) => entry.startsWith("plan:")).length === 1,
+        "Single Spec run should invoke Planner once and advance unlocked frontier deterministically",
+      );
+    }
     if (scenario === "complete") {
+      verify(
+        stages.filter((entry) => entry.startsWith("explore:")).length === 1,
+        "Expected exactly one optional Explorer session when explore.needed=true",
+      );
       verify(
         !stages.some((entry) => entry.startsWith("ticket-merge-conflict:")),
         "Non-conflicting tickets unexpectedly triggered conflict resolution sessions",
       );
     }
     if (scenario === "conflict") {
+      verify(
+        !stages.some((entry) => entry.startsWith("explore:")),
+        "Unexpected Explorer session when explore.needed=false",
+      );
       verify(stages.includes("ticket-merge-conflict:42"), "Conflicting ticket #42 did not trigger conflict resolution");
       verify(
         !stages.includes("ticket-merge-conflict:41"),
@@ -488,6 +568,10 @@ export async function controlledWorkflowJourney(options: {
         "Merged shared.txt did not preserve both tickets' changes",
       );
     }
+    verify(
+      !existsSync(join(cwd, ".sandcastle", "resources", `spec-40-exploration-${base.slice(0, 12)}.md`)),
+      "Delivery left local exploration notes file behind",
+    );
     verify(result?.delivered.join(",") === "40", "The production runtime did not deliver exactly the selected Spec");
     const squash = await git("rev-parse", "HEAD");
     verify(

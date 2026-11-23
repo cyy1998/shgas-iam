@@ -4,6 +4,7 @@
 本票分支：`{{BRANCH}}`；实施基线：`{{BASE_SHA}}`；已交接候选：`{{CANDIDATE_SHA}}`。
 Spec 分支：`{{INTEGRATION_BRANCH}}`；本次串行合并固定的集成快照：`{{INTEGRATION_SHA}}`。
 最终启动分支：`{{INVOCATION_BRANCH}}`。角色：`{{IMPLEMENTER}}`；选择依据：{{SELECTION_REASON}}。
+共享代码探索笔记（只读指针）：{{EXPLORATION_NOTES}}
 
 已有实施交接：
 

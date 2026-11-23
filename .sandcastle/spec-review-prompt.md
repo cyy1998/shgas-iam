@@ -5,16 +5,17 @@
 仓库 `{{REPO}}`；父 Spec #{{SPEC_NUMBER}}；集成分支 `{{INTEGRATION_BRANCH}}`；启动分支 `{{INVOCATION_BRANCH}}`。
 本轮固定 review base：`{{REVIEW_BASE}}`；不可变 candidate：`{{REVIEW_CANDIDATE}}`。
 
-全部必要 tickets 的实际集成交接：
+全部必要 tickets 的集成索引（详细验收与票级交接请用 `gh` 读取对应 issue 及评论）：
 
 {{TICKETS}}
 
 1. 核对当前 checkout 为集成分支、工作区干净、HEAD 精确等于固定 candidate，base 是 candidate 的祖先。
    用显式 `--repo {{REPO}}` 读取完整父 Spec、上述全部 tickets、相关评论与已确认测试决策。
    核对每张必要票的验收和普通 merge 事实；验收来源缺失或仍有必要切片未完成时报告阻碍。
-2. 按 `code-review` skill 收集固定 base 到固定 candidate 的完整 diff、提交列表和命中的规范来源。
+2. 按 `code-review` skill 收集固定 base 到固定 candidate 的完整 diff 命令、提交列表和命中的规范来源。
    新建相互独立的 `standards_reviewer` 与 `spec_reviewer` 只读子代理，并行审查同一完整范围。
-   为两轴提供实际 base/candidate、完整 diff 与提交列表；Spec 轴对照完整父 Spec 与全部 tickets，不能跳过。
+   向两轴传递稀疏上下文指针（固定 base/candidate、diff 命令、提交列表、父 Spec 与 tickets 编号、规范路径，
+   以及 `code-review` skill 要求的 Standards smell baseline）；Spec 轴对照完整父 Spec 与全部 tickets，不能跳过。
    本阶段只读协调，不修复、stage、commit、merge、关闭 issue 或启动实施者。
 3. 等待两轴实际结束，保留两份真实报告、各轴身份与结论、findings 和引用的依据。
    缺失、失败、未完成或候选不符的报告均不能作为有效评审。再次核对 HEAD 与工作区未变。

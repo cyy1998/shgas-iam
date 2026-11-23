@@ -1,3 +1,4 @@
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Sandbox } from "@ai-hero/sandcastle";
 import { codex, createSandbox, createWorktree, run } from "@ai-hero/sandcastle";
@@ -24,7 +25,7 @@ import {
   withDockerPreflight,
   withWorkspacePreparation,
 } from "./sandbox.mts";
-import type { SpecGraph } from "./specs.ts";
+import type { ExplorationPlan, SpecGraph } from "./specs.ts";
 import { loadSpecBacklog, loadSpecGraph, parseSpecPlan, specFrontier } from "./specs.ts";
 import {
   createTicketExecutor,
@@ -33,7 +34,7 @@ import {
   recordTicketHandoff,
 } from "./ticket-runtime.mts";
 import { createTicketLifecycle, GitStateError, type SpecWorkspace } from "./tickets.ts";
-import type { SpecFrontier, SpecSelection, Ticket } from "./workflow.ts";
+import { isFatalWorkflowError, type SpecFrontier, type SpecSelection, type Ticket } from "./workflow.ts";
 import { dependencyVolumeTargets } from "./workspace-dependencies.mts";
 
 export { githubRepo } from "./github.ts";
@@ -112,6 +113,8 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
   let selectedSpec: SpecGraph | undefined;
   let specWorkspace: SpecWorkspace | undefined;
   let recovered: RecoveredSpec | undefined;
+  let plannedTickets: Ticket[] = [];
+  let explorationNotesPath: string | undefined;
   const closedIssues = new Set<number>();
   let unsafeCreator = false;
   const onUnsafeClose = () => {
@@ -128,6 +131,7 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
     auth,
     mounts,
     githubCredentials,
+    explorationNotesPath: () => explorationNotesPath,
     onUnsafeClose,
     canClose: () => !unsafeCreator,
   });
@@ -157,19 +161,17 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
     if (await git("status", "--porcelain")) throw new GitStateError("目标工作区有未提交改动；保留现场并停止运行。");
   };
 
-  async function planFrontier(backlog: { specs: SpecGraph[] }, attempted: ReadonlySet<number>, name: string) {
+  async function planSpec(backlog: { specs: SpecGraph[] }, name: string) {
     await assertTarget();
     const baseSha = await git("rev-parse", "HEAD");
-    const planning = backlog.specs.map((graph) => {
-      const frontier = specFrontier(graph, recovery.progress);
-      return {
-        ...graph,
-        frontier: { ...frontier, ready: frontier.ready.filter((entry) => !attempted.has(entry.number)) },
-      };
-    });
+    const planning = backlog.specs.map((graph) => ({
+      ...graph,
+      frontier: specFrontier(graph, recovery.progress),
+    }));
     for (const entry of planning)
       for (const blocked of entry.frontier.blocked) console.log(`#${blocked.number}: ${blocked.reasons.join(" ")}`);
-    if (!planning.some((entry) => entry.frontier.ready.length)) return { graph: undefined, tickets: [] };
+    if (!planning.some((entry) => entry.frontier.ready.length))
+      return { graph: undefined, planned: [], ready: [], explore: { needed: false, focus: "" } };
     let result: { stdout: string };
     try {
       result = await withExecutorResources({ cwd, image, signal, onUnsafeClose }, (resources) =>
@@ -209,10 +211,119 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
     await assertTarget();
     if ((await git("rev-parse", "HEAD")) !== baseSha)
       throw new GitStateError("规划期间启动分支 HEAD 发生变化；请核对现场后重新启动。");
-    const plan = parseSpecPlan(result.stdout, backlog, recovery.progress);
-    if (plan.tickets.some((entry) => attempted.has(entry.number)))
-      throw new Error("Planner 重新选择了本轮已尝试的 ticket；停止重复派发。");
-    return plan;
+    return parseSpecPlan(result.stdout, backlog, recovery.progress);
+  }
+
+  const explorationNotesFile = (workspace: SpecWorkspace) =>
+    join(
+      cwd,
+      ".sandcastle",
+      "resources",
+      `spec-${workspace.graph.spec.number}-exploration-${workspace.invocationBase.slice(0, 12)}.md`,
+    );
+
+  async function ensureExplorationNotes(
+    workspace: SpecWorkspace,
+    planned: readonly Ticket[],
+    explore: ExplorationPlan,
+  ): Promise<void> {
+    explorationNotesPath = undefined;
+    if (!explore.needed) return;
+    await assertTarget();
+    const specNumber = workspace.graph.spec.number;
+    const notesDir = join(cwd, ".sandcastle", "resources");
+    const notesFile = explorationNotesFile(workspace);
+    const existingLocal = await readFile(notesFile, "utf8").catch(() => "");
+    if (existingLocal.trim()) {
+      explorationNotesPath = notesFile;
+      return;
+    }
+    const header = `Spec #${specNumber} 共享代码探索笔记（基线：${workspace.invocationBase}）`;
+    const existingComment = (workspace.graph.spec.comments ?? [])
+      .filter((entry) => entry.author === actor)
+      .map((entry) => entry.body.replaceAll("\r\n", "\n"))
+      .filter((body) => body.startsWith(header))
+      .at(-1);
+    if (existingComment) {
+      const cached = existingComment.slice(header.length).trim();
+      if (cached) {
+        await mkdir(notesDir, { recursive: true });
+        await writeFile(notesFile, `# ${header}\n\n${cached}\n`, "utf8");
+        explorationNotesPath = notesFile;
+        return;
+      }
+    }
+    const baseSha = await command("git", ["rev-parse", "HEAD"], workspace.worktreePath);
+    const promptArgs = {
+      ...common,
+      SPEC_NUMBER: String(specNumber),
+      INTEGRATION_BRANCH: workspace.branch,
+      BASE_SHA: baseSha,
+      PLANNED_TICKETS: planned.map((entry) => `- #${entry.number} (${entry.title}) [${entry.implementer}]`).join("\n"),
+      EXPLORE_FOCUS: explore.focus,
+    };
+    const name = `Spec #${specNumber} explore`;
+    let result: { stdout: string; completionSignal?: string };
+    try {
+      await mkdir(join(cwd, ".sandcastle", "logs"), { recursive: true });
+      result = await withExecutorResources({ cwd, image, signal, onUnsafeClose }, (resources) =>
+        (dependencies.run ?? run)({
+          cwd: workspace.worktreePath,
+          branchStrategy: { type: "head" },
+          sandbox: dockerSandbox({
+            ...resources,
+            imageName: image,
+            env: { ...githubCredentials, ...auth.env, ...resources.env },
+            mounts: [...mounts, ...resources.mounts],
+          }),
+          agent: withDockerPreflight(
+            withCachePreflight(
+              dependencies.agent?.({
+                worktreePath: workspace.worktreePath,
+                role: roles.code_researcher,
+                name,
+                promptFile: promptFile("explore"),
+                promptArgs,
+              }) ?? configuredCodex(model, roles, roles.code_researcher),
+            ),
+          ),
+          promptFile: promptFile("explore"),
+          promptArgs,
+          maxIterations: 1,
+          name,
+          signal,
+          logging: {
+            type: "file",
+            path: join(cwd, ".sandcastle", "logs", `spec-${specNumber}-explore-${Date.now()}.log`),
+            verbose: true,
+          },
+        }),
+      );
+    } catch (error) {
+      if (isFatalWorkflowError(error) || signal.aborted) throw error;
+      console.warn(`Spec #${specNumber} 可选代码探索失败，降级跳过共享笔记并继续实施：${String(error)}`);
+      return;
+    }
+    await assertTarget();
+    const [actualBranch, actualHead, actualStatus] = await Promise.all([
+      command("git", ["branch", "--show-current"], workspace.worktreePath),
+      command("git", ["rev-parse", "HEAD"], workspace.worktreePath),
+      command("git", ["status", "--porcelain", "--untracked-files=all"], workspace.worktreePath),
+    ]);
+    if (actualBranch !== workspace.branch || actualHead !== baseSha || actualStatus) {
+      throw new GitStateError(`只读代码探索期间 Spec #${specNumber} 集成工作树发生变化，保留现场。`);
+    }
+    const notes = result.stdout.replaceAll(complete, "").trim();
+    if (result.completionSignal !== complete || !notes) {
+      console.warn(`Spec #${specNumber} 可选代码探索未完成，降级跳过共享笔记并继续实施。`);
+      return;
+    }
+    await mkdir(notesDir, { recursive: true });
+    await writeFile(notesFile, `# ${header}\n\n探索快照：${baseSha}\n\n${notes}\n`, "utf8");
+    explorationNotesPath = notesFile;
+    await recordHandoff(specNumber, `${header}\n\n探索快照：${baseSha}\n\n${notes}`).catch((error) => {
+      console.warn(`Spec #${specNumber} 探索笔记评论写入失败，继续使用本地笔记：${String(error)}`);
+    });
   }
 
   const finalization = createFinalizationLifecycle({
@@ -277,11 +388,14 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
       if (finalized.workspace.graph.spec.state === "OPEN") {
         await reportProjectStage?.(finalized.workspace.graph.spec.number, "Delivering");
       }
-      return delivery.deliver(
+      const delivered = await delivery.deliver(
         finalized,
         tickets.contexts,
         recovered?.squashSha ? { squashSha: recovered.squashSha } : undefined,
       );
+      await rm(explorationNotesPath ?? explorationNotesFile(finalized.workspace), { force: true }).catch(() => {});
+      explorationNotesPath = undefined;
+      return delivered;
     },
     prepareSpec: async (graph: SpecGraph, selection?: { branch?: string }) => {
       selectedSpec = graph;
@@ -324,6 +438,7 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
 
     async plan(attempt: number, excludedSpecs: ReadonlySet<number>): Promise<SpecSelection | undefined> {
       await assertTarget();
+      explorationNotesPath = undefined;
       const backlog = await loadSpecBacklog(tracker);
       // Only local unfinished closeout branches add closed parents; never sweep historical closed issues.
       const localCloseouts = await recovery.localSpecs();
@@ -350,24 +465,26 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
           }
         }
         const plan = recovered.squashSha
-          ? { tickets: [] }
-          : await planFrontier(
-              { specs: [selectedSpec] },
-              new Set(),
-              `Planner recovered Spec #${selectedSpec.spec.number}`,
-            );
-        return { workspace: specWorkspace, tickets: plan.tickets };
+          ? { planned: [], ready: [], explore: { needed: false, focus: "" } }
+          : await planSpec({ specs: [selectedSpec] }, `Planner recovered Spec #${selectedSpec.spec.number}`);
+        plannedTickets = plan.planned;
+        if (!recovered.squashSha && !recovered.finalized && plan.ready.length) {
+          await ensureExplorationNotes(specWorkspace, plan.planned, plan.explore);
+        }
+        return { workspace: specWorkspace, tickets: plan.ready };
       }
       if (available.specs.some((graph) => localCloseouts.includes(graph.spec.number)))
         throw new GitStateError(
           "本地仍有 Spec 交付收尾现场，但当前类型、准入、认领或普通交接不允许恢复；保留分支和工作树，先核对报告。",
         );
-      const plan = await planFrontier(available, new Set(), `Planner Spec ${attempt}`);
+      const plan = await planSpec(available, `Planner Spec ${attempt}`);
       if (!plan.graph) return undefined;
       selectedSpec = plan.graph;
+      plannedTickets = plan.planned;
       specWorkspace = await tickets.prepareSpec(selectedSpec);
       await reportProjectStage?.(selectedSpec.spec.number, "Implementing");
-      return { workspace: specWorkspace, tickets: plan.tickets };
+      await ensureExplorationNotes(specWorkspace, plan.planned, plan.explore);
+      return { workspace: specWorkspace, tickets: plan.ready };
     },
 
     async frontier(workspace: SpecWorkspace, attemptedTickets: ReadonlySet<number>): Promise<SpecFrontier> {
@@ -375,12 +492,11 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
       if (recovered?.workspace === workspace && recovered.squashSha)
         return { tickets: [], complete: true, blocked: [] };
       const frontier = specFrontier(workspace.graph, recovery.progress);
-      const plan = await planFrontier(
-        { specs: [workspace.graph] },
-        attemptedTickets,
-        `Planner Spec #${workspace.graph.spec.number} frontier`,
+      const readyNumbers = new Set(frontier.ready.map((entry) => entry.number));
+      const tickets = plannedTickets.filter(
+        (ticket) => readyNumbers.has(ticket.number) && !attemptedTickets.has(ticket.number),
       );
-      return { tickets: plan.tickets, complete: frontier.complete, blocked: frontier.blocked };
+      return { tickets, complete: frontier.complete, blocked: frontier.blocked };
     },
 
     async pause(

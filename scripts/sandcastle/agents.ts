@@ -5,7 +5,8 @@ import { parse } from "smol-toml";
 export const implementerNames = ["implementer_light", "implementer_standard", "implementer_deep"] as const;
 export type ImplementerName = (typeof implementerNames)[number];
 export const reviewerNames = ["standards_reviewer", "spec_reviewer"] as const;
-export type RoleName = ImplementerName | (typeof reviewerNames)[number];
+export const researcherNames = ["code_researcher"] as const;
+export type RoleName = ImplementerName | (typeof reviewerNames)[number] | (typeof researcherNames)[number];
 export type AgentRole = {
   name: RoleName;
   description: string;
@@ -36,13 +37,13 @@ export function parseAgentRole(source: string, name: RoleName): AgentRole {
     throw new Error(`无效的 AFK 角色配置：${name}`);
   }
   if (!isImplementer(name) && role.sandbox_mode !== "read-only")
-    throw new Error(`AFK 评审角色必须为 read-only：${name}`);
+    throw new Error(`AFK 只读角色必须为 read-only：${name}`);
   return { name, description: role.description, model: role.model, effort, instructions: role.developer_instructions };
 }
 
 export async function loadAgentRoles(cwd: string): Promise<AgentRoles> {
   const roles = await Promise.all(
-    [...implementerNames, ...reviewerNames].map(async (name) => {
+    [...implementerNames, ...reviewerNames, ...researcherNames].map(async (name) => {
       const source = await readFile(join(cwd, ".codex", "agents", `${name.replaceAll("_", "-")}.toml`), "utf8");
       return [name, parseAgentRole(source, name)] as const;
     }),
