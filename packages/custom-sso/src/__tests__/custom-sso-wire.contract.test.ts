@@ -36,6 +36,7 @@ describe("Custom SSO V5 subject wire mapping contract", () => {
           code: "target-a",
           name: "目标甲",
           type: OrganizationType.Department,
+          customAttributes: { cost_center: "target" },
           path: [
             { level: 1, distanceToTarget: 1, code: "root", name: "总部", type: OrganizationType.Company },
             {
@@ -103,7 +104,7 @@ describe("Custom SSO V5 subject wire mapping contract", () => {
             responsibilities: [
               {
                 type: { code: OrganizationResponsibilityTypeCode.Head },
-                targetOrganization: { code: "target-a" },
+                targetOrganization: { code: "target-a", customAttributes: { cost_center: "target" } },
               },
             ],
           },

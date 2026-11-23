@@ -5,6 +5,7 @@ import {
   OrganizationReferenceSchema,
 } from "@iam/contracts";
 import type { CustomAttributeValues } from "@iam/contracts/custom-attributes";
+import { PublishedCustomAttributesSchema } from "@iam/contracts/custom-attributes";
 import { z } from "zod";
 import type {
   ClientAuthorizationBase,
@@ -24,6 +25,7 @@ export const EmploymentResponsibilitySnapshotSchema = DocumentResponsibilitySche
   type: DocumentResponsibilitySchema.shape.type.strict(),
   targetOrganization: OrganizationReferenceSchema.safeExtend({
     path: z.array(OrganizationPathNodeSchema.strict()).min(1).max(OrganizationLevel.Five),
+    customAttributes: PublishedCustomAttributesSchema,
   }).strict(),
 }).strict();
 
@@ -38,7 +40,7 @@ export interface SubjectFactsEmployment extends SubjectFactsEmploymentBase {
   readonly position: SubjectFactsEmploymentBase["position"] & CustomAttributeFields;
   readonly responsibilities: readonly {
     readonly type: EmploymentResponsibilitySnapshot["type"];
-    readonly targetOrganization: SubjectFactsEmploymentBase["organization"];
+    readonly targetOrganization: SubjectFactsEmploymentBase["organization"] & CustomAttributeFields;
   }[];
 }
 

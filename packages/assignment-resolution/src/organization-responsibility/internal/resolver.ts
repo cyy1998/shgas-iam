@@ -76,17 +76,21 @@ export function createResolver(db: DbClient): OrganizationResponsibilityResolver
       const typeCodes = input.typeCodes === undefined ? undefined : unique(input.typeCodes);
       if (targetOrganizationIds.length === 0 || typeCodes?.length === 0) return [];
 
-      const affectedTargetIds = new Set<number>();
-      for (const batch of queryIdBatches(targetOrganizationIds)) {
-        const targetRows = await db
-          .select({ targetOrganizationId: organizationClosures.descendantId })
-          .from(organizationClosures)
-          .where(inArray(organizationClosures.ancestorId, batch));
-        for (const row of targetRows) affectedTargetIds.add(row.targetOrganizationId);
+      let affectedTargetIds = targetOrganizationIds;
+      if (input.includeDescendants !== false) {
+        const descendants = new Set<number>();
+        for (const batch of queryIdBatches(targetOrganizationIds)) {
+          const targetRows = await db
+            .select({ targetOrganizationId: organizationClosures.descendantId })
+            .from(organizationClosures)
+            .where(inArray(organizationClosures.ancestorId, batch));
+          for (const row of targetRows) descendants.add(row.targetOrganizationId);
+        }
+        affectedTargetIds = [...descendants];
       }
-      if (affectedTargetIds.size === 0) return [];
+      if (affectedTargetIds.length === 0) return [];
 
-      const rows = await loadAssignmentsByTargetIds(db, [...affectedTargetIds]);
+      const rows = await loadAssignmentsByTargetIds(db, affectedTargetIds);
       await assertBatchIntegrity(db, rows, input.at);
       return unique(
         rows

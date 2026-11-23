@@ -19,6 +19,7 @@ status: accepted
 
 Internal 在所属对象上返回 `customAttributes`。Custom SSO 在 `profile.customAttributes` 返回用户自身属性，OIDC UserInfo 使用顶层
 `iam:custom_attributes` 声明。两种 SSO 都在有效任职的直属 `organization` 和 `position` 对象上使用 `customAttributes`。
+Custom SSO 也在 `profile.employments[].responsibilities[].targetOrganization` 上提供目标组织自身的 `customAttributes`。
 省略未填写的属性键，值集合为空时省略整个属性对象。
 
 ## 发布时效

@@ -195,12 +195,14 @@ function mapEmploymentProfile(employment: EmploymentProfile): CustomSsoEmploymen
         : { ...base.organization, customAttributes: organizationAttributes },
     position:
       positionAttributes === undefined ? base.position : { ...base.position, customAttributes: positionAttributes },
-    responsibilities: employment.responsibilities.map((responsibility) => ({
-      type: {
-        code: responsibility.type.code,
-        name: responsibility.type.name,
+    responsibilities: employment.responsibilities.map(({ type, targetOrganization }) => ({
+      type: { code: type.code, name: type.name },
+      targetOrganization: {
+        ...OrganizationReferenceSchema.parse(targetOrganization),
+        ...(targetOrganization.customAttributes === undefined
+          ? {}
+          : { customAttributes: targetOrganization.customAttributes }),
       },
-      targetOrganization: OrganizationReferenceSchema.parse(responsibility.targetOrganization),
     })),
   };
 }

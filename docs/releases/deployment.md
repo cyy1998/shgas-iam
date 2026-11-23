@@ -243,6 +243,12 @@ Internal API、Worker 及涉及任职诊断、构建或修复的 Ops 制品使�
    文档和 Facts。无法证明兼容时优先修复候选，确需回退则按下节恢复匹配的旧制品、调用方、配置和一致数据，
    另行处理备份后的业务变更与会话撤销。现有会话与协议凭据沿用原期限和绑定。
 
+### 发布 Custom SSO 责任目标的自定义属性
+
+Wire v5 的责任目标新增可选的 `customAttributes`。启用新版 API 和 User Document Worker 前，先更新使用旧版严格 Wire v5 Schema 的调用方。
+新版可读取存量用户文档及 Redis Facts。已有责任目标的属性随用户文档重新发布生效，升级时按
+[User Document 全量重建](data-maintenance.md#user-document-全量重建)回填并核验存量。
+
 ## 完成检查与回退
 
 | 检查       | 通过条件                                                                                                                               |

@@ -84,9 +84,9 @@ export async function expandUserDocumentSource(db: DbClient, source: UserDocumen
         ]),
       ];
     case "organization-custom-attributes":
-      return await repository.findByDirectOrganizationId(source.organizationId);
+      return await repository.findByOrganizationCustomAttributes([source.organizationId], observedAt);
     case "custom-attribute-definition":
-      return await repository.findByCustomAttributeDefinition(source.entityType, source.attributeCode);
+      return await repository.findByCustomAttributeDefinition(source.entityType, source.attributeCode, observedAt);
     case "position":
       return await repository.findByPositionIds([source.positionId]);
     case "role":

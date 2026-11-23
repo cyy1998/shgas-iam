@@ -75,6 +75,7 @@ function createDocumentAssembler(
   const roles = groupItemsBy(dataset.roleRows, (row) => row.employmentId);
   const responsibilities = groupItemsBy(dataset.responsibilityRows, (row) => row.employmentId);
   const definitions = groupItemsBy(dataset.customAttributeDefinitions, (row) => row.entityType);
+  const organizationDefinitions = definitions.get("organization") ?? [];
   const employmentIds = new Set(dataset.employments.map(({ id }) => id));
   if (dataset.responsibilityRows.some((row) => !employmentIds.has(row.employmentId)))
     throw new Error("Document responsibility references an unexpected Employment");
@@ -122,7 +123,10 @@ function createDocumentAssembler(
             return {
               order: type.displayOrder,
               type: { code: type.code, name: type.name },
-              targetOrganization: row.targetOrganization,
+              targetOrganization: {
+                ...row.targetOrganization,
+                ...documentCustomAttributeFields(row.customAttributes, organizationDefinitions),
+              },
             };
           })
           .sort(
@@ -138,7 +142,7 @@ function createDocumentAssembler(
             isPrimary: employment.isPrimary,
             organization: {
               ...organization,
-              ...documentCustomAttributeFields(target.customAttributes, definitions.get("organization") ?? []),
+              ...documentCustomAttributeFields(target.customAttributes, organizationDefinitions),
             },
             position: {
               code: position.posCode,

@@ -1,4 +1,9 @@
-import { DocumentEmploymentSchema, DocumentUserSchema, isGlobalRoleCode } from "@iam/contracts";
+import {
+  DocumentEmploymentSchema,
+  DocumentResponsibilitySchema,
+  DocumentUserSchema,
+  isGlobalRoleCode,
+} from "@iam/contracts";
 import { PublishedCustomAttributesSchema } from "@iam/contracts/custom-attributes";
 import { z } from "zod";
 
@@ -18,6 +23,9 @@ export const DocumentClientAuthorizationSchema = z
 
 export const StoredDocumentEmploymentSchema = DocumentEmploymentSchema.omit({ roles: true })
   .extend({
+    responsibilities: z.array(
+      DocumentResponsibilitySchema.safeExtend({ targetOrganization: DocumentEmploymentSchema.shape.organization }),
+    ),
     clientAuthorizations: z.array(DocumentClientAuthorizationSchema),
     globalRoles: z.array(DocumentGlobalRoleSchema).min(1).optional(),
   })

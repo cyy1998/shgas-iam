@@ -166,6 +166,7 @@ test("publishes canonical responsibility facts and rejects a malformed complete 
       {
         employmentId: 1,
         typeCode: OrganizationResponsibilityTypeCode.Head,
+        customAttributes: {},
         targetOrganization: organization("target"),
       },
     ],

@@ -116,7 +116,8 @@ code={urlencoded_code}&redirect_uri={urlencoded_original_redirect_url}
 
 - **主体投影格式（Wire v5）** 业务兑换的 `data.subject` 与应用 UserInfo 的 `data` 使用[同一严格 Schema](../../packages/custom-sso/src/wire.ts)。
   `subjectClaims` 继续控制可选基础资料、任职和角色。`profile.customAttributes` 提供当前用户的已发布自定义属性，
-  获准披露的有效任职在直属 `organization` 和 `position` 上各自提供 `customAttributes`。属性按稳定编码索引，未填写的键和空属性对象省略。
+  获准披露的有效任职在直属 `organization`、`position` 和 `responsibilities[].targetOrganization` 上各自提供 `customAttributes`。
+  属性按稳定编码索引，未填写的键和空属性对象省略。
   任职与责任目标的组织使用[共用资料结构](README.md#单点登录的共同处理)。`authorization` 及其任职继续承载本 Client 的有效角色和有效全局角色。
   严格解析主体的调用方按[协调发布](../releases/deployment.md#启用目录自定义属性和-custom-sso-wire-v5)切换到 v5。
   业务后端自行建立本地会话、关联 sid、设置自己的 HttpOnly Cookie，再跳回原 redirectUrl。

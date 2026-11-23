@@ -1270,10 +1270,11 @@ test("Custom SSO delivers published custom attributes and nested Roles through W
     {
       type: { code: OrganizationResponsibilityTypeCode.Head, name: "负责人" },
       targetOrganization: {
-        code: "org",
-        name: "组织",
+        code: "target",
+        name: "责任目标",
         type: OrganizationType.Department,
-        path: [{ code: "org", name: "组织", type: OrganizationType.Department, level: 1, distanceToTarget: 0 }],
+        path: [{ code: "target", name: "责任目标", type: OrganizationType.Department, level: 1, distanceToTarget: 0 }],
+        customAttributes: { cost_center: 42 },
       },
     },
   ];
@@ -1302,16 +1303,30 @@ test("Custom SSO delivers published custom attributes and nested Roles through W
       { entityType: "organization", code: "cost_center", displayName: "Cost center", valueType: "number" },
       { entityType: "position", code: "grade", displayName: "Grade", valueType: "text" },
     ]);
-    await db.insert(organizations).values({
-      id: 1,
-      orgCode: "org",
-      orgName: "组织",
-      orgType: OrganizationType.Department,
-      level: OrganizationLevel.One,
-      path: "/1",
-      customAttributes: { cost_center: 0 },
-    });
-    await db.insert(organizationClosures).values({ ancestorId: 1, descendantId: 1, depth: 0 });
+    await db.insert(organizations).values([
+      {
+        id: 1,
+        orgCode: "org",
+        orgName: "组织",
+        orgType: OrganizationType.Department,
+        level: OrganizationLevel.One,
+        path: "/1",
+        customAttributes: { cost_center: 0 },
+      },
+      {
+        id: 2,
+        orgCode: "target",
+        orgName: "责任目标",
+        orgType: OrganizationType.Department,
+        level: OrganizationLevel.One,
+        path: "/2",
+        customAttributes: { cost_center: 42 },
+      },
+    ]);
+    await db.insert(organizationClosures).values([
+      { ancestorId: 1, descendantId: 1, depth: 0 },
+      { ancestorId: 2, descendantId: 2, depth: 0 },
+    ]);
     await db.insert(positions).values([
       { id: 1, posCode: "position", posName: "岗位", customAttributes: { grade: "p2" } },
       { id: 2, posCode: "secondary", posName: "副岗" },
@@ -1323,7 +1338,7 @@ test("Custom SSO delivers published custom attributes and nested Roles through W
     ]);
     await db.insert(organizationResponsibilityAssignments).values({
       employmentId: 1,
-      targetOrganizationId: 1,
+      targetOrganizationId: 2,
       typeCode: OrganizationResponsibilityTypeCode.Head,
       status: OrganizationResponsibilityAssignmentStatus.Enable,
       startTime,

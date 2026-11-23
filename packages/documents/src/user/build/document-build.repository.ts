@@ -4,10 +4,10 @@ import type {
 } from "@iam/assignment-resolution/organization-responsibility";
 import type { DocumentResponsibility } from "@iam/contracts";
 import { ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG } from "@iam/contracts";
-import type { CustomAttributeEntityType } from "@iam/contracts/custom-attributes";
+import type { CustomAttributeEntityType, CustomAttributeValues } from "@iam/contracts/custom-attributes";
 import type { DbClient } from "@iam/db";
 import { organizationClosures, organizations } from "@iam/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
   type DocumentCustomAttributeDefinition,
@@ -22,6 +22,7 @@ import { createUserDocumentBuildRepository } from "./user-document-build.reposit
 export interface DocumentResponsibilityRow extends Omit<DocumentResponsibility, "type"> {
   employmentId: number;
   typeCode: EffectiveOrganizationResponsibility["typeCode"];
+  customAttributes: CustomAttributeValues;
 }
 
 export type DocumentBuildDataset = UserDocumentBuildDataset & {
@@ -57,17 +58,19 @@ export function createDocumentBuildRepository(
         })),
       );
       const targetOrganizationIds = unique(identities.map((row) => row.targetOrganizationId));
+      const targetPaths = await loadTargetOrganizationPaths(db, targetOrganizationIds);
+      signal?.throwIfAborted();
       const entityTypes: CustomAttributeEntityType[] = [];
       if (dataset.users.some(({ customAttributes }) => hasCustomAttributeValues(customAttributes)))
         entityTypes.push("user");
       if (dataset.positions.some(({ customAttributes }) => hasCustomAttributeValues(customAttributes)))
         entityTypes.push("position");
-      if (dataset.orgPathRows.some(({ customAttributes }) => hasCustomAttributeValues(customAttributes)))
+      if (
+        dataset.orgPathRows.some(({ customAttributes }) => hasCustomAttributeValues(customAttributes)) ||
+        [...targetPaths.values()].some((path) => hasCustomAttributeValues(path.at(-1)?.customAttributes ?? {}))
+      )
         entityTypes.push("organization");
-      const [targetPaths, customAttributeDefinitions] = await Promise.all([
-        loadTargetOrganizationPaths(db, targetOrganizationIds),
-        loadEnabledDocumentCustomAttributeDefinitions(db, entityTypes),
-      ]);
+      const customAttributeDefinitions = await loadEnabledDocumentCustomAttributeDefinitions(db, entityTypes);
       signal?.throwIfAborted();
       const typeByCode = new Map(ORGANIZATION_RESPONSIBILITY_TYPE_CATALOG.map((type) => [type.code, type]));
       return {
@@ -88,11 +91,12 @@ export function createDocumentBuildRepository(
           return {
             employmentId: identity.employmentId,
             typeCode: identity.typeCode,
+            customAttributes: target.customAttributes,
             targetOrganization: {
               code: target.code,
               name: target.name,
               type: target.type,
-              path: path.map(({ id: _id, ...node }) => node),
+              path: path.map(({ id: _id, customAttributes: _customAttributes, ...node }) => node),
             },
           };
         }),
@@ -115,6 +119,8 @@ async function loadTargetOrganizationPaths(db: DbClient, targetOrganizationIds: 
       type: ancestor.orgType,
       level: ancestor.level,
       parentId: ancestor.parentId,
+      customAttributes: sql<CustomAttributeValues>`CASE WHEN ${organizationClosures.depth} = 0
+        THEN ${ancestor.customAttributes} ELSE '{}'::jsonb END`,
     })
     .from(organizationClosures)
     .innerJoin(ancestor, eq(organizationClosures.ancestorId, ancestor.id))
@@ -145,6 +151,7 @@ async function loadTargetOrganizationPaths(db: DbClient, targetOrganizationIds: 
 
 type ResponsibilityOrganizationNode = DocumentResponsibility["targetOrganization"]["path"][number] & {
   id: number;
+  customAttributes: CustomAttributeValues;
 };
 
 function unique<T>(items: readonly T[]) {

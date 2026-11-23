@@ -14,6 +14,7 @@ export interface ResolveEffectiveResponsibilitiesInput {
 
 export interface ResolveHolderEmploymentIdsInput {
   readonly targetOrganizationIds: readonly number[];
+  readonly includeDescendants?: boolean;
   readonly typeCodes?: readonly OrganizationResponsibilityTypeCode[];
   readonly at: Date;
 }

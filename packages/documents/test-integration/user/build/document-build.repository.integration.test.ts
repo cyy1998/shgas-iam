@@ -55,6 +55,7 @@ describe("User Document v4 build repository", () => {
       {
         employmentId: 100,
         typeCode: OrganizationResponsibilityTypeCode.Head,
+        customAttributes: {},
         targetOrganization: {
           code: "TARGET",
           name: "TARGET",

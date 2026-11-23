@@ -84,7 +84,10 @@ function toEmploymentProfile(employment: SubjectFactsEmployment, includeCustomAt
     responsibilities: z.array(EmploymentResponsibilitySnapshotSchema).parse(
       employment.responsibilities.map((responsibility) => ({
         type: responsibility.type,
-        targetOrganization: OrganizationReferenceSchema.parse(responsibility.targetOrganization),
+        targetOrganization: withCustomAttributes(
+          OrganizationReferenceSchema.parse(responsibility.targetOrganization),
+          includeCustomAttributes ? responsibility.targetOrganization.customAttributes : undefined,
+        ),
       })),
     ),
   };

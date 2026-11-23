@@ -5,6 +5,8 @@ import process from "node:process";
 import {
   OidcScope,
   OrganizationLevel,
+  OrganizationResponsibilityAssignmentStatus,
+  OrganizationResponsibilityTypeCode,
   OrganizationType,
   RoleAssignmentTargetType,
   RoleKind,
@@ -16,6 +18,7 @@ import {
   customAttributeDefinitions,
   employments,
   organizationClosures,
+  organizationResponsibilityAssignments,
   organizations,
   positions,
   roleInclusions,
@@ -132,6 +135,13 @@ test("UserInfo HTTP uses real published Facts cache, canonical PostgreSQL fallba
       })
       .returning({ id: roles.id });
     if (!employment || !role) throw new Error("UserInfo role fixture is missing");
+    await pg.db.insert(organizationResponsibilityAssignments).values({
+      employmentId: employment.id,
+      targetOrganizationId: organization.id,
+      typeCode: OrganizationResponsibilityTypeCode.Head,
+      status: OrganizationResponsibilityAssignmentStatus.Enable,
+      startTime: new Date("2026-01-01T00:00:00Z"),
+    });
     await pg.db
       .insert(roleAssignments)
       .values({ roleId: role.id, targetType: RoleAssignmentTargetType.Employment, targetId: employment.id });
@@ -177,6 +187,9 @@ test("UserInfo HTTP uses real published Facts cache, canonical PostgreSQL fallba
       name: "岗位",
       customAttributes: { grade: 0 },
     });
+    const responsibilityTarget = firstPayload["iam:employments"][0].responsibilities[0].targetOrganization;
+    expect(responsibilityTarget.code).toBe("org");
+    expect(responsibilityTarget).not.toHaveProperty("customAttributes");
     expect(firstPayload["iam:employments"][1].position).not.toHaveProperty("customAttributes");
     const authorizedEmployment = firstPayload["iam:authorization"].employments[0];
     expect(authorizedEmployment.organization).not.toHaveProperty("customAttributes");

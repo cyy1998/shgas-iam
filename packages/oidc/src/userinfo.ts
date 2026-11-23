@@ -71,7 +71,10 @@ export function createOidcUserInfo(options: {
                       isPrimary,
                       organization,
                       position,
-                      responsibilities,
+                      responsibilities: responsibilities.map(({ type, targetOrganization }) => ({
+                        type,
+                        targetOrganization: OrganizationReferenceSchema.parse(targetOrganization),
+                      })),
                     }),
                   ),
                 }),

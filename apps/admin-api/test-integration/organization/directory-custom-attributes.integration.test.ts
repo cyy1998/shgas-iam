@@ -13,11 +13,18 @@ import { createOrganizationService } from "@admin-api/services/organization/orga
 import { createPositionService } from "@admin-api/services/position/position.service";
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import { createTRPCContext, router } from "@iam/api-core/trpc";
-import { EmploymentStatus, OrganizationType, PositionStatus } from "@iam/contracts";
+import {
+  EmploymentStatus,
+  OrganizationResponsibilityAssignmentStatus,
+  OrganizationResponsibilityTypeCode,
+  OrganizationType,
+  PositionStatus,
+} from "@iam/contracts";
 import {
   auditLogs,
   employments,
   organizationDocumentOutboxEntries,
+  organizationResponsibilityAssignments,
   userDocumentOutboxEntries,
   users,
 } from "@iam/db/schema";
@@ -322,7 +329,7 @@ test.each(entries)(
   },
 );
 
-test("recovers publication for directly assigned organizations and positions after profile and definition changes", async () => {
+test("republishes attributes for direct employments and responsibility holders after values and definitions change", async () => {
   const app = createTestApp();
   for (const [entityType, valueType] of [
     ["organization", "number"],
@@ -360,23 +367,45 @@ test("recovers publication for directly assigned organizations and positions aft
       { username: "descendant", name: "Descendant" },
       { username: "same-position", name: "Same position" },
     ])
-    .returning({ id: users.id });
+    .returning({ id: users.id, subjectIdentifier: users.subjectIdentifier });
   if (!direct || !descendant || !samePosition) throw new Error("Missing user fixtures");
-  await harness.db.insert(employments).values([
-    { userId: direct.id, orgId: root.id, posId: pos.id, startTime: "2026-01-01", status: EmploymentStatus.Enable },
+  const employmentRows = await harness.db
+    .insert(employments)
+    .values([
+      { userId: direct.id, orgId: root.id, posId: pos.id, startTime: "2026-01-01", status: EmploymentStatus.Enable },
+      {
+        userId: samePosition.id,
+        orgId: child.id,
+        posId: pos.id,
+        startTime: "2026-01-01",
+        status: EmploymentStatus.Enable,
+      },
+      {
+        userId: descendant.id,
+        orgId: child.id,
+        posId: otherPos.id,
+        startTime: "2026-01-01",
+        status: EmploymentStatus.Enable,
+      },
+    ])
+    .returning({ id: employments.id, userId: employments.userId });
+  const responsibilityHolder = employmentRows.find(({ userId }) => userId === samePosition.id);
+  const descendantHolder = employmentRows.find(({ userId }) => userId === descendant.id);
+  if (!responsibilityHolder || !descendantHolder) throw new Error("Missing responsibility employments");
+  await harness.db.insert(organizationResponsibilityAssignments).values([
     {
-      userId: samePosition.id,
-      orgId: child.id,
-      posId: pos.id,
-      startTime: "2026-01-01",
-      status: EmploymentStatus.Enable,
+      employmentId: responsibilityHolder.id,
+      targetOrganizationId: root.id,
+      typeCode: OrganizationResponsibilityTypeCode.Head,
+      status: OrganizationResponsibilityAssignmentStatus.Enable,
+      startTime: new Date("2026-01-01T00:00:00Z"),
     },
     {
-      userId: descendant.id,
-      orgId: child.id,
-      posId: otherPos.id,
-      startTime: "2026-01-01",
-      status: EmploymentStatus.Enable,
+      employmentId: descendantHolder.id,
+      targetOrganizationId: child.id,
+      typeCode: OrganizationResponsibilityTypeCode.Head,
+      status: OrganizationResponsibilityAssignmentStatus.Enable,
+      startTime: new Date("2026-01-01T00:00:00Z"),
     },
   ]);
 
@@ -421,6 +450,14 @@ test("recovers publication for directly assigned organizations and positions aft
     })),
   );
   await user.publishPending();
+  const holderSubjectIdentifier = samePosition.subjectIdentifier;
+  function readResponsibilityTarget() {
+    const record = user.facts.get(holderSubjectIdentifier);
+    const target =
+      record?.kind === "document" ? record.facts.employments[0]?.responsibilities[0]?.targetOrganization : undefined;
+    if (!target) throw new Error("Missing published responsibility target");
+    return target;
+  }
   async function readPublished() {
     const [organization, direct] = await Promise.all([org.getByCode("ORG"), user.get("direct")]);
     const employment = direct.employments?.[0];
@@ -431,6 +468,7 @@ test("recovers publication for directly assigned organizations and positions aft
     };
   }
   const old = await readPublished();
+  expect(readResponsibilityTarget()).not.toHaveProperty("customAttributes");
   const oldChild = await user.get("descendant");
 
   const organization = await write(app, "PUT", "organizations/ORG", { customAttributes: { grade: 0 } });
@@ -444,7 +482,8 @@ test("recovers publication for directly assigned organizations and positions aft
   const updatedOrganizations = await publishOrganizations();
   const updatedOrganizationHolders = await user.publishPending();
   expect(updatedOrganizations).toEqual([root.id]);
-  expect(updatedOrganizationHolders).toEqual([direct.id]);
+  expect(updatedOrganizationHolders).toEqual([direct.id, samePosition.id]);
+  expect(readResponsibilityTarget()).toMatchObject({ code: "ORG", customAttributes: { grade: 0 } });
   const updatedOrganization = await readPublished();
   expect(updatedOrganization).toEqual({
     ...old,
@@ -465,6 +504,9 @@ test("recovers publication for directly assigned organizations and positions aft
   const secondHolder = await user.get("same-position");
   expect(secondHolder.employments?.[0]?.position?.customAttributes).toEqual({ grade: false });
   expect(secondHolder.employments?.[0]?.organization).not.toHaveProperty("customAttributes");
+  expect(secondHolder.employments?.[0]?.responsibilities?.[0]?.targetOrganization).not.toHaveProperty(
+    "customAttributes",
+  );
   const publishedChild = await user.get("descendant");
   expect(publishedChild).toEqual(oldChild);
 
@@ -482,7 +524,8 @@ test("recovers publication for directly assigned organizations and positions aft
   const disabledOrganizations = await publishOrganizations(1);
   const disabledOrganizationHolders = await user.publishPending();
   expect(disabledOrganizations).toEqual([root.id]);
-  expect(disabledOrganizationHolders).toEqual([direct.id]);
+  expect(disabledOrganizationHolders).toEqual([direct.id, samePosition.id]);
+  expect(readResponsibilityTarget()).not.toHaveProperty("customAttributes");
   const disabledOrganization = await readPublished();
   expect(disabledOrganization).toEqual({ ...old, employmentPosition: { grade: false } });
 
@@ -499,6 +542,7 @@ test("recovers publication for directly assigned organizations and positions aft
   await user.publishPending();
   const restored = await readPublished();
   expect(restored).toEqual(updated);
+  expect(readResponsibilityTarget().customAttributes).toEqual({ grade: 0 });
 
   const clearedOrganization = await write(app, "PUT", "organizations/ORG", { customAttributes: { grade: null } });
   const clearedPosition = await write(app, "PUT", "positions/POS", { customAttributes: { grade: null } });
@@ -510,6 +554,7 @@ test("recovers publication for directly assigned organizations and positions aft
   await user.publishPending();
   const cleared = await readPublished();
   expect(cleared).toEqual(old);
+  expect(readResponsibilityTarget()).not.toHaveProperty("customAttributes");
 
   // A lifecycle event with no stored values is still a completed, verifiable receipt.
   await setEnabled("organization", false);

@@ -1,3 +1,4 @@
+import type { ResolveHolderEmploymentIdsInput } from "@iam/assignment-resolution/organization-responsibility";
 import type { OrganizationResponsibilityTypeCode } from "@iam/contracts";
 import { EmploymentStatus } from "@iam/contracts";
 import type { CustomAttributeEntityType } from "@iam/contracts/custom-attributes";
@@ -14,10 +15,7 @@ interface UserDocumentAffectedUserResolverPort {
 }
 
 export interface UserDocumentResponsibilityAffectedUserResolverPort {
-  resolveHolderEmploymentIds: (input: {
-    targetOrganizationIds: readonly number[];
-    at: Date;
-  }) => Promise<readonly number[]>;
+  resolveHolderEmploymentIds: (input: ResolveHolderEmploymentIdsInput) => Promise<readonly number[]>;
   resolveHolderEmploymentIdsByTypes: (input: {
     typeCodes: readonly OrganizationResponsibilityTypeCode[];
     at: Date;
@@ -38,7 +36,7 @@ export function createUserDocumentAffectedUserRepository(
   }
 
   async function findByDirectAssignment(match: SQL) {
-    const rows = await db
+    return await db
       .selectDistinct({ userId: employments.userId })
       .from(employments)
       .innerJoin(users, eq(users.id, employments.userId))
@@ -50,15 +48,33 @@ export function createUserDocumentAffectedUserRepository(
           match,
         ),
       );
-    return rows.map(({ userId }) => userId);
+  }
+
+  async function findResponsibilityHoldersByOrganizationIds(
+    targetOrganizationIds: readonly number[],
+    at: Date,
+    includeDescendants = true,
+  ) {
+    const employmentIds = await responsibilityResolver.resolveHolderEmploymentIds({
+      targetOrganizationIds,
+      at,
+      includeDescendants,
+    });
+    return await findByEmploymentIds(employmentIds);
+  }
+
+  async function findByOrganizationCustomAttributes(organizationIds: readonly number[], at: Date) {
+    const directUsers = await findInBatches(organizationIds, (ids) =>
+      findByDirectAssignment(inArray(employments.orgId, ids)),
+    );
+    const responsibilityHolders = await findResponsibilityHoldersByOrganizationIds(organizationIds, at, false);
+    return [...new Set([...directUsers, ...responsibilityHolders])];
   }
 
   return {
-    async findByDirectOrganizationId(organizationId: number) {
-      return await findByDirectAssignment(eq(employments.orgId, organizationId));
-    },
+    findByOrganizationCustomAttributes,
 
-    async findByCustomAttributeDefinition(entityType: CustomAttributeEntityType, attributeCode: string) {
+    async findByCustomAttributeDefinition(entityType: CustomAttributeEntityType, attributeCode: string, at: Date) {
       if (entityType === "user") {
         const rows = await db
           .select({ userId: users.id })
@@ -66,17 +82,33 @@ export function createUserDocumentAffectedUserRepository(
           .where(and(eq(users.isDelete, false), customAttributeKeyExists(users.customAttributes, attributeCode)));
         return rows.map(({ userId }) => userId);
       }
-      const source = entityType === "organization" ? organizations : positions;
-      const assignedId = entityType === "organization" ? employments.orgId : employments.posId;
-      return await findByDirectAssignment(
+      if (entityType === "organization") {
+        const rows = await db
+          .select({ id: organizations.id })
+          .from(organizations)
+          .where(
+            and(
+              eq(organizations.isDelete, false),
+              customAttributeKeyExists(organizations.customAttributes, attributeCode),
+            ),
+          );
+        return await findByOrganizationCustomAttributes(
+          rows.map(({ id }) => id),
+          at,
+        );
+      }
+      const rows = await findByDirectAssignment(
         inArray(
-          assignedId,
+          employments.posId,
           db
-            .select({ id: source.id })
-            .from(source)
-            .where(and(eq(source.isDelete, false), customAttributeKeyExists(source.customAttributes, attributeCode))),
+            .select({ id: positions.id })
+            .from(positions)
+            .where(
+              and(eq(positions.isDelete, false), customAttributeKeyExists(positions.customAttributes, attributeCode)),
+            ),
         ),
       );
+      return rows.map(({ userId }) => userId);
     },
 
     async findByOrganizationIds(organizationIds: readonly number[]) {
@@ -120,13 +152,7 @@ export function createUserDocumentAffectedUserRepository(
       return [...(await roleAssignmentResolver.resolveAffectedUserIds({ roleIds }))];
     },
 
-    async findResponsibilityHoldersByOrganizationIds(organizationIds: readonly number[], at: Date) {
-      const employmentIds = await responsibilityResolver.resolveHolderEmploymentIds({
-        targetOrganizationIds: organizationIds,
-        at,
-      });
-      return await findByEmploymentIds(employmentIds);
-    },
+    findResponsibilityHoldersByOrganizationIds,
 
     async findResponsibilityHoldersByTypeCodes(typeCodes: readonly OrganizationResponsibilityTypeCode[], at: Date) {
       const employmentIds = await responsibilityResolver.resolveHolderEmploymentIdsByTypes({
