@@ -37,25 +37,47 @@ const ignoredInputDirectories = new Set([
 ]);
 const sharedInputFiles = ["pnpm-lock.yaml", "pnpm-workspace.yaml", ".npmrc", "package.json"];
 
+interface CachedFrontendOptions {
+  repoRoot: string;
+  app: FrontendApp;
+  cacheRoot: string;
+  buildEnvironment: Readonly<Record<string, string>>;
+  hostEnvironment?: NodeJS.ProcessEnv;
+  signal?: AbortSignal;
+}
+
 export async function buildFrontends(options: FrontendOptions) {
   options.signal?.throwIfAborted();
   const repoRoot = resolve(options.repoRoot);
-  const inputs = await readFrontendInputs(repoRoot);
-  const admin = await buildFrontend("admin", options, repoRoot, inputs);
-  const sso = await buildFrontend("sso", options, repoRoot, inputs);
+  const inputs = await readFrontendInputs(repoRoot, ["@iam/admin", "@iam/sso"]);
+  const build = (app: FrontendApp) =>
+    buildFrontend(
+      {
+        ...options,
+        repoRoot,
+        app,
+        cacheRoot: frontendCacheRoot(repoRoot),
+        buildEnvironment: frontendEnvironment(app, options),
+      },
+      inputs,
+    );
+  const admin = await build("admin");
+  const sso = await build("sso");
   return { admin, sso };
 }
 
-async function buildFrontend(
-  app: FrontendApp,
-  options: FrontendOptions,
-  repoRoot: string,
-  inputs: Awaited<ReturnType<typeof readFrontendInputs>>,
-) {
-  const environment = frontendEnvironment(app, options);
+export async function buildCachedFrontend(options: CachedFrontendOptions) {
+  options.signal?.throwIfAborted();
+  const repoRoot = resolve(options.repoRoot);
+  const inputs = await readFrontendInputs(repoRoot, [`@iam/${options.app}`]);
+  return buildFrontend({ ...options, repoRoot }, inputs);
+}
+
+async function buildFrontend(options: CachedFrontendOptions, inputs: Awaited<ReturnType<typeof readFrontendInputs>>) {
+  const { app, repoRoot, buildEnvironment: environment } = options;
   const appName = `@iam/${app}`;
   const fingerprint = fingerprintFrontendInputs(appName, inputs.workspaces, inputs.sharedFiles, environment);
-  const cache = join(frontendCacheRoot(repoRoot), app);
+  const cache = join(options.cacheRoot, app);
   const recordPath = join(cache, fingerprintFilename);
   const previous = await readBuildRecord(recordPath);
   options.signal?.throwIfAborted();
@@ -69,8 +91,7 @@ async function buildFrontend(
     if (matchesFrontendBuild(previous, fingerprint, files)) return { directory, rebuilt: false };
   }
 
-  // Publish only complete generations. A running E2E server keeps its original directory
-  // while another --fresh run builds or publishes a different set of inputs.
+  // Each server retains its own complete build while concurrent startups publish new ones.
   await mkdir(cache, { recursive: true });
   const directory = await mkdtemp(join(cache, "build-"));
   try {
@@ -89,7 +110,7 @@ async function buildFrontend(
     if (!files["index.html"]) throw new Error(`Vite build for ${app} did not produce index.html`);
     const current = await readFrontendInputs(repoRoot, [appName]);
     if (fingerprintFrontendInputs(appName, current.workspaces, current.sharedFiles, environment) !== fingerprint) {
-      throw new Error(`Frontend inputs for ${app} changed during the Vite build. Run E2E again.`);
+      throw new Error(`Frontend inputs for ${app} changed during the Vite build. Run the test command again.`);
     }
     options.signal?.throwIfAborted();
     const record: FrontendBuildRecord = { fingerprint, directory: basename(directory), files };
@@ -103,7 +124,7 @@ async function buildFrontend(
   }
 }
 
-async function readFrontendInputs(repoRoot: string, apps = ["@iam/admin", "@iam/sso"]) {
+async function readFrontendInputs(repoRoot: string, apps: readonly string[]) {
   const manifests = await readWorkspaceManifests(repoRoot);
   const workspaces = new Map<string, FrontendWorkspaceInputs>();
   const selected = new Set(apps.flatMap((app) => [...workspaceDependencyClosure(app, manifests)]));

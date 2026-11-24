@@ -8,6 +8,7 @@ export default defineConfig({
   testMatch: "**/*.spec.ts",
   outputDir: "./test-results/browser",
   timeout: 180_000,
+  fullyParallel: true,
   expect: {
     timeout: 120_000,
   },
@@ -18,12 +19,16 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: "pnpm dev:e2e",
+    command:
+      process.env.IAM_PW_DEV_SERVER === "1"
+        ? "pnpm dev:e2e"
+        : `bun --no-env-file ../../e2e/system/src/frontend/integration-frontend.ts sso ${port}`,
     reuseExistingServer: false,
+    gracefulShutdown: { signal: "SIGTERM", timeout: 5000 },
+    stdout: "pipe",
     timeout: 240_000,
     url: `${baseURL}/portal/`,
   },
-  workers: 1,
   projects: [
     {
       name: "chromium",
