@@ -48,7 +48,7 @@ export function parseIntegrationArguments(args) {
 }
 
 export function selectIntegrationTasks(root, options) {
-  const manifestPaths = ["e2e/system/package.json"];
+  const manifestPaths = [];
   for (const directory of ["apps", "packages"]) {
     if (!existsSync(join(root, directory))) continue;
     for (const entry of readdirSync(join(root, directory), { withFileTypes: true }))
