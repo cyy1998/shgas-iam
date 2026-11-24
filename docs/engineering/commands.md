@@ -87,6 +87,10 @@ pnpm test:integration
   ```
 
 Integration 的 `--timeout-ms` 默认 30 分钟，`--cleanup-timeout-ms` 默认 30 秒。
+Admin 和 SSO 的浏览器集成测试默认使用 `.cache/integration-frontend/` 中的静态构建。源码、workspace 传递依赖、锁定文件或公开构建环境变更时重新构建。
+设置 `IAM_PW_DEV_SERVER=1` 可切换到 Vite dev server。无资源的 Playwright 集合可通过 `--browser-workers <1–16>` 或 `IAM_TEST_BROWSER_WORKERS` 调整并发，命令行参数优先。
+选择带资源或 resource provider 的 Playwright 集合时须省略这两个覆盖项。
+
 `--keep-resources` 显式保留本次环境。准确 project、配置与产物登记在 `test-results/integration/<run-id>/run.json`。
 清理失败、进程被强制结束或用完保留环境后，按记录清理：
 

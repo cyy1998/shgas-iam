@@ -1,9 +1,14 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from "node:fs";
+import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
-import { integrationDeclarations, selectIntegrationTasks } from "./test-resources/integration-selection.mjs";
+import {
+  integrationDeclarations,
+  parseBrowserWorkers,
+  selectIntegrationTasks,
+} from "./test-resources/integration-selection.mjs";
 import { formatResourceFailure, readManagedResourceRun } from "./test-resources/managed-resources.mjs";
 import { pnpmCommand, runOwnedCommand } from "./test-resources/owned-command.mjs";
 
@@ -32,9 +37,8 @@ try {
     const option = parameters.shift();
     const value = parameters.shift();
     if (option === "--browser-workers") {
-      if (browserWorkers !== undefined || !["1", "2"].includes(value))
-        throw new Error("--browser-workers requires 1 or 2 and may be supplied once");
-      browserWorkers = Number(value);
+      if (browserWorkers !== undefined) throw new Error("--browser-workers may be supplied once");
+      browserWorkers = parseBrowserWorkers(value, option);
     } else {
       if (!value) throw new Error(`${option} requires a script path`);
       if (option === "--preflight") preflight = value;
@@ -52,8 +56,13 @@ try {
   const names = declaration.environmentNames;
   const testEnvironment = { ...process.env };
   delete testEnvironment.IAM_TEST_POSTGRES_TEMPLATE;
-  if (browserWorkers !== undefined && (executor !== "playwright" || names.length > 0 || resourceProvider))
-    throw new Error("--browser-workers requires a resource-free Playwright collection without a resource provider");
+  const workerOverride = executor === "playwright" ? process.env.IAM_TEST_BROWSER_WORKERS : undefined;
+  const parallelBrowser = executor === "playwright" && names.length === 0 && !resourceProvider;
+  if (!parallelBrowser && (browserWorkers !== undefined || workerOverride !== undefined)) {
+    throw new Error(
+      "Browser worker overrides require a resource-free Playwright collection without a resource provider",
+    );
+  }
   if (names.length > 0) {
     const recordPath = process.env.IAM_TEST_RESOURCE_RECORD;
     const runId = process.env.IAM_TEST_RESOURCE_RUN_ID;
@@ -88,7 +97,18 @@ try {
     args.splice(1, 0, "--max-concurrency=1", "--bail");
   }
   if (executor === "vitest") args.push("--maxWorkers=1", "--no-file-parallelism", "--bail=1");
-  if (executor === "playwright") args.push(`--workers=${browserWorkers ?? 1}`, "--max-failures=1", "--retries=0");
+  if (executor === "playwright") {
+    if (args.some((arg) => /^(?:--workers(?:=|$)|-j)/.test(arg))) {
+      throw new Error("Configure Playwright workers through --browser-workers or IAM_TEST_BROWSER_WORKERS");
+    }
+    const workers = parallelBrowser
+      ? (browserWorkers ??
+        (workerOverride === undefined
+          ? Math.min(4, Math.max(2, Math.floor(availableParallelism() / 2)))
+          : parseBrowserWorkers(workerOverride, "IAM_TEST_BROWSER_WORKERS")))
+      : 1;
+    args.push(`--workers=${workers}`, "--max-failures=1", "--retries=0");
+  }
   const directoryIndex = args.indexOf("test-integration");
   if (directoryIndex >= 0) args.splice(directoryIndex, 1);
   args.push(...files);

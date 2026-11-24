@@ -3,6 +3,14 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 
 export const integrationExecutors = ["bun", "vitest", "playwright"];
 
+export function parseBrowserWorkers(value, option) {
+  const workers = Number(value);
+  if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(workers) || workers > 16) {
+    throw new Error(`${option} requires an integer from 1 to 16`);
+  }
+  return workers;
+}
+
 export function integrationDeclarations(manifest) {
   const declarations = manifest.iamTest?.integration ?? {};
   if (!declarations || typeof declarations !== "object" || Array.isArray(declarations))
@@ -38,6 +46,9 @@ export function parseIntegrationArguments(args) {
       const value = args[++index];
       if (!value || value.startsWith("--")) throw new Error(`${argument} requires a value`);
       options[fields[argument]].push(value);
+    } else if (argument === "--browser-workers") {
+      if (options.browserWorkers !== undefined) throw new Error(`${argument} may be supplied once`);
+      options.browserWorkers = parseBrowserWorkers(args[++index], argument);
     } else if (argument === "--timeout-ms" || argument === "--cleanup-timeout-ms") {
       const value = Number(args[++index]);
       if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${argument} requires a positive integer`);
