@@ -250,7 +250,7 @@ pnpm test:integration --workspace @iam/api
 ```
 
 需要调试保留时，在独立 fixture 命令的配置路径后增加 `--keep`；结束时按打印的准确记录清理，内部 marker 不作为公开运行模式。
-fixture 负责候选 API、TLS 代理、随机 PG schema、Redis 和 Node 进程树，driver 负责浏览器与官方模块。
+独立入口先迁移并封存本次 PostgreSQL 模板库。fixture 负责候选 API、TLS 代理、独立 PostgreSQL 克隆库、Redis 和 Node 进程树，driver 负责浏览器与官方模块。
 信号/失败仍逐项尝试收尾，再以独立预算清理准确 project；超时不冒称清理完成，原始失败与清理失败均保留。
 官方 REVIEW 使自动 driver 非零，必须独立完成图像判读并保留官方结果，不把它改写为套件 PASSED。
 不同 loopback 端口只证明两 issuer 协议；hostname/Cookie 隔离须由真实 APISIX/browser 验证，

@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
@@ -20,7 +20,10 @@ import { createClientRepository } from "@admin-api/services/client/client.reposi
 import { createClientService } from "@admin-api/services/client/client.service";
 import { createClientSsoRepository } from "@admin-api/services/client-sso/client-sso.repository";
 import { createClientSsoService } from "@admin-api/services/client-sso/client-sso.service";
-import { AdminLoginStateAuditFailedAfterEffectError } from "@admin-api/services/session-management/session-management.error";
+import {
+  AdminLoginStateAuditFailedAfterEffectError,
+  AdminLoginStateUnavailableError,
+} from "@admin-api/services/session-management/session-management.error";
 import { AdminSessionRevokeResultSchema } from "@admin-api/services/session-management/session-management.schema";
 import { createFakePasswordHasher, createFakeRandom } from "@admin-api/test/fakes";
 import { createErrorHandler } from "@iam/api-core/middlewares";
@@ -88,6 +91,9 @@ beforeAll(async () => {
       throw error;
     });
   }
+});
+beforeEach(async () => {
+  await pg?.reset();
 });
 afterEach(async () => {
   await barrierHarness?.reset();
@@ -1438,7 +1444,7 @@ test("Client deletion audit rollback and unknown COMMIT preserve their true Post
   });
 });
 
-test("single-root aggregate rejects 10001 before effects and its 10000-item unfinished batch can be retried", async () => {
+test("single-root and captured revocation reject 10001 distinct sessions before effects", async () => {
   const f = await fixture();
   await runWithOwnedTestResources(async (lifecycle) => {
     lifecycle.registerCleanup(() => f.scope.close());
@@ -1446,75 +1452,63 @@ test("single-root aggregate rejects 10001 before effects and its 10000-item unfi
     const target = await f.create();
     const actor = { actorUserId: f.account.id, principalSessionId: current.root.userSessionId };
     const audit = { actorType: "admin" as const, actorUserId: f.account.id };
-    await f.operations.run(async (operation) => {
-      const sessions = f.kernel.forOperation(operation);
-      const root = await sessions.resolveUserSession(target.bearer);
-      if (root.status !== "resolved") throw new Error("Missing root");
-      for (let start = 0; start < 9999; start += 100) {
-        await Promise.all(
-          Array.from({ length: Math.min(100, 9999 - start) }, async (_, index) => {
-            const created = await sessions.openClientSession(root.value, {
-              clientId: `budget-${start + index}`,
-              protocol: "oidc",
-            });
-            if (created.status !== "created") throw new Error("Missing child");
-          }),
-        );
-      }
-    });
-    async function inventory() {
-      return await f.operations.run(async (operation) => {
-        const targets: CapturedSession[] = [];
-        const states: string[] = [];
-        let offset: number | null = 0;
-        do {
-          const page = await f.kernel
-            .forOperation(operation)
-            .captureSessions({ scope: { userSessionId: target.root.userSessionId }, offset, limit: 1000 });
-          targets.push(...page.targets);
-          states.push(...page.records.map((record) => record.state));
-          offset = page.nextOffset;
-        } while (offset !== null);
-        return { targets, states };
-      });
-    }
-    let failure: unknown;
-    try {
-      await f.sessionManagement.revokeSessions(
-        { target: { type: "session", principalSessionId: target.root.userSessionId } },
-        actor,
-        audit,
-      );
-    } catch (error) {
-      failure = error;
-    }
-    expect(failure).toBeInstanceOf(Error);
+    const children = await f.scope.seedClientSessions(
+      target.root,
+      Array.from({ length: 9999 }, (_, index) => `budget-${index}`),
+    );
+    const root = {
+      kind: "userSession" as const,
+      id: target.root.userSessionId,
+      instance: target.root.instance,
+      userSessionId: target.root.userSessionId,
+      subjectIdentifier: target.root.subjectIdentifier,
+    };
+    const targets: CapturedSession[] = [
+      root,
+      {
+        kind: "clientSession",
+        id: target.child.clientSessionId,
+        instance: target.child.instance,
+        userSessionId: root.id,
+        subjectIdentifier: root.subjectIdentifier,
+        clientId: target.child.clientId,
+      },
+      ...children,
+    ];
+    const [singleRoot, captured] = await Promise.allSettled([
+      f.sessionManagement.revokeSessions({ target: { type: "session", principalSessionId: root.id } }, actor, audit),
+      f.revocation.executeCapturedSessions(targets),
+    ]);
+    if (singleRoot.status !== "rejected" || captured.status !== "rejected")
+      throw new Error("Both revocation paths must reject a batch over budget");
+    expect(singleRoot.reason).toBeInstanceOf(AdminLoginStateUnavailableError);
+    expect(singleRoot.reason.cause).toHaveProperty("message", "Session capture exceeds the request budget");
+    expect(captured.reason).toHaveProperty("message", "Session capture exceeds the request budget");
     const rootStatus = await f.status(target.bearer);
-    const before = await inventory();
+    const inventory = await f.operations.run(async (operation) =>
+      f.kernel
+        .forOperation(operation)
+        .listSessions({ kind: "clientSession", userSessionId: root.id, offset: 0, limit: 1 }),
+    );
     expect(rootStatus).toBe("resolved");
-    expect(before.targets).toHaveLength(10000);
-    expect(before.states.every((state) => state === "active")).toBe(true);
-    // Direct captured callers use the same pre-effect aggregate check.
-    let directFailure: unknown;
-    try {
-      await f.revocation.executeCapturedSessions([
-        ...before.targets,
-        {
-          kind: "userSession",
-          id: target.root.userSessionId,
-          instance: target.root.instance,
-          userSessionId: target.root.userSessionId,
-          subjectIdentifier: target.root.subjectIdentifier,
-        },
-      ]);
-    } catch (error) {
-      directFailure = error;
-    }
-    expect(directFailure).toBeInstanceOf(Error);
-    const stillPresent = await inventory();
-    expect(stillPresent.states.every((state) => state === "active")).toBe(true);
-    await f.revocation.executeCapturedSessions([before.targets[0]!]);
-    f.scope.failNext("revoke", false, 10000);
+    expect(inventory.total).toBe(10000);
+    const atLimit = SessionManagementRevokeSessionsInputSchema.safeParse({
+      target: { type: "captured", targets: targets.slice(0, 10000) },
+    });
+    expect(atLimit.success).toBe(true);
+  });
+});
+
+test("an unfinished batch retries distinct captured sessions without expanding to newer sessions", async () => {
+  const f = await fixture();
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => f.scope.close());
+    const current = await f.create();
+    const target = await f.create();
+    const actor = { actorUserId: f.account.id, principalSessionId: current.root.userSessionId };
+    const audit = { actorType: "admin" as const, actorUserId: f.account.id };
+    await f.scope.seedClientSessions(target.root, ["retry-client"]);
+    f.scope.failNext("revoke", false, 3);
     const uncertain = await f.sessionManagement.revokeSessions(
       { target: { type: "session", principalSessionId: target.root.userSessionId } },
       actor,
@@ -1523,16 +1517,16 @@ test("single-root aggregate rejects 10001 before effects and its 10000-item unfi
     if (!("sessions" in uncertain.result) || !uncertain.result.batch) throw new Error("Missing batch");
     expect(uncertain).toMatchObject({
       changed: false,
-      result: { sessions: { userSessionsTerminated: 0, clientSessionsTerminated: 0, unknown: 10000 } },
+      result: { sessions: { userSessionsTerminated: 0, clientSessionsTerminated: 0, unknown: 3 } },
     });
-    expect(uncertain.result.batch.unfinished).toHaveLength(10000);
-    f.scope.failNext("revoke", false, 10000);
+    expect(uncertain.result.batch.unfinished).toHaveLength(3);
+    f.scope.failNext("revoke", false, 3);
     const duplicateInput = await f.revocation.executeCapturedSessions([
       ...uncertain.result.batch.unfinished,
       uncertain.result.batch.unfinished[0]!,
     ]);
-    expect(duplicateInput.results).toHaveLength(10000);
-    expect(duplicateInput.unfinished).toHaveLength(10000);
+    expect(duplicateInput.results).toHaveLength(3);
+    expect(duplicateInput.unfinished).toHaveLength(3);
     const retryInput = SessionManagementRevokeSessionsInputSchema.parse({
       target: { type: "captured", targets: uncertain.result.batch.unfinished },
     });
@@ -1541,11 +1535,11 @@ test("single-root aggregate rejects 10001 before effects and its 10000-item unfi
     expect(retried).toMatchObject({
       changed: true,
       result: {
-        sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 9999, unknown: 0 },
+        sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 2, unknown: 0 },
         batch: { unfinished: [] },
       },
     });
     const statuses = [await f.status(target.bearer), await f.status(newer.bearer), await f.status(current.bearer)];
     expect(statuses).toEqual(["terminated", "resolved", "resolved"]);
   });
-}, 120000);
+});

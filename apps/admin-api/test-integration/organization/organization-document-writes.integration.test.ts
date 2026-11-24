@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { connect, createServer, type Socket } from "node:net";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
@@ -33,6 +33,9 @@ beforeAll(async () => {
       throw error;
     });
   }
+});
+beforeEach(async () => {
+  await pg?.reset();
 });
 afterEach(async () => {
   await redisHarness?.reset();

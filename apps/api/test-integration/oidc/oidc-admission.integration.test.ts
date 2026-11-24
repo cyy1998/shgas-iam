@@ -6,10 +6,11 @@ import type { OidcAuthorizationOptions } from "@iam/oidc";
 import type { OidcTokenResponse } from "@iam/oidc/wire";
 import { eq } from "drizzle-orm";
 import { ownApiTestExecutor, resetApiRedisTestDatabase } from "../support/fixture-lifecycle";
-import { createApiPostgresTestHarness } from "../support/postgres-test-harness";
+import { useApiPostgresTestHarness } from "../support/postgres-test-file.fixture";
 import { publishUserDocument } from "../support/user-document.fixture";
 import { cleanupAfterFixtureFailure, closeFixtureResources, fixture } from "./oidc.fixture";
 
+const getDatabase = useApiPostgresTestHarness();
 afterEach(resetApiRedisTestDatabase);
 
 const policy = {
@@ -27,7 +28,7 @@ async function admissionFixture(admissionEnabled = true, beforeEvaluation?: () =
   const resources: Array<() => Promise<void>> = [];
   const close = ownApiTestExecutor(() => closeFixtureResources(resources));
   try {
-    const { db } = await createApiPostgresTestHarness((stop) => resources.push(stop));
+    const { db } = getDatabase();
     const evaluator = createApplicationAdmissionEvaluator(db);
     const admission: OidcAuthorizationOptions["admission"] = {
       async evaluate(input) {

@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { createAdminClientCache } from "@admin-api/composition/runtime/client-cache";
 import { createClientAdmissionManagement } from "@admin-api/composition/services/client-admission-management";
@@ -56,6 +56,9 @@ beforeAll(async () => {
       throw error;
     });
   }
+});
+beforeEach(async () => {
+  await pg?.reset();
 });
 afterEach(async () => {
   await resource?.reset();

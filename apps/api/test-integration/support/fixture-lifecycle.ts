@@ -4,8 +4,9 @@ import Redis from "ioredis";
 const executors: Array<() => Promise<void>> = [];
 
 export async function closeApiRedisConnection(redis: Redis) {
-  if (redis.status === "end") return;
-  if (redis.status === "reconnecting") {
+  const { status: initialStatus } = redis;
+  if (initialStatus === "end") return;
+  if (initialStatus === "reconnecting") {
     // ioredis 6.0.0 (#2245): disconnect() during reconnecting clears the timer without emitting "end".
     redis.disconnect();
     return;

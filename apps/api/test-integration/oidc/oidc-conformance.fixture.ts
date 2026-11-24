@@ -61,9 +61,12 @@ export async function createOidcConformanceCandidate(options: {
   });
   options.lifecycle?.own(close);
   try {
-    await writeFile(`${options.logPath}.owner.json`, JSON.stringify({ temporaryDirectory }));
+    const ownerPath = `${options.logPath}.owner.json`;
+    await writeFile(ownerPath, JSON.stringify({ temporaryDirectory }));
     await checkpoint("temporary-directory-ready");
     const pg = await createApiPostgresTestHarness(registerCleanup);
+    const database = new URL(pg.databaseUrl).pathname.slice(1);
+    await writeFile(ownerPath, JSON.stringify({ temporaryDirectory, database }));
     await checkpoint("postgres-ready");
     const redis = new Redis(redisUrl, { maxRetriesPerRequest: 1 });
     registerCleanup(() => closeApiRedisConnection(redis));
@@ -200,7 +203,7 @@ export async function createOidcConformanceCandidate(options: {
       child.stdout?.on("data", capture);
       child.stderr?.on("data", capture);
       await writeFile(
-        `${options.logPath}.owner.json`,
+        ownerPath,
         JSON.stringify({
           pid: child.pid,
           port,
@@ -208,7 +211,7 @@ export async function createOidcConformanceCandidate(options: {
           internalProxyPort: internalProxy.port,
           namespace,
           temporaryDirectory,
-          schema: new URL(pg.databaseUrl).searchParams.get("search_path"),
+          database,
         }),
       );
       const deadline = Date.now() + 30000;

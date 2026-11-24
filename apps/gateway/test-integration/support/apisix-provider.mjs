@@ -1,4 +1,5 @@
-import { appendFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { appendFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   createManagedResourceRun,
@@ -11,6 +12,15 @@ import {
 export async function prepare({ root, signal }) {
   signal.throwIfAborted();
   const parent = await readManagedResourceRun(root, process.env.IAM_TEST_RESOURCE_RECORD);
+  const supportDirectory = join(root, "apps/gateway/test-integration/support");
+  const [dockerfile, config] = await Promise.all([
+    readFile(join(supportDirectory, "apisix.Dockerfile"), "utf8"),
+    readFile(join(supportDirectory, "apisix.config.yaml"), "utf8"),
+  ]);
+  const fingerprint = createHash("sha256")
+    .update(JSON.stringify([dockerfile, config]))
+    .digest("hex");
+  signal.throwIfAborted();
   const run = await createManagedResourceRun({
     root,
     composeFile: "apps/gateway/test-integration/support/apisix.compose.yaml",
@@ -18,7 +28,7 @@ export async function prepare({ root, signal }) {
     services: ["apisix-etcd", "apisix"],
     keep: parent.record.keep,
     registryFile: process.env.IAM_TEST_RESOURCE_REGISTRY,
-    removeLocalImages: true,
+    composeEnvironment: { IAM_GATEWAY_TEST_APISIX_IMAGE: `iam-gateway-apisix:${fingerprint}` },
   });
   try {
     await appendFile(
