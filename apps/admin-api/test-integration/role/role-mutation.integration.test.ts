@@ -615,7 +615,7 @@ async function waitForBlocked(table: "role" | "role_assignment" | "role-inclusio
   while (Date.now() < deadline) {
     const [row] = await harness.sql<{ blocked: boolean }[]>`
       select (select count(*) from pg_stat_activity
-        where wait_event_type = 'Lock' and query like ${pattern}
+        where datname = current_database() and wait_event_type = 'Lock' and query like ${pattern}
         and application_name = current_setting('application_name') and pid <> pg_backend_pid()) >= ${count} as blocked
     `;
     if (row!.blocked) return;
