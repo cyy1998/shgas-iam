@@ -1,27 +1,13 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { fileURLToPath } from "node:url";
 import { UserDocumentWorkStatus } from "@iam/contracts";
-import { relations } from "@iam/db/relations";
 import { userDocumentRebuildStates, userDocuments, users } from "@iam/db/schema";
-import { drizzle } from "drizzle-orm/postgres-js";
-import { migrate } from "drizzle-orm/postgres-js/migrator";
-import { createPostgresTestHarness, type PostgresTestHarness } from "../support/postgres-harness";
+import { createMigratedPostgresTestHarness } from "../support/migrated-postgres-harness";
 
-let harness: PostgresTestHarness;
-let db: ReturnType<typeof createDb>;
-
-function createDb() {
-  return drizzle({ client: harness.sql, relations });
-}
+let harness: Awaited<ReturnType<typeof createMigratedPostgresTestHarness>>;
 
 beforeAll(async () => {
-  harness = await createPostgresTestHarness();
-  db = createDb();
-  await migrate(db, {
-    migrationsFolder: fileURLToPath(new URL("../../src/migrations", import.meta.url)),
-    migrationsSchema: harness.schemaName,
-  });
-  const accounts = await db
+  harness = await createMigratedPostgresTestHarness();
+  const accounts = await harness.db
     .insert(users)
     .values([
       { id: 10, username: "published", name: "Published" },
@@ -29,7 +15,7 @@ beforeAll(async () => {
       { id: 12, username: "unpublished", name: "Unpublished" },
     ])
     .returning();
-  await db.insert(userDocuments).values(
+  await harness.db.insert(userDocuments).values(
     accounts
       .filter((account) => account.id !== 12)
       .map((account) => ({
@@ -41,7 +27,7 @@ beforeAll(async () => {
         document: account.isDelete ? null : { user: { username: account.username } },
       })),
   );
-  await db.insert(userDocumentRebuildStates).values([
+  await harness.db.insert(userDocumentRebuildStates).values([
     { userId: 10, version: "10", status: UserDocumentWorkStatus.Processed },
     { userId: 11, version: "11", status: UserDocumentWorkStatus.Processed },
   ]);
@@ -52,7 +38,7 @@ afterAll(async () => {
 });
 
 test("loads each user's own document and rebuild state, preserving tombstones and absent records", async () => {
-  const accounts = await db.query.users.findMany({
+  const accounts = await harness.db.query.users.findMany({
     columns: { id: true },
     orderBy: { id: "asc" },
     with: {

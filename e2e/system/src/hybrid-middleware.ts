@@ -80,10 +80,7 @@ export async function withHybridMiddleware<T>(
         throw new Error("E2E resident APISIX network mode changed; run test:e2e:down before restarting the stack");
       }
       await recoverResidentHostProcesses(directory);
-      const state = existing ?? (await allocateState(modes.network, "resident"));
-      const root = residentResourceRoot(options.repositoryRoot, directory);
-      const run = existing ? await readRun(root, state.project) : await registerRun(root, state, options, false);
-      if (!existing) await writeAtomicResourceRecord(join(directory, "resident.json"), state);
+      const { state, run } = await prepareResidentRun(options, directory, modes.network, existing);
       return await runWithCleanup(
         async () => {
           await startStack(run, options, state);
@@ -221,6 +218,28 @@ async function readRun(root: string, project: string) {
     throw new Error(`E2E resource record does not name the requested exact project ${project}`);
   }
   return run;
+}
+
+async function prepareResidentRun(
+  options: MiddlewareOptions,
+  directory: string,
+  network: HybridNetwork,
+  existing: ResourceState | undefined,
+) {
+  const root = residentResourceRoot(options.repositoryRoot, directory);
+  const residentRecord = join(directory, "resident.json");
+  if (existing) {
+    const run = await readRun(root, existing.project);
+    const snapshot = JSON.parse(await readFile(join(root, run.record.composeFile), "utf8"));
+    if (!Object.hasOwn(snapshot.volumes ?? {}, "postgres-data")) return { state: existing, run };
+    // Retire the previous stack while its Compose snapshot still names its PostgreSQL volume.
+    await cleanupManagedResources(run, { timeoutMs: 120_000 });
+    await rm(residentRecord);
+  }
+  const state = await allocateState(network, "resident");
+  const run = await registerRun(root, state, options, false);
+  await writeAtomicResourceRecord(residentRecord, state);
+  return { state, run };
 }
 
 async function registerRun(root: string, state: ResourceState, options: MiddlewareOptions, keep: boolean) {

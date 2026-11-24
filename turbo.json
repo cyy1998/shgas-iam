@@ -84,6 +84,10 @@
         "IAM_TEST_RESOURCE_RECORD",
         "IAM_TEST_INTEGRATION_SELECTION",
         "IAM_TEST_RESOURCE_REGISTRY",
+        "IAM_TEST_BROWSER_WORKERS",
+        "IAM_PW_DEV_SERVER",
+        "IAM_ADMIN_WEB_*",
+        "IAM_SSO_WEB_*",
         "PLAYWRIGHT_BROWSERS_PATH"
       ]
     }

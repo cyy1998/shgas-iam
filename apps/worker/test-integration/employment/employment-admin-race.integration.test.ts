@@ -23,7 +23,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { startEmploymentProcess } from "../support/employment-process.fixture";
 import { startEmploymentWorker, waitFor, waitForEmploymentWorkerLock } from "../support/employment-worker";
-import { createWorkerPostgresTestHarness, type WorkerPostgresTestHarness } from "../support/postgres-test-harness";
+import { useWorkerPostgresTestHarness, type WorkerPostgresTestHarness } from "../support/postgres-test-harness";
 import {
   createWorkerRedisTestHarness,
   resetWorkerRedisTestDatabase,
@@ -63,6 +63,8 @@ const cases = [
   },
 ] as const;
 
+const getPostgres = useWorkerPostgresTestHarness();
+
 for (const scenario of cases) {
   test(scenario.name, async () => {
     await runWithOwnedTestResources(async ({ registerCleanup }) => {
@@ -70,10 +72,9 @@ for (const scenario of cases) {
       registerCleanup(async () => {
         if (stopExecutors.length > 0) await resetWorkerRedisTestDatabase(stopExecutors);
       });
-      const pg = await createWorkerPostgresTestHarness();
-      stopExecutors.push(pg.close);
       const redis = await createWorkerRedisTestHarness();
       stopExecutors.push(redis.close);
+      const pg = getPostgres();
       const auth = await seedAdmin(pg, redis);
       const admin = await startAdmin(pg, stopExecutors, auth);
 
@@ -274,7 +275,7 @@ async function startAdmin(
           temporaryDirectory,
           overrides: {
             NODE_ENV: "test",
-            IAM_ADMIN_API_DATABASE_URL: pg.commandDatabaseUrl,
+            IAM_ADMIN_API_DATABASE_URL: pg.databaseUrl,
             IAM_ADMIN_API_REDIS_URL: resolveWorkerRedisTestUrl(process.env),
             IAM_ADMIN_API_PORT: String(port),
             IAM_ADMIN_API_ADMIN_CLIENT_CODES: clientCode,

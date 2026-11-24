@@ -848,6 +848,7 @@ for (const fault of ["login", "configuration"] as const) {
     await new Promise<void>((resolve) => proxy.listen(0, "127.0.0.1", resolve));
     const address = proxy.address();
     if (!address || typeof address === "string") throw new Error("Missing proxy port");
+    url.hostname = "127.0.0.1";
     url.port = String(address.port);
     let initialized: Awaited<ReturnType<typeof fixture>> | undefined;
     let redisEnded: Promise<void> | undefined;

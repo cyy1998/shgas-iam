@@ -39,14 +39,16 @@ export function parseClientSnapshotMaintenanceArgs(argv: string[]) {
   return { mode, clientCode, deadlineMs };
 }
 
-async function main(args: string[]) {
+export async function runClientSnapshotMaintenance(
+  args: string[],
+  environment: NodeJS.ProcessEnv,
+  signals?: Parameters<typeof runMaintenanceCommandWithLifecycle>[0]["signals"],
+) {
   let input: ReturnType<typeof parseClientSnapshotMaintenanceArgs>;
   try {
     input = parseClientSnapshotMaintenanceArgs(args);
   } catch {
-    process.stdout.write(`${JSON.stringify({ version: 1, status: "failed", reason: "invalid-input" })}\n`);
-    process.exitCode = 2;
-    return;
+    return { report: { version: 1, status: "failed", reason: "invalid-input" }, exitCode: 2 };
   }
   const report: {
     version: number;
@@ -67,13 +69,13 @@ async function main(args: string[]) {
   let connection: ReturnType<typeof createOfflineMaintenanceRedis> | undefined;
   try {
     await runMaintenanceCommandWithLifecycle({
-      signals: process,
+      signals,
       deadlineMs: input.deadlineMs,
       shutdown: async () => {
         connection?.close();
       },
       run: async (signal) => {
-        connection = createOfflineMaintenanceRedis(parseOfflineMaintenanceEnv(process.env), signal);
+        connection = createOfflineMaintenanceRedis(parseOfflineMaintenanceEnv(environment), signal);
         await connection.connect();
         const redis = connection.redis;
         if (input.mode === "verify") {
@@ -98,10 +100,11 @@ async function main(args: string[]) {
     report.status = "failed";
     report.reason = "operation-failed";
   }
-  process.stdout.write(`${JSON.stringify(report)}\n`);
-  process.exitCode = report.status === "completed" ? 0 : 1;
+  return { report, exitCode: report.status === "completed" ? 0 : 1 };
 }
 
 export async function run(args: string[]) {
-  await main(args);
+  const { report, exitCode } = await runClientSnapshotMaintenance(args, process.env, process);
+  process.stdout.write(`${JSON.stringify(report)}\n`);
+  process.exitCode = exitCode;
 }

@@ -16,7 +16,7 @@ describe("historical audit action maintenance command", () => {
     if (harness) await harness.close();
   });
   beforeEach(async () => {
-    await harness.sql`TRUNCATE audit_log RESTART IDENTITY`;
+    await harness.reset();
   });
 
   async function seed(action: string, outcome = "success") {
@@ -31,7 +31,7 @@ describe("historical audit action maintenance command", () => {
   async function rows() {
     return Array.from(await harness.sql`SELECT * FROM audit_log ORDER BY id`);
   }
-  async function run(args: string[], expectedExitCode = 0, url = harness.commandDatabaseUrl) {
+  async function run(args: string[], expectedExitCode = 0, url = harness.databaseUrl) {
     const result = await runProcessCommandSmoke({
       label: "audit action command",
       start: () =>
@@ -135,7 +135,7 @@ describe("historical audit action maintenance command", () => {
       const deadline = Date.now() + 5000;
       while (!waiting && Date.now() < deadline) {
         const active = await harness.sql`SELECT 1 FROM pg_stat_activity
-          WHERE application_name = 'iam-audit-action-maintenance' AND wait_event_type = 'Lock'`;
+          WHERE datname=current_database() AND application_name = 'iam-audit-action-maintenance' AND wait_event_type = 'Lock'`;
         waiting = active.length > 0;
         if (!waiting) await Bun.sleep(20);
       }
@@ -158,7 +158,7 @@ describe("historical audit action maintenance command", () => {
     const invalid = await run(["apply"], 2, "not-a-url-private");
     expect(invalid.output).toContain('"reason":"invalid-arguments"');
     expect(invalid.output).not.toContain("not-a-url-private");
-    const unavailable = new URL(harness.commandDatabaseUrl);
+    const unavailable = new URL(harness.databaseUrl);
     unavailable.password = "wrong-private-password";
     const failed = await run(["verify"], 1, unavailable.toString());
     expect(failed.output).toContain('"reason":"operation-failed"');

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { copyFile, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -24,8 +24,9 @@ import {
 import { createUnitOfWork } from "@iam/unit-of-work";
 import { startDocumentRepairSchedule } from "@worker/composition/document-repair-schedule";
 import { parseWorkerEnv } from "@worker/env";
-import { createWorkerPostgresTestHarness } from "../support/postgres-test-harness";
+import { useWorkerPostgresTestHarness } from "../support/postgres-test-harness";
 import { createWorkerRedisTestHarness, resetWorkerRedisTestDatabase } from "../support/redis-test-harness";
+import { prepareWorkerStandalone } from "../support/standalone-build";
 
 const workerRoot = fileURLToPath(new URL("../../", import.meta.url));
 const logger = createLogger({
@@ -92,7 +93,7 @@ for (const standalone of [false, true])
         });
       }, "disabled");
     },
-    30_000,
+    standalone ? 70_000 : 30_000,
   );
 
 for (const selection of [
@@ -162,7 +163,7 @@ test("stopping a blocked repair child is bounded and preserves the active consum
     await fixture.pg.sql.begin(async (tx) => {
       await tx`LOCK TABLE user_document_outbox IN ACCESS EXCLUSIVE MODE`;
       const peer = createMaintenancePostgresResources({
-        databaseUrl: fixture.pg.commandDatabaseUrl,
+        databaseUrl: fixture.pg.databaseUrl,
         deadlineMs: 60_000,
         scope: "organization",
       });
@@ -180,7 +181,7 @@ test("stopping a blocked repair child is bounded and preserves the active consum
       let commandOwner: string | undefined;
       await waitUntil(async () => {
         const [row] = await fixture.pg.sql<{ application_name: string }[]>`
-          SELECT application_name FROM pg_stat_activity WHERE application_name LIKE 'iam-user-%'
+          SELECT application_name FROM pg_stat_activity WHERE datname=current_database() AND application_name LIKE 'iam-user-%'
             AND wait_event_type='Lock' AND query LIKE '%user_document_outbox%'
         `;
         commandOwner = row?.application_name;
@@ -217,7 +218,7 @@ test("stopping a blocked repair child is bounded and preserves the active consum
 test("the production Worker's shutdown listener waits for its blocked repair database owner and preserves a peer", async () => {
   await withFixture(async (fixture) => {
     const peer = createMaintenancePostgresResources({
-      databaseUrl: fixture.pg.commandDatabaseUrl,
+      databaseUrl: fixture.pg.databaseUrl,
       deadlineMs: 60_000,
       scope: "organization",
     });
@@ -246,7 +247,7 @@ test("the production Worker's shutdown listener waits for its blocked repair dat
           const [row] = await fixture.pg.sql<
             { application_name: string }[]
           >`SELECT application_name FROM pg_stat_activity
-            WHERE application_name LIKE 'iam-user-%' AND wait_event_type='Lock'`;
+            WHERE datname=current_database() AND application_name LIKE 'iam-user-%' AND wait_event_type='Lock'`;
           owner = row?.application_name;
           return owner !== undefined;
         });
@@ -277,7 +278,7 @@ test("the production Worker exits unsuccessfully when shutdown cannot cancel its
     await runWithOwnedTestResources(async ({ registerCleanup }) => {
       const role = `iam_shutdown_${randomUUID().replaceAll("-", "")}`;
       const password = randomUUID();
-      const target = new URL(fixture.pg.commandDatabaseUrl);
+      const target = new URL(fixture.pg.databaseUrl);
       target.username = role;
       target.password = password;
       let owner: string | undefined;
@@ -299,9 +300,9 @@ test("the production Worker exits unsuccessfully when shutdown cannot cancel its
         const remaining = await fixture.pg.sql`SELECT pid FROM pg_stat_activity WHERE usename=${role}`;
         expect([...remaining]).toEqual([]);
       });
-      await fixture.pg.sql.unsafe(`GRANT USAGE ON SCHEMA "${fixture.pg.schemaName}" TO "${role}"`);
-      await fixture.pg.sql.unsafe(`GRANT ALL ON ALL TABLES IN SCHEMA "${fixture.pg.schemaName}" TO "${role}"`);
-      await fixture.pg.sql.unsafe(`GRANT ALL ON ALL SEQUENCES IN SCHEMA "${fixture.pg.schemaName}" TO "${role}"`);
+      await fixture.pg.sql.unsafe(`GRANT USAGE ON SCHEMA public TO "${role}"`);
+      await fixture.pg.sql.unsafe(`GRANT ALL ON ALL TABLES IN SCHEMA public TO "${role}"`);
+      await fixture.pg.sql.unsafe(`GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO "${role}"`);
       await fixture.pg.sql`REVOKE EXECUTE ON FUNCTION pg_catalog.pg_cancel_backend(integer) FROM PUBLIC`;
       await fixture.pg.sql.begin(async (tx) => {
         await tx`LOCK TABLE user_document_outbox IN ACCESS EXCLUSIVE MODE`;
@@ -342,6 +343,8 @@ test("the production Worker exits unsuccessfully when shutdown cannot cancel its
   });
 }, 25000);
 
+const getPostgres = useWorkerPostgresTestHarness();
+
 async function withFixture(
   work: (fixture: Awaited<ReturnType<typeof createFixture>>) => Promise<void>,
   initialAccessState: "enabled" | "disabled" = "enabled",
@@ -366,8 +369,7 @@ async function createFixture(
   stopExecutors: Array<() => Promise<void> | void>,
   initialAccessState: "enabled" | "disabled",
 ) {
-  const pg = await createWorkerPostgresTestHarness();
-  stopExecutors.push(pg.close);
+  const pg = getPostgres();
   const redis = await createWorkerRedisTestHarness();
   stopExecutors.push(redis.close);
   const subject = randomUUID();
@@ -408,7 +410,7 @@ async function createFixture(
   function environment(overrides: NodeJS.ProcessEnv = {}) {
     return {
       ...redis.commandEnvironment(temporaryDirectory),
-      IAM_WORKER_DATABASE_URL: pg.commandDatabaseUrl,
+      IAM_WORKER_DATABASE_URL: pg.databaseUrl,
       IAM_WORKER_ENABLED_MODULES: "user-document",
       IAM_WORKER_HTTP_ENABLED: "false",
       IAM_WORKER_BULL_BOARD_ENABLED: "false",
@@ -427,42 +429,7 @@ async function createFixture(
     subject,
     stopExecutors,
     async buildStandalone() {
-      const repositoryRoot = resolve(workerRoot, "../..");
-      standaloneExecutable = join(temporaryDirectory, "worker.exe");
-      for (const [entry, output] of [
-        [join(workerRoot, "src/index.ts"), standaloneExecutable],
-        [
-          join(repositoryRoot, "packages/runtime/src/process/windows-job-launcher.mjs"),
-          join(temporaryDirectory, "windows-job-launcher.exe"),
-        ],
-      ]) {
-        if (!entry || !output) throw new Error("Missing standalone build input");
-        await runProcessCommandSmoke({
-          label: "compile Worker repair standalone fixture",
-          completionTimeoutMs: 20000,
-          cleanupTimeoutMs: 5000,
-          start: () =>
-            spawnOwnedProcessTree({
-              executable: process.execPath,
-              args: [
-                "build",
-                entry,
-                "--compile",
-                "--packages=bundle",
-                "--no-compile-autoload-dotenv",
-                "--no-compile-autoload-bunfig",
-                "--windows-hide-console",
-                `--outfile=${output}`,
-              ],
-              cwd: workerRoot,
-              env: process.env,
-            }),
-        });
-      }
-      await copyFile(
-        join(repositoryRoot, "packages/runtime/src/process/windows-job-supervisor.ps1"),
-        join(temporaryDirectory, "windows-job-supervisor.ps1"),
-      );
+      standaloneExecutable = await prepareWorkerStandalone({ repositoryRoot: resolve(workerRoot, "../..") });
     },
     startEntry(overrides: NodeJS.ProcessEnv = {}) {
       return spawnOwnedProcessTree({

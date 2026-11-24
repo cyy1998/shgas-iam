@@ -2,8 +2,27 @@ import { createHash, randomUUID } from "node:crypto";
 import Redis from "ioredis";
 import type { UnifiedSessionKernelOptions } from "./unified/factory";
 import { createUnifiedSessionKernel } from "./unified/factory";
-import type { CapturedSession, SessionRecord } from "./unified/model";
-import { SessionObservationRequiredError, sessionRecordSchema } from "./unified/model";
+import type { CapturedSession, ClientSession, SessionRecord, UserSession } from "./unified/model";
+import { captureIdentity, SessionObservationRequiredError, sessionRecordSchema } from "./unified/model";
+
+const SEED_CLIENT_SESSIONS = `
+local prefix, userId, subject, expiresAt = ARGV[1], ARGV[2], ARGV[3], ARGV[4]
+local function index(key, id)
+  redis.call('ZADD', key, expiresAt, id)
+  redis.call('PEXPIREAT', key, expiresAt, 'NX')
+  redis.call('PEXPIREAT', key, expiresAt, 'GT')
+end
+for i = 5, #ARGV, 3 do
+  local id, clientId, record = ARGV[i], ARGV[i + 1], ARGV[i + 2]
+  redis.call('SET', prefix .. 'client:' .. id, record, 'PXAT', expiresAt)
+  redis.call('SET', prefix .. 'slot:' .. userId .. ':' .. clientId, id, 'PXAT', expiresAt)
+  index(prefix .. 'children:' .. userId, id)
+  index(prefix .. 'client-index:' .. clientId, id)
+  index(prefix .. 'inventory:clientSession', id)
+  index(prefix .. 'subject-clients:' .. subject, id)
+end
+return (#ARGV - 4) / 3
+`;
 
 /** Owner-only real Redis fixture; it never emulates Redis commands or lifecycle transitions. */
 export async function createUnifiedSessionRedisTestScope(
@@ -129,6 +148,53 @@ export async function createUnifiedSessionRedisTestScope(
       callback: () => Promise<void>,
     ) {
       interception = { action, callback };
+    },
+    // Aggregate tests supply fresh client IDs and seed storage without exercising the open-session workflow.
+    async seedClientSessions(parent: Readonly<UserSession>, clientIds: readonly string[]) {
+      if (clientIds.length === 0) return [];
+      const createdAt = parent.createdAt;
+      const expiresAt = Math.min(parent.expiresAt, createdAt + (ttl.client ?? 1800) * 1000);
+      const pipeline = redis.pipeline();
+      const records = clientIds.map(
+        (clientId): ClientSession => ({
+          version: 1,
+          kind: "clientSession",
+          state: "active",
+          instance: randomUUID(),
+          clientSessionId: randomUUID(),
+          clientId,
+          userSessionId: parent.userSessionId,
+          parentInstance: parent.instance,
+          subjectIdentifier: parent.subjectIdentifier,
+          subjectContext: parent.subjectContext,
+          protocol: "oidc",
+          createdAt,
+          authorizedAt: createdAt,
+          expiresAt,
+        }),
+      );
+      const batchSize = 500;
+      for (let start = 0; start < records.length; start += batchSize) {
+        const batch = records.slice(start, start + batchSize);
+        pipeline.eval(
+          SEED_CLIENT_SESSIONS,
+          0,
+          prefix,
+          parent.userSessionId,
+          parent.subjectIdentifier,
+          expiresAt,
+          ...batch.flatMap((record) => [record.clientSessionId, record.clientId, JSON.stringify(record)]),
+        );
+      }
+      const replies = await pipeline.exec();
+      let seeded = 0;
+      for (const [error, count] of replies ?? []) {
+        if (error) throw error;
+        if (typeof count !== "number") throw new Error("Invalid client session seed reply");
+        seeded += count;
+      }
+      if (seeded !== records.length) throw new Error("Incomplete client session seed batch");
+      return records.map(captureIdentity);
     },
     inspect,
     async forgetInventory(kind: "userSession" | "clientSession") {

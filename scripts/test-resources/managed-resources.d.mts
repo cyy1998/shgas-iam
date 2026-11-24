@@ -51,6 +51,12 @@ export function managedServicePort(
   port: number,
   options?: ManagedComposeCommandOptions,
 ): Promise<number>;
+export function managedServiceEndpoint(
+  run: ManagedResourceRun,
+  service: string,
+  port: number,
+  options?: ManagedComposeCommandOptions,
+): Promise<{ host: string; port: number }>;
 export function collectManagedResourceDiagnostics(
   run: ManagedResourceRun,
   options?: ManagedComposeCommandOptions,
@@ -62,6 +68,6 @@ export function cleanupManagedResources(
 ): Promise<void>;
 export function finishManagedResourceRun(
   run: ManagedResourceRun,
-  options?: { cleanupTimeoutMs?: number },
+  options?: { cleanupTimeoutMs?: number; diagnostics?: boolean },
 ): Promise<void>;
 export function formatResourceFailure(error: unknown): string;

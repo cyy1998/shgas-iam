@@ -90,6 +90,7 @@ coverage
 
 # Testing
 .vitest
+**/playwright-report
 **/test-results
 e2e/system
 

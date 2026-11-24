@@ -1,17 +1,20 @@
 import { realpath, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
-import { frontendApps, frontendPrefixes } from "./frontend-config.ts";
+import { type FrontendApp, frontendApps, frontendPrefixes } from "./frontend-config.ts";
 
 const immutable = "public, max-age=31536000, immutable";
 const staticAsset = /\.(?:js|css|png|jpe?g|gif|svg|ico|webp|avif|woff2?|ttf|eot|wasm)$/i;
 const hashedAdminAsset = /^assets\/.+\.[A-Za-z0-9_-]{8}\.[a-zA-Z0-9]+$/;
 const noStore = { "Cache-Control": "no-cache, no-store, must-revalidate", Pragma: "no-cache", Expires: "0" };
 
-export function startStaticFrontendServer(paths: { admin: string; sso: string; rpTerminalPath: string }) {
+export function startStaticFrontendServer(
+  paths: Partial<Record<FrontendApp, string>> & { rpTerminalPath?: string },
+  port = 0,
+) {
   const server = Bun.serve({
     hostname: "127.0.0.1",
-    port: 0,
+    port,
     async fetch(request) {
       let pathname: string;
       try {
@@ -24,7 +27,8 @@ export function startStaticFrontendServer(paths: { admin: string; sso: string; r
         const prefix = frontendPrefixes[app];
         return pathname === prefix || pathname.startsWith(`${prefix}/`);
       });
-      if (app === undefined) return new Response(null, { status: 404 });
+      const directory = app && paths[app];
+      if (!app || !directory) return new Response(null, { status: 404 });
 
       const prefix = frontendPrefixes[app];
       if (pathname === prefix) return new Response(null, { status: 301, headers: { Location: `${prefix}/` } });
@@ -38,17 +42,18 @@ export function startStaticFrontendServer(paths: { admin: string; sso: string; r
       }
 
       const head = request.method === "HEAD";
-      if (app === "sso" && name === "e2e-rp.html") return respondWithFile(paths.rpTerminalPath, noStore, head);
+      if (app === "sso" && name === "e2e-rp.html" && paths.rpTerminalPath)
+        return respondWithFile(paths.rpTerminalPath, noStore, head);
       const cached = app === "sso" ? name.startsWith("assets/") : hashedAdminAsset.test(name);
       if (cached || staticAsset.test(name)) {
         return respondWithFile(
-          await findFile(paths[app], name),
+          await findFile(directory, name),
           { "Cache-Control": cached ? immutable : "no-cache" },
           head,
         );
       }
 
-      const file = (await findFile(paths[app], name)) ?? (await findFile(paths[app], "index.html"));
+      const file = (await findFile(directory, name)) ?? (await findFile(directory, "index.html"));
       return respondWithFile(file, noStore, head);
     },
   });

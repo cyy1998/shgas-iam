@@ -8,11 +8,11 @@ import {
 } from "../../../src/organization/query";
 import type { OrganizationOutboxJobPayload, OrganizationRebuildJobPayload } from "../../../src/organization/work.types";
 import { createOrganizationDocumentProcessor } from "../../../src/organization/worker";
-import { createOrganizationDocumentPostgresTestHarness } from "../support/postgres-test-harness";
+import { createDocumentsPostgresTestHarness } from "../../support/postgres-test-harness";
 
-let harness: Awaited<ReturnType<typeof createOrganizationDocumentPostgresTestHarness>>;
+let harness: Awaited<ReturnType<typeof createDocumentsPostgresTestHarness>>;
 beforeAll(async () => {
-  harness = await createOrganizationDocumentPostgresTestHarness();
+  harness = await createDocumentsPostgresTestHarness();
 });
 beforeEach(async () => {
   await harness.reset();

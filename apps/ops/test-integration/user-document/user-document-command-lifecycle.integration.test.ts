@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import { UserStatus } from "@iam/contracts";
 import { createCurrentUserDocumentProjectionBundle } from "@iam/documents/user/worker";
@@ -10,6 +10,9 @@ const opsRoot = fileURLToPath(new URL("../../", import.meta.url));
 let harness: Awaited<ReturnType<typeof createOpsPostgresTestHarness>>;
 beforeAll(async () => {
   harness = await createOpsPostgresTestHarness();
+});
+beforeEach(async () => {
+  await harness.reset();
   await harness.sql`INSERT INTO "user" (id,subject_identifier,username,name,status,is_delete)
     VALUES (1,'00000000-0000-4000-8000-000000000001','lifecycle','Existing user',${UserStatus.Enable},false)`;
   const projection = createCurrentUserDocumentProjectionBundle();
@@ -121,7 +124,7 @@ async function runVerify(
         env: {
           ...process.env,
           NODE_ENV: "test",
-          IAM_OPS_DATABASE_URL: harness.commandDatabaseUrl,
+          IAM_OPS_DATABASE_URL: harness.databaseUrl,
           IAM_OPS_REDIS_URL: readiness ? "redis://127.0.0.1:1/0" : redisUrl,
           IAM_OPS_LOG_LEVEL: "info",
           IAM_OPS_LOG_FORMAT: "json",

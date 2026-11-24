@@ -337,17 +337,22 @@ export async function waitForOwnedProcessTree(child, options = {}) {
   const report = await Promise.race([completed, interrupted, deadline]);
   clearTimeout(timer);
   try {
-    await stopProcessTree(
-      child,
-      closed,
-      options.cleanupTimeoutMs ?? 5000,
-      options.forceAfterMs,
-      options.requestGracefulStop,
-    );
-  } catch (error) {
-    report.cleanupFailure = error;
+    const didFail = report.executionFailure ? report.executionFailure.kind !== "abort" : report.outcome.exitCode !== 0;
+    if (didFail) options.onExecutionFailure?.();
   } finally {
-    options.signal?.removeEventListener("abort", onAbort);
+    try {
+      await stopProcessTree(
+        child,
+        closed,
+        options.cleanupTimeoutMs ?? 5000,
+        options.forceAfterMs,
+        options.requestGracefulStop,
+      );
+    } catch (error) {
+      report.cleanupFailure = error;
+    } finally {
+      options.signal?.removeEventListener("abort", onAbort);
+    }
   }
   return report;
 }

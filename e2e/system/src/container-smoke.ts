@@ -69,6 +69,7 @@ export async function runContainerSmoke(options: {
   });
   console.log(`[container-smoke] Project ${project}; diagnostics ${artifacts}`);
 
+  let passed = false;
   await runWithCleanup(
     async () => {
       for (const service of containerSmokeImages) {
@@ -195,8 +196,9 @@ export async function runContainerSmoke(options: {
         timeoutMs: 120_000,
       });
       signal.throwIfAborted();
+      passed = true;
     },
-    () => finishManagedResourceRun(run, { cleanupTimeoutMs: 90_000 }),
+    () => finishManagedResourceRun(run, { cleanupTimeoutMs: 90_000, diagnostics: !passed || signal.aborted }),
   );
   signal.throwIfAborted();
 }

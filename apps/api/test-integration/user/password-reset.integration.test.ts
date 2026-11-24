@@ -14,18 +14,17 @@ import { createUnitOfWork } from "@iam/unit-of-work";
 import { eq } from "drizzle-orm";
 import Redis from "ioredis";
 import { closeApiRedisConnection, ownApiTestExecutor, resetApiRedisTestDatabase } from "../support/fixture-lifecycle";
-import { createApiPostgresTestHarness } from "../support/postgres-test-harness";
+import { useApiPostgresTestHarness } from "../support/postgres-test-file.fixture";
 
+const getDatabase = useApiPostgresTestHarness();
 afterEach(resetApiRedisTestDatabase);
 
 test("a rolled-back password reset spends its code and only one submission can use the next code", async () => {
   const redisUrl = process.env.IAM_API_TEST_REDIS_URL;
   if (!redisUrl) throw new Error("IAM_API_TEST_REDIS_URL is required");
-  const pg = await createApiPostgresTestHarness();
+  const pg = getDatabase();
   const redis = new Redis(redisUrl, { lazyConnect: true, maxRetriesPerRequest: 0 });
-  const close = ownApiTestExecutor(() =>
-    Promise.all([pg.close(), closeApiRedisConnection(redis)]).then(() => undefined),
-  );
+  const close = ownApiTestExecutor(() => closeApiRedisConnection(redis));
 
   try {
     const username = "reset-user";

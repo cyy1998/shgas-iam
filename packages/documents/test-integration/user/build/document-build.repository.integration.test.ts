@@ -33,7 +33,6 @@ describe("User Document v4 build repository", () => {
 
   beforeEach(async () => {
     await harness.reset();
-    await harness.sql`TRUNCATE role_assignment, role, client, organization_responsibility_assignment, employment, organization_closure, organization, position RESTART IDENTITY CASCADE`;
     await seedResponsibility(harness);
   });
 

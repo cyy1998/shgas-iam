@@ -13,7 +13,7 @@ import { createOrganizationDocumentWorkerModule } from "@iam/documents/organizat
 import { parseDedicatedRedisTestUrl, runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import { createUnitOfWork } from "@iam/unit-of-work";
 import { eq } from "drizzle-orm";
-import { createWorkerPostgresTestHarness } from "../support/postgres-test-harness";
+import { useWorkerPostgresTestHarness } from "../support/postgres-test-harness";
 import {
   createWorkerRedisTestHarness,
   resetWorkerRedisTestDatabase,
@@ -164,6 +164,8 @@ test("a ready Redis connection that becomes silent times out, releases its socke
   });
 }, 20_000);
 
+const getPostgres = useWorkerPostgresTestHarness();
+
 async function withFixture(work: (fixture: Awaited<ReturnType<typeof createFixture>>) => Promise<void>) {
   const stopExecutors: Array<() => Promise<void> | void> = [];
   await runWithOwnedTestResources(async ({ registerCleanup }) => {
@@ -175,8 +177,7 @@ async function withFixture(work: (fixture: Awaited<ReturnType<typeof createFixtu
 }
 
 async function createFixture(stopExecutors: Array<() => Promise<void> | void>) {
-  const pg = await createWorkerPostgresTestHarness();
-  stopExecutors.push(pg.close);
+  const pg = getPostgres();
   const redis = await createWorkerRedisTestHarness();
   stopExecutors.push(redis.close);
   const redisConfig = parseDedicatedRedisTestUrl({

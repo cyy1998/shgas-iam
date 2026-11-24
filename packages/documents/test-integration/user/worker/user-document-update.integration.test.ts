@@ -58,7 +58,6 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   await pg.reset();
-  await pg.sql`TRUNCATE role_assignment, role, client, organization_responsibility_assignment, employment, organization_closure, organization, position RESTART IDENTITY CASCADE`;
   await pg.db.insert(users).values({ id: 1, subjectIdentifier: subject, username: "first", name: "First" });
 });
 afterEach(async () => {

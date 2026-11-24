@@ -3,7 +3,6 @@ import { UserDocumentWorkStatus } from "@iam/contracts";
 import { userDocumentRebuildStates, userDocuments, users } from "@iam/db/schema";
 import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import { asc, eq } from "drizzle-orm";
-import postgres from "postgres";
 import { publication } from "../../../src/user/__tests__/document-fixture";
 import type { DocumentFactsCacheRecord } from "../../../src/user/document";
 import { createUserDocumentPostPublicationProcessor } from "../../../src/user/worker/user-document-post-publication.processor";
@@ -466,12 +465,11 @@ test("cancelling repair removes a waiting shared slot without waiting for anothe
 
 test("metadata waits preserve stricter session budgets and LOCAL settings roll back", async () => {
   const scope = await redis.createScope();
-  const single = await createPostgresTestHarness({ createSql: Object.assign(singleConnectionSql, postgres) });
+  const single = await createPostgresTestHarness(1);
   let unlock: (() => Promise<void>) | undefined;
   try {
     const requests = await seed(1, "1", single.db);
-    const lock = await single.holdDirtyRowLock(1);
-    unlock = lock.commit;
+    unlock = await single.holdDirtyRowLock(1);
     await single.sql`SET lock_timeout='50ms'`;
     await single.sql`SET statement_timeout='1s'`;
     const context = processor(scope, { db: single.db });
@@ -488,8 +486,11 @@ test("metadata waits preserve stricter session budgets and LOCAL settings roll b
       await single.sql`SELECT current_setting('lock_timeout') AS lock_timeout,current_setting('statement_timeout') AS statement_timeout`;
     expect(settings).toEqual({ lock_timeout: "50ms", statement_timeout: "1s" });
   } finally {
-    await unlock?.();
-    await single.close();
+    try {
+      await unlock?.();
+    } finally {
+      await single.close();
+    }
   }
 }, 15_000);
 
@@ -503,13 +504,4 @@ async function waitForPostStatus(userIds: number[], status: string) {
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
   throw new Error("Healthy post-publication completion did not become visible before slow subject release");
-}
-
-function singleConnectionSql<T extends Record<string, postgres.PostgresType> = {}>(
-  urlOrOptions?: string | postgres.Options<T>,
-  options?: postgres.Options<T>,
-) {
-  return typeof urlOrOptions === "string"
-    ? postgres(urlOrOptions, { ...options, max: 1 })
-    : postgres({ ...urlOrOptions, max: 1 });
 }

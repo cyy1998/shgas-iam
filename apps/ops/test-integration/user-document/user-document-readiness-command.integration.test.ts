@@ -18,9 +18,7 @@ describe("User Document PostgreSQL readiness production command", () => {
   });
 
   beforeEach(async () => {
-    await harness.sql.unsafe(
-      'TRUNCATE TABLE user_document_rebuild_state, user_document, "user" RESTART IDENTITY CASCADE',
-    );
+    await harness.reset();
   });
 
   afterAll(async () => {
@@ -40,7 +38,7 @@ describe("User Document PostgreSQL readiness production command", () => {
             env: {
               ...process.env,
               NODE_ENV: "test",
-              IAM_OPS_DATABASE_URL: harness.commandDatabaseUrl,
+              IAM_OPS_DATABASE_URL: harness.databaseUrl,
               IAM_OPS_LOG_LEVEL: "info",
               IAM_OPS_LOG_FORMAT: "json",
               FORCE_COLOR: "0",

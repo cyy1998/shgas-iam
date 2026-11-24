@@ -12,13 +12,13 @@ import {
   type OrganizationRebuildJobPayload,
 } from "../../../src/organization/worker";
 import {
-  createOrganizationDocumentPostgresTestHarness,
-  type OrganizationDocumentPostgresTestHarness,
-} from "../support/postgres-test-harness";
+  createDocumentsPostgresTestHarness,
+  type DocumentsPostgresTestHarness,
+} from "../../support/postgres-test-harness";
 
-let harness: OrganizationDocumentPostgresTestHarness;
+let harness: DocumentsPostgresTestHarness;
 beforeAll(async () => {
-  harness = await createOrganizationDocumentPostgresTestHarness();
+  harness = await createDocumentsPostgresTestHarness();
 });
 beforeEach(async () => {
   await harness.reset();

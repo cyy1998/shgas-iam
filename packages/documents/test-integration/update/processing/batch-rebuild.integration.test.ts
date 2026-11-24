@@ -13,19 +13,18 @@ import {
   type PreparedDocumentPublication,
 } from "../../../src/update";
 import {
-  createDocumentUpdatePostgresTestHarness,
-  type DocumentUpdatePostgresTestHarness,
-} from "../support/postgres-test-harness";
+  createDocumentsPostgresTestHarness,
+  type DocumentsPostgresTestHarness,
+} from "../../support/postgres-test-harness";
 
 type Document = { name: string };
-let harness: DocumentUpdatePostgresTestHarness;
+let harness: DocumentsPostgresTestHarness;
 beforeAll(async () => {
-  harness = await createDocumentUpdatePostgresTestHarness();
+  harness = await createDocumentsPostgresTestHarness();
   await harness.sql`CREATE TABLE rebuild_source (target_id integer PRIMARY KEY, name text NOT NULL)`;
 });
 beforeEach(async () => {
   await harness.reset();
-  await harness.sql`TRUNCATE rebuild_source`;
 });
 afterAll(async () => {
   await harness?.close();

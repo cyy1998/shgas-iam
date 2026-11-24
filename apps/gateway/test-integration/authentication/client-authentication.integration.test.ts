@@ -4,10 +4,12 @@ import { clients } from "@iam/db/schema";
 import { eq } from "drizzle-orm";
 import { createGatewayComposition } from "../../src/composition";
 import { parseGatewayEnv } from "../../src/env";
-import { createGatewayPostgresTestHarness } from "../support/postgres-test-harness";
+import { useGatewayPostgresTestHarness } from "../support/postgres-test-harness";
+
+const getDatabase = useGatewayPostgresTestHarness();
 
 test("Gateway HTTP observes current PostgreSQL credentials, lifecycle and datasource failure", async () => {
-  const database = await createGatewayPostgresTestHarness();
+  const database = getDatabase();
   const composition = createGatewayComposition(
     parseGatewayEnv({
       IAM_GATEWAY_DATABASE_URL: database.databaseUrl,
@@ -79,16 +81,19 @@ test("Gateway HTTP observes current PostgreSQL credentials, lifecycle and dataso
     const deleted = await request("test:tender", "new-secret");
     expect(deleted.status).toBe(401);
     await database.sql.unsafe("ALTER TABLE client RENAME TO unavailable_client");
-    const unavailable = await request("test:tender", "new-secret");
-    expect(unavailable.status).toBe(503);
-    const unavailableBody = await unavailable.json();
-    expect(unavailableBody.code).toBe("GATEWAY_AUTH_UNAVAILABLE");
+    try {
+      const unavailable = await request("test:tender", "new-secret");
+      expect(unavailable.status).toBe(503);
+      const unavailableBody = await unavailable.json();
+      expect(unavailableBody.code).toBe("GATEWAY_AUTH_UNAVAILABLE");
+    } finally {
+      await database.sql`ALTER TABLE unavailable_client RENAME TO client`;
+    }
   } finally {
     await composition.close();
     const sessions = await database.sql<
       { count: number }[]
     >`SELECT count(*)::int AS count FROM pg_stat_activity WHERE application_name = 'iam-gateway' AND datname = current_database()`;
     expect(sessions[0]?.count).toBe(0);
-    await database.close();
   }
 }, 45_000);
