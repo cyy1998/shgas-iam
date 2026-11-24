@@ -74,7 +74,7 @@ for (const interruptedPhase of ["postgres-ready", "redis-seeded", "api-ready", "
       const owner = JSON.parse(await readFile(`${logPath}.owner.json`, "utf8"));
       expect(owner.database).toMatch(/^iam_test_[a-f0-9]{32}$/u);
       const remaining = await sql`SELECT datname FROM pg_database WHERE datname = ${owner.database}`;
-      expect(remaining).toEqual([]);
+      expect(remaining).toHaveLength(0);
       let directoryExists = true;
       try {
         await stat(owner.temporaryDirectory);
