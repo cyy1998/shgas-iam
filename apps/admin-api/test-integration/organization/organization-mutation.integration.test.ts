@@ -661,7 +661,7 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
         while (Date.now() < deadline && !blocked) {
           const rows = await harness.sql<{ blocked: boolean }[]>`
             select exists (select 1 from pg_stat_activity
-              where wait_event_type = 'Lock' and query like '%"organization"%'
+              where datname = current_database() and wait_event_type = 'Lock' and query like '%"organization"%'
               and application_name = current_setting('application_name')
               and pid <> pg_backend_pid()) as blocked
           `;
@@ -718,7 +718,7 @@ describe("Organization mutations through production PostgreSQL UnitOfWork", () =
           const rows = await harness.sql<{ blocked: boolean }[]>`
             select exists (
               select 1 from pg_stat_activity
-              where wait_event_type = 'Lock' and query like '%"organization"%'
+              where datname = current_database() and wait_event_type = 'Lock' and query like '%"organization"%'
                 and application_name = current_setting('application_name')
                 and pid <> pg_backend_pid()
             ) as blocked

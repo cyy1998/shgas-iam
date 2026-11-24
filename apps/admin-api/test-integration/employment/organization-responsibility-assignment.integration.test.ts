@@ -3026,7 +3026,8 @@ async function waitForBlockedPostgresQuery(queryFragment: string) {
       select exists(
         select 1
         from pg_stat_activity
-        where pid <> pg_backend_pid()
+        where datname = current_database()
+          and pid <> pg_backend_pid()
           and wait_event_type = 'Lock'
           and query like ${`%${queryFragment}%`}
       ) as found

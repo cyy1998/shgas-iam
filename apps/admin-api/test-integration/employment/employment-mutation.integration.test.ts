@@ -342,7 +342,7 @@ async function waitForLock(table: string, minimum = 1) {
   const deadline = Date.now() + 2000;
   while (Date.now() < deadline) {
     const rows = await harness.sql<{ blocked: boolean }[]>`select count(*) >= ${minimum} as blocked
-      from pg_stat_activity where wait_event_type = 'Lock'
+      from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'
       and application_name = current_setting('application_name') and pid <> pg_backend_pid()
       and query like ${`%${table}%`}`;
     if (rows[0]!.blocked) return;

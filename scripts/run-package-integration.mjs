@@ -6,6 +6,7 @@ import process from "node:process";
 import { pathToFileURL } from "node:url";
 import {
   integrationDeclarations,
+  integrationRedisSlotLimit,
   parseBrowserWorkers,
   selectIntegrationTasks,
 } from "./test-resources/integration-selection.mjs";
@@ -53,6 +54,7 @@ try {
   const root = repositoryRoot(cwd);
   const declaration = integrationDeclarations(manifest).find((item) => item.executor === executor);
   if (!declaration) throw new Error(`No Integration declaration for ${manifest.name}:${executor}`);
+  const taskKey = `${manifest.name}:${executor}`;
   const names = declaration.environmentNames;
   const testEnvironment = { ...process.env };
   delete testEnvironment.IAM_TEST_POSTGRES_TEMPLATE;
@@ -63,28 +65,43 @@ try {
       "Browser worker overrides require a resource-free Playwright collection without a resource provider",
     );
   }
-  if (names.length > 0) {
-    const recordPath = process.env.IAM_TEST_RESOURCE_RECORD;
-    const runId = process.env.IAM_TEST_RESOURCE_RUN_ID;
-    if (!recordPath || !runId) throw new Error("Use the root Integration entry to create managed resources");
-    const run = await readManagedResourceRun(repositoryRoot(cwd), recordPath);
-    if (run.record.runId !== runId || !["ready", "running"].includes(run.record.status))
-      throw new Error("Managed test resource record is not ready for this run");
-    for (const service of Object.keys(declaration.resources))
-      if (!run.record.services.includes(service)) throw new Error(`Managed resource record is missing ${service}`);
-    const environment = JSON.parse(readFileSync(join(run.root, run.record.testEnvironmentFile), "utf8"));
-    for (const name of names)
-      if (!environment[name] || environment[name] !== process.env[name])
-        throw new Error(`${name} must come from this run's managed resource record`);
-    if (declaration.resources.postgres) {
-      const templateName = environment.IAM_TEST_POSTGRES_TEMPLATE;
-      if (typeof templateName !== "string" || !templateName)
-        throw new Error("Managed resource record is missing the PostgreSQL template");
-      testEnvironment.IAM_TEST_POSTGRES_TEMPLATE = templateName;
-    }
+  const recordPath = process.env.IAM_TEST_RESOURCE_RECORD;
+  const runId = process.env.IAM_TEST_RESOURCE_RUN_ID;
+  if (!recordPath || !runId) throw new Error("Use the root Integration entry to create managed resources");
+  const run = await readManagedResourceRun(root, recordPath);
+  if (run.record.runId !== runId || run.record.status !== "running")
+    throw new Error("Managed test resource record is not ready for this run");
+  for (const service of Object.keys(declaration.resources))
+    if (!run.record.services.includes(service)) throw new Error(`Managed resource record is missing ${service}`);
+  const record = JSON.parse(readFileSync(join(run.root, run.record.testEnvironmentFile), "utf8"));
+  const environment = record.tasks?.[taskKey];
+  if (!environment || typeof environment !== "object" || Array.isArray(environment))
+    throw new Error(`Managed resource record is missing the assignment for ${taskKey}`);
+  for (const name of names)
+    if (!environment[name] || environment[name] !== process.env[name])
+      throw new Error(`${name} must come from this run's managed resource record for ${taskKey}`);
+  if (declaration.resources.redis) {
+    const url = URL.parse(environment[declaration.resources.redis]);
+    const slot = /^\/([1-9]\d*)$/u.exec(url?.pathname)?.[1];
+    if (
+      url?.protocol !== "redis:" ||
+      !url.hostname ||
+      !url.port ||
+      url.search ||
+      url.hash ||
+      !slot ||
+      Number(slot) > integrationRedisSlotLimit
+    )
+      throw new Error(`Managed resource record has an invalid Redis slot for ${taskKey}`);
+  }
+  if (declaration.resources.postgres) {
+    const templateName = environment.IAM_TEST_POSTGRES_TEMPLATE;
+    if (typeof templateName !== "string" || !templateName)
+      throw new Error("Managed resource record is missing the PostgreSQL template");
+    testEnvironment.IAM_TEST_POSTGRES_TEMPLATE = templateName;
   }
   const selection = JSON.parse(process.env.IAM_TEST_INTEGRATION_SELECTION || "null");
-  const files = selection?.[`${manifest.name}:${executor}`];
+  const files = selection?.[taskKey];
   if (!Array.isArray(files) || files.length === 0 || files.some((file) => typeof file !== "string"))
     throw new Error("Use the root Integration entry to select this package's files");
   const selected = selectIntegrationTasks(root, { workspaces: [manifest.name], files });
@@ -141,7 +158,7 @@ try {
   process.exitCode = 1;
 } finally {
   try {
-    await resources?.close();
+    await resources?.close({ diagnostics: Boolean(process.exitCode) || controller.signal.aborted });
   } catch (error) {
     console.error(formatResourceFailure(error));
     process.exitCode = 1;

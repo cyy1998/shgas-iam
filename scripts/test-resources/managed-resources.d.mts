@@ -68,6 +68,6 @@ export function cleanupManagedResources(
 ): Promise<void>;
 export function finishManagedResourceRun(
   run: ManagedResourceRun,
-  options?: { cleanupTimeoutMs?: number },
+  options?: { cleanupTimeoutMs?: number; diagnostics?: boolean },
 ): Promise<void>;
 export function formatResourceFailure(error: unknown): string;
