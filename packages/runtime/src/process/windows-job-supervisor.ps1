@@ -18,7 +18,9 @@ param(
   [int]$GraceMs,
 
   [Parameter(ParameterSetName = "Recover", Mandatory = $true)]
-  [int]$TimeoutMs
+  [int]$TimeoutMs,
+
+  [string]$JobApiCacheDirectory
 )
 
 $ErrorActionPreference = "Stop"
@@ -29,8 +31,66 @@ $scopeHandle = [IntPtr]::Zero
 $launcher = $null
 $launcherStarted = $false
 
+function Import-JobApi([string]$Source, [string]$CacheDirectory) {
+  $temporaryPath = $null
+  try {
+    if (-not $CacheDirectory) {
+      # The DLL is executable code. Use the current account's OS-resolved profile,
+      # independent of temporary directories passed in the child environment.
+      $localAppData = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
+      if (-not $localAppData) { throw "Windows local application data is unavailable" }
+      $CacheDirectory = [IO.Path]::Combine($localAppData, "IAM", "WindowsJob")
+    }
+
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try {
+      $sourceHash = [BitConverter]::ToString($sha256.ComputeHash([Text.Encoding]::UTF8.GetBytes($Source)))
+      $sourceHash = $sourceHash.Replace("-", "").ToLowerInvariant()
+    }
+    finally {
+      $sha256.Dispose()
+    }
+    $cachePath = [IO.Path]::Combine($CacheDirectory, "IamOwnedProcess.JobApi.$sourceHash.dll")
+
+    if (-not [IO.File]::Exists($cachePath)) {
+      [IO.Directory]::CreateDirectory($CacheDirectory) | Out-Null
+      $temporaryPath = [IO.Path]::Combine($CacheDirectory, "$([guid]::NewGuid().ToString('N')).dll")
+      # Compile to disk without loading the staging DLL, so it can be moved on Windows.
+      Add-Type -Language CSharp -TypeDefinition $Source -OutputAssembly $temporaryPath
+      try {
+        [IO.File]::Move($temporaryPath, $cachePath)
+      }
+      catch [IO.IOException] {
+        # A concurrent publisher may have won. Keep its file and load it below.
+        if (-not [IO.File]::Exists($cachePath)) { throw }
+      }
+    }
+
+    $types = Add-Type -LiteralPath $cachePath -PassThru
+    if ($types.FullName -notcontains "IamOwnedProcess.JobApi") {
+      throw "Cached Windows Job assembly does not contain JobApi"
+    }
+    return
+  }
+  catch {
+    # Cache failures are optional. Never remove a shared path another supervisor may be using.
+  }
+  finally {
+    if ($temporaryPath) {
+      try {
+        [IO.File]::Delete($temporaryPath)
+      }
+      catch {
+        # A staging cleanup failure must not prevent the in-memory fallback.
+      }
+    }
+  }
+
+  Add-Type -Language CSharp -TypeDefinition $Source
+}
+
 try {
-  Add-Type -Language CSharp -TypeDefinition @'
+  $jobApiSource = @'
 using System;
 using System.Runtime.InteropServices;
 
@@ -145,6 +205,8 @@ namespace IamOwnedProcess
     }
 }
 '@
+
+  Import-JobApi -Source $jobApiSource -CacheDirectory $JobApiCacheDirectory
 
   if ($PSCmdlet.ParameterSetName -eq "Recover") {
     $scopeHandle = [IamOwnedProcess.JobApi]::OpenScope($RecoverScope)
