@@ -1,6 +1,8 @@
 import { type RedisConfig, redisUrlString } from "@iam/runtime/redis/config";
 import Redis from "ioredis";
 
+export { requireDedicatedPostgresTestUrl } from "./dedicated-postgres-test-url";
+
 export interface OwnedTestResourceLifecycle {
   readonly registerCleanup: (cleanup: () => Promise<void> | void) => void;
 }
@@ -37,32 +39,6 @@ export function requireExternalTestUrl(input: {
   return value;
 }
 
-export function requireDedicatedPostgresTestUrl(input: {
-  readonly forbidden: ReadonlyArray<{
-    readonly name: string;
-    readonly value: string | undefined;
-  }>;
-  readonly name: string;
-  readonly value: string;
-}): string {
-  const parsed = new URL(input.value);
-  if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:") {
-    throw new Error(`${input.name} must use the postgres or postgresql protocol`);
-  }
-  const databaseName = decodeURIComponent(parsed.pathname.slice(1));
-  if (!databaseName || ["postgres", "template0", "template1"].includes(databaseName.toLowerCase())) {
-    throw new Error(`${input.name} must name a dedicated, non-system test database`);
-  }
-
-  const identity = postgresDatabaseIdentity(parsed);
-  for (const forbidden of input.forbidden) {
-    if (forbidden.value !== undefined && postgresDatabaseIdentity(new URL(forbidden.value)) === identity) {
-      throw new Error(`${input.name} must not identify the same database as ${forbidden.name}`);
-    }
-  }
-  return input.value;
-}
-
 export function parseDedicatedRedisTestUrl(input: {
   readonly name: string;
   readonly value: string;
@@ -70,10 +46,6 @@ export function parseDedicatedRedisTestUrl(input: {
   const parsed = redisUrlString().safeParse(input.value);
   if (!parsed.success) throw new Error(`${input.name} ${parsed.error.issues[0]?.message}`);
   return parsed.data;
-}
-
-function postgresDatabaseIdentity(parsed: URL) {
-  return `${parsed.hostname.toLowerCase()}:${parsed.port || "5432"}/${decodeURIComponent(parsed.pathname.slice(1))}`;
 }
 
 export async function runWithOwnedTestResources<T>(
