@@ -6,6 +6,12 @@ export type FrontendApp = (typeof frontendApps)[number];
 
 export const frontendPrefixes: Record<FrontendApp, string> = { admin: "/iam-admin", sso: "/portal" };
 
+export const ssoTestLoginCredential = {
+  IAM_SSO_WEB_LOGIN_CREDENTIAL_KID: "2026-05-primary",
+  IAM_SSO_WEB_LOGIN_CREDENTIAL_PUBLIC_KEY:
+    "04112ddd8854e8262db2520bba112535844884c03348a45fcf4ee0f9a967979be52bd46caf43be697ae557ed2e4fa5b4dca8d2dbfa08c0f2f710c0f61591bb17dc",
+};
+
 export interface FrontendOptions {
   repoRoot: string;
   adminClientCode?: string;
@@ -33,9 +39,7 @@ export function frontendEnvironment(app: FrontendApp, options: FrontendOptions):
           IAM_SSO_WEB_CAP_ENDPOINT: "/api/iam/open/cap/iam-sso/",
           IAM_SSO_WEB_CAP_WASM_URL: "/portal/cap/cap_wasm_bg.wasm",
           IAM_SSO_WEB_CAP_PAKO_URL: "/portal/cap/pako_inflate.min.js",
-          IAM_SSO_WEB_LOGIN_CREDENTIAL_KID: "2026-05-primary",
-          IAM_SSO_WEB_LOGIN_CREDENTIAL_PUBLIC_KEY:
-            "04112ddd8854e8262db2520bba112535844884c03348a45fcf4ee0f9a967979be52bd46caf43be697ae557ed2e4fa5b4dca8d2dbfa08c0f2f710c0f61591bb17dc",
+          ...ssoTestLoginCredential,
           IAM_SSO_WEB_WELL_KNOWN_URL: "/sso/.well-known/authentication-configuration",
         };
   const prefix = `IAM_${app.toUpperCase()}_WEB_`;

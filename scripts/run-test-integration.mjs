@@ -32,6 +32,14 @@ try {
   const options = parseIntegrationArguments(process.argv.slice(2));
   const root = process.cwd();
   const tasks = selectIntegrationTasks(root, options);
+  const playwrightTasks = tasks.filter((task) => task.executor === "playwright");
+  const browserWorkers = options.browserWorkers ?? process.env.IAM_TEST_BROWSER_WORKERS;
+  if (options.browserWorkers !== undefined && playwrightTasks.length === 0) {
+    throw new Error("--browser-workers requires a Playwright collection");
+  }
+  if (browserWorkers !== undefined && playwrightTasks.some((task) => task.environmentNames.length > 0)) {
+    throw new Error("--browser-workers and IAM_TEST_BROWSER_WORKERS require resource-free Playwright collections");
+  }
   const pnpmCli = process.env.npm_execpath;
   if (!pnpmCli) throw new Error("Integration must be launched through a pnpm lifecycle script.");
   timer = setTimeout(
@@ -44,6 +52,7 @@ try {
       Object.fromEntries(tasks.map((task) => [`${task.name}:${task.executor}`, task.files])),
     ),
   };
+  if (browserWorkers !== undefined) environment.IAM_TEST_BROWSER_WORKERS = String(browserWorkers);
   for (const name of Object.keys(environment))
     if (/^IAM_.*_TEST_(DATABASE|REDIS)_URL$/.test(name)) delete environment[name];
   delete environment.IAM_TEST_RESOURCE_RUN_ID;
