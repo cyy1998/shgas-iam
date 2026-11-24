@@ -51,6 +51,12 @@ export function managedServicePort(
   port: number,
   options?: ManagedComposeCommandOptions,
 ): Promise<number>;
+export function managedServiceEndpoint(
+  run: ManagedResourceRun,
+  service: string,
+  port: number,
+  options?: ManagedComposeCommandOptions,
+): Promise<{ host: string; port: number }>;
 export function collectManagedResourceDiagnostics(
   run: ManagedResourceRun,
   options?: ManagedComposeCommandOptions,

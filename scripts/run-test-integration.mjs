@@ -10,7 +10,7 @@ import {
   createManagedResourceRun,
   finishManagedResourceRun,
   formatResourceFailure,
-  managedServicePort,
+  managedServiceEndpoint,
   readManagedResourceRegistry,
   readManagedResourceRun,
   saveManagedResourceRun,
@@ -77,10 +77,14 @@ try {
       cleanupTimeoutMs: options.cleanupTimeoutMs,
     });
     const urls = {};
-    if (services.includes("postgres"))
-      urls.postgres = `postgres://iam_test:iam_test@127.0.0.1:${await managedServicePort(run, "postgres", 5432, { signal: controller.signal })}/iam_test`;
-    if (services.includes("redis"))
-      urls.redis = `redis://127.0.0.1:${await managedServicePort(run, "redis", 6379, { signal: controller.signal })}/0`;
+    if (services.includes("postgres")) {
+      const pg = await managedServiceEndpoint(run, "postgres", 5432, { signal: controller.signal });
+      urls.postgres = `postgres://iam_test:iam_test@${pg.host}:${pg.port}/iam_test`;
+    }
+    if (services.includes("redis")) {
+      const redis = await managedServiceEndpoint(run, "redis", 6379, { signal: controller.signal });
+      urls.redis = `redis://${redis.host}:${redis.port}/0`;
+    }
     for (const name of names) environment[name] = name.endsWith("DATABASE_URL") ? urls.postgres : urls.redis;
     const testEnvironment = Object.fromEntries(names.map((name) => [name, environment[name]]));
     if (urls.postgres) {

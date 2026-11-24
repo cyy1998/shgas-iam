@@ -5,12 +5,21 @@ const executors: Array<() => Promise<void>> = [];
 
 export async function closeApiRedisConnection(redis: Redis) {
   if (redis.status === "end") return;
+  if (redis.status === "reconnecting") {
+    // ioredis 6.0.0 (#2245): disconnect() during reconnecting clears the timer without emitting "end".
+    redis.disconnect();
+    return;
+  }
   const ended = new Promise<void>((resolve) => redis.once("end", resolve));
   try {
     if (redis.status === "ready") await redis.quit();
   } finally {
-    redis.disconnect();
-    await ended;
+    if (redis.status === "reconnecting") {
+      redis.disconnect();
+    } else {
+      redis.disconnect();
+      if (redis.status !== "end") await ended;
+    }
   }
 }
 
@@ -33,9 +42,24 @@ export async function resetApiRedisTestDatabase() {
     if (stops.length) throw new Error("IAM_API_TEST_REDIS_URL is required for API fixture reset");
     return;
   }
-  const control = new Redis(url, { lazyConnect: true, maxRetriesPerRequest: 0, retryStrategy: () => null });
+  const control = new Redis(url, {
+    connectTimeout: 2_000,
+    enableOfflineQueue: false,
+    lazyConnect: true,
+    maxRetriesPerRequest: 0,
+    retryStrategy: () => null,
+  });
   await runWithOwnedTestResources(async ({ registerCleanup }) => {
     registerCleanup(() => closeApiRedisConnection(control));
-    await resetExclusiveRedisTestDatabase({ redis: control, stopExecutors: stops });
+    await resetExclusiveRedisTestDatabase({
+      redis: {
+        async flushdb() {
+          await control.connect();
+          await control.ping();
+          return await control.flushdb();
+        },
+      },
+      stopExecutors: stops,
+    });
   });
 }

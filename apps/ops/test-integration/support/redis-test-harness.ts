@@ -121,7 +121,10 @@ export function resolveOpsRedisTestUrl(source: NodeJS.ProcessEnv) {
 
 export function overrideOpsRedisTestUrl(overrides: { port?: number; username?: string; password?: string }) {
   const url = new URL(resolveOpsRedisTestUrl(process.env));
-  if (overrides.port !== undefined) url.port = String(overrides.port);
+  if (overrides.port !== undefined) {
+    url.hostname = "127.0.0.1";
+    url.port = String(overrides.port);
+  }
   if (overrides.username !== undefined) url.username = encodeURIComponent(overrides.username);
   if (overrides.password !== undefined) url.password = encodeURIComponent(overrides.password);
   return url.href;
