@@ -40,7 +40,7 @@ import Redis from "ioredis";
 import { sm2 } from "sm-crypto";
 import { createEntryEnvironment } from "../support/api-env.fixture";
 import { closeApiRedisConnection, ownApiTestExecutor, resetApiRedisTestDatabase } from "../support/fixture-lifecycle";
-import { createApiPostgresTestHarness } from "../support/postgres-test-harness";
+import { useApiPostgresTestHarness } from "../support/postgres-test-file.fixture";
 import { publishUserDocument } from "../support/user-document.fixture";
 
 requireDedicatedPostgresTestUrl({
@@ -66,6 +66,7 @@ const suite = createProcessSmokeSuite({
   temporaryDirectoryPrefix: "iam-api-unified-",
   hostname: "localhost",
 });
+const getDatabase = useApiPostgresTestHarness();
 afterEach(resetApiRedisTestDatabase);
 
 test(
@@ -73,9 +74,7 @@ test(
   async () => {
     await runWithOwnedTestResources(async ({ registerCleanup }) => {
       registerCleanup(resetApiRedisTestDatabase);
-      const pg = await createApiPostgresTestHarness((close) => {
-        ownApiTestExecutor(close);
-      });
+      const pg = getDatabase();
       const sql = pg.sql;
       const redis = new Redis(redisUrl, { maxRetriesPerRequest: 1 });
       ownApiTestExecutor(() => closeApiRedisConnection(redis));

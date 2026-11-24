@@ -15,7 +15,9 @@ async function fixture(cooldownMilliseconds?: number) {
   const url = process.env.IAM_API_TEST_REDIS_URL;
   if (!url) throw new Error("IAM_API_TEST_REDIS_URL is required");
   const keyPrefix = `sms-cooldown-test:${randomUUID()}:`;
-  const clients = [0, 1].map(() => new Redis(url, { keyPrefix, lazyConnect: true, maxRetriesPerRequest: 0 }));
+  const clients = [0, 1].map(
+    () => new Redis(url, { keyPrefix, lazyConnect: true, maxRetriesPerRequest: 0, retryStrategy: () => null }),
+  );
   const close = ownApiTestExecutor(() =>
     closeFixtureResources(clients.map((client) => () => closeApiRedisConnection(client))),
   );

@@ -32,11 +32,12 @@ import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import Redis from "ioredis";
 import { closeApiRedisConnection, ownApiTestExecutor, resetApiRedisTestDatabase } from "../support/fixture-lifecycle";
-import { createApiPostgresTestHarness } from "../support/postgres-test-harness";
+import { useApiPostgresTestHarness } from "../support/postgres-test-file.fixture";
 import { publishUserDocument } from "../support/user-document.fixture";
 import { cleanupAfterFixtureFailure, closeFixtureResources } from "./oidc.fixture";
 import { userInfoFixture } from "./oidc-userinfo.fixture";
 
+const getDatabase = useApiPostgresTestHarness();
 afterEach(resetApiRedisTestDatabase);
 
 test("UserInfo HTTP uses real published Facts cache, canonical PostgreSQL fallback and transient I/O boundaries", async () => {
@@ -45,7 +46,7 @@ test("UserInfo HTTP uses real published Facts cache, canonical PostgreSQL fallba
   const resources: Array<() => unknown | Promise<unknown>> = [];
   const close = ownApiTestExecutor(() => closeFixtureResources(resources));
   try {
-    const pg = await createApiPostgresTestHarness((close) => resources.push(close));
+    const pg = getDatabase();
     const redis = new Redis(redisUrl, { maxRetriesPerRequest: 0, retryStrategy: () => null });
     resources.push(() => closeApiRedisConnection(redis));
     const cleanup = new Redis(redisUrl);

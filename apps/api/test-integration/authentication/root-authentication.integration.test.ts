@@ -44,10 +44,11 @@ import { eq } from "drizzle-orm";
 import Redis from "ioredis";
 import { cleanupAfterFixtureFailure, closeFixtureResources } from "../oidc/oidc.fixture";
 import { closeApiRedisConnection, ownApiTestExecutor, resetApiRedisTestDatabase } from "../support/fixture-lifecycle";
-import { createApiPostgresTestHarness } from "../support/postgres-test-harness";
+import { useApiPostgresTestHarness } from "../support/postgres-test-file.fixture";
 import { publishUserDocument } from "../support/user-document.fixture";
 import { fixture } from "./root-authentication.fixture";
 
+const getDatabase = useApiPostgresTestHarness();
 afterEach(resetApiRedisTestDatabase);
 
 test.each(["https://internal.example", "https://public.example"])(
@@ -411,85 +412,81 @@ test("candidate four authentication handlers validate credentials and create ind
 });
 
 test("legacy WeCom callback only logs in the enabled owner of the registered member ID", async () => {
-  const pg = await createApiPostgresTestHarness();
+  const pg = getDatabase();
+  const f = await fixture(undefined, undefined, undefined, undefined, undefined, undefined, {
+    wechatUsers: createUserRepository(pg.db),
+  });
   try {
-    const f = await fixture(undefined, undefined, undefined, undefined, undefined, undefined, {
-      wechatUsers: createUserRepository(pg.db),
+    await pg.db.insert(users).values([
+      { username: "disabled", name: "Disabled", wxId: "Wx-Member", status: UserStatus.Disable },
+      { username: "other", name: "Other", wxId: "wx-member" },
+    ]);
+    const callback = (code: string) =>
+      f.app.request(
+        `/sso/third-party/wx?${new URLSearchParams({
+          code,
+          client: "iam",
+          redirectUrl: "https://app.example/callback",
+          state: "existing-client-state",
+        })}`,
+      );
+    const disabled = await callback("wx-pg-disabled");
+    expect(disabled.status).not.toBe(302);
+    expect(f.cookie(disabled)).toBeUndefined();
+
+    await pg.db.update(users).set({ isDelete: true }).where(eq(users.username, "disabled"));
+    const deleted = await callback("wx-pg-deleted");
+    expect(deleted.status).not.toBe(302);
+    expect(f.cookie(deleted)).toBeUndefined();
+
+    await pg.db.insert(users).values({
+      id: 1001,
+      subjectIdentifier: f.subjectIdentifier,
+      username: "enabled",
+      name: "Enabled",
+      wxId: "Wx-Member",
     });
-    try {
-      await pg.db.insert(users).values([
-        { username: "disabled", name: "Disabled", wxId: "Wx-Member", status: UserStatus.Disable },
-        { username: "other", name: "Other", wxId: "wx-member" },
-      ]);
-      const callback = (code: string) =>
-        f.app.request(
-          `/sso/third-party/wx?${new URLSearchParams({
-            code,
-            client: "iam",
-            redirectUrl: "https://app.example/callback",
-            state: "existing-client-state",
-          })}`,
-        );
-      const disabled = await callback("wx-pg-disabled");
-      expect(disabled.status).not.toBe(302);
-      expect(f.cookie(disabled)).toBeUndefined();
-
-      await pg.db.update(users).set({ isDelete: true }).where(eq(users.username, "disabled"));
-      const deleted = await callback("wx-pg-deleted");
-      expect(deleted.status).not.toBe(302);
-      expect(f.cookie(deleted)).toBeUndefined();
-
-      await pg.db.insert(users).values({
-        id: 1001,
-        subjectIdentifier: f.subjectIdentifier,
-        username: "enabled",
-        name: "Enabled",
-        wxId: "Wx-Member",
+    const enabled = await callback("wx-pg-enabled");
+    expect(enabled.status).toBe(302);
+    const token = f.cookie(enabled);
+    if (!token) throw new Error("Missing global session cookie");
+    const location = enabled.headers.get("location");
+    if (location === null) throw new Error("Missing authorization redirect");
+    const redirect = new URL(location, "https://iam.example");
+    expect(redirect.pathname).toBe("/sso/authorize");
+    expect(Object.fromEntries(redirect.searchParams)).toMatchObject({
+      client: "iam",
+      redirectUrl: "https://app.example/callback",
+      state: "existing-client-state",
+      token,
+    });
+    await f.operations.run(async (operation) => {
+      const session = await f.kernel.forOperation(operation).resolveUserSession(token);
+      expect(session).toMatchObject({
+        status: "resolved",
+        value: { userSession: { subjectIdentifier: f.subjectIdentifier, amr: ["wechat"] } },
       });
-      const enabled = await callback("wx-pg-enabled");
-      expect(enabled.status).toBe(302);
-      const token = f.cookie(enabled);
-      if (!token) throw new Error("Missing global session cookie");
-      const location = enabled.headers.get("location");
-      if (location === null) throw new Error("Missing authorization redirect");
-      const redirect = new URL(location, "https://iam.example");
-      expect(redirect.pathname).toBe("/sso/authorize");
-      expect(Object.fromEntries(redirect.searchParams)).toMatchObject({
-        client: "iam",
-        redirectUrl: "https://app.example/callback",
-        state: "existing-client-state",
-        token,
-      });
-      await f.operations.run(async (operation) => {
-        const session = await f.kernel.forOperation(operation).resolveUserSession(token);
-        expect(session).toMatchObject({
-          status: "resolved",
-          value: { userSession: { subjectIdentifier: f.subjectIdentifier, amr: ["wechat"] } },
-        });
-      });
-      const retry = await callback("wx-pg-enabled");
-      expect(retry.status).toBe(302);
-      expect(f.cookie(retry)).toEqual(expect.any(String));
-      expect(
-        f.audits.filter(({ action, outcome }) => action === "auth.login.wechat" && outcome === "success"),
-      ).toHaveLength(1);
+    });
+    const retry = await callback("wx-pg-enabled");
+    expect(retry.status).toBe(302);
+    expect(f.cookie(retry)).toEqual(expect.any(String));
+    expect(
+      f.audits.filter(({ action, outcome }) => action === "auth.login.wechat" && outcome === "success"),
+    ).toHaveLength(1);
 
-      await pg.db.update(users).set({ wxId: null }).where(eq(users.username, "enabled"));
-      const unlinked = await callback("wx-pg-enabled");
-      expect(unlinked.status).toBe(400);
-      expect(f.cookie(unlinked)).toBeUndefined();
-      expect(unlinked.headers.get("location")).toBeNull();
+    await pg.db.update(users).set({ wxId: null }).where(eq(users.username, "enabled"));
+    const unlinked = await callback("wx-pg-enabled");
+    expect(unlinked.status).toBe(400);
+    expect(f.cookie(unlinked)).toBeUndefined();
+    expect(unlinked.headers.get("location")).toBeNull();
 
-      await pg.db.update(users).set({ wxId: "Wx-Member" }).where(eq(users.username, "other"));
-      const reassigned = await callback("wx-pg-enabled");
-      expect(reassigned.status).toBe(400);
-      expect(f.cookie(reassigned)).toBeUndefined();
-      expect(reassigned.headers.get("location")).toBeNull();
-    } finally {
-      await f.close();
-    }
+    await pg.db.update(users).set({ wxId: "Wx-Member" }).where(eq(users.username, "other"));
+    const reassigned = await callback("wx-pg-enabled");
+    expect(reassigned.status).toBe(400);
+    expect(f.cookie(reassigned)).toBeUndefined();
+    expect(reassigned.headers.get("location")).toBeNull();
   } finally {
-    await pg.close();
+    await f.close();
   }
 });
 
@@ -1287,7 +1284,7 @@ test("Custom SSO delivers published custom attributes and nested Roles through W
     const redis = new Redis(redisUrl);
     resources.push(() => closeApiRedisConnection(redis));
     const cache = createSubjectFactsRedisCache(redis);
-    const { db } = await createApiPostgresTestHarness((close) => resources.push(close));
+    const { db } = getDatabase();
     const reader = createSubjectFactsReader({ db, cache });
     const f = await businessFixture(30, undefined, 45, reader);
     resources.push(f.close);

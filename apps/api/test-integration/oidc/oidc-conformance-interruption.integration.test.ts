@@ -39,7 +39,6 @@ for (const interruptedPhase of ["postgres-ready", "redis-seeded", "api-ready", "
     const logPath = join(directory, "api.log");
     const failures: unknown[] = [];
     try {
-      const schemasBefore = await sql`SELECT nspname FROM pg_namespace ORDER BY nspname`;
       let reachedDriver = false;
       let failure: unknown;
       try {
@@ -72,9 +71,10 @@ for (const interruptedPhase of ["postgres-ready", "redis-seeded", "api-ready", "
       expect(reachedDriver).toBe(interruptedPhase === "cleanup");
       expect(signals.listenerCount("SIGINT")).toBe(0);
       expect(signals.listenerCount("SIGTERM")).toBe(0);
-      const schemasAfter = await sql`SELECT nspname FROM pg_namespace ORDER BY nspname`;
-      expect(schemasAfter).toEqual(schemasBefore);
       const owner = JSON.parse(await readFile(`${logPath}.owner.json`, "utf8"));
+      expect(owner.database).toMatch(/^iam_test_[a-f0-9]{32}$/u);
+      const remaining = await sql`SELECT datname FROM pg_database WHERE datname = ${owner.database}`;
+      expect(remaining).toHaveLength(0);
       let directoryExists = true;
       try {
         await stat(owner.temporaryDirectory);

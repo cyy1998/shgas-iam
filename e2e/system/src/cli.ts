@@ -87,6 +87,9 @@ try {
   } else if (command === "container-smoke" && args.length === 0) {
     const { runContainerSmoke } = await import("./container-smoke.ts");
     await withCapturableSignals((signal) => runContainerSmoke({ repositoryRoot, workspaceRoot, signal }));
+  } else if (command === "integration" && args.length === 0) {
+    const { runRuntimeIntegration } = await import("./runtime-integration.ts");
+    await withCapturableSignals((signal) => runRuntimeIntegration({ repositoryRoot, workspaceRoot, signal }));
   } else if (command === "cleanup") {
     await withCapturableSignals((signal) => runRecovery(args, signal));
   } else if (command === "down" && args.length === 0) {
@@ -95,7 +98,7 @@ try {
       console.log("[e2e] Resident middleware is down");
     });
   } else {
-    throw new Error("expected command: e2e | managed | container-smoke | down | cleanup");
+    throw new Error("expected command: e2e | managed | container-smoke | integration | down | cleanup");
   }
 } catch (error) {
   console.error(formatFailure(error));

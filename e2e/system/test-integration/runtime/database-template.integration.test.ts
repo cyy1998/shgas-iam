@@ -1,31 +1,32 @@
 import { expect, test } from "bun:test";
-import { appendFile, cp, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { SQL } from "bun";
 import Redis from "ioredis";
 import { prepareE2EDatabaseTemplate } from "../../src/database-template.ts";
 import { withHybridMiddleware } from "../../src/hybrid-middleware.ts";
-import { fingerprintTemplateInputs, readTemplateSourceFingerprint } from "../../src/template-fingerprint.ts";
+import {
+  fingerprintTemplateInputs,
+  readTemplateSourceFingerprint,
+  readTemplateSourceInputs,
+} from "../../src/template-fingerprint.ts";
 
 const repositoryRoot = resolve(import.meta.dir, "../../../..");
 
 test("changes the template source fingerprint when the User Document contract or Worker projection changes", async () => {
   const root = await mkdtemp(join(tmpdir(), "iam-template-inputs-"));
   try {
-    await cp(join(repositoryRoot, "packages"), join(root, "packages"), {
-      recursive: true,
-      filter: (path) => !/[\\/](?:node_modules|dist|\.turbo|test-results)(?:[\\/]|$)/u.test(path),
-    });
-    await mkdir(join(root, "apps"), { recursive: true });
-    await cp(join(repositoryRoot, "apps/worker"), join(root, "apps/worker"), {
-      recursive: true,
-      filter: (path) => !/[\\/](?:node_modules|dist|\.turbo|test-results)(?:[\\/]|$)/u.test(path),
-    });
-    await mkdir(join(root, "e2e/system"), { recursive: true });
-    await cp(join(repositoryRoot, "e2e/system/src"), join(root, "e2e/system/src"), { recursive: true });
-    await cp(join(repositoryRoot, "pnpm-lock.yaml"), join(root, "pnpm-lock.yaml"));
+    const inputs = await readTemplateSourceInputs(repositoryRoot);
+    await Promise.all(
+      inputs.map(async ({ path, content }) => {
+        const file = join(root, path);
+        await mkdir(dirname(file), { recursive: true });
+        await writeFile(file, content);
+      }),
+    );
     const before = await readTemplateSourceFingerprint(root);
+    expect(before).toBe(fingerprintTemplateInputs(inputs));
     await appendFile(join(root, "apps/worker/src/index.ts"), "\n// New Worker projection input\n");
     const worker = await readTemplateSourceFingerprint(root);
     expect(worker).not.toBe(before);
@@ -62,6 +63,12 @@ test("creates and reuses a published seed template, restores PG and Redis, and r
     maintenanceUrl.pathname = "/postgres";
     const maintenance = new SQL({ url: maintenanceUrl.href, max: 1 });
     try {
+      const [settings] = await maintenance`
+        SELECT current_setting('fsync') AS fsync,
+               current_setting('synchronous_commit') AS synchronous_commit,
+               current_setting('full_page_writes') AS full_page_writes
+      `;
+      expect(settings).toEqual({ fsync: "off", synchronous_commit: "off", full_page_writes: "off" });
       const dirtyDatabase = new SQL({ url: middleware.databaseUrl, max: 1 });
       try {
         await dirtyDatabase.unsafe("CREATE TABLE e2e_dirty (value text)");

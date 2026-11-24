@@ -98,28 +98,31 @@ expect(failure).toBeInstanceOf(ExpectedError);
 
 每个测试归属一个 workspace 的一个 collection。所属 workspace 维护 runner、收集目录、setup 和 fixture。Vitest 不跨 workspace 共用配置或 setup。非浏览器 Integration 在同一 workspace 选 Bun 或 Vitest，浏览器由 Playwright 收集。新增用例遵循[路径与命名](#路径与命名)。调整 include/exclude、Vitest projects 或脚本时，核对根入口能到达受影响集合并实际运行。一次成功运行只覆盖被收集的用例。
 
-Turbo 负责跨 workspace 编排。Unit 通过 `transit` 传播依赖源码变化，允许有界并发，仅在输入、环境、时间和随机性均可复现时缓存。Integration 与 E2E 禁用缓存。Strict env 只透传所需资源地址、记录、筛选和工具路径，进程归属标记不计入 hash。[任务图与缓存配置](../../turbo.json)
+Unit 由 Turbo 跨 workspace 编排，通过 `transit` 传播依赖源码变化，允许有界并发，仅在输入、环境、时间和随机性均可复现时缓存。Integration 与 E2E 由各自的根入口编排，执行结果不缓存。[任务图与缓存配置](../../turbo.json)
 
-根 Integration runner 根据 workspace 的 `iamTest.integration` 选择执行器和资源。筛选单个文件仍沿用所属执行器的完整资源声明，对声明了 PostgreSQL 或 Redis 的任务，包级 runner 核验本次 run ID、资源记录及内部 URL。资源测试通过根入口使用本次环境，参数无效、无匹配或缺少资源时退出失败。[声明示例](../../apps/api/package.json) · [收集与筛选](../../scripts/test-resources/integration-selection.mjs) · [运行及定向命令](commands.md#测试与验证通道)
+根 Integration runner 根据 workspace 的 `iamTest.integration` 选择执行器和资源，以 `workspace:executor` 为单位直接运行包级脚本。筛选单个文件仍沿用所属执行器的完整资源声明。包级 runner 核验本次 run ID、记录的运行状态、该任务的资源 URL 和选中的文件。参数无效、无匹配或缺少资源时退出失败。[声明示例](../../apps/api/package.json) · [收集与筛选](../../scripts/test-resources/integration-selection.mjs) · [运行及定向命令](commands.md#测试与验证通道)
+
+`e2e/system` 的编排器 Integration 用独立入口收集，由各用例管理自己的测试环境。测试进程退出后，独立入口按本次登记回收未清理的项目。根 Integration 入口会拒绝对此 workspace 的筛选。[独立入口与路径门禁](commands.md#full-system-e2e)
 
 ## 并发、timeout 与清理
 
-| 运行范围                     | 失败后何时停止                                                                                                                                                                                                                                                                                                     |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 聚合验证                     | 当前命令启动失败或非零退出，后续命令不再启动。[基础验证](../../scripts/verify.mjs) · [CI 与发布验证](../../scripts/run-verification-gate.mjs)                                                                                                                                                                      |
-| Integration 阶段与 workspace | 根 runner 顺序运行被选中的执行器阶段，每阶段由 Turbo 串行调度 workspace。任务失败会停止剩余任务，当前阶段非零退出就不再启动后续阶段。[根 Integration runner](../../scripts/run-test-integration.mjs)                                                                                                               |
-| 包级 Integration 用例        | Bun 与 Vitest 限制并发并启用首错停止。Playwright 零重试、失败上限为 1。默认单 worker，Admin 的无专用资源 mock API 集合可用两个 worker 并行不同文件。达到上限时停止调度，已启动的用例仍需收尾。[包级 runner](../../scripts/run-package-integration.mjs) · [Admin 浏览器配置](../../apps/admin/playwright.config.ts) |
-| Full-system E2E              | 一次 Playwright 运行默认使用一个 worker、零重试，跑完全部选中用例。新文件开始前自动复位，按需用 `-x` 首错停止。[Playwright 配置](../../e2e/system/playwright.config.ts)                                                                                                                                            |
+| 运行范围              | 失败后何时停止                                                                                                                                                                                                                                                                                                                                 |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 聚合验证              | 当前命令启动失败或非零退出，后续命令不再启动。[基础验证](../../scripts/verify.mjs) · [CI 与发布验证](../../scripts/run-verification-gate.mjs)                                                                                                                                                                                                  |
+| 根 Integration 任务   | 根 runner 优先启动耗时较长的任务，默认最多同时运行 3 个任务，允许不同执行器重叠。任一任务失败即取消在途进程树，停止新任务，并在回收资源前等待所有已启动任务收尾。[根 Integration runner](../../scripts/run-test-integration.mjs)                                                                                                               |
+| 包级 Integration 用例 | Bun 与 Vitest 限制并发并启用首错停止。Playwright 零重试、失败上限为 1。带资源或 resource provider 的集合固定单 worker，无资源集合默认使用 `min(4, max(2, floor(cpus / 2)))` 个 worker。Admin 和 SSO 的 mock API 用例可在同一文件内并行。达到失败上限时停止调度，已启动的用例仍需收尾。[包级 runner](../../scripts/run-package-integration.mjs) |
+| Full-system E2E       | 一次 Playwright 运行默认使用一个 worker、零重试，跑完全部选中用例。新文件开始前自动复位，按需用 `-x` 首错停止。[Playwright 配置](../../e2e/system/playwright.config.ts)                                                                                                                                                                        |
 
 Timeout 用于限制悬挂。进程测试等待实际 readiness，同时观察启动错误与退出。成功、失败、超时或可捕获中断后均须尝试停止并等待所属进程树，再释放端口、连接及目录。清理有独立预算，失败时报告原因并保留原始错误。Windows 使用 Job，Linux 按继承的进程归属标记回收后代。[进程生命周期](../../packages/runtime/src/process/owned-process-tree.mjs)
 
 ### 专用资源与隔离
 
 - **命令隔离**。根 runner 先登记本次 run ID，子 Compose project 启动前登记在本轮记录旁。声明需要 PostgreSQL 或 Redis 时，根 runner 再以动态 loopback 端口启动所需服务。不同命令独占各自环境，浏览器服务器由所属 workspace 管理。测试使用专用资源及合成数据。
-- **Fixture 重置**。PostgreSQL 使用随机 schema、专用连接和整体清理。Redis 先完成业务观察，停止本例全部 consumer、子进程与连接，再对独占 DB 执行 `FLUSHDB`，最后关闭控制连接。任一停止失败即跳过重置，仍尝试其余收尾并汇总错误。禁止 `FLUSHALL`。非目标数据保护、生产连接关闭和只读作用须在重置前观察。[资源生命周期 helper](../../packages/test-support/src/external-test-resources.ts)
-- **Gateway 子环境**。Gateway Integration 在本次运行内复用独立的 APISIX/etcd。用例成功收尾后才重置并回读空基线，失败即停止复用。包级 provider 收尾自己的子 project。根 runner 按登记逆序处理剩余子 project，再处理主 project，某项清理失败仍尝试其余项。[Gateway fixture](../../apps/gateway/test-integration/support/apisix.fixture.ts)
+- **PostgreSQL 隔离**。临时 PostgreSQL 使用带 `1g` 上限的 `tmpfs`，关闭 `fsync`、`synchronous_commit` 和 `full_page_writes`。根 runner 在发布运行环境前迁移一次并封存模板库。普通业务 fixture 按文件克隆独立数据库，以标准 `public` schema 连接，动态清空业务表并保留迁移账本，文件结束后删除克隆。迁移专项用例从干净库或 schema 开始执行迁移。[模板 harness](../../packages/test-support/src/postgres-test-harness.ts)
+- **Redis 隔离与重置**。根 runner 在 `test-environment.json` 为每个声明 Redis 的任务分配独占的逻辑 DB，依次使用 `/1` 至 `/31`，保留 `/0`。同一 workspace 的不同执行器各有自己的槽位。先完成业务观察，停止本例全部 consumer、子进程与连接，再对独占 DB 执行 `FLUSHDB`，最后关闭控制连接。任一停止失败即跳过重置，仍尝试其余收尾并汇总错误。禁止 `FLUSHALL`。非目标数据保护、生产连接关闭和只读作用须在重置前观察。[资源生命周期 helper](../../packages/test-support/src/external-test-resources.ts)
+- **Gateway 子环境**。Gateway Integration 在本次运行内复用独立的 APISIX/etcd。用例成功收尾后才重置并回读空基线，失败即停止复用。包级 provider 收尾自己的子 project，保留按 APISIX 配置与 Dockerfile 内容打 tag 的本地镜像供后续运行复用。根 runner 按登记逆序处理剩余子 project，再处理主 project，某项清理失败仍尝试其余项。[Gateway fixture](../../apps/gateway/test-integration/support/apisix.fixture.ts)
 - **人工恢复**。保留环境或强制中断后，先确认所属进程树已退出。若父记录旁有 `children.jsonl`，逐项清理已登记的子 project，最后按父记录清理主 project。手工清理只作用于传入的准确记录，禁止按前缀猜测或全局 prune。[手工清理入口](../../scripts/run-test-resource-cleanup.mjs) · [恢复命令](commands.md#测试与验证通道)
-- **诊断与保留**。默认移除本次容器、网络和数据卷，保留运行记录及日志。辅助日志采集失败只告警，进程关闭、资源清理或测试所需证据失败均使命令失败。显式保留的资源按记录恢复。AFK 须先确认 sandbox 已停止，再按 registry 处理。[资源管理](../../scripts/test-resources/managed-resources.mjs) · [AFK 工作流](../agents/sandcastle-afk.md)
+- **诊断与保留**。每个已启动任务的 stdout 和 stderr 完整写入 `test-results/integration/<run-id>/logs/<package>-<executor>.log`。终端汇总逐任务耗时、日志路径和本轮墙钟。正常通过后直接回收本次容器、网络和数据卷。执行失败、超时、中断、显式保留或清理失败时尝试保存 `containers.log` 和 `services.log`。容器诊断采集失败只告警，任务日志写入、进程关闭和资源清理失败均使命令失败。AFK 须先确认 sandbox 已停止，再按 registry 处理。[资源管理](../../scripts/test-resources/managed-resources.mjs) · [AFK 工作流](../agents/sandcastle-afk.md)
 
 正常业务状态由生产模块建立，损坏变体和内部状态观察使用所属模块的 `/testing`。Unit 可使用事务替身，Admin 的正式事务接线和 Ops 的维护 CLI 由 Integration 验证。Worker 验证正式进程的周期恢复，Worker 与 Ops 使用各自的专用环境。API 协议浏览器测试使用候选 API、独立 RP 和专用资源。各通道分开保存产物，正式协议套件使用独立输出目录。[进程测试辅助](../../packages/test-support/src/process-smoke-harness.ts) · [OIDC 协议套件](commands.md#oidc-协议套件)
 
@@ -130,6 +133,8 @@ Timeout 用于限制悬挂。进程测试等待实际 readiness，同时观察�
 ### 初始化与就绪
 
 本地默认复用常驻中间件，互斥锁记录占用进程、工作树及开始时间。接管锁后，运行时先停止并等待旧运行登记的宿主进程，再访问模板或复位数据。回收失败时保留原进程记录，本轮停止。CI、Sandcastle AFK 和 `--fresh` 使用独占 Compose project 和动态端口。运行时按数据库迁移、seed 和 Worker 投影输入的指纹复用或重建模板，等待 Worker 发布并回读基础状态。前端默认使用独立的指纹缓存构建静态产物，`--dev-frontend` 启动 Vite。
+
+E2E PostgreSQL 使用带 `1g` 上限的 `tmpfs`，关闭 `fsync`、`synchronous_commit` 和 `full_page_writes`。常驻 PostgreSQL 容器停止后会丢失数据，下一次启动重建模板。首次从使用 PostgreSQL 命名卷的常驻环境升级时，运行时按原 Compose 记录清理旧 project，再创建新环境。
 
 Windows 和 macOS 的 Docker Desktop 本机运行使用 bridge，APISIX 默认通过 `host.docker.internal` 访问宿主上游。原生 Linux 和 AFK 使用 host network 及动态监听端口，APISIX 通过 `127.0.0.1` 访问业务进程。两种拓扑均无宿主机路径 bind mount。网关路由发布后，从 APISIX 容器内探测上游，再检查真实双入口和企微 HTTPS 路由。
 
@@ -145,7 +150,7 @@ Playwright 临时产物保存到 `e2e/system/test-results/<run-id>/playwright/`�
 
 `pnpm test:e2e:container-smoke` 在独占 Compose project 中构建六个生产镜像和 APISIX，等候全部容器健康。候选工作树在专用库执行迁移，经正式 Ops 初始化命令建立合成基线并验证 Worker 发布，随后通过真实 Gateway API 发布路由。单条 Chromium 用例经 APISIX 验证 Worker 发布的 User Document、`/portal/login` 登录、Admin 与 SSO 的 Nginx SPA 和静态资源，以及 API 和 Admin API 的真实响应。
 
-命令在成功、失败或可捕获中断后先采集有限的容器状态和日志，再按本次登记回收容器、网络、数据卷和本地构建镜像。原始诊断、浏览器失败产物与资源记录留在命令输出的运行目录。强制结束或清理失败时，按准确记录恢复。[命令与门禁](commands.md#container-smoke)
+命令按本次登记回收容器、网络、数据卷和本地构建镜像。失败或可捕获中断时先采集有限的容器状态和日志，清理本身出错时也尝试采集。诊断、浏览器失败产物与资源记录留在命令输出的运行目录。强制结束或清理失败时，按准确记录恢复。[命令与门禁](commands.md#container-smoke)
 
 ## 验证结果与交付
 

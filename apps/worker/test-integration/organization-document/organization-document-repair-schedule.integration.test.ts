@@ -16,7 +16,7 @@ import {
   withOwnedTemporaryDirectory,
 } from "@iam/test-support/process-smoke-harness";
 import { createUnitOfWork } from "@iam/unit-of-work";
-import { createWorkerPostgresTestHarness } from "../support/postgres-test-harness";
+import { useWorkerPostgresTestHarness } from "../support/postgres-test-harness";
 import { createWorkerRedisTestHarness, resetWorkerRedisTestDatabase } from "../support/redis-test-harness";
 
 const workerRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -168,7 +168,7 @@ test("a real repair cleanup failure stops only that schedule and leaves the othe
     await runWithOwnedTestResources(async ({ registerCleanup }) => {
       const role = `iam_cleanup_${randomUUID().replaceAll("-", "")}`;
       const password = randomUUID();
-      const databaseUrl = new URL(fixture.pg.commandDatabaseUrl);
+      const databaseUrl = new URL(fixture.pg.databaseUrl);
       databaseUrl.username = role;
       databaseUrl.password = password;
       await fixture.pg.sql.unsafe(`CREATE ROLE "${role}" LOGIN PASSWORD '${password}'`);
@@ -192,9 +192,9 @@ test("a real repair cleanup failure stops only that schedule and leaves the othe
           if (failure) throw failure;
         }
       });
-      await fixture.pg.sql.unsafe(`GRANT USAGE ON SCHEMA "${fixture.pg.schemaName}" TO "${role}"`);
-      await fixture.pg.sql.unsafe(`GRANT ALL ON ALL TABLES IN SCHEMA "${fixture.pg.schemaName}" TO "${role}"`);
-      await fixture.pg.sql.unsafe(`GRANT ALL ON ALL SEQUENCES IN SCHEMA "${fixture.pg.schemaName}" TO "${role}"`);
+      await fixture.pg.sql.unsafe(`GRANT USAGE ON SCHEMA public TO "${role}"`);
+      await fixture.pg.sql.unsafe(`GRANT ALL ON ALL TABLES IN SCHEMA public TO "${role}"`);
+      await fixture.pg.sql.unsafe(`GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO "${role}"`);
       // A real control-connection permission failure, isolated to this disposable database.
       await fixture.pg.sql`REVOKE EXECUTE ON FUNCTION pg_catalog.pg_cancel_backend(integer) FROM PUBLIC`;
       const acquired = Promise.withResolvers<void>();
@@ -257,6 +257,8 @@ test("a real repair cleanup failure stops only that schedule and leaves the othe
   });
 }, 30000);
 
+const getPostgres = useWorkerPostgresTestHarness();
+
 async function withFixture(work: (fixture: Awaited<ReturnType<typeof createFixture>>) => Promise<void>) {
   await withOwnedTemporaryDirectory({
     prefix: "iam-organization-document-repair-schedule-",
@@ -274,8 +276,7 @@ async function withFixture(work: (fixture: Awaited<ReturnType<typeof createFixtu
 }
 
 async function createFixture(temporaryDirectory: string, stopExecutors: Array<() => Promise<void> | void>) {
-  const pg = await createWorkerPostgresTestHarness();
-  stopExecutors.push(pg.close);
+  const pg = getPostgres();
   const redis = await createWorkerRedisTestHarness();
   stopExecutors.push(redis.close);
   const clock = { nowDate: () => new Date() };
@@ -335,7 +336,7 @@ async function createFixture(temporaryDirectory: string, stopExecutors: Array<()
         cwd: workerRoot,
         env: {
           ...redis.commandEnvironment(temporaryDirectory),
-          IAM_WORKER_DATABASE_URL: pg.commandDatabaseUrl,
+          IAM_WORKER_DATABASE_URL: pg.databaseUrl,
           IAM_WORKER_ENABLED_MODULES: "organization-document",
           IAM_WORKER_HTTP_ENABLED: "false",
           IAM_WORKER_BULL_BOARD_ENABLED: "false",

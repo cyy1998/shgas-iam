@@ -19,7 +19,7 @@ describe("Employment verifier production command", () => {
   });
 
   beforeEach(async () => {
-    await harness.sql.unsafe('TRUNCATE TABLE employment, position, organization, "user" RESTART IDENTITY CASCADE');
+    await harness.reset();
     await harness.sql`
       INSERT INTO "user" (id, username, name)
       VALUES (1, 'employment-command-user', 'Employment Command User')
@@ -86,7 +86,7 @@ describe("Employment verifier production command", () => {
           env: {
             ...process.env,
             NODE_ENV: "test",
-            IAM_OPS_DATABASE_URL: harness.commandDatabaseUrl,
+            IAM_OPS_DATABASE_URL: harness.databaseUrl,
             IAM_OPS_LOG_LEVEL: "info",
             IAM_OPS_LOG_FORMAT: "json",
             FORCE_COLOR: "0",

@@ -20,6 +20,7 @@ status: accepted
   接受独立命令的启动成本和同环境资源测试串行，单次运行内按 owner 复用资源。
   共享能力的完整失败证明放在 owner，调用方验证接线与业务差异。
   Full-system E2E 的拓扑与本地常驻中间件复用已由 [ADR-0055](0055-adopt-hybrid-host-runtime-for-full-system-e2e.md) 修订（保留确定性整体复位、同环境串行及 CI/AFK 独占清理原则，生产镜像验证拆为独立 Container Smoke）。
+  Integration 的 PostgreSQL 模板库隔离、Redis 多 DB 槽位有界并发、前端静态预构建托管与 `@iam/e2e-system` 路径触发门禁已由 [ADR-0056](0056-accelerate-integration-tests-with-template-isolation-and-bounded-parallelism.md) 修订（保留每命令独占即毁、零手动防残留、首错停止与精确清理原则）。
   [资源隔离与清理](../engineering/testing.md#专用资源与隔离)
 
 - **AFK 宿主 Docker 复用** AFK 使用宿主 Docker 和 host networking，减少额外 daemon、网络代理和地址转换的维护，接受宿主管理与网络访问范围。

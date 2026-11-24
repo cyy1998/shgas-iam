@@ -63,7 +63,9 @@ pnpm test:integration
 `--file` 接受绝对路径、仓库相对路径或 owner 相对路径，须属于所选 owner 的 collection。
 无匹配、越界文件或未知参数均失败。根 `iam-monorepo` 负责聚合，测试 owner 是实际 workspace。
 
-同一候选的同一轮 Integration 检查按所需范围合并。根入口为整轮统一准备所需 PostgreSQL/Redis，串行调度所选 workspace，首错停止。
+同一候选的同一轮 Integration 检查按所需范围合并。根入口为整轮准备所需的 PostgreSQL 模板库和 Redis，
+按 `workspace:executor` 分配 Redis DB，并以同一并发池调度所选任务。默认并发上限为 3，首个失败会取消其他在途任务。
+`--concurrency <n>` 或 `IAM_TEST_INTEGRATION_CONCURRENCY` 可调整上限，两者接受正整数，命令行参数优先。
 
 - **多个文件**。重复传 `--file`，使用仓库相对路径区分不同 workspace 的文件。
 
@@ -76,7 +78,7 @@ pnpm test:integration
 - **多个 workspace 全量**。重复传 `--workspace`，运行各 workspace 的完整 Integration collection。
 
   ```bash
-  pnpm test:integration --workspace @iam/worker --workspace @iam/ops
+  pnpm test:integration --workspace @iam/worker --workspace @iam/ops --concurrency 2
   ```
 
 - **全量与定向混用**。`--file` 对整条命令生效。用一条命令跑全量 workspace，再用一条命令跑定向文件。
@@ -87,7 +89,12 @@ pnpm test:integration
   ```
 
 Integration 的 `--timeout-ms` 默认 30 分钟，`--cleanup-timeout-ms` 默认 30 秒。
-`--keep-resources` 显式保留本次环境。准确 project、配置与产物登记在 `test-results/integration/<run-id>/run.json`。
+Admin 和 SSO 的浏览器集成测试默认使用 `.cache/integration-frontend/` 中的静态构建。源码、workspace 传递依赖、锁定文件或公开构建环境变更时重新构建。
+设置 `IAM_PW_DEV_SERVER=1` 可切换到 Vite dev server。无资源的 Playwright 集合可通过 `--browser-workers <1–16>` 或 `IAM_TEST_BROWSER_WORKERS` 调整并发，命令行参数优先。
+选择带资源或 resource provider 的 Playwright 集合时须省略这两个覆盖项。
+
+`--keep-resources` 显式保留本次环境并采集容器诊断。准确 project、配置与产物登记在 `test-results/integration/<run-id>/run.json`。
+同目录的 `logs/<package>-<executor>.log` 保存各任务的完整输出。终端列出逐任务耗时、日志路径和总墙钟。
 清理失败、进程被强制结束或用完保留环境后，按记录清理：
 
 ```bash
@@ -95,6 +102,15 @@ pnpm test:resources:cleanup --record test-results/integration/<run-id>/run.json
 ```
 
 ### Full-system E2E
+
+E2E 编排器的 Integration 集合独立于日常 `pnpm test:integration` 与 `pnpm verify:ci`。它验证临时中间件、数据库模板、宿主进程、前端托管和恢复，按单并发执行并在首个失败后停止。
+
+```bash
+pnpm --filter @iam/e2e-system test:integration
+pnpm verify:e2e-runtime --base <target-commit-sha>
+```
+
+路径门禁比较固定基线与候选 HEAD。差异命中 `e2e/system/**`、`packages/runtime/**`、`scripts/test-resources/**`、`scripts/run-verification-gate.mjs`、任意目录的 `package.json`、`vite.config.*`、`Dockerfile` 或根 `pnpm-lock.yaml`、`turbo.json` 时，门禁运行一次编排器 Integration。无匹配时打印跳过信息，基线非法或 Git 比较失败时以非零状态退出。
 
 完整系统入口为 `pnpm test:e2e`。需要 Chromium 时按环境选择 `pnpm e2e:install`（含系统依赖）或
 `pnpm e2e:install:browsers`。就绪、文件复位和报告目录见[完整系统测试](testing.md#full-system-e2e)。
@@ -140,7 +156,7 @@ pnpm verify:container-smoke --base <target-commit-sha>
 | `pnpm verify:static`  | `format:check`、`lint`、`check:docs`、`check:env-names`、`check:architecture` |
 | `pnpm verify`         | 静态检查 → typecheck → Unit → build                                           |
 | `pnpm verify:ci`      | verify → Integration                                                          |
-| `pnpm verify:release` | verify:ci → Full-system E2E → Container Smoke                                 |
+| `pnpm verify:release` | verify:ci → E2E 编排器 Integration → Full-system E2E → Container Smoke        |
 
 组合入口首错停止。何时执行见[验证节奏](../agents/workflow.md#验证节奏)，结果能证明的范围见[验证结果与交付](testing.md#验证结果与交付)。
 
@@ -237,7 +253,7 @@ pnpm test:integration --workspace @iam/api
 ```
 
 需要调试保留时，在独立 fixture 命令的配置路径后增加 `--keep`；结束时按打印的准确记录清理，内部 marker 不作为公开运行模式。
-fixture 负责候选 API、TLS 代理、随机 PG schema、Redis 和 Node 进程树，driver 负责浏览器与官方模块。
+独立入口先迁移并封存本次 PostgreSQL 模板库。fixture 负责候选 API、TLS 代理、独立 PostgreSQL 克隆库、Redis 和 Node 进程树，driver 负责浏览器与官方模块。
 信号/失败仍逐项尝试收尾，再以独立预算清理准确 project；超时不冒称清理完成，原始失败与清理失败均保留。
 官方 REVIEW 使自动 driver 非零，必须独立完成图像判读并保留官方结果，不把它改写为套件 PASSED。
 不同 loopback 端口只证明两 issuer 协议；hostname/Cookie 隔离须由真实 APISIX/browser 验证，

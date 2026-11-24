@@ -72,7 +72,8 @@ Pull Requests 和 Git 为依据。看板同步失败会输出告警，AFK 继续
 需要 Linux Docker Engine，或 Docker Desktop 4.34+ 开启 host networking 并关闭 Enhanced Container Isolation。
 共享 daemon 和 host network 提供宿主 Docker 管理与网络访问能力，project 名用于资源归属。
 运行前以实际执行用户检查 socket、Docker 工具和宿主 loopback，条件不满足时退出。
-测试走正式根入口，每条命令独立创建环境、使用动态端口并清理。资源规则见[专用资源与隔离](../engineering/testing.md#专用资源与隔离)。
+测试走正式根入口，每条命令独立创建环境、使用动态端口并清理。根 Integration 在单条命令内并发运行所选任务，
+并为每个需要 Redis 的任务分配独立 DB。同一宿主上的顶层验证命令仍按顺序执行。资源规则见[专用资源与隔离](../engineering/testing.md#专用资源与隔离)。
 
 每个需要安装依赖的执行器以独占匿名卷保存 Linux root/workspace `node_modules`，同时挂载共享的持久化 Docker named volume
 `iam-sandcastle-pnpm-store`（`/home/agent/.pnpm-store`）作为跨容器 pnpm 内容寻址缓存，避免每个容器重复从公网下载全部依赖；
@@ -221,5 +222,8 @@ GitHub Issues 保存需求、协作状态与恢复说明，Git 提交保存实�
   `package.json`、`pnpm-lock.yaml` 或 `e2e/system/docker/` 下的文件时，串行追加一次 `pnpm test:e2e:container-smoke`。
   无命中时记录跳过，Git 比较失败时门禁失败。同一最终候选已通过 `pnpm verify:release` 时复用其中的冒烟结果。
   启动分支提供最终验证 prompt，执行器在候选工作树读取本页和运行门禁，因此本次 Spec 引入的门禁也在本次生效。
+- **E2E Runtime 门禁** 编排器 Integration 由独立入口 `pnpm --filter @iam/e2e-system test:integration` 运行。集中修复提交后，在候选工作树执行
+  `pnpm verify:e2e-runtime --base <review-base-sha>`，按[命令入口](../engineering/commands.md#full-system-e2e)的路径规则串行调用独立入口。
+  同一最终候选已通过 `pnpm verify:release` 时可复用对应结果。此要求以候选工作树中的本页为准。
 - 后续修复重跑失效检查，仍有效的通过证据可复用。普通交接记录实际命令、结果、对应候选与未执行项；必需检查失败或
   未执行、findings 尚未解决时保持未完成。本轮不通过反复新开会话重试，也不以清理成功或进程正常退出代替验收。

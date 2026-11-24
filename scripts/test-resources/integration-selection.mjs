@@ -2,6 +2,24 @@ import { existsSync, globSync, readdirSync, readFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 
 export const integrationExecutors = ["bun", "vitest", "playwright"];
+// The root Compose Redis enables 32 logical databases. Slot 0 is reserved.
+export const integrationRedisSlotLimit = 31;
+
+export function parseBrowserWorkers(value, option) {
+  const workers = Number(value);
+  if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(workers) || workers > 16) {
+    throw new Error(`${option} requires an integer from 1 to 16`);
+  }
+  return workers;
+}
+
+export function parseIntegrationConcurrency(value, option) {
+  const concurrency = Number(value);
+  if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(concurrency)) {
+    throw new Error(`${option} requires a positive integer`);
+  }
+  return concurrency;
+}
 
 export function integrationDeclarations(manifest) {
   const declarations = manifest.iamTest?.integration ?? {};
@@ -38,6 +56,12 @@ export function parseIntegrationArguments(args) {
       const value = args[++index];
       if (!value || value.startsWith("--")) throw new Error(`${argument} requires a value`);
       options[fields[argument]].push(value);
+    } else if (argument === "--browser-workers") {
+      if (options.browserWorkers !== undefined) throw new Error(`${argument} may be supplied once`);
+      options.browserWorkers = parseBrowserWorkers(args[++index], argument);
+    } else if (argument === "--concurrency") {
+      if (options.concurrency !== undefined) throw new Error(`${argument} may be supplied once`);
+      options.concurrency = parseIntegrationConcurrency(args[++index], argument);
     } else if (argument === "--timeout-ms" || argument === "--cleanup-timeout-ms") {
       const value = Number(args[++index]);
       if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${argument} requires a positive integer`);
@@ -48,7 +72,7 @@ export function parseIntegrationArguments(args) {
 }
 
 export function selectIntegrationTasks(root, options) {
-  const manifestPaths = ["e2e/system/package.json"];
+  const manifestPaths = [];
   for (const directory of ["apps", "packages"]) {
     if (!existsSync(join(root, directory))) continue;
     for (const entry of readdirSync(join(root, directory), { withFileTypes: true }))

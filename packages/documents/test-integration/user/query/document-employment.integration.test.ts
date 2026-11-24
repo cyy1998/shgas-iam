@@ -50,11 +50,7 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  await harness!.sql.unsafe(
-    "TRUNCATE TABLE organization_responsibility_assignment, role_assignment, " +
-      "role, client, employment, " +
-      'organization_closure, organization, position, user_document, "user" RESTART IDENTITY CASCADE',
-  );
+  await harness!.reset();
 });
 
 afterAll(async () => {

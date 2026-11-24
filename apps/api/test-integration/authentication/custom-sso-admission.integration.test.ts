@@ -13,10 +13,11 @@ import { createApplicationAdmissionEvaluator } from "@iam/documents/user/admissi
 import { eq } from "drizzle-orm";
 import { cleanupAfterFixtureFailure, closeFixtureResources } from "../oidc/oidc.fixture";
 import { ownApiTestExecutor, resetApiRedisTestDatabase } from "../support/fixture-lifecycle";
-import { createApiPostgresTestHarness } from "../support/postgres-test-harness";
+import { useApiPostgresTestHarness } from "../support/postgres-test-file.fixture";
 import { publishUserDocument } from "../support/user-document.fixture";
 import { fixture } from "./root-authentication.fixture";
 
+const getDatabase = useApiPostgresTestHarness();
 afterEach(resetApiRedisTestDatabase);
 
 const client = "expense";
@@ -31,7 +32,7 @@ async function admissionFixture(callbackType = ClientSsoCallbackType.Business, a
   const resources: Array<() => Promise<void>> = [];
   const close = ownApiTestExecutor(() => closeFixtureResources(resources));
   try {
-    const { db } = await createApiPostgresTestHarness((stop) => resources.push(stop));
+    const { db } = getDatabase();
     const f = await fixture(30, undefined, 45, 60, undefined, {
       evaluator: createApplicationAdmissionEvaluator(db),
       source: createClientSnapshotRepository(db),

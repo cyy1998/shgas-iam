@@ -943,6 +943,9 @@ importers:
         specifier: 1.0.0-rc.2
         version: 1.0.0-rc.2(bun-types@1.4.4)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.6.7)
     devDependencies:
+      '@iam/test-support':
+        specifier: workspace:*
+        version: link:../test-support
       '@types/bun':
         specifier: latest
         version: 1.4.5
@@ -1077,6 +1080,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
+      '@iam/test-support':
+        specifier: workspace:*
+        version: link:../test-support
       '@types/bun':
         specifier: latest
         version: 1.4.5
@@ -1389,6 +1395,9 @@ importers:
       ioredis:
         specifier: ^6.0.0
         version: 6.0.0(supports-color@10.2.2)
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
     devDependencies:
       '@types/bun':
         specifier: latest

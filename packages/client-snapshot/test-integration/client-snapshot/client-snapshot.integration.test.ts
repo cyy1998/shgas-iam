@@ -423,7 +423,8 @@ test("targeted and full repair preserve non-target data, independent scan-only v
   await redis.set(sentinel, "retained");
   const username = `snapshot-verify-${randomUUID()}`;
   const password = randomUUID();
-  await redis.acl("SETUSER", username, "on", `>${password}`, "~*", "-@all", "+scan");
+  // ioredis selects the assigned logical database before running the scan-only verifier.
+  await redis.acl("SETUSER", username, "on", `>${password}`, "~*", "-@all", "+select", "+scan");
   stopExecutors.push(async () => {
     await redis.acl("DELUSER", username);
   });

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { UserDocumentWorkStatus } from "@iam/contracts";
 import { userDocumentRebuildStates } from "@iam/db/schema";
@@ -14,7 +14,7 @@ import { createOpsPostgresTestHarness } from "../support/postgres-test-harness";
 import { createOpsRedisTestHarness } from "../support/redis-test-harness";
 import { fixtureInput } from "./fixtures";
 
-let pg: Awaited<ReturnType<typeof createOpsPostgresTestHarness>> | undefined;
+let pg: Awaited<ReturnType<typeof createOpsPostgresTestHarness>>;
 let redis: Awaited<ReturnType<typeof createOpsRedisTestHarness>> | undefined;
 let source: Awaited<ReturnType<typeof initializeSourceFacts>>;
 let factsKey: string;
@@ -22,8 +22,14 @@ let barrierKey: string;
 const clock = { now: Date.now, nowDate: () => new Date() };
 const projection = createCurrentUserDocumentProjectionBundle();
 
-beforeEach(async () => {
+beforeAll(async () => {
   pg = await createOpsPostgresTestHarness();
+});
+afterAll(async () => {
+  await pg?.close();
+});
+beforeEach(async () => {
+  await pg.reset();
   redis = await createOpsRedisTestHarness();
   const { input, secrets } = fixtureInput();
   source = await initializeSourceFacts(pg.db, input, secrets);
@@ -38,8 +44,6 @@ afterEach(async () => {
     try {
       await redis?.close();
     } finally {
-      await pg?.close();
-      pg = undefined;
       redis = undefined;
       factsKey = "";
       barrierKey = "";
@@ -49,7 +53,7 @@ afterEach(async () => {
 
 function completeAccess() {
   return completePublishedInitializationAccess({
-    db: pg!.db,
+    db: pg.db,
     runtime: { redis: redis!.writer, clock },
     source,
     username: fixtureInput().input.admin.username,
@@ -169,7 +173,7 @@ test("完整 publication 后种缺失 Barrier，重复执行保留 PG/Facts/Barr
       clientAuthorizations: [{ clientCode: "iam-admin", roles: [{ code: "iam:admin" }] }],
     },
   ];
-  const [publication] = await pg!.sql`select document from user_document where user_id=${source.userId}`;
+  const [publication] = await pg.sql`select document from user_document where user_id=${source.userId}`;
   expect(publication?.document).toMatchObject({
     username: "controlled-admin",
     name: "受控管理员",
@@ -181,7 +185,7 @@ test("完整 publication 后种缺失 Barrier，重复执行保留 PG/Facts/Barr
     facts: { profile: { username: "controlled-admin", name: "受控管理员" }, employments: expectedEmployments },
   });
 
-  const [initialProfile] = await pg!.sql`select to_jsonb(p) as row from user_document p where user_id=${source.userId}`;
+  const [initialProfile] = await pg.sql`select to_jsonb(p) as row from user_document p where user_id=${source.userId}`;
   const first = await completeAccess();
   expect(first).toEqual({ seeded: 1, retainedExisting: 0 });
   const initialBarrier = await redis!.observer.get(barrierKey);

@@ -39,17 +39,19 @@ const internalClient: GenericClientRuntimeDto = {
 };
 let harness: ApiPostgresTestHarness;
 let queryResource: ReturnType<typeof createInternalOrganizationQueryResource>;
-let app: ReturnType<typeof createOrganizationApp>;
+let server: ReturnType<typeof Bun.serve>;
 
 beforeAll(async () => {
   harness = await createApiPostgresTestHarness();
   queryResource = createInternalOrganizationQueryResource({ databaseUrl: harness.databaseUrl });
-  app = createOrganizationApp();
+  const app = createOrganizationApp();
+  server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: app.fetch });
 });
 beforeEach(async () => {
   await harness.reset();
 });
 afterAll(async () => {
+  await server?.stop(true);
   await queryResource?.close();
   await harness?.close();
 });
@@ -600,24 +602,34 @@ describe("Organization Filter DSL through authenticated Internal HTTP and Postgr
   }, 10_000);
 
   test("returns exactly 500 complete matches and rejects a 501st published match without truncation", async () => {
-    const roots = Array.from({ length: 501 }, (_, index) => ({
-      id: index + 1,
-      orgCode: `ORG-${index + 1}`,
-      orgName: `Organization ${index + 1}`,
-      orgType: OrganizationType.Company,
-      level: 1 as const,
-      parentId: -1,
-      path: `/${index + 1}`,
-      status: OrganizationStatus.Enable,
-    }));
-    await harness.db.insert(organizations).values(roots);
-    await harness.db
-      .insert(organizationClosures)
-      .values(roots.map(({ id }) => ({ ancestorId: id, descendantId: id, depth: 0 })));
-    await publishAll();
-    const exactly500 = await search({ field: "code", op: "in", value: ["ORG-501"] });
-    expect(exactly500.status).toBe(200);
-    expect(exactly500.body.data.items).toHaveLength(1);
+    const started = performance.now();
+    await harness.db.insert(organizationDocuments).values(
+      Array.from({ length: 501 }, (_, index) => {
+        const organizationId = 501 - index;
+        const node = {
+          code: `ORG-${organizationId}`,
+          name: `Organization ${organizationId}`,
+          type: OrganizationType.Company,
+        };
+        return {
+          organizationId,
+          schemaVersion: ORGANIZATION_DOCUMENT_SCHEMA_VERSION,
+          sourceVersion: "1",
+          searchVisible: true,
+          document: OrganizationDocumentSchema.parse({
+            ...node,
+            level: 1,
+            status: OrganizationStatus.Enable,
+            isVirtual: false,
+            isEntity: false,
+            path: [{ ...node, level: 1, distanceToTarget: 0 }],
+          }),
+        };
+      }),
+    );
+    const finalMatch = await search({ field: "code", op: "in", value: ["ORG-501"] });
+    expect(finalMatch.status).toBe(200);
+    expect(finalMatch.body.data.items).toHaveLength(1);
     const bounded = await search({ not: { field: "code", op: "eq", value: "ORG-501" } });
     expect(bounded.status).toBe(200);
     expect(bounded.body.data.items).toHaveLength(500);
@@ -658,6 +670,7 @@ describe("Organization Filter DSL through authenticated Internal HTTP and Postgr
     });
     expect(sorted.status).toBe(200);
     expect(sorted.body.data).toEqual({ items: [{ code: "ORG-501" }], total: 501, page: 1, pageSize: 1 });
+    expect(performance.now() - started).toBeLessThan(1000);
   }, 60_000);
 });
 
@@ -782,7 +795,7 @@ async function search(filter: unknown, secret = internalClient.clientSecret) {
   return await searchRequest({ filter, select: Object.keys(OrganizationDocumentSchema.shape) }, secret);
 }
 async function searchRequest(body: unknown, secret = internalClient.clientSecret) {
-  const response = await app.request("http://localhost/internal/organizations/search-dsl", {
+  const response = await fetch(new URL("/internal/organizations/search-dsl", server.url), {
     method: "POST",
     headers: { apikey: secret, Client: internalClient.clientCode, "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -791,7 +804,7 @@ async function searchRequest(body: unknown, secret = internalClient.clientSecret
 }
 
 async function detail(code: string) {
-  const response = await app.request(`http://localhost/internal/organizations/${code}`, {
+  const response = await fetch(new URL(`/internal/organizations/${code}`, server.url), {
     headers: { apikey: internalClient.clientSecret, Client: internalClient.clientCode },
   });
   return { status: response.status, body: await response.json() };

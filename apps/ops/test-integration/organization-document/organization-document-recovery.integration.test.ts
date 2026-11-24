@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import { createOrganizationDocumentInvalidation } from "@iam/documents/organization/producer";
 import {
@@ -37,11 +37,16 @@ let prefix: string;
 let stopExecutors: Array<() => Promise<void> | void>;
 let redis: { host: string; port: number; db: number; password?: string; username?: string };
 let search: ReturnType<typeof createOrganizationDocumentQueryService>;
+beforeAll(async () => {
+  harness = await createOpsPostgresTestHarness();
+});
+afterAll(async () => {
+  await harness?.close();
+});
 beforeEach(async () => {
   stopExecutors = [];
+  await harness.reset();
   redis = redisUrlString().parse(resolveOpsRedisTestUrl(process.env));
-  harness = await createOpsPostgresTestHarness();
-  stopExecutors.push(harness.close);
   prefix = DEFAULT_QUEUE_PREFIX;
   module = createOrganizationDocumentWorkerModule({
     db: harness.db,
@@ -137,7 +142,7 @@ function environment(overrides: NodeJS.ProcessEnv = {}) {
   return {
     ...process.env,
     NODE_ENV: "test",
-    IAM_OPS_DATABASE_URL: harness.commandDatabaseUrl,
+    IAM_OPS_DATABASE_URL: harness.databaseUrl,
     IAM_OPS_REDIS_URL: resolveOpsRedisTestUrl(process.env),
     IAM_OPS_ORGANIZATION_DOCUMENT_QUEUE_PREFIX: prefix,
     IAM_OPS_LOG_FORMAT: "json",
@@ -345,7 +350,7 @@ for (const stage of ["expand", "build"] as const) {
           ? await harness.sql`SELECT status FROM organization_document_outbox WHERE status='processing'`
           : await harness.sql`SELECT status FROM organization_document_rebuild_state WHERE status='processing'`;
       const locks = await harness.sql`SELECT count(*)::int AS blocked FROM pg_stat_activity
-          WHERE wait_event_type='Lock' AND query LIKE '%organization_closure%' AND query NOT LIKE '%pg_stat_activity%'`;
+          WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%organization_closure%' AND query NOT LIKE '%pg_stat_activity%'`;
       return rows.length && locks[0]?.blocked ? rows : undefined;
     });
     expect(claimed.length).toBeGreaterThan(0);

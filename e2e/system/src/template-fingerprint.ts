@@ -22,6 +22,11 @@ const seedFiles = [
 ];
 
 export async function readTemplateSourceFingerprint(repositoryRoot: string) {
+  const inputs = await readTemplateSourceInputs(repositoryRoot);
+  return fingerprintTemplateInputs(inputs);
+}
+
+export async function readTemplateSourceInputs(repositoryRoot: string) {
   // The Worker publishes the documents stored in the template. Include its runtime
   // dependencies and the seed owner's dependencies as independent roots.
   const manifests = await readWorkspaceManifests(repositoryRoot);
@@ -49,7 +54,7 @@ export async function readTemplateSourceFingerprint(repositoryRoot: string) {
   if (!sourceInputs.some(({ path }) => path.startsWith("packages/db/src/migrations/"))) {
     throw new Error("E2E template requires the PostgreSQL migration set");
   }
-  return fingerprintTemplateInputs([...sourceInputs, ...configuration]);
+  return [...sourceInputs, ...configuration];
 }
 
 export function fingerprintTemplateInputs(inputs: readonly TemplateInput[]) {

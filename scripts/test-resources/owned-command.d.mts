@@ -8,6 +8,8 @@ export type OwnedCommandOptions = {
   cleanupTimeoutMs?: number;
   inheritOutput?: boolean;
   logFile?: string;
+  fullLogFile?: string;
+  onExecutionFailure?: () => void;
 };
 export type OwnedCommandResult = { exitCode: number; signal: NodeJS.Signals | null; output: string };
 export function runOwnedCommand(options: OwnedCommandOptions): Promise<OwnedCommandResult>;

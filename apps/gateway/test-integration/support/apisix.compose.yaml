@@ -20,6 +20,8 @@ services:
       retries: 30
 
   apisix:
+    image: "${IAM_GATEWAY_TEST_APISIX_IMAGE:-}"
+    pull_policy: never
     build:
       context: ./apps/gateway/test-integration/support
       dockerfile: apisix.Dockerfile

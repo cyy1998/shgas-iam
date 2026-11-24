@@ -5,6 +5,7 @@
   "private": true,
   "exports": {
     "./external-test-resources": "./src/external-test-resources.ts",
+    "./postgres-test-harness": "./src/postgres-test-harness.ts",
     "./process-smoke-harness": "./src/process-smoke-harness.ts"
   },
   "scripts": {
@@ -19,7 +20,8 @@
   },
   "dependencies": {
     "@iam/runtime": "workspace:*",
-    "ioredis": "^6.0.0"
+    "ioredis": "^6.0.0",
+    "postgres": "^3.4.9"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -29,6 +31,7 @@
   "iamTest": {
     "integration": {
       "bun": {
+        "postgres": "IAM_TEST_SUPPORT_TEST_DATABASE_URL",
         "redis": "IAM_TEST_SUPPORT_TEST_REDIS_URL"
       }
     }

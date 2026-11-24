@@ -370,7 +370,7 @@ async function waitForUserLock() {
   const deadline = Date.now() + 2000;
   while (Date.now() < deadline) {
     const rows = await harness.sql<{ blocked: boolean }[]>`select exists (
-      select 1 from pg_stat_activity where wait_event_type = 'Lock'
+      select 1 from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'
       and query like '%"user"%' and application_name = current_setting('application_name')
       and pid <> pg_backend_pid()
     ) as blocked`;
@@ -648,7 +648,7 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
               String(delegation.clientId),
             ],
             cwd: fileURLToPath(new URL("../../../api/", import.meta.url)),
-            env: { ...process.env, IAM_API_TEST_DATABASE_URL: harness.commandDatabaseUrl },
+            env: { ...process.env, IAM_API_TEST_DATABASE_URL: harness.databaseUrl },
           }),
         completionTimeoutMs: 15_000,
         cleanupTimeoutMs: 5_000,
@@ -1916,7 +1916,7 @@ describe("User mutations through production PostgreSQL UnitOfWork", () => {
         let blocked = false;
         while (!blocked && Date.now() < deadline) {
           const rows = await harness.sql<{ blocked: boolean }[]>`select exists (
-          select 1 from pg_stat_activity where wait_event_type = 'Lock'
+          select 1 from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'
           and query like '%"user"%' and application_name = current_setting('application_name')
           and pid <> pg_backend_pid()
         ) as blocked`;

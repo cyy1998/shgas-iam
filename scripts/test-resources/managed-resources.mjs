@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { createConnection } from "node:net";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import process from "node:process";
 import { runOwnedCommand } from "./owned-command.mjs";
@@ -51,7 +52,7 @@ export async function createManagedResourceRun(options) {
     testEnvironmentFile: `${artifactDirectory}/test-environment.json`,
     services: [...(options.services ?? [])],
     removeLocalImages: options.removeLocalImages ?? false,
-    keep: Boolean(options.keep || parent?.record.keep),
+    keep: Boolean(options.keep ?? parent?.record.keep),
     status: "created",
     createdAt: new Date().toISOString(),
     durations: {},
@@ -179,6 +180,56 @@ export async function managedServicePort(run, service, port, options = {}) {
   return Number(match[1]);
 }
 
+async function probeTcpEndpoint(host, port, signal, timeoutMs = 500) {
+  return await new Promise((resolve) => {
+    const socket = createConnection({ host, port });
+    let settled = false;
+    const finish = (reachable) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      socket.destroy();
+      resolve(reachable);
+    };
+    const onAbort = () => finish(false);
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    signal?.addEventListener("abort", onAbort, { once: true });
+    socket.once("connect", () => finish(true));
+    socket.once("error", () => finish(false));
+  });
+}
+
+async function managedContainerBridgeIp(run, service, options = {}) {
+  const ps = await runManagedComposeCommand(run, ["ps", "-q", service], options);
+  const containerId = ps.output.trim().split(/\r?\n/u).find(Boolean)?.trim();
+  if (ps.exitCode !== 0 || !containerId) return undefined;
+  const runCommand = options.runCommand ?? runOwnedCommand;
+  const inspected = await runCommand({
+    ...options,
+    executable: "docker",
+    args: ["inspect", "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{println}}{{end}}", containerId],
+    cwd: run.root,
+    env: process.env,
+  });
+  if (inspected.exitCode !== 0) return undefined;
+  return inspected.output
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .find((line) => /^\d{1,3}(?:\.\d{1,3}){3}$/u.test(line));
+}
+
+/** Prefer direct Compose bridge connectivity on Linux/AFK to bypass WSL2 loopback proxy SYN drops. */
+export async function managedServiceEndpoint(run, service, port, options = {}) {
+  if (process.platform === "linux") {
+    const containerIp = await managedContainerBridgeIp(run, service, options);
+    if (containerIp && (await probeTcpEndpoint(containerIp, port, options.signal))) {
+      return { host: containerIp, port };
+    }
+  }
+  return { host: "127.0.0.1", port: await managedServicePort(run, service, port, options) };
+}
+
 export async function collectManagedResourceDiagnostics(run, options = {}) {
   for (const [name, args] of [
     ["containers", ["ps", "--all", "--format", "json"]],
@@ -247,12 +298,20 @@ export async function cleanupManagedResources(run, options = {}) {
 }
 
 export async function finishManagedResourceRun(run, options = {}) {
-  await collectManagedResourceDiagnostics(run);
+  const diagnose = options.diagnostics || run.record.keep;
+  if (diagnose) await collectManagedResourceDiagnostics(run);
   if (run.record.keep) {
     run.record.status = "kept";
     await saveManagedResourceRun(run);
     console.log(`[test-resources] Environment retained; cleanup: ${managedCleanupCommand(run)}`);
-  } else await cleanupManagedResources(run, { timeoutMs: options.cleanupTimeoutMs });
+    return;
+  }
+  try {
+    await cleanupManagedResources(run, { timeoutMs: options.cleanupTimeoutMs });
+  } catch (error) {
+    if (!diagnose) await collectManagedResourceDiagnostics(run);
+    throw error;
+  }
 }
 
 export function formatResourceFailure(error) {

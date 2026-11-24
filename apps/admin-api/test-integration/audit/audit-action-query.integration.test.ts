@@ -27,7 +27,7 @@ describe("Admin audit queries after historical action normalization", () => {
           executable: process.execPath,
           args: ["--no-env-file", "run", "iam-ops", "audit-action", ...args],
           cwd: fileURLToPath(new URL("../../../ops/", import.meta.url)),
-          env: { ...process.env, IAM_OPS_DATABASE_URL: harness.commandDatabaseUrl, NO_COLOR: "1" },
+          env: { ...process.env, IAM_OPS_DATABASE_URL: harness.databaseUrl, NO_COLOR: "1" },
         }),
       completionTimeoutMs: 15_000,
       cleanupTimeoutMs: 5_000,

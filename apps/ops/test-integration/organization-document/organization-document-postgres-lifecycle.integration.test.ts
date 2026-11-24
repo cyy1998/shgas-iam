@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { mkdtemp, rm, rmdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,11 +16,16 @@ let harness: Awaited<ReturnType<typeof createOpsPostgresTestHarness>>;
 let queue: ReturnType<typeof createJobQueue>;
 let stopExecutors: Array<() => Promise<void> | void>;
 let redis: { host: string; port: number; db: number; password?: string; username?: string };
+beforeAll(async () => {
+  harness = await createOpsPostgresTestHarness();
+});
+afterAll(async () => {
+  await harness?.close();
+});
 beforeEach(async () => {
   stopExecutors = [];
+  await harness.reset();
   redis = redisUrlString().parse(resolveOpsRedisTestUrl(process.env));
-  harness = await createOpsPostgresTestHarness();
-  stopExecutors.push(harness.close);
   queue = createJobQueue({ name: "organization-document", redis });
   stopExecutors.push(() => queue.close());
   await harness.sql`INSERT INTO organization (id,org_code,org_name,parent_id,path,level,org_type)
@@ -186,7 +191,7 @@ async function command(
         env: {
           ...process.env,
           NODE_ENV: "test",
-          IAM_OPS_DATABASE_URL: harness.commandDatabaseUrl,
+          IAM_OPS_DATABASE_URL: harness.databaseUrl,
           IAM_OPS_REDIS_URL: resolveOpsRedisTestUrl(process.env),
           IAM_OPS_LOG_FORMAT: "json",
           IAM_OPS_LOG_LEVEL: "info",
