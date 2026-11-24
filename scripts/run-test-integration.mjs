@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import process from "node:process";
 import {
@@ -16,6 +15,7 @@ import {
   readManagedResourceRun,
   saveManagedResourceRun,
   startManagedResources,
+  writeAtomicResourceRecord,
 } from "./test-resources/managed-resources.mjs";
 import { pnpmCommand, runOwnedCommand } from "./test-resources/owned-command.mjs";
 
@@ -48,6 +48,7 @@ try {
     if (/^IAM_.*_TEST_(DATABASE|REDIS)_URL$/.test(name)) delete environment[name];
   delete environment.IAM_TEST_RESOURCE_RUN_ID;
   delete environment.IAM_TEST_RESOURCE_RECORD;
+  delete environment.IAM_TEST_POSTGRES_TEMPLATE;
   const names = [...new Set(tasks.flatMap((task) => task.environmentNames))];
   const services = ["postgres", "redis"].filter((service) => tasks.some((task) => task.resources[service]));
   // Even workspaces without shared data services may create child Compose projects.
@@ -72,11 +73,31 @@ try {
     if (services.includes("redis"))
       urls.redis = `redis://127.0.0.1:${await managedServicePort(run, "redis", 6379, { signal: controller.signal })}/0`;
     for (const name of names) environment[name] = name.endsWith("DATABASE_URL") ? urls.postgres : urls.redis;
-    await writeFile(
-      join(root, run.record.testEnvironmentFile),
-      `${JSON.stringify(Object.fromEntries(names.map((name) => [name, environment[name]])), null, 2)}\n`,
-      { mode: 0o600 },
-    );
+    const testEnvironment = Object.fromEntries(names.map((name) => [name, environment[name]]));
+    if (urls.postgres) {
+      const templateName = "iam_test_template";
+      const result = await runOwnedCommand({
+        ...pnpmCommand(pnpmCli, [
+          "--filter",
+          "@iam/db",
+          "exec",
+          "bun",
+          "--no-env-file",
+          "test-integration/support/prepare-postgres-template.ts",
+          templateName,
+        ]),
+        cwd: root,
+        env: { ...environment, IAM_DB_TEST_DATABASE_URL: urls.postgres },
+        signal: controller.signal,
+        timeoutMs: options.timeoutMs,
+        cleanupTimeoutMs: options.cleanupTimeoutMs,
+        logFile: join(root, run.record.artifactDirectory, "template-migration.log"),
+      });
+      if (result.exitCode !== 0) throw new Error(`Integration PostgreSQL template migration failed:\n${result.output}`);
+      testEnvironment.IAM_TEST_POSTGRES_TEMPLATE = templateName;
+    }
+    controller.signal.throwIfAborted();
+    await writeAtomicResourceRecord(join(root, run.record.testEnvironmentFile), testEnvironment);
     run.record.status = "running";
     await saveManagedResourceRun(run);
   }
