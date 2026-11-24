@@ -196,65 +196,79 @@ diff --git a/dist/index.js b/dist/index.js
 index 2a1d6d7e902e34620d64929418b34c715ab65d7d..f24cf5eb147e8078e9adcb1798d517771b5ba450 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -180,6 +180,7 @@ var TextDeltaBuffer = class {
+@@ -180,6 +180,8 @@ var TextDeltaBuffer = class {
  var IDLE_WARNING_INTERVAL_MS = 6e4;
  var invokeAgent = (sandbox, sandboxRepoDir, prompt, provider, idleTimeoutMs, completionTimeoutMs, completionSignals, onText, onToolCall, onRawLine, onIdleWarning, onCompletionTimeout, idleWarningIntervalMs = IDLE_WARNING_INTERVAL_MS, resumeSession, forkSession, signal) => Effect_exports.gen(function* () {
    let resultText = "";
 +  let streamError;
++  let fatalError;
    let sessionId;
    let usage;
    let accumulatedOutput = "";
-@@ -274,6 +275,8 @@ var invokeAgent = (sandbox, sandboxRepoDir, prompt, provider, idleTimeoutMs, com
+@@ -274,6 +276,14 @@ var invokeAgent = (sandbox, sandboxRepoDir, prompt, provider, idleTimeoutMs, com
              sessionId = parsed.sessionId;
            } else if (parsed.type === "usage") {
              usage = parsed.usage;
++          } else if (parsed.type === "turn_completed") {
++            streamError = void 0;
 +          } else if (parsed.type === "error") {
-+            streamError = parsed.message;
++            if (parsed.fatal) {
++              fatalError = parsed.message;
++            } else {
++              streamError = parsed.message;
++            }
            }
          }
          if (!completionDetected && completionSignals.some((sig) => accumulatedOutput.includes(sig))) {
-@@ -287,7 +290,12 @@ var invokeAgent = (sandbox, sandboxRepoDir, prompt, provider, idleTimeoutMs, com
+@@ -287,7 +297,13 @@ var invokeAgent = (sandbox, sandboxRepoDir, prompt, provider, idleTimeoutMs, com
        stdin: printCmd.stdin
      });
      if (execResult.exitCode !== 0) {
 -      let errorDetail = execResult.stderr;
 +      const stderr = execResult.stderr.trim();
-+      let errorDetail = streamError
++      const reportedError = fatalError ?? streamError;
++      let errorDetail = reportedError
 +        ? stderr
-+          ? `${streamError}\n${stderr}`
-+          : streamError
++          ? `${reportedError}\n${stderr}`
++          : reportedError
 +        : execResult.stderr;
        if (!errorDetail.trim()) {
          errorDetail = resultText;
        }
-@@ -302,6 +310,14 @@ ${errorDetail}`
+@@ -302,6 +318,15 @@ ${errorDetail}`
          })
        );
      }
-+    if (streamError !== void 0) {
++    const reportedError = fatalError ?? streamError;
++    if (reportedError !== void 0) {
 +      return yield* Effect_exports.fail(
 +        new AgentError({
 +          message: `${provider.name} reported an error:
-+${streamError}`
++${reportedError}`
 +        })
 +      );
 +    }
      return { result: resultText || execResult.stdout, sessionId, usage };
    }).pipe(
      Effect_exports.ensuring(
-@@ -3202,7 +3218,11 @@ var parseCodexStreamLine = (line) => {
+@@ -3202,11 +3227,15 @@ var parseCodexStreamLine = (line) => {
      }
      if (obj.type === "error") {
        const msg = extractErrorMessage(obj);
 -      return msg ? [{ type: "result", result: msg }] : [];
-+      return msg ? [{ type: "error", message: msg }, { type: "result", result: msg }] : [];
++      return msg ? [{ type: "error", message: msg }] : [];
 +    }
 +    if (obj.type === "turn.failed") {
 +      const msg = extractErrorMessage(obj);
-+      return [{ type: "error", message: msg ?? "codex turn failed" }];
++      return [{ type: "error", message: msg ?? "codex turn failed", fatal: true }];
      }
      if (obj.type === "turn.completed") {
        const usage = parseCodexUsage(obj.usage);
+-      return usage ? [{ type: "usage", usage }] : [];
++      return usage ? [{ type: "turn_completed" }, { type: "usage", usage }] : [{ type: "turn_completed" }];
+     }
+   } catch {
+   }
 diff --git a/dist/sandboxes/docker.d.ts b/dist/sandboxes/docker.d.ts
 index c7cc9e78dd3f14021ae64061d70e715bb98f768f..66b75c569fe999fbf1b5f920e5ed2b4482a2ed59 100644
 --- a/dist/sandboxes/docker.d.ts

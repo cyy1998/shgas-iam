@@ -180,7 +180,7 @@ overrides:
   typescript: npm:@typescript/typescript6@6.0.2
 
 patchedDependencies:
-  '@ai-hero/sandcastle@0.12.0': 2e8686812b55c9c40820576e2dfabd64213dd3deba19b2e51bff0c25d769ff29
+  '@ai-hero/sandcastle@0.12.0': b538ddeff7271bc64e05071708122d0fd6eb763de918acf72bad6e1610bc297f
 
 importers:
 
@@ -188,7 +188,7 @@ importers:
     devDependencies:
       '@ai-hero/sandcastle':
         specifier: 0.12.0
-        version: 0.12.0(patch_hash=2e8686812b55c9c40820576e2dfabd64213dd3deba19b2e51bff0c25d769ff29)
+        version: 0.12.0(patch_hash=b538ddeff7271bc64e05071708122d0fd6eb763de918acf72bad6e1610bc297f)
       '@biomejs/biome':
         specifier: ^2.6.8
         version: 2.6.8
@@ -4793,7 +4793,7 @@ snapshots:
 
   '@adobe/css-tools@4.5.0': {}
 
-  '@ai-hero/sandcastle@0.12.0(patch_hash=2e8686812b55c9c40820576e2dfabd64213dd3deba19b2e51bff0c25d769ff29)':
+  '@ai-hero/sandcastle@0.12.0(patch_hash=b538ddeff7271bc64e05071708122d0fd6eb763de918acf72bad6e1610bc297f)':
     dependencies:
       '@clack/prompts': 1.7.0
 
