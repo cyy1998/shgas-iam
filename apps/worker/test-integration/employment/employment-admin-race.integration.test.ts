@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -63,6 +63,17 @@ const cases = [
   },
 ] as const;
 
+let pg: WorkerPostgresTestHarness;
+beforeAll(async () => {
+  pg = await createWorkerPostgresTestHarness();
+});
+beforeEach(async () => {
+  await pg.reset();
+});
+afterAll(async () => {
+  await pg?.close();
+});
+
 for (const scenario of cases) {
   test(scenario.name, async () => {
     await runWithOwnedTestResources(async ({ registerCleanup }) => {
@@ -70,8 +81,6 @@ for (const scenario of cases) {
       registerCleanup(async () => {
         if (stopExecutors.length > 0) await resetWorkerRedisTestDatabase(stopExecutors);
       });
-      const pg = await createWorkerPostgresTestHarness();
-      stopExecutors.push(pg.close);
       const redis = await createWorkerRedisTestHarness();
       stopExecutors.push(redis.close);
       const auth = await seedAdmin(pg, redis);
@@ -274,7 +283,7 @@ async function startAdmin(
           temporaryDirectory,
           overrides: {
             NODE_ENV: "test",
-            IAM_ADMIN_API_DATABASE_URL: pg.commandDatabaseUrl,
+            IAM_ADMIN_API_DATABASE_URL: pg.databaseUrl,
             IAM_ADMIN_API_REDIS_URL: resolveWorkerRedisTestUrl(process.env),
             IAM_ADMIN_API_PORT: String(port),
             IAM_ADMIN_API_ADMIN_CLIENT_CODES: clientCode,

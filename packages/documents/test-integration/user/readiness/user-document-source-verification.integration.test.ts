@@ -35,8 +35,6 @@ describe("User Document source verification", () => {
 
   beforeEach(async () => {
     await harness.reset();
-    await harness.sql`TRUNCATE role_assignment, role, client, organization_responsibility_assignment,
-      employment, organization_closure, organization, position RESTART IDENTITY CASCADE`;
   });
 
   afterAll(async () => {

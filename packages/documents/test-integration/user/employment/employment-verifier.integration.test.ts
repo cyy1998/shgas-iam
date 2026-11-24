@@ -16,7 +16,6 @@ describe("Employment verifier PostgreSQL contract", () => {
 
   beforeEach(async () => {
     await harness.reset();
-    await harness.sql.unsafe("TRUNCATE TABLE employment, position, organization RESTART IDENTITY CASCADE");
     await seedParents();
   });
 

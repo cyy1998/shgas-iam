@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { createConnection, createServer, type Socket } from "node:net";
 import process from "node:process";
 import { OrganizationLevel, OrganizationType } from "@iam/contracts";
@@ -164,6 +164,17 @@ test("a ready Redis connection that becomes silent times out, releases its socke
   });
 }, 20_000);
 
+let pg: Awaited<ReturnType<typeof createWorkerPostgresTestHarness>>;
+beforeAll(async () => {
+  pg = await createWorkerPostgresTestHarness();
+});
+beforeEach(async () => {
+  await pg.reset();
+});
+afterAll(async () => {
+  await pg?.close();
+});
+
 async function withFixture(work: (fixture: Awaited<ReturnType<typeof createFixture>>) => Promise<void>) {
   const stopExecutors: Array<() => Promise<void> | void> = [];
   await runWithOwnedTestResources(async ({ registerCleanup }) => {
@@ -175,8 +186,6 @@ async function withFixture(work: (fixture: Awaited<ReturnType<typeof createFixtu
 }
 
 async function createFixture(stopExecutors: Array<() => Promise<void> | void>) {
-  const pg = await createWorkerPostgresTestHarness();
-  stopExecutors.push(pg.close);
   const redis = await createWorkerRedisTestHarness();
   stopExecutors.push(redis.close);
   const redisConfig = parseDedicatedRedisTestUrl({

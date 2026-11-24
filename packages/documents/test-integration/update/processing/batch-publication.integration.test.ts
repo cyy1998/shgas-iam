@@ -8,20 +8,19 @@ import {
 import { sql } from "drizzle-orm";
 import { createDocumentUpdateProcessor, type PreparedDocumentPublication } from "../../../src/update";
 import {
-  createDocumentUpdatePostgresTestHarness,
-  type DocumentUpdatePostgresTestHarness,
-} from "../support/postgres-test-harness";
+  createDocumentsPostgresTestHarness,
+  type DocumentsPostgresTestHarness,
+} from "../../support/postgres-test-harness";
 
 type Document = { name: string };
 type Prepared = PreparedDocumentPublication<Document>;
-let harness: DocumentUpdatePostgresTestHarness;
+let harness: DocumentsPostgresTestHarness;
 beforeAll(async () => {
-  harness = await createDocumentUpdatePostgresTestHarness();
+  harness = await createDocumentsPostgresTestHarness();
   await harness.sql`CREATE TABLE batch_followup (target_id integer PRIMARY KEY, version bigint NOT NULL)`;
 });
 beforeEach(async () => {
   await harness.reset();
-  await harness.sql`TRUNCATE batch_followup`;
 });
 afterAll(async () => {
   await harness?.close();

@@ -19,8 +19,8 @@ import {
   createOrganizationResponsibilityResolver,
   type OrganizationResponsibilityResolver,
 } from "../../../src/organization-responsibility/index.ts";
-import type { PostgresTestHarness } from "../support/postgres-harness.ts";
-import { createPostgresTestHarness } from "../support/postgres-harness.ts";
+import type { PostgresTestHarness } from "../../support/postgres-harness.ts";
+import { createPostgresTestHarness } from "../../support/postgres-harness.ts";
 
 const at = new Date("2026-08-20T12:00:00.000Z");
 let harness: PostgresTestHarness | undefined;

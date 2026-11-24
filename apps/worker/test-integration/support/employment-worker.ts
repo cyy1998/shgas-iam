@@ -17,7 +17,7 @@ export async function startEmploymentWorker(input: {
   overrides?: NodeJS.ProcessEnv;
 }) {
   const { pg, redis, stopExecutors } = input;
-  const databaseUrl = new URL(input.overrides?.IAM_WORKER_DATABASE_URL ?? pg.commandDatabaseUrl);
+  const databaseUrl = new URL(input.overrides?.IAM_WORKER_DATABASE_URL ?? pg.databaseUrl);
   databaseUrl.searchParams.set("application_name", workerApplicationName(pg));
   const worker = await startEmploymentProcess({
     label: "Employment lifecycle Worker",
@@ -109,7 +109,7 @@ export async function waitForEmploymentWorkerLock(pg: WorkerPostgresTestHarness,
 }
 
 function workerApplicationName(pg: WorkerPostgresTestHarness) {
-  return `iam-sweep-${pg.schemaName}`;
+  return `iam-sweep-${new URL(pg.databaseUrl).pathname.slice(1)}`;
 }
 
 export async function waitFor<T>(

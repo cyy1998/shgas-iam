@@ -19,7 +19,7 @@ afterAll(async () => {
 
 test("the formal PostgreSQL-only CLI accepts a standard URI with an uppercase scheme", async () => {
   const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("IAM_OPS_")));
-  const uri = harness.commandDatabaseUrl.replace(/^[^:]+:/u, "POSTGRESQL:");
+  const uri = harness.databaseUrl.replace(/^[^:]+:/u, "POSTGRESQL:");
   const result = await runProcessCommandSmoke({
     label: "Ops uppercase PostgreSQL scheme",
     completionTimeoutMs: 10000,
@@ -34,7 +34,8 @@ test("the formal PostgreSQL-only CLI accepts a standard URI with an uppercase sc
   });
   expect(result.output).toContain('"status":"passed"');
   expect(result.output).not.toContain(uri);
-  const remaining = await harness.sql`SELECT pid FROM pg_stat_activity WHERE application_name LIKE 'iam-org-%'`;
+  const remaining =
+    await harness.sql`SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND application_name LIKE 'iam-org-%'`;
   expect([...remaining]).toEqual([]);
 }, 15000);
 
@@ -57,7 +58,7 @@ test("source artifact loads only its own private env and inherited process value
       expect(built.success).toBe(true);
       await writeFile(
         join(directory, ".env"),
-        `NODE_ENV=test\nIAM_OPS_DATABASE_URL=${JSON.stringify(harness.commandDatabaseUrl)}\nIAM_OPS_LOG_FORMAT=json\n`,
+        `NODE_ENV=test\nIAM_OPS_DATABASE_URL=${JSON.stringify(harness.databaseUrl)}\nIAM_OPS_LOG_FORMAT=json\n`,
       );
       await writeFile(
         join(foreignWorkingDirectory, ".env"),
@@ -102,7 +103,7 @@ test("source artifact loads only its own private env and inherited process value
       });
       expect(invalid.output).not.toContain("verification completed");
       const [row] = await harness.sql`SELECT count(*)::int AS count FROM pg_stat_activity
-      WHERE application_name LIKE 'iam-org-%' AND query NOT LIKE '%pg_stat_activity%'`;
+      WHERE datname=current_database() AND application_name LIKE 'iam-org-%' AND query NOT LIKE '%pg_stat_activity%'`;
       expect(row?.count).toBe(0);
     },
   });

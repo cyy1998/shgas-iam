@@ -53,7 +53,7 @@ test("first build and incompatible schema recovery require a fresh full verifica
   const runtime = createOrganizationFixtureRuntime(
     {
       NODE_ENV: "test",
-      IAM_OPS_DATABASE_URL: harness.commandDatabaseUrl,
+      IAM_OPS_DATABASE_URL: harness.databaseUrl,
       IAM_OPS_REDIS_URL: resolveOpsRedisTestUrl(process.env),
     },
     createLogger({ nodeEnv: "test", logLevel: "silent", logFormat: "json", sourceApp: LoggerSourceApp.Ops }),
@@ -188,7 +188,7 @@ test("first build and incompatible schema recovery require a fresh full verifica
           env: {
             ...process.env,
             NODE_ENV: "test",
-            IAM_OPS_DATABASE_URL: harness.commandDatabaseUrl,
+            IAM_OPS_DATABASE_URL: harness.databaseUrl,
             IAM_OPS_REDIS_URL: resolveOpsRedisTestUrl(process.env),
             IAM_OPS_ORGANIZATION_DOCUMENT_QUEUE_PREFIX: prefix,
             IAM_OPS_LOG_LEVEL: "info",
