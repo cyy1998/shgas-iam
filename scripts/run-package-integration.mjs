@@ -50,6 +50,8 @@ try {
   const declaration = integrationDeclarations(manifest).find((item) => item.executor === executor);
   if (!declaration) throw new Error(`No Integration declaration for ${manifest.name}:${executor}`);
   const names = declaration.environmentNames;
+  const testEnvironment = { ...process.env };
+  delete testEnvironment.IAM_TEST_POSTGRES_TEMPLATE;
   if (browserWorkers !== undefined && (executor !== "playwright" || names.length > 0 || resourceProvider))
     throw new Error("--browser-workers requires a resource-free Playwright collection without a resource provider");
   if (names.length > 0) {
@@ -65,6 +67,12 @@ try {
     for (const name of names)
       if (!environment[name] || environment[name] !== process.env[name])
         throw new Error(`${name} must come from this run's managed resource record`);
+    if (declaration.resources.postgres) {
+      const templateName = environment.IAM_TEST_POSTGRES_TEMPLATE;
+      if (typeof templateName !== "string" || !templateName)
+        throw new Error("Managed resource record is missing the PostgreSQL template");
+      testEnvironment.IAM_TEST_POSTGRES_TEMPLATE = templateName;
+    }
   }
   const selection = JSON.parse(process.env.IAM_TEST_INTEGRATION_SELECTION || "null");
   const files = selection?.[`${manifest.name}:${executor}`];
@@ -103,7 +111,7 @@ try {
   const result = await runOwnedCommand({
     ...pnpmCommand(pnpmCli, ["exec", executable, ...args]),
     cwd,
-    env: { ...process.env, ...resources?.environment },
+    env: { ...testEnvironment, ...resources?.environment },
     signal: controller.signal,
     inheritOutput: true,
   });
