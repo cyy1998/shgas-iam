@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import {
@@ -14,7 +14,6 @@ import {
   createSubjectFactsRedisPublisher,
   DocumentFactsCacheRecordSchema,
 } from "@iam/documents/user";
-import { repairUserDocument } from "@iam/documents/user/maintenance";
 import {
   createCurrentUserDocumentReadiness,
   createSubjectAccessAuthorityRepository,
@@ -33,6 +32,7 @@ import {
   runUserDocumentRedisGateCommand,
   userDocumentGateExitCode,
 } from "@ops/commands/user-document/user-document-readiness";
+import { parseUserDocumentRepairArgs } from "@ops/commands/user-document/user-document-repair";
 import { createUserDocumentCommandComposition } from "@ops/composition/user-document-command";
 import { createUserDocumentReadinessCommandComposition } from "@ops/composition/user-document-readiness-command";
 import { parseUserDocumentCommandEnv } from "@ops/env";
@@ -42,8 +42,16 @@ import { resetOpsRedisTestDatabase, resolveOpsRedisTestUrl } from "../support/re
 
 const opsRoot = fileURLToPath(new URL("../../", import.meta.url));
 let stopExecutors: Array<() => Promise<void> | void>;
-beforeEach(() => {
+let pg: Awaited<ReturnType<typeof createOpsPostgresTestHarness>>;
+beforeAll(async () => {
+  pg = await createOpsPostgresTestHarness();
+});
+afterAll(async () => {
+  await pg?.close();
+});
+beforeEach(async () => {
   stopExecutors = [];
+  await pg.reset();
 });
 afterEach(async () => {
   if (stopExecutors.length) await resetOpsRedisTestDatabase(stopExecutors);
@@ -61,10 +69,10 @@ test("full User Document maintenance rebuilds every account and repeats both gat
   await sql`INSERT INTO user_document_outbox (id,source)
     VALUES (${legacyOutboxId},'{"change":{"kind":"user","userId":1}}'::jsonb)`;
 
-  const initialPostgres = await fixture.command("verify-postgres", 1);
+  const initialPostgres = await fixture.run("verify-postgres", 1);
   expect(initialPostgres.output).toContain('"code":"document-version-mismatch"');
   expect(initialPostgres.output).toContain('"code":"document-missing"');
-  const initialRedis = await fixture.command("verify-redis", 1);
+  const initialRedis = await fixture.run("verify-redis", 1);
   expect(initialRedis.output).toContain('"code":"facts-missing"');
 
   const backfill = await fixture.command("backfill", 0, ["--batch-size", "3"]);
@@ -75,7 +83,7 @@ test("full User Document maintenance rebuilds every account and repeats both gat
   expect(beforeConsumption.output).toContain('"status":"failed"');
   expect(beforeConsumption.output).toContain('"code":"unprocessed-rebuild-state"');
   // Repair still wakes legacy Outbox work alongside the registered backfill rebuilds.
-  const recovery = await fixture.command("repair", 0, [
+  const recovery = await fixture.run("repair", 0, [
     "--stale-before",
     new Date(Date.now() + 60_000).toISOString(),
     "--limit",
@@ -117,7 +125,7 @@ test("full User Document maintenance rebuilds every account and repeats both gat
   await fixture.run("verify-redis", 0);
 
   await fixture.run("backfill", 0);
-  await fixture.command("repair", 0, ["--limit", "10"]);
+  await fixture.run("repair", 0, ["--limit", "10"]);
   await fixture.startConsumer();
   await fixture.converged();
   await fixture.assertReadOnlyCompleteGates(true);
@@ -174,7 +182,7 @@ test("Subject Access-only CLI reaps PostgreSQL-only stale intent without changin
   expect([...connections]).toEqual([]);
 }, 30_000);
 
-test("repair CLI preserves exhausted work and explicitly retries only the requested version", async () => {
+test("repair preserves exhausted work and explicitly retries only the requested version", async () => {
   const fixture = await createMaintenanceFixture();
   await fixture.run("backfill", 0);
   await fixture.startConsumer();
@@ -188,7 +196,7 @@ test("repair CLI preserves exhausted work and explicitly retries only the reques
   const [before] = await fixture.pg.sql<{ version: string }[]>`
     SELECT post_publication_version AS version FROM user_document_rebuild_state WHERE user_id=1`;
   if (!before) throw new Error("Missing exhausted publication fixture");
-  const exhausted = await fixture.command("repair", 1, ["--limit", "1"]);
+  const exhausted = await fixture.run("repair", "User Document repair remains incomplete", ["--limit", "1"]);
   expect(exhausted.output).toContain('"exhausted":2');
   const unchanged = await fixture.pg.sql`SELECT user_id,post_publication_status,post_publication_attempts
     FROM user_document_rebuild_state WHERE user_id IN (1,2) ORDER BY user_id`;
@@ -196,8 +204,12 @@ test("repair CLI preserves exhausted work and explicitly retries only the reques
     { user_id: 1, post_publication_status: "failed", post_publication_attempts: 5 },
     { user_id: 2, post_publication_status: "failed", post_publication_attempts: 5 },
   ]);
-  await fixture.command("repair", 1, ["--retry-user-id", "1", "--retry-version", String(BigInt(before.version) + 1n)]);
-  const retry = await fixture.command("repair", 0, ["--retry-user-id", "1", "--retry-version", before.version]);
+  await fixture.run(
+    "repair",
+    "Explicit retry requires an exhausted failed or stale publication of the specified version",
+    ["--retry-user-id", "1", "--retry-version", String(BigInt(before.version) + 1n)],
+  );
+  const retry = await fixture.run("repair", 0, ["--retry-user-id", "1", "--retry-version", before.version]);
   expect(retry.output).toContain('"completed":1');
   const states = await fixture.pg.sql`SELECT user_id,post_publication_status,post_publication_attempts
     FROM user_document_rebuild_state WHERE user_id IN (1,2) ORDER BY user_id`;
@@ -208,7 +220,7 @@ test("repair CLI preserves exhausted work and explicitly retries only the reques
   await fixture.pg.sql`UPDATE user_document_rebuild_state SET post_publication_status='failed',
     post_publication_attempts=5,post_publication_completed_at=NULL,post_publication_error='RedisUnavailable'
     WHERE user_id=3`;
-  const forced = await fixture.command("repair", 0, ["--force", "--limit", "10"]);
+  const forced = await fixture.run("repair", 0, ["--force", "--limit", "10"]);
   expect(forced.output).toContain('"force":true');
   expect(forced.output).toContain('"completed":2');
   const bulkStates = await fixture.pg.sql`SELECT user_id,post_publication_status,post_publication_attempts
@@ -271,9 +283,15 @@ test("complete maintenance gates reject corrupt, missing and inconsistent rows b
   await fixture.assertUnrelatedRedis();
 }, 120_000);
 
+test("the User Document verification CLI rejects an invalid batch size and redacts the database URL", async () => {
+  const fixture = await createMaintenanceFixture();
+  const result = await fixture.command("verify-postgres", 1, ["--batch-size", "0"]);
+  expect(result.output).toContain("User Document readiness failed");
+  expect(result.output).not.toContain("PostgreSQL gate completed");
+  expect(result.output).not.toContain(pg.databaseUrl);
+}, 30_000);
+
 async function createMaintenanceFixture() {
-  const pg = await createOpsPostgresTestHarness();
-  stopExecutors.push(pg.close);
   const redisUrl = resolveOpsRedisTestUrl(process.env);
   const redisConfig = redisUrlString().parse(redisUrl);
   const redis = new Redis(redisUrl);
@@ -369,12 +387,8 @@ async function createMaintenanceFixture() {
     throw new Error("Profile maintenance did not converge through both full gates");
   }
   function commandEnvironment(readiness: boolean) {
-    const databaseUrl = new URL(pg.commandDatabaseUrl);
-    if (readiness)
-      databaseUrl.searchParams.set(
-        "options",
-        `${databaseUrl.searchParams.get("options")} -cdefault_transaction_read_only=on`,
-      );
+    const databaseUrl = new URL(pg.databaseUrl);
+    if (readiness) databaseUrl.searchParams.set("options", "-cdefault_transaction_read_only=on");
     return {
       ...process.env,
       NODE_ENV: "test",
@@ -407,7 +421,7 @@ async function createMaintenanceFixture() {
             "src/index.ts",
             "user-document",
             operation,
-            ...(readiness ? ["--batch-size", "1"] : []),
+            ...(readiness && args.length === 0 ? ["--batch-size", "1"] : []),
             ...args,
           ],
           cwd: opsRoot,
@@ -427,7 +441,11 @@ async function createMaintenanceFixture() {
   }
   // Business variants use the same production composition and command operations,
   // while representative argv/output/exit and read-only checks still run a real CLI.
-  async function run(operation: "backfill" | "repair" | "verify-postgres" | "verify-redis", expectedExitCode: number) {
+  async function run(
+    operation: "backfill" | "repair" | "verify-postgres" | "verify-redis",
+    expected: number | string,
+    args: string[] = [],
+  ) {
     const messages: string[] = [];
     const commandLogger = {
       debug: logger.debug.bind(logger),
@@ -451,7 +469,6 @@ async function createMaintenanceFixture() {
       });
       stopExecutors.push(() => composition.shutdown("test-cleanup"));
       const report = await runMaintenanceCommandWithLifecycle({
-        signals: process,
         deadlineMs,
         shutdown: composition.shutdown,
         run: (signal) =>
@@ -462,49 +479,40 @@ async function createMaintenanceFixture() {
       });
       exitCode = userDocumentGateExitCode(report);
     } else {
+      const options = operation === "repair" ? parseUserDocumentRepairArgs(args) : {};
       const composition = createUserDocumentCommandComposition({ env, logger: commandLogger, deadlineMs });
       stopExecutors.push(() => composition.shutdown("test-cleanup"));
-      await runMaintenanceCommandWithLifecycle({
-        signals: process,
-        deadlineMs,
-        shutdown: composition.shutdown,
-        async run(signal) {
-          if (!composition.maintenance) throw new Error("User Document maintenance is required");
-          if (operation === "backfill") {
-            return await runUserDocumentBackfillCommand(
-              { maintenance: composition.maintenance, logger: commandLogger, config: { batchSize: 1 } },
-              signal,
-            );
-          }
-          await composition.connect();
-          const result = await repairUserDocument(
-            {
-              maintenance: composition.maintenance,
-              subjectAccessRepair: composition.subjectAccess.repair,
-              subjectAccessRepairBacklog: composition.subjectAccess.repairBacklog,
-              subjectAccessTransitionReaper: composition.subjectAccess.transitionReaper,
-              subjectAccessTransitionRecovery: composition.subjectAccess.transitionRecovery,
-              clock: composition.clock,
-              logger: commandLogger,
-              config: {
-                limit: 10,
-                repairStaleSeconds: env.userDocument.repairStaleSeconds,
-                transitionStaleSeconds: env.userDocument.repairStaleSeconds,
-              },
-            },
-            { signal },
-          );
-          if (result.subjectAccess.failed || result.transitionRecovery.failed) exitCode = 1;
-          return result;
-        },
-      });
+      try {
+        await runMaintenanceCommandWithLifecycle({
+          deadlineMs,
+          shutdown: composition.shutdown,
+          async run(signal) {
+            if (operation === "backfill") {
+              if (!composition.maintenance) throw new Error("User Document maintenance is required");
+              return await runUserDocumentBackfillCommand(
+                { maintenance: composition.maintenance, logger: commandLogger, config: { batchSize: 1 } },
+                signal,
+              );
+            }
+            await composition.connect();
+            const result = await composition.repair({ ...options, signal });
+            if (result.subjectAccess.failed || result.transitionRecovery.failed) exitCode = 1;
+            return result;
+          },
+        });
+      } catch (error) {
+        if (typeof expected !== "string") throw error;
+        expect(error).toMatchObject({ message: expected });
+        return { output: messages.join("\n") };
+      }
     }
-    expect(exitCode).toBe(expectedExitCode);
+    if (typeof expected === "string") throw new Error(`Expected repair to fail with "${expected}"`);
+    expect(exitCode).toBe(expected);
     return { output: messages.join("\n") };
   }
   async function completeGates(useCli = false) {
     for (const operation of ["verify-postgres", "verify-redis"] as const) {
-      const result = await (useCli ? command : run)(operation, 0);
+      const result = await (useCli && operation === "verify-postgres" ? command : run)(operation, 0);
       expect(result.output).toContain('"status":"passed"');
       expect(result.output).toContain('"counts":{"users":5,"documents":5,"verifiedUsers":5');
     }

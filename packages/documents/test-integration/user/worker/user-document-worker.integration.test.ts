@@ -31,8 +31,6 @@ describe("production User Document schema 1 Worker", () => {
 
   beforeEach(async () => {
     await harness.reset();
-    await harness.sql`TRUNCATE role_assignment, role, client, organization_responsibility_assignment,
-      employment, organization_closure, organization, position RESTART IDENTITY CASCADE`;
     await harness.sql`
       INSERT INTO "user" (
         id,

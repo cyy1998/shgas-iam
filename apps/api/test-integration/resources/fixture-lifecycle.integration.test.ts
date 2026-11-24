@@ -52,6 +52,7 @@ test.each([
   await new Promise<void>((resolve) => proxy.listen(0, "127.0.0.1", resolve));
   const address = proxy.address();
   if (!address || typeof address === "string") throw new Error("Missing reset fault proxy port");
+  url.hostname = "127.0.0.1";
   url.port = String(address.port);
   let failure: unknown;
   try {
@@ -150,6 +151,7 @@ test("Root Auth initialization failure stops previously created scopes and the n
   );
   const address = proxy.address();
   if (!address || typeof address === "string") throw new Error("Missing setup fault proxy port");
+  url.hostname = "127.0.0.1";
   url.port = String(address.port);
   let failure: unknown;
   try {
@@ -187,6 +189,7 @@ test("API reset stops a scope still awaiting PING before resetting the database"
   );
   const address = proxy.address();
   if (!address || typeof address === "string") throw new Error("Missing stalled PING proxy port");
+  url.hostname = "127.0.0.1";
   url.port = String(address.port);
   const initializing = fixture(30, url.href).then(
     (value) => ({ value, failure: undefined }),

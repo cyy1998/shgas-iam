@@ -28,6 +28,7 @@
     "drizzle-orm": "1.0.0-rc.2"
   },
   "devDependencies": {
+    "@iam/test-support": "workspace:*",
     "@types/bun": "latest",
     "@typescript/native": "npm:typescript@7.0.2",
     "postgres": "^3.4.9",

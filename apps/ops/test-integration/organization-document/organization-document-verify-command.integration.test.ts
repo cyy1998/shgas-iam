@@ -17,9 +17,7 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   commands = [];
-  await harness.sql.unsafe(
-    "TRUNCATE organization_document_outbox, organization_document_rebuild_state, organization_document, organization_closure, organization RESTART IDENTITY CASCADE",
-  );
+  await harness.reset();
   await harness.sql`INSERT INTO organization (id, org_code, org_name, path, level, org_type) VALUES (1, 'VERIFY', 'Verify', '/1', 1, ${OrganizationType.Department})`;
   await harness.sql`INSERT INTO organization_closure (ancestor_id, descendant_id, depth) VALUES (1,1,0)`;
 });
@@ -142,11 +140,8 @@ async function publishAll() {
 }
 
 async function runVerify(expectedExitCode: number, args: string[] = [], bunArgs: string[] = []) {
-  const url = new URL(harness.commandDatabaseUrl);
-  url.searchParams.set(
-    "options",
-    `${url.searchParams.get("options")} -cdefault_transaction_read_only=on -capplication_name=verify_${harness.schemaName}`,
-  );
+  const url = new URL(harness.databaseUrl);
+  url.searchParams.set("options", "-cdefault_transaction_read_only=on");
   const pending = runProcessCommandSmoke({
     label: "Organization Search PostgreSQL verification",
     start: () =>

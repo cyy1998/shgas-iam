@@ -20,7 +20,7 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  await harness.sql.unsafe("TRUNCATE TABLE document_query_fixture");
+  await harness.reset();
 });
 
 afterAll(async () => {

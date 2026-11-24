@@ -369,15 +369,9 @@ describe("User Document v4 User scalar tracer", () => {
     const candidate = await builder.buildOne({ userId: 1, sourceVersion: "1" });
     await candidatePersistence.upsert(candidate!);
 
-    const schemaRows = await harness!.sql<{ schemaName: string }[]>`
-      SELECT current_schema() AS "schemaName"
-    `;
-    const schemaName = schemaRows[0]?.schemaName;
-    if (schemaName === undefined) throw new Error("PostgreSQL test schema is unavailable");
-    const timeoutSql = postgres(process.env.IAM_DOCUMENTS_TEST_DATABASE_URL!, {
+    const timeoutSql = postgres(harness!.databaseUrl, {
       connection: {
         application_name: "iam-user-document-timeout-test",
-        search_path: schemaName,
         statement_timeout: 50,
       },
       max: 1,

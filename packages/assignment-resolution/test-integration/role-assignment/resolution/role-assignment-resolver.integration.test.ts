@@ -25,23 +25,23 @@ import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { eq, inArray } from "drizzle-orm";
 import type { RoleAssignmentResolver } from "../../../src/role-assignment/index.ts";
 import { createRoleAssignmentResolver } from "../../../src/role-assignment/index.ts";
-import type { PostgresTestHarness } from "../support/postgres-harness.ts";
-import { createPostgresTestHarness } from "../support/postgres-harness.ts";
+import type { PostgresTestHarness } from "../../support/postgres-harness.ts";
+import { createPostgresTestHarness } from "../../support/postgres-harness.ts";
 
 let harness: PostgresTestHarness | undefined;
 let resolver: RoleAssignmentResolver;
 
 beforeAll(async () => {
   harness = await createPostgresTestHarness();
-  await harness.db.insert(clients).values([
-    { id: 1, clientCode: "client-one", clientName: "Client one", clientSecret: "synthetic", extAttributes: {} },
-    { id: 2, clientCode: "client-two", clientName: "Client two", clientSecret: "synthetic", extAttributes: {} },
-  ]);
   resolver = createRoleAssignmentResolver(harness.db);
 });
 
 beforeEach(async () => {
   await harness!.reset();
+  await harness!.db.insert(clients).values([
+    { id: 1, clientCode: "client-one", clientName: "Client one", clientSecret: "synthetic", extAttributes: {} },
+    { id: 2, clientCode: "client-two", clientName: "Client two", clientSecret: "synthetic", extAttributes: {} },
+  ]);
 });
 
 afterAll(async () => {

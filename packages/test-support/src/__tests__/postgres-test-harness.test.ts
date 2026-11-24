@@ -28,3 +28,13 @@ test("rejects URL parameters that can redirect a pool from its named database", 
     }),
   ).toThrow("must identify PostgreSQL through its URL host and path");
 });
+
+test("accepts a dedicated database with the same name on a different port", () => {
+  const value = "postgres://test-user@localhost:5433/iam_test";
+  const validated = requireDedicatedPostgresTestUrl({
+    name,
+    value,
+    forbidden: [{ name: "DATABASE_URL", value: "postgresql://dev-user@localhost:5432/iam_test" }],
+  });
+  expect(validated).toBe(value);
+});

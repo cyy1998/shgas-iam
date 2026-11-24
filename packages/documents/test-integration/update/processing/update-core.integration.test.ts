@@ -13,20 +13,18 @@ import {
   persistDocumentOutboxEntries,
 } from "../../../src/update";
 import {
-  createDocumentUpdatePostgresTestHarness,
-  type DocumentUpdatePostgresTestHarness,
-} from "../support/postgres-test-harness";
+  createDocumentsPostgresTestHarness,
+  type DocumentsPostgresTestHarness,
+} from "../../support/postgres-test-harness";
 
-let harness: DocumentUpdatePostgresTestHarness;
+let harness: DocumentsPostgresTestHarness;
 beforeAll(async () => {
-  harness = await createDocumentUpdatePostgresTestHarness();
+  harness = await createDocumentsPostgresTestHarness();
   await harness.sql`CREATE TABLE followup (target_id integer PRIMARY KEY, version bigint NOT NULL)`;
   await harness.sql`CREATE TABLE source_metadata (target_id integer PRIMARY KEY, version bigint NOT NULL)`;
 });
 beforeEach(async () => {
   await harness.reset();
-  await harness.sql`TRUNCATE followup`;
-  await harness.sql`TRUNCATE source_metadata`;
 });
 afterAll(async () => {
   await harness?.close();
