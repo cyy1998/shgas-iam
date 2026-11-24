@@ -38,6 +38,7 @@
     "verify:ci": "node scripts/run-verification-gate.mjs ci",
     "verify:release": "node scripts/run-verification-gate.mjs release",
     "verify:container-smoke": "node scripts/run-verification-gate.mjs container-smoke",
+    "verify:e2e-runtime": "node scripts/run-verification-gate.mjs e2e-runtime",
     "test:resources:cleanup": "node scripts/run-test-resource-cleanup.mjs"
   },
   "devDependencies": {

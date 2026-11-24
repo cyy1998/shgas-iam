@@ -31,7 +31,7 @@ describe("hybrid middleware topology", () => {
     });
   });
 
-  test("publishes bridge listeners only on loopback and uses named data volumes", () => {
+  test("publishes bridge listeners only on loopback and bounds temporary PostgreSQL storage", () => {
     const topology = createHybridCompose({ project: "iam-e2e-test", ports, network: "bridge" });
     expect(Object.keys(topology.services)).toEqual(["postgres", "redis", "apisix-etcd", "apisix"]);
     expect(topology.services.apisix).toMatchObject({
@@ -43,7 +43,11 @@ describe("hybrid middleware topology", () => {
       healthcheck: { interval: "1s" },
       volumes: ["etcd-data:/bitnami/etcd"],
     });
-    expect(topology.services.postgres.volumes).toEqual(["postgres-data:/var/lib/postgresql"]);
+    expect(topology.services.postgres).toMatchObject({
+      tmpfs: ["/var/lib/postgresql:size=1g"],
+      command: expect.arrayContaining(["fsync=off", "synchronous_commit=off", "full_page_writes=off"]),
+    });
+    expect(topology.volumes).not.toHaveProperty("postgres-data");
     expect(topology.services.redis.volumes).toEqual(["redis-data:/data"]);
   });
 
