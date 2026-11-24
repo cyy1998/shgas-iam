@@ -100,6 +100,15 @@ pnpm test:resources:cleanup --record test-results/integration/<run-id>/run.json
 
 ### Full-system E2E
 
+E2E 编排器的 Integration 集合独立于日常 `pnpm test:integration` 与 `pnpm verify:ci`。它验证临时中间件、数据库模板、宿主进程、前端托管和恢复，按单并发执行并在首个失败后停止。
+
+```bash
+pnpm --filter @iam/e2e-system test:integration
+pnpm verify:e2e-runtime --base <target-commit-sha>
+```
+
+路径门禁比较固定基线与候选 HEAD。差异命中 `e2e/system/**`、`packages/runtime/**`、`scripts/test-resources/**`、`scripts/run-verification-gate.mjs`、任意目录的 `package.json`、`vite.config.*`、`Dockerfile` 或根 `pnpm-lock.yaml`、`turbo.json` 时，门禁运行一次编排器 Integration。无匹配时打印跳过信息，基线非法或 Git 比较失败时以非零状态退出。
+
 完整系统入口为 `pnpm test:e2e`。需要 Chromium 时按环境选择 `pnpm e2e:install`（含系统依赖）或
 `pnpm e2e:install:browsers`。就绪、文件复位和报告目录见[完整系统测试](testing.md#full-system-e2e)。
 
@@ -144,7 +153,7 @@ pnpm verify:container-smoke --base <target-commit-sha>
 | `pnpm verify:static`  | `format:check`、`lint`、`check:docs`、`check:env-names`、`check:architecture` |
 | `pnpm verify`         | 静态检查 → typecheck → Unit → build                                           |
 | `pnpm verify:ci`      | verify → Integration                                                          |
-| `pnpm verify:release` | verify:ci → Full-system E2E → Container Smoke                                 |
+| `pnpm verify:release` | verify:ci → E2E 编排器 Integration → Full-system E2E → Container Smoke        |
 
 组合入口首错停止。何时执行见[验证节奏](../agents/workflow.md#验证节奏)，结果能证明的范围见[验证结果与交付](testing.md#验证结果与交付)。
 

@@ -221,5 +221,6 @@ GitHub Issues 保存需求、协作状态与恢复说明，Git 提交保存实�
   `package.json`、`pnpm-lock.yaml` 或 `e2e/system/docker/` 下的文件时，串行追加一次 `pnpm test:e2e:container-smoke`。
   无命中时记录跳过，Git 比较失败时门禁失败。同一最终候选已通过 `pnpm verify:release` 时复用其中的冒烟结果。
   启动分支提供最终验证 prompt，执行器在候选工作树读取本页和运行门禁，因此本次 Spec 引入的门禁也在本次生效。
+- **E2E Runtime 门禁** 集中修复提交后，在候选工作树执行 `pnpm verify:e2e-runtime --base <review-base-sha>`。按[命令入口](../engineering/commands.md#full-system-e2e)的路径规则串行验证 E2E 编排器 Integration。同一最终候选已通过 `pnpm verify:release` 时可复用对应结果。此要求以候选工作树中的本页为准。
 - 后续修复重跑失效检查，仍有效的通过证据可复用。普通交接记录实际命令、结果、对应候选与未执行项；必需检查失败或
   未执行、findings 尚未解决时保持未完成。本轮不通过反复新开会话重试，也不以清理成功或进程正常退出代替验收。

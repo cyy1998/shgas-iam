@@ -102,6 +102,8 @@ Turbo 负责跨 workspace 编排。Unit 通过 `transit` 传播依赖源码变�
 
 根 Integration runner 根据 workspace 的 `iamTest.integration` 选择执行器和资源。筛选单个文件仍沿用所属执行器的完整资源声明，对声明了 PostgreSQL 或 Redis 的任务，包级 runner 核验本次 run ID、资源记录及内部 URL。资源测试通过根入口使用本次环境，参数无效、无匹配或缺少资源时退出失败。[声明示例](../../apps/api/package.json) · [收集与筛选](../../scripts/test-resources/integration-selection.mjs) · [运行及定向命令](commands.md#测试与验证通道)
 
+`e2e/system` 的编排器 Integration 用独立入口收集，由各用例管理自己的测试环境。测试进程退出后，独立入口按本次登记回收未清理的项目。根 Integration 入口会拒绝对此 workspace 的筛选。[独立入口与路径门禁](commands.md#full-system-e2e)
+
 ## 并发、timeout 与清理
 
 | 运行范围                     | 失败后何时停止                                                                                                                                                                                                                                                                                                                                 |
@@ -130,6 +132,8 @@ Timeout 用于限制悬挂。进程测试等待实际 readiness，同时观察�
 ### 初始化与就绪
 
 本地默认复用常驻中间件，互斥锁记录占用进程、工作树及开始时间。接管锁后，运行时先停止并等待旧运行登记的宿主进程，再访问模板或复位数据。回收失败时保留原进程记录，本轮停止。CI、Sandcastle AFK 和 `--fresh` 使用独占 Compose project 和动态端口。运行时按数据库迁移、seed 和 Worker 投影输入的指纹复用或重建模板，等待 Worker 发布并回读基础状态。前端默认使用独立的指纹缓存构建静态产物，`--dev-frontend` 启动 Vite。
+
+E2E PostgreSQL 使用带 `1g` 上限的 `tmpfs`，关闭 `fsync`、`synchronous_commit` 和 `full_page_writes`。常驻 PostgreSQL 容器停止后会丢失数据，下一次启动重建模板。首次从使用 PostgreSQL 命名卷的常驻环境升级时，运行时按原 Compose 记录清理旧 project，再创建新环境。
 
 Windows 和 macOS 的 Docker Desktop 本机运行使用 bridge，APISIX 默认通过 `host.docker.internal` 访问宿主上游。原生 Linux 和 AFK 使用 host network 及动态监听端口，APISIX 通过 `127.0.0.1` 访问业务进程。两种拓扑均无宿主机路径 bind mount。网关路由发布后，从 APISIX 容器内探测上游，再检查真实双入口和企微 HTTPS 路由。
 
