@@ -58,12 +58,16 @@ const test = gatewayTest.extend<{ withStoppedWorker: RunWithStoppedWorker }>({
           await runDuringTest(() => requestHybridControl(runtime, "/worker/stop"));
           await observeMissedWake((code) =>
             runDuringTest(() =>
-              runCommand("bun", ["--no-env-file", "src/drop-user-attribute-wake.ts", code], {
-                cwd: workspaceRoot,
-                env: { ...process.env, DATABASE_URL: runtime.databaseUrl, IAM_E2E_REDIS_URL: runtime.redisUrl },
-                signal: controller.signal,
-                inheritOutput: true,
-              }),
+              runCommand(
+                process.env.IAM_E2E_BUN_EXECUTABLE || "bun",
+                ["--no-env-file", "src/drop-user-attribute-wake.ts", code],
+                {
+                  cwd: workspaceRoot,
+                  env: { ...process.env, DATABASE_URL: runtime.databaseUrl, IAM_E2E_REDIS_URL: runtime.redisUrl },
+                  signal: controller.signal,
+                  inheritOutput: true,
+                },
+              ),
             ),
           );
           await runDuringTest(() => requestHybridControl(runtime, "/worker/start"));

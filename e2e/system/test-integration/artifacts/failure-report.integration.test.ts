@@ -177,22 +177,28 @@ test("a real failed Playwright run publishes every failure and preserves history
 
     const sentinel = join(output, "old-playwright-artifact");
     await writeFile(sentinel, "Playwright removes this");
-    // Existing readers keep a complete old snapshot while new readers see the replacement.
-    const previousJson = await open(join(reports, "last-failure.json"));
-    try {
-      const previousMarkdown = await open(join(reports, "last-failure.md"));
+    if (process.platform === "win32") {
+      // NTFS rejects replacing a destination file while another handle keeps it open.
+      const second = await runPlaywright(root, "second-run", "--grep", "assertion failure");
+      expect(second.exitCode).toBe(1);
+    } else {
+      // Existing readers keep a complete old snapshot while new readers see the replacement.
+      const previousJson = await open(join(reports, "last-failure.json"));
       try {
-        const second = await runPlaywright(root, "second-run", "--grep", "assertion failure");
-        expect(second.exitCode).toBe(1);
-        const oldJson = await previousJson.readFile("utf8");
-        const oldMarkdown = await previousMarkdown.readFile("utf8");
-        expect(oldJson).toBe(firstContent);
-        expect(oldMarkdown).toBe(firstMarkdown);
+        const previousMarkdown = await open(join(reports, "last-failure.md"));
+        try {
+          const second = await runPlaywright(root, "second-run", "--grep", "assertion failure");
+          expect(second.exitCode).toBe(1);
+          const oldJson = await previousJson.readFile("utf8");
+          const oldMarkdown = await previousMarkdown.readFile("utf8");
+          expect(oldJson).toBe(firstContent);
+          expect(oldMarkdown).toBe(firstMarkdown);
+        } finally {
+          await previousMarkdown.close();
+        }
       } finally {
-        await previousMarkdown.close();
+        await previousJson.close();
       }
-    } finally {
-      await previousJson.close();
     }
     expect(await Bun.file(sentinel).exists()).toBe(false);
     expect(await readFile(firstJsonPath, "utf8")).toBe(firstContent);

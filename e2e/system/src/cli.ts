@@ -32,6 +32,7 @@ async function runHybridPlaywright(args: string[]) {
         env: {
           ...hostEnvironment,
           DATABASE_URL: context.databaseUrl,
+          IAM_E2E_BUN_EXECUTABLE: process.execPath,
           IAM_E2E_CONTEXT_PATH: contextPath,
           IAM_E2E_INTERACTIVE: process.stdout.isTTY ? "1" : "0",
           IAM_E2E_ADMIN_PASSWORD: context.adminPassword,

@@ -46,7 +46,7 @@ test("starts the real Admin and SSO Vite servers on distinct loopback ports and 
       (response) => response.status,
       (error: unknown) => error,
     );
-    expect(error).toMatchObject({ message: expect.stringContaining("ECONNREFUSED") });
+    expectConnectionRefused(error);
   }
 }, 40_000);
 
@@ -103,10 +103,18 @@ test("reclaims an already-started Vite server and its child when the second app 
       (response) => response.status,
       (error: unknown) => error,
     );
-    expect(error).toMatchObject({ message: expect.stringContaining("ECONNREFUSED") });
+    expectConnectionRefused(error);
     const cache = await Array.fromAsync(new Bun.Glob("dev-*").scan({ cwd: cacheRoot, onlyFiles: false }));
     expect(cache).toEqual([]);
   } finally {
     await rm(repoRoot, { recursive: true, force: true });
   }
 }, 40_000);
+
+function expectConnectionRefused(error: unknown) {
+  expect(error).toBeInstanceOf(Error);
+  const code = error instanceof Error && "code" in error ? error.code : undefined;
+  const message = error instanceof Error ? error.message : String(error);
+  const refused = code === "ConnectionRefused" || message.includes("ECONNREFUSED");
+  expect({ refused, code, message }).toMatchObject({ refused: true });
+}
