@@ -1,8 +1,12 @@
 import { expect, test } from "bun:test";
 import { withGatewayLifecycleFixture } from "../support/gateway-lifecycle.fixture";
+import { useGatewayPostgresTestHarness } from "../support/postgres-test-harness";
+
+const getDatabase = useGatewayPostgresTestHarness();
 
 test("a real TCP disconnect leaves the original publish running once and busy until completion", async () => {
   await withGatewayLifecycleFixture(
+    getDatabase(),
     async ({ proxy, remote, startGateway, connectCaller, body, observeAvailability }) => {
       const gateway = await startGateway();
       const gate = proxy.interceptOnce({ method: "PUT", path: "/apisix/admin/upstreams/tender.api.test" });
@@ -32,6 +36,7 @@ test("a real TCP disconnect leaves the original publish running once and busy un
 
 test("the service deadline blocks a disconnected publish even when its original remote write arrives late", async () => {
   await withGatewayLifecycleFixture(
+    getDatabase(),
     async ({ proxy, remote, startGateway, connectCaller, body, observeAvailability }) => {
       const gateway = await startGateway({ operationTimeoutMs: 1500, requestTimeoutMs: 1500 });
       const lateWrite = proxy.interceptOnce({ method: "PUT", path: "/apisix/admin/upstreams/tender.api.test" });
@@ -56,7 +61,7 @@ test("the service deadline blocks a disconnected publish even when its original 
 }, 180_000);
 
 test("normal shutdown stops new apply and waits for the original real publication before releasing resources", async () => {
-  await withGatewayLifecycleFixture(async ({ proxy, remote, database, startGateway, body }) => {
+  await withGatewayLifecycleFixture(getDatabase(), async ({ proxy, remote, database, startGateway, body }) => {
     const gateway = await startGateway();
     const gate = proxy.interceptOnce({ method: "PUT", path: "/apisix/admin/upstreams/tender.api.test" });
     const publication = gateway.apply(body("drained"));
@@ -102,6 +107,7 @@ test("normal shutdown stops new apply and waits for the original real publicatio
 
 test("an undeliverable unknown result remains blocked until manual repair and a fresh process", async () => {
   await withGatewayLifecycleFixture(
+    getDatabase(),
     async ({ proxy, remote, startGateway, connectCaller, body, observeAvailability }) => {
       const gateway = await startGateway();
       const lostResponse = proxy.interceptOnce({
@@ -153,6 +159,7 @@ test("an undeliverable unknown result remains blocked until manual repair and a 
 
 test("a disconnected caller cannot release apply ownership while real compensation is running", async () => {
   await withGatewayLifecycleFixture(
+    getDatabase(),
     async ({ proxy, remote, startGateway, connectCaller, body, observeAvailability }) => {
       await remote.upsert("upstreams", "unrelated", { type: "roundrobin", nodes: { "127.0.0.1:30001": 1 } });
       const gateway = await startGateway();

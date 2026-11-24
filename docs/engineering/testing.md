@@ -118,8 +118,9 @@ Timeout 用于限制悬挂。进程测试等待实际 readiness，同时观察�
 ### 专用资源与隔离
 
 - **命令隔离**。根 runner 先登记本次 run ID，子 Compose project 启动前登记在本轮记录旁。声明需要 PostgreSQL 或 Redis 时，根 runner 再以动态 loopback 端口启动所需服务。不同命令独占各自环境，浏览器服务器由所属 workspace 管理。测试使用专用资源及合成数据。
-- **Fixture 重置**。PostgreSQL 使用随机 schema、专用连接和整体清理。Redis 先完成业务观察，停止本例全部 consumer、子进程与连接，再对独占 DB 执行 `FLUSHDB`，最后关闭控制连接。任一停止失败即跳过重置，仍尝试其余收尾并汇总错误。禁止 `FLUSHALL`。非目标数据保护、生产连接关闭和只读作用须在重置前观察。[资源生命周期 helper](../../packages/test-support/src/external-test-resources.ts)
-- **Gateway 子环境**。Gateway Integration 在本次运行内复用独立的 APISIX/etcd。用例成功收尾后才重置并回读空基线，失败即停止复用。包级 provider 收尾自己的子 project。根 runner 按登记逆序处理剩余子 project，再处理主 project，某项清理失败仍尝试其余项。[Gateway fixture](../../apps/gateway/test-integration/support/apisix.fixture.ts)
+- **PostgreSQL 隔离**。根 runner 在发布运行环境前迁移一次并封存模板库。API、Admin API 和 Gateway 的普通 fixture 为每个测试文件克隆独立数据库，以标准 `public` schema 连接，动态清空业务表并保留迁移账本，文件结束后删除克隆。迁移专项用例从干净库或 schema 开始执行迁移。[模板 harness](../../packages/test-support/src/postgres-test-harness.ts)
+- **Redis 重置**。先完成业务观察，停止本例全部 consumer、子进程与连接，再对独占 DB 执行 `FLUSHDB`，最后关闭控制连接。任一停止失败即跳过重置，仍尝试其余收尾并汇总错误。禁止 `FLUSHALL`。非目标数据保护、生产连接关闭和只读作用须在重置前观察。[资源生命周期 helper](../../packages/test-support/src/external-test-resources.ts)
+- **Gateway 子环境**。Gateway Integration 在本次运行内复用独立的 APISIX/etcd。用例成功收尾后才重置并回读空基线，失败即停止复用。包级 provider 收尾自己的子 project，保留按 APISIX 配置与 Dockerfile 内容打 tag 的本地镜像供后续运行复用。根 runner 按登记逆序处理剩余子 project，再处理主 project，某项清理失败仍尝试其余项。[Gateway fixture](../../apps/gateway/test-integration/support/apisix.fixture.ts)
 - **人工恢复**。保留环境或强制中断后，先确认所属进程树已退出。若父记录旁有 `children.jsonl`，逐项清理已登记的子 project，最后按父记录清理主 project。手工清理只作用于传入的准确记录，禁止按前缀猜测或全局 prune。[手工清理入口](../../scripts/run-test-resource-cleanup.mjs) · [恢复命令](commands.md#测试与验证通道)
 - **诊断与保留**。默认移除本次容器、网络和数据卷，保留运行记录及日志。辅助日志采集失败只告警，进程关闭、资源清理或测试所需证据失败均使命令失败。显式保留的资源按记录恢复。AFK 须先确认 sandbox 已停止，再按 registry 处理。[资源管理](../../scripts/test-resources/managed-resources.mjs) · [AFK 工作流](../agents/sandcastle-afk.md)
 

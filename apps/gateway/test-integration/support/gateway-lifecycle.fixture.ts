@@ -12,7 +12,7 @@ import {
   type GatewayProcessFixture,
 } from "./gateway-process.fixture";
 import { bounded } from "./lifecycle-sync.fixture";
-import { createGatewayPostgresTestHarness } from "./postgres-test-harness";
+import type { GatewayPostgresTestHarness } from "./postgres-test-harness";
 
 function body(version: string): GatewayApplyBody {
   return {
@@ -38,7 +38,7 @@ async function observeAvailability(gateway: GatewayProcessFixture) {
 type LifecycleContext = {
   proxy: Awaited<ReturnType<typeof createApisixFaultProxy>>;
   remote: ApisixAdminClient;
-  database: Awaited<ReturnType<typeof createGatewayPostgresTestHarness>>;
+  database: GatewayPostgresTestHarness;
   startGateway(options?: { operationTimeoutMs?: number; requestTimeoutMs?: number }): Promise<GatewayProcessFixture>;
   connectCaller(
     gateway: GatewayProcessFixture,
@@ -48,11 +48,12 @@ type LifecycleContext = {
   observeAvailability: typeof observeAvailability;
 };
 
-export async function withGatewayLifecycleFixture<T>(exercise: (context: LifecycleContext) => Promise<T>) {
+export async function withGatewayLifecycleFixture<T>(
+  database: GatewayPostgresTestHarness,
+  exercise: (context: LifecycleContext) => Promise<T>,
+) {
   return withApisixFixture((apisix) =>
     runWithOwnedTestResources(async (lifecycle) => {
-      const database = await createGatewayPostgresTestHarness();
-      lifecycle.registerCleanup(() => database.close());
       await database.db.insert(clients).values({
         clientCode: "tender",
         clientName: "Lifecycle",

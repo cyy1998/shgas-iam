@@ -5,15 +5,16 @@ import { runWithOwnedTestResources } from "@iam/test-support/external-test-resou
 import { stringify } from "yaml";
 import { withApisixFixture } from "../support/apisix.fixture";
 import { createGatewayProcessFixture } from "../support/gateway-process.fixture";
-import { createGatewayPostgresTestHarness } from "../support/postgres-test-harness";
+import { useGatewayPostgresTestHarness } from "../support/postgres-test-harness";
 import { certificate, privateKey } from "../support/tls.fixture";
+
+const getDatabase = useGatewayPostgresTestHarness();
 
 test("independent Gateway publishes seven kinds, prunes and reports no change", async () => {
   const environment = "test";
   await withApisixFixture(async (apisix) => {
     await runWithOwnedTestResources(async (lifecycle) => {
-      const database = await createGatewayPostgresTestHarness();
-      lifecycle.registerCleanup(() => database.close());
+      const database = getDatabase();
       await database.db.insert(clients).values({
         clientCode: "iam",
         clientName: "IAM",

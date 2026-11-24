@@ -9,12 +9,14 @@ import { createGatewayApp } from "../../src/http/app";
 import { resourceDefinitions } from "../../src/resources";
 import { createGatewayService } from "../../src/services/gateway/gateway.service";
 import { withApisixFixture } from "../support/apisix.fixture";
-import { createGatewayPostgresTestHarness } from "../support/postgres-test-harness";
+import { useGatewayPostgresTestHarness } from "../support/postgres-test-harness";
 import { certificate, privateKey } from "../support/tls.fixture";
+
+const getDatabase = useGatewayPostgresTestHarness();
 
 test("authenticated HTTP preview reads seven real APISIX resource kinds and leaves their values intact", async () => {
   await withApisixFixture(async (fixture) => {
-    const database = await createGatewayPostgresTestHarness();
+    const database = getDatabase();
     const composition = createGatewayComposition(
       parseGatewayEnv({
         IAM_GATEWAY_DATABASE_URL: database.databaseUrl,
@@ -24,7 +26,6 @@ test("authenticated HTTP preview reads seven real APISIX resource kinds and leav
     );
     const client = new ApisixAdminClient({ adminUrl: fixture.adminUrl, adminKey: fixture.adminKey });
     await runWithOwnedTestResources(async (lifecycle) => {
-      lifecycle.registerCleanup(() => database.close());
       lifecycle.registerCleanup(() => composition.close());
       await database.db.insert(clients).values({
         clientCode: "tender",

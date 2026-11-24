@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import { createAdminClientMutation } from "@admin-api/services/client/client-mutation";
 import { ClientStatus } from "@iam/contracts";
@@ -13,6 +13,9 @@ beforeAll(async () => {
   harness = await createAdminApiPostgresTestHarness();
 });
 
+beforeEach(async () => {
+  await harness?.reset();
+});
 afterAll(async () => {
   await harness.close();
 });

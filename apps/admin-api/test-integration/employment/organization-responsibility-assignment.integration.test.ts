@@ -75,9 +75,6 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  await harness!.db.delete(roleAssignments);
-  await harness!.db.delete(roles);
-  await harness!.db.delete(clients);
   await harness!.reset();
 });
 

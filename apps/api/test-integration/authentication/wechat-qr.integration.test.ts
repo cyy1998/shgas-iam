@@ -26,9 +26,11 @@ import Redis from "ioredis";
 import pino from "pino";
 import { closeFixtureResources } from "../oidc/oidc.fixture";
 import { closeApiRedisConnection, resetApiRedisTestDatabase } from "../support/fixture-lifecycle";
-import { createApiPostgresTestHarness } from "../support/postgres-test-harness";
+import { useApiPostgresTestHarness } from "../support/postgres-test-file.fixture";
+import type { ApiPostgresTestHarness } from "../support/postgres-test-harness";
 import { fixture } from "./root-authentication.fixture";
 
+const getDatabase = useApiPostgresTestHarness();
 afterEach(resetApiRedisTestDatabase);
 
 const external = "https://external.example";
@@ -439,7 +441,7 @@ type BindingDatabaseOptions = {
 
 async function withBindingDatabase(
   testBinding: (db: {
-    pg: Awaited<ReturnType<typeof createApiPostgresTestHarness>>;
+    pg: ApiPostgresTestHarness;
     newBrowser: (onWake?: () => Promise<void>) => ReturnType<typeof setup>;
     addAccount: (input: {
       id?: number;
@@ -456,7 +458,7 @@ async function withBindingDatabase(
   }) => Promise<void>,
   options: BindingDatabaseOptions = {},
 ) {
-  const pg = await createApiPostgresTestHarness();
+  const pg = getDatabase();
   const redis = new Redis(required(process.env.IAM_API_TEST_REDIS_URL), {
     keyPrefix: `wecom-binding-test:${randomUUID()}:`,
     lazyConnect: true,
@@ -594,11 +596,7 @@ async function withBindingDatabase(
       },
     });
   } finally {
-    await closeFixtureResources([
-      pg.close,
-      () => closeApiRedisConnection(redis),
-      ...browsers.map((browser) => browser.close),
-    ]);
+    await closeFixtureResources([() => closeApiRedisConnection(redis), ...browsers.map((browser) => browser.close)]);
   }
 }
 
@@ -1272,28 +1270,24 @@ test("the original continuation deadline invalidates an authorized phone without
 });
 
 test("a disabled account retains its registered WeCom identity during confirmation", async () => {
-  const pg = await createApiPostgresTestHarness();
+  const pg = getDatabase();
+  await pg.db.insert(users).values({
+    username: "wecom-disabled",
+    name: "Disabled WeCom Member",
+    status: UserStatus.Disable,
+    wxId: "wx-test",
+  });
+  const f = await setup(60, createUserRepository(pg.db).findRegisteredWechatMember);
   try {
-    await pg.db.insert(users).values({
-      username: "wecom-disabled",
-      name: "Disabled WeCom Member",
-      status: UserStatus.Disable,
-      wxId: "wx-test",
-    });
-    const f = await setup(60, createUserRepository(pg.db).findRegisteredWechatMember);
-    try {
-      const start = await f.begin({ ...f.desktop, "User-Agent": "Windows" });
-      const { data: qr } = await start.json();
-      const confirm = await authorizePhone(f, qr.mobileUrl);
-      const accepted = await confirm("confirm");
-      expect(accepted.status).toBe(200);
-      expect(requestCookie(accepted)).not.toContain("global_session");
-      const desktop = await f.readStatus(qr.requestId);
-      expect(desktop).toEqual({ status: 200, event: { status: "confirmed" } });
-    } finally {
-      await f.close();
-    }
+    const start = await f.begin({ ...f.desktop, "User-Agent": "Windows" });
+    const { data: qr } = await start.json();
+    const confirm = await authorizePhone(f, qr.mobileUrl);
+    const accepted = await confirm("confirm");
+    expect(accepted.status).toBe(200);
+    expect(requestCookie(accepted)).not.toContain("global_session");
+    const desktop = await f.readStatus(qr.requestId);
+    expect(desktop).toEqual({ status: 200, event: { status: "confirmed" } });
   } finally {
-    await pg.close();
+    await f.close();
   }
 });
