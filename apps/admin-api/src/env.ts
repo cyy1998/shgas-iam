@@ -16,6 +16,7 @@ function listString(defaultValue: string) {
 const RawEnvSchema = z.object({
   IAM_ADMIN_API_DATABASE_URL: z.string().min(1),
   IAM_ADMIN_API_PASSWORD_HASH_ROUNDS: z.coerce.number().int().positive().default(10),
+  IAM_ADMIN_API_HOSTNAME: z.string().trim().min(1).optional(),
   IAM_ADMIN_API_PORT: z.coerce.number().int().min(1).max(65535).default(30001),
   NODE_ENV: z.string().default("development"),
   IAM_ADMIN_API_REDIS_URL: redisUrlString(),
@@ -35,6 +36,7 @@ type RawEnv = z.infer<typeof RawEnvSchema>;
 export interface Env extends Record<string, unknown> {
   databaseUrl: string;
   passwordHashRounds: number;
+  hostname?: string;
   port: number;
   nodeEnv: string;
   redis: RedisConfig;
@@ -56,6 +58,7 @@ function toAdminApiEnv(raw: RawEnv): Env {
   return {
     databaseUrl: raw.IAM_ADMIN_API_DATABASE_URL,
     passwordHashRounds: raw.IAM_ADMIN_API_PASSWORD_HASH_ROUNDS,
+    hostname: raw.IAM_ADMIN_API_HOSTNAME,
     port: raw.IAM_ADMIN_API_PORT,
     nodeEnv: raw.NODE_ENV,
     redis: raw.IAM_ADMIN_API_REDIS_URL,

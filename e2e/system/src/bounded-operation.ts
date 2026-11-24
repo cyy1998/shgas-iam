@@ -78,3 +78,20 @@ function validatePositiveInteger(value: number | undefined, name: string) {
   if (value !== undefined && (!Number.isInteger(value) || value <= 0))
     throw new Error(`${name} must be a positive integer`);
 }
+
+export async function runWithCleanup<T>(use: () => Promise<T>, cleanup: () => Promise<void>) {
+  let result: T;
+  try {
+    result = await use();
+  } catch (error) {
+    try {
+      await cleanup();
+    } catch (cleanupError) {
+      if (cleanupError === error) throw error;
+      throw new AggregateError([error, cleanupError], "E2E operation and cleanup both failed");
+    }
+    throw error;
+  }
+  await cleanup();
+  return result;
+}

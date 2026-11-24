@@ -1,253 +1,101 @@
-import { randomBytes } from "node:crypto";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createAdminJourneyOperations } from "./admin-journey.ts";
-import { createRunDescriptor, persistRunDescriptor } from "./descriptor.ts";
-import { createDockerInfraOperations } from "./docker-infra.ts";
-import { createFullSystemJourneyOperations } from "./full-system-journey.ts";
-import { createStageMemoryProfile } from "./host-memory.ts";
-import { createHrAdminJourneyOperations } from "./hr-admin-journey.ts";
-import { runExactProjectJourneyLifecycle, runExactProjectRuntimeLifecycle } from "./lifecycle.ts";
+import { runCommand } from "./command-runner.ts";
+import { readHybridRunContext } from "./hybrid-context.ts";
+import { cleanupHybridProject, cleanupHybridResident } from "./hybrid-middleware.ts";
+import { withHybridRuntime } from "./hybrid-runtime.ts";
 import { runManagedIamJourney } from "./managed-iam-journey.ts";
-import { createOidcJourneyOperations } from "./oidc-journey.ts";
-import type { PlaywrightJourneyRuntimeOptions } from "./playwright-journey.ts";
+import { parsePlaywrightArguments } from "./playwright-arguments.ts";
 import { recoverExactProject } from "./recovery.ts";
-import {
-  allocateAvailablePort,
-  captureCommand,
-  probeGateway,
-  probeHttpRoute,
-  probeOidcDiscovery,
-  probeSsoConfiguration,
-  runCommand,
-} from "./system-boundaries.ts";
+import { wecomSecret } from "./wecom-provider.ts";
 
-const sourceDirectory = dirname(fileURLToPath(import.meta.url));
-const workspaceRoot = resolve(sourceDirectory, "..");
+const workspaceRoot = fileURLToPath(new URL("../", import.meta.url));
 const repositoryRoot = resolve(workspaceRoot, "../..");
-const composeFile = join(workspaceRoot, "compose.yaml");
 const artifactRoot = join(workspaceRoot, "test-results");
-const runtimeTimeoutMs = 12 * 60 * 1000;
-const keepResources = process.argv.slice(3).includes("--keep-resources");
+const residentOptions = { repositoryRoot, residentDirectory: process.env.IAM_E2E_RESIDENT_DIRECTORY };
 
-type JourneyFactoryOptions = PlaywrightJourneyRuntimeOptions & {
-  captureCommand: typeof captureCommand;
-  composeFile: string;
-};
-
-interface JourneyOperations {
-  preflight: (signal?: AbortSignal) => Promise<unknown>;
-  runJourney: (descriptor: Awaited<ReturnType<typeof createRunDescriptor>>, signal?: AbortSignal) => Promise<unknown>;
-}
-
-function createRunId() {
-  const timestamp = new Date().toISOString().replaceAll(/\D/gu, "");
-  return `${timestamp}-${randomBytes(4).toString("hex")}`;
-}
-
-function createOperations(signal?: AbortSignal) {
-  return createDockerInfraOperations({
-    composeFile,
-    repositoryRoot,
-    requiredPaths: [
-      composeFile,
-      join(workspaceRoot, "docker", "migrate.Dockerfile"),
-      join(workspaceRoot, "docker", "apisix.Dockerfile"),
-      join(workspaceRoot, "docker", "seed.Dockerfile"),
-      join(workspaceRoot, "docker", "gateway-sync.Dockerfile"),
-      join(workspaceRoot, "docker", "start-api.sh"),
-      join(workspaceRoot, "docker", "start-api.ts"),
-      join(workspaceRoot, "docker", "rp-terminal.html"),
-      join(workspaceRoot, "test-assets", "apisix.yaml"),
-      join(workspaceRoot, "test-assets", "iam.yaml"),
-      join(workspaceRoot, "test-assets", "wecom-mobile-cert.pem"),
-      join(workspaceRoot, "test-assets", "wecom-mobile-key.pem"),
-      join(repositoryRoot, "packages", "db", "drizzle.config.ts"),
-      join(repositoryRoot, "packages", "db", "src", "migrations"),
-      join(repositoryRoot, "pnpm-lock.yaml"),
-    ],
-    runCommand,
-    captureCommand,
-    probeGateway,
-    probeOidcDiscovery,
-    probeSsoConfiguration,
-    probeRoute: probeHttpRoute,
-    signal,
-    keep: keepResources,
-    registryFile: process.env.IAM_TEST_RESOURCE_REGISTRY,
-  });
-}
-
-async function runRuntimeLifecycle() {
-  await withCapturableSignals(async (signal) => {
-    const operations = createOperations(signal);
-    const descriptor = await runExactProjectRuntimeLifecycle(
-      {
-        ...operations,
-        async createDescriptor() {
-          return createRunDescriptor({
-            artifactRoot,
-            gatewayPort: await allocateAvailablePort(),
-            runId: createRunId(),
-          });
-        },
-        async persistDescriptor(descriptor) {
-          await operations.registerManagedRun(descriptor);
-          await persistRunDescriptor(descriptor);
-        },
-      },
-      {
+async function runHybridPlaywright(args: string[]) {
+  const { runtime, playwright } = parsePlaywrightArguments(args);
+  const override = process.env.IAM_E2E_LIFECYCLE;
+  if (override !== undefined && override !== "resident" && override !== "fresh") {
+    throw new Error("IAM_E2E_LIFECYCLE must be resident or fresh");
+  }
+  await withHybridRuntime(
+    { ...residentOptions, ...runtime, artifactRoot, lifecycle: runtime.fresh ? "fresh" : override },
+    async (contextPath, signal, hostEnvironment) => {
+      const context = await readHybridRunContext(contextPath);
+      console.log(`[e2e] Runtime ${context.project}; context ${contextPath}`);
+      await runCommand("node", [join(workspaceRoot, "node_modules/@playwright/test/cli.js"), "test", ...playwright], {
+        cwd: workspaceRoot,
+        inheritOutput: true,
         signal,
-        timeoutMs: runtimeTimeoutMs,
-        abortSettleTimeoutMs: 60_000,
-        createMemoryProfile: createStageMemoryProfile,
-      },
-    );
-    console.log(
-      JSON.stringify({
-        status: "runtime-seeded-routes-ready",
-        resources: keepResources ? "retained" : "cleaned",
-        resourceRecord: descriptor.resourceRecord,
-        project: descriptor.project,
-        origin: descriptor.origin,
-        artifactDirectory: descriptor.artifactDirectory,
-      }),
-    );
-  });
-}
-
-async function runAdminJourneyLifecycle() {
-  await runJourneyLifecycle(createAdminJourneyOperations, "admin-custom-sso-journey-passed-and-cleaned");
-}
-
-async function runOidcJourneyLifecycle() {
-  await runJourneyLifecycle(createOidcJourneyOperations, "oidc-pkce-journey-passed-and-cleaned", true);
-}
-
-async function runHrAdminJourneyLifecycle() {
-  await runJourneyLifecycle(createHrAdminJourneyOperations, "hr-admin-user-management-journey-passed-and-cleaned");
-}
-
-async function runFullSystemJourneyLifecycle() {
-  await runJourneyLifecycle(
-    (options) =>
-      createFullSystemJourneyOperations({
-        admin: createAdminJourneyOperations(options),
-        hrAdmin: createHrAdminJourneyOperations(options),
-        oidc: createOidcJourneyOperations(options),
-      }),
-    "full-system-e2e-passed-and-cleaned",
-    true,
+        env: {
+          ...hostEnvironment,
+          DATABASE_URL: context.databaseUrl,
+          IAM_E2E_CONTEXT_PATH: contextPath,
+          IAM_E2E_INTERACTIVE: process.stdout.isTTY ? "1" : "0",
+          IAM_E2E_ADMIN_PASSWORD: context.adminPassword,
+          IAM_E2E_INTERNAL_API_KEY: context.internalApiKey,
+          IAM_E2E_CONTROL_TOKEN: context.control.token,
+          IAM_E2E_DATABASE_PASSWORD: decodeURIComponent(new URL(context.databaseUrl).password),
+          IAM_E2E_WECOM_SECRET: wecomSecret,
+          PLAYWRIGHT_LAST_RUN_OUTPUT_FILE:
+            process.env.PLAYWRIGHT_LAST_RUN_OUTPUT_FILE ?? join(workspaceRoot, ".cache", "last-run.json"),
+        },
+      });
+    },
   );
 }
 
-async function runJourneyLifecycle(
-  createJourney: (options: JourneyFactoryOptions) => JourneyOperations,
-  status: string,
-  dualEntry = false,
-) {
-  await withCapturableSignals(async (signal) => {
-    const operations = createOperations(signal);
-    const journey = createJourney({
-      captureCommand,
-      composeFile,
-      repositoryRoot,
-      runCommand,
-      workspaceRoot,
-    });
-    const descriptor = await runExactProjectJourneyLifecycle(
-      {
-        ...operations,
-        ...journey,
-        async preflight(preflightSignal) {
-          await journey.preflight(preflightSignal);
-          await operations.preflight(preflightSignal);
-        },
-        async createDescriptor() {
-          const gatewayPort = await allocateAvailablePort();
-          let wecomMobilePort = dualEntry ? await allocateAvailablePort() : undefined;
-          while (wecomMobilePort === gatewayPort) wecomMobilePort = await allocateAvailablePort();
-          return createRunDescriptor({
-            artifactRoot,
-            dualEntry,
-            gatewayPort,
-            runId: createRunId(),
-            wecomMobilePort,
-          });
-        },
-        async persistDescriptor(descriptor) {
-          await operations.registerManagedRun(descriptor);
-          await persistRunDescriptor(descriptor);
-        },
-      },
-      {
-        signal,
-        timeoutMs: runtimeTimeoutMs,
-        abortSettleTimeoutMs: 60_000,
-        createMemoryProfile: createStageMemoryProfile,
-      },
-    );
-    console.log(
-      JSON.stringify({
-        status: status.replace("-and-cleaned", ""),
-        resources: keepResources ? "retained" : "cleaned",
-        resourceRecord: descriptor.resourceRecord,
-        project: descriptor.project,
-        origin: descriptor.origin,
-        artifactDirectory: descriptor.artifactDirectory,
-      }),
-    );
+async function runRecovery(args: string[], signal: AbortSignal) {
+  const [flag, value] = args[0] === "--" ? args.slice(1) : args;
+  if (
+    args.length !== (args[0] === "--" ? 3 : 2) ||
+    !value?.trim() ||
+    (flag !== "--descriptor" && flag !== "--project")
+  ) {
+    throw new Error("cleanup requires exactly one --descriptor <path> or --project <exact-project>");
+  }
+  const target = flag === "--descriptor" ? { descriptorPath: value } : { project: value };
+  const project = await recoverExactProject(target, (project) => cleanupHybridProject(residentOptions, project), {
+    signal,
   });
+  console.log(JSON.stringify({ status: "exact-project-cleaned", project }));
 }
 
-async function runRecovery(args: string[]) {
-  const input = parseRecoveryArgs(args);
-  await withCapturableSignals(async (signal) => {
-    const operations = createOperations(signal);
-    const project = await recoverExactProject(input, async (target) => operations.recoverProject(target), { signal });
-    console.log(JSON.stringify({ status: "exact-project-cleaned", project }));
-  });
-}
-
-async function withCapturableSignals<T>(operation: (signal: AbortSignal) => Promise<T>) {
+async function withCapturableSignals(operation: (signal: AbortSignal) => Promise<void>) {
   const controller = new AbortController();
   const onSigint = () => controller.abort(new Error("received SIGINT"));
   const onSigterm = () => controller.abort(new Error("received SIGTERM"));
-  process.once("SIGINT", onSigint);
-  process.once("SIGTERM", onSigterm);
+  process.on("SIGINT", onSigint);
+  process.on("SIGTERM", onSigterm);
   try {
-    return await operation(controller.signal);
+    await operation(controller.signal);
   } finally {
     process.removeListener("SIGINT", onSigint);
     process.removeListener("SIGTERM", onSigterm);
   }
 }
 
-function parseRecoveryArgs(args: string[]) {
-  if (args.length !== 2 || !["--descriptor", "--project"].includes(args[0] ?? "")) {
-    throw new Error("cleanup requires exactly one --descriptor <path> or --project <exact-project>");
-  }
-  const value = args[1];
-  if (value === undefined || value.trim() === "") throw new Error("cleanup target must not be empty");
-  return args[0] === "--descriptor" ? { descriptorPath: value } : { project: value };
-}
-
+const [command, ...args] = process.argv.slice(2);
 try {
-  const command = process.argv[2];
-  const managed =
-    command === "e2e" &&
-    (process.argv.slice(3).join(" ") === "--managed" || process.argv.slice(3).join(" ") === "-- --managed");
-  if (!managed && command !== "cleanup" && process.argv.slice(3).some((argument) => argument !== "--keep-resources")) {
-    throw new Error("E2E lifecycle accepts only --keep-resources");
+  if (command === "e2e" && args.join(" ") !== "--managed" && args.join(" ") !== "-- --managed") {
+    await runHybridPlaywright(args);
+  } else if ((command === "managed" && args.length === 0) || command === "e2e") {
+    await withCapturableSignals(runManagedIamJourney);
+  } else if (command === "container-smoke" && args.length === 0) {
+    const { runContainerSmoke } = await import("./container-smoke.ts");
+    await withCapturableSignals((signal) => runContainerSmoke({ repositoryRoot, workspaceRoot, signal }));
+  } else if (command === "cleanup") {
+    await withCapturableSignals((signal) => runRecovery(args, signal));
+  } else if (command === "down" && args.length === 0) {
+    await withCapturableSignals(async () => {
+      await cleanupHybridResident(residentOptions);
+      console.log("[e2e] Resident middleware is down");
+    });
+  } else {
+    throw new Error("expected command: e2e | managed | container-smoke | down | cleanup");
   }
-  if (managed) await withCapturableSignals((signal) => runManagedIamJourney(signal));
-  else if (command === "admin") await runAdminJourneyLifecycle();
-  else if (command === "hr-admin") await runHrAdminJourneyLifecycle();
-  else if (command === "oidc") await runOidcJourneyLifecycle();
-  else if (command === "e2e") await runFullSystemJourneyLifecycle();
-  else if (command === "run") await runRuntimeLifecycle();
-  else if (command === "cleanup") await runRecovery(process.argv.slice(3));
-  else throw new Error("expected command: admin | hr-admin | oidc | e2e | run | cleanup");
 } catch (error) {
   console.error(formatFailure(error));
   process.exitCode = 1;

@@ -42,6 +42,6 @@ pnpm --filter @iam/ops iam-ops organization-document verify
 
 ## 托管环境验收
 
-对已完成初始化和网关发布的独立测试环境，可使用 `pnpm test:e2e -- --managed`。将 `IAM_MANAGED_ACCEPTANCE_INPUT_FILE` 指向私有 JSON，提供 `environment`、`origin`、`database`、`databaseUrl`、`admin.username/password`、`redis.host/port/db` 和可选的 Redis 用户名、密码。环境标识为 `shrq-srv-test` 或 `shrq-srv-prod`，数据库名需与该标识对应。
+对已完成初始化和网关发布的独立测试环境，可使用 `pnpm test:e2e:managed`。将 `IAM_MANAGED_ACCEPTANCE_INPUT_FILE` 指向私有 JSON，提供 `environment`、`origin`、`database`、`databaseUrl`、`admin.username/password`、`redis.host/port/db` 和可选的 Redis 用户名、密码。环境标识为 `shrq-srv-test` 或 `shrq-srv-prod`，数据库名需与该标识对应。
 
 该模式使用真实管理入口执行写入。用户场景临时改名，核对 Redis Facts、已完成的 User Document 批任务和 `user-info`，随后恢复原值。组织场景创建并重命名自有组织，核对 PostgreSQL 发布结果和任务完成后逐级清理。验收前确认账号和目标环境允许这些写入，测试通过以发布结果和清理完成为准。

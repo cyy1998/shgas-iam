@@ -16,7 +16,10 @@
     "test": "pnpm test:unit",
     "test:unit": "turbo test:unit --concurrency=2",
     "test:integration": "node scripts/run-test-integration.mjs",
-    "test:e2e": "turbo test:e2e --concurrency=1",
+    "test:e2e": "pnpm --filter @iam/e2e-system test:e2e",
+    "test:e2e:container-smoke": "pnpm --filter @iam/e2e-system test:e2e:container-smoke",
+    "test:e2e:down": "pnpm --filter @iam/e2e-system test:e2e:down",
+    "test:e2e:managed": "pnpm --filter @iam/e2e-system test:e2e:managed",
     "e2e:install": "pnpm --filter @iam/admin exec playwright install --with-deps chromium",
     "e2e:install:browsers": "pnpm --filter @iam/admin exec playwright install chromium",
     "typecheck": "turbo typecheck typecheck:root --concurrency=1",
@@ -33,6 +36,7 @@
     "verify:docs": "node scripts/verify-docs.mjs",
     "verify:ci": "node scripts/run-verification-gate.mjs ci",
     "verify:release": "node scripts/run-verification-gate.mjs release",
+    "verify:container-smoke": "node scripts/run-verification-gate.mjs container-smoke",
     "test:resources:cleanup": "node scripts/run-test-resource-cleanup.mjs"
   },
   "devDependencies": {

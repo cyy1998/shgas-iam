@@ -1,5 +1,3 @@
-import { createE2EGatewayApiKey } from "./gateway-credential";
-
 export async function publishGateway(
   input: {
     yaml: string;
@@ -8,6 +6,8 @@ export async function publishGateway(
     gatewayOrigin: string;
     adminUrl: string;
     adminKey: string;
+    signal?: AbortSignal;
+    includeRpTerminals?: boolean;
     wecomMobile?: { authority: string; cert: string; privateKey: string };
   },
   request: (input: string, init?: RequestInit) => Promise<Response> = fetch,
@@ -32,21 +32,23 @@ export async function publishGateway(
     throw new Error("E2E Gateway manifest has no frontend logging policy");
   // These test-owned RP terminals only receive completed protocol navigation.
   // The static upstream has no IAM logic or browser script that can redirect.
-  for (const [entry, authority] of [
-    ["internal", input.variables.IAM_SSO_INTERNAL_HOST],
-    ["external", input.variables.IAM_SSO_EXTERNAL_HOST],
-  ]) {
-    if (!authority) throw new Error(`E2E Gateway ${entry} authority is missing`);
-    source.routes.push({
-      key: `e2e-rp-${entry}`,
-      uris: ["/e2e/custom-sso/callback", "/e2e/business/callback", "/e2e/business/landing", "/e2e/oidc/callback"],
-      vars: [["http_host", "==", authority]],
-      plugins: {
-        ...frontend.plugins,
-        "proxy-rewrite": { uri: "/portal/e2e-rp.html" },
-      },
-      upstream: "sso-frontend",
-    });
+  if (input.includeRpTerminals !== false) {
+    for (const [entry, authority] of [
+      ["internal", input.variables.IAM_SSO_INTERNAL_HOST],
+      ["external", input.variables.IAM_SSO_EXTERNAL_HOST],
+    ]) {
+      if (!authority) throw new Error(`E2E Gateway ${entry} authority is missing`);
+      source.routes.push({
+        key: `e2e-rp-${entry}`,
+        uris: ["/e2e/custom-sso/callback", "/e2e/business/callback", "/e2e/business/landing", "/e2e/oidc/callback"],
+        vars: [["http_host", "==", authority]],
+        plugins: {
+          ...frontend.plugins,
+          "proxy-rewrite": { uri: "/portal/e2e-rp.html" },
+        },
+        upstream: "sso-frontend",
+      });
+    }
   }
   let variables = input.variables;
   if (input.wecomMobile) {
@@ -103,7 +105,7 @@ export async function publishGateway(
       variables,
       prune: true,
     }),
-    signal: AbortSignal.timeout(70_000),
+    signal: requestSignal(70_000, input.signal),
   });
   if (!publication.ok)
     throw new Error(
@@ -114,7 +116,7 @@ export async function publishGateway(
     throw new Error("E2E Gateway did not confirm publication; inspect Gateway state before retrying");
   const response = await request(`${input.adminUrl}/upstreams/iam.api.e2e`, {
     headers: { "X-API-KEY": input.adminKey },
-    signal: AbortSignal.timeout(10_000),
+    signal: requestSignal(10_000, input.signal),
   });
   if (!response.ok) throw new Error("E2E Gateway applied upstream cannot be read back");
   const applied = await response.json();
@@ -123,45 +125,7 @@ export async function publishGateway(
   return { gatewayHostRewrite: { verified: true, upstream: "iam.api.e2e", host: applied.value.upstream_host } };
 }
 
-if (import.meta.main) {
-  const variableNames = [
-    "APISIX_OTEL_COLLECTOR_ENDPOINT",
-    "DEV_IAM_API_UPSTREAM_HOST",
-    "DEV_IAM_API_UPSTREAM_PORT",
-    "DEV_IAM_ADMIN_API_UPSTREAM_HOST",
-    "DEV_IAM_ADMIN_API_UPSTREAM_PORT",
-    "DEV_IAM_SSO_FRONTEND_UPSTREAM_HOST",
-    "DEV_IAM_SSO_FRONTEND_UPSTREAM_PORT",
-    "DEV_IAM_ADMIN_FRONTEND_UPSTREAM_HOST",
-    "DEV_IAM_ADMIN_FRONTEND_UPSTREAM_PORT",
-    "IAM_SSO_INTERNAL_HOST",
-    "IAM_SSO_EXTERNAL_HOST",
-  ];
-  const required = (name: string) => {
-    const value = process.env[name];
-    if (!value) throw new Error(`E2E Gateway configuration missing ${name}`);
-    return value;
-  };
-  try {
-    const mobileAuthority = process.env.IAM_E2E_WECHAT_QR_MOBILE_AUTHORITY;
-    const result = await publishGateway({
-      yaml: await Bun.file(new URL("../test-assets/iam.yaml", import.meta.url)).text(),
-      variables: Object.fromEntries(variableNames.map((name) => [name, required(name)])),
-      clientSecret: createE2EGatewayApiKey(required("IAM_E2E_RUN_ID")),
-      gatewayOrigin: required("IAM_E2E_GATEWAY_API_ORIGIN"),
-      adminUrl: "http://apisix:9180/apisix/admin",
-      adminKey: "dev-local-admin-key-change-me",
-      wecomMobile: mobileAuthority
-        ? {
-            authority: mobileAuthority,
-            cert: await Bun.file(new URL("../test-assets/wecom-mobile-cert.pem", import.meta.url)).text(),
-            privateKey: await Bun.file(new URL("../test-assets/wecom-mobile-key.pem", import.meta.url)).text(),
-          }
-        : undefined,
-    });
-    console.log(JSON.stringify(result));
-  } catch {
-    console.error("E2E Gateway publication failed; inspect Gateway and APISIX before retrying");
-    process.exitCode = 1;
-  }
+function requestSignal(timeoutMs: number, signal?: AbortSignal) {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
 }

@@ -109,13 +109,13 @@ Turbo 负责跨 workspace 编排。Unit 通过 `transit` 传播依赖源码变�
 | 聚合验证                     | 当前命令启动失败或非零退出，后续命令不再启动。[基础验证](../../scripts/verify.mjs) · [CI 与发布验证](../../scripts/run-verification-gate.mjs)                                                                                                                                                                      |
 | Integration 阶段与 workspace | 根 runner 顺序运行被选中的执行器阶段，每阶段由 Turbo 串行调度 workspace。任务失败会停止剩余任务，当前阶段非零退出就不再启动后续阶段。[根 Integration runner](../../scripts/run-test-integration.mjs)                                                                                                               |
 | 包级 Integration 用例        | Bun 与 Vitest 限制并发并启用首错停止。Playwright 零重试、失败上限为 1。默认单 worker，Admin 的无专用资源 mock API 集合可用两个 worker 并行不同文件。达到上限时停止调度，已启动的用例仍需收尾。[包级 runner](../../scripts/run-package-integration.mjs) · [Admin 浏览器配置](../../apps/admin/playwright.config.ts) |
-| Full-system E2E              | 单次 Playwright 调用使用一个 worker、零重试，未设累计失败数上限，普通用例失败后同旅程仍可调度其他用例。外层逐个等待完整旅程，Playwright 非零退出或旅程后置核验失败，都会阻止下一旅程启动。[Playwright 调用](../../e2e/system/src/playwright-journey.ts) · [旅程编排](../../e2e/system/src/full-system-journey.ts)  |
+| Full-system E2E              | 一次 Playwright 运行默认使用一个 worker、零重试，跑完全部选中用例。新文件开始前自动复位，按需用 `-x` 首错停止。[Playwright 配置](../../e2e/system/playwright.config.ts)                                                                                                                                            |
 
 Timeout 用于限制悬挂。进程测试等待实际 readiness，同时观察启动错误与退出。成功、失败、超时或可捕获中断后均须尝试停止并等待所属进程树，再释放端口、连接及目录。清理有独立预算，失败时报告原因并保留原始错误。Windows 使用 Job，Linux 按继承的进程归属标记回收后代。[进程生命周期](../../packages/runtime/src/process/owned-process-tree.mjs)
 
 ### 专用资源与隔离
 
-- **命令隔离**。当选中的任务需要 PostgreSQL 或 Redis 时，根 runner 先登记本次 run ID 和准确的 Compose project，再以动态 loopback 端口启动所需服务。不同命令独占各自环境，浏览器服务器由所属 workspace 管理。测试使用专用资源及合成数据。
+- **命令隔离**。根 runner 先登记本次 run ID，子 Compose project 启动前登记在本轮记录旁。声明需要 PostgreSQL 或 Redis 时，根 runner 再以动态 loopback 端口启动所需服务。不同命令独占各自环境，浏览器服务器由所属 workspace 管理。测试使用专用资源及合成数据。
 - **Fixture 重置**。PostgreSQL 使用随机 schema、专用连接和整体清理。Redis 先完成业务观察，停止本例全部 consumer、子进程与连接，再对独占 DB 执行 `FLUSHDB`，最后关闭控制连接。任一停止失败即跳过重置，仍尝试其余收尾并汇总错误。禁止 `FLUSHALL`。非目标数据保护、生产连接关闭和只读作用须在重置前观察。[资源生命周期 helper](../../packages/test-support/src/external-test-resources.ts)
 - **Gateway 子环境**。Gateway Integration 在本次运行内复用独立的 APISIX/etcd。用例成功收尾后才重置并回读空基线，失败即停止复用。包级 provider 收尾自己的子 project。根 runner 按登记逆序处理剩余子 project，再处理主 project，某项清理失败仍尝试其余项。[Gateway fixture](../../apps/gateway/test-integration/support/apisix.fixture.ts)
 - **人工恢复**。保留环境或强制中断后，先确认所属进程树已退出。若父记录旁有 `children.jsonl`，逐项清理已登记的子 project，最后按父记录清理主 project。手工清理只作用于传入的准确记录，禁止按前缀猜测或全局 prune。[手工清理入口](../../scripts/run-test-resource-cleanup.mjs) · [恢复命令](commands.md#测试与验证通道)
@@ -125,21 +125,27 @@ Timeout 用于限制悬挂。进程测试等待实际 readiness，同时观察�
 
 ## Full-system E2E
 
-完整 E2E 集合中的各旅程共用本次独立的双入口 Compose project，以真实前后端、Worker 和 APISIX 观察业务结果。当前收集哪些场景查 [Playwright 配置的 `testMatch`](../../e2e/system/playwright.config.ts)，执行顺序见[旅程编排](../../e2e/system/src/full-system-journey.ts)，定向运行和显式恢复见[E2E 命令](commands.md#full-system-e2e)。
+九个业务 spec 通过真实 APISIX 双入口观察业务结果。Docker 运行 PostgreSQL、Redis、etcd 和 APISIX，API、Admin API、Worker、Gateway API、Admin 和 SSO 在当前执行环境监听回环地址。浏览器通过两个 hostname 分别访问网关，以验证 Cookie 作用域和入口隔离。根命令直连 Playwright 包装入口，剥离 `--` 前的运行时开关，透传文件筛选、`-g`、`-x`、`--last-failed` 和 `--ui` 等参数。[E2E 命令](commands.md#full-system-e2e) · [运行时编排](../../e2e/system/src/hybrid-runtime.ts)
 
 ### 初始化与就绪
 
-前置检查在独立期限内确认 Chromium 和 Docker 条件，再创建并持久化 descriptor、初始化迁移 receipt。随后在独立的构建预算内逐个构建本次 project 的镜像。镜像就绪后才启动容器，从空卷迁移并启动正式 runtime，用合成数据 seed，等待 Worker 发布并回读 Document、Facts 版本及访问屏障。必要的 seed receipt 缺失、入口配置不符或路由 readiness 失败都会阻止旅程启动。[CLI 接线](../../e2e/system/src/cli.ts) · [生命周期顺序](../../e2e/system/src/lifecycle.ts)
+本地默认复用常驻中间件，互斥锁记录占用进程、工作树及开始时间。接管锁后，运行时先停止并等待旧运行登记的宿主进程，再访问模板或复位数据。回收失败时保留原进程记录，本轮停止。CI、Sandcastle AFK 和 `--fresh` 使用独占 Compose project 和动态端口。运行时按数据库迁移、seed 和 Worker 投影输入的指纹复用或重建模板，等待 Worker 发布并回读基础状态。前端默认使用独立的指纹缓存构建静态产物，`--dev-frontend` 启动 Vite。
 
-通过正式 Gateway 发布本次测试路由并检查真实代理后的协议入口。两个 hostname 在测试环境解析到 loopback，以便检验浏览器的 Cookie 作用域与入口隔离。镜像携带本次所需配置，业务旅程通过正式系统建立和观察状态，人工 Ops 命令由独立 Integration 验证。[完整系统配置](../../e2e/system/compose.yaml) · [网关测试资源](../../e2e/system/test-assets/)
+Windows 和 macOS 的 Docker Desktop 本机运行使用 bridge，APISIX 默认通过 `host.docker.internal` 访问宿主上游。原生 Linux 和 AFK 使用 host network 及动态监听端口，APISIX 通过 `127.0.0.1` 访问业务进程。两种拓扑均无宿主机路径 bind mount。网关路由发布后，从 APISIX 容器内探测上游，再检查真实双入口和企微 HTTPS 路由。
+
+首次进入每个 spec 时，fixture 调用本轮鉴权控制端点，等待后端停止、PostgreSQL 克隆模板、Redis 复位和后端重新就绪，再读取最新运行上下文。同文件内的用例共用该基线。Worker 停启由控制端点负责，测试直接读取本轮目录中的短信投递文件。[运行时 fixture](../../e2e/system/src/gateway-test.ts) · [网关测试资源](../../e2e/system/test-assets/)
 
 ### 失败诊断与清理
 
-构建开始后，无论成功、失败、超时或收到可捕获信号，均先尝试有界的辅助诊断，再用独立预算清理本次 project（显式保留除外）。辅助诊断失败只告警，必要输入、断言证据或清理失败则返回失败。运行和清理均失败时保留两者。收尾期间收到信号仍完成清理尝试并报告失败。[生命周期验证](../../e2e/system/src/__tests__/lifecycle.test.ts)
+Playwright 临时产物保存到 `e2e/system/test-results/<run-id>/playwright/`。失败摘要独立落在 `e2e/system/.reports/<run-id>/failure-summary.{md,json}`，末尾输出绝对路径，并更新 `.reports/last-failure.{md,json}`。摘要按用例聚合断言、浏览器错误、失败请求和同时间窗服务日志。APISIX 原始错误日志保留在容器内存中，Reporter 按时间窗读取并脱敏后写入摘要。原始 trace、截图和视频可能含合成凭据，按运行目录控制访问与保留期。
 
-`host-memory.json` 按阶段记录采样区间、采样数和最低可用物理内存。Windows 正常读取系统性能计数器时还记录阶段起始和最低提交余量，以及系统提交量峰值。比较构建或浏览器峰值时使用同一候选，并核对各轮的起始余量。[宿主内存采样](../../e2e/system/src/host-memory.ts)
+运行结束后停止本轮宿主进程，独占模式按本轮登记记录回收容器、卷、网络和本地镜像。指定 `--keep` 时，环境记录提供精确清理命令。常驻中间件通过 `pnpm test:e2e:down` 清理。强制中断后先确认所属进程树退出，再按[恢复命令](commands.md#full-system-e2e)处理准确记录。
 
-清理失败时保留 descriptor，供按准确 project 重试。清理限于该 Compose project，不另行扫描全机镜像或资源。诊断和浏览器产物限制数量、大小和路径，原始 trace、截图、视频可能含合成凭据，按运行目录控制访问与保留期。显式恢复只接受一份 descriptor 或一个完整 project 名。[诊断采集](../../e2e/system/src/diagnostics.ts) · [产物归档](../../e2e/system/src/playwright-evidence.ts) · [恢复入口](../../e2e/system/src/recovery.ts)
+## Container Smoke
+
+`pnpm test:e2e:container-smoke` 在独占 Compose project 中构建六个生产镜像和 APISIX，等候全部容器健康。候选工作树在专用库执行迁移，经正式 Ops 初始化命令建立合成基线并验证 Worker 发布，随后通过真实 Gateway API 发布路由。单条 Chromium 用例经 APISIX 验证 Worker 发布的 User Document、`/portal/login` 登录、Admin 与 SSO 的 Nginx SPA 和静态资源，以及 API 和 Admin API 的真实响应。
+
+命令在成功、失败或可捕获中断后先采集有限的容器状态和日志，再按本次登记回收容器、网络、数据卷和本地构建镜像。原始诊断、浏览器失败产物与资源记录留在命令输出的运行目录。强制结束或清理失败时，按准确记录恢复。[命令与门禁](commands.md#container-smoke)
 
 ## 验证结果与交付
 

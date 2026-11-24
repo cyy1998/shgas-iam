@@ -1,56 +1,57 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
-import { requireEnvironment } from "./src/environment.ts";
+import { createFailureReporters } from "./src/failure-report/reporter-config.ts";
+import type { HybridRunContext } from "./src/hybrid-context.ts";
 import { wecomMobileCertificatePin } from "./src/wecom-mobile-tls.ts";
 
-const origin = requireEnvironment("IAM_E2E_ORIGIN");
-const outputDir = requireEnvironment("IAM_E2E_PLAYWRIGHT_OUTPUT_DIR");
-const journey = process.env.IAM_E2E_JOURNEY ?? "admin";
-if (journey !== "admin" && journey !== "hr-admin" && journey !== "oidc" && journey !== "managed")
-  throw new Error("IAM_E2E_JOURNEY must be admin, hr-admin, oidc, or managed");
+const contextPath = process.env.IAM_E2E_CONTEXT_PATH;
+const context: HybridRunContext | undefined = contextPath ? JSON.parse(readFileSync(contextPath, "utf8")) : undefined;
 
 export default defineConfig({
   expect: { timeout: 30_000 },
   forbidOnly: true,
   fullyParallel: false,
-  outputDir,
-  preserveOutput: journey === "managed" ? "never" : "always",
-  projects: [
-    {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+  outputDir: contextPath ? join(dirname(contextPath), "playwright") : "test-results/playwright",
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  reporter: createFailureReporters(
+    context && {
+      logFiles: Object.fromEntries(
+        Object.keys(context.backendOrigins).map((service) => [
+          service,
+          ["stdout", "stderr"].map((stream) => join(context.logDirectory, `${service}.${stream}.log`)),
+        ]),
+      ),
+      apisix: { project: context.project, composeFile: context.apisixComposeFile },
     },
-  ],
-  reporter: "list",
+    process.env.IAM_E2E_INTERACTIVE === undefined ? process.stdout.isTTY : process.env.IAM_E2E_INTERACTIVE === "1",
+  ),
   retries: 0,
   testDir: ".",
-  testMatch:
-    journey === "oidc"
-      ? [
-          "oidc-pkce.spec.ts",
-          "directory-custom-attributes.spec.ts",
-          "dual-entry.spec.ts",
-          "application-admission.spec.ts",
-          "wecom-qr.spec.ts",
-          "wecom-qr-oidc.spec.ts",
-          "wecom-qr-binding.spec.ts",
-        ]
-      : journey === "hr-admin"
-        ? "hr-admin-user-management.spec.ts"
-        : journey === "managed"
-          ? "managed-hosting.spec.ts"
-          : "admin-custom-sso.spec.ts",
+  testMatch: [
+    "admin-custom-sso.spec.ts",
+    "application-admission.spec.ts",
+    "directory-custom-attributes.spec.ts",
+    "dual-entry.spec.ts",
+    "hr-admin-user-management.spec.ts",
+    "oidc-pkce.spec.ts",
+    "wecom-qr-binding.spec.ts",
+    "wecom-qr-oidc.spec.ts",
+    "wecom-qr.spec.ts",
+  ],
+  testIgnore: "**/test-results/**",
   timeout: 120_000,
   use: {
-    baseURL: origin,
+    baseURL: context?.origin,
     launchOptions: {
       args: [
         "--host-resolver-rules=MAP internal.iam.localhost 127.0.0.1, MAP external.iam.localhost 127.0.0.1",
-        ...(journey === "oidc" ? [`--ignore-certificate-errors-spki-list=${wecomMobileCertificatePin()}`] : []),
+        `--ignore-certificate-errors-spki-list=${wecomMobileCertificatePin()}`,
       ],
     },
-    screenshot: journey === "managed" ? "off" : "only-on-failure",
-    trace: journey === "managed" ? "off" : "retain-on-failure",
-    video: journey === "managed" ? "off" : "retain-on-failure",
+    screenshot: "only-on-failure",
+    trace: "retain-on-failure",
+    video: "retain-on-failure",
   },
   workers: 1,
 });

@@ -1,17 +1,25 @@
+import { readFile, stat } from "node:fs/promises";
+import { join } from "node:path";
 import { OrganizationResponsibilityAssignmentStatus } from "@iam/contracts";
 import type { APIRequestContext, Browser, Page, Response } from "@playwright/test";
 import { expect } from "@playwright/test";
 import { expectRpcMutationResult, isSuccessfulRpcResponse, loginToAdmin } from "./src/admin-client-journey.ts";
+import { runWithCleanup } from "./src/bounded-operation.ts";
 import { containsScalarValue } from "./src/concealment.ts";
-import { requireEnvironment } from "./src/environment.ts";
 import { test } from "./src/gateway-test.ts";
+import { assertHrAdminDenialLog, verifyHrAdminOutcome } from "./src/hr-admin-outcome.ts";
+import { createProductionHrAdminOutcomeOwner } from "./src/hr-admin-outcome-owner.ts";
+import type { HybridRunContext } from "./src/hybrid-context.ts";
 
 test("HR Admin manages cross-root responsibilities without widening either endpoint", async ({
+  runtime,
   browser,
   context,
   page,
 }) => {
-  const scenario = readScenario();
+  const scenario = readScenario(runtime);
+  const logFiles = ["stdout", "stderr"].map((stream) => join(runtime.logDirectory, `admin-api.${stream}.log`));
+  const logOffsets = await Promise.all(logFiles.map(async (file) => (await stat(file)).size));
   await expectMixedAndFullAdminGlobalCapability(browser, scenario);
   await loginToAdmin({
     adminPassword: scenario.adminPassword,
@@ -120,6 +128,21 @@ test("HR Admin manages cross-root responsibilities without widening either endpo
 
   await expectActorFailClosed(browser, scenario, scenario.delegateeUsername);
   await expectActorFailClosed(browser, scenario, scenario.noScopeHrAdminUsername);
+
+  await test.step("Verify responsibility, audit, and Worker publication in PostgreSQL", async () => {
+    const { db, closeDb } = await import("@iam/db");
+    await runWithCleanup(
+      () => verifyHrAdminOutcome({ owner: createProductionHrAdminOutcomeOwner(db), scenario: runtime.references }),
+      () => closeDb({ timeoutSeconds: 5 }),
+    );
+  });
+
+  await test.step("Verify authorization denials conceal scope in the Admin API logs", async () => {
+    const logs = await Promise.all(
+      logFiles.map(async (file, index) => (await readFile(file)).subarray(logOffsets[index]).toString("utf8")),
+    );
+    assertHrAdminDenialLog(logs.join("\n"), runtime.references, runtime.references);
+  });
 });
 
 async function expectContextPanels(page: Page, scenario: Scenario, assignmentId: number) {
@@ -501,27 +524,12 @@ function adminHeaders(clientCode: string) {
   return { Client: clientCode };
 }
 
-function readScenario() {
+function readScenario(runtime: HybridRunContext) {
   return {
-    origin: requireEnvironment("IAM_E2E_ORIGIN"),
-    runId: requireEnvironment("IAM_E2E_RUN_ID"),
-    adminClientCode: requireEnvironment("IAM_E2E_ADMIN_CLIENT_CODE"),
-    adminMixedRoleAssignmentId: Number(requireEnvironment("IAM_E2E_ADMIN_MIXED_ROLE_ASSIGNMENT_ID")),
-    adminPassword: requireEnvironment("IAM_E2E_ADMIN_PASSWORD"),
-    adminUsername: requireEnvironment("IAM_E2E_ADMIN_USERNAME"),
-    hrAdminUsername: requireEnvironment("IAM_E2E_HR_ADMIN_USERNAME"),
-    delegateeUsername: requireEnvironment("IAM_E2E_DELEGATEE_USERNAME"),
-    noScopeHrAdminUsername: requireEnvironment("IAM_E2E_NO_SCOPE_HR_ADMIN_USERNAME"),
-    responsibilityHolderPositionCode: requireEnvironment("IAM_E2E_RESPONSIBILITY_HOLDER_POSITION_CODE"),
-    outsideResponsibilityHolderPositionCode: requireEnvironment("IAM_E2E_OUTSIDE_RESPONSIBILITY_HOLDER_POSITION_CODE"),
-    responsibilityHolderEmploymentId: Number(requireEnvironment("IAM_E2E_RESPONSIBILITY_HOLDER_EMPLOYMENT_ID")),
-    outsideResponsibilityHolderEmploymentId: Number(
-      requireEnvironment("IAM_E2E_OUTSIDE_RESPONSIBILITY_HOLDER_EMPLOYMENT_ID"),
-    ),
-    hiddenResponsibilityAssignmentId: Number(requireEnvironment("IAM_E2E_HIDDEN_RESPONSIBILITY_ASSIGNMENT_ID")),
-    hrSecondScopeRoleAssignmentId: Number(requireEnvironment("IAM_E2E_HR_SECOND_SCOPE_ROLE_ASSIGNMENT_ID")),
-    hrResponsibilityTargetOrganizationCode: requireEnvironment("IAM_E2E_HR_RESPONSIBILITY_TARGET_ORGANIZATION_CODE"),
-    outsideOrganizationCode: requireEnvironment("IAM_E2E_OUTSIDE_ORGANIZATION_CODE"),
+    ...runtime.references,
+    origin: runtime.origin,
+    adminPassword: runtime.adminPassword,
+    outsideOrganizationCode: runtime.references.responsibilityTargetOrganizationCode,
   };
 }
 

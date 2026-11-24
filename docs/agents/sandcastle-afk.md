@@ -187,5 +187,10 @@ GitHub Issues 保存需求、协作状态与恢复说明，Git 提交保存实�
 - **Spec 最终验证** 最终集中修复者以固定 review base 为合入目标，按[验证节奏](workflow.md#验证节奏)为整个 Spec 的最终候选选择基础门禁。
   按父 Spec 与全部 tickets 的风险、验收和已确认测试决策补齐所需 Integration、E2E、Gateway 等检查，重复覆盖按范围去重。
   各票分支结果不替代最终组合验证。
+- **Container Smoke 门禁** 集中修复提交后，在候选工作树执行 `pnpm verify:container-smoke --base <review-base-sha>`。
+  该命令对比固定 review base 与当前 HEAD，新增、修改、删除或移动命中任意目录的 `Dockerfile`、`nginx.conf`、
+  `package.json`、`pnpm-lock.yaml` 或 `e2e/system/docker/` 下的文件时，串行追加一次 `pnpm test:e2e:container-smoke`。
+  无命中时记录跳过，Git 比较失败时门禁失败。同一最终候选已通过 `pnpm verify:release` 时复用其中的冒烟结果。
+  启动分支提供最终验证 prompt，执行器在候选工作树读取本页和运行门禁，因此本次 Spec 引入的门禁也在本次生效。
 - 后续修复重跑失效检查，仍有效的通过证据可复用。普通交接记录实际命令、结果、对应候选与未执行项；必需检查失败或
   未执行、findings 尚未解决时保持未完成。本轮不通过反复新开会话重试，也不以清理成功或进程正常退出代替验收。

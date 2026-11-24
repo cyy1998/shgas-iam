@@ -34,6 +34,7 @@ export async function saveManagedResourceRun(run) {
 
 export async function createManagedResourceRun(options) {
   const root = resolve(options.root);
+  const parent = options.parentRecord ? await readManagedResourceRun(root, options.parentRecord) : undefined;
   const runId = randomUUID();
   const project = options.project ?? `${options.projectPrefix ?? "iam-integration"}-${runId.replaceAll("-", "")}`;
   if (!/^[a-z0-9][a-z0-9_-]+$/.test(project)) throw new Error("An exact Compose project name is required");
@@ -50,7 +51,7 @@ export async function createManagedResourceRun(options) {
     testEnvironmentFile: `${artifactDirectory}/test-environment.json`,
     services: [...(options.services ?? [])],
     removeLocalImages: options.removeLocalImages ?? false,
-    keep: options.keep ?? false,
+    keep: Boolean(options.keep || parent?.record.keep),
     status: "created",
     createdAt: new Date().toISOString(),
     durations: {},
@@ -65,8 +66,9 @@ export async function createManagedResourceRun(options) {
   await writeFile(join(root, record.testEnvironmentFile), "{}\n", { mode: 0o600 });
   const run = { root, recordPath, record };
   await saveManagedResourceRun(run);
-  if (options.registryFile) {
-    const registry = join(root, repositoryPath(root, options.registryFile));
+  for (const file of [options.registryFile, parent && `${parent.record.artifactDirectory}/children.jsonl`]) {
+    if (!file) continue;
+    const registry = join(root, repositoryPath(root, file));
     await mkdir(dirname(registry), { recursive: true });
     await appendFile(registry, `${JSON.stringify(recordPath)}\n`, { mode: 0o600 });
   }

@@ -1,13 +1,14 @@
 import { expect, type Page } from "@playwright/test";
-import { requireEnvironment } from "./environment.ts";
 import { createWecomAuthorizationCode, wecomAgent, wecomCorp, wecomMobileCallbackPath } from "./wecom-provider.ts";
 
 const authorizationEndpoint = "https://open.weixin.qq.com/connect/oauth2/authorize";
 
 /** Emulate only the WeCom browser redirect. IAM URLs are handled by the real gateway and application. */
-export async function standInForWecomAuthorization(page: Page, input: { mobileOrigin: string; member: string }) {
+export async function standInForWecomAuthorization(
+  page: Page,
+  input: { mobileOrigin: string; member: string; runId: string },
+) {
   const allowedCallback = new URL(wecomMobileCallbackPath, input.mobileOrigin).href;
-  const runId = requireEnvironment("IAM_E2E_RUN_ID");
   // Playwright route handlers see only the first request in a redirect chain.
   const provider = await page.context().newCDPSession(page);
   await provider.send("Fetch.enable", {
@@ -31,7 +32,7 @@ export async function standInForWecomAuthorization(page: Page, input: { mobileOr
       if (!state) throw new Error("WeCom authorization redirect omitted state");
       const callback = new URL(allowedCallback);
       callback.searchParams.set("state", state);
-      callback.searchParams.set("code", createWecomAuthorizationCode(input.member, state, runId));
+      callback.searchParams.set("code", createWecomAuthorizationCode(input.member, state, input.runId));
       await provider.send("Fetch.fulfillRequest", {
         requestId,
         responseCode: 302,

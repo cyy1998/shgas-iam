@@ -68,6 +68,7 @@ const RawWorkerEnvSchema = z
     IAM_WORKER_LOG_FORMAT: z.enum(["auto", "json", "pretty"]).default("auto"),
     IAM_WORKER_ENABLED_MODULES: moduleSelection("all"),
     IAM_WORKER_HTTP_ENABLED: booleanString(true),
+    IAM_WORKER_HTTP_HOSTNAME: optionalNonEmptyString(),
     IAM_WORKER_HTTP_PORT: z.coerce.number().int().min(1).max(65535).default(30003),
     IAM_WORKER_HEALTH_PATH: slashPath("/healthz"),
     IAM_WORKER_BULL_BOARD_ENABLED: booleanString(false),
@@ -144,6 +145,7 @@ export interface WorkerEnv {
   };
   http: {
     enabled: boolean;
+    hostname?: string;
     port: number;
     healthPath: string;
   };
@@ -193,6 +195,7 @@ function toWorkerEnv(raw: RawWorkerEnv): WorkerEnv {
     },
     http: {
       enabled: raw.IAM_WORKER_HTTP_ENABLED,
+      hostname: raw.IAM_WORKER_HTTP_HOSTNAME,
       port: raw.IAM_WORKER_HTTP_PORT,
       healthPath: raw.IAM_WORKER_HEALTH_PATH,
     },

@@ -33,7 +33,11 @@ import {
 } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { USER_DOCUMENT_SCHEMA_VERSION } from "@iam/documents/user/document";
-import { createSubjectFactsRedisInspector } from "@iam/documents/user/subject-facts";
+import {
+  createDocumentFactsCacheRecord,
+  createSubjectFactsRedisInspector,
+  createSubjectFactsRedisPublisher,
+} from "@iam/documents/user/subject-facts";
 import type { CreateUserDocumentWorkerModuleInput } from "@iam/documents/user/worker";
 import { createUserDocumentWorkerModule } from "@iam/documents/user/worker";
 import { hashSecret } from "@iam/runtime/security/bcrypt";
@@ -48,7 +52,7 @@ import type {
   E2EScenarioReferences,
   E2EScenarioSeedReferences,
 } from "./seed.ts";
-import { createE2ESeedSubjects } from "./seed.ts";
+import { assertScenarioReadBack, createE2ESeedSubjects } from "./seed.ts";
 import { smsBindingMobile, smsBindingUsername } from "./sms-provider";
 import { wecomBoundMember, wecomUnlinkMember } from "./wecom-provider";
 
@@ -61,7 +65,9 @@ export interface CreateProductionE2EScenarioOwnerInput {
   passwordHashCost: number;
 }
 
-export function createProductionE2EScenarioOwner(input: CreateProductionE2EScenarioOwnerInput): E2EScenarioOwner {
+export function createProductionE2EScenarioOwner(
+  input: CreateProductionE2EScenarioOwnerInput,
+): E2EScenarioOwner & { restoreRedis: (references: E2EScenarioReferences) => Promise<void> } {
   const subjectAccess = createSubjectAccessBootstrap({
     redis: input.redis,
     random: input.random,
@@ -701,42 +707,54 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
       throw new Error("E2E User Document cutover did not start from a stored v2 row");
     }
 
-    const documentModule = createUserDocumentWorkerModule({
-      db: input.db,
-      redis: input.queueRedis,
-      subjectFactsRedis: input.redis,
-      subjectAccessRepair: { repairSubject: async () => undefined },
-      logger: {
-        info: () => undefined,
-        warn: () => undefined,
-        error: () => undefined,
-      },
-      clock: input.clock,
-      config: {
-        concurrency: 1,
-        rebuildBatchSize: 100,
-        backfillBatchSize: 100,
-      },
-    });
     const seedSubjects = createE2ESeedSubjects(scenario);
-    try {
-      const backfill = await documentModule.maintenance.backfillAllUsers({ batchSize: 100 });
-      if (backfill.enqueued !== seedSubjects.length) {
-        throw new Error("E2E User Document backfill did not enqueue all seeded users");
-      }
-    } finally {
-      await documentModule.close();
-    }
+    await enqueueSeedUserDocuments(input, seedSubjects.length);
 
     await waitForPublishedUserDocuments(scenario);
-    const access = await subjectAccess.seedMany(seedSubjects, input.clock.nowDate());
-    if (access.seeded !== seedSubjects.length || access.retainedExisting !== 0) {
-      throw new Error("E2E Subject Access bootstrap did not seed all users");
-    }
+    await seedSubjectAccess(seedSubjects);
     if (generatedReferences === undefined) {
       throw new Error("E2E generated scenario references were not captured");
     }
     return generatedReferences;
+  }
+
+  async function seedSubjectAccess(subjects: ReturnType<typeof createE2ESeedSubjects>) {
+    const access = await subjectAccess.seedMany(subjects, input.clock.nowDate());
+    if (access.seeded !== subjects.length || access.retainedExisting !== 0) {
+      throw new Error("E2E Subject Access bootstrap did not seed all users");
+    }
+  }
+
+  async function restoreRedis(references: E2EScenarioReferences) {
+    const subjects = createE2ESeedSubjects(references);
+    const identifiers = subjects.map(({ subjectIdentifier }) => subjectIdentifier);
+    const documents = await input.db
+      .select({
+        userId: userDocuments.userId,
+        subjectIdentifier: userDocuments.subjectIdentifier,
+        schemaVersion: userDocuments.schemaVersion,
+        sourceVersion: userDocuments.sourceVersion,
+        publishedAt: userDocuments.publishedAt,
+        document: userDocuments.document,
+      })
+      .from(userDocuments)
+      .where(inArray(userDocuments.subjectIdentifier, identifiers));
+    const records = documents.map(createDocumentFactsCacheRecord);
+    const publishedSubjects = new Set(records.map((record) => record.subjectIdentifier));
+    if (
+      records.some((record) => record.kind !== "document") ||
+      publishedSubjects.size !== identifiers.length ||
+      !identifiers.every((identifier) => publishedSubjects.has(identifier))
+    ) {
+      throw new Error("E2E template is missing published User Documents for Redis restore");
+    }
+    await input.redis.flushdb();
+    const facts = await createSubjectFactsRedisPublisher(input.redis).publishMany(records);
+    if (facts.published !== identifiers.length) {
+      throw new Error("E2E Subject Facts restore did not publish all seeded users");
+    }
+    await seedSubjectAccess(subjects);
+    assertScenarioReadBack(references, await readBack(references));
   }
 
   async function waitForPublishedUserDocuments(references: E2EScenarioSeedReferences) {
@@ -1318,7 +1336,36 @@ export function createProductionE2EScenarioOwner(input: CreateProductionE2EScena
     };
   }
 
-  return { establish, readBack };
+  return { establish, readBack, restoreRedis };
+}
+
+async function enqueueSeedUserDocuments(
+  input: Pick<CreateProductionE2EScenarioOwnerInput, "db" | "redis" | "queueRedis" | "clock">,
+  count: number,
+) {
+  const documentModule = createUserDocumentWorkerModule({
+    db: input.db,
+    redis: input.queueRedis,
+    subjectFactsRedis: input.redis,
+    subjectAccessRepair: { repairSubject: async () => undefined },
+    logger: {
+      info: () => undefined,
+      warn: () => undefined,
+      error: () => undefined,
+    },
+    clock: input.clock,
+    config: {
+      concurrency: 1,
+      rebuildBatchSize: 100,
+      backfillBatchSize: 100,
+    },
+  });
+  try {
+    const backfill = await documentModule.maintenance.backfillAllUsers({ batchSize: 100 });
+    if (backfill.enqueued !== count) throw new Error("E2E User Document backfill did not enqueue all seeded users");
+  } finally {
+    await documentModule.close();
+  }
 }
 
 function unique(values: string[]) {

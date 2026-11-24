@@ -26,11 +26,6 @@
         "$TURBO_ROOT$/packages/runtime/src/**"
       ]
     },
-    "test:e2e": {
-      "dependsOn": ["transit"],
-      "cache": false,
-      "passThroughEnv": ["IAM_TEST_RESOURCE_REGISTRY", "PLAYWRIGHT_BROWSERS_PATH", "IAM_MANAGED_ACCEPTANCE_INPUT_FILE"]
-    },
     "test:coverage": {
       "dependsOn": ["transit"],
       "outputs": ["coverage/**"]

@@ -1,11 +1,20 @@
 import type { Buffer } from "node:buffer";
 import { type OwnedProcessTree, spawnOwnedProcessTree, waitForOwnedProcessTree } from "@iam/runtime/process";
 import { createBoundedByteCapture, createBoundedLineCapture } from "./command-capture.ts";
-import type { CapturedCommandRunner, CommandRunner } from "./docker-infra.ts";
 
 const processCleanupTimeoutMs = 5_000;
 
-export const runCommand: CommandRunner = async (command, args, options) => {
+interface CommandOptions {
+  cwd: string;
+  env?: NodeJS.ProcessEnv;
+  signal?: AbortSignal;
+}
+
+export async function runCommand(
+  command: string,
+  args: string[],
+  options: CommandOptions & { inheritOutput?: boolean },
+) {
   const child = startCommand(command, args, options);
   if (options.inheritOutput) {
     child.stdout.on("data", (chunk: Buffer) => process.stdout.write(chunk));
@@ -15,9 +24,13 @@ export const runCommand: CommandRunner = async (command, args, options) => {
     child.stderr.resume();
   }
   await waitForCommand(child, command, options.signal);
-};
+}
 
-export const captureCommand: CapturedCommandRunner = async (command, args, options) => {
+export async function captureCommand(
+  command: string,
+  args: string[],
+  options: CommandOptions & { capture?: { maxBytes: number; mode: "line-tail" | "tail" } },
+) {
   const maxCapturedBytes = options.capture?.maxBytes ?? 256 * 1024;
   const captureMode = options.capture?.mode ?? "prefix";
   const stdout =
@@ -38,9 +51,9 @@ export const captureCommand: CapturedCommandRunner = async (command, args, optio
     throw error;
   }
   return { stdout: stdout.toString(), stderr: stderr.toString() };
-};
+}
 
-function startCommand(command: string, args: string[], options: Parameters<CommandRunner>[2]) {
+function startCommand(command: string, args: string[], options: CommandOptions) {
   options.signal?.throwIfAborted();
   return spawnOwnedProcessTree({ executable: command, args, cwd: options.cwd, env: options.env ?? process.env });
 }

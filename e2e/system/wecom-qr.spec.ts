@@ -1,19 +1,19 @@
 import { randomUUID } from "node:crypto";
 import { devices, expect } from "@playwright/test";
 import { loginToAdmin } from "./src/admin-client-journey.ts";
-import { requireEnvironment } from "./src/environment.ts";
 import { test } from "./src/gateway-test.ts";
 import { standInForWecomAuthorization } from "./src/wecom-journey.ts";
 import { wecomUnboundMember, wecomUnlinkMember } from "./src/wecom-provider.ts";
 
 test("WeCom confirmation on the public phone updates the originating internal browser", async ({
+  runtime,
   browser,
   page,
   request,
 }) => {
-  const desktopOrigin = requireEnvironment("IAM_E2E_INTERNAL_ORIGIN");
-  const mobileOrigin = requireEnvironment("IAM_E2E_WECHAT_QR_MOBILE_ORIGIN");
-  const client = requireEnvironment("IAM_E2E_CUSTOM_CLIENT_CODE");
+  const desktopOrigin = runtime.internalOrigin;
+  const mobileOrigin = runtime.wecomMobileOrigin;
+  const client = `${runtime.references.customSsoClientCode}-dual`;
   const destination = `${desktopOrigin}/e2e/custom-sso/callback`;
   const authorization = new URL("/sso/authorize", desktopOrigin);
   authorization.search = new URLSearchParams({ client, redirectUrl: destination, state: randomUUID() }).toString();
@@ -21,7 +21,11 @@ test("WeCom confirmation on the public phone updates the originating internal br
   const phone = await browser.newContext({ ...devices["Pixel 7"] });
   try {
     const mobilePage = await phone.newPage();
-    await standInForWecomAuthorization(mobilePage, { mobileOrigin, member: wecomUnboundMember });
+    await standInForWecomAuthorization(mobilePage, {
+      mobileOrigin,
+      member: wecomUnboundMember,
+      runId: runtime.references.runId,
+    });
     const desktopNetwork = await page.context().newCDPSession(page);
     await desktopNetwork.send("Network.enable");
     const streamRequests = new Map<string, string>();
@@ -45,7 +49,7 @@ test("WeCom confirmation on the public phone updates the originating internal br
     expect(qrUrl.hostname).not.toBe(new URL(desktopOrigin).hostname);
     expect(qrUrl.pathname).toMatch(/^\/sso\/wechat-qr\/mobile\/[a-zA-Z0-9_-]+$/u);
     expect(qrUrl.search + qrUrl.hash + qrUrl.username + qrUrl.password).toBe("");
-    const insecureMobile = new URL(qrUrl.pathname, requireEnvironment("IAM_E2E_ORIGIN"));
+    const insecureMobile = new URL(qrUrl.pathname, runtime.origin);
     const insecureResponse = await request.get(insecureMobile.href, {
       headers: { "X-Forwarded-Proto": "https" },
       maxRedirects: 0,
@@ -103,14 +107,15 @@ test("WeCom confirmation on the public phone updates the originating internal br
 });
 
 test("WeCom confirmation continues the original Custom SSO request after switching tabs and unlinking", async ({
+  runtime,
   browser,
   page,
 }) => {
-  const desktopOrigin = requireEnvironment("IAM_E2E_INTERNAL_ORIGIN");
-  const mobileOrigin = requireEnvironment("IAM_E2E_WECHAT_QR_MOBILE_ORIGIN");
-  const adminOrigin = requireEnvironment("IAM_E2E_ORIGIN");
-  const client = requireEnvironment("IAM_E2E_CUSTOM_CLIENT_CODE");
-  const delegatee = requireEnvironment("IAM_E2E_DELEGATEE_USERNAME");
+  const desktopOrigin = runtime.internalOrigin;
+  const mobileOrigin = runtime.wecomMobileOrigin;
+  const adminOrigin = runtime.origin;
+  const client = `${runtime.references.customSsoClientCode}-dual`;
+  const delegatee = runtime.references.delegateeUsername;
   const destination = `${desktopOrigin}/e2e/custom-sso/callback`;
   const authorization = new URL("/sso/authorize", desktopOrigin);
   const state = randomUUID();
@@ -121,13 +126,17 @@ test("WeCom confirmation continues the original Custom SSO request after switchi
   try {
     const adminPage = await admin.newPage();
     await loginToAdmin({
-      adminPassword: requireEnvironment("IAM_E2E_ADMIN_PASSWORD"),
-      adminUsername: requireEnvironment("IAM_E2E_ADMIN_USERNAME"),
+      adminPassword: runtime.adminPassword,
+      adminUsername: runtime.references.adminUsername,
       origin: adminOrigin,
       page: adminPage,
     });
     const mobilePage = await phone.newPage();
-    await standInForWecomAuthorization(mobilePage, { mobileOrigin, member: wecomUnlinkMember });
+    await standInForWecomAuthorization(mobilePage, {
+      mobileOrigin,
+      member: wecomUnlinkMember,
+      runId: runtime.references.runId,
+    });
     await page.goto(authorization.href);
     await expect(page).toHaveURL((url) => url.origin === desktopOrigin && url.pathname === "/portal/login");
     const qrSwitch = page.getByRole("button", { name: "企业微信扫码登录" });

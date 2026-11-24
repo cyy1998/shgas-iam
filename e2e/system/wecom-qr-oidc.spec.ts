@@ -1,25 +1,32 @@
 import { Buffer } from "node:buffer";
-import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
+import { readFile, stat } from "node:fs/promises";
+import { join } from "node:path";
 import { devices, expect } from "@playwright/test";
-import { composeArguments } from "./src/docker-infra.ts";
-import { requireEnvironment } from "./src/environment.ts";
+import { captureCommand } from "./src/command-runner.ts";
 import { test } from "./src/gateway-test.ts";
+import type { HybridRunContext } from "./src/hybrid-context.ts";
 import { createPkceS256Pair, receiveOidcAuthorizationCallback } from "./src/oidc-rp.ts";
 import { standInForWecomAuthorization } from "./src/wecom-journey.ts";
 import { wecomBoundMember, wecomMobileCallbackPath } from "./src/wecom-provider.ts";
 
 test("an internal OIDC request completes with WeCom confirmation on a separate public phone", async ({
+  runtime,
   browser,
   page,
   request,
 }) => {
-  const desktopOrigin = requireEnvironment("IAM_E2E_INTERNAL_ORIGIN");
-  const mobileOrigin = requireEnvironment("IAM_E2E_WECHAT_QR_MOBILE_ORIGIN");
-  const clientId = `${requireEnvironment("IAM_E2E_OIDC_CLIENT_CODE")}-dual`;
-  const redirectUri = requireEnvironment("IAM_E2E_OIDC_REDIRECT_URI");
+  const startedAt = new Date();
+  const apiLogs = await Promise.all(
+    ["stdout", "stderr"].map(async (stream) => {
+      const path = join(runtime.logDirectory, `api.${stream}.log`);
+      return { path, offset: (await stat(path)).size };
+    }),
+  );
+  const desktopOrigin = runtime.internalOrigin;
+  const mobileOrigin = runtime.wecomMobileOrigin;
+  const clientId = `${runtime.references.oidcClientCode}-dual`;
+  const redirectUri = runtime.references.oidcRedirectUri;
   const issuer = `${desktopOrigin}/oidc`;
   const pkce = createPkceS256Pair();
   const state = randomUUID();
@@ -40,7 +47,11 @@ test("an internal OIDC request completes with WeCom confirmation on a separate p
   const phone = await browser.newContext({ ...devices["Pixel 7"] });
   try {
     const mobilePage = await phone.newPage();
-    await standInForWecomAuthorization(mobilePage, { mobileOrigin, member: wecomBoundMember });
+    await standInForWecomAuthorization(mobilePage, {
+      mobileOrigin,
+      member: wecomBoundMember,
+      runId: runtime.references.runId,
+    });
     await page.goto(authorization.href);
     await expect(page).toHaveURL((url) => url.origin === desktopOrigin && url.pathname === "/portal/login");
     await page.getByRole("button", { name: "企业微信扫码登录" }).click();
@@ -96,7 +107,7 @@ test("an internal OIDC request completes with WeCom confirmation on a separate p
       oauthQuery.get("state"),
       login.searchParams.get("oidcReturn"),
     ];
-    await expectRedactedQrLogs(secretValues);
+    await expectRedactedQrLogs(runtime, startedAt, apiLogs, secretValues);
     expect(new URL(page.url()).searchParams.get("iss")).toBe(issuer);
 
     const root = (await page.context().cookies(desktopOrigin)).find(({ name }) => name === "global_session");
@@ -130,29 +141,45 @@ test("an internal OIDC request completes with WeCom confirmation on a separate p
     expect(identity.status()).toBe(200);
     expect(await identity.json()).toMatchObject({
       sub: claims.sub,
-      preferred_username: requireEnvironment("IAM_E2E_ADMIN_USERNAME"),
+      preferred_username: runtime.references.adminUsername,
     });
   } finally {
     await phone.close();
   }
 });
 
-async function expectRedactedQrLogs(secretValues: Array<string | null | undefined>) {
-  const runId = requireEnvironment("IAM_E2E_RUN_ID");
-  if (!/^[a-z0-9][a-z0-9-]{7,62}$/u.test(runId)) throw new Error("Invalid E2E run ID");
-  const composeFile = fileURLToPath(new URL("./compose.yaml", import.meta.url));
-  const project = `iam-e2e-${runId}`;
-
+async function expectRedactedQrLogs(
+  runtime: HybridRunContext,
+  startTime: Date,
+  apiLogs: Array<{ path: string; offset: number }>,
+  secretValues: Array<string | null | undefined>,
+) {
   async function readLogs(service: "api" | "apisix") {
-    const args = composeArguments(composeFile, project, [
-      "logs",
-      "--no-color",
-      "--no-log-prefix",
-      "--tail",
-      "300",
-      service,
-    ]);
-    const { stdout, stderr } = await promisify(execFile)("docker", args, { timeout: 8000 });
+    if (service === "api") {
+      const logs = await Promise.all(
+        apiLogs.map(async ({ path, offset }) => (await readFile(path)).subarray(offset).toString("utf8")),
+      );
+      return logs.join("\n");
+    }
+    const { stdout, stderr } = await captureCommand(
+      "docker",
+      [
+        "compose",
+        "--project-name",
+        runtime.project,
+        "--file",
+        runtime.apisixComposeFile,
+        "logs",
+        "--no-color",
+        "--no-log-prefix",
+        "--since",
+        startTime.toISOString(),
+        "--tail",
+        "300",
+        "apisix",
+      ],
+      { cwd: process.cwd(), signal: AbortSignal.timeout(8_000) },
+    );
     return stdout + stderr;
   }
 

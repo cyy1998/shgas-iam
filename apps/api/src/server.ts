@@ -2,9 +2,9 @@ import process from "node:process";
 import { createApiApp } from "./app";
 import type { CreateApiCompositionOptions } from "./composition";
 
-export async function startApi(options: CreateApiCompositionOptions = {}) {
+export async function startApi(options: CreateApiCompositionOptions & { hostname?: string } = {}) {
   const { app, close, port, logger } = await createApiApp(options);
-  const server = Bun.serve({ port, fetch: app.fetch });
+  const server = Bun.serve({ hostname: options.hostname, port, fetch: app.fetch });
   logger.info({ event: "api_started", port: server.port }, `server: http://localhost:${server.port}`);
   let shutdownStarted = false;
   for (const signal of ["SIGINT", "SIGTERM"] as const) {

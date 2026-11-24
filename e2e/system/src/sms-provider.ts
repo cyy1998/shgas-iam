@@ -3,9 +3,9 @@ import { writeFile } from "node:fs/promises";
 
 export const smsBindingUsername = "e2e-wecom-sms";
 export const smsBindingMobile = "13800005558";
-export const smsDeliveryPath = "/tmp/iam-e2e-wecom-sms-delivery";
+export const smsDeliveryPath = "/run/iam-e2e/sms-delivery";
 
-export function createSmsProvider(): typeof fetch {
+export function createSmsProvider(deliveryPath: string): typeof fetch {
   const request = async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
     const candidate = new Request(input, init);
     const failure = { resultCode: "-1", resultInfo: "unexpected provider request", result: "" };
@@ -22,7 +22,7 @@ export function createSmsProvider(): typeof fetch {
       .digest("hex");
     if (!code || signature !== body.signature) return Response.json(failure, { status: 400 });
 
-    await writeFile(smsDeliveryPath, code, { encoding: "utf8", mode: 0o600 });
+    await writeFile(deliveryPath, code, { encoding: "utf8", mode: 0o600 });
     return Response.json({ resultCode: "0000", resultInfo: "ok", result: "" });
   };
   return Object.assign(request, {

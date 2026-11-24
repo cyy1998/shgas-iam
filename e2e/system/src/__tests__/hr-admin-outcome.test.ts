@@ -6,7 +6,7 @@ import {
   UserDocumentWorkStatus,
 } from "@iam/contracts";
 import type { HrAdminOutcomeScenario } from "../hr-admin-outcome.ts";
-import { verifyHrAdminOutcome } from "../hr-admin-outcome.ts";
+import { assertHrAdminDenialLog, verifyHrAdminOutcome } from "../hr-admin-outcome.ts";
 
 const scenario = {
   runId: "outcome-01",
@@ -82,6 +82,59 @@ describe("HR Admin responsibility journey outcome", () => {
     }
 
     expect(rejection).toBeInstanceOf(Error);
+  });
+
+  test("rejects scope keys and hidden fixture values in every HR denial log", () => {
+    const references = {
+      adminMixedRoleAssignmentId: 40,
+      hiddenResponsibilityAssignmentId: 41,
+      hrSecondScopeRoleAssignmentId: 42,
+      outsideResponsibilityHolderEmploymentId: 43,
+      responsibilityHolderEmploymentId: 44,
+    };
+    const safeDenial = {
+      event: "admin.authorization.denied",
+      actor: { username: scenario.hrAdminUsername },
+      action: "admin.organizationResponsibility.createAssignment",
+      resourceType: "organizationResponsibilityAssignment",
+      resourceIdentifier: "create-request",
+      reasonCode: "RESOURCE_OUT_OF_SCOPE",
+    };
+
+    expect(() => assertHrAdminDenialLog(JSON.stringify(safeDenial), scenario, references)).not.toThrow();
+    expect(() =>
+      assertHrAdminDenialLog(
+        [JSON.stringify(safeDenial), JSON.stringify({ ...safeDenial, scope: [1] })].join("\n"),
+        scenario,
+        references,
+      ),
+    ).toThrow("leaked authorization scope");
+    expect(() =>
+      assertHrAdminDenialLog(
+        [
+          JSON.stringify(safeDenial),
+          JSON.stringify({
+            ...safeDenial,
+            detail: scenario.outsideResponsibilityHolderPositionCode,
+          }),
+        ].join("\n"),
+        scenario,
+        references,
+      ),
+    ).toThrow("leaked concealed fixture value");
+    expect(() =>
+      assertHrAdminDenialLog(
+        [
+          JSON.stringify(safeDenial),
+          JSON.stringify({
+            ...safeDenial,
+            resourceIdentifier: references.hiddenResponsibilityAssignmentId,
+          }),
+        ].join("\n"),
+        scenario,
+        references,
+      ),
+    ).toThrow("leaked concealed fixture value");
   });
 });
 

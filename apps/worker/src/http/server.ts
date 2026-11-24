@@ -80,8 +80,9 @@ export function createWorkerHttpApp(input: CreateWorkerHttpAppInput): Hono {
   return app;
 }
 
-export function startWorkerHttpServer(app: Hono, port: number): ReturnType<typeof Bun.serve> {
+export function startWorkerHttpServer(app: Hono, port: number, hostname?: string): ReturnType<typeof Bun.serve> {
   return Bun.serve({
+    hostname,
     port,
     fetch: app.fetch,
   });

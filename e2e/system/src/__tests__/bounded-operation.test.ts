@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { runBoundedOperation } from "../bounded-operation.ts";
+import { runBoundedOperation, runWithCleanup } from "../bounded-operation.ts";
 
 describe("bounded operation", () => {
   test("waits briefly for an aborting operation to settle", async () => {
@@ -47,4 +47,19 @@ describe("bounded operation", () => {
     await expect(operation).rejects.toThrow("permanently hung operation deadline");
     expect(operationSignal?.aborted).toBe(true);
   });
+});
+
+test("keeps both the operation failure and the exact cleanup failure", async () => {
+  const operationFailure = new Error("startup deadline");
+  const cleanupFailure = new Error("compose down failed");
+  const failure = await runWithCleanup(
+    async () => {
+      throw operationFailure;
+    },
+    async () => {
+      throw cleanupFailure;
+    },
+  ).catch((error: unknown) => error);
+  expect(failure).toBeInstanceOf(AggregateError);
+  expect(failure).toMatchObject({ errors: [operationFailure, cleanupFailure] });
 });

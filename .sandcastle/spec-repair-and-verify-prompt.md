@@ -22,6 +22,8 @@
 3. 以 `{{REVIEW_BASE}}` 为合入目标，按 `docs/agents/workflow.md` 的验证节奏为最终集成内容选择基础门禁。
    按完整 Spec 和 tickets 的风险、验收与测试决策补齐必需
    Integration、E2E、Gateway 或其他检查；重复覆盖按范围去重。票级通过不能代替最终组合验证。
+   按候选工作树中的 [Container Smoke 门禁](../docs/agents/sandcastle-afk.md#验证节奏)，在修复提交后运行
+   `pnpm verify:container-smoke --base {{REVIEW_BASE}}`。同一最终候选的 `pnpm verify:release` 已通过时可复用其中的 Container Smoke 结果。
    真实资源检查通过根 `pnpm test:integration --workspace ... --file ...` 或 `pnpm test:e2e`，每条命令独立管理资源。
    修改依赖后运行 `sh scripts/sandcastle/prepare-workspace.sh`。遵守 Bun 真实 I/O await 规则。
 4. 正常会话内诊断和修复验证失败，提交后重跑因此失效的检查；仍有效的检查结果可复用。

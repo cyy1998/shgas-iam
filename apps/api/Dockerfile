@@ -82,17 +82,9 @@ RUN --mount=type=cache,id=iam-pnpm-v12,target=/pnpm/store \
     pnpm --config.inject-workspace-packages=true --filter @iam/api deploy --prod /deploy/api
 
 # ── Stage 4: Production runtime (Bun) ────────────────────────────────────────
-FROM docker.xuanyuan.run/oven/bun:1.4.4-alpine AS runtime
+FROM docker.xuanyuan.run/oven/bun:1.4.4-alpine AS runner
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=builder /deploy/api ./
 EXPOSE 30000
 CMD ["bun", "run", "src/index.ts"]
-
-FROM runtime AS e2e
-COPY e2e/system/docker/start-api.sh /run/iam-e2e/start-api.sh
-COPY e2e/system/docker/start-api.ts e2e/system/src/wecom-provider.ts e2e/system/src/sms-provider.ts ./src/e2e/
-CMD ["sh", "/run/iam-e2e/start-api.sh"]
-
-# Keep the default production image free of E2E inputs.
-FROM runtime AS runner

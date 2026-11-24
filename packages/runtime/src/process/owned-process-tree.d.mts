@@ -8,6 +8,11 @@ export type OwnedProcessTree = ChildProcess & {
   /** Linux owner 有界停止并等待全部继承本次 ancestry 的执行者，包括 detached / reparented 后代。 */
   readonly closeOwnedProcessTree?: (options: { timeoutMs: number; forceAfterMs?: number }) => Promise<void>;
 };
+export function ownedProcessScopeEnvironment(
+  scope: { id: string; activeFile: string },
+  env?: NodeJS.ProcessEnv,
+): NodeJS.ProcessEnv;
+export function closeOwnedProcessScope(id: string, options: { timeoutMs: number; forceAfterMs: number }): Promise<void>;
 export function spawnOwnedProcessTree(options: {
   executable: string;
   args: readonly string[];
@@ -18,7 +23,13 @@ export function spawnOwnedProcessTree(options: {
 }): OwnedProcessTree;
 export function waitForOwnedProcessTree(
   child: OwnedProcessTree,
-  options?: { signal?: AbortSignal; timeoutMs?: number; cleanupTimeoutMs?: number },
+  options?: {
+    signal?: AbortSignal;
+    timeoutMs?: number;
+    cleanupTimeoutMs?: number;
+    forceAfterMs?: number;
+    requestGracefulStop?: () => void | Promise<void>;
+  },
 ): Promise<{
   outcome?: { exitCode: number | null; signal: NodeJS.Signals | null };
   executionFailure?: { kind: "start" | "abort" | "deadline"; error: unknown };

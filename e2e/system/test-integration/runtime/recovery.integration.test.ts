@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createRunDescriptor, persistRunDescriptor } from "../../src/descriptor.ts";
 import { recoverExactProject } from "../../src/recovery.ts";
 
 let temporaryDirectory: string | undefined;
@@ -15,12 +14,19 @@ afterEach(async () => {
 describe("exact-project recovery", () => {
   test("cleans only an explicit descriptor or exact project target", async () => {
     temporaryDirectory = await mkdtemp(join(tmpdir(), "iam-e2e-recovery-"));
-    const descriptor = createRunDescriptor({
-      artifactRoot: temporaryDirectory,
-      gatewayPort: 43877,
-      runId: "run-recovery-01",
-    });
-    const descriptorPath = await persistRunDescriptor(descriptor);
+    const descriptorPath = join(temporaryDirectory, "run-descriptor.json");
+    await writeFile(
+      descriptorPath,
+      JSON.stringify({
+        version: 1,
+        runId: "run-recovery-01",
+        project: "iam-e2e-run-recovery-01",
+        labels: {
+          "com.docker.compose.project": "iam-e2e-run-recovery-01",
+          "com.shgas-iam.e2e.run-id": "run-recovery-01",
+        },
+      }),
+    );
     const cleaned: string[] = [];
     const cleanup = async (project: string) => cleaned.push(project);
 

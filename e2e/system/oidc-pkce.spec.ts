@@ -11,24 +11,24 @@ import {
   updateClientStatus,
 } from "./src/admin-client-journey.ts";
 import { exerciseDatedEmployment } from "./src/employment-journey.ts";
-import { requireEnvironment } from "./src/environment.ts";
 import { test } from "./src/gateway-test.ts";
 import { createPkceS256Pair, receiveOidcAuthorizationCallback } from "./src/oidc-rp.ts";
 import { exerciseUnifiedSession } from "./src/unified-session-journey.ts";
 
 test("public RP observes reversible Maintenance and permanent logout through real Admin control", async ({
+  runtime,
   browser,
   page,
   request,
 }) => {
-  const origin = requireEnvironment("IAM_E2E_ORIGIN");
-  const adminUsername = requireEnvironment("IAM_E2E_ADMIN_USERNAME");
-  const adminPassword = requireEnvironment("IAM_E2E_ADMIN_PASSWORD");
-  const clientId = requireEnvironment("IAM_E2E_OIDC_CLIENT_CODE");
-  const redirectUri = requireEnvironment("IAM_E2E_OIDC_REDIRECT_URI");
-  const internalApiKey = requireEnvironment("IAM_E2E_INTERNAL_API_KEY");
-  const organizationCode = requireEnvironment("IAM_E2E_ORGANIZATION_CODE");
-  const positionCode = requireEnvironment("IAM_E2E_GLOBAL_POSITION_CODE");
+  const origin = runtime.origin;
+  const adminUsername = runtime.references.adminUsername;
+  const adminPassword = runtime.adminPassword;
+  const clientId = runtime.references.oidcClientCode;
+  const redirectUri = runtime.references.oidcRedirectUri;
+  const internalApiKey = runtime.internalApiKey;
+  const organizationCode = runtime.references.organizationCode;
+  const positionCode = runtime.references.globalPositionCode;
   const adminContext = await browser.newContext({ baseURL: origin });
   const adminPage = await adminContext.newPage();
   await loginToAdmin({

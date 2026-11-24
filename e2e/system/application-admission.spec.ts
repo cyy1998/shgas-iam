@@ -7,24 +7,24 @@ import {
   loginToAdmin,
   openClientSection,
 } from "./src/admin-client-journey.ts";
-import { requireEnvironment } from "./src/environment.ts";
 import { test } from "./src/gateway-test.ts";
 import { createPkceS256Pair, receiveOidcAuthorizationCallback } from "./src/oidc-rp.ts";
 
 test("Admin admission changes govern new Custom SSO and OIDC grants while existing sessions remain usable", async ({
+  runtime,
   browser,
   page: adminPage,
   request,
 }) => {
-  const origin = requireEnvironment("IAM_E2E_ORIGIN");
-  const adminUsername = requireEnvironment("IAM_E2E_ADMIN_USERNAME");
-  const adminPassword = requireEnvironment("IAM_E2E_ADMIN_PASSWORD");
-  const delegatee = requireEnvironment("IAM_E2E_DELEGATEE_USERNAME");
-  const runId = requireEnvironment("IAM_E2E_RUN_ID");
-  const customClient = requireEnvironment("IAM_E2E_CUSTOM_CLIENT_CODE");
+  const origin = runtime.origin;
+  const adminUsername = runtime.references.adminUsername;
+  const adminPassword = runtime.adminPassword;
+  const delegatee = runtime.references.delegateeUsername;
+  const runId = runtime.references.runId;
+  const customClient = `${runtime.references.customSsoClientCode}-dual`;
   const oidc = {
-    clientId: requireEnvironment("IAM_E2E_OIDC_CLIENT_CODE"),
-    redirectUri: requireEnvironment("IAM_E2E_OIDC_REDIRECT_URI"),
+    clientId: runtime.references.oidcClientCode,
+    redirectUri: runtime.references.oidcRedirectUri,
     origin,
   };
   const targets = [customClient, oidc.clientId];

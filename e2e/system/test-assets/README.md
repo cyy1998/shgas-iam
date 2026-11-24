@@ -11,3 +11,9 @@ openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -noenc -sha25
   -addext "basicConstraints=critical,CA:FALSE" \
   -days 3650 -out wecom-mobile-cert.pem -keyout wecom-mobile-key.pem
 ```
+
+Hybrid 中间件的 APISIX 配置由[独立镜像上下文](../docker/apisix/)携带。Windows 和 macOS 本机直跑使用 Bridge，
+可用 `IAM_E2E_UPSTREAM_HOST` 覆写宿主上游地址。Linux 与 AFK 使用 Host 网络和动态回环端口。
+
+常驻中间件按宿主用户复用，跨工作树共享互斥锁。同一套栈在运行结束后保留，可以按记录中的准确 project 运行
+`pnpm --filter @iam/e2e-system runtime:cleanup -- --project <project>` 回收。独占模式显式保留环境时会打印其记录对应的清理命令。

@@ -82,6 +82,8 @@
   按实际变化重跑失效的类型或行为检查。
 - **门禁分级** 手动交付前以合入目标的固定提交与候选比较：差异仅属[纯文档验证](../engineering/commands.md#纯文档验证)范围且验收只涉及文档时运行
   `pnpm verify:docs --base <target-commit>`；其余改动完成 `pnpm verify` 覆盖的全部检查，并按 Spec 与风险补齐所需 Integration、E2E、Gateway 检查。
+  手动交付时在最终候选执行 `pnpm verify:container-smoke --base <target-commit>`，由打包路径差异决定是否追加冒烟。
+  同一候选已通过 `pnpm verify:release` 时复用其中的冒烟结果。
   设计产物先落候选集成分支交接给 Sandcastle 时，完成文档格式化、`pnpm check:docs` 与 `git diff --check`，完整门禁由 AFK 最终验证统一覆盖。
 - **同宿主串行验证** 在同一宿主上串行运行 `pnpm verify`、全量 Integration 和 Full-system E2E，跨会话、工作树及 Sandcastle AFK 均适用；
   待上一轮命令退出并完成测试资源清理后再启动下一轮。需要一次完成全部发布验证时使用 `pnpm verify:release`。

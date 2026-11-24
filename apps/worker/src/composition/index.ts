@@ -119,7 +119,9 @@ export async function createWorkerComposition(options: CreateWorkerCompositionOp
       }
     },
   });
-  const httpServer = options.env.http.enabled ? startWorkerHttpServer(httpApp, options.env.http.port) : undefined;
+  const httpServer = options.env.http.enabled
+    ? startWorkerHttpServer(httpApp, options.env.http.port, options.env.http.hostname)
+    : undefined;
   const repairSchedules = (["user", "organization"] as const).map((document) =>
     startDocumentRepairSchedule({ document, env: options.env, enabledModuleKeys, logger: runtime.logger }),
   );

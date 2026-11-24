@@ -1,24 +1,20 @@
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { UserDocumentSchema } from "@iam/contracts";
 import type { CustomAttributeValues } from "@iam/contracts/custom-attributes";
 import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import type { APIResponse } from "@playwright/test";
 import { expect } from "@playwright/test";
-import {
-  formatResourceFailure,
-  type ManagedResourceRun,
-  readManagedResourceRun,
-  runManagedComposeCommand,
-} from "../../scripts/test-resources/managed-resources.mjs";
+import { formatResourceFailure } from "../../scripts/test-resources/managed-resources.mjs";
 import { loginToAdmin } from "./src/admin-client-journey.ts";
-import { requireEnvironment } from "./src/environment.ts";
+import { runCommand } from "./src/command-runner.ts";
 import { test as gatewayTest } from "./src/gateway-test.ts";
+import { requestHybridControl } from "./src/hybrid-context.ts";
 import { createPkceS256Pair, receiveOidcAuthorizationCallback } from "./src/oidc-rp.ts";
-import { assertExactProject } from "./src/recovery.ts";
 
 const publicationTimeoutMs = 45_000;
-const composeCommandTimeoutMs = 30_000;
+const workspaceRoot = fileURLToPath(new URL(".", import.meta.url));
 const definitionPath = "/api/iam/admin/custom-attribute-definitions";
 const attributes = [
   { entityType: "user", code: "on_call", displayName: "On call", valueType: "boolean" },
@@ -41,60 +37,46 @@ type RunWithStoppedWorker = (
 
 const test = gatewayTest.extend<{ withStoppedWorker: RunWithStoppedWorker }>({
   withStoppedWorker: [
-    async ({ gatewayDns: _gatewayDns }, use) => {
-      const run = await readManagedResourceRun(process.cwd(), requireEnvironment("IAM_E2E_RESOURCE_RECORD"));
-      const project = assertExactProject(`iam-e2e-${requireEnvironment("IAM_E2E_RUN_ID")}`);
-      if (run.record.project !== project) throw new Error("E2E resource record does not name the current project");
-
+    async ({ runtime }, use) => {
       const controller = new AbortController();
-      const interrupted = new Error("Playwright ended the directory attribute test during Worker recovery");
       let inFlight: Promise<void> | undefined;
       let restoreRequired = false;
-      function runDuringTest(args: string[]) {
+      async function runDuringTest(operation: () => Promise<unknown>) {
         controller.signal.throwIfAborted();
-        const command = runCompose(run, args, controller.signal);
+        const command = operation().then(() => undefined);
         inFlight = command;
-        return command
-          .finally(() => {
-            inFlight = undefined;
-          })
-          .catch(throwFormattedResourceFailure);
+        try {
+          await command;
+        } finally {
+          inFlight = undefined;
+        }
       }
 
       try {
         await use(async (observeMissedWake) => {
-          controller.signal.throwIfAborted();
           restoreRequired = true;
-          await runDuringTest(["stop", "worker"]);
+          await runDuringTest(() => requestHybridControl(runtime, "/worker/stop"));
           await observeMissedWake((code) =>
-            runDuringTest([
-              "run",
-              "--rm",
-              "--no-deps",
-              "--pull",
-              "never",
-              "-T",
-              "seed",
-              "bun",
-              "run",
-              "src/drop-user-attribute-wake.ts",
-              code,
-            ]),
+            runDuringTest(() =>
+              runCommand("bun", ["--no-env-file", "src/drop-user-attribute-wake.ts", code], {
+                cwd: workspaceRoot,
+                env: { ...process.env, DATABASE_URL: runtime.databaseUrl, IAM_E2E_REDIS_URL: runtime.redisUrl },
+                signal: controller.signal,
+                inheritOutput: true,
+              }),
+            ),
           );
-          await runDuringTest(["start", "worker"]);
+          await runDuringTest(() => requestHybridControl(runtime, "/worker/start"));
           restoreRequired = false;
         });
       } finally {
-        // Playwright can start teardown while the timed-out test body is still running.
+        // Playwright can begin teardown while the test body is still running.
         await runWithOwnedTestResources(async ({ registerCleanup }) => {
-          if (restoreRequired) registerCleanup(() => runCompose(run, ["start", "worker"]));
+          if (restoreRequired) registerCleanup(() => requestHybridControl(runtime, "/worker/start"));
           const pending = inFlight;
-          controller.abort(interrupted);
-          try {
-            await pending;
-          } catch (error) {
-            if (error !== interrupted) throw error;
-          }
+          controller.abort(new Error("Playwright ended the directory attribute test during Worker recovery"));
+          // The control server serializes requests. Settle any issued stop/start before attempting recovery.
+          await pending;
         }).catch(throwFormattedResourceFailure);
       }
     },
@@ -103,19 +85,20 @@ const test = gatewayTest.extend<{ withStoppedWorker: RunWithStoppedWorker }>({
 });
 
 test("directory attributes follow Admin writes and Worker publication across Internal, OIDC and Custom SSO", async ({
+  runtime,
   page,
   request,
   withStoppedWorker,
 }) => {
-  const origin = requireEnvironment("IAM_E2E_ORIGIN");
-  const adminUsername = requireEnvironment("IAM_E2E_ADMIN_USERNAME");
-  const adminPassword = requireEnvironment("IAM_E2E_ADMIN_PASSWORD");
-  const organizationCode = requireEnvironment("IAM_E2E_ORGANIZATION_CODE");
-  const positionCode = requireEnvironment("IAM_E2E_POSITION_CODE");
-  const internalApiKey = requireEnvironment("IAM_E2E_INTERNAL_API_KEY");
-  const oidcClient = requireEnvironment("IAM_E2E_OIDC_CLIENT_CODE");
-  const oidcRedirectUri = requireEnvironment("IAM_E2E_OIDC_REDIRECT_URI");
-  const businessClient = requireEnvironment("IAM_E2E_BUSINESS_CLIENT_CODE");
+  const origin = runtime.origin;
+  const adminUsername = runtime.references.adminUsername;
+  const adminPassword = runtime.adminPassword;
+  const organizationCode = runtime.references.organizationCode;
+  const positionCode = runtime.references.positionCode;
+  const internalApiKey = runtime.internalApiKey;
+  const oidcClient = runtime.references.oidcClientCode;
+  const oidcRedirectUri = runtime.references.oidcRedirectUri;
+  const businessClient = `${runtime.references.customSsoClientCode}-business`;
   const businessRedirectUri = `${origin}/e2e/business/landing?view=profile`;
   const expectedAttributes = {
     user: { on_call: false },
@@ -301,15 +284,6 @@ test("directory attributes follow Admin writes and Worker publication across Int
     expect(exchange.subject).toStrictEqual(userInfo);
   });
 });
-
-async function runCompose(run: ManagedResourceRun, args: string[], abortSignal?: AbortSignal) {
-  const { exitCode, signal, output } = await runManagedComposeCommand(run, args, {
-    timeoutMs: composeCommandTimeoutMs,
-    signal: abortSignal,
-  });
-  if (exitCode !== 0 || signal !== null)
-    throw new Error(`E2E Compose ${args[0]} failed with exit ${exitCode} and signal ${signal ?? "none"}\n${output}`);
-}
 
 function throwFormattedResourceFailure(error: unknown): never {
   // Playwright serializes the message but omits AggregateError.errors.

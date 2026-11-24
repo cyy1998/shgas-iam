@@ -13,6 +13,7 @@ coverage
 # test artifacts
 test-results/
 .vitest/
+/e2e/system/.reports/
 
 # logs
 logs

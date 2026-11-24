@@ -91,6 +91,7 @@ coverage
 # Testing
 .vitest
 **/test-results
+e2e/system
 
 # Documentation
 README.md

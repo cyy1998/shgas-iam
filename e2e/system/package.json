@@ -16,12 +16,11 @@
     "ioredis": "^6.0.0"
   },
   "scripts": {
-    "admin:journey": "bun src/cli.ts admin",
-    "hr-admin:journey": "bun src/cli.ts hr-admin",
-    "oidc:journey": "bun src/cli.ts oidc",
     "runtime:cleanup": "bun src/cli.ts cleanup",
-    "runtime:lifecycle": "bun src/cli.ts run",
     "test:e2e": "bun src/cli.ts e2e",
+    "test:e2e:container-smoke": "bun src/cli.ts container-smoke",
+    "test:e2e:down": "bun src/cli.ts down",
+    "test:e2e:managed": "bun src/cli.ts managed",
     "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
     "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "test": "pnpm test:unit",

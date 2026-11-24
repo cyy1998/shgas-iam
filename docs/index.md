@@ -98,7 +98,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [ADR-0004](adr/0004-adopt-upstream-first-matt-skills.md)                                | decision | Current    | 2026-10-25    | 2026-11-25  | 上游优先与手动薄适配；AFK 按 Spec 动态实施、集中评审及本地 squash 交付。                                   |
 | [ADR-0005](adr/0005-keep-live-login-state-in-redis.md)                                  | decision | Current    | 2026-11-16    | 2026-12-16  | Redis 实时状态与生命周期时间权威。                                                                         |
 | [ADR-0006](adr/0006-elevate-user-subject-identifier.md)                                 | decision | Current    | 2026-11-16    | 2026-12-16  | 跨协议稳定 Subject Identifier 归属 IAM 身份域。                                                            |
-| [ADR-0009](adr/0009-adopt-canonical-test-collections.md)                                | decision | Current    | 2026-10-29    | 2026-11-29  | 按真实资源归类、workspace 声明与临时环境；root 工具链改用一次性验证。                                      |
+| [ADR-0009](adr/0009-adopt-canonical-test-collections.md)                                | decision | Current    | 2026-11-24    | 2026-12-24  | 按真实资源归类、workspace 声明与临时环境；root 工具链一次性验证；E2E 拓扑与复用由 ADR-0055 修订。          |
 | [ADR-0011](adr/0011-model-employment-as-an-immutable-tenure-lifecycle.md)               | decision | Current    | 2026-11-13    | 2026-12-13  | 按日有效期、未启用状态、自动启停、日期修正、责任联动与旧数据迁移。                                         |
 | [ADR-0013](adr/0013-guard-login-page-reentry-with-authentication-continuation.md)       | decision | Current    | 2026-11-16    | 2026-12-16  | 认证续接、已有根复用与新鲜认证边界。                                                                       |
 | [ADR-0014](adr/0014-model-organization-responsibility-as-employment-bound-fact.md)      | decision | Current    | 2026-10-21    | 2026-11-21  | 任职绑定的非授权责任事实与并发边界。                                                                       |
@@ -128,6 +128,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [ADR-0052](adr/0052-complete-wecom-qr-login-at-the-originating-browser.md)              | decision | Current    | 2026-11-14    | 2026-12-14  | 已确认的设计：跨设备完成企业微信登录、绑定与手机号唯一性。                                                 |
 | [ADR-0053](adr/0053-bind-wecom-identities-through-one-qr-flow.md)                       | decision | Current    | 2026-11-17    | 2026-12-17  | 已确认的设计：统一扫码流程、多身份绑定与旧接口兼容。                                                       |
 | [ADR-0054](adr/0054-disclose-directory-custom-attributes-to-all-eligible-clients.md)    | decision | Current    | 2026-11-22    | 2026-12-22  | 已确认的设计：目录自定义属性向具备入口调用资格的应用统一披露。                                             |
+| [ADR-0055](adr/0055-adopt-hybrid-host-runtime-for-full-system-e2e.md)                   | decision | Current    | 2026-11-24    | 2026-12-24  | 已确认的设计：混合宿主运行时 E2E、整库复位、原生 Playwright 入口、AFK 路由与独立容器冒烟。                 |
 
 </details>
 
@@ -141,9 +142,9 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [代码调查子代理](agents/code-investigation.md)    | agent-config | Current | 2026-11-23    | 2026-12-23  | 双引擎只读调查路由、沙箱约束、返回契约与跨会话记忆。                              |
 | [Domain Docs](agents/domain.md)                   | agent-config | Current | 2026-11-16    | 2026-12-16  | 工程 skills 的领域文档消费规则。                                                  |
 | [GitHub 议题跟踪](agents/issue-tracker.md)        | agent-config | Current | 2026-11-23    | 2026-12-23  | GitHub spec、ticket 类型、原生任务图、T3 绑定与手动/AFK 交接。                    |
-| [Sandcastle AFK 工作流](agents/sandcastle-afk.md) | agent-config | Current | 2026-11-23    | 2026-12-23  | 原生 Spec 图选票，以及无人值守实施、串行合入、集中评审与本地交付。                |
+| [Sandcastle AFK 工作流](agents/sandcastle-afk.md) | agent-config | Current | 2026-11-24    | 2026-12-24  | 原生 Spec 图选票、无人值守实施、集中评审与按打包路径触发的最终冒烟。              |
 | [Triage Labels](agents/triage-labels.md)          | agent-config | Current | 2026-10-25    | 2026-11-25  | 默认 canonical triage labels 与 Spec/ticket 互斥类型。                            |
-| [工作流补充](agents/workflow.md)                  | agent-config | Current | 2026-11-23    | 2026-12-23  | 分析设计（T3 Code）与执行交付（Sandcastle AFK）分离、双引擎角色、验证与收尾约束。 |
+| [工作流补充](agents/workflow.md)                  | agent-config | Current | 2026-11-24    | 2026-12-24  | 分析设计（T3 Code）与执行交付（Sandcastle AFK）分离、双引擎角色、验证与收尾约束。 |
 
 </details>
 
@@ -169,10 +170,10 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 
 #### 编写、运行或排查测试
 
-| Document                                        | Type        | Status  | Last verified | Next review | Notes                                                  |
-| ----------------------------------------------- | ----------- | ------- | ------------- | ----------- | ------------------------------------------------------ |
-| [测试与验证](engineering/testing.md)            | development | Current | 2026-10-29    | 2026-11-29  | 验证选择、编写规则、测试编排、资源生命周期与架构守卫。 |
-| [构建、测试与开发命令](engineering/commands.md) | development | Current | 2026-11-02    | 2026-12-02  | 本地开发、构建、测试、检查与临时资源清理。             |
+| Document                                        | Type        | Status  | Last verified | Next review | Notes                                                     |
+| ----------------------------------------------- | ----------- | ------- | ------------- | ----------- | --------------------------------------------------------- |
+| [测试与验证](engineering/testing.md)            | development | Current | 2026-11-24    | 2026-12-24  | 验证选择、测试编排、Hybrid E2E 和容器冒烟的资源生命周期。 |
+| [构建、测试与开发命令](engineering/commands.md) | development | Current | 2026-11-24    | 2026-12-24  | 本地开发、构建、测试、容器冒烟、发布门禁与临时资源清理。  |
 
 #### 查编码规范
 

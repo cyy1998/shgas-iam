@@ -19,6 +19,7 @@ status: accepted
   替代由调用方任意指定外部地址、fixture 逐项保护共享环境的方式，减少残留数据、锁等待和资源归属判断。
   接受独立命令的启动成本和同环境资源测试串行，单次运行内按 owner 复用资源。
   共享能力的完整失败证明放在 owner，调用方验证接线与业务差异。
+  Full-system E2E 的拓扑与本地常驻中间件复用已由 [ADR-0055](0055-adopt-hybrid-host-runtime-for-full-system-e2e.md) 修订（保留确定性整体复位、同环境串行及 CI/AFK 独占清理原则，生产镜像验证拆为独立 Container Smoke）。
   [资源隔离与清理](../engineering/testing.md#专用资源与隔离)
 
 - **AFK 宿主 Docker 复用** AFK 使用宿主 Docker 和 host networking，减少额外 daemon、网络代理和地址转换的维护，接受宿主管理与网络访问范围。

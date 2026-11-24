@@ -1,27 +1,19 @@
-import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
+import { readFile } from "node:fs/promises";
 import { ApiErrorCode, UserType } from "@iam/contracts";
 import { devices, expect, type Page } from "@playwright/test";
 import { loginToAdmin } from "./src/admin-client-journey.ts";
-import { composeArguments } from "./src/docker-infra.ts";
-import { requireEnvironment } from "./src/environment.ts";
 import { test } from "./src/gateway-test.ts";
-import { smsBindingMobile, smsBindingUsername, smsDeliveryPath } from "./src/sms-provider.ts";
+import type { HybridRunContext } from "./src/hybrid-context.ts";
+import { smsBindingMobile, smsBindingUsername } from "./src/sms-provider.ts";
 import { standInForWecomAuthorization } from "./src/wecom-journey.ts";
 
 const firstBindingMember = "wecom-e2e-password-binding";
 const deniedBindingMember = "wecom-e2e-password-denied";
 const smsBindingMember = "wecom-e2e-sms-binding";
 
-async function readDeliveredSmsCode() {
-  const runId = requireEnvironment("IAM_E2E_RUN_ID");
-  if (!/^[a-z0-9][a-z0-9-]{7,62}$/u.test(runId)) throw new Error("Invalid E2E run ID");
-  const composeFile = fileURLToPath(new URL("./compose.yaml", import.meta.url));
-  const args = composeArguments(composeFile, `iam-e2e-${runId}`, ["exec", "-T", "api", "cat", smsDeliveryPath]);
-  const { stdout } = await promisify(execFile)("docker", args, { timeout: 8000 });
-  const code = stdout.trim();
+async function readDeliveredSmsCode(path: string) {
+  const code = (await readFile(path, "utf8")).trim();
   if (!/^\d{4}$/u.test(code)) throw new Error("The SMS provider did not deliver a verification code");
   return code;
 }
@@ -34,9 +26,9 @@ function customAuthorization(origin: string, client: string) {
   return { url, redirectUrl, state };
 }
 
-async function confirmWecom(desktop: Page, phone: Page, authorization: URL, member: string) {
-  const mobileOrigin = requireEnvironment("IAM_E2E_WECHAT_QR_MOBILE_ORIGIN");
-  await standInForWecomAuthorization(phone, { mobileOrigin, member });
+async function confirmWecom(desktop: Page, phone: Page, authorization: URL, member: string, runtime: HybridRunContext) {
+  const mobileOrigin = runtime.wecomMobileOrigin;
+  await standInForWecomAuthorization(phone, { mobileOrigin, member, runId: runtime.references.runId });
   await desktop.goto(authorization.href);
   await expect(desktop).toHaveURL((url) => url.origin === authorization.origin && url.pathname === "/portal/login");
   await desktop.getByRole("button", { name: "企业微信扫码登录" }).click();
@@ -93,14 +85,15 @@ async function expectCustomIdentity(
 }
 
 test("WeCom password binding accepts a password with edge spaces and continues the original application", async ({
+  runtime,
   browser,
   page,
 }) => {
-  const origin = requireEnvironment("IAM_E2E_INTERNAL_ORIGIN");
-  const adminOrigin = requireEnvironment("IAM_E2E_ORIGIN");
-  const client = requireEnvironment("IAM_E2E_CUSTOM_CLIENT_CODE");
-  const adminUsername = requireEnvironment("IAM_E2E_ADMIN_USERNAME");
-  const adminPassword = requireEnvironment("IAM_E2E_ADMIN_PASSWORD");
+  const origin = runtime.internalOrigin;
+  const adminOrigin = runtime.origin;
+  const client = `${runtime.references.customSsoClientCode}-dual`;
+  const adminUsername = runtime.references.adminUsername;
+  const adminPassword = runtime.adminPassword;
   const username = "e2e-wecom-password";
   const password = "  PaddedPass123!  ";
   const authorization = customAuthorization(origin, client);
@@ -117,13 +110,13 @@ test("WeCom password binding accepts a password with edge spaces and continues t
     await expect
       .poll(async () => {
         const profile = await page.request.get(`${origin}/api/iam/internal/users/${username}`, {
-          headers: { apikey: requireEnvironment("IAM_E2E_INTERNAL_API_KEY") },
+          headers: { apikey: runtime.internalApiKey },
         });
         return profile.status();
       })
       .toBe(200);
 
-    await confirmWecom(page, await phone.newPage(), authorization.url, firstBindingMember);
+    await confirmWecom(page, await phone.newPage(), authorization.url, firstBindingMember, runtime);
     const rejected = await submitPassword(page, username, password.trim());
     expect(rejected.status()).toBe(400);
     expect(await rejected.json()).toMatchObject({ code: ApiErrorCode.LoginFailed });
@@ -137,15 +130,16 @@ test("WeCom password binding accepts a password with edge spaces and continues t
 });
 
 test("WeCom SMS binding continues the original Custom SSO application after switching methods and retrying", async ({
+  runtime,
   browser,
   page,
 }) => {
-  const origin = requireEnvironment("IAM_E2E_INTERNAL_ORIGIN");
-  const client = requireEnvironment("IAM_E2E_CUSTOM_CLIENT_CODE");
+  const origin = runtime.internalOrigin;
+  const client = `${runtime.references.customSsoClientCode}-dual`;
   const authorization = customAuthorization(origin, client);
   const phone = await browser.newContext({ ...devices["Pixel 7"] });
   try {
-    await confirmWecom(page, await phone.newPage(), authorization.url, smsBindingMember);
+    await confirmWecom(page, await phone.newPage(), authorization.url, smsBindingMember, runtime);
     await page.getByRole("button", { name: "使用短信验证" }).click();
     const mobileField = page.getByLabel("IAM 已登记的手机号");
     await mobileField.fill(smsBindingMobile);
@@ -157,7 +151,7 @@ test("WeCom SMS binding continues the original Custom SSO application after swit
     expect(sent.request().postDataJSON()).toMatchObject({ phoneNumber: smsBindingMobile });
     expect(sent.status()).toBe(200);
     expect(await sent.json()).toMatchObject({ data: { decision: "sent" } });
-    const code = await readDeliveredSmsCode();
+    const code = await readDeliveredSmsCode(runtime.smsDeliveryPath);
 
     await page.getByRole("button", { name: "使用密码验证" }).click();
     await page.getByRole("button", { name: "使用短信验证" }).click();
@@ -187,15 +181,16 @@ test("WeCom SMS binding continues the original Custom SSO application after swit
 });
 
 test("application admission can reject a WeCom password binding login while preserving the binding for a new browser", async ({
+  runtime,
   browser,
   page,
 }) => {
-  const origin = requireEnvironment("IAM_E2E_INTERNAL_ORIGIN");
-  const adminOrigin = requireEnvironment("IAM_E2E_ORIGIN");
-  const client = requireEnvironment("IAM_E2E_CUSTOM_CLIENT_CODE");
-  const username = requireEnvironment("IAM_E2E_NO_SCOPE_HR_ADMIN_USERNAME");
-  const adminUsername = requireEnvironment("IAM_E2E_ADMIN_USERNAME");
-  const adminPassword = requireEnvironment("IAM_E2E_ADMIN_PASSWORD");
+  const origin = runtime.internalOrigin;
+  const adminOrigin = runtime.origin;
+  const client = `${runtime.references.customSsoClientCode}-dual`;
+  const username = runtime.references.noScopeHrAdminUsername;
+  const adminUsername = runtime.references.adminUsername;
+  const adminPassword = runtime.adminPassword;
   const admin = await browser.newContext({ baseURL: adminOrigin });
   const phone = await browser.newContext({ ...devices["Pixel 7"] });
   const nextDesktop = await browser.newContext();
@@ -220,7 +215,7 @@ test("application admission can reject a WeCom password binding login while pres
     await setPolicy(true);
 
     const denied = customAuthorization(origin, client);
-    await confirmWecom(page, await phone.newPage(), denied.url, deniedBindingMember);
+    await confirmWecom(page, await phone.newPage(), denied.url, deniedBindingMember, runtime);
     const bound = await submitPassword(page, username, adminPassword);
     expect(bound.status()).toBe(200);
     await expect(page).toHaveURL(
@@ -235,7 +230,7 @@ test("application admission can reject a WeCom password binding login while pres
     const boundCompletion = fresh.waitForResponse((response) =>
       /^\/sso\/wechat-qr\/[^/]+\/complete$/u.test(new URL(response.url()).pathname),
     );
-    await confirmWecom(fresh, await phone.newPage(), next.url, deniedBindingMember);
+    await confirmWecom(fresh, await phone.newPage(), next.url, deniedBindingMember, runtime);
     expect((await boundCompletion).status()).toBe(200);
     await expectCustomIdentity(fresh, next, client, username);
   } finally {

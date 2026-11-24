@@ -96,26 +96,42 @@ pnpm test:resources:cleanup --record test-results/integration/<run-id>/run.json
 
 ### Full-system E2E
 
-完整系统入口为 `pnpm test:e2e`，产物位于 `e2e/system/test-results/`。需要 Chromium 时按环境选择
-`pnpm e2e:install`（含系统依赖）或 `pnpm e2e:install:browsers`。运行与就绪契约见[完整系统测试](testing.md#full-system-e2e)。
+完整系统入口为 `pnpm test:e2e`。需要 Chromium 时按环境选择 `pnpm e2e:install`（含系统依赖）或
+`pnpm e2e:install:browsers`。就绪、文件复位和报告目录见[完整系统测试](testing.md#full-system-e2e)。
 
 ```bash
 pnpm test:e2e
-pnpm --filter @iam/e2e-system runtime:lifecycle
-pnpm --filter @iam/e2e-system admin:journey
-pnpm --filter @iam/e2e-system hr-admin:journey
-pnpm --filter @iam/e2e-system oidc:journey
+pnpm test:e2e hr-admin-user-management.spec.ts
+pnpm test:e2e dual-entry.spec.ts -g "Discovery" -x
+pnpm test:e2e --last-failed
+pnpm test:e2e --ui
+pnpm test:e2e --dev-frontend
+pnpm test:e2e --fresh --keep
+pnpm test:e2e:down
 ```
 
-workspace-local 旅程用于聚焦调试。宿主异常后，使用一个准确的 descriptor 或 project：
+`--fresh`、`--dev-frontend`、`--keep` 由运行时入口解析，可和 Playwright 参数一起传入。遇到 `--` 后，余下参数直接交给 Playwright。CI 和 AFK 默认走独占模式。在 AFK 验证常驻模式，可设置 `IAM_E2E_LIFECYCLE=resident`，并在运行和 `test:e2e:down` 时使用同一个 `IAM_E2E_RESIDENT_DIRECTORY`。托管环境另走[托管验收入口](../releases/initial-installation.md#托管环境验收)。
+
+保留现场或异常中断后，按输出的资源记录或准确 project 清理。既有 E2E descriptor 也可用于恢复。
 
 ```bash
-pnpm --filter @iam/e2e-system runtime:cleanup -- --descriptor test-results/<run-id>/run-descriptor.json
-pnpm --filter @iam/e2e-system runtime:cleanup -- --project iam-e2e-<run-id>
+pnpm test:resources:cleanup --record test-results/integration/<resource-id>/run.json
+pnpm --filter @iam/e2e-system runtime:cleanup --project iam-e2e-<resource-id>
+pnpm --filter @iam/e2e-system runtime:cleanup --descriptor test-results/<run-id>/run-descriptor.json
 ```
 
-相对 descriptor 从 `e2e/system/` 解析，也可提供绝对路径。显式恢复使用独立的 120 秒清理预算。
-清理失败非零退出并保留 descriptor，可对同一目标重试。
+相对 descriptor 从 `e2e/system/` 解析，也可提供绝对路径。显式恢复使用 120 秒清理预算。清理失败时保留记录，可对同一目标重试。
+
+### Container Smoke
+
+```bash
+pnpm test:e2e:container-smoke
+pnpm verify:container-smoke --base <target-commit-sha>
+```
+
+第一条命令需 Docker、Compose 和本机 Chromium，可独立验证六个生产 Dockerfile、Nginx、`pnpm deploy` 依赖闭包和真实 APISIX 浏览器链路。诊断目录和资源记录路径由命令输出。异常终止后可通过上方的 `test:resources:cleanup --record` 命令清理这一个 project。
+
+第二条命令对比固定合入基线与候选 HEAD。差异命中任意目录的 `Dockerfile`、`nginx.conf`、`package.json`、`pnpm-lock.yaml` 或 `e2e/system/docker/` 下的文件时执行一次冒烟。手动交付和 AFK 最终验证使用该入口，`pnpm verify:release` 每次运行冒烟。日常 `pnpm test:e2e` 只运行 Hybrid 业务 spec。[容器冒烟契约](testing.md#container-smoke)
 
 ### 聚合验证
 
@@ -124,7 +140,7 @@ pnpm --filter @iam/e2e-system runtime:cleanup -- --project iam-e2e-<run-id>
 | `pnpm verify:static`  | `format:check`、`lint`、`check:docs`、`check:env-names`、`check:architecture` |
 | `pnpm verify`         | 静态检查 → typecheck → Unit → build                                           |
 | `pnpm verify:ci`      | verify → Integration                                                          |
-| `pnpm verify:release` | verify:ci → Full-system E2E                                                   |
+| `pnpm verify:release` | verify:ci → Full-system E2E → Container Smoke                                 |
 
 组合入口首错停止。何时执行见[验证节奏](../agents/workflow.md#验证节奏)，结果能证明的范围见[验证结果与交付](testing.md#验证结果与交付)。
 

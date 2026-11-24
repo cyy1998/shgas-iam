@@ -29,7 +29,6 @@ export async function runManagedIamJourney(signal?: AbortSignal) {
   }
   Object.assign(environment, {
     IAM_E2E_ORIGIN: input.origin,
-    IAM_E2E_JOURNEY: "managed",
     IAM_E2E_PLAYWRIGHT_OUTPUT_DIR: resolve(output, "playwright"),
     IAM_MANAGED_ACCEPTANCE_INPUT_FILE: resolve(inputFile),
     DATABASE_URL: input.databaseUrl,
@@ -46,7 +45,7 @@ export async function runManagedIamJourney(signal?: AbortSignal) {
         resolve(workspace, "node_modules/@playwright/test/cli.js"),
         "test",
         "--config",
-        resolve(workspace, "playwright.config.ts"),
+        resolve(workspace, "playwright.managed.config.ts"),
       ],
       {
         cwd: workspace,

@@ -34,6 +34,7 @@ export function createManagedResourceRun(options: {
   removeLocalImages?: boolean;
   keep?: boolean;
   registryFile?: string;
+  parentRecord?: string;
 }): Promise<ManagedResourceRun>;
 export function readManagedResourceRun(root: string, recordPath: string): Promise<ManagedResourceRun>;
 export function readManagedResourceRegistry(root: string, registryFile: string): Promise<string[]>;

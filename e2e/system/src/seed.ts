@@ -339,7 +339,7 @@ function requireRunKey(runId: string) {
   return runId.slice(-18);
 }
 
-function assertScenarioReadBack(expected: E2EScenarioReferences, actual: E2EScenarioReadBack) {
+export function assertScenarioReadBack(expected: E2EScenarioReferences, actual: E2EScenarioReadBack) {
   const expectedSubjects = createE2ESeedSubjects(expected);
   const subjects = new Map(actual.subjects.map((subject) => [subject.subjectIdentifier, subject]));
   if (

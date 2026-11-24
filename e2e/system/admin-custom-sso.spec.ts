@@ -10,7 +10,6 @@ import {
   saveUnchangedClientProtocolConfiguration,
   updateClientStatus,
 } from "./src/admin-client-journey.ts";
-import { requireEnvironment } from "./src/environment.ts";
 import { test } from "./src/gateway-test.ts";
 import {
   createHeadResponsibility,
@@ -24,28 +23,29 @@ import {
 } from "./src/user-document-search-journey.ts";
 
 test("Admin prepares Custom SSO in Maintenance and existing access resumes after recovery", async ({
+  runtime,
   context,
   page,
 }) => {
-  const origin = requireEnvironment("IAM_E2E_ORIGIN");
-  const adminUsername = requireEnvironment("IAM_E2E_ADMIN_USERNAME");
-  const adminPassword = requireEnvironment("IAM_E2E_ADMIN_PASSWORD");
-  const customSsoClientCode = requireEnvironment("IAM_E2E_CUSTOM_SSO_CLIENT_CODE");
-  const customSsoRedirectUri = requireEnvironment("IAM_E2E_CUSTOM_SSO_REDIRECT_URI");
-  const internalApiKey = requireEnvironment("IAM_E2E_INTERNAL_API_KEY");
-  const internalClientCode = requireEnvironment("IAM_E2E_INTERNAL_CLIENT_CODE");
-  const adminClientCode = requireEnvironment("IAM_E2E_ADMIN_CLIENT_CODE");
-  const adminRoleCode = requireEnvironment("IAM_E2E_ADMIN_ROLE_CODE");
-  const hrAdminRoleCode = requireEnvironment("IAM_E2E_HR_ADMIN_ROLE_CODE");
-  const delegateeUsername = requireEnvironment("IAM_E2E_DELEGATEE_USERNAME");
-  const disabledUsername = requireEnvironment("IAM_E2E_DISABLED_USERNAME");
-  const hrAdminUsername = requireEnvironment("IAM_E2E_HR_ADMIN_USERNAME");
-  const noScopeHrAdminUsername = requireEnvironment("IAM_E2E_NO_SCOPE_HR_ADMIN_USERNAME");
-  const organizationCode = requireEnvironment("IAM_E2E_ORGANIZATION_CODE");
-  const pausedUsername = requireEnvironment("IAM_E2E_PAUSED_USERNAME");
-  const positionCode = requireEnvironment("IAM_E2E_POSITION_CODE");
-  const responsibilityTargetOrganizationCode = requireEnvironment("IAM_E2E_RESPONSIBILITY_TARGET_ORGANIZATION_CODE");
-  const responsibilityHolderPositionCode = requireEnvironment("IAM_E2E_RESPONSIBILITY_HOLDER_POSITION_CODE");
+  const origin = runtime.origin;
+  const adminUsername = runtime.references.adminUsername;
+  const adminPassword = runtime.adminPassword;
+  const customSsoClientCode = runtime.references.customSsoClientCode;
+  const customSsoRedirectUri = runtime.references.customSsoRedirectUri;
+  const internalApiKey = runtime.internalApiKey;
+  const internalClientCode = runtime.references.internalClientCode;
+  const adminClientCode = runtime.references.adminClientCode;
+  const adminRoleCode = runtime.references.adminRoleCode;
+  const hrAdminRoleCode = runtime.references.hrAdminRoleCode;
+  const delegateeUsername = runtime.references.delegateeUsername;
+  const disabledUsername = runtime.references.disabledUsername;
+  const hrAdminUsername = runtime.references.hrAdminUsername;
+  const noScopeHrAdminUsername = runtime.references.noScopeHrAdminUsername;
+  const organizationCode = runtime.references.organizationCode;
+  const pausedUsername = runtime.references.pausedUsername;
+  const positionCode = runtime.references.positionCode;
+  const responsibilityTargetOrganizationCode = runtime.references.responsibilityTargetOrganizationCode;
+  const responsibilityHolderPositionCode = runtime.references.responsibilityHolderPositionCode;
   const actualRedirectUri = customSsoRedirectUri.replace(/\/\*$/u, "/callback");
   await loginToAdmin({ adminPassword, adminUsername, origin, page });
 
@@ -224,7 +224,7 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   const enabledAgainUserInfo = await userInfoRequest();
   expect(enabledAgainUserInfo.status()).toBe(200);
 
-  const adminHeaders = { Client: encodeURIComponent(requireEnvironment("IAM_E2E_ADMIN_CLIENT_CODE")) };
+  const adminHeaders = { Client: encodeURIComponent(adminClientCode) };
   const inventoryResponse = await context.request.post(`${origin}/api/iam/admin/session-management/sessions/search`, {
     headers: adminHeaders,
     data: { conditions: { kind: "clientSession" }, pageNum: 1, pageSize: 100 },

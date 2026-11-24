@@ -49,15 +49,18 @@ try {
   delete environment.IAM_TEST_RESOURCE_RUN_ID;
   delete environment.IAM_TEST_RESOURCE_RECORD;
   const names = [...new Set(tasks.flatMap((task) => task.environmentNames))];
+  const services = ["postgres", "redis"].filter((service) => tasks.some((task) => task.resources[service]));
+  // Even workspaces without shared data services may create child Compose projects.
+  run = await createManagedResourceRun({
+    root,
+    composeFile: "scripts/test-resources/compose.yaml",
+    services,
+    keep: options.keep,
+    registryFile: process.env.IAM_TEST_RESOURCE_REGISTRY,
+  });
+  environment.IAM_TEST_RESOURCE_RUN_ID = run.record.runId;
+  environment.IAM_TEST_RESOURCE_RECORD = run.recordPath;
   if (names.length > 0) {
-    const services = ["postgres", "redis"].filter((service) => tasks.some((task) => task.resources[service]));
-    run = await createManagedResourceRun({
-      root,
-      composeFile: "scripts/test-resources/compose.yaml",
-      services,
-      keep: options.keep,
-      registryFile: process.env.IAM_TEST_RESOURCE_REGISTRY,
-    });
     await startManagedResources(run, {
       signal: controller.signal,
       timeoutMs: options.timeoutMs,
@@ -69,8 +72,6 @@ try {
     if (services.includes("redis"))
       urls.redis = `redis://127.0.0.1:${await managedServicePort(run, "redis", 6379, { signal: controller.signal })}/0`;
     for (const name of names) environment[name] = name.endsWith("DATABASE_URL") ? urls.postgres : urls.redis;
-    environment.IAM_TEST_RESOURCE_RUN_ID = run.record.runId;
-    environment.IAM_TEST_RESOURCE_RECORD = run.recordPath;
     await writeFile(
       join(root, run.record.testEnvironmentFile),
       `${JSON.stringify(Object.fromEntries(names.map((name) => [name, environment[name]])), null, 2)}\n`,
@@ -131,9 +132,14 @@ try {
       failures.push(error);
     }
     try {
-      await finishManagedResourceRun(run, {
-        cleanupTimeoutMs: parseIntegrationArguments(process.argv.slice(2)).cleanupTimeoutMs,
-      });
+      if (run.record.status === "created") {
+        run.record.status = "cleaned";
+        await saveManagedResourceRun(run);
+      } else {
+        await finishManagedResourceRun(run, {
+          cleanupTimeoutMs: parseIntegrationArguments(process.argv.slice(2)).cleanupTimeoutMs,
+        });
+      }
     } catch (error) {
       failures.push(error);
     }
