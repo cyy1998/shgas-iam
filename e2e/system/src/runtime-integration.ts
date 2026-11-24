@@ -47,7 +47,7 @@ async function finishRuntimeIntegration(run: ManagedResourceRun) {
         child.record.status = "cleaned";
         await saveManagedResourceRun(child);
       } else if (child.record.status !== "cleaned" && child.record.status !== "kept") {
-        await finishManagedResourceRun(child, { cleanupTimeoutMs: 120_000 });
+        await finishManagedResourceRun(child, { cleanupTimeoutMs: 120_000, diagnostics: true });
       }
     } catch (error) {
       failures.push(error);

@@ -29,6 +29,7 @@ export function waitForOwnedProcessTree(
     cleanupTimeoutMs?: number;
     forceAfterMs?: number;
     requestGracefulStop?: () => void | Promise<void>;
+    onExecutionFailure?: () => void;
   },
 ): Promise<{
   outcome?: { exitCode: number | null; signal: NodeJS.Signals | null };

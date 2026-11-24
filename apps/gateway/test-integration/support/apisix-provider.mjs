@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { appendFile, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   createManagedResourceRun,
@@ -26,22 +26,13 @@ export async function prepare({ root, signal }) {
     composeFile: "apps/gateway/test-integration/support/apisix.compose.yaml",
     projectPrefix: "iam-gateway-apisix",
     services: ["apisix-etcd", "apisix"],
-    keep: parent.record.keep,
+    parentRecord: parent.recordPath,
     registryFile: process.env.IAM_TEST_RESOURCE_REGISTRY,
     composeEnvironment: { IAM_GATEWAY_TEST_APISIX_IMAGE: `iam-gateway-apisix:${fingerprint}` },
   });
-  try {
-    await appendFile(
-      join(root, parent.record.artifactDirectory, "children.jsonl"),
-      `${JSON.stringify(run.recordPath)}\n`,
-    );
-  } catch (error) {
-    await finishManagedResourceRun(run, { cleanupTimeoutMs: 30_000 });
-    throw error;
-  }
   return {
     environment: { IAM_GATEWAY_TEST_APISIX_RECORD: run.recordPath },
-    async close() {
+    async close({ diagnostics }) {
       const current = await readManagedResourceRun(root, run.recordPath);
       if (current.record.status === "created") {
         // Selections that never lease APISIX do not create Docker resources.
@@ -49,7 +40,7 @@ export async function prepare({ root, signal }) {
         await saveManagedResourceRun(current);
         return;
       }
-      await finishManagedResourceRun(current, { cleanupTimeoutMs: 30_000 });
+      await finishManagedResourceRun(current, { cleanupTimeoutMs: 30_000, diagnostics });
     },
   };
 }

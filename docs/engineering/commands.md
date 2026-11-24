@@ -63,7 +63,9 @@ pnpm test:integration
 `--file` 接受绝对路径、仓库相对路径或 owner 相对路径，须属于所选 owner 的 collection。
 无匹配、越界文件或未知参数均失败。根 `iam-monorepo` 负责聚合，测试 owner 是实际 workspace。
 
-同一候选的同一轮 Integration 检查按所需范围合并。根入口为整轮统一准备所需 PostgreSQL/Redis，串行调度所选 workspace，首错停止。
+同一候选的同一轮 Integration 检查按所需范围合并。根入口为整轮准备所需的 PostgreSQL 模板库和 Redis，
+按 `workspace:executor` 分配 Redis DB，并以同一并发池调度所选任务。默认并发上限为 3，首个失败会取消其他在途任务。
+`--concurrency <n>` 或 `IAM_TEST_INTEGRATION_CONCURRENCY` 可调整上限，两者接受正整数，命令行参数优先。
 
 - **多个文件**。重复传 `--file`，使用仓库相对路径区分不同 workspace 的文件。
 
@@ -76,7 +78,7 @@ pnpm test:integration
 - **多个 workspace 全量**。重复传 `--workspace`，运行各 workspace 的完整 Integration collection。
 
   ```bash
-  pnpm test:integration --workspace @iam/worker --workspace @iam/ops
+  pnpm test:integration --workspace @iam/worker --workspace @iam/ops --concurrency 2
   ```
 
 - **全量与定向混用**。`--file` 对整条命令生效。用一条命令跑全量 workspace，再用一条命令跑定向文件。
@@ -91,7 +93,8 @@ Admin 和 SSO 的浏览器集成测试默认使用 `.cache/integration-frontend/
 设置 `IAM_PW_DEV_SERVER=1` 可切换到 Vite dev server。无资源的 Playwright 集合可通过 `--browser-workers <1–16>` 或 `IAM_TEST_BROWSER_WORKERS` 调整并发，命令行参数优先。
 选择带资源或 resource provider 的 Playwright 集合时须省略这两个覆盖项。
 
-`--keep-resources` 显式保留本次环境。准确 project、配置与产物登记在 `test-results/integration/<run-id>/run.json`。
+`--keep-resources` 显式保留本次环境并采集容器诊断。准确 project、配置与产物登记在 `test-results/integration/<run-id>/run.json`。
+同目录的 `logs/<package>-<executor>.log` 保存各任务的完整输出。终端列出逐任务耗时、日志路径和总墙钟。
 清理失败、进程被强制结束或用完保留环境后，按记录清理：
 
 ```bash

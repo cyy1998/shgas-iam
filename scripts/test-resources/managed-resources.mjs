@@ -52,7 +52,7 @@ export async function createManagedResourceRun(options) {
     testEnvironmentFile: `${artifactDirectory}/test-environment.json`,
     services: [...(options.services ?? [])],
     removeLocalImages: options.removeLocalImages ?? false,
-    keep: Boolean(options.keep || parent?.record.keep),
+    keep: Boolean(options.keep ?? parent?.record.keep),
     status: "created",
     createdAt: new Date().toISOString(),
     durations: {},
@@ -298,12 +298,20 @@ export async function cleanupManagedResources(run, options = {}) {
 }
 
 export async function finishManagedResourceRun(run, options = {}) {
-  await collectManagedResourceDiagnostics(run);
+  const diagnose = options.diagnostics || run.record.keep;
+  if (diagnose) await collectManagedResourceDiagnostics(run);
   if (run.record.keep) {
     run.record.status = "kept";
     await saveManagedResourceRun(run);
     console.log(`[test-resources] Environment retained; cleanup: ${managedCleanupCommand(run)}`);
-  } else await cleanupManagedResources(run, { timeoutMs: options.cleanupTimeoutMs });
+    return;
+  }
+  try {
+    await cleanupManagedResources(run, { timeoutMs: options.cleanupTimeoutMs });
+  } catch (error) {
+    if (!diagnose) await collectManagedResourceDiagnostics(run);
+    throw error;
+  }
 }
 
 export function formatResourceFailure(error) {
