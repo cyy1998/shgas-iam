@@ -22,7 +22,7 @@ export default defineConfig({
     command:
       process.env.IAM_PW_DEV_SERVER === "1"
         ? "pnpm dev:e2e"
-        : `bun --no-env-file ../../e2e/system/src/frontend/integration-frontend.ts admin ${port}`,
+        : `pnpm --filter @iam/e2e-system test:frontend:serve admin ${port}`,
     reuseExistingServer: false,
     gracefulShutdown: { signal: "SIGTERM", timeout: 5000 },
     stdout: "pipe",

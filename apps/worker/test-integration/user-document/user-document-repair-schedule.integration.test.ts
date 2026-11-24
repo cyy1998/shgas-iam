@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -24,7 +24,7 @@ import {
 import { createUnitOfWork } from "@iam/unit-of-work";
 import { startDocumentRepairSchedule } from "@worker/composition/document-repair-schedule";
 import { parseWorkerEnv } from "@worker/env";
-import { createWorkerPostgresTestHarness } from "../support/postgres-test-harness";
+import { useWorkerPostgresTestHarness } from "../support/postgres-test-harness";
 import { createWorkerRedisTestHarness, resetWorkerRedisTestDatabase } from "../support/redis-test-harness";
 import { prepareWorkerStandalone } from "../support/standalone-build";
 
@@ -343,16 +343,7 @@ test("the production Worker exits unsuccessfully when shutdown cannot cancel its
   });
 }, 25000);
 
-let pg: Awaited<ReturnType<typeof createWorkerPostgresTestHarness>>;
-beforeAll(async () => {
-  pg = await createWorkerPostgresTestHarness();
-});
-beforeEach(async () => {
-  await pg.reset();
-});
-afterAll(async () => {
-  await pg?.close();
-});
+const getPostgres = useWorkerPostgresTestHarness();
 
 async function withFixture(
   work: (fixture: Awaited<ReturnType<typeof createFixture>>) => Promise<void>,
@@ -378,6 +369,7 @@ async function createFixture(
   stopExecutors: Array<() => Promise<void> | void>,
   initialAccessState: "enabled" | "disabled",
 ) {
+  const pg = getPostgres();
   const redis = await createWorkerRedisTestHarness();
   stopExecutors.push(redis.close);
   const subject = randomUUID();

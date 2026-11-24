@@ -1,6 +1,7 @@
 import {
+  cleanupManagedResources,
+  collectManagedResourceDiagnostics,
   createManagedResourceRun,
-  finishManagedResourceRun,
   type ManagedResourceRun,
   readManagedResourceRegistry,
   readManagedResourceRun,
@@ -46,8 +47,10 @@ async function finishRuntimeIntegration(run: ManagedResourceRun) {
       if (child.record.status === "created") {
         child.record.status = "cleaned";
         await saveManagedResourceRun(child);
-      } else if (child.record.status !== "cleaned" && child.record.status !== "kept") {
-        await finishManagedResourceRun(child, { cleanupTimeoutMs: 120_000, diagnostics: true });
+      } else if (child.record.status !== "cleaned") {
+        // Keep is exercised by a fixture and ends with this integration command.
+        await collectManagedResourceDiagnostics(child);
+        await cleanupManagedResources(child, { timeoutMs: 120_000 });
       }
     } catch (error) {
       failures.push(error);

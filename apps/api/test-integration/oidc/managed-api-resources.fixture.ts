@@ -11,6 +11,7 @@ import {
   writeAtomicResourceRecord,
 } from "../../../../scripts/test-resources/managed-resources.mjs";
 import { runOwnedCommand } from "../../../../scripts/test-resources/owned-command.mjs";
+import { prepareManagedPostgresTemplate } from "../../../../scripts/test-resources/postgres-template.mjs";
 
 const root = fileURLToPath(new URL("../../../../", import.meta.url));
 
@@ -65,19 +66,12 @@ export async function runManagedApiFixture(options: {
       parentRecord: process.env.IAM_TEST_RESOURCE_RECORD,
     });
     await startManagedResources(run, { signal: controller.signal, timeoutMs: 60000 });
-    const databaseUrl = `postgres://iam_test:iam_test@127.0.0.1:${await managedServicePort(run, "postgres", 5432, { signal: controller.signal })}/iam_test`;
-    const templateName = "iam_test_template";
-    const migration = await runOwnedCommand({
-      executable: process.execPath,
-      args: ["--no-env-file", "run", "packages/db/test-integration/support/prepare-postgres-template.ts", templateName],
-      cwd: root,
-      env: { ...process.env, IAM_DB_TEST_DATABASE_URL: databaseUrl },
+    const { databaseUrl, templateName } = await prepareManagedPostgresTemplate(run, {
+      env: process.env,
       signal: controller.signal,
       timeoutMs: 60000,
       cleanupTimeoutMs: 10000,
-      logFile: join(root, run.record.artifactDirectory, "template-migration.log"),
     });
-    if (migration.exitCode !== 0) throw new Error(`OIDC PostgreSQL template migration failed:\n${migration.output}`);
     const environment = {
       IAM_API_TEST_DATABASE_URL: databaseUrl,
       IAM_API_TEST_REDIS_URL: `redis://127.0.0.1:${await managedServicePort(run, "redis", 6379, { signal: controller.signal })}/0`,

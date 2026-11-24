@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -23,7 +23,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { startEmploymentProcess } from "../support/employment-process.fixture";
 import { startEmploymentWorker, waitFor, waitForEmploymentWorkerLock } from "../support/employment-worker";
-import { createWorkerPostgresTestHarness, type WorkerPostgresTestHarness } from "../support/postgres-test-harness";
+import { useWorkerPostgresTestHarness, type WorkerPostgresTestHarness } from "../support/postgres-test-harness";
 import {
   createWorkerRedisTestHarness,
   resetWorkerRedisTestDatabase,
@@ -63,16 +63,7 @@ const cases = [
   },
 ] as const;
 
-let pg: WorkerPostgresTestHarness;
-beforeAll(async () => {
-  pg = await createWorkerPostgresTestHarness();
-});
-beforeEach(async () => {
-  await pg.reset();
-});
-afterAll(async () => {
-  await pg?.close();
-});
+const getPostgres = useWorkerPostgresTestHarness();
 
 for (const scenario of cases) {
   test(scenario.name, async () => {
@@ -83,6 +74,7 @@ for (const scenario of cases) {
       });
       const redis = await createWorkerRedisTestHarness();
       stopExecutors.push(redis.close);
+      const pg = getPostgres();
       const auth = await seedAdmin(pg, redis);
       const admin = await startAdmin(pg, stopExecutors, auth);
 

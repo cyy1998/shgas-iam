@@ -11,6 +11,7 @@ coverage
 *.lcov
 
 # test artifacts
+playwright-report/
 test-results/
 .vitest/
 /e2e/system/.reports/

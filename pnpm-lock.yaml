@@ -1080,6 +1080,9 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
+      '@iam/test-support':
+        specifier: workspace:*
+        version: link:../test-support
       '@types/bun':
         specifier: latest
         version: 1.4.5

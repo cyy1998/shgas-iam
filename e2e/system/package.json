@@ -27,6 +27,7 @@
     "test:unit": "bun test --max-concurrency=2 src/__tests__",
     "typecheck": "pnpm exec tsc --noEmit",
     "test:integration": "bun src/cli.ts integration",
+    "test:frontend:serve": "bun --no-env-file src/frontend/integration-frontend.ts",
     "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
     "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check"
   },

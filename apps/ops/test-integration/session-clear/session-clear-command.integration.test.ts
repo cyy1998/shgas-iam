@@ -16,6 +16,7 @@ import {
   spawnOwnedProcessTree,
   withOwnedTemporaryDirectory,
 } from "@iam/test-support/process-smoke-harness";
+import { runClientSnapshotMaintenance } from "@ops/commands/client-runtime/client-snapshot-maintenance";
 import { parseSessionClearArgs } from "@ops/commands/session-clear/arguments";
 import { createSessionClearMaintenance } from "@ops/composition/session-clear-maintenance";
 import { parseOfflineMaintenanceEnv } from "@ops/env";
@@ -364,29 +365,28 @@ test("Snapshot verification reports remaining inventory through a read-only ACL"
   cleanups.push(async () => {
     await harness.writer.call("ACL", "DELUSER", user);
   });
-  const reader = await restrictedRedis(user);
+  const environment = { IAM_OPS_REDIS_URL: overrideOpsRedisTestUrl({ username: user, password: "scan-password" }) };
+  const scope = ["--all", ...stopped];
   const cache = await createClientSnapshotMaintenanceTestFixture(harness.writer).seedInvalidClientPayload(
     `snapshot-${randomUUID()}`,
   );
   const before = await observation([cache]);
-  const blocked = await verifySnapshots(reader);
-  expect(blocked.matchingKeys).toBe(1);
+  const blocked = await runClientSnapshotMaintenance(["verify", ...scope], environment);
+  expect(blocked).toMatchObject({ exitCode: 1, report: { mode: "verify", status: "failed", matching: 1 } });
   const afterVerify = await observation([cache]);
   expect(afterVerify).toEqual(before);
 
-  let failure: unknown;
-  try {
-    await createClientSnapshotMaintenance(reader).repairAllAfterRedisRestore({ protocolTrafficStopped: true });
-  } catch (error) {
-    failure = error;
-  }
-  expect(failure).toBeInstanceOf(Error);
+  const denied = await runClientSnapshotMaintenance(["repair", ...scope], environment);
+  expect(denied).toMatchObject({ exitCode: 1, report: { mode: "repair", status: "failed" } });
   const afterDeniedRepair = await observation([cache]);
   expect(afterDeniedRepair).toEqual(before);
 
-  await createClientSnapshotMaintenance(harness.writer).repairAllAfterRedisRestore({ protocolTrafficStopped: true });
-  const verified = await verifySnapshots(reader);
-  expect(verified.matchingKeys).toBe(0);
+  const repaired = await runClientSnapshotMaintenance(["repair", ...scope], {
+    IAM_OPS_REDIS_URL: resolveOpsRedisTestUrl(process.env),
+  });
+  expect(repaired).toMatchObject({ exitCode: 0, report: { mode: "repair", status: "completed" } });
+  const verified = await runClientSnapshotMaintenance(["verify", ...scope], environment);
+  expect(verified).toMatchObject({ exitCode: 0, report: { mode: "verify", status: "completed", matching: 0 } });
 }, 30_000);
 
 test("Snapshot repair shares control across ordinary and sensitive readers without changing Secret or sessions", async () => {

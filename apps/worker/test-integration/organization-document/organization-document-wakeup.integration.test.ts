@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { createConnection, createServer, type Socket } from "node:net";
 import process from "node:process";
 import { OrganizationLevel, OrganizationType } from "@iam/contracts";
@@ -13,7 +13,7 @@ import { createOrganizationDocumentWorkerModule } from "@iam/documents/organizat
 import { parseDedicatedRedisTestUrl, runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import { createUnitOfWork } from "@iam/unit-of-work";
 import { eq } from "drizzle-orm";
-import { createWorkerPostgresTestHarness } from "../support/postgres-test-harness";
+import { useWorkerPostgresTestHarness } from "../support/postgres-test-harness";
 import {
   createWorkerRedisTestHarness,
   resetWorkerRedisTestDatabase,
@@ -164,16 +164,7 @@ test("a ready Redis connection that becomes silent times out, releases its socke
   });
 }, 20_000);
 
-let pg: Awaited<ReturnType<typeof createWorkerPostgresTestHarness>>;
-beforeAll(async () => {
-  pg = await createWorkerPostgresTestHarness();
-});
-beforeEach(async () => {
-  await pg.reset();
-});
-afterAll(async () => {
-  await pg?.close();
-});
+const getPostgres = useWorkerPostgresTestHarness();
 
 async function withFixture(work: (fixture: Awaited<ReturnType<typeof createFixture>>) => Promise<void>) {
   const stopExecutors: Array<() => Promise<void> | void> = [];
@@ -186,6 +177,7 @@ async function withFixture(work: (fixture: Awaited<ReturnType<typeof createFixtu
 }
 
 async function createFixture(stopExecutors: Array<() => Promise<void> | void>) {
+  const pg = getPostgres();
   const redis = await createWorkerRedisTestHarness();
   stopExecutors.push(redis.close);
   const redisConfig = parseDedicatedRedisTestUrl({

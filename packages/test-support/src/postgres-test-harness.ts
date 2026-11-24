@@ -46,14 +46,14 @@ async function cloneDatabase(baseUrl: string, templateName: string, client?: Tes
   const databaseUrl = url.href;
   const admin = postgres(baseUrl, { max: 1, connect_timeout: 5, connection: { statement_timeout: 30_000 } });
   const sql = postgres(databaseUrl, { connect_timeout: 5, ...client });
-  let created = false;
   let closing: Promise<void> | undefined;
   function close() {
     closing ??= (async () => {
       const failures: unknown[] = [];
       for (const cleanup of [
         () => sql.end({ timeout: 5 }),
-        () => created && admin`DROP DATABASE IF EXISTS ${admin(databaseName)} WITH (FORCE)`,
+        // CREATE may have committed even if its response was lost.
+        () => admin`DROP DATABASE IF EXISTS ${admin(databaseName)} WITH (FORCE)`,
         () => admin.end({ timeout: 5 }),
       ]) {
         try {
@@ -70,7 +70,6 @@ async function cloneDatabase(baseUrl: string, templateName: string, client?: Tes
 
   try {
     await admin`CREATE DATABASE ${admin(databaseName)} TEMPLATE ${admin(templateName)}`;
-    created = true;
     const [connection] = await sql`SELECT current_database() AS name`;
     if (connection?.name !== databaseName) throw new Error("PostgreSQL did not connect to the cloned test database");
   } catch (error) {

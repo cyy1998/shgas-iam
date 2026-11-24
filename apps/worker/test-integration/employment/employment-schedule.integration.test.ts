@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import {
   EmploymentStatus,
@@ -26,7 +26,7 @@ import { createSubjectAccessBootstrap } from "@iam/subject-access/redis";
 import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import { asc, eq } from "drizzle-orm";
 import { startEmploymentWorker, waitFor, waitForEmploymentWorkerLock } from "../support/employment-worker";
-import { createWorkerPostgresTestHarness } from "../support/postgres-test-harness";
+import { useWorkerPostgresTestHarness } from "../support/postgres-test-harness";
 import { createWorkerRedisTestHarness, resetWorkerRedisTestDatabase } from "../support/redis-test-harness";
 
 const beforeMidnight = "2026-11-30T15:59:58.000Z";
@@ -330,16 +330,7 @@ test("User Document repair publishes a committed Employment transition after a p
   });
 }, 45_000);
 
-let pg: Awaited<ReturnType<typeof createWorkerPostgresTestHarness>>;
-beforeAll(async () => {
-  pg = await createWorkerPostgresTestHarness();
-});
-beforeEach(async () => {
-  await pg.reset();
-});
-afterAll(async () => {
-  await pg?.close();
-});
+const getPostgres = useWorkerPostgresTestHarness();
 
 async function withFixture(work: (fixture: Awaited<ReturnType<typeof createFixture>>) => Promise<void>) {
   await runWithOwnedTestResources(async ({ registerCleanup }) => {
@@ -352,6 +343,7 @@ async function withFixture(work: (fixture: Awaited<ReturnType<typeof createFixtu
 }
 
 async function createFixture(stopExecutors: Array<() => Promise<void> | void>) {
+  const pg = getPostgres();
   const redis = await createWorkerRedisTestHarness();
   stopExecutors.push(redis.close);
   const factsInspector = createSubjectFactsRedisInspector(redis.observer);

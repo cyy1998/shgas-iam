@@ -20,6 +20,7 @@ import {
   writeAtomicResourceRecord,
 } from "./test-resources/managed-resources.mjs";
 import { pnpmCommand, runOwnedCommand } from "./test-resources/owned-command.mjs";
+import { prepareManagedPostgresTemplate } from "./test-resources/postgres-template.mjs";
 
 const taskPriority = [
   "@iam/api:bun",
@@ -37,33 +38,13 @@ const priority = (task) => {
   return rank === -1 ? taskPriority.length : rank;
 };
 
-async function prepareTaskEnvironments(run, tasks, environment, pnpmCli, commandOptions) {
+async function prepareTaskEnvironments(run, tasks, environment, commandOptions) {
   const { root, record } = run;
   if (record.services.length > 0) await startManagedResources(run, commandOptions);
 
-  let databaseUrl;
-  let templateName;
-  if (record.services.includes("postgres")) {
-    const pg = await managedServiceEndpoint(run, "postgres", 5432, commandOptions);
-    databaseUrl = `postgres://iam_test:iam_test@${pg.host}:${pg.port}/iam_test`;
-    templateName = "iam_test_template";
-    const result = await runOwnedCommand({
-      ...commandOptions,
-      ...pnpmCommand(pnpmCli, [
-        "--filter",
-        "@iam/db",
-        "exec",
-        "bun",
-        "--no-env-file",
-        "test-integration/support/prepare-postgres-template.ts",
-        templateName,
-      ]),
-      cwd: root,
-      env: { ...environment, IAM_DB_TEST_DATABASE_URL: databaseUrl },
-      logFile: join(root, record.artifactDirectory, "template-migration.log"),
-    });
-    if (result.exitCode !== 0) throw new Error(`Integration PostgreSQL template migration failed:\n${result.output}`);
-  }
+  const postgres = record.services.includes("postgres")
+    ? await prepareManagedPostgresTemplate(run, { ...commandOptions, env: environment })
+    : undefined;
 
   const redis = record.services.includes("redis")
     ? await managedServiceEndpoint(run, "redis", 6379, commandOptions)
@@ -73,8 +54,8 @@ async function prepareTaskEnvironments(run, tasks, environment, pnpmCli, command
     tasks.map((task) => {
       const variables = {};
       if (task.resources.postgres) {
-        variables[task.resources.postgres] = databaseUrl;
-        variables.IAM_TEST_POSTGRES_TEMPLATE = templateName;
+        variables[task.resources.postgres] = postgres.databaseUrl;
+        variables.IAM_TEST_POSTGRES_TEMPLATE = postgres.templateName;
       }
       if (task.resources.redis) variables[task.resources.redis] = `redis://${redis.host}:${redis.port}/${++redisSlot}`;
       return [`${task.name}:${task.executor}`, variables];
@@ -246,7 +227,7 @@ try {
   });
   environment.IAM_TEST_RESOURCE_RUN_ID = run.record.runId;
   environment.IAM_TEST_RESOURCE_RECORD = run.recordPath;
-  const taskEnvironments = await prepareTaskEnvironments(run, tasks, environment, pnpmCli, {
+  const taskEnvironments = await prepareTaskEnvironments(run, tasks, environment, {
     signal: controller.signal,
     timeoutMs: options.timeoutMs,
     cleanupTimeoutMs: options.cleanupTimeoutMs,

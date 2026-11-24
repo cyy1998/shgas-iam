@@ -1,39 +1,24 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { fileURLToPath } from "node:url";
 import {
   OrganizationLevel,
   OrganizationResponsibilityAssignmentStatus,
   OrganizationResponsibilityTypeCode,
   OrganizationType,
 } from "@iam/contracts";
-import { relations } from "@iam/db/relations";
 import { employments, organizationResponsibilityAssignments, organizations, positions, users } from "@iam/db/schema";
-import { drizzle } from "drizzle-orm/postgres-js";
-import { migrate } from "drizzle-orm/postgres-js/migrator";
-import type { PostgresTestHarness } from "../support/postgres-harness";
-import { createPostgresTestHarness } from "../support/postgres-harness";
+import { createMigratedPostgresTestHarness } from "../support/migrated-postgres-harness";
 
 describe("Employment and responsibility relations through PostgreSQL", () => {
-  let harness: PostgresTestHarness;
-  let db: ReturnType<typeof createDb>;
+  let harness: Awaited<ReturnType<typeof createMigratedPostgresTestHarness>>;
   let assignmentId: number;
 
-  function createDb() {
-    return drizzle({ client: harness.sql, relations });
-  }
-
   beforeAll(async () => {
-    harness = await createPostgresTestHarness();
-    db = createDb();
-    await migrate(db, {
-      migrationsFolder: fileURLToPath(new URL("../../src/migrations", import.meta.url)),
-      migrationsSchema: harness.schemaName,
-    });
-    await db.insert(users).values([
+    harness = await createMigratedPostgresTestHarness();
+    await harness.db.insert(users).values([
       { id: 10, username: "holder", name: "Holder" },
       { id: 11, username: "other", name: "Other" },
     ]);
-    await db.insert(organizations).values([
+    await harness.db.insert(organizations).values([
       {
         id: 20,
         orgCode: "DEPT",
@@ -51,15 +36,15 @@ describe("Employment and responsibility relations through PostgreSQL", () => {
         orgType: OrganizationType.Department,
       },
     ]);
-    await db.insert(positions).values([
+    await harness.db.insert(positions).values([
       { id: 40, posCode: "HOLDER", posName: "Holder position" },
       { id: 41, posCode: "OTHER", posName: "Other position" },
     ]);
-    await db.insert(employments).values([
+    await harness.db.insert(employments).values([
       { id: 100, userId: 10, orgId: 20, posId: 40 },
       { id: 101, userId: 11, orgId: 30, posId: 41 },
     ]);
-    const assignments = await db
+    const assignments = await harness.db
       .insert(organizationResponsibilityAssignments)
       .values([
         {
@@ -85,7 +70,7 @@ describe("Employment and responsibility relations through PostgreSQL", () => {
   });
 
   test("loads the employment's department and only its own responsibility assignments", async () => {
-    const employment = await db.query.employments.findFirst({
+    const employment = await harness.db.query.employments.findFirst({
       where: { id: 100 },
       columns: { id: true },
       with: {
@@ -102,7 +87,7 @@ describe("Employment and responsibility relations through PostgreSQL", () => {
   });
 
   test("loads the holder employment separately from the responsibility target organization", async () => {
-    const assignment = await db.query.organizationResponsibilityAssignments.findFirst({
+    const assignment = await harness.db.query.organizationResponsibilityAssignments.findFirst({
       where: { id: assignmentId },
       columns: { id: true },
       with: {

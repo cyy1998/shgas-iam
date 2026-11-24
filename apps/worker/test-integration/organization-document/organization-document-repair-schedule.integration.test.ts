@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -16,7 +16,7 @@ import {
   withOwnedTemporaryDirectory,
 } from "@iam/test-support/process-smoke-harness";
 import { createUnitOfWork } from "@iam/unit-of-work";
-import { createWorkerPostgresTestHarness } from "../support/postgres-test-harness";
+import { useWorkerPostgresTestHarness } from "../support/postgres-test-harness";
 import { createWorkerRedisTestHarness, resetWorkerRedisTestDatabase } from "../support/redis-test-harness";
 
 const workerRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -257,16 +257,7 @@ test("a real repair cleanup failure stops only that schedule and leaves the othe
   });
 }, 30000);
 
-let pg: Awaited<ReturnType<typeof createWorkerPostgresTestHarness>>;
-beforeAll(async () => {
-  pg = await createWorkerPostgresTestHarness();
-});
-beforeEach(async () => {
-  await pg.reset();
-});
-afterAll(async () => {
-  await pg?.close();
-});
+const getPostgres = useWorkerPostgresTestHarness();
 
 async function withFixture(work: (fixture: Awaited<ReturnType<typeof createFixture>>) => Promise<void>) {
   await withOwnedTemporaryDirectory({
@@ -285,6 +276,7 @@ async function withFixture(work: (fixture: Awaited<ReturnType<typeof createFixtu
 }
 
 async function createFixture(temporaryDirectory: string, stopExecutors: Array<() => Promise<void> | void>) {
+  const pg = getPostgres();
   const redis = await createWorkerRedisTestHarness();
   stopExecutors.push(redis.close);
   const clock = { nowDate: () => new Date() };

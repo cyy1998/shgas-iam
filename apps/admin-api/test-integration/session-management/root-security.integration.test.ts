@@ -1492,10 +1492,26 @@ test("single-root and captured revocation reject 10001 distinct sessions before 
     );
     expect(rootStatus).toBe("resolved");
     expect(inventory.total).toBe(10000);
-    const atLimit = SessionManagementRevokeSessionsInputSchema.safeParse({
-      target: { type: "captured", targets: targets.slice(0, 10000) },
-    });
-    expect(atLimit.success).toBe(true);
+  });
+});
+
+test("the executor accepts 10000 distinct captured identities and deduplicates before enforcing its budget", async () => {
+  const f = await fixture();
+  await runWithOwnedTestResources(async (lifecycle) => {
+    lifecycle.registerCleanup(() => f.scope.close());
+    const target = await f.create();
+    const captured = await f.scope.seedClientSessions(
+      target.root,
+      Array.from({ length: 10000 }, (_, index) => `execution-limit-${index}`),
+    );
+    // Simulate transport loss on the first 9999 attempts, then exercise the last
+    // item against Redis to prove execution reached the end of the tenth batch.
+    f.scope.failNext("revoke", false, 9999);
+    const result = await f.revocation.executeCapturedSessions([...captured, captured[0]!]);
+    expect(result.results.map(({ target }) => target)).toEqual(captured);
+    expect(result.unfinished).toEqual(captured.slice(0, -1));
+    expect(result.clientSessionsTerminated).toBe(1);
+    expect(result.results.at(-1)).toMatchObject({ status: "terminated" });
   });
 });
 
@@ -1507,8 +1523,11 @@ test("an unfinished batch retries distinct captured sessions without expanding t
     const target = await f.create();
     const actor = { actorUserId: f.account.id, principalSessionId: current.root.userSessionId };
     const audit = { actorType: "admin" as const, actorUserId: f.account.id };
-    await f.scope.seedClientSessions(target.root, ["retry-client"]);
-    f.scope.failNext("revoke", false, 3);
+    await f.scope.seedClientSessions(
+      target.root,
+      Array.from({ length: 999 }, (_, index) => `retry-client-${index}`),
+    );
+    f.scope.failNext("revoke", false, 1001);
     const uncertain = await f.sessionManagement.revokeSessions(
       { target: { type: "session", principalSessionId: target.root.userSessionId } },
       actor,
@@ -1517,16 +1536,9 @@ test("an unfinished batch retries distinct captured sessions without expanding t
     if (!("sessions" in uncertain.result) || !uncertain.result.batch) throw new Error("Missing batch");
     expect(uncertain).toMatchObject({
       changed: false,
-      result: { sessions: { userSessionsTerminated: 0, clientSessionsTerminated: 0, unknown: 3 } },
+      result: { sessions: { userSessionsTerminated: 0, clientSessionsTerminated: 0, unknown: 1001 } },
     });
-    expect(uncertain.result.batch.unfinished).toHaveLength(3);
-    f.scope.failNext("revoke", false, 3);
-    const duplicateInput = await f.revocation.executeCapturedSessions([
-      ...uncertain.result.batch.unfinished,
-      uncertain.result.batch.unfinished[0]!,
-    ]);
-    expect(duplicateInput.results).toHaveLength(3);
-    expect(duplicateInput.unfinished).toHaveLength(3);
+    expect(uncertain.result.batch.unfinished).toHaveLength(1001);
     const retryInput = SessionManagementRevokeSessionsInputSchema.parse({
       target: { type: "captured", targets: uncertain.result.batch.unfinished },
     });
@@ -1535,7 +1547,7 @@ test("an unfinished batch retries distinct captured sessions without expanding t
     expect(retried).toMatchObject({
       changed: true,
       result: {
-        sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 2, unknown: 0 },
+        sessions: { userSessionsTerminated: 1, clientSessionsTerminated: 1000, unknown: 0 },
         batch: { unfinished: [] },
       },
     });

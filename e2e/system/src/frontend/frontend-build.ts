@@ -32,6 +32,7 @@ const ignoredInputDirectories = new Set([
   "coverage",
   "dist",
   "node_modules",
+  "playwright-report",
   "test-integration",
   "test-results",
 ]);
