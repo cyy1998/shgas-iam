@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import { OrganizationStatus, OrganizationType } from "@iam/contracts";
 import {
@@ -21,10 +21,15 @@ import { createOrganizationFixtureRuntime } from "./organization-worker-runtime"
 const opsRoot = fileURLToPath(new URL("../../", import.meta.url));
 let harness: Awaited<ReturnType<typeof createOpsPostgresTestHarness>>;
 let stopExecutors: Array<() => Promise<void> | void>;
+beforeAll(async () => {
+  harness = await createOpsPostgresTestHarness();
+});
+afterAll(async () => {
+  await harness?.close();
+});
 beforeEach(async () => {
   stopExecutors = [];
-  harness = await createOpsPostgresTestHarness();
-  stopExecutors.push(harness.close);
+  await harness.reset();
   await harness.sql`INSERT INTO organization (id, org_code, org_name, parent_id, path, level, org_type, status)
     VALUES (1, 'ROOT', 'Root', -1, '/1', 1, ${OrganizationType.Department}, ${OrganizationStatus.Pause}),
       (2, 'CHILD', 'Child', 1, '/1/2', 2, ${OrganizationType.Department}, ${OrganizationStatus.Disable})`;
@@ -39,7 +44,7 @@ test("organization backfill uses the normal consumer to publish complete documen
   const runtime = createOrganizationFixtureRuntime(
     {
       NODE_ENV: "test",
-      IAM_OPS_DATABASE_URL: harness.commandDatabaseUrl,
+      IAM_OPS_DATABASE_URL: harness.databaseUrl,
       IAM_OPS_REDIS_URL: resolveOpsRedisTestUrl(process.env),
     },
     createLogger({ nodeEnv: "test", logLevel: "silent", logFormat: "json", sourceApp: LoggerSourceApp.Ops }),
@@ -109,7 +114,7 @@ test(
                 TMP: temporaryDirectory,
                 TEMP: temporaryDirectory,
                 NODE_ENV: "test",
-                IAM_OPS_DATABASE_URL: harness.commandDatabaseUrl,
+                IAM_OPS_DATABASE_URL: harness.databaseUrl,
                 IAM_OPS_REDIS_URL: "redis://127.0.0.1:1/15",
                 IAM_OPS_LOG_LEVEL: "info",
                 IAM_OPS_LOG_FORMAT: "json",
@@ -175,7 +180,7 @@ async function runBackfillCLI(prefix: string) {
               TMP: temporaryDirectory,
               TEMP: temporaryDirectory,
               NODE_ENV: "test",
-              IAM_OPS_DATABASE_URL: harness.commandDatabaseUrl,
+              IAM_OPS_DATABASE_URL: harness.databaseUrl,
               IAM_OPS_REDIS_URL: resolveOpsRedisTestUrl(process.env),
               IAM_OPS_ORGANIZATION_DOCUMENT_QUEUE_PREFIX: prefix,
               IAM_OPS_LOG_LEVEL: "info",

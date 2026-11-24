@@ -18,13 +18,13 @@ import {
   type OrganizationRebuildJobPayload,
 } from "../../../src/organization/worker";
 import {
-  createOrganizationDocumentPostgresTestHarness,
-  type OrganizationDocumentPostgresTestHarness,
-} from "../support/postgres-test-harness";
+  createDocumentsPostgresTestHarness,
+  type DocumentsPostgresTestHarness,
+} from "../../support/postgres-test-harness";
 
-let harness: OrganizationDocumentPostgresTestHarness;
+let harness: DocumentsPostgresTestHarness;
 beforeAll(async () => {
-  harness = await createOrganizationDocumentPostgresTestHarness();
+  harness = await createDocumentsPostgresTestHarness();
 });
 beforeEach(async () => {
   await harness.reset();
@@ -426,7 +426,7 @@ async function waitForDirtyLockWaiters(count: number) {
   const deadline = Date.now() + 2000;
   while (Date.now() < deadline) {
     const [row] = await harness.sql<{ waiters: number }[]>`SELECT COUNT(*)::int AS waiters FROM pg_stat_activity
-      WHERE application_name=current_setting('application_name') AND wait_event_type='Lock'
+      WHERE datname=current_database() AND wait_event_type='Lock'
         AND query LIKE '%organization_document_rebuild_state%'`;
     if (row && row.waiters >= count) return;
     await new Promise((resolve) => setTimeout(resolve, 10));

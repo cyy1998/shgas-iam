@@ -1,71 +1,16 @@
-import { randomUUID } from "node:crypto";
-import process from "node:process";
-import { fileURLToPath } from "node:url";
-import type { db as database } from "@iam/db";
 import { relations } from "@iam/db/relations";
-import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
+import { createPostgresTestHarness } from "@iam/test-support/postgres-test-harness";
 import { drizzle } from "drizzle-orm/postgres-js";
-import { migrate } from "drizzle-orm/postgres-js/migrator";
-import postgres from "postgres";
 
-const TEST_DATABASE_URL_ENV = "IAM_OPS_TEST_DATABASE_URL";
-const RESERVED_DATABASE_NAMES = new Set(["postgres", "template0", "template1"]);
+export type OpsPostgresTestHarness = Awaited<ReturnType<typeof createOpsPostgresTestHarness>>;
 
-export interface OpsPostgresTestHarness {
-  readonly db: typeof database;
-  readonly sql: ReturnType<typeof postgres>;
-  readonly commandDatabaseUrl: string;
-  readonly schemaName: string;
-  readonly reset: () => Promise<void>;
-  readonly close: () => Promise<void>;
-}
-
-export async function createOpsPostgresTestHarness(): Promise<OpsPostgresTestHarness> {
-  const databaseUrl = requireDedicatedTestDatabaseUrl();
-  const schemaName = `iam_ops_${randomUUID().replaceAll("-", "")}`;
-  const adminSql = postgres(databaseUrl, { max: 1 });
-  let scopedSql: ReturnType<typeof postgres> | undefined;
-  let closePromise: Promise<void> | undefined;
-  function close() {
-    closePromise ??= runWithOwnedTestResources(async (lifecycle) => {
-      lifecycle.registerCleanup(() => adminSql.end({ timeout: 1 }));
-      lifecycle.registerCleanup(async () => {
-        await adminSql.unsafe(`DROP SCHEMA IF EXISTS ${quoteIdentifier(schemaName)} CASCADE`);
-      });
-      lifecycle.registerCleanup(() => scopedSql?.end({ timeout: 1 }));
-    });
-    return closePromise;
-  }
-
-  try {
-    await adminSql.unsafe(`CREATE SCHEMA ${quoteIdentifier(schemaName)}`);
-    scopedSql = postgres(databaseUrl, {
-      connection: {
-        application_name: `iam-ops-contract-${schemaName}`,
-        search_path: schemaName,
-      },
-      max: 4,
-    });
-    const db = drizzle({ client: scopedSql, relations });
-    const migrationsFolder = fileURLToPath(new URL("../../../../packages/db/src/migrations", import.meta.url));
-    await migrate(db, { migrationsFolder, migrationsSchema: schemaName });
-
-    return {
-      db,
-      sql: scopedSql,
-      commandDatabaseUrl: databaseUrlWithSearchPath(databaseUrl, schemaName),
-      schemaName,
-      async reset() {
-        await scopedSql!.unsafe("TRUNCATE TABLE client RESTART IDENTITY CASCADE");
-      },
-      close,
-    };
-  } catch (error) {
-    return await runWithOwnedTestResources(async (lifecycle) => {
-      lifecycle.registerCleanup(close);
-      throw error;
-    });
-  }
+export async function createOpsPostgresTestHarness() {
+  const pg = await createPostgresTestHarness({
+    environment: process.env,
+    name: "IAM_OPS_TEST_DATABASE_URL",
+    client: { max: 4 },
+  });
+  return { ...pg, db: drizzle({ client: pg.sql, relations }) };
 }
 
 export async function reserveOpsPostgresConnection(
@@ -86,50 +31,4 @@ export async function reserveOpsPostgresConnection(
   }
   stopExecutors.push(close);
   return { sql, close };
-}
-
-function requireDedicatedTestDatabaseUrl() {
-  const databaseUrl = process.env[TEST_DATABASE_URL_ENV];
-  if (!databaseUrl) {
-    throw new Error(
-      `${TEST_DATABASE_URL_ENV} must point to a dedicated PostgreSQL test database; no fallback is allowed`,
-    );
-  }
-
-  const parsed = new URL(databaseUrl);
-  if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:")
-    throw new Error(`${TEST_DATABASE_URL_ENV} must use the postgres or postgresql protocol`);
-
-  const databaseName = decodeURIComponent(parsed.pathname.slice(1));
-  if (!databaseName || RESERVED_DATABASE_NAMES.has(databaseName.toLowerCase())) {
-    throw new Error(`${TEST_DATABASE_URL_ENV} must name a dedicated, non-system test database`);
-  }
-
-  for (const developmentEnv of ["DATABASE_URL", "IAM_OPS_DATABASE_URL"] as const) {
-    const developmentUrl = process.env[developmentEnv];
-    if (developmentUrl && databaseIdentity(developmentUrl) === databaseIdentity(databaseUrl)) {
-      throw new Error(`${TEST_DATABASE_URL_ENV} must not identify the same database as ${developmentEnv}`);
-    }
-  }
-
-  return databaseUrl;
-}
-
-function databaseIdentity(databaseUrl: string) {
-  const parsed = new URL(databaseUrl);
-  const host = parsed.hostname.toLowerCase();
-  const port = parsed.port || "5432";
-  const databaseName = decodeURIComponent(parsed.pathname.slice(1));
-  return `${host}:${port}/${databaseName}`;
-}
-
-function databaseUrlWithSearchPath(databaseUrl: string, schemaName: string) {
-  const parsed = new URL(databaseUrl);
-  parsed.searchParams.set("options", `-csearch_path=${schemaName}`);
-  return parsed.toString();
-}
-
-function quoteIdentifier(identifier: string) {
-  if (!/^[a-z0-9_]+$/u.test(identifier)) throw new Error("test schema name contains unsafe characters");
-  return `"${identifier}"`;
 }

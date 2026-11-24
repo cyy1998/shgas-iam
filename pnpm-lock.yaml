@@ -943,6 +943,9 @@ importers:
         specifier: 1.0.0-rc.2
         version: 1.0.0-rc.2(bun-types@1.4.4)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.6.7)
     devDependencies:
+      '@iam/test-support':
+        specifier: workspace:*
+        version: link:../test-support
       '@types/bun':
         specifier: latest
         version: 1.4.5

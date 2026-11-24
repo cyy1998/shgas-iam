@@ -31,14 +31,9 @@ for (const scenario of [
 ]) {
   test(`pagination keeps items and total in one publication snapshot for a ${scenario.name}`, async () => {
     await runWithOwnedTestResources(async ({ registerCleanup }) => {
-      const schemas = await harness.sql<{ schemaName: string }[]>`SELECT current_schema() AS "schemaName"`;
-      const schemaName = schemas[0]?.schemaName;
-      if (schemaName === undefined) throw new Error("Test schema is unavailable");
-      const databaseUrl = process.env.IAM_DOCUMENTS_TEST_DATABASE_URL;
-      if (databaseUrl === undefined) throw new Error("User Document Integration database is unavailable");
-      const reader = postgres(databaseUrl, {
+      const reader = postgres(harness.databaseUrl, {
         max: 1,
-        connection: { search_path: schemaName, statement_timeout: 2_000 },
+        connection: { statement_timeout: 2_000 },
       });
       registerCleanup(async () => {
         await reader.end();
@@ -62,7 +57,7 @@ for (const scenario of [
       let pending: ReturnType<typeof query.searchDocuments> | undefined;
       registerCleanup(async () => {
         gate.disable();
-        // Settle scheduled reader and writer work before closing the reader or resetting the schema.
+        // Settle scheduled reader and writer work before closing the reader or resetting the database.
         const outcomes = await Promise.allSettled([pending, gate.settled()]);
         const failures = [
           ...new Set(outcomes.flatMap((outcome) => (outcome.status === "rejected" ? [outcome.reason] : []))),

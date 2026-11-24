@@ -4,9 +4,13 @@ import { requireDedicatedPostgresTestUrl } from "./dedicated-postgres-test-url";
 
 export { requireDedicatedPostgresTestUrl } from "./dedicated-postgres-test-url";
 
+type TestClientOptions = Pick<postgres.Options<Record<string, never>>, "max" | "debug" | "onnotice">;
+
 interface PostgresTestHarnessOptions {
   readonly environment: Readonly<Record<string, string | undefined>>;
   readonly name: string;
+  readonly forbiddenEnvironmentNames?: readonly string[];
+  readonly client?: TestClientOptions;
 }
 
 export async function createPostgresTestHarness(options: PostgresTestHarnessOptions) {
@@ -15,31 +19,33 @@ export async function createPostgresTestHarness(options: PostgresTestHarnessOpti
   if (!templateName || !/^[a-z][a-z0-9_]{0,62}$/u.test(templateName)) {
     throw new Error("IAM_TEST_POSTGRES_TEMPLATE must name the prepared PostgreSQL test template");
   }
-  return await cloneDatabase(baseUrl, templateName);
+  return await cloneDatabase(baseUrl, templateName, options.client);
 }
 
 export async function createEmptyPostgresTestHarness(options: PostgresTestHarnessOptions) {
-  return await cloneDatabase(dedicatedDatabaseUrl(options), "template0");
+  return await cloneDatabase(dedicatedDatabaseUrl(options), "template0", options.client);
 }
 
-function dedicatedDatabaseUrl({ environment, name }: PostgresTestHarnessOptions) {
+function dedicatedDatabaseUrl({ environment, name, forbiddenEnvironmentNames = [] }: PostgresTestHarnessOptions) {
   const value = environment[name]?.trim();
   if (!value) throw new Error(`${name} must be supplied with a dedicated PostgreSQL test URL`);
   const workspaceDevelopmentName = name.replace(/_TEST_DATABASE_URL$/u, "_DATABASE_URL");
-  const forbidden = [{ name: "DATABASE_URL", value: environment.DATABASE_URL }];
-  if (workspaceDevelopmentName !== name) {
-    forbidden.push({ name: workspaceDevelopmentName, value: environment[workspaceDevelopmentName] });
-  }
-  return requireDedicatedPostgresTestUrl({ name, value, forbidden });
+  const forbidden = new Set(["DATABASE_URL", ...forbiddenEnvironmentNames]);
+  if (workspaceDevelopmentName !== name) forbidden.add(workspaceDevelopmentName);
+  return requireDedicatedPostgresTestUrl({
+    name,
+    value,
+    forbidden: [...forbidden].map((name) => ({ name, value: environment[name] })),
+  });
 }
 
-async function cloneDatabase(baseUrl: string, templateName: string) {
+async function cloneDatabase(baseUrl: string, templateName: string, client?: TestClientOptions) {
   const databaseName = `iam_test_${randomUUID().replaceAll("-", "")}`;
   const url = new URL(baseUrl);
   url.pathname = `/${databaseName}`;
   const databaseUrl = url.href;
   const admin = postgres(baseUrl, { max: 1, connect_timeout: 5, connection: { statement_timeout: 30_000 } });
-  const sql = postgres(databaseUrl, { connect_timeout: 5 });
+  const sql = postgres(databaseUrl, { connect_timeout: 5, ...client });
   let created = false;
   let closing: Promise<void> | undefined;
   function close() {

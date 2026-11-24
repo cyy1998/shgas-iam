@@ -10,13 +10,13 @@ import {
   ORGANIZATION_DOCUMENT_SCHEMA_VERSION,
 } from "../../../src/organization/index";
 import {
-  createOrganizationDocumentPostgresTestHarness,
-  type OrganizationDocumentPostgresTestHarness,
-} from "../support/postgres-test-harness";
+  createDocumentsPostgresTestHarness,
+  type DocumentsPostgresTestHarness,
+} from "../../support/postgres-test-harness";
 
-let harness: OrganizationDocumentPostgresTestHarness;
+let harness: DocumentsPostgresTestHarness;
 beforeAll(async () => {
-  harness = await createOrganizationDocumentPostgresTestHarness();
+  harness = await createDocumentsPostgresTestHarness();
 });
 beforeEach(async () => {
   await harness.reset();
@@ -34,10 +34,9 @@ test.each([
   async ({ initialCount, page }) => {
     let generation = initialCount;
     await publishGeneration(generation);
-    const schemas = await harness.sql<{ name: string }[]>`SELECT current_schema() AS name`;
-    const reader = postgres(process.env.IAM_DOCUMENTS_TEST_DATABASE_URL!, {
+    const reader = postgres(harness.databaseUrl, {
       max: 1,
-      connection: { search_path: schemas[0]!.name, statement_timeout: 2_000 },
+      connection: { statement_timeout: 2_000 },
       onnotice() {},
     });
     const knownStates: unknown[] = [expectedPage(generation, page)];

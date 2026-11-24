@@ -18,7 +18,6 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   await pg.reset();
-  await pg.sql`TRUNCATE employment RESTART IDENTITY CASCADE`;
 });
 afterAll(async () => {
   await pg?.close();

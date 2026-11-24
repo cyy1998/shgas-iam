@@ -10,13 +10,13 @@ import {
 import type { OrganizationOutboxJobPayload, OrganizationRebuildJobPayload } from "../../../src/organization/work.types";
 import { createOrganizationDocumentProcessor } from "../../../src/organization/worker";
 import {
-  createOrganizationDocumentPostgresTestHarness,
-  type OrganizationDocumentPostgresTestHarness,
-} from "../support/postgres-test-harness";
+  createDocumentsPostgresTestHarness,
+  type DocumentsPostgresTestHarness,
+} from "../../support/postgres-test-harness";
 
-let harness: OrganizationDocumentPostgresTestHarness;
+let harness: DocumentsPostgresTestHarness;
 beforeAll(async () => {
-  harness = await createOrganizationDocumentPostgresTestHarness();
+  harness = await createDocumentsPostgresTestHarness();
 });
 beforeEach(async () => {
   await harness.reset();
@@ -245,8 +245,7 @@ test("normal build reads target and ancestors from one consistent source snapsho
     preparedPromise = processor.prepareRebuild({ organizationId: 2, version: "1" });
     const deadline = Date.now() + 2000;
     while (true) {
-      const rows =
-        await harness.sql`SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE application_name LIKE 'iam_organization_document_%'
+      const rows = await harness.sql`SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database()
         AND wait_event_type='Lock' AND query LIKE '%organization_closure%') AS blocked`;
       if (rows[0]?.blocked === true) break;
       if (Date.now() > deadline) throw new Error("Build did not reach the controlled closure read");

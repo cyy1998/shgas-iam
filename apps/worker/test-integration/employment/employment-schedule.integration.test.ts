@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import {
   EmploymentStatus,
@@ -330,6 +330,17 @@ test("User Document repair publishes a committed Employment transition after a p
   });
 }, 45_000);
 
+let pg: Awaited<ReturnType<typeof createWorkerPostgresTestHarness>>;
+beforeAll(async () => {
+  pg = await createWorkerPostgresTestHarness();
+});
+beforeEach(async () => {
+  await pg.reset();
+});
+afterAll(async () => {
+  await pg?.close();
+});
+
 async function withFixture(work: (fixture: Awaited<ReturnType<typeof createFixture>>) => Promise<void>) {
   await runWithOwnedTestResources(async ({ registerCleanup }) => {
     const stopExecutors: Array<() => Promise<void> | void> = [];
@@ -341,8 +352,6 @@ async function withFixture(work: (fixture: Awaited<ReturnType<typeof createFixtu
 }
 
 async function createFixture(stopExecutors: Array<() => Promise<void> | void>) {
-  const pg = await createWorkerPostgresTestHarness();
-  stopExecutors.push(pg.close);
   const redis = await createWorkerRedisTestHarness();
   stopExecutors.push(redis.close);
   const factsInspector = createSubjectFactsRedisInspector(redis.observer);
