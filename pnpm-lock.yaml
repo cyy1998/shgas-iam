@@ -180,7 +180,7 @@ overrides:
   typescript: npm:@typescript/typescript6@6.0.2
 
 patchedDependencies:
-  '@ai-hero/sandcastle@0.12.0': b538ddeff7271bc64e05071708122d0fd6eb763de918acf72bad6e1610bc297f
+  '@ai-hero/sandcastle@0.12.0': 5de11841c5c691de7daef1dba51ba765e8c3617a5a7123fcb68d0357f5843edc
 
 importers:
 
@@ -188,7 +188,7 @@ importers:
     devDependencies:
       '@ai-hero/sandcastle':
         specifier: 0.12.0
-        version: 0.12.0(patch_hash=b538ddeff7271bc64e05071708122d0fd6eb763de918acf72bad6e1610bc297f)
+        version: 0.12.0(patch_hash=5de11841c5c691de7daef1dba51ba765e8c3617a5a7123fcb68d0357f5843edc)
       '@biomejs/biome':
         specifier: ^2.6.8
         version: 2.6.8
@@ -424,7 +424,7 @@ importers:
         version: link:../../packages/test-support
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -545,7 +545,7 @@ importers:
         version: 1.65.1
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       '@types/pngjs':
         specifier: 6.0.5
         version: 6.0.5
@@ -603,7 +603,7 @@ importers:
         version: link:../../packages/test-support
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -667,7 +667,7 @@ importers:
         version: link:../../packages/unit-of-work
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -825,7 +825,7 @@ importers:
         version: link:../../packages/test-support
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -877,7 +877,7 @@ importers:
         version: 1.65.1
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -920,7 +920,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -945,7 +945,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -970,7 +970,7 @@ importers:
         version: link:../test-support
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -992,7 +992,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1011,7 +1011,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       '@types/sm-crypto':
         specifier: ^0.3.4
         version: 0.3.4
@@ -1051,7 +1051,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1079,7 +1079,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1110,7 +1110,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -1165,7 +1165,7 @@ importers:
         version: link:../unit-of-work
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1202,7 +1202,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1237,7 +1237,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1252,7 +1252,7 @@ importers:
         version: link:../test-support
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1289,7 +1289,7 @@ importers:
         version: link:../test-support
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1323,7 +1323,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1339,7 +1339,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1370,7 +1370,7 @@ importers:
         version: link:../test-support
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1392,7 +1392,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -1411,7 +1411,7 @@ importers:
     devDependencies:
       '@types/bun':
         specifier: latest
-        version: 1.4.4
+        version: 1.4.5
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
@@ -2847,6 +2847,9 @@ packages:
   '@types/bun@1.4.4':
     resolution: {integrity: sha512-9wkRDXUXK124pEnAutE6n/l18j+i9GC5IAHK8TmX/2nlySETmky0OU6yL5U8pW1AoKh++AN9auDCr647BfurjQ==}
 
+  '@types/bun@1.4.5':
+    resolution: {integrity: sha512-DpgwNI9z0L1S0gtb45QLCWgwCUcMLnsHYMJHQvpNj7erGiCGBvpggltAIeARrtobNMKMuy0UP7i56tKKgwFs/Q==}
+
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
 
@@ -3180,6 +3183,9 @@ packages:
 
   bun-types@1.4.4:
     resolution: {integrity: sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ==}
+
+  bun-types@1.4.5:
+    resolution: {integrity: sha512-ECHn+9dhL3wv0G6u0+7dQvrnaimXiRDxxerYBmhTaLyJEEuvTPWk2Fye3XIf5Y++JIIiHKfQw4Z7V5D8KuiXbg==}
 
   cacheable@2.5.0:
     resolution: {integrity: sha512-60cyAOytib/OzBw1JNSoSV/boK1AtHryDIjvVBk7XbN4ugfkM3+Sry7fEjNgPMGgOjuaZPAp8ruZ0Cxafwyq9g==}
@@ -4793,7 +4799,7 @@ snapshots:
 
   '@adobe/css-tools@4.5.0': {}
 
-  '@ai-hero/sandcastle@0.12.0(patch_hash=b538ddeff7271bc64e05071708122d0fd6eb763de918acf72bad6e1610bc297f)':
+  '@ai-hero/sandcastle@0.12.0(patch_hash=5de11841c5c691de7daef1dba51ba765e8c3617a5a7123fcb68d0357f5843edc)':
     dependencies:
       '@clack/prompts': 1.7.0
 
@@ -6073,6 +6079,10 @@ snapshots:
     dependencies:
       bun-types: 1.4.4
 
+  '@types/bun@1.4.5':
+    dependencies:
+      bun-types: 1.4.5
+
   '@types/chai@5.2.3':
     dependencies:
       '@types/deep-eql': 4.0.2
@@ -6377,6 +6387,11 @@ snapshots:
       ioredis: 6.0.0(supports-color@10.2.2)
 
   bun-types@1.4.4:
+    dependencies:
+      '@types/node': 25.9.1
+      undici-types: 8.10.2
+
+  bun-types@1.4.5:
     dependencies:
       '@types/node': 25.9.1
       undici-types: 8.10.2

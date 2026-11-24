@@ -1,7 +1,7 @@
 # 选择 Spec 与可执行切片
 
 这是仓库的 Sandcastle AFK 模式。先读取 `AGENTS.md`、`docs/agents/sandcastle-afk.md` 和
-`docs/agents/issue-tracker.md`。本次 GitHub 仓库为 `{{REPO}}`，本地合入目标为 `{{INVOCATION_BRANCH}}`。
+`docs/agents/issue-tracker.md`。本次 GitHub 仓库为 `{{REPO}}`，PR 目标分支为 `{{INVOCATION_BRANCH}}`。
 本阶段只读取仓库与 issues，输出计划。
 
 可选实施者由 runner 从本次启动分支的 `.codex/agents/implementer-*.toml` 加载：

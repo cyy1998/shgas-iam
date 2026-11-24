@@ -1,10 +1,15 @@
 import { access, mkdir, readFile, stat } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { command } from "./commands.ts";
 import type { SpecGraph } from "./specs.ts";
 import type { Ticket } from "./workflow.ts";
 
 export class GitStateError extends Error {}
+
+export function isManagedWorktreePath(managedRoot: string, candidatePath: string): boolean {
+  const rel = relative(resolve(managedRoot), resolve(candidatePath));
+  return Boolean(rel) && !rel.startsWith("..") && !isAbsolute(rel);
+}
 
 export type SpecWorkspace = {
   graph: SpecGraph;
@@ -117,7 +122,8 @@ export function createTicketLifecycle(options: {
 
   async function checkout(branch: string, base: string, name: string, recoveryPath?: string) {
     const common = await git("rev-parse", "--path-format=absolute", "--git-common-dir");
-    const path = join(dirname(common), ".sandcastle", "worktrees", name);
+    const managedRoot = join(dirname(common), ".sandcastle", "worktrees");
+    const path = join(managedRoot, name);
     const entries = (await git("worktree", "list", "--porcelain", "-z")).split("\0\0");
     const entry = entries.find((entry) => entry.split("\0").includes(`branch refs/heads/${branch}`));
     if (entry) {
@@ -129,6 +135,10 @@ export function createTicketLifecycle(options: {
         throw new GitStateError("Git worktree 登记缺少准确路径或被锁定，保留现场。");
       if (resolve(registered) === resolve(cwd))
         throw new GitStateError(`不能把启动 checkout 用作集成工作树：${branch}。`);
+      if (!isManagedWorktreePath(managedRoot, registered))
+        throw new GitStateError(
+          `分支 ${branch} 已被非 Sandcastle worktree 检出（${registered}），请先移除或切离该工作树后再启动 AFK。`,
+        );
       if (recoveryPath && resolve(registered) !== resolve(recoveryPath))
         throw new GitStateError(`恢复工作树路径与真实登记不符，保留现场：${branch}。`);
       await assertCheckout(registered, branch, Boolean(recoveryPath));

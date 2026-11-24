@@ -17,6 +17,78 @@ import type { DockerConfig } from "./docker-config.ts";
 import { closeDockerConfig, prepareDockerConfig } from "./docker-config.ts";
 import type { DockerDaemonAccess } from "./sandbox.mts";
 
+export const pnpmStoreVolumeName = "iam-sandcastle-pnpm-store";
+export const pnpmStoreDirectory = "/home/agent/.pnpm-store";
+
+const cachedSocketGroupIds = new Map<string, Promise<number>>();
+const initializedNamedVolumes = new Map<string, Promise<void>>();
+
+async function resolveSocketGroupId(cwd: string, image: string, probeName: string): Promise<number> {
+  const existing = cachedSocketGroupIds.get(image);
+  if (existing) return existing;
+  const pending = (async () => {
+    const gid = Number(
+      await command(
+        "docker",
+        [
+          "run",
+          "--rm",
+          "--name",
+          probeName,
+          "--mount",
+          "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock,readonly",
+          "--entrypoint",
+          "stat",
+          image,
+          "-c",
+          "%g",
+          "/var/run/docker.sock",
+        ],
+        cwd,
+      ),
+    );
+    if (!Number.isSafeInteger(gid) || gid < 0) throw new Error("无法读取 Docker socket GID。");
+    return gid;
+  })().catch((error) => {
+    cachedSocketGroupIds.delete(image);
+    throw error;
+  });
+  cachedSocketGroupIds.set(image, pending);
+  return pending;
+}
+
+async function ensurePnpmStoreVolume(cwd: string, image: string): Promise<void> {
+  const key = `${image}:${pnpmStoreVolumeName}`;
+  const existing = initializedNamedVolumes.get(key);
+  if (existing) return existing;
+  const pending = (async () => {
+    await command("docker", ["volume", "create", pnpmStoreVolumeName], cwd, 15_000);
+    await command(
+      "docker",
+      [
+        "run",
+        "--rm",
+        "--user",
+        "0:0",
+        "--mount",
+        `type=volume,source=${pnpmStoreVolumeName},target=/mnt`,
+        "--entrypoint",
+        "chown",
+        image,
+        "1000:1000",
+        "/mnt",
+      ],
+      cwd,
+      30_000,
+    );
+  })().catch((error) => {
+    initializedNamedVolumes.delete(key);
+    throw error;
+  });
+  initializedNamedVolumes.set(key, pending);
+  return pending;
+}
+
 export const hostNetworkRequirements =
   "需要 Linux Docker Engine，或 Docker Desktop 4.34+ 已启用 host networking 且关闭 Enhanced Container Isolation；" +
   "需要实际 UID 1000 访问共享 Docker socket，不自动切换网络、DinD 或代理。";
@@ -42,6 +114,7 @@ export type ExecutorResources = {
   mounts: NonNullable<DockerOptions["mounts"]>;
   registryFile: string;
   anonymousVolumes: readonly string[];
+  namedVolumes: NonNullable<DockerOptions["namedVolumes"]>;
   onAnonymousVolumes: (names: readonly string[]) => Promise<void>;
 };
 
@@ -222,27 +295,11 @@ export async function withExecutorResources<T>(
     dockerConfig = await prepareDockerConfig(runId, cwd);
     if ((await command("docker", ["info", "--format", "{{.OSType}}"], cwd)) !== "linux")
       throw new Error(hostNetworkRequirements);
-    const socketGroupId = Number(
-      await command(
-        "docker",
-        [
-          "run",
-          "--rm",
-          "--name",
-          socketProbeName,
-          "--mount",
-          "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock,readonly",
-          "--entrypoint",
-          "stat",
-          image,
-          "-c",
-          "%g",
-          "/var/run/docker.sock",
-        ],
-        cwd,
-      ),
-    );
-    if (!Number.isSafeInteger(socketGroupId) || socketGroupId < 0) throw new Error("无法读取 Docker socket GID。");
+    const socketGroupId = await resolveSocketGroupId(cwd, image, socketProbeName);
+    const namedVolumes: NonNullable<DockerOptions["namedVolumes"]> = targets.length
+      ? [{ name: pnpmStoreVolumeName, target: pnpmStoreDirectory }]
+      : [];
+    if (namedVolumes.length) await ensurePnpmStoreVolume(cwd, image);
     signal.throwIfAborted();
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
@@ -258,12 +315,14 @@ export async function withExecutorResources<T>(
       containerGid: 1000,
       daemonAccess: { socketGroupId },
       anonymousVolumes: targets,
+      namedVolumes,
       onAnonymousVolumes: (names) => recordVolumes(names),
       registryFile,
       env: {
         IAM_TEST_RESOURCE_REGISTRY: registryFile,
         IAM_AFK_HOST_PROBE_URL: `http://127.0.0.1:${address.port}`,
         IAM_AFK_HOST_PROBE_VALUE: runId,
+        ...(namedVolumes.length ? { IAM_AFK_PNPM_STORE_DIR: pnpmStoreDirectory } : {}),
       },
       mounts: [
         ...["test-results/integration", directory].map((path) => ({

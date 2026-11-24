@@ -28,6 +28,7 @@
     "sandcastle:check": "tsx scripts/sandcastle/main.mts --check",
     "sandcastle:build": "tsx scripts/sandcastle/main.mts --build",
     "sandcastle:smoke": "tsx scripts/sandcastle/main.mts --smoke",
+    "sandcastle:smoke:workflow": "tsx scripts/sandcastle/main.mts --smoke-workflow",
     "check:architecture": "bun scripts/check-architecture.ts",
     "check:docs": "bun scripts/check-docs-index.ts",
     "check:env-names": "bun scripts/check-env-names.ts",

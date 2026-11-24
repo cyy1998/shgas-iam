@@ -4,4 +4,8 @@ set -eu
 
 git config --global --add safe.directory "$PWD"
 node scripts/sandcastle/workspace-dependencies.mts
-HUSKY=0 pnpm install --frozen-lockfile
+if [ -n "${IAM_AFK_PNPM_STORE_DIR:-}" ]; then
+  HUSKY=0 pnpm install --frozen-lockfile --store-dir "$IAM_AFK_PNPM_STORE_DIR"
+else
+  HUSKY=0 pnpm install --frozen-lockfile
+fi

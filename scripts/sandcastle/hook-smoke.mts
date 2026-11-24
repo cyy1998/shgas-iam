@@ -39,20 +39,37 @@ async function snapshotPath(path: string): Promise<unknown> {
 }
 
 /** Observe bytes and modes on the host, including absent generated Husky wrappers. */
-export async function snapshotHostHooks(cwd: string, checkout: string): Promise<string> {
+export async function snapshotHostHooks(
+  cwd: string,
+  checkout: string,
+  expectedBranchTracking?: { branch: string; remote: string },
+): Promise<string> {
   const common = await command("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], cwd);
   const worktreeConfig = await command(
     "git",
     ["rev-parse", "--path-format=absolute", "--git-path", "config.worktree"],
     checkout,
   );
-  return JSON.stringify(
-    await Promise.all(
-      [join(common, "config"), worktreeConfig, join(cwd, ".husky", "_"), join(checkout, ".husky", "_")].map(
-        snapshotPath,
-      ),
-    ),
-  );
+  const configSnapshot = await snapshotPath(join(common, "config"));
+  if (
+    expectedBranchTracking &&
+    configSnapshot &&
+    typeof configSnapshot === "object" &&
+    "contents" in configSnapshot &&
+    typeof configSnapshot.contents === "string"
+  ) {
+    const raw = Buffer.from(configSnapshot.contents, "base64").toString("utf8");
+    const escapedBranch = expectedBranchTracking.branch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const escapedRemote = expectedBranchTracking.remote.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const trackingBlock = new RegExp(
+      `\\[branch "${escapedBranch}"\\]\\r?\\n\\tremote = ${escapedRemote}\\r?\\n\\tmerge = refs/heads/${escapedBranch}\\r?\\n?`,
+    );
+    configSnapshot.contents = Buffer.from(raw.replace(trackingBlock, ""), "utf8").toString("base64");
+  }
+  return JSON.stringify([
+    configSnapshot,
+    ...(await Promise.all([worktreeConfig, join(cwd, ".husky", "_"), join(checkout, ".husky", "_")].map(snapshotPath))),
+  ]);
 }
 
 /** Called as the agent command, after the production preparation wrapper. */

@@ -13,6 +13,7 @@ export function createFinalizationExecutor(options: ExecutorOptions): Finalizati
     const result = await execute({
       worktreePath: workspace.worktreePath,
       role: phase === "review" ? undefined : implementer,
+      prepareWorkspace: phase !== "review",
       name: `Spec #${workspace.graph.spec.number} ${phase}`,
       promptFile: join(options.cwd, ".sandcastle", `spec-${phase}-prompt.md`),
       promptArgs: {

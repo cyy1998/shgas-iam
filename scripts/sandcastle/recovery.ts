@@ -1,12 +1,14 @@
-import { lstat } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { lstat, readdir } from "node:fs/promises";
+import { basename, dirname, join, resolve } from "node:path";
 import { isImplementer } from "./agents.ts";
 import { command } from "./commands.ts";
-import type { FinalizedSpec } from "./finalization.ts";
+import { type FinalizedSpec, parsePrBody } from "./finalization.ts";
+import type { PullRequestInfo } from "./github.ts";
 import type { SpecGraph, SpecProgress, TrackedIssue } from "./specs.ts";
 import {
   type createTicketLifecycle,
   GitStateError,
+  isManagedWorktreePath,
   type SpecWorkspace,
   type TicketContext,
   type TicketRecovery,
@@ -15,7 +17,7 @@ import type { Ticket } from "./workflow.ts";
 
 const sha = "[a-f0-9]{40}";
 function metadata(body: string): string {
-  return body.split(/\n\n(?:实施交接|真实双轴报告|findings 处置与最终验证|失败|阻碍)[:：]/)[0]!;
+  return body.split(/\n\n(?:实施交接|真实双轴报告|findings 处置与最终验证|PR 描述草稿|失败|阻碍)[:：]/)[0]!;
 }
 function field(body: string, label: string): string | undefined {
   return new RegExp(`${label}：([^；。\\n]+)`).exec(metadata(body))?.[1]?.trim();
@@ -23,15 +25,25 @@ function field(body: string, label: string): string | undefined {
 function hash(body: string, label: string): string | undefined {
   return new RegExp(`${label}：(${sha})(?=[；。\\s]|$)`).exec(metadata(body))?.[1];
 }
+function prNumberField(body: string): number | undefined {
+  const value = /PR：#([1-9]\d*)(?=[（(\s；。]|$)/.exec(metadata(body))?.[1];
+  return value ? Number(value) : undefined;
+}
 
-export type RecoveredSpec = { workspace: SpecWorkspace; finalized?: FinalizedSpec; squashSha?: string };
+export type RecoveredSpec = {
+  workspace: SpecWorkspace;
+  finalized?: FinalizedSpec;
+  openPr?: PullRequestInfo;
+};
 
-/** Rebuild ephemeral contexts from ordinary issue handoffs, checking every claimed Git fact. */
+/** Rebuild ephemeral contexts from ordinary issue handoffs, checking every claimed Git and PR fact. */
 export function createSpecRecovery(options: {
   cwd: string;
   invocationBranch: string;
   actor: string;
   tickets: ReturnType<typeof createTicketLifecycle>;
+  findOpenPrs: (headBranch: string, baseBranch: string) => Promise<PullRequestInfo[]>;
+  readPr: (number: number) => Promise<PullRequestInfo>;
   recordHandoff?: (number: number, body: string) => Promise<void>;
 }) {
   const recoverable = new Set<number>();
@@ -77,13 +89,16 @@ export function createSpecRecovery(options: {
       return;
     }
     const path = lines.find((line) => line.startsWith("worktree "))?.slice(9);
+    const common = await git("rev-parse", "--path-format=absolute", "--git-common-dir");
+    const managedRoot = join(dirname(common), ".sandcastle", "worktrees");
     if (
       !path ||
       lines.some((line) => line === "locked" || line.startsWith("locked ")) ||
       (recorded && resolve(recorded) !== resolve(path)) ||
-      resolve(path) === resolve(options.cwd)
+      resolve(path) === resolve(options.cwd) ||
+      !isManagedWorktreePath(managedRoot, path)
     )
-      throw new GitStateError(`恢复 worktree 路径或锁无法确认，保留 ${branch}。`);
+      throw new GitStateError(`恢复 worktree 路径、归属或锁无法确认，保留 ${branch}。`);
     return path;
   }
   function finalRecord(graph: SpecGraph, workspace: SpecWorkspace): FinalizedSpec | undefined {
@@ -100,18 +115,38 @@ export function createSpecRecovery(options: {
     const reviewCandidate = hash(body, "评审候选");
     const finalCandidate = hash(body, "修复后最终候选");
     const reviewReport = body.split("真实双轴报告：\n")[1]?.split("\n\nfindings 处置与最终验证：\n")[0];
-    const repairAndValidation = body.split("findings 处置与最终验证：\n")[1]?.split("\n\n下一动作：")[0];
+    const afterRepair = body.split("findings 处置与最终验证：\n")[1];
+    const repairAndValidation = afterRepair?.split("\n\nPR 描述草稿：\n")[0];
+    const prDraftSection = afterRepair?.split("\n\nPR 描述草稿：\n")[1]?.split("\n\n下一动作：")[0];
+    let prBody: string | undefined;
+    if (prDraftSection) {
+      try {
+        prBody = parsePrBody(prDraftSection).prBody;
+      } catch {
+        prBody = undefined;
+      }
+    }
     if (
       !reviewBase ||
       !reviewCandidate ||
       !finalCandidate ||
       !reviewReport?.trim() ||
       !repairAndValidation?.trim() ||
+      !prBody ||
       field(body, "启动分支") !== options.invocationBranch ||
       field(body, "Spec 分支") !== workspace.branch
     )
       return;
-    return { workspace, reviewBase, reviewCandidate, finalCandidate, reviewReport, repairAndValidation, handoff: body };
+    return {
+      workspace,
+      reviewBase,
+      reviewCandidate,
+      finalCandidate,
+      reviewReport,
+      repairAndValidation,
+      prBody,
+      handoff: body,
+    };
   }
   return {
     get progress(): SpecProgress {
@@ -126,35 +161,83 @@ export function createSpecRecovery(options: {
       }
     },
     async localSpecs(): Promise<number[]> {
-      const commits = (
-        await git("log", options.invocationBranch, "--format=%H", "--extended-regexp", "--grep=^Spec: #[0-9]+$")
-      )
-        .split("\n")
-        .filter(Boolean);
+      const common = await git("rev-parse", "--path-format=absolute", "--git-common-dir");
+      const managedRoot = join(dirname(common), ".sandcastle", "worktrees");
       const specs = new Set<number>();
-      for (const commit of commits) {
-        const body = await git("show", "-s", "--format=%B", commit);
-        const number = /^Spec: #([1-9]\d*)$/m.exec(body)?.[1];
-        const branch = /^Integration-Branch: ([\w./-]+)$/m.exec(body)?.[1];
-        if (number && branch && (await git("for-each-ref", "--format=%(objectname)", `refs/heads/${branch}`)))
-          specs.add(Number(number));
+      const entries = (await git("worktree", "list", "--porcelain", "-z")).split("\0\0");
+      for (const entry of entries) {
+        const path = entry
+          .split("\0")
+          .find((line) => line.startsWith("worktree "))
+          ?.slice(9);
+        if (!path || !isManagedWorktreePath(managedRoot, path)) continue;
+        const match = /^spec-([1-9]\d*)$/.exec(basename(path));
+        if (match) specs.add(Number(match[1]));
+      }
+      const names = await readdir(managedRoot).catch(() => [] as string[]);
+      for (const name of names) {
+        const match = /^spec-([1-9]\d*)$/.exec(name);
+        if (match) specs.add(Number(match[1]));
       }
       return [...specs];
     },
     async confirmDelivered(issue: TrackedIssue): Promise<void> {
       const body = comments(issue)
         .map((entry) => entry.body)
-        .filter((body) => /^Spec #[1-9]\d* 已确认本地 squash 交付。/.test(body))
+        .filter(
+          (body) =>
+            /^Spec #[1-9]\d* 已确认 PR 交付/.test(body) || /^Spec #[1-9]\d* 已确认本地 squash 交付。/.test(body),
+        )
         .at(-1);
       if (!body) return;
       const number = /^Spec #([1-9]\d*)/.exec(body)?.[1];
+      if (!number || (issue.parent ?? issue.number) !== Number(number)) return;
+      if (body.startsWith(`Spec #${number} 已确认 PR 交付`)) {
+        const prNum = prNumberField(body);
+        const targetBranch = field(body, "目标分支");
+        const branch = field(body, "Spec 分支");
+        const base = hash(body, "review base");
+        const review = hash(body, "评审候选");
+        const final = hash(body, "最终候选");
+        if (
+          !prNum ||
+          !branch ||
+          !base ||
+          !review ||
+          !final ||
+          targetBranch !== options.invocationBranch ||
+          !body.includes("\n\n真实双轴报告：\n") ||
+          !body.includes("\n\nfindings 处置与最终验证：\n")
+        )
+          return;
+        const pr = await options.readPr(prNum);
+        if (pr.baseRefName !== options.invocationBranch || pr.headRefName !== branch)
+          throw new GitStateError(`跨 Spec 的 PR #${prNum} 分支信息与交付评论不符，保留为未知结果。`);
+        if (pr.state !== "MERGED") return;
+        if (!pr.mergeCommitOid) throw new GitStateError(`已合并 PR #${prNum} 缺少 mergeCommit SHA，无法核验交付事实。`);
+        const synced = await command(
+          "git",
+          ["merge-base", "--is-ancestor", pr.mergeCommitOid, options.invocationBranch],
+          options.cwd,
+        )
+          .then(() => true)
+          .catch(() => false);
+        if (!synced) {
+          throw new GitStateError(
+            `前置 #${issue.number} 的 PR #${prNum} 已合入远端 ${options.invocationBranch} (${pr.mergeCommitOid})，但本地 ${options.invocationBranch} 尚未包含该提交，请先同步本地分支。`,
+          );
+        }
+        delivered.add(issue.number);
+        return;
+      }
+
+      // Backward compatibility for historical Specs delivered via local squash.
       const squash = hash(body, "实际 squash 提交");
       const base = hash(body, "review base");
       const review = hash(body, "评审候选");
       const final = hash(body, "最终候选");
       const branch = field(body, "Spec 分支");
       if (
-        !number ||
         !squash ||
         !base ||
         !review ||
@@ -162,8 +245,7 @@ export function createSpecRecovery(options: {
         !branch ||
         !body.includes("\n\n真实双轴报告：\n") ||
         !body.includes("\n\nfindings 处置与最终验证：\n") ||
-        field(body, "启动分支") !== options.invocationBranch ||
-        (issue.parent ?? issue.number) !== Number(number)
+        field(body, "启动分支") !== options.invocationBranch
       )
         return;
       const message = (await git("show", "-s", "--format=%B", squash)).split("\n");
@@ -179,8 +261,6 @@ export function createSpecRecovery(options: {
         (await git("rev-list", "--parents", "-n", "1", squash)) !== `${squash} ${base}`
       )
         throw new GitStateError("跨 Spec 的交付记录与实际 Git 不符，保留为未知结果。");
-      // Delivery checks the final tree and implementation ancestry before committing.
-      // After cleanup those objects may be collected; the squash and its ordinary trailers persist.
       await git("cat-file", "-e", `${squash}^{tree}`);
       await git("merge-base", "--is-ancestor", squash, options.invocationBranch);
       delivered.add(issue.number);
@@ -188,12 +268,7 @@ export function createSpecRecovery(options: {
     execute: (workspace: SpecWorkspace, ticket: Ticket) =>
       options.tickets.execute(workspace, ticket, resumable.get(ticket.number)),
     async restore(graph: SpecGraph): Promise<RecoveredSpec | undefined> {
-      if (
-        !owned(graph.spec) ||
-        !graph.spec.labels.includes("type:spec") ||
-        graph.spec.labels.includes("type:ticket") ||
-        !graph.spec.labels.includes("ready-for-agent")
-      )
+      if (!owned(graph.spec) || !graph.spec.labels.includes("type:spec") || graph.spec.labels.includes("type:ticket"))
         return;
       const specRecords = ownedComments(graph.spec)
         .map((entry) => entry.body)
@@ -203,31 +278,25 @@ export function createSpecRecovery(options: {
         .find(
           (body) =>
             (field(body, "Spec 分支") ?? field(body, "集成分支")) &&
-            field(body, "启动分支") &&
+            (field(body, "启动分支") ?? field(body, "目标分支")) &&
             (hash(body, "Spec 启动基线") ?? hash(body, "启动基线") ?? hash(body, "review base")),
         );
       if (!record) return;
       const branch = field(record, "Spec 分支") ?? field(record, "集成分支");
       const invocationBase = hash(record, "Spec 启动基线") ?? hash(record, "启动基线") ?? hash(record, "review base");
-      if (!branch || !invocationBase || field(record, "启动分支") !== options.invocationBranch)
+      const recordedInvocationBranch = field(record, "启动分支") ?? field(record, "目标分支");
+      if (!branch || !invocationBase || recordedInvocationBranch !== options.invocationBranch)
         throw new GitStateError("恢复交接缺少准确分支或基线，保留现场。");
       const tip = await git("for-each-ref", "--format=%(objectname)", `refs/heads/${branch}`);
       if (!tip) throw new GitStateError(`恢复的 Spec 分支 ${branch} 不存在，保留记录并核对 Git。`);
-      const commits = (
-        await git(
-          "log",
-          options.invocationBranch,
-          "--format=%H",
-          "--extended-regexp",
-          `--grep=^Spec: #${graph.spec.number}$`,
-        )
-      )
-        .split("\n")
-        .filter(Boolean);
-      if (commits.length > 1) throw new GitStateError("发现多个可能的 Spec 交付提交，保留现场，不重复交付。");
-      const closing = Boolean(commits.length);
-      if (graph.spec.state === "CLOSED" && !closing)
-        throw new GitStateError("父 Spec 已关闭但未确认实际交付，保留现场。");
+      const openPrs = await options.findOpenPrs(branch, options.invocationBranch);
+      if (openPrs.length > 1)
+        throw new GitStateError(`发现多个 ${branch} -> ${options.invocationBranch} 的 Open PR，保留现场，不重复交付。`);
+      const openPr = openPrs[0];
+      const closing = Boolean(openPr);
+      if (!closing && !graph.spec.labels.includes("ready-for-agent")) return;
+      if (graph.spec.state === "CLOSED")
+        throw new GitStateError("父 Spec 已关闭但仍有本地集成工作树现场，保留现场人工核对。");
       const pathRecord = [...specRecords]
         .reverse()
         .map((body) => field(body, "Spec 工作树"))
@@ -338,36 +407,23 @@ export function createSpecRecovery(options: {
         recoverable.add(issue.number);
       }
       const finalized = finalRecord(graph, workspace);
-      if (commits.length) {
+      if (openPr) {
         if (!finalized)
-          throw new GitStateError("发现可能已 squash 的 Spec，但缺少完整最终验收交接，先核对已有日志，禁止重复交付。");
-        const squashSha = commits[0]!;
-        const message = await git("show", "-s", "--format=%B", squashSha);
-        const trailers = [
-          `Spec: #${graph.spec.number}`,
-          `Invocation-Branch: ${options.invocationBranch}`,
-          `Integration-Branch: ${branch}`,
-          `Review-Base: ${finalized.reviewBase}`,
-          `Review-Candidate: ${finalized.reviewCandidate}`,
-          `Final-Candidate: ${finalized.finalCandidate}`,
-        ];
+          throw new GitStateError(
+            `发现已存在的 Open PR #${openPr.number}，但缺少完整最终验收交接与 PR 描述草稿，先核对已有日志，禁止重复交付。`,
+          );
         if (
-          !trailers.every((line) => message.split("\n").includes(line)) ||
-          (await git("rev-list", "--parents", "-n", "1", squashSha)) !== `${squashSha} ${finalized.reviewBase}` ||
-          (await git("rev-parse", `${squashSha}^{tree}`)) !==
-            (await git("rev-parse", `${finalized.finalCandidate}^{tree}`))
+          openPr.baseRefName !== options.invocationBranch ||
+          openPr.headRefName !== branch ||
+          openPr.headRefOid !== finalized.finalCandidate ||
+          tip !== finalized.finalCandidate
         )
-          throw new GitStateError("可能的交付提交与最终门禁、parent 或文件树不符，保留现场，禁止重复 squash。");
+          throw new GitStateError(`Open PR #${openPr.number} 与本地最终验收候选不符，保留现场，禁止重复建 PR。`);
         await git("merge-base", "--is-ancestor", finalized.reviewBase, finalized.reviewCandidate);
         await git("merge-base", "--is-ancestor", finalized.reviewCandidate, finalized.finalCandidate);
-        if (
-          tip !== finalized.finalCandidate ||
-          graph.tickets.some((issue) => !options.tickets.integrated.has(issue.number))
-        )
-          throw new GitStateError("已交付 Spec 的候选或完整票级交接不符，保留现场。 ");
-        delivered.add(graph.spec.number);
-        for (const issue of graph.tickets) delivered.add(issue.number);
-        return { workspace, finalized, squashSha };
+        if (graph.tickets.some((issue) => !options.tickets.integrated.has(issue.number)))
+          throw new GitStateError(`Open PR #${openPr.number} 缺少完整票级集成交接，保留现场。`);
+        return { workspace, finalized, openPr };
       }
       const current = await git("rev-parse", options.invocationBranch);
       if (current !== invocationBase) {

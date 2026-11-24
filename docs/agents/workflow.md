@@ -5,7 +5,7 @@
 - **Stage 1：分析与设计（T3 Code，Antigravity + Codex 协作）** 负责只读代码调查、需求澄清、原型验证、在候选集成分支落盘
   `ADR`/`GLOSSARY.md`/设计文档，以及产出带原生任务图的 Spec 与 tickets。
 - **Stage 2：执行与交付（Sandcastle AFK）** 承担完整 Spec 的无人值守实施、双轴评审（`gpt-6.2-astra` `xhigh`）、集中修复、
-  全量验证、本地 squash 合入与资源回收，详见[AFK 工作流](sandcastle-afk.md)。
+  全量验证、按 `$pr` 生成描述并推送创建 Pull Request（不改动本地 `main`）与临时工作树回收，详见[AFK 工作流](sandcastle-afk.md)。
 - **Fast Track：轻量直改与异常介入（T3 Code 单会话）** 负责小型明确改动、文档/配置修改、紧急 bugfix、主观 UI/交互微调，
   以及 AFK 暂停（`Needs Attention`）时的人工排障回流，在单会话内直接完成。
 
@@ -20,8 +20,8 @@
 - **候选集成分支复用** 同一 feature 的设计产物（`ADR`、`GLOSSARY.md`、设计文档等）直接提交在候选集成分支中，待实现、评审与验证全部通过后再整体合入目标分支。
   首次落盘改动前核对目标分支、工作区和已有分支，优先复用已有或用户指定分支，否则创建引擎无关前缀的 `feat/<feature-slug>`。
 - **跨会话恢复** 文档随相关工作正常提交。跨会话按[议题跟踪](issue-tracker.md#当-skill-要求publish-to-the-issue-tracker)恢复同一分支与基线，保留未知改动并在覆盖前先解决重叠。
-- **合入确认** 手动单会话或异常收尾任务合入目标分支前，按[收尾约定](#完成与本地合入)单独确认；Sandcastle AFK 的本地合入授权在启动
-  AFK 时统一授予。
+- **合入确认** 手动单会话或异常收尾任务合入目标分支前，按[收尾约定](#完成与本地合入)单独确认；Sandcastle AFK 的交付授权在启动
+  AFK 时统一授予（推送 Spec 分支并创建 Ready for Review PR，最终合入由维护者在 GitHub 完成）。
 
 ## 设计与执行交接
 
@@ -37,8 +37,8 @@
    - **唯一分支声明**：存在设计产物分支时，在 Spec 正文仅声明一行 `集成分支：feat/<feature-slug>`（runner 据此确定唯一归属）；
    - **祖先关系成立**：确保候选集成分支包含当前调用分支（满足 `git merge-base --is-ancestor main feat/<feature-slug>`）；若期间
      `main` 前进，交接前先将最新 `main` 合入候选集成分支；
-   - **切回调用分支且工作区干净**：启动 `pnpm sandcastle` 前，将主仓库工作区切回目标调用分支（如 `main`）并保持工作区干净；
-     设计阶段若使用独立 worktree，保持该 worktree 干净或先移除 worktree（保留分支）。
+   - **切回调用分支、对齐远端且工作区干净**：启动 `pnpm sandcastle` 前，将主仓库工作区切回目标调用分支（如 `main`）、保持工作区干净且与远端
+     `github/<branch>` 对齐（无未推送本地提交、未落后远端）；设计阶段若使用独立 worktree，必须先移除该外部 worktree（保留分支，避免被 runner 拒绝接管）。
 3. **AFK 异常回流（`Needs Attention`）** Sandcastle 因设计歧义或难解失败暂停时，切回 T3 Code 处理：
    - 读取对应 Spec/ticket 的交接评论与集成分支现场；
    - 复杂问题交给 `deep_researcher` 定位根因；
@@ -99,8 +99,9 @@
 
 ## 完成与本地合入
 
-本仓库默认本地交付。父 Spec 在最终合入前保持 open；tickets 的完成按所用流程执行，GitHub 操作见[议题跟踪](issue-tracker.md)。
-完整 Spec 的合入与关票默认由 Sandcastle AFK 自动完成；以下流程用于 Fast Track 手动任务或 AFK 异常介入后的人工收口。
+手动单会话与异常收尾默认本地交付，父 Spec 在最终合入前保持 open；tickets 的完成按所用流程执行，GitHub 操作见[议题跟踪](issue-tracker.md)。
+完整 Spec 的 AFK 交付由 Sandcastle 自动推送分支并创建关联 `Closes #...` 的 Pull Request（不改动本地目标分支），由维护者验收并在 GitHub 合并时自动关票；
+以下流程用于 Fast Track 手动任务或 AFK 异常介入后的人工收口。
 
 完成适用评审和最终验证后，提出一次收尾确认，列明 feature、适用 Spec、目标分支、固定候选 SHA，以及
 本地 squash 合入、关闭父 Spec、删除本地功能分支的完整范围（无 Spec 时跳过关票）。

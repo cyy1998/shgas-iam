@@ -7,10 +7,18 @@ import type { CodexAuth } from "./auth.ts";
 import { prepareCodexAuth } from "./auth.ts";
 import { codexConfigProbe, configuredCodex, prepareAgentConfig, shellQuote } from "./codex-provider.mts";
 import { command } from "./commands.ts";
-import { closeDeliveredIssue, createSpecDelivery } from "./delivery.ts";
+import { createSpecDelivery } from "./delivery.ts";
 import { createFinalizationLifecycle, type FinalizedSpec } from "./finalization.ts";
 import { createFinalizationExecutor } from "./finalization-runtime.mts";
-import { createGitHubIssueTracker, githubRepo } from "./github.ts";
+import {
+  createGitHubIssueTracker,
+  createPullRequest,
+  findOpenPullRequests,
+  githubRepo,
+  readPullRequest,
+  removeIssueLabel,
+  resolveGitRemote,
+} from "./github.ts";
 import { hookCommitProbe, hookSmokeEnvironment, snapshotHostHooks } from "./hook-smoke.mts";
 import type { ReportProjectStage } from "./projects.ts";
 import { createSpecRecovery, type RecoveredSpec } from "./recovery.ts";
@@ -45,6 +53,8 @@ const invocationArgs = (branch: string) => ({ REPO: githubRepo, INVOCATION_BRANC
 export type RuntimeOptions = {
   cwd: string;
   branch: string;
+  remote?: string;
+  draft?: boolean;
   model: string;
   image: string;
   signal: AbortSignal;
@@ -83,10 +93,11 @@ export type RuntimeDependencies = ExecutorDependencies & {
 };
 
 export async function createRuntime(options: RuntimeOptions, dependencies: RuntimeDependencies = {}) {
-  const { cwd, branch, model, image, signal, reportProjectStage } = options;
+  const { cwd, branch, draft, model, image, signal, reportProjectStage } = options;
   const runGh = dependencies.runGh ?? ((args: string[]) => command("gh", args, cwd));
   const actor = await runGh(["api", "user", "--jq", ".login"]);
   if (!actor.trim()) throw new ExecutorInfrastructureError("无法确认当前 GitHub 认领身份，停止启动。");
+  const remote = options.remote ?? (await resolveGitRemote(cwd, branch, process.env.SANDCASTLE_GIT_REMOTE));
   const githubCredentials = dependencies.runGh
     ? {}
     : Object.fromEntries(["GH_TOKEN"].flatMap((key) => (process.env[key] ? [[key, process.env[key]!]] : [])));
@@ -115,7 +126,7 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
   let recovered: RecoveredSpec | undefined;
   let plannedTickets: Ticket[] = [];
   let explorationNotesPath: string | undefined;
-  const closedIssues = new Set<number>();
+  const openedPrSpecs = new Set<number>();
   let unsafeCreator = false;
   const onUnsafeClose = () => {
     unsafeCreator = true;
@@ -145,11 +156,16 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
     },
     recordHandoff,
   });
+  const findOpenPrs = (headBranch: string, baseBranch: string) =>
+    findOpenPullRequests(cwd, headBranch, baseBranch, runGh);
+  const readPr = (prNumber: number) => readPullRequest(cwd, prNumber, runGh);
   const recovery = createSpecRecovery({
     cwd,
     invocationBranch: branch,
     actor,
     tickets,
+    findOpenPrs,
+    readPr,
     recordHandoff,
   });
 
@@ -159,6 +175,25 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
     if ((await git("branch", "--show-current")) !== branch)
       throw new GitStateError(`宿主已离开目标分支 ${branch}；停止运行。`);
     if (await git("status", "--porcelain")) throw new GitStateError("目标工作区有未提交改动；保留现场并停止运行。");
+  };
+
+  const assertRemoteBaselineSynced = async (allowBehind = false) => {
+    await git("fetch", remote, branch);
+    const localTip = await git("rev-parse", "HEAD");
+    const remoteTip = await git("rev-parse", `refs/remotes/${remote}/${branch}`);
+    if (localTip === remoteTip) return;
+    const ahead = Number(await git("rev-list", "--count", `${remoteTip}..${localTip}`));
+    const behind = Number(await git("rev-list", "--count", `${localTip}..${remoteTip}`));
+    if (ahead > 0) {
+      throw new GitStateError(
+        `本地分支 ${branch} 领先远端 ${remote}/${branch} ${ahead} 个提交；请先同步远端基线后再启动 AFK，避免未推送提交混入 PR。`,
+      );
+    }
+    if (!allowBehind && behind > 0) {
+      throw new GitStateError(
+        `本地分支 ${branch} 落后远端 ${remote}/${branch} ${behind} 个提交；请先执行 git pull --ff-only 同步后再启动 AFK。`,
+      );
+    }
   };
 
   async function planSpec(backlog: { specs: SpecGraph[] }, name: string) {
@@ -346,18 +381,27 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
   });
   const delivery = createSpecDelivery({
     cwd,
+    remote,
+    draft: Boolean(draft),
     signal,
     creatorsStopped: () => !unsafeCreator,
     recordHandoff,
-    closeIssue: (number) => closeDeliveredIssue(cwd, number, runGh),
-    onIssueClosed: async (number) => {
-      closedIssues.add(number);
-      await reportProjectStage?.(number, "Done");
+    findOpenPrs,
+    createPr: (input) => createPullRequest(cwd, input, runGh),
+    readPr,
+    removeReadyLabel: (issueNumber) => removeIssueLabel(cwd, issueNumber, "ready-for-agent", runGh),
+    onPrOpened: async (numbers) => {
+      if (specWorkspace) openedPrSpecs.add(specWorkspace.graph.spec.number);
+      if (reportProjectStage) {
+        for (const issueNumber of numbers) {
+          await reportProjectStage(issueNumber, "PR Open");
+        }
+      }
     },
   });
 
   async function reportSpecPaused(graph: SpecGraph) {
-    if (graph.spec.state === "OPEN" && !closedIssues.has(graph.spec.number)) {
+    if (graph.spec.state === "OPEN" && !openedPrSpecs.has(graph.spec.number)) {
       await reportProjectStage?.(graph.spec.number, "Needs Attention");
     }
   }
@@ -385,14 +429,15 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
     deliver: async (finalized: FinalizedSpec) => {
       await assertTarget();
       if (finalized.workspace !== specWorkspace) throw new GitStateError("最终验收交接不属于当前 Spec，保留现场。");
-      if (finalized.workspace.graph.spec.state === "OPEN") {
-        await reportProjectStage?.(finalized.workspace.graph.spec.number, "Delivering");
+      if (finalized.workspace.graph.spec.state === "OPEN" && !recovered?.openPr) {
+        await reportProjectStage?.(finalized.workspace.graph.spec.number, "Reviewing");
       }
       const delivered = await delivery.deliver(
         finalized,
         tickets.contexts,
-        recovered?.squashSha ? { squashSha: recovered.squashSha } : undefined,
+        recovered?.openPr ? { prNumber: recovered.openPr.number } : undefined,
       );
+      openedPrSpecs.add(finalized.workspace.graph.spec.number);
       await rm(explorationNotesPath ?? explorationNotesFile(finalized.workspace), { force: true }).catch(() => {});
       explorationNotesPath = undefined;
       return delivered;
@@ -440,7 +485,7 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
       await assertTarget();
       explorationNotesPath = undefined;
       const backlog = await loadSpecBacklog(tracker);
-      // Only local unfinished closeout branches add closed parents; never sweep historical closed issues.
+      // Only local unfinished Spec worktrees add non-queued Specs; never sweep historical closed issues.
       const localCloseouts = await recovery.localSpecs();
       for (const number of localCloseouts) {
         if (!backlog.specs.some((graph) => graph.spec.number === number))
@@ -454,29 +499,31 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
       const available = { specs: backlog.specs.filter((graph) => !excludedSpecs.has(graph.spec.number)) };
       recovered = await recovery.select(available.specs);
       if (recovered) {
+        await assertRemoteBaselineSynced(Boolean(recovered.openPr));
         selectedSpec = recovered.workspace.graph;
         specWorkspace = recovered.workspace;
-        if (reportProjectStage && !recovered.squashSha) {
-          await reportProjectStage(selectedSpec.spec.number, recovered.finalized ? "Delivering" : "Implementing");
+        if (reportProjectStage && !recovered.openPr) {
+          await reportProjectStage(selectedSpec.spec.number, recovered.finalized ? "Reviewing" : "Implementing");
           for (const issue of selectedSpec.tickets) {
             if (issue.state === "OPEN" && tickets.integrated.has(issue.number)) {
               await reportProjectStage(issue.number, "Integrated");
             }
           }
         }
-        const plan = recovered.squashSha
+        const plan = recovered.openPr
           ? { planned: [], ready: [], explore: { needed: false, focus: "" } }
           : await planSpec({ specs: [selectedSpec] }, `Planner recovered Spec #${selectedSpec.spec.number}`);
         plannedTickets = plan.planned;
-        if (!recovered.squashSha && !recovered.finalized && plan.ready.length) {
+        if (!recovered.openPr && !recovered.finalized && plan.ready.length) {
           await ensureExplorationNotes(specWorkspace, plan.planned, plan.explore);
         }
         return { workspace: specWorkspace, tickets: plan.ready };
       }
       if (available.specs.some((graph) => localCloseouts.includes(graph.spec.number)))
         throw new GitStateError(
-          "本地仍有 Spec 交付收尾现场，但当前类型、准入、认领或普通交接不允许恢复；保留分支和工作树，先核对报告。",
+          "本地仍有未清理的 Spec 集成工作树，但当前类型、准入、认领或普通交接不允许恢复；保留分支和工作树，先核对报告。",
         );
+      await assertRemoteBaselineSynced(false);
       const plan = await planSpec(available, `Planner Spec ${attempt}`);
       if (!plan.graph) return undefined;
       selectedSpec = plan.graph;
@@ -489,8 +536,7 @@ export async function createRuntime(options: RuntimeOptions, dependencies: Runti
 
     async frontier(workspace: SpecWorkspace, attemptedTickets: ReadonlySet<number>): Promise<SpecFrontier> {
       if (workspace !== specWorkspace) throw new GitStateError("当前 Spec 工作树与调度上下文不匹配；保留现场。");
-      if (recovered?.workspace === workspace && recovered.squashSha)
-        return { tickets: [], complete: true, blocked: [] };
+      if (recovered?.workspace === workspace && recovered.openPr) return { tickets: [], complete: true, blocked: [] };
       const frontier = specFrontier(workspace.graph, recovery.progress);
       const readyNumbers = new Set(frontier.ready.map((entry) => entry.number));
       const tickets = plannedTickets.filter(

@@ -12,10 +12,10 @@ index 5ebe75081651f603c90b5106c847d6291f0eb30a..3eb26e533908b60b05512e808b9cdfb1
      readonly name: string;
      /** Environment variables injected by this provider. */
 diff --git a/dist/chunk-CP3TYXZA.js b/dist/chunk-CP3TYXZA.js
-index 7d097321871cfee95a8ba7e6d12a7fe002190cc5..44e33a8de9f47b1ba89fc4ead4dff7bf6f70e325 100644
+index 7d097321871cfee95a8ba7e6d12a7fe002190cc5..a62b1563cb89f7adbfc6a6c3cba9e5117806212b 100644
 --- a/dist/chunk-CP3TYXZA.js
 +++ b/dist/chunk-CP3TYXZA.js
-@@ -77,6 +77,13 @@ var startContainer = (containerName, imageName, env, options) => Effect_exports.
+@@ -77,6 +77,17 @@ var startContainer = (containerName, imageName, env, options) => Effect_exports.
      "-v",
      formatVolumeMount(mount, selinuxLabel)
    ]);
@@ -26,19 +26,24 @@ index 7d097321871cfee95a8ba7e6d12a7fe002190cc5..44e33a8de9f47b1ba89fc4ead4dff7bf
 +  const anonymousVolumeFlags = (options?.anonymousVolumes ?? []).flatMap((target) => [
 +    "--mount", `type=volume,target=${target},volume-nocopy`
 +  ]);
++  const namedVolumeFlags = (options?.namedVolumes ?? []).flatMap((volume) => [
++    "--mount",
++    `type=volume,source=${volume.name},target=${volume.target}${volume.readonly ? ",readonly" : ""}`
++  ]);
    const workdirFlags = options?.workdir ? ["-w", options.workdir] : [];
    const userFlags = options?.user ? ["--user", options.user] : [];
    const networks = options?.network ? Array.isArray(options.network) ? options.network : [options.network] : [];
-@@ -97,6 +104,8 @@ var startContainer = (containerName, imageName, env, options) => Effect_exports.
+@@ -97,6 +108,9 @@ var startContainer = (containerName, imageName, env, options) => Effect_exports.
      containerName,
      ...envFlags,
      ...volumeFlags,
 +    ...daemonSocketFlags,
 +    ...anonymousVolumeFlags,
++    ...namedVolumeFlags,
      ...workdirFlags,
      ...userFlags,
      ...networkFlags,
-@@ -108,7 +117,7 @@ var startContainer = (containerName, imageName, env, options) => Effect_exports.
+@@ -108,7 +122,7 @@ var startContainer = (containerName, imageName, env, options) => Effect_exports.
  });
  var removeContainer = (containerName) => Effect_exports.gen(function* () {
    yield* Effect_exports.ignore(dockerExec(["stop", containerName]));
@@ -47,7 +52,7 @@ index 7d097321871cfee95a8ba7e6d12a7fe002190cc5..44e33a8de9f47b1ba89fc4ead4dff7bf
  });
  var removeImage = (imageName) => Effect_exports.gen(function* () {
    yield* dockerExec(["rmi", imageName]);
-@@ -116,6 +125,15 @@ var removeImage = (imageName) => Effect_exports.gen(function* () {
+@@ -116,6 +130,27 @@ var removeImage = (imageName) => Effect_exports.gen(function* () {
 
  // src/sandboxes/docker.ts
  var docker = (options) => {
@@ -60,10 +65,22 @@ index 7d097321871cfee95a8ba7e6d12a7fe002190cc5..44e33a8de9f47b1ba89fc4ead4dff7bf
 +      || target === "/" || target.split("/").includes("..") || /[,:\\\0\r\n]/.test(target))) {
 +    throw new Error("anonymousVolumes must be unique absolute container paths without traversal or mount delimiters");
 +  }
++  const namedVolumes = options?.namedVolumes ?? [];
++  if (!Array.isArray(namedVolumes)
++    || new Set(namedVolumes.map((volume) => volume?.target)).size !== namedVolumes.length
++    || namedVolumes.some((volume) => !volume || typeof volume !== "object"
++      || typeof volume.name !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/.test(volume.name)
++      || typeof volume.target !== "string" || !volume.target.startsWith("/")
++      || volume.target === "/" || volume.target.split("/").includes("..") || /[,:\\\0\r\n]/.test(volume.target))) {
++    throw new Error("namedVolumes must specify valid volume names and unique absolute container paths");
++  }
++  if (namedVolumes.some((volume) => anonymousVolumes.includes(volume.target))) {
++    throw new Error("Named volume target conflicts with an anonymous volume");
++  }
    const configuredImageName = options?.imageName;
    const selinuxLabel = options?.selinuxLabel ?? "z";
    const maxOutputTailChars = options?.maxOutputTailChars ?? MAX_TAIL_CHARS;
-@@ -130,7 +148,7 @@ var docker = (options) => {
+@@ -130,7 +165,7 @@ var docker = (options) => {
      env: options?.env,
      sandboxHomedir,
      create: async (createOptions) => {
@@ -72,26 +89,30 @@ index 7d097321871cfee95a8ba7e6d12a7fe002190cc5..44e33a8de9f47b1ba89fc4ead4dff7bf
        const worktreePath = createOptions.mounts.find(
          (m) => m.hostPath === createOptions.worktreePath
        )?.sandboxPath ?? "/home/agent/workspace";
-@@ -140,6 +158,9 @@ var docker = (options) => {
+@@ -140,6 +175,12 @@ var docker = (options) => {
          sandboxPath: m.sandboxPath,
          readonly: m.readonly
        }));
 +      if (anonymousVolumes.some((target) => allMounts.some((mount) => mount.sandboxPath === target))) {
 +        throw new Error("Anonymous volume target conflicts with an ordinary bind mount");
 +      }
++      if (namedVolumes.some((volume) => allMounts.some((mount) => mount.sandboxPath === volume.target))) {
++        throw new Error("Named volume target conflicts with an ordinary bind mount");
++      }
        const imageName = configuredImageName ?? defaultImageName(createOptions.hostRepoPath);
        const containerUid = options?.containerUid ?? process.getuid?.() ?? 1e3;
        const containerGid = options?.containerGid ?? process.getgid?.() ?? 1e3;
-@@ -154,6 +175,8 @@ var docker = (options) => {
+@@ -154,6 +195,9 @@ var docker = (options) => {
            },
            {
              volumeMounts,
 +            daemonSocket: options?.daemonSocket,
 +            anonymousVolumes,
++            namedVolumes,
              workdir: worktreePath,
              user: `${containerUid}:${containerGid}`,
              network: options?.network,
-@@ -164,6 +187,37 @@ var docker = (options) => {
+@@ -164,6 +208,37 @@ var docker = (options) => {
            }
          )
        );
@@ -129,7 +150,7 @@ index 7d097321871cfee95a8ba7e6d12a7fe002190cc5..44e33a8de9f47b1ba89fc4ead4dff7bf
        for (const dir of parentDirsToCreate) {
          await new Promise((resolve2, reject) => {
            execFile(
-@@ -194,15 +248,12 @@ var docker = (options) => {
+@@ -194,15 +269,12 @@ var docker = (options) => {
            );
          });
        }
@@ -193,7 +214,7 @@ index 93f24d139b795c284915a10c34d82f2fa769eab0..64dac84040152ab70d1a15fbe0075ec3
  var detachListeners = () => {
    if (!listenersInstalled) return;
 diff --git a/dist/index.js b/dist/index.js
-index 2a1d6d7e902e34620d64929418b34c715ab65d7d..f24cf5eb147e8078e9adcb1798d517771b5ba450 100644
+index 2a1d6d7e902e34620d64929418b34c715ab65d7d..489b93197477b06727ef061e62e507f4cde4d676 100644
 --- a/dist/index.js
 +++ b/dist/index.js
 @@ -180,6 +180,8 @@ var TextDeltaBuffer = class {
@@ -270,7 +291,7 @@ index 2a1d6d7e902e34620d64929418b34c715ab65d7d..f24cf5eb147e8078e9adcb1798d51777
    } catch {
    }
 diff --git a/dist/sandboxes/docker.d.ts b/dist/sandboxes/docker.d.ts
-index c7cc9e78dd3f14021ae64061d70e715bb98f768f..66b75c569fe999fbf1b5f920e5ed2b4482a2ed59 100644
+index c7cc9e78dd3f14021ae64061d70e715bb98f768f..7687171b4ce3f49c51f7fc6ddbafedb51fbab455 100644
 --- a/dist/sandboxes/docker.d.ts
 +++ b/dist/sandboxes/docker.d.ts
 @@ -1,4 +1,4 @@
@@ -279,12 +300,18 @@ index c7cc9e78dd3f14021ae64061d70e715bb98f768f..66b75c569fe999fbf1b5f920e5ed2b44
  import { M as MountConfig } from '../MountConfig-CmXclHA5.js';
  import { S as SelinuxLabel } from '../mountUtils-CCA-bbpK.js';
  export { d as defaultImageName } from '../mountUtils-CCA-bbpK.js';
-@@ -12,6 +12,14 @@ export { d as defaultImageName } from '../mountUtils-CCA-bbpK.js';
+@@ -12,6 +12,20 @@ export { d as defaultImageName } from '../mountUtils-CCA-bbpK.js';
   */
 
  interface DockerOptions {
 +    /** Container-private anonymous volumes, initialized for the agent UID and removed with the exact container. */
 +    readonly anonymousVolumes?: readonly string[];
++    /** Shared named Docker volumes (e.g. persistent pnpm store cache); retained when containers are removed. */
++    readonly namedVolumes?: readonly {
++        readonly name: string;
++        readonly target: string;
++        readonly readonly?: boolean;
++    }[];
 +    /** Persist exact allocated volume IDs before initialization or agent commands. */
 +    readonly onAnonymousVolumes?: (names: readonly string[]) => Promise<void>;
 +    /** Optional exact name for caller-owned provisioning and cleanup recovery records. */
@@ -294,7 +321,7 @@ index c7cc9e78dd3f14021ae64061d70e715bb98f768f..66b75c569fe999fbf1b5f920e5ed2b44
      /** Docker image name (default: derived from repo directory name). */
      readonly imageName?: string;
      /**
-@@ -105,6 +113,6 @@ interface DockerOptions {
+@@ -105,6 +119,6 @@ interface DockerOptions {
   * The returned provider creates Docker containers with bind-mounts
   * for the worktree and git directories.
   */

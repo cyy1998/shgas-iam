@@ -15,7 +15,7 @@ import { runWorkflow, type WorkflowResult } from "./workflow.ts";
 import { workspaceDependencyPaths } from "./workspace-dependencies.mts";
 
 const complete = "<promise>COMPLETE</promise>";
-type Scenario = "complete" | "conflict" | "interrupt" | "close-interrupt";
+type Scenario = "complete" | "conflict" | "interrupt" | "pr-interrupt";
 
 /** A controlled external model, shared by host Integration and real SDK/Docker smoke. */
 function modelProgram() {
@@ -55,7 +55,7 @@ function modelProgram() {
       check(prompt.length > 0, "Model command received no prompt on stdin");
       fs.writeFileSync(path.join(control, `${stage}-${args.ISSUE_NUMBER ?? "spec"}-${firstRun}.prompt.md`), prompt);
       if (docker) check(process.getuid?.() === 1000, "Model command must run as UID 1000");
-      if (docker && stage !== "plan" && stage !== "explore")
+      if (docker && stage !== "plan" && stage !== "explore" && stage !== "spec-review")
         for (const directory of dependencyPaths)
           check(!fs.existsSync(path.join(directory, "host-sentinel")), "Host dependencies leaked into the sandbox");
       let response = "Controlled executor: focused checks passed.";
@@ -173,8 +173,34 @@ function modelProgram() {
         } else {
           check(args.REVIEW_REPORT.includes(args.REVIEW_CANDIDATE), "Repair did not receive fixed-candidate reports");
           commit("repair.txt", "central repair verified\n");
-          response =
-            "Controlled repair executor: finding handled and fixture validation passed; model quality and real pnpm verify are outside this fixture.";
+          response = [
+            "Controlled repair executor: finding handled and fixture validation passed; model quality and real pnpm verify are outside this fixture.",
+            "",
+            "<pr-body>",
+            "## Summary",
+            "",
+            "```text",
+            "Spec #40",
+            "  ├── 41.txt (#41)",
+            "  ├── 42.txt (#42)",
+            "  ├── 43.txt (#43)",
+            "  └── repair.txt (central repair)",
+            "```",
+            "",
+            "## Evidence",
+            "",
+            "- **Before:** fixture files missing before Spec #40 implementation.",
+            "  **After:** controlled focused checks and final verification passed.",
+            "",
+            "## Merge Danger",
+            "",
+            "**Door:** two-way",
+            "",
+            "**Blast Radius:** Low",
+            "",
+            "Controlled fixture files only; safe to revert.",
+            "</pr-body>",
+          ].join("\n");
         }
       }
       console.log(JSON.stringify({ type: "thread.started", thread_id: `controlled-${stage}` }));
@@ -202,17 +228,34 @@ export async function controlledWorkflowJourney(options: {
   const { sourceCwd, mode, scenario } = options;
   const root = await mkdtemp(join(tmpdir(), "iam-afk-workflow-smoke-"));
   const cwd = join(root, "repository");
+  const remoteRepo = join(root, "remotes", "cyy1998", "shgas-iam.git");
   const control = join(root, "control");
   const git = (...args: string[]) => command("git", args, cwd);
+  const remoteGit = (...args: string[]) => command("git", args, remoteRepo);
   const records = new Map<number, TrackedIssue>();
-  const closed: number[] = [];
+  type ControlledPr = {
+    number: number;
+    url: string;
+    state: "OPEN" | "CLOSED" | "MERGED";
+    baseRefName: string;
+    headRefName: string;
+    headRefOid: string;
+    mergeCommit: { oid: string } | null;
+    isDraft: boolean;
+    title: string;
+    body: string;
+  };
+  const pullRequests = new Map<number, ControlledPr>();
+  let nextPrNumber = 900;
+  const unlabeled: number[] = [];
+  const projectStageLog: { issue: number; stage: string }[] = [];
   const stages: string[] = [];
   let firstRun = true;
   let controller = new AbortController();
   let succeeded = false;
   const startedAt = Date.now();
   let interrupted = false;
-  let closeFailed = false;
+  let prCloseoutFailed = false;
   let sawDynamicUnlock = false;
   let unlockIntegration: string | undefined;
   let dependencyIsolationChecks = 0;
@@ -257,6 +300,63 @@ export async function controlledWorkflowJourney(options: {
       else throw new Error(`Unexpected controlled GitHub API: ${endpoint}`);
       return JSON.stringify([values.slice(0, 1), values.slice(1)]);
     }
+    if (args[0] === "pr") {
+      verify(
+        args.includes("--repo") && args[args.indexOf("--repo") + 1] === "cyy1998/shgas-iam",
+        "Unexpected gh pr repo",
+      );
+      if (args[1] === "list") {
+        const stateFilter = args.includes("--state") ? args[args.indexOf("--state") + 1]?.toUpperCase() : "OPEN";
+        const headFilter = args.includes("--head") ? args[args.indexOf("--head") + 1] : undefined;
+        const baseFilter = args.includes("--base") ? args[args.indexOf("--base") + 1] : undefined;
+        const matched = [...pullRequests.values()].filter(
+          (pr) =>
+            (!stateFilter || stateFilter === "ALL" || pr.state === stateFilter) &&
+            (!headFilter || pr.headRefName === headFilter) &&
+            (!baseFilter || pr.baseRefName === baseFilter),
+        );
+        return JSON.stringify(matched);
+      }
+      if (args[1] === "view") {
+        const prNumber = Number(args[2]);
+        const pr = pullRequests.get(prNumber);
+        verify(pr, `Unknown controlled PR #${prNumber}`);
+        return JSON.stringify(pr);
+      }
+      if (args[1] === "create") {
+        const baseBranch = args[args.indexOf("--base") + 1]!;
+        const headBranch = args[args.indexOf("--head") + 1]!;
+        const title = args[args.indexOf("--title") + 1]!;
+        const body = await readFile(args[args.indexOf("--body-file") + 1]!, "utf8");
+        const isDraft = args.includes("--draft");
+        const remoteHeadSha = await remoteGit("rev-parse", `refs/heads/${headBranch}`);
+        verify(
+          (await remoteGit("rev-parse", `refs/heads/${baseBranch}`)) === base,
+          "Remote base branch unexpectedly moved before PR creation",
+        );
+        verify((await git("rev-parse", "main")) === base, "Local invocation branch moved during PR delivery");
+        verify(
+          (await remoteGit("show", `${headBranch}:repair.txt`)) === "central repair verified",
+          "PR created before repaired candidate was pushed to remote",
+        );
+        const number = nextPrNumber++;
+        const pr: ControlledPr = {
+          number,
+          url: `https://github.com/cyy1998/shgas-iam/pull/${number}`,
+          state: "OPEN",
+          baseRefName: baseBranch,
+          headRefName: headBranch,
+          headRefOid: remoteHeadSha,
+          mergeCommit: null,
+          isDraft,
+          title,
+          body,
+        };
+        pullRequests.set(number, pr);
+        return pr.url;
+      }
+      throw new Error(`Unexpected controlled gh pr: ${args.join(" ")}`);
+    }
     verify(
       args[0] === "issue" && args.includes("--repo") && args[args.indexOf("--repo") + 1] === "cyy1998/shgas-iam",
       "Unexpected gh operation",
@@ -290,20 +390,22 @@ export async function controlledWorkflowJourney(options: {
       }
       return "controlled comment";
     }
-    if (args[1] === "close") {
-      verify((await git("rev-list", "--count", `${base}..main`)) === "1", "Issue closed before one real squash");
-      verify(
-        (await git("show", "main:repair.txt")) === "central repair verified",
-        "Issue closed before repaired candidate delivery",
-      );
-      if (scenario === "close-interrupt" && number === 42 && firstRun) {
-        closeFailed = true;
-        throw new Error("Controlled GitHub outage after first close");
+    if (args[1] === "edit") {
+      verify(pullRequests.size === 1, "Removed ready-for-agent before PR creation");
+      const removeIndex = args.indexOf("--remove-label");
+      verify(removeIndex > 0, `Unexpected controlled gh issue edit: ${args.join(" ")}`);
+      const label = args[removeIndex + 1]!;
+      verify(label === "ready-for-agent", `Unexpected label removal: ${label}`);
+      if (scenario === "pr-interrupt" && number === 42 && firstRun) {
+        prCloseoutFailed = true;
+        throw new Error("Controlled GitHub outage after first label removal");
       }
-      verify(record.state === "OPEN", "Closed the same issue twice");
-      record.state = "CLOSED";
-      closed.push(number);
+      record.labels = record.labels.filter((entry) => entry !== label);
+      unlabeled.push(number);
       return "";
+    }
+    if (args[1] === "close") {
+      throw new Error("PR delivery must not close issues before human PR merge");
     }
     throw new Error(`Unexpected controlled gh: ${args.join(" ")}`);
   };
@@ -348,6 +450,13 @@ export async function controlledWorkflowJourney(options: {
     await git("add", ".");
     await git("commit", "--allow-empty", "-m", "Controlled workflow baseline");
     base = await git("rev-parse", "HEAD");
+    await mkdir(remoteRepo, { recursive: true });
+    await remoteGit("init", "--bare", "--initial-branch=main");
+    if (mode === "docker") {
+      await git("remote", "remove", "origin").catch(() => {});
+    }
+    await git("remote", "add", "github", remoteRepo);
+    await git("push", "-u", "github", "main");
     const dependencyPaths = mode === "docker" ? await workspaceDependencyPaths(cwd) : [];
     const fixtureHooksBefore = mode === "docker" ? await snapshotHostHooks(cwd, cwd) : undefined;
     const modelInput = (input: WorkspaceAgentInput) => {
@@ -441,9 +550,13 @@ export async function controlledWorkflowJourney(options: {
         {
           cwd,
           branch: "main",
+          remote: "github",
           image: options.image ?? "iam-sandcastle:local",
           model: "controlled-no-model",
           signal: options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal,
+          reportProjectStage: async (issueNumber, stage) => {
+            projectStageLog.push({ issue: issueNumber, stage });
+          },
         },
         {
           runGh,
@@ -458,7 +571,9 @@ export async function controlledWorkflowJourney(options: {
             : {
                 run: async (input: RunOptions) => {
                   await observeExecutionStart(input);
-                  const workspace = !["plan", "explore"].includes(basename(input.promptFile!, "-prompt.md"));
+                  const workspace = !["plan", "explore", "spec-review"].includes(
+                    basename(input.promptFile!, "-prompt.md"),
+                  );
                   if (workspace)
                     for (const path of dependencyPaths) {
                       await mkdir(join(input.cwd!, path), { recursive: true });
@@ -506,13 +621,14 @@ export async function controlledWorkflowJourney(options: {
       if (scenario === "interrupt") {
         verify(interrupted, "Partial integration interruption was not reached");
         verify((await git("rev-parse", "HEAD")) === base, "Partial work was delivered");
-        verify(closed.length === 0, "Partial Spec closed issues");
+        verify(pullRequests.size === 0, "Partial Spec created a PR");
         verify(
           (await git("worktree", "list", "--porcelain")).includes("codex/sandcastle/issue-42"),
           "Interrupted ticket worktree was removed",
         );
       } else {
-        verify(closeFailed && closed.join(",") === "41", "Did not stop after partial close");
+        verify(prCloseoutFailed && unlabeled.join(",") === "41", "Did not stop after partial label removal");
+        verify(pullRequests.size === 1, "PR closeout interruption did not preserve created PR");
       }
       const before = await git("rev-parse", "HEAD");
       const beforeStages = stages.length;
@@ -532,9 +648,10 @@ export async function controlledWorkflowJourney(options: {
           "Recovered Spec unexpectedly re-ran Explorer instead of reusing cached exploration notes",
         );
       }
-      if (scenario === "close-interrupt") {
-        verify((await git("rev-parse", "HEAD")) === before, "Recovery repeated squash");
-        verify(resumed.length === 0, "Delivered recovery restarted a model session");
+      if (scenario === "pr-interrupt") {
+        verify((await git("rev-parse", "HEAD")) === before, "Recovery moved local invocation branch");
+        verify(resumed.length === 0, "PR recovery restarted a model session");
+        verify(pullRequests.size === 1, "PR recovery created a duplicate PR");
       }
     } else if (failure) throw failure;
     if (scenario === "complete" || scenario === "conflict") {
@@ -564,8 +681,8 @@ export async function controlledWorkflowJourney(options: {
         "First ticket #41 unexpectedly triggered conflict resolution",
       );
       verify(
-        (await git("show", "main:shared.txt")) === "from 41\nfrom 42",
-        "Merged shared.txt did not preserve both tickets' changes",
+        (await remoteGit("show", "codex/sandcastle/spec-40:shared.txt")) === "from 41\nfrom 42",
+        "Merged shared.txt did not preserve both tickets' changes on pushed PR branch",
       );
     }
     verify(
@@ -573,38 +690,88 @@ export async function controlledWorkflowJourney(options: {
       "Delivery left local exploration notes file behind",
     );
     verify(result?.delivered.join(",") === "40", "The production runtime did not deliver exactly the selected Spec");
-    const squash = await git("rev-parse", "HEAD");
-    verify(
-      (await git("rev-list", "--parents", "-n", "1", squash)) === `${squash} ${base}`,
-      "Delivery is not a single-parent squash",
-    );
+    verify((await git("rev-parse", "HEAD")) === base, "PR delivery unexpectedly moved local main");
+    verify((await remoteGit("rev-parse", "refs/heads/main")) === base, "PR delivery unexpectedly moved remote main");
     verify((await git("status", "--porcelain")) === "", "Invocation checkout is dirty");
+    verify(pullRequests.size === 1, "Expected exactly one PR to be created");
+    const pr = [...pullRequests.values()][0]!;
+    const specBranch = "codex/sandcastle/spec-40";
+    const remoteSpecHead = await remoteGit("rev-parse", `refs/heads/${specBranch}`);
+    const localSpecHead = await git("for-each-ref", "--format=%(objectname)", `refs/heads/${specBranch}`);
+    verify(pr.state === "OPEN" && !pr.isDraft, "Created PR must be open and Ready for Review");
+    verify(pr.baseRefName === "main" && pr.headRefName === specBranch, "PR base/head branch mismatch");
+    verify(
+      pr.headRefOid === remoteSpecHead && localSpecHead === remoteSpecHead,
+      "Local/remote/PR Spec branch SHA mismatch",
+    );
+    verify(
+      (await git("config", "--get", `branch.${specBranch}.remote`)) === "github" &&
+        (await git("config", "--get", `branch.${specBranch}.merge`)) === `refs/heads/${specBranch}`,
+      "Retained local Spec branch missing upstream tracking",
+    );
+    verify(
+      (await remoteGit("show", `${specBranch}:repair.txt`)) === "central repair verified",
+      "Pushed Spec branch missing central repair commit",
+    );
+    for (const required of [
+      "## Summary",
+      "## Evidence",
+      "## Merge Danger",
+      "**Door:** two-way",
+      "**Blast Radius:** Low",
+      "- Closes #40",
+      "- Closes #41",
+      "- Closes #42",
+      "- Closes #43",
+      `Final-Candidate: ${remoteSpecHead}`,
+    ]) {
+      verify(pr.body.includes(required), `PR body missing expected content: ${required}`);
+    }
+    for (const issueNumber of [40, 41, 42, 43]) {
+      const issueRecord = records.get(issueNumber)!;
+      verify(issueRecord.state === "OPEN", `Issue #${issueNumber} was prematurely closed before PR merge`);
+      verify(
+        !issueRecord.labels.includes("ready-for-agent"),
+        `Issue #${issueNumber} kept ready-for-agent after PR creation`,
+      );
+      const lastStage = [...projectStageLog].reverse().find((entry) => entry.issue === issueNumber)?.stage;
+      verify(lastStage === "PR Open", `Issue #${issueNumber} final project Status was ${lastStage}, expected PR Open`);
+    }
     const remainingWorktrees = (await git("worktree", "list", "--porcelain")).match(/^worktree /gm)?.length ?? 0;
     verify(remainingWorktrees === 1, "Delivery left registered ticket/integration worktrees");
     verify(
-      (await git("for-each-ref", "--format=%(refname)", "refs/heads/codex/sandcastle")) === "",
-      "Delivery left workflow branches",
+      (await git("for-each-ref", "--format=%(refname)", "refs/heads/codex/sandcastle/issue-*")) === "",
+      "Delivery left local ticket branches",
     );
     if (mode === "docker") {
       verify(
         (await snapshotHostHooks(sourceCwd, sourceCwd)) === sourceHooksBefore,
         "Workflow changed caller Git/hooks",
       );
-      verify((await snapshotHostHooks(cwd, cwd)) === fixtureHooksBefore, "Workflow changed fixture Git/hooks");
+      verify(
+        (await snapshotHostHooks(cwd, cwd, { branch: specBranch, remote: "github" })) === fixtureHooksBefore,
+        "Workflow changed fixture Git/hooks",
+      );
     }
     const report = {
       scenario,
       mode,
       delivered: result!.delivered,
-      closed,
-      commits: Number(await git("rev-list", "--count", `${base}..HEAD`)),
+      unlabeled,
+      pr: {
+        number: pr.number,
+        url: pr.url,
+        headRefName: pr.headRefName,
+        headRefOid: pr.headRefOid,
+        isDraft: pr.isDraft,
+      },
       remainingWorktrees,
       startedBeforeBFinished: sawDynamicUnlock ? [41, 43] : [],
       dynamicStart: { boundary: "SDK run including workspace preparation", integration: unlockIntegration },
       dependencyIsolationChecks,
       unattemptedSpec: records.get(50)!.state,
       base,
-      squash,
+      specHead: remoteSpecHead,
       stages,
       promptFiles: (await readdir(control)).filter((name) => name.endsWith(".prompt.md")),
       elapsedMs: Date.now() - startedAt,

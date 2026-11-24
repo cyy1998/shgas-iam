@@ -9,7 +9,7 @@ import { configuredCodex } from "./codex-provider.mts";
 import { command } from "./commands.ts";
 import { githubRepo } from "./github.ts";
 import { ExecutorInfrastructureError, hasUnstoppedExecutor, withExecutorResources } from "./resources.ts";
-import { dockerSandbox, withDockerPreflight, withWorkspacePreparation } from "./sandbox.mts";
+import { dockerSandbox, withCachePreflight, withDockerPreflight, withWorkspacePreparation } from "./sandbox.mts";
 import type { TicketRun } from "./tickets.ts";
 import { dependencyVolumeTargets } from "./workspace-dependencies.mts";
 
@@ -67,14 +67,19 @@ export type ExecutorOptions = ExecutorDependencies & {
 
 export function createWorkspaceExecutor(options: ExecutorOptions) {
   return async (
-    input: WorkspaceAgentInput & { logName: string; extraMounts?: NonNullable<DockerOptions["mounts"]> },
+    input: WorkspaceAgentInput & {
+      logName: string;
+      extraMounts?: NonNullable<DockerOptions["mounts"]>;
+      prepareWorkspace?: boolean;
+    },
   ) => {
     const { cwd, image, signal, roles, auth } = options;
+    const prepareWorkspace = input.prepareWorkspace ?? true;
     if (!options.canClose()) throw new ExecutorInfrastructureError("创建者尚未确认停止，禁止启动后续执行器。");
     let executionFailure: unknown;
     let sandboxCreated = false;
     try {
-      const anonymousVolumes = await dependencyVolumeTargets(input.worktreePath);
+      const anonymousVolumes = prepareWorkspace ? await dependencyVolumeTargets(input.worktreePath) : [];
       return await withExecutorResources(
         { cwd, image, signal, anonymousVolumes, onUnsafeClose: options.onUnsafeClose },
         async (resources) => {
@@ -88,6 +93,10 @@ export function createWorkspaceExecutor(options: ExecutorOptions) {
               env: { ...options.githubCredentials, ...auth.env, ...resources.env },
               mounts: [...options.mounts, ...(input.extraMounts ?? []), ...resources.mounts],
             });
+            const baseProvider = options.agent?.(input) ?? configuredCodex(options.model, roles, input.role);
+            const preparedProvider = prepareWorkspace
+              ? withWorkspacePreparation(baseProvider)
+              : withCachePreflight(baseProvider);
             const result = await (options.run ?? run)({
               cwd: input.worktreePath,
               branchStrategy: { type: "head" },
@@ -99,9 +108,7 @@ export function createWorkspaceExecutor(options: ExecutorOptions) {
                   return handle;
                 },
               },
-              agent: withDockerPreflight(
-                withWorkspacePreparation(options.agent?.(input) ?? configuredCodex(options.model, roles, input.role)),
-              ),
+              agent: withDockerPreflight(preparedProvider),
               name: input.name,
               promptFile: input.promptFile,
               promptArgs: input.promptArgs,

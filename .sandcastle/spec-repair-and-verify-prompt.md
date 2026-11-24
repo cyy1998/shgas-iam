@@ -30,10 +30,15 @@
    必需工作无法完成时保持未完成，不能通过删测试、缩小验收或忽略失败获得完成标记。
 5. 确认最终工作区干净、最终 HEAD 包含评审 candidate，记录两者关系、逐项 findings 处置、实际命令与结果、
    可复用证据、未执行项及原因。全部 findings 妥善处理且所有必需检查通过，才可声明最终门禁通过。
+6. 确认最终提交与全部必需验证通过且工作区干净后，读取 `.agents/skills/pr/SKILL.md` 与 `GLOSSARY.md`，依据
+   `git diff {{REVIEW_BASE}}..HEAD`、你的真实最终验证证据和领域术语编写 PR 正文草稿，并用唯一一对
+   `<pr-body>...</pr-body>` 包裹输出。草稿必须包含 `## Summary`、`## Evidence`、`## Merge Danger`
+   （含 `**Door:**` 与 `**Blast Radius:**`）；正文使用自然中文，保留代码标识符、命令、路径、领域术语和模板标题。
+   不要在 `<pr-body>` 中手写 `Closes #...` 或机器元数据尾注（由宿主在创建 PR 时确定性组装）。
 
-本阶段保留 tickets 与父 Spec open，将最终候选交给后续 squash 阶段；不写启动分支，不 push、创建 PR 或部署。
+本阶段保留 tickets 与父 Spec open，将最终候选与 `<pr-body>` 交给宿主推送 Spec 分支并创建 PR；不写启动分支，不 push、创建 PR 或部署。
 无法完成时保留普通 Git 提交和完整自然语言交接，本次不通过新开会话重试。
 
-仅当全部修复、Spec 验收与必需最终验证已完成，实现已提交、工作区干净时，在完整交接后输出：
+仅当全部修复、Spec 验收、必需最终验证与 `<pr-body>` 草稿已完成，实现已提交、工作区干净时，在完整交接后输出：
 
 <promise>COMPLETE</promise>

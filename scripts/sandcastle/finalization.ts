@@ -18,8 +18,29 @@ export type FinalizedSpec = {
   finalCandidate: string;
   reviewReport: string;
   repairAndValidation: string;
+  prBody: string;
   handoff: string;
 };
+
+export function parsePrBody(text: string): { prBody: string; rest: string } {
+  const normalized = text.replaceAll("\r\n", "\n");
+  const matches = [...normalized.matchAll(/<pr-body>([\s\S]*?)<\/pr-body>/g)];
+  if (matches.length !== 1) {
+    throw new Error("最终修复与验证交接必须包含且仅包含一个 <pr-body>...</pr-body> PR 描述块。");
+  }
+  const prBody = matches[0]![1]!.trim();
+  const requiredSections = ["## Summary", "## Evidence", "## Merge Danger"] as const;
+  for (const heading of requiredSections) {
+    if (!new RegExp(`^${heading}\\s*$`, "m").test(prBody)) {
+      throw new Error(`PR 描述草稿缺少必需章节 ${heading}，请按 .agents/skills/pr/SKILL.md 补齐。`);
+    }
+  }
+  const rest = normalized
+    .replace(matches[0]![0], "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return { prBody, rest };
+}
 
 export function createFinalizationLifecycle(options: {
   cwd: string;
@@ -99,14 +120,17 @@ export function createFinalizationLifecycle(options: {
         repairAndValidation = repair.handoff;
         if (!repair.completed || !repairAndValidation.trim())
           throw new Error("仍有未解决 findings 或必需验证未通过，Spec 保持未完成。");
+        const parsedPr = parsePrBody(repairAndValidation);
+        const repairSummary = parsedPr.rest || repairAndValidation.trim();
         const finalCandidate = await observed(workspace);
         await gitAt(workspace.worktreePath, "merge-base", "--is-ancestor", reviewCandidate, finalCandidate);
         const handoff =
-          `Spec #${number} 最终评审、集中修复与验证完成，等待 squash 交付；tickets 与父 Spec 保持 open。\n\n` +
+          `Spec #${number} 最终评审、集中修复与验证完成，等待推送分支并创建 PR 交付；tickets 与父 Spec 保持 open。\n\n` +
           `启动分支：${workspace.invocationBranch}；Spec 分支：${workspace.branch}。\n` +
           `固定 review base：${workspace.invocationBase}；评审候选：${reviewCandidate}；修复后最终候选：${finalCandidate}。\n\n` +
-          `真实双轴报告：\n${reviewReport}\n\nfindings 处置与最终验证：\n${repairAndValidation}\n\n` +
-          "下一动作：核对最终候选与启动分支，完成单一 squash 交付，再统一记录并关闭 tickets 和父 Spec。";
+          `真实双轴报告：\n${reviewReport}\n\nfindings 处置与最终验证：\n${repairSummary}\n\n` +
+          `PR 描述草稿：\n<pr-body>\n${parsedPr.prBody}\n</pr-body>\n\n` +
+          "下一动作：核对最终候选与启动分支，推送 Spec 分支并创建 PR，再写入交付评论、移除 ready-for-agent 标签并清理临时 worktree（保留本地 Spec 分支供人工验收）。";
         await options.recordHandoff(number, handoff);
         if ((await observed(workspace)) !== finalCandidate)
           throw new GitStateError("最终交接期间候选漂移，交付证据失效。");
@@ -116,7 +140,8 @@ export function createFinalizationLifecycle(options: {
           reviewCandidate,
           finalCandidate,
           reviewReport,
-          repairAndValidation,
+          repairAndValidation: repairSummary,
+          prBody: parsedPr.prBody,
           handoff,
         };
       } catch (error) {
