@@ -15,7 +15,10 @@ const publicEnvKeys = [
   "IAM_SSO_WEB_WELL_KNOWN_URL",
 ];
 
-const apiTarget = { target: "http://localhost:30000", changeOrigin: true };
+const authApi = { target: "http://localhost:30000", changeOrigin: true };
+const ssoApi = { target: "http://localhost:30002", changeOrigin: true };
+const integrationApi = { target: "http://localhost:30005", changeOrigin: true };
+const stripApiPrefix = (path: string) => path.replace(/^\/api\/iam/, "");
 
 const redirectPortalBase: Plugin = {
   name: "sso-portal-redirect",
@@ -44,16 +47,13 @@ export default defineConfig(({ mode }) => {
     server: {
       port: Number(env.PORT) || 8000,
       proxy: {
-        "^/api/iam/(public|open|internal|sso|auth)": {
-          ...apiTarget,
-          rewrite: (path) => path.replace(/^\/api\/iam/, ""),
-        },
-        "/api": apiTarget,
-        "/sso": apiTarget,
-        "/auth": apiTarget,
-        "/public": apiTarget,
-        "/open": apiTarget,
-        "/internal": apiTarget,
+        "/api/iam/auth": { ...authApi, rewrite: stripApiPrefix },
+        "/api/iam/sso": { ...ssoApi, rewrite: stripApiPrefix },
+        "/api/iam/delegations": { ...integrationApi, rewrite: stripApiPrefix },
+        "/auth": authApi,
+        "/sso": ssoApi,
+        "/oidc": ssoApi,
+        "/delegations": integrationApi,
       },
     },
   };

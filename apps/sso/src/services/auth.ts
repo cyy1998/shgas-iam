@@ -40,7 +40,3 @@ export function mobileLogin(
     body: JSON.stringify(body),
   });
 }
-
-export function logout() {
-  return request<void>("/auth/logout", { method: "POST" });
-}

@@ -12,7 +12,7 @@ export type CurrentAdminUserLoadResult =
   | { kind: "unavailable" };
 
 export async function loadCurrentAdminUser(): Promise<CurrentAdminUserLoadResult> {
-  const response = await fetch(`${API_PREFIX}/public/user-info`, {
+  const response = await fetch(`${API_PREFIX}/sso/user-info`, {
     credentials: "include",
     headers: { Client: SSO_CLIENT_CODE },
   });

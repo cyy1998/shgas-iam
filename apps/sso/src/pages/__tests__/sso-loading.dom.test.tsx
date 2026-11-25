@@ -43,7 +43,7 @@ describe("SSO loading and recovery", () => {
     async (failure) => {
       let requests = 0;
       server.use(
-        http.get("*/public/user-info", () => {
+        http.get("*/api/iam/sso/user-info", () => {
           requests += 1;
           if (requests > 1) return HttpResponse.json({ code: 200, data: currentUserInfo });
           if (failure === "network") return HttpResponse.error();
@@ -68,7 +68,7 @@ describe("SSO loading and recovery", () => {
   );
 
   it("keeps the existing authentication redirect when user info returns 401", async () => {
-    server.use(http.get("*/public/user-info", () => new HttpResponse(null, { status: 401 })));
+    server.use(http.get("*/api/iam/sso/user-info", () => new HttpResponse(null, { status: 401 })));
     render(<UserInfoPage />, { withSso: true });
     await waitFor(() =>
       expect(browserLocation()).toBe(

@@ -29,8 +29,8 @@ export function requireImageCaptcha(route: Route) {
 }
 
 export async function mockImageCaptchaFallback(page: Page) {
-  await page.route("**/open/cap/*/challenge", (route) => route.fulfill({ status: 503, json: {} }));
-  await page.route("**/open/image-captcha/challenge", (route) =>
+  await page.route("**/api/iam/auth/captcha/cap/*/challenge", (route) => route.fulfill({ status: 503, json: {} }));
+  await page.route("**/api/iam/auth/captcha/image/challenge", (route) =>
     fulfillJson(
       route,
       ok({
@@ -39,7 +39,7 @@ export async function mockImageCaptchaFallback(page: Page) {
       }),
     ),
   );
-  await page.route("**/open/image-captcha/answer", (route) =>
+  await page.route("**/api/iam/auth/captcha/image/answer", (route) =>
     fulfillJson(
       route,
       ok(
@@ -72,7 +72,7 @@ export async function mockSsoApi(page: Page, options: SsoMockOptions = {}) {
   await page.route("**/sso/.well-known/authentication-configuration", (route) =>
     fulfillJson(route, ok(authenticationConfig)),
   );
-  await page.route("**/auth/login/password", (route) => {
+  await page.route("**/api/iam/auth/login/password", (route) => {
     if (passwordLogin === "failure") {
       return fulfillJson(
         route,
@@ -86,22 +86,23 @@ export async function mockSsoApi(page: Page, options: SsoMockOptions = {}) {
     }
     return fulfillJson(route, ok({ isMobileSet: true }));
   });
-  await page.route("**/auth/login/mobile", (route) => fulfillJson(route, ok({ isMobileSet: true })));
-  await page.route("**/auth/logout", (route) => fulfillJson(route, ok(null)));
-  await page.route("**/open/client/status?**", (route) =>
+  await page.route("**/api/iam/auth/login/mobile", (route) => fulfillJson(route, ok({ isMobileSet: true })));
+  await page.route("**/api/iam/auth/clients/*/status", (route) =>
     fulfillJson(
       route,
       ok({
-        clientCode: new URL(route.request().url()).searchParams.get("clientCode"),
+        clientCode: decodeURIComponent(new URL(route.request().url()).pathname.split("/").at(-2) ?? ""),
         clientName: "IAM 管理后台",
         status: ClientStatus.Enable,
         url: null,
       }),
     ),
   );
-  await page.route("**/open/code/send", (route) => fulfillJson(route, ok(null)));
-  await page.route("**/open/code/verify", (route) => fulfillJson(route, ok({ result: true })));
-  await page.route("**/open/password/reset", (route) => fulfillJson(route, ok(null)));
-  await page.route("**/open/users/*/masked-mobile**", (route) => fulfillJson(route, ok(resetPasswordMaskedMobile)));
-  await page.route("**/public/mobile/set", (route) => fulfillJson(route, ok(null)));
+  await page.route("**/api/iam/auth/sms/send", (route) => fulfillJson(route, ok(null)));
+  await page.route("**/api/iam/auth/sms/verify", (route) => fulfillJson(route, ok({ result: true })));
+  await page.route("**/api/iam/auth/recovery/password-reset", (route) => fulfillJson(route, ok(null)));
+  await page.route("**/api/iam/auth/recovery/users/*/masked-mobile**", (route) =>
+    fulfillJson(route, ok(resetPasswordMaskedMobile)),
+  );
+  await page.route("**/api/iam/auth/account/mobile", (route) => fulfillJson(route, ok(null)));
 }

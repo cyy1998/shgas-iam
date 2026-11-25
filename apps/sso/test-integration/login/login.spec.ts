@@ -42,13 +42,13 @@ test("a denied Custom SSO continuation shows the IAM application name and stops 
   await page.route("**/sso/.well-known/authentication-configuration", (route) =>
     route.fulfill({ json: { data: { authorizationEndpoint: "/sso/authorize", logoutEndpoint: "/sso/logout" } } }),
   );
-  await page.route("**/open/client/status?**", (route) =>
+  await page.route("**/api/iam/auth/clients/expense/status", (route) =>
     route.fulfill({
       json: {
         code: 200,
         message: "OK",
         data: {
-          clientCode: new URL(route.request().url()).searchParams.get("clientCode"),
+          clientCode: "expense",
           clientName: "费用报销",
           status: 1,
           url: null,
@@ -111,8 +111,14 @@ test("login page opens and shows mocked password login failure", async ({ page }
 test("shows an inline image below the password and retries login only after a verified answer", async ({ page }) => {
   await mockSsoApi(page);
   await mockImageCaptchaFallback(page);
+  const capAttempts: Array<{ method: string; action?: string }> = [];
+  await page.route("**/api/iam/auth/captcha/cap/iam-sso/challenge", (route) => {
+    const request = route.request();
+    capAttempts.push({ method: request.method(), action: request.headers()["x-cap-action"] });
+    return route.fulfill({ status: 503, json: {} });
+  });
   const attempts: Array<{ credential: string; proof: string | undefined }> = [];
-  await page.route("**/auth/login/password", async (route) => {
+  await page.route("**/api/iam/auth/login/password", async (route) => {
     const request = route.request();
     const proof = request.headers()[IMAGE_CAPTCHA_PROOF_HEADER.toLowerCase()];
     attempts.push({ credential: request.postDataJSON().credential, proof });
@@ -134,6 +140,7 @@ test("shows an inline image below the password and retries login only after a ve
   const form = page.locator("form").filter({ has: password });
   const captcha = form.getByRole("group", { name: "图片验证码" });
   await expect(captcha.getByAltText("图片验证码")).toBeVisible({ timeout: 15_000 });
+  expect(capAttempts).toEqual([{ method: "POST", action: "passwordLogin" }]);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(loginButton).toBeDisabled();
   const passwordBox = await password.boundingBox();
@@ -278,7 +285,7 @@ test("completes first-party authorization and restores callback query and hash",
   await mockSsoApi(page);
   let userInfoRequests = 0;
   let authorizeRequest: URL | undefined;
-  await page.route("**/public/user-info", async (route) => {
+  await page.route("**/api/iam/sso/user-info", async (route) => {
     userInfoRequests += 1;
     await route.fulfill({
       contentType: "application/json",

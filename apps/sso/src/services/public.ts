@@ -3,17 +3,17 @@ import { request } from "@sso/utils/request";
 import { submitSmsCode } from "./submit-sms-code";
 
 export async function getCurrentUserInfo() {
-  const response = await request<unknown>("/public/user-info", { suppressErrorMessage: true });
+  const response = await request<unknown>("/sso/user-info", { suppressErrorMessage: true });
   return CustomSsoSubjectProjectionSchema.parse(response);
 }
 
 export function passwordChange(body: { oldPassword: string; newPassword: string }) {
-  return request<void>("/public/password/change", {
+  return request<void>("/auth/account/password", {
     method: "POST",
     body: JSON.stringify(body),
   });
 }
 
 export function mobileSet(body: { phoneNumber: string; code: string }) {
-  return submitSmsCode("/public/mobile/set", body, "重新获取验证码");
+  return submitSmsCode("/auth/account/mobile", body, "重新获取验证码");
 }

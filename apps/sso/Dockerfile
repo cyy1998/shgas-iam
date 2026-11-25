@@ -47,9 +47,10 @@ RUN --mount=type=cache,id=iam-pnpm-v12,target=/pnpm/store \
     pnpm install --frozen-lockfile --ignore-scripts
 
 FROM deps AS builder
-ARG IAM_SSO_WEB_API_PREFIX
+ARG IAM_SSO_WEB_API_PREFIX=/api/iam
 ARG IAM_SSO_WEB_CLIENT_CODE
 ARG IAM_SSO_WEB_CAP_SITE_KEY
+# An empty override lets the app derive /auth/captcha/cap/ from the API prefix and site key.
 ARG IAM_SSO_WEB_CAP_ENDPOINT
 ARG IAM_SSO_WEB_CAP_WASM_URL
 ARG IAM_SSO_WEB_CAP_PAKO_URL

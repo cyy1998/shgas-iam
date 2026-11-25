@@ -7,7 +7,7 @@ async function fillPasswordReset(page: Page) {
   await page.goto("/portal/reset-password?client=iam-admin");
 
   await page.getByPlaceholder("请输入用户名").fill("zhangsan");
-  const lookup = page.waitForRequest("**/open/users/zhangsan/masked-mobile*");
+  const lookup = page.waitForRequest("**/api/iam/auth/recovery/users/zhangsan/masked-mobile*");
   await page.getByRole("button", { name: "下一步" }).click();
   await lookup;
 
@@ -30,7 +30,7 @@ test("reset password page completes mocked verification flow", async ({ page }) 
 test("password reset guides recovery and keeps the countdown on return to the SMS step", async ({ page }) => {
   await mockSsoApi(page);
   let attempts = 0;
-  await page.route("**/open/password/reset", (route) => {
+  await page.route("**/api/iam/auth/recovery/password-reset", (route) => {
     attempts++;
     return route.fulfill({
       status: attempts === 1 ? 500 : 400,
@@ -58,11 +58,11 @@ test("keeps the inline captcha usable during phone lookup and SMS sending", asyn
   await mockSsoApi(page);
   await mockImageCaptchaFallback(page);
   let messagesSent = 0;
-  await page.route("**/open/users/*/masked-mobile**", (route) => {
+  await page.route("**/api/iam/auth/recovery/users/*/masked-mobile**", (route) => {
     if (!route.request().headers()[IMAGE_CAPTCHA_PROOF_HEADER.toLowerCase()]) return requireImageCaptcha(route);
     return route.fulfill({ json: { code: 200, data: { mobile: "138****0000" } } });
   });
-  await page.route("**/open/code/send", (route) => {
+  await page.route("**/api/iam/auth/sms/send", (route) => {
     if (!route.request().headers()[IMAGE_CAPTCHA_PROOF_HEADER.toLowerCase()]) return requireImageCaptcha(route);
     messagesSent++;
     return route.fulfill({ json: { code: 200, data: true } });
@@ -87,7 +87,7 @@ test("keeps the inline captcha usable during phone lookup and SMS sending", asyn
 
 test("null mobile blocks sending codes and advancing to password reset", async ({ page }) => {
   await mockSsoApi(page);
-  await page.route("**/open/users/*/masked-mobile**", (route) =>
+  await page.route("**/api/iam/auth/recovery/users/*/masked-mobile**", (route) =>
     route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
@@ -99,7 +99,7 @@ test("null mobile blocks sending codes and advancing to password reset", async (
   );
   const recoveryRequests: string[] = [];
   page.on("request", (request) => {
-    if (/\/open\/(?:code\/(?:send|verify)|password\/reset)/.test(request.url())) {
+    if (/^\/api\/iam\/auth\/(?:sms\/(?:send|verify)|recovery\/password-reset)$/.test(new URL(request.url()).pathname)) {
       recoveryRequests.push(request.url());
     }
   });
