@@ -79,7 +79,9 @@ async function main() {
     return;
   }
   if (values["smoke-workflow"]) {
-    const { controlledWorkflowJourney } = await import("./workflow-smoke.mts");
+    const { controlledWorkflowJourney, verifyWorkspaceRemountBehavior } = await import("./workflow-smoke.mts");
+    await verifyWorkspaceRemountBehavior(cwd);
+    console.log("宿主受控工作流 [workspace-remount] 通过。");
     for (const scenario of ["complete", "conflict", "interrupt", "pr-interrupt"] as const) {
       const report = await controlledWorkflowJourney({ sourceCwd: cwd, mode: "host", scenario });
       console.log(
