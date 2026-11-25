@@ -40,6 +40,7 @@
     "@iam/subject-access": "workspace:*",
     "@iam/unit-of-work": "workspace:*",
     "bcrypt": "^6.0.0",
+    "bcrypt-ts": "^9.0.3",
     "drizzle-orm": "1.0.0-rc.2",
     "hono": "^4.13.19",
     "ioredis": "^6.0.0",
