@@ -454,7 +454,7 @@ for (const protocol of ["custom_sso", "oidc"] as const) {
 
 test("only one account can bind the same external WeCom identity across concurrent QR requests", async () => {
   const first = await setup("custom_sso", true);
-  if (!first.newCustomBrowser) throw new Error("Expected a Custom SSO fixture");
+  if (first.protocol !== "custom_sso") throw new Error("Expected a Custom SSO fixture");
   const second = { ...first, ...(await first.newCustomBrowser()) };
   const { db } = getDatabase();
   const subjectIdentifier = randomUUID();
@@ -485,10 +485,11 @@ test("only one account can bind the same external WeCom identity across concurre
   ]);
   expect(responses.map((response) => response.status).sort()).toEqual([200, 400]);
   const winner = responses.findIndex((response) => response.ok);
-  const success = responses[winner]!;
+  const success = responses[winner];
+  const denied = responses.find((response) => !response.ok);
+  if (!success || !denied) throw new Error("Expected one accepted and one rejected binding");
   expect(await success.json()).toMatchObject({ data: { decision: "continue" } });
   expect(cookie(success, "global_session")).toStartWith("global_session=");
-  const denied = responses.find((response) => !response.ok)!;
   expect(await denied.json()).toMatchObject({
     code: ApiErrorCode.LoginFailed,
     message: "企业微信绑定冲突，请联系管理员",
