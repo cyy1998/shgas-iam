@@ -1,0 +1,232 @@
+# Development IAM routes, also published by the full-system test runners.
+service:
+  desc: IAM development
+  plugin_configs:
+    - key: api
+      plugins: &telemetry
+        request-id:
+          header_name: X-Request-Id
+          include_in_response: true
+        opentelemetry:
+          sampler:
+            name: always_on
+
+plugin_metadata:
+  - key: opentelemetry
+    set_ngx_var: true
+    collector:
+      address: ${APISIX_OTEL_COLLECTOR_ENDPOINT}
+      request_timeout: 1
+
+upstreams:
+  - key: auth-api
+    type: roundrobin
+    nodes:
+      ${DEV_IAM_AUTH_API_UPSTREAM_HOST}:${DEV_IAM_AUTH_API_UPSTREAM_PORT}: 1
+  - key: sso-api
+    type: roundrobin
+    nodes:
+      ${DEV_IAM_SSO_API_UPSTREAM_HOST}:${DEV_IAM_SSO_API_UPSTREAM_PORT}: 1
+  - key: integration-api
+    type: roundrobin
+    nodes:
+      ${DEV_IAM_INTEGRATION_API_UPSTREAM_HOST}:${DEV_IAM_INTEGRATION_API_UPSTREAM_PORT}: 1
+  - key: admin-api
+    type: roundrobin
+    nodes:
+      ${DEV_IAM_ADMIN_API_UPSTREAM_HOST}:${DEV_IAM_ADMIN_API_UPSTREAM_PORT}: 1
+  - key: sso-frontend
+    type: roundrobin
+    nodes:
+      ${DEV_IAM_SSO_FRONTEND_UPSTREAM_HOST}:${DEV_IAM_SSO_FRONTEND_UPSTREAM_PORT}: 1
+  - key: admin-frontend
+    type: roundrobin
+    nodes:
+      ${DEV_IAM_ADMIN_FRONTEND_UPSTREAM_HOST}:${DEV_IAM_ADMIN_FRONTEND_UPSTREAM_PORT}: 1
+
+routes:
+  - key: auth-api
+    uri: /api/iam/auth/*
+    vars: [[uri, "!", "~~", "^/api/iam/auth/wechat-qr(/|$)"]]
+    upstream: auth-api
+    plugin_config: api
+    plugins:
+      proxy-rewrite:
+        regex_uri: &strip-iam-prefix ["^/api/iam/(.*)", "/$1"]
+        headers:
+          remove: [X-IAM-Entry-Network]
+  - key: sso-api
+    uri: /api/iam/sso/*
+    upstream: sso-api
+    plugin_config: api
+    plugins:
+      proxy-rewrite:
+        regex_uri: *strip-iam-prefix
+  - key: integration-api
+    uris: [/api/iam/internal/*, /api/iam/delegations, /api/iam/delegations/*]
+    upstream: integration-api
+    plugin_config: api
+    plugins:
+      proxy-rewrite:
+        regex_uri: *strip-iam-prefix
+  - key: legacy-user-info
+    uri: /api/iam/public/user-info
+    priority: 10
+    upstream: sso-api
+    plugin_config: api
+    plugins:
+      proxy-rewrite:
+        uri: /sso/user-info
+  - key: legacy-authz
+    uri: /api/iam/auth/authz
+    priority: 10
+    upstream: sso-api
+    plugin_config: api
+    plugins:
+      proxy-rewrite:
+        uri: /sso/authz
+  - key: legacy-internal-authz
+    uri: /api/iam/auth/internal-authz
+    priority: 10
+    upstream: integration-api
+    plugin_config: api
+    plugins:
+      proxy-rewrite:
+        uri: /internal/authz
+  - key: wecom-desktop-internal
+    uris: [/api/iam/auth/wechat-qr, /api/iam/auth/wechat-qr/*]
+    vars: [[http_host, "==", "${IAM_SSO_INTERNAL_HOST}"]]
+    priority: 10
+    upstream: auth-api
+    plugin_config: api
+    plugins:
+      opentelemetry: &private-telemetry
+        sampler:
+          name: always_off
+      proxy-rewrite:
+        regex_uri: *strip-iam-prefix
+        headers:
+          set:
+            X-IAM-Entry-Network: internal
+            X-Forwarded-Proto: $scheme
+  - key: third-party-internal
+    uris: [/sso/thirdparty/*, /sso/third-party/wx]
+    vars: [[http_host, "==", "${IAM_SSO_INTERNAL_HOST}"]]
+    priority: 10
+    upstream: auth-api
+    plugin_config: api
+    plugins:
+      opentelemetry: *private-telemetry
+      proxy-rewrite:
+        headers:
+          set:
+            X-IAM-Entry-Network: internal
+            X-Forwarded-Proto: $scheme
+  - key: wecom-desktop-external
+    uris: [/api/iam/auth/wechat-qr, /api/iam/auth/wechat-qr/*]
+    vars: [[http_host, "==", "${IAM_SSO_EXTERNAL_HOST}"]]
+    priority: 10
+    upstream: auth-api
+    plugin_config: api
+    plugins:
+      opentelemetry: *private-telemetry
+      proxy-rewrite:
+        regex_uri: *strip-iam-prefix
+        headers:
+          set:
+            X-IAM-Entry-Network: external
+            X-Forwarded-Proto: $scheme
+  - key: third-party-external
+    uris: [/sso/thirdparty/*, /sso/third-party/wx]
+    vars: [[http_host, "==", "${IAM_SSO_EXTERNAL_HOST}"]]
+    priority: 10
+    upstream: auth-api
+    plugin_config: api
+    plugins:
+      opentelemetry: *private-telemetry
+      proxy-rewrite:
+        headers:
+          set:
+            X-IAM-Entry-Network: external
+            X-Forwarded-Proto: $scheme
+  - key: wecom-mobile
+    uri: /sso/wechat-qr/mobile/*
+    vars:
+      - [http_host, "==", "${IAM_WECHAT_MOBILE_HOST}"]
+      - [scheme, "==", https]
+    priority: 10
+    upstream: auth-api
+    plugin_config: api
+    plugins:
+      opentelemetry: *private-telemetry
+      proxy-rewrite:
+        headers:
+          set:
+            X-IAM-Entry-Network: external
+            X-Forwarded-Proto: $scheme
+  - key: admin-api
+    uris: [/api/iam/admin/*, /api/iam/rpc/*]
+    upstream: admin-api
+    plugin_config: api
+    plugins:
+      proxy-rewrite:
+        regex_uri: *strip-iam-prefix
+  - key: sso-internal
+    uri: /sso/*
+    # The mobile QR path is served only by the dedicated TLS route.
+    vars:
+      - [http_host, "==", "${IAM_SSO_INTERNAL_HOST}"]
+      - [uri, "!", "~~", "^/sso/wechat-qr/mobile(/|$)"]
+    upstream: sso-api
+    plugin_config: api
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-IAM-Entry-Network: internal
+            X-Forwarded-Proto: $scheme
+  - key: sso-external
+    uri: /sso/*
+    vars:
+      - [http_host, "==", "${IAM_SSO_EXTERNAL_HOST}"]
+      - [uri, "!", "~~", "^/sso/wechat-qr/mobile(/|$)"]
+    upstream: sso-api
+    plugin_config: api
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-IAM-Entry-Network: external
+            X-Forwarded-Proto: $scheme
+  - key: oidc-internal
+    uris: [/oidc, /oidc/*]
+    vars: [[http_host, "==", "${IAM_SSO_INTERNAL_HOST}"]]
+    upstream: sso-api
+    plugin_config: api
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-IAM-Entry-Network: internal
+            X-Forwarded-Host: $http_host
+            X-Forwarded-Proto: $scheme
+  - key: oidc-external
+    uris: [/oidc, /oidc/*]
+    vars: [[http_host, "==", "${IAM_SSO_EXTERNAL_HOST}"]]
+    upstream: sso-api
+    plugin_config: api
+    plugins:
+      proxy-rewrite:
+        headers:
+          set:
+            X-IAM-Entry-Network: external
+            X-Forwarded-Host: $http_host
+            X-Forwarded-Proto: $scheme
+  - key: sso-frontend
+    uris: [/portal, /portal/*]
+    upstream: sso-frontend
+    plugins: *telemetry
+  - key: admin-frontend
+    uris: [/iam-admin, /iam-admin/*]
+    upstream: admin-frontend
+    plugin_config: api

@@ -97,7 +97,7 @@ test("managed IAM login and User Profile worker publish one real name change and
       username: input.admin.username,
     });
     expect(Number.isSafeInteger(detail!.data.id)).toBe(true);
-    const identity = await context.request.get(`${input.origin}/api/iam/public/user-info`, {
+    const identity = await context.request.get(`${input.origin}/api/iam/sso/user-info`, {
       headers: { Client: "iam-admin" },
     });
     expect(identity.status()).toBe(200);
@@ -156,7 +156,7 @@ test("managed IAM login and User Profile worker publish one real name change and
       "managed-user-profile-job-incomplete",
     );
     expect(job!.finishedOn).toBeGreaterThanOrEqual(job!.processedOn!);
-    const userInfo = await context.request.get(`${input.origin}/api/iam/public/user-info`, {
+    const userInfo = await context.request.get(`${input.origin}/api/iam/sso/user-info`, {
       headers: { Client: "iam-admin" },
     });
     expect(userInfo.status()).toBe(200);

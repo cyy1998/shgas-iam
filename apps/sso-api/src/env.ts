@@ -32,6 +32,7 @@ const RawEnvSchema = z.object({
   IAM_SSO_API_CUSTOM_SSO_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(86400),
   IAM_SSO_API_AUTH_CODE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
   IAM_SSO_API_PORT: z.coerce.number().int().min(1).max(65535).default(30002),
+  IAM_SSO_API_HOSTNAME: optionalNonEmptyString(),
   IAM_SSO_API_REDIS_URL: redisUrlString(),
   IAM_SSO_API_LOGIN_ENDPOINT: z
     .string()
@@ -81,6 +82,7 @@ export function parseSsoApiEnv(source: NodeJS.ProcessEnv) {
   return {
     databaseUrl: raw.IAM_SSO_API_DATABASE_URL,
     port: raw.IAM_SSO_API_PORT,
+    hostname: raw.IAM_SSO_API_HOSTNAME,
     nodeEnv: raw.NODE_ENV,
     redis: raw.IAM_SSO_API_REDIS_URL,
     log: { level: raw.IAM_SSO_API_LOG_LEVEL, format: raw.IAM_SSO_API_LOG_FORMAT },

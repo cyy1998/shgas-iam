@@ -3,7 +3,17 @@ import { frontendEnvironment } from "../src/frontend/frontend-config.ts";
 import { apisixAdminKey, createHybridCompose, e2eDatabaseName, e2eDatabasePassword } from "../src/hybrid-compose.ts";
 import { e2eLoginCredentialEnvironment } from "../src/login-credential-config.ts";
 
-export const containerSmokeImages = ["apisix", "api", "admin-api", "worker", "gateway-api", "admin", "sso"];
+export const containerSmokeImages = [
+  "apisix",
+  "auth-api",
+  "sso-api",
+  "integration-api",
+  "admin-api",
+  "worker",
+  "gateway-api",
+  "admin",
+  "sso",
+];
 export const containerSmokeInfrastructure = ["postgres", "redis", "apisix-etcd", "apisix"];
 export const containerSmokeApplications = containerSmokeImages.slice(1);
 export const smokeGatewayApiPort = 30004;
@@ -36,29 +46,43 @@ export function createContainerSmokeCompose(options: {
         ...infrastructure.services.apisix,
         ports: [`127.0.0.1:${gatewayPort}:9080`, "127.0.0.1:0:9180"],
       },
-      api: {
-        build: image("api"),
+      "auth-api": {
+        build: image("auth-api"),
         healthcheck: httpHealth(30000, "/ready"),
         environment: {
-          IAM_API_DATABASE_URL: databaseUrl,
-          IAM_API_REDIS_URL: redisUrl,
-          IAM_API_PORT: "30000",
-          IAM_API_SMS_URL: "http://127.0.0.1:9/test-sms",
-          IAM_API_SMS_SIGNATURE_KEY: "e2e-sms",
-          IAM_API_WECHAT_CORP_ID: "ww-e2e-local",
-          IAM_API_WECHAT_CORP_SECRET: "wecom-e2e-secret-only",
-          IAM_API_MAGIC_CODE: "1234",
-          IAM_API_CAP_ENABLED: "false",
-          IAM_API_AUTH_CODE_TTL_SECONDS: "300",
+          IAM_AUTH_API_DATABASE_URL: databaseUrl,
+          IAM_AUTH_API_REDIS_URL: redisUrl,
+          IAM_AUTH_API_SMS_URL: "http://127.0.0.1:9/test-sms",
+          IAM_AUTH_API_SMS_SIGNATURE_KEY: "e2e-sms",
+          IAM_AUTH_API_WECHAT_CORP_ID: "ww-e2e-local",
+          IAM_AUTH_API_WECHAT_CORP_SECRET: "wecom-e2e-secret-only",
+          IAM_AUTH_API_MAGIC_CODE: "1234",
+          IAM_AUTH_API_CAP_ENABLED: "false",
           ...e2eLoginCredentialEnvironment,
-          IAM_API_OIDC_CURRENT_JWK_JSON: JSON.stringify(jwk),
-          IAM_API_OIDC_COOKIE_SECURE: "false",
-          IAM_API_LOGIN_ENDPOINT: "/portal/login",
-          IAM_API_SSO_INTERNAL_ORIGIN: internalOrigin,
-          IAM_API_SSO_EXTERNAL_ORIGIN: origin,
-          IAM_API_AUTHORIZATION_ENDPOINT: "/sso/authorize",
-          IAM_API_LOGOUT_ENDPOINT: "/sso/logout",
-          IAM_API_THIRDPARTY_OA_ENDPOINT: "/sso/thirdparty/oa",
+          IAM_AUTH_API_SSO_INTERNAL_ORIGIN: internalOrigin,
+          IAM_AUTH_API_SSO_EXTERNAL_ORIGIN: origin,
+        },
+      },
+      "sso-api": {
+        build: image("sso-api"),
+        healthcheck: httpHealth(30002, "/ready"),
+        environment: {
+          IAM_SSO_API_DATABASE_URL: databaseUrl,
+          IAM_SSO_API_REDIS_URL: redisUrl,
+          IAM_SSO_API_OIDC_CURRENT_JWK_JSON: JSON.stringify(jwk),
+          IAM_SSO_API_OIDC_COOKIE_SECURE: "false",
+          IAM_SSO_API_SSO_INTERNAL_ORIGIN: internalOrigin,
+          IAM_SSO_API_SSO_EXTERNAL_ORIGIN: origin,
+        },
+      },
+      "integration-api": {
+        build: image("integration-api"),
+        healthcheck: httpHealth(30005, "/ready"),
+        environment: {
+          IAM_INTEGRATION_API_DATABASE_URL: databaseUrl,
+          IAM_INTEGRATION_API_REDIS_URL: redisUrl,
+          IAM_INTEGRATION_API_SMS_URL: "http://127.0.0.1:9/test-sms",
+          IAM_INTEGRATION_API_SMS_SIGNATURE_KEY: "e2e-sms",
         },
       },
       "admin-api": {

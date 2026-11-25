@@ -5,9 +5,9 @@ import type { CreateIntegrationApiCompositionOptions } from "./composition";
 export async function startIntegrationApi(
   options: CreateIntegrationApiCompositionOptions & { hostname?: string } = {},
 ) {
-  const { app, close, port, logger } = await createIntegrationApiApp(options);
+  const { app, close, port, hostname, logger } = await createIntegrationApiApp(options);
   const server = await Promise.resolve()
-    .then(() => Bun.serve({ hostname: options.hostname, port, fetch: app.fetch }))
+    .then(() => Bun.serve({ hostname: options.hostname ?? hostname, port, fetch: app.fetch }))
     .catch(async (error: unknown) => {
       try {
         await close();

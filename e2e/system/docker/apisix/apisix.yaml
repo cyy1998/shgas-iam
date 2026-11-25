@@ -43,7 +43,9 @@ nginx_config:
       ~^/sso/wechat-qr/mobile/confirm/[^/]+/?$ /sso/wechat-qr/mobile/confirm/:flowId;
       ~^/sso/wechat-qr/mobile/(callback|decision)$ $uri;
       ~^/sso/wechat-qr/mobile/[^/]+/?$ /sso/wechat-qr/mobile/:requestId;
-      ~^/(?<qr_protocol>sso|oidc)/wechat-qr/[^/]+/(?<qr_action>events|complete|bind/(?:password|sms(?:/send)?))/?$ /${qr_protocol}/wechat-qr/:requestId/${qr_action};
+      ~^/api/iam/auth/wechat-qr/[^/]+/(?<qr_action>status|events|complete|bind/(?:password|sms(?:/send)?))/?$ /api/iam/auth/wechat-qr/:requestId/${qr_action};
+      ~^/api/iam/auth/wechat-qr/ /api/iam/auth/wechat-qr/*;
+      ~^/sso/thirdparty/ /sso/thirdparty/:clientCode;
       ~^/sso/wechat-qr/ /sso/wechat-qr/*;
       ~^/oidc/wechat-qr/ /oidc/wechat-qr/*;
     }

@@ -13,7 +13,7 @@ export async function loginToAdmin(input: {
 }) {
   const adminUrl = new RegExp(`^${escapeRegExp(input.origin)}/iam-admin(?:/|$)`, "u");
   const currentUser = () =>
-    input.page.request.get(`${input.origin}/api/iam/public/user-info`, {
+    input.page.request.get(`${input.origin}/api/iam/sso/user-info`, {
       headers: { Client: "iam-admin" },
     });
   const before = await currentUser();

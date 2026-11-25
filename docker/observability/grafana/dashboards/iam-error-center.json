@@ -190,7 +190,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(count_over_time({env=\"$env\", service=\"api\", level=~\"error|fatal\"} | json | event=\"oidc_server_error\" [$__range]))"
+          "expr": "sum(count_over_time({env=\"$env\", service=\"sso-api\", level=~\"error|fatal\"} | json | event=\"oidc_server_error\" [$__range]))"
         }
       ],
       "fieldConfig": {

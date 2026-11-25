@@ -7,7 +7,7 @@ export async function createSsoApiApp(options?: Parameters<typeof createSsoApiCo
   const { env, logger, routes, close } = await createSsoApiComposition(options);
   try {
     const app = createApp(appConfig, { env, logger, routes, middlewares: {}, redactLogPath: redactRetiredLoginPath });
-    return { app, port: env.port, logger, close };
+    return { app, port: env.port, hostname: env.hostname, logger, close };
   } catch (error) {
     try {
       await close();

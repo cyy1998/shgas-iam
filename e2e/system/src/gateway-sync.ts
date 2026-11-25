@@ -1,3 +1,5 @@
+export const iamGatewayManifest = new URL("../../../docker/gateway/iam.dev.example.yaml", import.meta.url);
+
 export async function publishGateway(
   input: {
     yaml: string;
@@ -17,13 +19,13 @@ export async function publishGateway(
   const source = Bun.YAML.parse(input.yaml);
   if (typeof source !== "object" || source === null || !("upstreams" in source) || !Array.isArray(source.upstreams))
     throw new Error("E2E Gateway manifest has no upstreams");
-  const api = source.upstreams.find(
+  const ssoApi = source.upstreams.find(
     (upstream: unknown) =>
-      typeof upstream === "object" && upstream !== null && "key" in upstream && upstream.key === "api",
+      typeof upstream === "object" && upstream !== null && "key" in upstream && upstream.key === "sso-api",
   );
-  if (!api) throw new Error("E2E Gateway manifest has no API upstream");
-  api.pass_host = "rewrite";
-  api.upstream_host = "api.e2e.internal";
+  if (!ssoApi) throw new Error("E2E Gateway manifest has no SSO API upstream");
+  ssoApi.pass_host = "rewrite";
+  ssoApi.upstream_host = "sso-api.e2e.internal";
   if (!("routes" in source) || !Array.isArray(source.routes)) throw new Error("E2E Gateway manifest has no routes");
   const frontend = source.routes.find(
     (route: unknown) => typeof route === "object" && route !== null && "key" in route && route.key === "sso-frontend",
@@ -50,40 +52,13 @@ export async function publishGateway(
       });
     }
   }
-  let variables = input.variables;
+  // Smoke has no dedicated TLS listener. The route still requires HTTPS.
+  const mobileHost = input.wecomMobile?.authority ?? input.variables.IAM_SSO_EXTERNAL_HOST;
+  if (!mobileHost) throw new Error("E2E Gateway mobile authority is missing");
+  const variables = { ...input.variables, IAM_WECHAT_MOBILE_HOST: mobileHost };
+
   if (input.wecomMobile) {
     const { authority, cert, privateKey } = input.wecomMobile;
-    // The normal telemetry policy records query strings. These routes carry OAuth state and continuations.
-    const privatePlugins = {
-      "request-id": frontend.plugins["request-id"],
-      opentelemetry: { sampler: { name: "always_off" } },
-    };
-    source.routes.push({
-      key: "wecom-mobile",
-      uri: "/sso/wechat-qr/mobile/*",
-      vars: [
-        ["http_host", "==", authority],
-        ["scheme", "==", "https"],
-      ],
-      upstream: "api",
-      priority: 10,
-      plugins: {
-        ...privatePlugins,
-        "proxy-rewrite": { headers: { set: { "X-IAM-Entry-Network": "external", "X-Forwarded-Proto": "$scheme" } } },
-      },
-    });
-    for (const protocol of ["sso", "oidc"]) {
-      const route = source.routes.find((route) => route.key === `${protocol}-internal`);
-      if (!route) throw new Error(`E2E Gateway has no internal ${protocol} route`);
-      source.routes.push({
-        key: `wecom-desktop-${protocol}`,
-        uris: [`/${protocol}/wechat-qr`, `/${protocol}/wechat-qr/*`],
-        vars: route.vars,
-        upstream: route.upstream,
-        priority: 10,
-        plugins: { ...privatePlugins, ...route.plugins },
-      });
-    }
     Object.assign(source, {
       ssls: [
         {
@@ -94,7 +69,7 @@ export async function publishGateway(
         },
       ],
     });
-    variables = { ...variables, IAM_E2E_WECHAT_QR_TLS_CERT: cert, IAM_E2E_WECHAT_QR_TLS_PRIVATE_KEY: privateKey };
+    Object.assign(variables, { IAM_E2E_WECHAT_QR_TLS_CERT: cert, IAM_E2E_WECHAT_QR_TLS_PRIVATE_KEY: privateKey });
   }
   const publication = await request(`${input.gatewayOrigin}/apply`, {
     method: "POST",
@@ -114,15 +89,15 @@ export async function publishGateway(
   const result = await publication.json();
   if (result.code !== 200 || !["applied", "no_change"].includes(result.data?.outcome))
     throw new Error("E2E Gateway did not confirm publication; inspect Gateway state before retrying");
-  const response = await request(`${input.adminUrl}/upstreams/iam.api.e2e`, {
+  const response = await request(`${input.adminUrl}/upstreams/iam.sso-api.e2e`, {
     headers: { "X-API-KEY": input.adminKey },
     signal: requestSignal(10_000, input.signal),
   });
   if (!response.ok) throw new Error("E2E Gateway applied upstream cannot be read back");
   const applied = await response.json();
-  if (applied.value?.pass_host !== "rewrite" || applied.value?.upstream_host !== "api.e2e.internal")
+  if (applied.value?.pass_host !== "rewrite" || applied.value?.upstream_host !== "sso-api.e2e.internal")
     throw new Error("E2E Gateway did not apply the Host rewrite topology");
-  return { gatewayHostRewrite: { verified: true, upstream: "iam.api.e2e", host: applied.value.upstream_host } };
+  return { gatewayHostRewrite: { verified: true, upstream: "iam.sso-api.e2e", host: applied.value.upstream_host } };
 }
 
 function requestSignal(timeoutMs: number, signal?: AbortSignal) {

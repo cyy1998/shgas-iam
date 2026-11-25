@@ -173,7 +173,7 @@ test("directory attributes follow Admin writes and Worker publication across Int
   }
 
   async function readCustomSso(sid: string) {
-    const response = await request.get("/api/iam/public/user-info", {
+    const response = await request.get("/api/iam/sso/user-info", {
       headers: { Authorization: sid, Client: businessClient },
     });
     return (await successfulJson(response)).data;

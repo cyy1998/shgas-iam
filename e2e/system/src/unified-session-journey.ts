@@ -91,7 +91,7 @@ export async function exerciseUnifiedSession(input: {
       form: { code, redirect_uri: redirectUri },
     });
   const useCustom = (request: APIRequestContext, sid: string) =>
-    request.get(`${origin}/api/iam/public/user-info`, {
+    request.get(`${origin}/api/iam/sso/user-info`, {
       headers: { Authorization: sid, Client: clientId },
     });
   // Cookie-free reads exercise the protocol Token, not the browser root fallback.

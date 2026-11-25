@@ -36,7 +36,7 @@ export function frontendEnvironment(app: FrontendApp, options: FrontendOptions):
           IAM_SSO_WEB_API_PREFIX: "/api/iam",
           IAM_SSO_WEB_CLIENT_CODE: "iam",
           IAM_SSO_WEB_CAP_SITE_KEY: "iam-sso",
-          IAM_SSO_WEB_CAP_ENDPOINT: "/api/iam/open/cap/iam-sso/",
+          IAM_SSO_WEB_CAP_ENDPOINT: "/api/iam/auth/captcha/cap/iam-sso/",
           IAM_SSO_WEB_CAP_WASM_URL: "/portal/cap/cap_wasm_bg.wasm",
           IAM_SSO_WEB_CAP_PAKO_URL: "/portal/cap/pako_inflate.min.js",
           ...ssoTestLoginCredential,

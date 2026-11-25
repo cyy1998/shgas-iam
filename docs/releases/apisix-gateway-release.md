@@ -15,6 +15,28 @@
 | `IAM_GATEWAY_APISIX_ADMIN_URL`、`IAM_GATEWAY_APISIX_ADMIN_KEY` | 提供从 Gateway 可达的 Admin API 地址（如 `http://apisix:9180/apisix/admin`）和 Admin Key。地址不含凭据、query 或 fragment。生产 Compose 从 `APISIX_ADMIN_KEY` 注入 Admin Key。                                                                |
 | 执行、单次 APISIX 请求、关闭超时                               | 默认分别为 60、10、70 秒。单次请求预算不超过执行预算。发布及补偿共用执行预算，关闭预算须更长。Compose 的 310 秒关闭宽限覆盖最大关闭预算。变量及取值见[环境模板](../../apps/gateway/.env.example)和[校验规则](../../apps/gateway/src/env.ts)。 |
 
+## 拆分后的 IAM 路由示例
+
+[开发 manifest](../../docker/gateway/iam.dev.example.yaml) 与 [Compose 变量模板](../../docker/.env.dev.example) 配套。
+将 manifest 的发布变量写入请求的 `variables`；内外网 Host 包含请求实际使用的端口。启用企微扫码时，
+`IAM_WECHAT_MOBILE_HOST` 取 HTTPS 回调的 authority，Auth API 配置回调 URL 和 Agent ID，SSO API 使用同一开关状态。
+APISIX 在已配置的入口上按 Host 覆盖 `X-IAM-Entry-Network`，移动回调使用公网 HTTPS 入口。
+扫码和第三方回调路由关闭 OpenTelemetry 采样，APISIX 的访问日志格式也应省略查询串和扫码路径中的句柄。
+
+更新已有 scope 时，把示例的 upstream、URI、优先级和 rewrite 合并进该环境的 YAML，沿用现有路由的
+`real-ip`、限流、CORS 和其他插件配置。检查新优先级路由与原路径继承同一组策略，包括可信代理 CIDR、限流 key、
+阈值和计数模式。示例中的 `plugin_config: api` 是继承这些共享插件的位置；原路由独有的配置随对应路径迁移。
+若前置代理终止 TLS，按实际可信代理与 APISIX 的监听方式核对移动 HTTPS 回调后再放流。
+
+| 兼容别名                       | 规范路径                  |
+| ------------------------------ | ------------------------- |
+| `/api/iam/public/user-info`    | `/api/iam/sso/user-info`  |
+| `/api/iam/auth/authz`          | `/api/iam/sso/authz`      |
+| `/api/iam/auth/internal-authz` | `/api/iam/internal/authz` |
+
+直连原后端地址的业务 `forward-auth.uri` 在切换前须改用新服务的目标地址，或经 APISIX 使用上表入口。
+三个新后端的 `/ready` 均通过后，再按下面的流程发布和验证。
+
 ## 发布配置
 
 一次只向一个目标环境发布一个 scope。发布窗口内暂停其他 Gateway 实例和外部工具对同一集群的写入，准备已知良好的恢复配置。以下 PowerShell 7 命令在**同一终端**按步骤执行。通过安全环境提供 `IAM_GATEWAY_URL`、`IAM_GATEWAY_CLIENT_SECRET` 及本次所需的私有 `variables.json`（无变量时内容为 `{}`）。

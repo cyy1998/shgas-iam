@@ -161,11 +161,15 @@ test("real Playwright file switches restore PG and Redis and the Worker can stop
              const reset = await runtime();
              expect(reset.resetCount).toBe(2);
              expect(reset.references.adminSubjectIdentifier).toBe(${JSON.stringify(context.references.adminSubjectIdentifier)});
+             for (const service of ["auth-api", "sso-api", "integration-api"]) {
+               const ready = await request.get(reset.backendOrigins[service] + "/ready");
+               expect(ready.status()).toBe(200);
+             }
              const health = await request.get(reset.internalOrigin + "/oidc/.well-known/openid-configuration");
              expect(health.status()).toBe(200);
            });`,
       );
-      for (const service of ["api", "admin-api", "worker", "gateway-api"]) {
+      for (const service of ["auth-api", "sso-api", "integration-api", "admin-api", "worker", "gateway-api"]) {
         const logs = await readFile(join(context.logDirectory, `${service}.stdout.log`), "utf8");
         expect(logs.length).toBeGreaterThan(0);
       }
