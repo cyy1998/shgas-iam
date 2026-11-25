@@ -3,13 +3,13 @@ import process from "node:process";
 import { createApiRepositories } from "@api/composition/repositories";
 import { createApiUnitOfWork } from "@api/composition/tx";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
-import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import { createMobileService } from "@api/services/mobile/mobile.service";
 import { createMobileCodeCooldown } from "@api/services/mobile/mobile-code-cooldown";
 import type { UserMobileBindingPort } from "@api/services/user/user.port";
 import { createUserService } from "@api/services/user/user.service";
 import { createUserMobileBinding } from "@api/services/user/user-mobile-binding.helper";
 import { ApiErrorCode, UserStatus } from "@iam/contracts";
+import { createAuditLogWriter } from "@iam/db/audit";
 import { auditLogs, userDocumentOutboxEntries, users } from "@iam/db/schema";
 import { UserNotFoundError } from "@iam/domain/user";
 import { mapUnitOfWork } from "@iam/unit-of-work";
@@ -91,7 +91,7 @@ test("a failed mobile write leaves the code spent and keeps the sending cooldown
 
 function makeUserService(mobileService: UserMobileBindingPort) {
   const repositories = createApiRepositories(pg.db);
-  const auditLogWriter = createApiAuditLogWriter({ auditRepository: repositories.audit });
+  const auditLogWriter = createAuditLogWriter({ sourceApp: "iam", auditRepository: repositories.audit });
   const uow = createApiUnitOfWork({
     db: pg.db,
     logger: { warn() {}, error() {} },

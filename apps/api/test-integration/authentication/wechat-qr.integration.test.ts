@@ -5,8 +5,6 @@ import { createApiPasswordHasher } from "@api/composition/runtime/password-hashe
 import { createApiUnitOfWork } from "@api/composition/tx";
 import { HumanVerificationAction } from "@api/enums/humanVerification.action";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
-import { createAuditRepository } from "@api/services/audit/audit.repository";
-import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import type { WechatQrIdentity } from "@api/services/authentication/wechat-qr-identity.type";
 import { createCapService } from "@api/services/human-verification/cap.service";
 import { createHumanRiskService } from "@api/services/human-verification/human-risk.service";
@@ -17,6 +15,7 @@ import { createUserRepository } from "@api/services/user/user.repository";
 import { createUserPasswordHelper } from "@api/services/user/user-password.helper";
 import type { WechatQrDirectoryPort } from "@api/use-cases/authentication/wechat-qr/wechat-qr.port";
 import { ApiErrorCode, IMAGE_CAPTCHA_PROOF_HEADER, IMAGE_CAPTCHA_TICKET_HEADER, UserStatus } from "@iam/contracts";
+import { createAuditLogWriter, createAuditRepository } from "@iam/db/audit";
 import { auditLogs, userDocumentOutboxEntries, users, userWechatExternalBindings } from "@iam/db/schema";
 import { createLoginRestriction } from "@iam/login-restriction";
 import { createRedisLoginRestrictionStore } from "@iam/login-restriction/redis";
@@ -523,7 +522,7 @@ async function withBindingDatabase(
         tokenTtlSeconds: 60,
       },
     });
-    const auditLogWriter = createApiAuditLogWriter({ auditRepository: createAuditRepository(pg.db) });
+    const auditLogWriter = createAuditLogWriter({ sourceApp: "iam", auditRepository: createAuditRepository(pg.db) });
     const passwordHelper = createUserPasswordHelper({ passwordHasher: createApiPasswordHasher(4) });
     const password = await passwordHelper.hashUserPassword(accountPassword);
 

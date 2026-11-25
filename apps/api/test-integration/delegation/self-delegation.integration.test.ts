@@ -2,8 +2,6 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { createPublicDelegationDependencies } from "@api/composition/public-delegation";
 import { createPublicDelegationHandlers } from "@api/routes/public/delegation/delegation.handlers";
 import { createPublicDelegationRoute } from "@api/routes/public/delegation/delegation.index";
-import { createAuditRepository } from "@api/services/audit/audit.repository";
-import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import createApp from "@iam/api-core/core/create-app";
 import { createRouter } from "@iam/api-core/core/create-router";
 import type { PublicBindings } from "@iam/api-core/types";
@@ -15,6 +13,7 @@ import {
   ClientDelegationStatus as Status,
   UserStatus,
 } from "@iam/contracts";
+import { createAuditLogWriter, createAuditRepository } from "@iam/db/audit";
 import { clients, organizationClosures, organizations, users } from "@iam/db/schema";
 import { createDelegationService } from "@iam/delegation";
 import { eq } from "drizzle-orm";
@@ -58,7 +57,9 @@ function application(subjectIdentifier = aliceSubject) {
         createDelegationService({
           db: harness.db,
           recordAudit: async (tx, event) =>
-            createApiAuditLogWriter({ auditRepository: createAuditRepository(tx) }).recordAuditLog(event),
+            createAuditLogWriter({ sourceApp: "iam", auditRepository: createAuditRepository(tx) }).recordAuditLog(
+              event,
+            ),
         }),
       ),
     ),

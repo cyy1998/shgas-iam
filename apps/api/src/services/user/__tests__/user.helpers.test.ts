@@ -19,7 +19,6 @@ describe("user helper factories", () => {
   test("validates mobile binding before allowing mutation", async () => {
     const auditLogWriter = {
       recordAuditLog: mock(async () => undefined),
-      recordAuditLogFromContext: mock(async () => undefined),
     };
     const consumeVerificationCode = mock(async () => true);
     const mobileBinding = createUserMobileBinding({
@@ -38,7 +37,6 @@ describe("user helper factories", () => {
   test("records mobile binding failures with request context", async () => {
     const auditLogWriter = {
       recordAuditLog: mock(async () => undefined),
-      recordAuditLogFromContext: mock(async () => undefined),
     };
     const mobileBinding = createUserMobileBinding({
       userRepository: { isMobileRegistered: async () => false },

@@ -1,5 +1,5 @@
-import type { AuditLogInput } from "@api/services/audit/audit.context";
 import { AuditActions } from "@iam/contracts";
+import type { AuditLogInput } from "@iam/contracts/audit";
 import { maskMobileForAudit } from "@iam/domain/audit";
 
 type UserAuditTarget = {

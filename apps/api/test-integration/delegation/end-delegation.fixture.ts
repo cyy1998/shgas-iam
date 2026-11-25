@@ -1,5 +1,4 @@
-import { createAuditRepository } from "@api/services/audit/audit.repository";
-import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
+import { createAuditLogWriter, createAuditRepository } from "@iam/db/audit";
 import { relations } from "@iam/db/relations";
 import { ClientDelegationStatus, createDelegationService } from "@iam/delegation";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -12,7 +11,7 @@ try {
   const service = createDelegationService({
     db: drizzle({ client, relations }),
     recordAudit: async (tx, event) =>
-      createApiAuditLogWriter({ auditRepository: createAuditRepository(tx) }).recordAuditLog(event),
+      createAuditLogWriter({ sourceApp: "iam", auditRepository: createAuditRepository(tx) }).recordAuditLog(event),
   });
   await service.update(
     Number(process.argv[2]),

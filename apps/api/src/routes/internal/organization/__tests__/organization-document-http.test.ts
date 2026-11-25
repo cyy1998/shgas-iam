@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
-import { createInternalAuthenticationHandler } from "@api/middlewares/internal-client-authentication";
 import { createInternalMiddlewares } from "@api/routes/internal/_middleware";
 import { createOrganizationHandlers } from "@api/routes/internal/organization/organization.handlers";
 import { createOrganizationRoute } from "@api/routes/internal/organization/organization.index";
 import createApp from "@iam/api-core/core/create-app";
+import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares/internal-client-authentication";
 import { OrganizationDocumentSchema, OrganizationStatus, OrganizationType } from "@iam/contracts";
 import {
   createOrganizationDocumentQueryRepository,
@@ -254,7 +254,7 @@ function createProductionApp(
     repository: createOrganizationDocumentQueryRepository({ select: () => selection } as never),
   });
   const handlers = createOrganizationHandlers({
-    auditLogWriter: { recordAuditLog: async () => undefined, recordAuditLogFromContext: async () => undefined },
+    auditLogWriter: { recordAuditLog: async () => undefined },
     organizationDocument: query,
     organizationService: {
       findOrganizationByCode: async () => null,

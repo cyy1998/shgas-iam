@@ -3,14 +3,13 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { createApiRepositories } from "@api/composition/repositories";
 import { createApiUnitOfWork } from "@api/composition/tx";
-import { createInternalAuthenticationHandler } from "@api/middlewares/internal-client-authentication";
 import { createInternalMiddlewares } from "@api/routes/internal/_middleware";
 import { createOrganizationHandlers } from "@api/routes/internal/organization/organization.handlers";
 import { createOrganizationRoute } from "@api/routes/internal/organization/organization.index";
-import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import type { OrganizationTransactionPorts } from "@api/services/organization/organization.port";
 import { createOrganizationService } from "@api/services/organization/organization.service";
 import createApp from "@iam/api-core/core/create-app";
+import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares/internal-client-authentication";
 import {
   ClientStatus,
   OrganizationDocumentSchema,
@@ -20,6 +19,7 @@ import {
   OrganizationStatus,
   OrganizationType,
 } from "@iam/contracts";
+import { createAuditLogWriter } from "@iam/db/audit";
 import {
   auditLogs,
   employments,
@@ -107,7 +107,7 @@ interface OrganizationAppOptions {
 
 function createOrganizationApp(options: OrganizationAppOptions = {}) {
   const repositories = createApiRepositories(harness.db);
-  const auditLogWriter = createApiAuditLogWriter({ auditRepository: repositories.audit });
+  const auditLogWriter = createAuditLogWriter({ sourceApp: "iam", auditRepository: repositories.audit });
   const uow = createApiUnitOfWork({
     db: harness.db,
     logger: { error() {}, warn() {} },

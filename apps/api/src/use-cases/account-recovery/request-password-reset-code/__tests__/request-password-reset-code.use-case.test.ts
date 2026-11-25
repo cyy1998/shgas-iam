@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import type { AuditLogInput } from "@api/services/audit/audit.context";
 import { createRequestPasswordResetCodeUseCase } from "@api/use-cases/account-recovery/request-password-reset-code/request-password-reset-code.use-case";
+import type { AuditLogInput } from "@iam/contracts/audit";
 
 test("requests a password-reset code for the bound mobile before auditing", async () => {
   const events: string[] = [];

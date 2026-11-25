@@ -1,11 +1,11 @@
 import type { HumanVerificationAction } from "@api/enums/humanVerification.action";
-import type { AuditLogInput } from "@api/services/audit/audit.context";
 import type { WechatBindingCodeScope } from "@api/services/authentication/wechat-binding.type";
 import type { AuthorizedWechatQrBinding, WechatQrState } from "@api/services/authentication/wechat-qr.state";
 import type { WechatExternalIdentity } from "@api/services/authentication/wechat-qr-identity.type";
 import type { HumanRiskServicePort } from "@api/services/human-verification/human-verification.port";
 import type { HumanVerificationContext } from "@api/services/human-verification/human-verification.type";
 import type { ApiUserDocumentChange } from "@api/services/user/user.port";
+import type { AuditLogInput } from "@iam/contracts/audit";
 import type { UnitOfWorkPort } from "@iam/unit-of-work";
 import type { AuthenticationLoginFailureStatus, AuthenticationLoginRestrictionStatus } from "../login-restriction.type";
 

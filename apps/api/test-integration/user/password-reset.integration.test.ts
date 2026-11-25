@@ -3,12 +3,12 @@ import process from "node:process";
 import { createApiRepositories } from "@api/composition/repositories";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import { createAccountRecoveryService } from "@api/services/account-recovery/account-recovery.service";
-import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import { createMobileService } from "@api/services/mobile/mobile.service";
 import { createMobileCodeCooldown } from "@api/services/mobile/mobile-code-cooldown";
 import { createResetPasswordUseCase } from "@api/use-cases/account-recovery/reset-password/reset-password.use-case";
 import { createVerifyPasswordResetCodeUseCase } from "@api/use-cases/account-recovery/verify-password-reset-code/verify-password-reset-code.use-case";
 import { ApiErrorCode } from "@iam/contracts";
+import { createAuditLogWriter } from "@iam/db/audit";
 import { auditLogs, users } from "@iam/db/schema";
 import { createUnitOfWork } from "@iam/unit-of-work";
 import { eq } from "drizzle-orm";
@@ -34,7 +34,7 @@ test("a rolled-back password reset spends its code and only one submission can u
     await pg.db.insert(users).values({ username, name: "Reset user", mobile: phone, password: "original" });
     const repositories = createApiRepositories(pg.db);
     const userLookup = { getActiveUserByUsername: repositories.user.getUserByUsername };
-    const auditLogWriter = createApiAuditLogWriter({ auditRepository: repositories.audit });
+    const auditLogWriter = createAuditLogWriter({ sourceApp: "iam", auditRepository: repositories.audit });
     const boundMobileResolver = createAccountRecoveryService({ userLookup });
     let nextCode = input.code;
     const verificationCodes = createMobileService({
@@ -65,7 +65,7 @@ test("a rolled-back password reset spends its code and only one submission can u
         createTxPorts(tx) {
           const txRepositories = createApiRepositories(tx);
           return {
-            auditLogWriter: createApiAuditLogWriter({ auditRepository: txRepositories.audit }),
+            auditLogWriter: createAuditLogWriter({ sourceApp: "iam", auditRepository: txRepositories.audit }),
             userWriter: {
               async setPassword(userId, password) {
                 await txRepositories.user.setPassword(userId, password);

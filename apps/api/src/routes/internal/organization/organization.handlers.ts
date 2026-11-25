@@ -1,6 +1,10 @@
 import { runWithinInternalHandlerBudget } from "@api/routes/internal/_handler-budget";
-import { getInternalAuditActor } from "@api/services/audit/audit.context";
-import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
+import type { AuditLogWriterPort } from "@api/services/audit/audit.context";
+import {
+  getApiAuditRequestContext,
+  getInternalAuditActor,
+  withApiRequestContext,
+} from "@api/services/audit/audit.context";
 import { buildInternalPurveyorRegisterAudit } from "@api/services/audit/events/internal.audit";
 import { OrganizationCreateDtoSchema } from "@api/services/organization/organization.schema";
 import type { OrganizationService } from "@api/services/organization/organization.service";
@@ -65,14 +69,16 @@ export function createOrganizationHandlers(deps: CreateOrganizationHandlersDeps)
       parentCode: parentOrg,
     });
     await deps.organizationService.setOrganization(organizationCreateDto);
-    await deps.auditLogWriter.recordAuditLogFromContext(
-      c,
-      buildInternalPurveyorRegisterAudit(getInternalAuditActor(c), {
-        orgCode,
-        orgName,
-        parentOrg,
-        orgType: OrganizationType.External,
-      }),
+    await deps.auditLogWriter.recordAuditLog(
+      withApiRequestContext(
+        getApiAuditRequestContext(c),
+        buildInternalPurveyorRegisterAudit(getInternalAuditActor(c), {
+          orgCode,
+          orgName,
+          parentOrg,
+          orgType: OrganizationType.External,
+        }),
+      ),
     );
     return c.json(resp.ok(true), HttpStatusCodes.OK);
   };

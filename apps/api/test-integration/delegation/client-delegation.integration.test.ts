@@ -1,14 +1,12 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { createInternalDelegationQueryResource } from "@api/composition/internal-delegation-query";
 import { createClientDelegationResolutionRepository } from "@api/composition/repositories/client-delegation-resolution.repository";
-import { createInternalAuthenticationHandler } from "@api/middlewares/internal-client-authentication";
 import { createInternalMiddlewares } from "@api/routes/internal/_middleware";
 import { createDelegationHandlers } from "@api/routes/internal/delegation/delegation.handlers";
 import { createDelegationRoute } from "@api/routes/internal/delegation/delegation.index";
-import { createAuditRepository } from "@api/services/audit/audit.repository";
-import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import { createResolveClientDelegationsUseCase } from "@api/use-cases/internal/resolve-client-delegations/resolve-client-delegations.use-case";
 import createApp from "@iam/api-core/core/create-app";
+import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares/internal-client-authentication";
 import {
   OrganizationLevel,
   OrganizationStatus,
@@ -17,6 +15,7 @@ import {
   UserStatus,
 } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
+import { createAuditLogWriter, createAuditRepository } from "@iam/db/audit";
 import {
   auditLogs,
   clientDelegations,
@@ -89,7 +88,7 @@ function service(db: DbClient = harness.db) {
   return createDelegationService({
     db,
     recordAudit: async (tx, event) =>
-      createApiAuditLogWriter({ auditRepository: createAuditRepository(tx) }).recordAuditLog(event),
+      createAuditLogWriter({ sourceApp: "iam", auditRepository: createAuditRepository(tx) }).recordAuditLog(event),
   });
 }
 function input(overrides: Record<string, unknown> = {}) {

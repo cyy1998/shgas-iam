@@ -1,7 +1,7 @@
 import { expect, mock, test } from "bun:test";
-import type { AuditLogInput } from "@api/services/audit/audit.context";
 import { createImmediateUnitOfWork } from "@api/testing/fakes";
 import { createResetPasswordUseCase } from "@api/use-cases/account-recovery/reset-password/reset-password.use-case";
+import type { AuditLogInput } from "@iam/contracts/audit";
 
 function createDeps() {
   const user = { id: 1, username: "zhangsan", name: "张三", mobile: "17721462865" };

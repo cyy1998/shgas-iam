@@ -1,10 +1,10 @@
-import { createAuditRepository } from "@api/services/audit/audit.repository";
 import { createClientRepository } from "@api/services/client/client.repository";
 import { createEmploymentRepository } from "@api/services/employment/employment.repository";
 import { createOrganizationRepository } from "@api/services/organization/organization.repository";
 import { createPositionRepository } from "@api/services/position/position.repository";
 import { createUserRepository } from "@api/services/user/user.repository";
 import type { DbClient } from "@iam/db";
+import { createAuditRepository } from "@iam/db/audit";
 import { createUserDocumentQueryRepository } from "@iam/documents/user/query/repository";
 
 export function createApiRepositories(client: DbClient) {

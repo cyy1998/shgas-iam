@@ -1,4 +1,5 @@
-import type { AuditLogInput, InternalAuditActor } from "@api/services/audit/audit.context";
+import type { InternalAuditActor } from "@api/services/audit/audit.context";
+import type { AuditLogInput } from "@iam/contracts/audit";
 import { maskMobileForAudit } from "@iam/domain/audit";
 
 export function buildInternalPurveyorRegisterAudit(

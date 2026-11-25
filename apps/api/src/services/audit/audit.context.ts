@@ -1,6 +1,6 @@
-import { getRequestId, getRequestIp, getTraceId } from "@iam/api-core/core/request-context";
-import type { AuditActorType, AuditDetails, AuditOutcome, AuditRequestContext } from "@iam/domain/audit";
-import { normalizeAuditActor } from "@iam/domain/audit";
+import { getAuditRequestContext } from "@iam/api-core/http/audit-request-context";
+import type { AuditLogInput, AuditRequestContext } from "@iam/contracts/audit";
+import { normalizeAuditActor } from "@iam/contracts/audit";
 import type { Context } from "hono";
 
 export type ApiRequestContext = AuditRequestContext;
@@ -10,40 +10,12 @@ export type InternalAuditActor = Pick<
   "actorType" | "actorUserId" | "actorUsername" | "actorClientCode" | "actorSystemKey"
 >;
 
-export type AuditLogInput = {
-  eventTime?: Date;
-  action: string;
-  outcome: AuditOutcome;
-  actorType: AuditActorType;
-  actorUserId?: number | null;
-  actorName?: string | null;
-  actorUsername?: string | null;
-  actorClientCode?: string | null;
-  actorSystemKey?: string | null;
-  targetType: string;
-  targetId?: number | null;
-  targetCode?: string | null;
-  targetName?: string | null;
-  sourceApp?: string;
-  requestId?: string | null;
-  traceId?: string | null;
-  ip?: string | null;
-  userAgent?: string | null;
-  route?: string | null;
-  method?: string | null;
-  details?: AuditDetails;
-};
+export interface AuditLogWriterPort {
+  recordAuditLog(input: AuditLogInput): Promise<void>;
+}
 
 export function getApiAuditRequestContext(c: Context): AuditRequestContext {
-  return {
-    sourceApp: "iam",
-    requestId: getRequestId(c) ?? c.req.header("x-request-id") ?? null,
-    traceId: getTraceId(c),
-    ip: getRequestIp(c),
-    userAgent: c.req.header("user-agent") ?? null,
-    route: c.req.path,
-    method: c.req.method,
-  };
+  return getAuditRequestContext(c, "iam");
 }
 
 export function withApiRequestContext(
