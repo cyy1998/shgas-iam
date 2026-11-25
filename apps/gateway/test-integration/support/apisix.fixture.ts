@@ -1,7 +1,7 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import {
-  managedServicePort,
+  managedServiceEndpoint,
   readManagedResourceRegistry,
   readManagedResourceRun,
   startManagedResources,
@@ -60,8 +60,8 @@ async function startSharedApisix(): Promise<ApisixFixture> {
     throw new Error("Invalid Gateway APISIX resource lease");
   const signal = new AbortController().signal;
   await startManagedResources(run, { signal, timeoutMs: 120_000 });
-  const port = await managedServicePort(run, "apisix", 9180, { signal, timeoutMs: 10_000 });
-  const adminUrl = `http://127.0.0.1:${port}/apisix/admin`;
+  const apisix = await managedServiceEndpoint(run, "apisix", 9180, { signal, timeoutMs: 10_000 });
+  const adminUrl = `http://${apisix.host}:${apisix.port}/apisix/admin`;
   await waitForAdmin(adminUrl, adminKey, signal);
   const fixture = { adminUrl, adminKey, signal };
   await assertEmpty(new ApisixAdminClient(fixture));

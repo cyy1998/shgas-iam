@@ -2,6 +2,7 @@
 import { spawnSync } from "node:child_process";
 import process from "node:process";
 import { runPnpmCommand } from "./run-pnpm-command.mjs";
+import { evaluateContainerSmokeTrigger } from "./verification-gate-selection.mjs";
 
 const args = process.argv.slice(2);
 const [gate, flag, base] = args;
@@ -15,13 +16,7 @@ const conditionalGates = {
     command: ["test:e2e:container-smoke"],
     label: "Container Smoke",
     pathLabel: "packaging paths",
-    pathspecs: [
-      ":(glob)**/Dockerfile",
-      ":(glob)**/nginx.conf",
-      ":(glob)**/package.json",
-      ":(glob)**/pnpm-lock.yaml",
-      ":(glob)e2e/system/docker/**",
-    ],
+    evaluate: (repoRoot, baseSha) => evaluateContainerSmokeTrigger({ repoRoot, base: baseSha }),
   },
   "e2e-runtime": {
     command: e2eRuntimeCommand,
@@ -58,18 +53,35 @@ if (!pnpmCli) {
 }
 
 if (conditional) {
-  const diff = spawnSync(
-    "git",
-    ["diff", "--quiet", "--no-renames", `${base}^{commit}`, "HEAD", "--", ...conditional.pathspecs],
-    { stdio: ["ignore", "ignore", "inherit"] },
-  );
-  if (diff.status === 0) {
-    console.log(`${conditional.label} skipped: no ${conditional.pathLabel} changed.`);
-    process.exit(0);
-  }
-  if (diff.error || diff.signal || diff.status !== 1) {
-    console.error(`Could not compare ${conditional.pathLabel} against the fixed verification base.`, diff.error ?? "");
-    process.exit(1);
+  if (conditional.evaluate) {
+    try {
+      const verdict = conditional.evaluate(process.cwd(), base);
+      if (!verdict.shouldRun) {
+        console.log(`${conditional.label} skipped: no ${conditional.pathLabel} changed.`);
+        process.exit(0);
+      }
+      console.log(`${conditional.label} triggered by: ${verdict.reasons.join("; ")}`);
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
+  } else {
+    const diff = spawnSync(
+      "git",
+      ["diff", "--quiet", "--no-renames", `${base}^{commit}`, "HEAD", "--", ...conditional.pathspecs],
+      { stdio: ["ignore", "ignore", "inherit"] },
+    );
+    if (diff.status === 0) {
+      console.log(`${conditional.label} skipped: no ${conditional.pathLabel} changed.`);
+      process.exit(0);
+    }
+    if (diff.error || diff.signal || diff.status !== 1) {
+      console.error(
+        `Could not compare ${conditional.pathLabel} against the fixed verification base.`,
+        diff.error ?? "",
+      );
+      process.exit(1);
+    }
   }
 }
 

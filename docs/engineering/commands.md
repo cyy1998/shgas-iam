@@ -145,9 +145,9 @@ pnpm test:e2e:container-smoke
 pnpm verify:container-smoke --base <target-commit-sha>
 ```
 
-第一条命令需 Docker、Compose 和本机 Chromium，可独立验证六个生产 Dockerfile、Nginx、`pnpm deploy` 依赖闭包和真实 APISIX 浏览器链路。诊断目录和资源记录路径由命令输出。异常终止后可通过上方的 `test:resources:cleanup --record` 命令清理这一个 project。
+第一条命令需 Docker、Compose 和本机 Chromium，可独立验证六个生产 Dockerfile、Nginx、`pnpm deploy` 依赖闭包和真实 APISIX 浏览器链路。镜像构建默认使用 2 路有界并发，可通过 `IAM_CONTAINER_SMOKE_BUILD_CONCURRENCY`（1–4）调整；各镜像完整构建日志保存在运行目录的 `build-<service>.log`。诊断目录和资源记录路径由命令输出。异常终止后可通过上方的 `test:resources:cleanup --record` 命令清理这一个 project。
 
-第二条命令对比固定合入基线与候选 HEAD。差异命中任意目录的 `Dockerfile`、`nginx.conf`、`package.json`、`pnpm-lock.yaml` 或 `e2e/system/docker/` 下的文件时执行一次冒烟。手动交付和 AFK 最终验证使用该入口，`pnpm verify:release` 每次运行冒烟。日常 `pnpm test:e2e` 只运行 Hybrid 业务 spec。[容器冒烟契约](testing.md#container-smoke)
+第二条命令对比固定合入基线与候选 HEAD。差异命中任意目录的 `Dockerfile`、`nginx.conf`、`pnpm-lock.yaml`，或命中 `pnpm-workspace.yaml`、`.npmrc`、`.husky/install.mjs`、`patches/`、`e2e/system/docker/`、Container Smoke 编排/spec、门禁脚本，或命中 6 个冒烟生产镜像依赖闭包内（及根）`package.json` 的打包敏感字段变更时执行一次冒烟；仅修改测试脚本、`iamTest`、非生产闭包 `package.json` 或纯后端包的 `devDependencies` 时跳过。手动交付和 AFK 最终验证使用该入口，`pnpm verify:release` 每次运行冒烟。日常 `pnpm test:e2e` 只运行 Hybrid 业务 spec。[容器冒烟契约](testing.md#container-smoke)
 
 ### 聚合验证
 
