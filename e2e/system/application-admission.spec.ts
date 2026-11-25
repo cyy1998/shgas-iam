@@ -107,7 +107,7 @@ test("Admin admission changes govern new Custom SSO and OIDC grants while existi
       await customGrant(matchingPage, origin, customClient);
       await oidcGrant(matchingPage, oidc);
 
-      const customInfo = await request.get(`${origin}/api/iam/public/user-info`, {
+      const customInfo = await request.get(`${origin}/api/iam/sso/user-info`, {
         headers: { Authorization: oldCustomToken, Client: customClient },
       });
       expect(customInfo.status()).toBe(200);
@@ -246,7 +246,7 @@ function waitForPublicClientStatus(page: Page, origin: string, clientCode: strin
     const url = new URL(response.url());
     return (
       url.origin === origin &&
-      url.pathname === "/api/iam/open/client/status" &&
+      url.pathname === "/api/iam/auth/client/status" &&
       url.searchParams.get("clientCode") === clientCode &&
       response.request().method() === "GET"
     );

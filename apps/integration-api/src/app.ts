@@ -6,7 +6,7 @@ export async function createIntegrationApiApp(options: CreateIntegrationApiCompo
   const { env, logger, routes, close } = await createIntegrationApiComposition(options);
   try {
     const app = createApp(appConfig, { env, logger, routes, middlewares: {} });
-    return { app, close, port: env.port, logger };
+    return { app, close, port: env.port, hostname: env.hostname, logger };
   } catch (error) {
     try {
       await close();

@@ -21,7 +21,7 @@ export function sanitizeReportUrl(raw: string) {
   return path
     .replace(/^([a-z][a-z\d+.-]*:\/\/)[^/]*@/iu, "$1")
     .replace(
-      /(\/(?:sso|oidc)\/wechat-qr\/(?:mobile(?:\/confirm)?\/)?)(?!callback(?:\/|$)|decision(?:\/|$)|init(?:\/|$)|start(?:\/|$))[^/\s]+/giu,
+      /(\/(?:sso|oidc|(?:api\/iam\/)?auth)\/wechat-qr\/(?:mobile(?:\/confirm)?\/)?)(?!callback(?:\/|$)|decision(?:\/|$)|init(?:\/|$)|start(?:\/|$))[^/\s]+/giu,
       "$1:id",
     );
 }
@@ -42,7 +42,7 @@ export function sanitizeReportText(value: string, secrets: readonly string[], li
       /(^|[\s"'(])((?:\/[^\s"'<>]*?)[?#][^\s"'<>]*)/gmu,
       (_value, prefix, url) => prefix + sanitizeReportUrl(url),
     )
-    .replace(/\/(?:sso|oidc)\/wechat-qr\/[^\s"'<>]+/giu, sanitizeReportUrl)
+    .replace(/\/(?:sso|oidc|(?:api\/iam\/)?auth)\/wechat-qr\/[^\s"'<>]+/giu, sanitizeReportUrl)
     .replace(/\b(Bearer|Basic)\s+[a-z\d+/=_~.-]+/giu, `$1 ${redacted}`)
     .replace(/\b(?:us|cs)_[A-Za-z\d_-]+/gu, redacted)
     .replace(/\beyJ[A-Za-z\d_-]+\.[A-Za-z\d_-]+\.[A-Za-z\d_-]+\b/gu, redacted)

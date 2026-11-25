@@ -52,7 +52,7 @@ async function submitPassword(page: Page, username: string, password: string) {
   await page.getByLabel("登录密码", { exact: true }).fill(password);
   const [response] = await Promise.all([
     page.waitForResponse((response) =>
-      /^\/sso\/wechat-qr\/[^/]+\/bind\/password$/u.test(new URL(response.url()).pathname),
+      /^\/api\/iam\/auth\/wechat-qr\/[^/]+\/bind\/password$/u.test(new URL(response.url()).pathname),
     ),
     page.getByRole("button", { name: "验证并绑定企业微信" }).click(),
   ]);
@@ -71,7 +71,7 @@ async function expectCustomIdentity(
   expect(callback.searchParams.get("state")).toBe(authorization.state);
   const token = callback.searchParams.get("token");
   if (!token) throw new Error("The original Custom SSO callback did not receive a session");
-  const identity = await page.request.get(`${authorization.url.origin}/api/iam/public/user-info`, {
+  const identity = await page.request.get(`${authorization.url.origin}/api/iam/sso/user-info`, {
     headers: { Client: client, Authorization: token },
   });
   expect(identity.status()).toBe(200);
@@ -228,7 +228,7 @@ test("application admission can reject a WeCom password binding login while pres
     const next = customAuthorization(origin, client);
     const fresh = await nextDesktop.newPage();
     const boundCompletion = fresh.waitForResponse((response) =>
-      /^\/sso\/wechat-qr\/[^/]+\/complete$/u.test(new URL(response.url()).pathname),
+      /^\/api\/iam\/auth\/wechat-qr\/[^/]+\/complete$/u.test(new URL(response.url()).pathname),
     );
     await confirmWecom(fresh, await phone.newPage(), next.url, deniedBindingMember, runtime);
     expect((await boundCompletion).status()).toBe(200);

@@ -1,13 +1,13 @@
 import process from "node:process";
 import { createSsoApiApp } from "./app";
 
-const { app, close, logger, port } = await createSsoApiApp();
+const { app, close, logger, port, hostname } = await createSsoApiApp();
 const server = await bind();
 logger.info({ event: "sso.api.started", port: server.port }, `server: http://localhost:${server.port}`);
 
 async function bind() {
   try {
-    return Bun.serve({ port, fetch: app.fetch });
+    return Bun.serve({ hostname, port, fetch: app.fetch });
   } catch (error) {
     try {
       await close();

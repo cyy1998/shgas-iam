@@ -89,18 +89,17 @@ for (const entry of ["internal", "external"] as const) {
       const interaction = (await page.context().cookies(entryOrigin)).find(
         (cookie) => cookie.name === "oidc_interaction_binding",
       );
-      // Path=/oidc means it is visible only on that path.
-      expect(interaction).toBeUndefined();
-      const interactionAtProtocol = (await page.context().cookies(`${entryOrigin}/oidc/resume`)).find(
-        (cookie) => cookie.name === "oidc_interaction_binding",
-      );
-      expect(interactionAtProtocol).toMatchObject({
+      expect(interaction).toMatchObject({
         domain: new URL(entryOrigin).hostname,
-        path: "/oidc",
+        path: "/",
         httpOnly: true,
         sameSite: "Lax",
       });
+      const completion = page.waitForResponse((response) => new URL(response.url()).pathname === "/oidc/resume");
       await login(page, entryOrigin, runtime);
+      expect(await (await completion).headerValue("set-cookie")).toMatch(
+        /oidc_login_completion=[^\r\n]*; Path=\/oidc;/u,
+      );
       await expect(page).toHaveURL(
         (url) => url.origin === runtime.origin && url.pathname === "/e2e/oidc/callback" && url.searchParams.has("code"),
       );
@@ -143,7 +142,11 @@ for (const entry of ["internal", "external"] as const) {
         sub: claims.sub,
         preferred_username: runtime.references.adminUsername,
       });
-      await page.goto(`${entryOrigin}/oidc/session/end`);
+      const logoutPage = await page.goto(`${entryOrigin}/oidc/session/end`);
+      const logoutCookies = await logoutPage?.headerValues("set-cookie");
+      for (const name of ["oidc_logout_binding", "oidc_logout_request"]) {
+        expect(logoutCookies?.find((cookie) => cookie.startsWith(`${name}=`))).toContain("Path=/oidc/session/end;");
+      }
       const confirmation = page.waitForResponse((response) => {
         const target = new URL(response.url());
         return (
@@ -230,7 +233,7 @@ for (const entry of ["internal", "external"] as const) {
     if (other !== entryOrigin)
       expect((await page.context().cookies(other)).find((cookie) => cookie.name === localCookieName)).toBeUndefined();
     const userInfo = () =>
-      gatewayRequest(request, entryOrigin, "/api/iam/public/user-info", {
+      gatewayRequest(request, entryOrigin, "/api/iam/sso/user-info", {
         headers: { Authorization: token, Client: customClient },
       });
     const before = await userInfo();
@@ -288,7 +291,7 @@ for (const entry of ["internal", "external"] as const) {
     const result = await exchanged.json();
     expect(result.data.sid).toBeTruthy();
     expect(result.data.ttl).toBeGreaterThan(0);
-    const userInfo = await gatewayRequest(request, entryOrigin, "/api/iam/public/user-info", {
+    const userInfo = await gatewayRequest(request, entryOrigin, "/api/iam/sso/user-info", {
       headers: { Authorization: result.data.sid, Client: businessClient },
     });
     expect(userInfo.status()).toBe(200);
@@ -324,4 +327,54 @@ test("configured entry metadata uses shared JWKS without merging distinct issuer
   const internalKeys = await internal.json();
   expect(internalKeys.keys.length).toBeGreaterThan(0);
   expect(internalKeys).toEqual(await external.json());
+});
+
+test("APISIX preserves M2M authentication on the canonical path and compatibility alias", async ({
+  request,
+  runtime,
+}) => {
+  for (const origin of [runtime.internalOrigin, runtime.origin]) {
+    for (const [apikey, status] of [
+      [runtime.internalApiKey, 200],
+      ["invalid", 401],
+    ] as const) {
+      const headers = { apikey };
+      const canonical = await gatewayRequest(request, origin, "/api/iam/internal/authz", { headers });
+      const legacy = await gatewayRequest(request, origin, "/api/iam/auth/internal-authz", { headers });
+      expect(canonical.status()).toBe(status);
+      expect(legacy.status()).toBe(status);
+      expect(await legacy.json()).toEqual(await canonical.json());
+    }
+  }
+});
+
+test("APISIX routes the fixed OA and WeCom callbacks on both entry hosts", async ({ request, runtime }) => {
+  for (const origin of [runtime.internalOrigin, runtime.origin]) {
+    for (const path of ["/sso/thirdparty/oa", "/sso/third-party/wx"]) {
+      const callback = await gatewayRequest(request, origin, path);
+      expect(callback.status()).toBe(422);
+      expect((await callback.json()).code).toBe("COMMON.VALIDATION_FAILED");
+    }
+  }
+});
+
+test("APISIX uses the entry host to gate desktop WeCom QR creation", async ({ request, runtime }) => {
+  const path = "/api/iam/auth/wechat-qr";
+  const internal = await gatewayRequest(request, runtime.internalOrigin, path, {
+    method: "POST",
+    headers: { "X-IAM-Entry-Network": "external" },
+  });
+  expect(internal.status()).toBe(400);
+  const external = await gatewayRequest(request, runtime.origin, path, {
+    method: "POST",
+    headers: { "X-IAM-Entry-Network": "internal" },
+  });
+  expect(external.status()).toBe(404);
+});
+
+test("APISIX separates SSO protocol URLs from the subject delivery prefix", async ({ request, runtime }) => {
+  for (const path of ["/api/iam/sso/.well-known/authentication-configuration", "/sso/user-info", "/sso/authz"]) {
+    const response = await gatewayRequest(request, runtime.origin, path);
+    expect(response.status()).toBe(404);
+  }
 });

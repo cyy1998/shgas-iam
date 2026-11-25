@@ -26,7 +26,7 @@ import {
 import { runWithCleanup } from "./bounded-operation.ts";
 import { buildContainerSmokeImages, parseContainerSmokeBuildConcurrency } from "./container-smoke-build.ts";
 import { createE2EGatewayApiKey } from "./gateway-credential.ts";
-import { publishGateway } from "./gateway-sync.ts";
+import { iamGatewayManifest, publishGateway } from "./gateway-sync.ts";
 import { apisixAdminKey, e2eDatabaseName, e2eDatabasePassword } from "./hybrid-compose.ts";
 import { allocateAvailablePort } from "./port-allocation.ts";
 import { createE2EScenarioIdentity, createE2EScenarioInternalApiKey } from "./seed.ts";
@@ -189,7 +189,7 @@ export async function runContainerSmoke(options: {
       console.log("[container-smoke] publish APISIX routes");
       const gatewayApi = await endpoint("gateway-api", smokeGatewayApiPort);
       await publishGateway({
-        yaml: await readFile(resolve(workspaceRoot, "test-assets/iam.yaml"), "utf8"),
+        yaml: await readFile(iamGatewayManifest, "utf8"),
         clientSecret: createE2EGatewayApiKey(runId),
         gatewayOrigin: `http://${gatewayApi.host}:${gatewayApi.port}`,
         adminUrl: `http://${apisixAdmin.host}:${apisixAdmin.port}/apisix/admin`,
@@ -199,8 +199,12 @@ export async function runContainerSmoke(options: {
           APISIX_OTEL_COLLECTOR_ENDPOINT: "127.0.0.1:9",
           IAM_SSO_INTERNAL_HOST: new URL(internalOrigin).host,
           IAM_SSO_EXTERNAL_HOST: new URL(origin).host,
-          DEV_IAM_API_UPSTREAM_HOST: "api",
-          DEV_IAM_API_UPSTREAM_PORT: "30000",
+          DEV_IAM_AUTH_API_UPSTREAM_HOST: "auth-api",
+          DEV_IAM_AUTH_API_UPSTREAM_PORT: "30000",
+          DEV_IAM_SSO_API_UPSTREAM_HOST: "sso-api",
+          DEV_IAM_SSO_API_UPSTREAM_PORT: "30002",
+          DEV_IAM_INTEGRATION_API_UPSTREAM_HOST: "integration-api",
+          DEV_IAM_INTEGRATION_API_UPSTREAM_PORT: "30005",
           DEV_IAM_ADMIN_API_UPSTREAM_HOST: "admin-api",
           DEV_IAM_ADMIN_API_UPSTREAM_PORT: "30001",
           DEV_IAM_SSO_FRONTEND_UPSTREAM_HOST: "sso",

@@ -9,7 +9,7 @@ import { e2eLoginCredentialEnvironment } from "./login-credential-config.ts";
 import { allocateAvailablePort } from "./port-allocation.ts";
 import { wecomAgent, wecomCorp, wecomMobileCallbackPath, wecomSecret } from "./wecom-provider.ts";
 
-const backendServices = ["api", "admin-api", "worker", "gateway-api"] as const;
+const backendServices = ["auth-api", "sso-api", "integration-api", "admin-api", "worker", "gateway-api"] as const;
 export type BackendService = (typeof backendServices)[number];
 const hostname = "127.0.0.1";
 
@@ -28,9 +28,11 @@ type HostProcess = Awaited<ReturnType<typeof startHostProcess>>;
 export async function createHostBackends(options: HostBackendsOptions) {
   const ports = new Set<number>();
   while (ports.size < backendServices.length) ports.add(await allocateAvailablePort());
-  const [apiPort, adminApiPort, workerPort, gatewayApiPort] = ports;
+  const [authApiPort, ssoApiPort, integrationApiPort, adminApiPort, workerPort, gatewayApiPort] = ports;
   const origins = {
-    api: `http://${hostname}:${apiPort}`,
+    "auth-api": `http://${hostname}:${authApiPort}`,
+    "sso-api": `http://${hostname}:${ssoApiPort}`,
+    "integration-api": `http://${hostname}:${integrationApiPort}`,
     "admin-api": `http://${hostname}:${adminApiPort}`,
     worker: `http://${hostname}:${workerPort}`,
     "gateway-api": `http://${hostname}:${gatewayApiPort}`,
@@ -106,7 +108,7 @@ function backendCommands(options: HostBackendsOptions, origins: Record<BackendSe
   const port = (service: BackendService) => new URL(origins[service]).port;
   const env = Object.fromEntries(
     Object.entries(options.middleware.hostEnvironment).filter(
-      ([name]) => !/^IAM_(API|ADMIN_API|WORKER|GATEWAY)_/iu.test(name),
+      ([name]) => !/^IAM_(API|AUTH_API|SSO_API|INTEGRATION_API|ADMIN_API|WORKER|GATEWAY)_/iu.test(name),
     ),
   );
   const common = { ...env, NODE_ENV: "development", DATABASE_URL: databaseUrl };
@@ -114,45 +116,64 @@ function backendCommands(options: HostBackendsOptions, origins: Record<BackendSe
   const jwk = { ...privateKey.export({ format: "jwk" }), kid: "e2e-runtime-rs256", alg: "RS256", use: "sig" };
 
   return {
-    api: {
-      cwd: app("api"),
+    "auth-api": {
+      cwd: app("auth-api"),
       args: [
         "--tsconfig-override",
-        join(app("api"), "tsconfig.json"),
-        join(options.repositoryRoot, "e2e/system/src/start-host-api.mts"),
+        join(app("auth-api"), "tsconfig.json"),
+        join(options.repositoryRoot, "e2e/system/src/start-host-auth-api.mts"),
       ],
-      healthPath: "/sso/.well-known/authentication-configuration",
+      healthPath: "/ready",
       env: {
         ...common,
         IAM_E2E_RUN_ID: options.seedRunId,
         IAM_E2E_SMS_DELIVERY_PATH: options.smsDeliveryPath,
-        IAM_API_DATABASE_URL: databaseUrl,
-        IAM_API_REDIS_URL: redisUrl,
-        IAM_API_PORT: port("api"),
-        IAM_API_LOG_FORMAT: "json",
-        IAM_API_PASSWORD_HASH_ROUNDS: "10",
-        IAM_API_MAGIC_CODE: "1234",
-        IAM_API_CAP_ENABLED: "false",
+        IAM_AUTH_API_DATABASE_URL: databaseUrl,
+        IAM_AUTH_API_REDIS_URL: redisUrl,
+        IAM_AUTH_API_PORT: port("auth-api"),
+        IAM_AUTH_API_LOG_FORMAT: "json",
+        IAM_AUTH_API_MAGIC_CODE: "1234",
+        IAM_AUTH_API_CAP_ENABLED: "false",
         ...e2eLoginCredentialEnvironment,
-        IAM_API_SESSION_KERNEL_NAMESPACE: "iam:session",
-        IAM_API_OIDC_CURRENT_JWK_JSON: JSON.stringify(jwk),
-        IAM_API_OIDC_COOKIE_SECURE: "false",
-        IAM_API_WECHAT_CORP_ID: wecomCorp,
-        IAM_API_WECHAT_CORP_SECRET: wecomSecret,
-        IAM_API_WECHAT_QR_AGENT_ID: wecomAgent,
-        IAM_API_WECHAT_QR_CALLBACK_URL: new URL(wecomMobileCallbackPath, options.wecomMobileOrigin).href,
-        IAM_API_SMS_URL: "http://127.0.0.1:9/test-sms",
-        IAM_API_SMS_SIGNATURE_KEY: "e2e-sms",
-        IAM_API_USER_SESSION_TTL_SECONDS: "86400",
-        IAM_API_CLIENT_SESSION_TTL_SECONDS: "86400",
-        IAM_API_CUSTOM_SSO_TOKEN_TTL_SECONDS: "86400",
-        IAM_API_AUTH_CODE_TTL_SECONDS: "300",
-        IAM_API_LOGIN_ENDPOINT: "/portal/login",
-        IAM_API_SSO_INTERNAL_ORIGIN: options.internalOrigin,
-        IAM_API_SSO_EXTERNAL_ORIGIN: options.origin,
-        IAM_API_AUTHORIZATION_ENDPOINT: "/sso/authorize",
-        IAM_API_LOGOUT_ENDPOINT: "/sso/logout",
-        IAM_API_THIRDPARTY_OA_ENDPOINT: "/sso/thirdparty/oa",
+        IAM_AUTH_API_WECHAT_CORP_ID: wecomCorp,
+        IAM_AUTH_API_WECHAT_CORP_SECRET: wecomSecret,
+        IAM_AUTH_API_WECHAT_QR_AGENT_ID: wecomAgent,
+        IAM_AUTH_API_WECHAT_QR_CALLBACK_URL: new URL(wecomMobileCallbackPath, options.wecomMobileOrigin).href,
+        IAM_AUTH_API_SMS_URL: "http://127.0.0.1:9/test-sms",
+        IAM_AUTH_API_SMS_SIGNATURE_KEY: "e2e-sms",
+        IAM_AUTH_API_SSO_INTERNAL_ORIGIN: options.internalOrigin,
+        IAM_AUTH_API_SSO_EXTERNAL_ORIGIN: options.origin,
+      },
+    },
+    "sso-api": {
+      cwd: app("sso-api"),
+      args: ["src/index.ts"],
+      healthPath: "/ready",
+      env: {
+        ...common,
+        IAM_SSO_API_DATABASE_URL: databaseUrl,
+        IAM_SSO_API_REDIS_URL: redisUrl,
+        IAM_SSO_API_PORT: port("sso-api"),
+        IAM_SSO_API_HOSTNAME: hostname,
+        IAM_SSO_API_LOG_FORMAT: "json",
+        IAM_SSO_API_OIDC_CURRENT_JWK_JSON: JSON.stringify(jwk),
+        IAM_SSO_API_OIDC_COOKIE_SECURE: "false",
+        IAM_SSO_API_WECHAT_QR_ENABLED: "true",
+        IAM_SSO_API_SSO_INTERNAL_ORIGIN: options.internalOrigin,
+        IAM_SSO_API_SSO_EXTERNAL_ORIGIN: options.origin,
+      },
+    },
+    "integration-api": {
+      cwd: app("integration-api"),
+      args: ["src/index.ts"],
+      healthPath: "/ready",
+      env: {
+        ...common,
+        IAM_INTEGRATION_API_DATABASE_URL: databaseUrl,
+        IAM_INTEGRATION_API_REDIS_URL: redisUrl,
+        IAM_INTEGRATION_API_PORT: port("integration-api"),
+        IAM_INTEGRATION_API_HOSTNAME: hostname,
+        IAM_INTEGRATION_API_LOG_FORMAT: "json",
       },
     },
     "admin-api": {

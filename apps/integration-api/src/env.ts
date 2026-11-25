@@ -6,6 +6,7 @@ const RawEnvSchema = z
   .object({
     NODE_ENV: z.string().default("development"),
     IAM_INTEGRATION_API_PORT: z.coerce.number().int().min(1).max(65535).default(30005),
+    IAM_INTEGRATION_API_HOSTNAME: optionalNonEmptyString(),
     IAM_INTEGRATION_API_DATABASE_URL: z.string().min(1),
     IAM_INTEGRATION_API_REDIS_URL: redisUrlString(),
     IAM_INTEGRATION_API_LOG_LEVEL: z.string().default("info"),
@@ -34,6 +35,7 @@ export function parseIntegrationApiEnv(source: NodeJS.ProcessEnv) {
   return {
     nodeEnv: raw.NODE_ENV,
     port: raw.IAM_INTEGRATION_API_PORT,
+    hostname: raw.IAM_INTEGRATION_API_HOSTNAME,
     databaseUrl: raw.IAM_INTEGRATION_API_DATABASE_URL,
     redis: raw.IAM_INTEGRATION_API_REDIS_URL,
     log: { level: raw.IAM_INTEGRATION_API_LOG_LEVEL, format: raw.IAM_INTEGRATION_API_LOG_FORMAT },

@@ -145,8 +145,8 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   const localSession = callback.searchParams.get("token");
   expect(localSession).toEqual(expect.any(String));
 
-  const userInfoRequest = () =>
-    context.request.get(`${origin}/api/iam/public/user-info`, {
+  const userInfoRequest = (path = "/api/iam/sso/user-info") =>
+    context.request.get(new URL(path, origin).href, {
       headers: {
         Authorization: String(localSession),
         Client: encodeURIComponent(customSsoClientCode),
@@ -155,6 +155,9 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   const initialUserInfo = await userInfoRequest();
   expect(initialUserInfo.status()).toBe(200);
   const initialUserInfoBody = await initialUserInfo.json();
+  const legacyUserInfo = await userInfoRequest("/api/iam/public/user-info");
+  expect(legacyUserInfo.status()).toBe(200);
+  expect(await legacyUserInfo.json()).toEqual(initialUserInfoBody);
   expect(initialUserInfoBody).toMatchObject({
     data: {
       version: 5,
@@ -185,16 +188,19 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   });
   expect(JSON.stringify(initialUserInfoBody.data.authorization)).not.toContain("responsibilit");
 
-  const authzResponse = await context.request.get(`${origin}/api/iam/auth/authz`, {
-    headers: {
-      Authorization: String(localSession),
-      Client: encodeURIComponent(customSsoClientCode),
-      "X-Forwarded-Uri": "/e2e/responsibility-acceptance",
-    },
-  });
+  const authzHeaders = {
+    Authorization: String(localSession),
+    Client: encodeURIComponent(customSsoClientCode),
+    "X-Forwarded-Uri": "/e2e/responsibility-acceptance",
+  };
+  const authzResponse = await context.request.get(`${origin}/api/iam/sso/authz`, { headers: authzHeaders });
   expect(authzResponse.status()).toBe(200);
   const authzBody = (await authzResponse.json()) as { data: string };
   expect(authzResponse.headers()["x-user-info"]).toBe(authzBody.data);
+  const legacyAuthz = await context.request.get(`${origin}/api/iam/auth/authz`, { headers: authzHeaders });
+  expect(legacyAuthz.status()).toBe(200);
+  expect(await legacyAuthz.json()).toEqual(authzBody);
+  expect(legacyAuthz.headers()["x-user-info"]).toBe(authzBody.data);
   const gatewaySubject = Buffer.from(authzBody.data, "base64").toString("utf8");
   expect(gatewaySubject).not.toMatch(/responsibilit|employment|authorization/iu);
 
@@ -266,7 +272,7 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   const renewedLocalSession = renewedCallback.searchParams.get("token");
   expect(renewedLocalSession).toEqual(expect.any(String));
   expect(renewedLocalSession).not.toBe(localSession);
-  const renewedUserInfo = await context.request.get(`${origin}/api/iam/public/user-info`, {
+  const renewedUserInfo = await context.request.get(`${origin}/api/iam/sso/user-info`, {
     headers: {
       Authorization: String(renewedLocalSession),
       Client: encodeURIComponent(customSsoClientCode),

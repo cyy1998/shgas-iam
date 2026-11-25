@@ -58,7 +58,7 @@ test("WeCom confirmation on the public phone updates the originating internal br
     expect(insecureResponse.headers()["set-cookie"]).toBeUndefined();
 
     const requestId = qrUrl.pathname.split("/").at(-1);
-    const streamPath = `/sso/wechat-qr/${requestId}/events`;
+    const streamPath = `/api/iam/auth/wechat-qr/${requestId}/events`;
     const desktopStatuses = () =>
       events
         .filter(({ url }) => {
@@ -146,7 +146,7 @@ test("WeCom confirmation continues the original Custom SSO request after switchi
     let confirmed = false;
     const completionRequests: string[] = [];
     desktopNetwork.on("Network.responseReceived", ({ requestId, response }) => {
-      if (/^\/sso\/wechat-qr\/[^/]+\/events$/u.test(new URL(response.url).pathname)) streams.add(requestId);
+      if (/^\/api\/iam\/auth\/wechat-qr\/[^/]+\/events$/u.test(new URL(response.url).pathname)) streams.add(requestId);
     });
     desktopNetwork.on("Network.eventSourceMessageReceived", ({ requestId, data }) => {
       if (streams.has(requestId) && JSON.parse(data).status === "confirmed") confirmed = true;
@@ -158,7 +158,7 @@ test("WeCom confirmation continues the original Custom SSO request after switchi
     const mobileLink = await page.getByRole("link", { name: "企业微信扫码链接" }).getAttribute("href");
     if (!mobileLink) throw new Error("WeCom QR did not expose its mobile destination");
     const requestId = new URL(mobileLink).pathname.split("/").at(-1);
-    const completePath = `/sso/wechat-qr/${requestId}/complete`;
+    const completePath = `/api/iam/auth/wechat-qr/${requestId}/complete`;
 
     await page.getByRole("button", { name: "账号登录" }).click();
     await page.getByLabel("工号 / 账号").fill(delegatee);
@@ -186,7 +186,7 @@ test("WeCom confirmation continues the original Custom SSO request after switchi
     const token = result.searchParams.get("token");
     if (!token) throw new Error("The original Custom SSO callback did not receive a session");
     expect(completionRequests).toHaveLength(1);
-    const identity = await page.request.get(`${desktopOrigin}/api/iam/public/user-info`, {
+    const identity = await page.request.get(`${desktopOrigin}/api/iam/sso/user-info`, {
       headers: { Client: client, Authorization: token },
     });
     expect(identity.status()).toBe(200);
