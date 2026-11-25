@@ -1,0 +1,68 @@
+{
+  "name": "@iam/auth-api",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "devEngines": {
+    "runtime": {
+      "name": "bun",
+      "version": "1.4.4"
+    }
+  },
+  "scripts": {
+    "dev": "bun --hot src/index.ts",
+    "serve": "bun run src/index.ts",
+    "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
+    "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
+    "test": "pnpm test:unit",
+    "test:unit": "bun test --max-concurrency=2 src",
+    "typecheck": "pnpm exec tsc --noEmit",
+    "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
+    "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check",
+    "test:integration:bun": "node ../../scripts/run-package-integration.mjs bun -- bun test test-integration"
+  },
+  "dependencies": {
+    "@cap.js/server": "^4.0.5",
+    "@hono/zod-openapi": "^1.6.3",
+    "@iam/api-core": "workspace:*",
+    "@iam/client-snapshot": "workspace:*",
+    "@iam/client-subject-projection": "workspace:*",
+    "@iam/contracts": "workspace:*",
+    "@iam/custom-sso": "workspace:*",
+    "@iam/db": "workspace:*",
+    "@iam/documents": "workspace:*",
+    "@iam/domain": "workspace:*",
+    "@iam/login-restriction": "workspace:*",
+    "@iam/oidc": "workspace:*",
+    "@iam/runtime": "workspace:*",
+    "@iam/session-kernel": "workspace:*",
+    "@iam/sms": "workspace:*",
+    "@iam/subject-access": "workspace:*",
+    "@iam/unit-of-work": "workspace:*",
+    "bcrypt": "^6.0.0",
+    "drizzle-orm": "1.0.0-rc.2",
+    "hono": "^4.13.19",
+    "ioredis": "^6.0.0",
+    "pino": "^10.4.0",
+    "pngjs": "7.0.0",
+    "postgres": "^3.4.9",
+    "sm-crypto": "^0.5.9",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@iam/test-support": "workspace:*",
+    "@types/bun": "latest",
+    "@types/pngjs": "6.0.5",
+    "@types/sm-crypto": "^0.3.4",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  },
+  "iamTest": {
+    "integration": {
+      "bun": {
+        "postgres": "IAM_AUTH_API_TEST_DATABASE_URL",
+        "redis": "IAM_AUTH_API_TEST_REDIS_URL"
+      }
+    }
+  }
+}
