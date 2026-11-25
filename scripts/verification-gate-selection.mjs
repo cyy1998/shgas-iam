@@ -7,6 +7,11 @@ const smokeProductionApps = {
   frontend: ["apps/admin", "apps/sso"],
 };
 
+const e2eRuntimeApps = {
+  backend: ["apps/api", "apps/admin-api", "apps/worker", "apps/gateway", "packages/db", "packages/runtime"],
+  frontend: ["apps/admin", "apps/sso"],
+};
+
 const rootPackagingFields = [
   "name",
   "packageManager",
@@ -52,6 +57,18 @@ const unconditionalContainerSmokeMatchers = [
   (path) => path === "e2e/system/src/container-smoke.ts",
   (path) => path === "e2e/system/src/container-smoke-build.ts",
   (path) => path === "scripts/run-verification-gate.mjs" || path === "scripts/verification-gate-selection.mjs",
+];
+
+const unconditionalE2eRuntimeMatchers = [
+  (path) => path.startsWith("e2e/system/"),
+  (path) => path.startsWith("packages/runtime/"),
+  (path) => path.startsWith("scripts/test-resources/"),
+  (path) => path === "scripts/run-verification-gate.mjs" || path === "scripts/verification-gate-selection.mjs",
+  (path) => path === "pnpm-lock.yaml",
+  (path) => path === "pnpm-workspace.yaml",
+  (path) => path === ".npmrc",
+  (path) => path === "turbo.json",
+  (path) => /(?:^|\/)vite\.config\.[^/]+$/u.test(path),
 ];
 
 function isPackageManifest(path) {
@@ -100,7 +117,8 @@ function collectWorkspaceGraph(repoRoot) {
   return { byName, byManifestPath, invalidManifests };
 }
 
-function expandClosure(repoRoot, appDirectories, graph) {
+function expandClosure(repoRoot, workspaceDirectories, graph, options = {}) {
+  const { includeDockerCopies = true } = options;
   const manifestPaths = new Set();
   const queue = [];
   const enqueueManifest = (manifestPath) => {
@@ -110,12 +128,14 @@ function expandClosure(repoRoot, appDirectories, graph) {
     if (node) queue.push(node);
   };
 
-  for (const appDir of appDirectories) {
-    enqueueManifest(`${appDir}/package.json`);
-    const dockerfilePath = join(repoRoot, appDir, "Dockerfile");
-    if (existsSync(dockerfilePath)) {
-      for (const copied of collectDockerCopyManifests(readFileSync(dockerfilePath, "utf8"))) {
-        if (copied !== "package.json") enqueueManifest(copied);
+  for (const workspaceDir of workspaceDirectories) {
+    enqueueManifest(`${workspaceDir}/package.json`);
+    if (includeDockerCopies) {
+      const dockerfilePath = join(repoRoot, workspaceDir, "Dockerfile");
+      if (existsSync(dockerfilePath)) {
+        for (const copied of collectDockerCopyManifests(readFileSync(dockerfilePath, "utf8"))) {
+          if (copied !== "package.json") enqueueManifest(copied);
+        }
       }
     }
   }
@@ -139,6 +159,15 @@ export function collectContainerSmokeManifestClosures(repoRoot) {
   };
 }
 
+export function collectE2eRuntimeManifestClosures(repoRoot) {
+  const graph = collectWorkspaceGraph(repoRoot);
+  return {
+    frontend: expandClosure(repoRoot, e2eRuntimeApps.frontend, graph, { includeDockerCopies: false }),
+    backend: expandClosure(repoRoot, e2eRuntimeApps.backend, graph, { includeDockerCopies: false }),
+    invalidManifests: graph.invalidManifests,
+  };
+}
+
 function canonicalizeValue(value) {
   if (Array.isArray(value)) return value.map(canonicalizeValue);
   if (value && typeof value === "object") {
@@ -152,7 +181,7 @@ function canonicalizeValue(value) {
   return value;
 }
 
-function packagingSnapshot(manifest, scope) {
+function packagingSnapshot(manifest, scope, gate) {
   const fields =
     scope === "root" ? rootPackagingFields : scope === "frontend" ? frontendPackagingFields : backendPackagingFields;
   const snapshot = {};
@@ -161,15 +190,31 @@ function packagingSnapshot(manifest, scope) {
       snapshot[field] = canonicalizeValue(manifest[field]);
     }
   }
-  if (scope === "frontend" && manifest.scripts && typeof manifest.scripts === "object") {
-    if (manifest.scripts.build !== undefined) snapshot["scripts.build"] = manifest.scripts.build;
+  if (manifest.scripts && typeof manifest.scripts === "object") {
+    if (scope === "frontend") {
+      if (manifest.scripts.build !== undefined) snapshot["scripts.build"] = manifest.scripts.build;
+      if (gate === "e2e-runtime" && manifest.scripts.dev !== undefined) snapshot["scripts.dev"] = manifest.scripts.dev;
+    } else if (gate === "e2e-runtime" && scope === "backend") {
+      if (manifest.scripts["db:migrate"] !== undefined) {
+        snapshot["scripts.db:migrate"] = manifest.scripts["db:migrate"];
+      }
+    } else if (gate === "e2e-runtime" && scope === "root") {
+      for (const [scriptName, scriptValue] of Object.entries(manifest.scripts)) {
+        if (
+          scriptValue !== undefined &&
+          (scriptName === "test:e2e" || scriptName.startsWith("test:e2e:") || scriptName === "verify:e2e-runtime")
+        ) {
+          snapshot[`scripts.${scriptName}`] = scriptValue;
+        }
+      }
+    }
   }
   return snapshot;
 }
 
-export function diffManifestPackagingFields(baseManifest, headManifest, scope) {
-  const left = packagingSnapshot(baseManifest, scope);
-  const right = packagingSnapshot(headManifest, scope);
+export function diffManifestPackagingFields(baseManifest, headManifest, scope, gate = "container-smoke") {
+  const left = packagingSnapshot(baseManifest, scope, gate);
+  const right = packagingSnapshot(headManifest, scope, gate);
   const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
   const changed = [];
   for (const key of [...keys].sort()) {
@@ -201,8 +246,8 @@ function parseNameStatusOutput(output) {
   return entries;
 }
 
-export function evaluateContainerSmokeTrigger(options) {
-  const { repoRoot, base, head = "HEAD" } = options;
+function evaluateSemanticGateTrigger(options) {
+  const { repoRoot, base, head = "HEAD", gate, pathLabel, unconditionalMatchers, collectClosures } = options;
   const diff = spawnSync("git", ["diff", "--name-status", "--no-renames", "-z", `${base}^{commit}`, head], {
     cwd: repoRoot,
     encoding: "utf8",
@@ -210,7 +255,7 @@ export function evaluateContainerSmokeTrigger(options) {
   });
   if (diff.error || diff.signal || diff.status !== 0) {
     throw new Error(
-      `Could not compare packaging paths against the fixed verification base.${diff.error ? ` ${diff.error.message}` : ""}`,
+      `Could not compare ${pathLabel} against the fixed verification base.${diff.error ? ` ${diff.error.message}` : ""}`,
     );
   }
 
@@ -220,7 +265,7 @@ export function evaluateContainerSmokeTrigger(options) {
   const reasons = [];
   const manifestChanges = [];
   for (const change of changes) {
-    if (unconditionalContainerSmokeMatchers.some((matches) => matches(change.path))) {
+    if (unconditionalMatchers.some((matches) => matches(change.path))) {
       reasons.push(`${change.path} (${change.status})`);
     } else if (isPackageManifest(change.path)) {
       manifestChanges.push(change);
@@ -230,7 +275,7 @@ export function evaluateContainerSmokeTrigger(options) {
     return { shouldRun: reasons.length > 0, reasons };
   }
 
-  const closures = collectContainerSmokeManifestClosures(repoRoot);
+  const closures = collectClosures(repoRoot);
   for (const change of manifestChanges) {
     if (closures.invalidManifests.has(change.path)) {
       reasons.push(`${change.path} (invalid JSON manifest)`);
@@ -264,11 +309,31 @@ export function evaluateContainerSmokeTrigger(options) {
       reasons.push(`${change.path} (invalid JSON manifest)`);
       continue;
     }
-    const changedFields = diffManifestPackagingFields(baseManifest, headManifest, scope);
+    const changedFields = diffManifestPackagingFields(baseManifest, headManifest, scope, gate);
     if (changedFields.length > 0) {
       reasons.push(`${change.path} (${changedFields.join(", ")})`);
     }
   }
 
   return { shouldRun: reasons.length > 0, reasons };
+}
+
+export function evaluateContainerSmokeTrigger(options) {
+  return evaluateSemanticGateTrigger({
+    ...options,
+    gate: "container-smoke",
+    pathLabel: "packaging paths",
+    unconditionalMatchers: unconditionalContainerSmokeMatchers,
+    collectClosures: collectContainerSmokeManifestClosures,
+  });
+}
+
+export function evaluateE2eRuntimeTrigger(options) {
+  return evaluateSemanticGateTrigger({
+    ...options,
+    gate: "e2e-runtime",
+    pathLabel: "E2E runtime paths",
+    unconditionalMatchers: unconditionalE2eRuntimeMatchers,
+    collectClosures: collectE2eRuntimeManifestClosures,
+  });
 }

@@ -129,7 +129,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [ADR-0053](adr/0053-bind-wecom-identities-through-one-qr-flow.md)                                    | decision | Current    | 2026-11-17    | 2026-12-17  | 已确认的设计：统一扫码流程、多身份绑定与旧接口兼容。                                                                                    |
 | [ADR-0054](adr/0054-disclose-directory-custom-attributes-to-all-eligible-clients.md)                 | decision | Current    | 2026-11-22    | 2026-12-22  | 已确认的设计：目录自定义属性向具备入口调用资格的应用统一披露。                                                                          |
 | [ADR-0055](adr/0055-adopt-hybrid-host-runtime-for-full-system-e2e.md)                                | decision | Current    | 2026-11-25    | 2026-12-25  | 已确认的设计：混合宿主运行时 E2E、整库复位、原生 Playwright 入口、AFK 路由与独立容器冒烟。                                              |
-| [ADR-0056](adr/0056-accelerate-integration-tests-with-template-isolation-and-bounded-parallelism.md) | decision | Current    | 2026-11-24    | 2026-12-24  | 已确认的设计：Integration PG 模板隔离与非持久 `tmpfs`、Redis 多 DB 有界并发、静态前端托管、Windows Job 缓存与 `e2e-system` 路径门禁。   |
+| [ADR-0056](adr/0056-accelerate-integration-tests-with-template-isolation-and-bounded-parallelism.md) | decision | Current    | 2026-11-25    | 2026-12-25  | 已确认的设计：Integration PG 模板隔离与非持久 `tmpfs`、Redis 多 DB 有界并发、静态前端托管、Windows Job 缓存与 `e2e-system` 路径门禁。   |
 
 </details>
 

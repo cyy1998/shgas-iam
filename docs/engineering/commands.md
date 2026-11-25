@@ -110,7 +110,7 @@ pnpm --filter @iam/e2e-system test:integration
 pnpm verify:e2e-runtime --base <target-commit-sha>
 ```
 
-路径门禁比较固定基线与候选 HEAD。差异命中 `e2e/system/**`、`packages/runtime/**`、`scripts/test-resources/**`、`scripts/run-verification-gate.mjs`、任意目录的 `package.json`、`vite.config.*`、`Dockerfile` 或根 `pnpm-lock.yaml`、`turbo.json` 时，门禁运行一次编排器 Integration。无匹配时打印跳过信息，基线非法或 Git 比较失败时以非零状态退出。
+路径门禁比较固定基线与候选 HEAD。差异命中 `e2e/system/**`、`packages/runtime/**`、`scripts/test-resources/**`、门禁脚本、`pnpm-lock.yaml`、`pnpm-workspace.yaml`、`.npmrc`、`turbo.json`、`**/vite.config.*`，或命中 Hybrid E2E 运行时闭包内（及根）`package.json` 的运行时/构建敏感字段（前端闭包另含 `devDependencies`、`scripts.build` 与 `scripts.dev`，后端闭包另含 `scripts.db:migrate`，根清单另含 `test:e2e*` 与 `verify:e2e-runtime`）时，门禁运行一次编排器 Integration；仅修改应用生产 `Dockerfile`、测试脚本、`iamTest` 或非闭包 `package.json` 时跳过。无匹配时打印跳过信息，基线非法或 Git 比较失败时以非零状态退出。
 
 完整系统入口为 `pnpm test:e2e`。需要 Chromium 时按环境选择 `pnpm e2e:install`（含系统依赖）或
 `pnpm e2e:install:browsers`。就绪、文件复位和报告目录见[完整系统测试](testing.md#full-system-e2e)。
