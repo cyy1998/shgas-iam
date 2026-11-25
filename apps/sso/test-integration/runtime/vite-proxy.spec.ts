@@ -1,10 +1,12 @@
 import { once } from "node:events";
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
+import { expect, test } from "@playwright/test";
 import { createServer as createViteServer } from "vite";
-import { expect, test } from "vitest";
 
-test("the development proxy routes fixed callbacks to Auth API and SSO protocol requests to SSO API", async () => {
+test("the development proxy routes fixed callbacks to Auth API and SSO protocol requests to SSO API", async ({
+  request,
+}) => {
   const upstreams = ["auth", "sso"].map((service) =>
     createServer((req, res) => res.end(JSON.stringify({ service, url: req.url }))),
   );
@@ -43,9 +45,9 @@ test("the development proxy routes fixed callbacks to Auth API and SSO protocol 
         ["/sso/wechat-qr/mobile/confirm/fixture", "auth"],
         ["/sso/authorize?client=fixture", "sso"],
       ] as const) {
-        const response = await fetch(new URL(path, origin));
+        const response = await request.get(new URL(path, origin).href);
         const result: unknown = await response.json();
-        expect(response.status).toBe(200);
+        expect(response.status()).toBe(200);
         expect(result).toEqual({ service, url: path });
       }
     } finally {
