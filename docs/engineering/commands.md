@@ -24,7 +24,7 @@ Admin 和 SSO 各自按 app 的 `.env.example` 准备 `.env.local`。默认入�
 - **数据库迁移与 schema** 使用 `pnpm --filter @iam/db <script>`。常用入口为 `db:generate`、`db:check`、`db:migrate` 和 `db:push`。
   目标环境的迁移与回退见[部署手册](../releases/deployment.md)。
 - **人工维护 CLI** 人工维护命令见 [Ops README](../../apps/ops/README.md)，按目标选择[运维手册](../releases/README.md)。
-- **Sandcastle AFK** 见 [AFK 启动与诊断](../agents/sandcastle-afk.md#启动与诊断)。
+- **Sandcastle AFK** 见 [AFK 运维与启动手册](../../.sandcastle/README.md#启动与诊断)。
 
 ## 日常检查
 
@@ -166,8 +166,8 @@ pnpm verify:container-smoke --base <target-commit-sha>
 pnpm verify:docs --base <target-commit>
 ```
 
-在干净的候选工作树中执行，传入本次合入目标的固定提交。候选须包含目标提交，且差异仅限 `docs/` 下的普通 Markdown 文件。
-`docs/agents/`、`AGENTS.md`、文件类型或权限变化以及范围外的改动走 `pnpm verify`。轻量入口检查提交范围的
+在干净的候选工作树中执行，传入本次合入目标的固定提交。候选须包含目标提交，且差异仅限 `docs/` 下的普通 Markdown 文件（含 `docs/agents/`）以及根目录 `README.md`、`AGENTS.md`、`GLOSSARY.md`。
+文件类型或权限变化以及范围外的改动（如 `.agents/`、`.codex/`、脚本或源码）走 `pnpm verify`。轻量入口检查提交范围的
 `git diff --check`、变动后仍存在的 Markdown 排版和整个文档索引。范围不符或任一检查失败时非零退出。
 
 ## 工具链排查

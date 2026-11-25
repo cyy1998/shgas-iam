@@ -25,7 +25,7 @@ status: accepted
 
 - **AFK 宿主 Docker 复用** AFK 使用宿主 Docker 和 host networking，减少额外 daemon、网络代理和地址转换的维护，接受宿主管理与网络访问范围。
   真实 sandbox smoke 验证平台与隔离边界，私有 registry 凭据按独立授权和生命周期处理。
-  [AFK 启动与宿主资源](../agents/sandcastle-afk.md#启动与诊断)
+  [AFK 启动与宿主资源](../../.sandcastle/README.md#启动与诊断)
 
 ## 收集检查与 root 工具链
 
