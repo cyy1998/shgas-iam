@@ -1,7 +1,7 @@
 import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
-import { expireCustomSsoCookies } from "@api/services/sso/transport/custom-sso-cookie";
 import { getRequestId, getTraceId } from "@iam/api-core/core/request-context";
 import * as resp from "@iam/api-core/http";
+import { expireCustomSsoCookies } from "@iam/api-core/http/custom-sso-transport";
 import { createSubjectAccessHttpAdapter } from "@iam/api-core/http/subject-access";
 import { appendNavigationParameters, buildApplicationAccessDeniedPath, ClientCodeSchema } from "@iam/contracts";
 import { HttpStatusCodes } from "@iam/contracts/http";

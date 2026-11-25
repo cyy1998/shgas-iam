@@ -1,13 +1,14 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
-import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
+import { createAuditLogWriter } from "@iam/db/audit";
 
 const insertedValues: unknown[] = [];
 const createAuditLog = mock(async (value: unknown) => {
   insertedValues.push(value);
 });
 
-const auditWriter = createApiAuditLogWriter({
+const auditWriter = createAuditLogWriter({
   auditRepository: { createAuditLog },
+  sourceApp: "iam",
 });
 
 beforeEach(() => {
@@ -15,7 +16,7 @@ beforeEach(() => {
   createAuditLog.mockClear();
 });
 
-describe("api audit writer", () => {
+describe("audit writer", () => {
   test("writes redacted audit logs with iam source app", async () => {
     await auditWriter.recordAuditLog({
       action: "auth.password.reset",

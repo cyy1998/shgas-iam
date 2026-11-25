@@ -16,9 +16,9 @@ export interface WechatQrConfig {
   callbackUrl: string;
 }
 
-import type { AuditLogInput } from "@api/services/audit/audit.context";
 import type { WechatExternalIdentity, WechatQrIdentity } from "@api/services/authentication/wechat-qr-identity.type";
 import type { SessionOrigin } from "@api/services/session/session-origin";
+import type { AuditLogInput } from "@iam/contracts/audit";
 import type { PublishedUserLoginProfile } from "@iam/domain/user";
 import type { UserSessionObservation } from "@iam/session-kernel";
 import type { AuthenticationLoginRestrictionStatus } from "../login-restriction.type";

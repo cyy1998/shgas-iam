@@ -1,19 +1,19 @@
 import type { LoggerPort } from "@api/composition/runtime";
 import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
 import { exposeImageCaptchaTicket } from "@api/middlewares/image-captcha-response";
-import { verifyInternalClient } from "@api/middlewares/internal-client-authentication";
 import { getApiAuditRequestContext } from "@api/services/audit/audit.context";
 import type { LoginCredentialParser } from "@api/services/authentication/login-credential.parser";
 import type { ClientService } from "@api/services/client/client.service";
-import {
-  customSsoLocalSessionCookieName,
-  decodeCustomSsoClientCode,
-} from "@api/services/sso/transport/custom-sso-client-code.transport";
-import { expireCustomSsoCookies } from "@api/services/sso/transport/custom-sso-cookie";
 import type { LoginWithMobileUseCase } from "@api/use-cases/authentication/login-with-mobile/login-with-mobile.use-case";
 import type { LoginWithPasswordUseCase } from "@api/use-cases/authentication/login-with-password/login-with-password.use-case";
 import * as resp from "@iam/api-core/http";
+import {
+  customSsoLocalSessionCookieName,
+  decodeCustomSsoClientCode,
+  expireCustomSsoCookies,
+} from "@iam/api-core/http/custom-sso-transport";
 import { createSubjectAccessHttpAdapter } from "@iam/api-core/http/subject-access";
+import { verifyInternalClient } from "@iam/api-core/middlewares/internal-client-authentication";
 import { ClientCodeSchema, IMAGE_CAPTCHA_PROOF_HEADER } from "@iam/contracts";
 import { HttpStatusCodes } from "@iam/contracts/http";
 import { CustomSsoRequestMismatchError } from "@iam/custom-sso";

@@ -1,6 +1,5 @@
 import type { PasswordHasherPort } from "@api/composition/runtime";
-import type { ApiRequestContext } from "@api/services/audit/audit.context";
-import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
+import type { ApiRequestContext, AuditLogWriterPort } from "@api/services/audit/audit.context";
 import type { PublishedUserLoginProfile } from "@iam/domain/user";
 import type { SubjectAccessMutationReceipt, SubjectAccessTransitionTarget } from "@iam/subject-access";
 import type { UnitOfWorkPort } from "@iam/unit-of-work";

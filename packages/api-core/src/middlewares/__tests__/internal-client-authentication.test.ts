@@ -1,8 +1,11 @@
 import { describe, expect, mock, test } from "bun:test";
 import { createErrorHandler } from "@iam/api-core/middlewares";
+import {
+  createInternalAuthenticationHandler,
+  type InternalBindings,
+} from "@iam/api-core/middlewares/internal-client-authentication";
 import { ClientStatus } from "@iam/contracts";
 import { Hono } from "hono";
-import { createInternalAuthenticationHandler, type InternalBindings } from "../internal-client-authentication";
 
 type TestClient = {
   clientCode: string;

@@ -6,6 +6,8 @@ function createContext() {
   return {
     get: mock((name: string) => (name === "clientCode" ? "portal" : undefined)),
     req: {
+      path: "/internal/organizations/purveyors",
+      method: "POST",
       valid: mock((target: string) => {
         expect(target).toBe("json");
         return {
@@ -23,7 +25,7 @@ function createContext() {
 function createHandlers(findResult: unknown = null) {
   const deps = {
     auditLogWriter: {
-      recordAuditLogFromContext: mock(async () => undefined),
+      recordAuditLog: mock(async () => undefined),
     },
     organizationService: {
       findOrganizationByCode: mock(async () => findResult),
@@ -65,9 +67,15 @@ describe("createOrganizationHandlers", () => {
         parentCode: "GY",
       }),
     );
-    expect(deps.auditLogWriter.recordAuditLogFromContext).toHaveBeenCalledWith(
-      context,
-      expect.objectContaining({ actorType: "client", actorClientCode: "portal", actorSystemKey: null }),
+    expect(deps.auditLogWriter.recordAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorType: "client",
+        actorClientCode: "portal",
+        actorSystemKey: null,
+        sourceApp: "iam",
+        route: "/internal/organizations/purveyors",
+        method: "POST",
+      }),
     );
   });
 });

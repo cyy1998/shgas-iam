@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { createUserHandlers } from "@api/routes/internal/user/user.handlers";
 import { createUserRoute } from "@api/routes/internal/user/user.index";
-import type { AuditLogInput } from "@api/services/audit/audit.context";
 import { createEmploymentRepository } from "@api/services/employment/employment.repository";
 import { createPositionRepository } from "@api/services/position/position.repository";
 import { createUserRepository } from "@api/services/user/user.repository";
@@ -17,6 +16,7 @@ import {
   UserStatus,
   UserType,
 } from "@iam/contracts";
+import type { AuditLogInput } from "@iam/contracts/audit";
 import type { DbClient } from "@iam/db";
 import { employments, organizationClosures, organizations, positions, users } from "@iam/db/schema";
 import type { SubjectAccessMutationReceipt } from "@iam/subject-access";

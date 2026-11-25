@@ -1,6 +1,6 @@
 import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
 import { getApiAuditRequestContext } from "@api/services/audit/audit.context";
-import { customSsoLocalSessionCookieName } from "@api/services/sso/transport/custom-sso-client-code.transport";
+import { customSsoLocalSessionCookieName } from "@iam/api-core/http/custom-sso-transport";
 import { createSubjectAccessHttpAdapter } from "@iam/api-core/http/subject-access";
 import { HttpStatusCodes } from "@iam/contracts/http";
 import type { UnifiedCustomSsoOperations } from "@iam/custom-sso";

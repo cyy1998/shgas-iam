@@ -7,16 +7,16 @@ import { createUserRoute } from "@api/routes/internal/user/user.index";
 import { createImageCaptchaRoutes } from "@api/routes/open/image-captcha.routes";
 import { createOpenHandlers } from "@api/routes/open/open.handlers";
 import { createOpenRoute } from "@api/routes/open/open.index";
-import type { ApiAuditLogWriter } from "@api/services/audit/audit.service";
 import type { CreateAppOptions } from "@iam/api-core/core/create-app";
 import { createRouter } from "@iam/api-core/core/create-router";
+import type { AuditLogWriter } from "@iam/db/audit";
 import type { ApiRuntimePorts } from "../runtime";
 import type { ApiServices } from "../services";
 import type { ApiUseCases } from "../use-cases";
 
 export interface CreateApiRoutesOptions {
   verifyDatabase: () => Promise<unknown>;
-  auditLogWriter: ApiAuditLogWriter;
+  auditLogWriter: AuditLogWriter;
   runtime: ApiRuntimePorts;
   services: ApiServices;
   useCases: ApiUseCases;

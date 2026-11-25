@@ -1,8 +1,8 @@
 import env from "@api/env";
 import { logger } from "@api/lib/logger";
-import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import type { CreateAppOptions } from "@iam/api-core/core/create-app";
 import db, { closeDb } from "@iam/db";
+import { createAuditLogWriter } from "@iam/db/audit";
 import { createOrganizationDocumentWriteResources } from "@iam/documents/organization/producer";
 import type { UserDocumentJobProducer } from "@iam/documents/user/producer";
 import { sql } from "drizzle-orm";
@@ -22,7 +22,7 @@ export interface ApiComposition {
   logger: typeof logger;
   runtime: ReturnType<typeof createApiRuntime>;
   repositories: ReturnType<typeof createApiRepositories>;
-  auditLogWriter: ReturnType<typeof createApiAuditLogWriter>;
+  auditLogWriter: ReturnType<typeof createAuditLogWriter>;
   userDocumentQueue: ReturnType<typeof createApiUserDocumentResources>["queue"];
   userDocumentJobProducer: UserDocumentJobProducer;
   organizationDocumentWrites: ReturnType<typeof createOrganizationDocumentWriteResources>;
@@ -60,7 +60,7 @@ export async function createApiComposition(options: CreateApiCompositionOptions 
   const organizationQueryResource = createInternalOrganizationQueryResource({
     databaseUrl: compositionEnv.databaseUrl,
   });
-  const auditLogWriter = createApiAuditLogWriter({ auditRepository: repositories.audit });
+  const auditLogWriter = createAuditLogWriter({ sourceApp: "iam", auditRepository: repositories.audit });
   const userDocumentQueue = userDocumentResources.queue;
   const userDocumentJobProducer = userDocumentResources.jobProducer;
   const organizationDocumentWrites = createOrganizationDocumentWriteResources({

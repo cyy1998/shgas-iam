@@ -14,7 +14,6 @@ const recordOpenUserInfoLookup = mock(async () => undefined);
 const checkVerificationCode = mock(async () => true);
 const sendCode = mock(async () => true);
 const recordAuditLog = mock(async () => undefined);
-const recordAuditLogFromContext = mock(async () => undefined);
 const getUserMobileByUsername = mock(async (): Promise<string | null> => "17721462865");
 const requestPasswordResetCode = mock(async () => true);
 const verifyPasswordResetCode = mock(async () => true);
@@ -29,7 +28,6 @@ function createHandlers() {
     },
     auditLogWriter: {
       recordAuditLog,
-      recordAuditLogFromContext,
     },
     clientService: {
       getClientByCode: mock(async () => null),
@@ -78,8 +76,6 @@ beforeEach(() => {
   sendCode.mockResolvedValue(true);
   recordAuditLog.mockReset();
   recordAuditLog.mockResolvedValue(undefined);
-  recordAuditLogFromContext.mockReset();
-  recordAuditLogFromContext.mockResolvedValue(undefined);
   getUserMobileByUsername.mockReset();
   getUserMobileByUsername.mockResolvedValue("17721462865");
   requestPasswordResetCode.mockClear();

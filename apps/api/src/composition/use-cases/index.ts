@@ -1,10 +1,10 @@
-import type { ApiAuditLogWriter } from "@api/services/audit/audit.service";
 import { createRequestPasswordResetCodeUseCase } from "@api/use-cases/account-recovery/request-password-reset-code/request-password-reset-code.use-case";
 import { createResetPasswordUseCase } from "@api/use-cases/account-recovery/reset-password/reset-password.use-case";
 import { createVerifyPasswordResetCodeUseCase } from "@api/use-cases/account-recovery/verify-password-reset-code/verify-password-reset-code.use-case";
 import { createRegisterPurveyorContactUseCase } from "@api/use-cases/internal/register-purveyor-contact/register-purveyor-contact.use-case";
 import { createResolveClientDelegationsUseCase } from "@api/use-cases/internal/resolve-client-delegations/resolve-client-delegations.use-case";
 import type { DbClient } from "@iam/db";
+import type { AuditLogWriter } from "@iam/db/audit";
 import { mapUnitOfWork } from "@iam/unit-of-work";
 import { createClientDelegationResolutionRepository } from "../repositories/client-delegation-resolution.repository";
 import type { ApiRuntimePorts } from "../runtime";
@@ -14,7 +14,7 @@ import type { createApiUnitOfWork } from "../tx";
 type ApiUnitOfWork = ReturnType<typeof createApiUnitOfWork>;
 
 export interface CreateApiUseCasesOptions {
-  auditLogWriter: ApiAuditLogWriter;
+  auditLogWriter: AuditLogWriter;
   runtime: ApiRuntimePorts;
   services: ApiServices;
   unitOfWork: ApiUnitOfWork;

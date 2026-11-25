@@ -1,8 +1,8 @@
 import { HumanVerificationAction } from "@api/enums/humanVerification.action";
 import { VerificationCodeUsage } from "@api/enums/verificationCode.usage";
 import { exposeImageCaptchaTicket } from "@api/middlewares/image-captcha-response";
+import type { AuditLogWriterPort } from "@api/services/audit/audit.context";
 import { getApiAuditRequestContext, withApiRequestContext } from "@api/services/audit/audit.context";
-import type { AuditLogWriterPort } from "@api/services/audit/audit.service";
 import { buildSmsCodeSendAudit, buildSmsCodeVerifyAudit } from "@api/services/audit/events/auth.audit";
 import type { ClientService } from "@api/services/client/client.service";
 import type { CapService } from "@api/services/human-verification/cap.service";

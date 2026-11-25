@@ -1,9 +1,9 @@
-import { getContextValue, getRequestId } from "@iam/api-core/core/request-context";
-import type { BaseVariables } from "@iam/api-core/types";
 import { ClientStatus } from "@iam/contracts";
 import { AuthzUnauthorizedError } from "@iam/runtime/errors";
 import type { Context, Next } from "hono";
 import type { Logger } from "pino";
+import { getContextValue, getRequestId } from "../core/request-context";
+import type { BaseVariables } from "../types/lib";
 
 type InternalClientIdentity = {
   clientCode: string;

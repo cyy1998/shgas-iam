@@ -5,6 +5,7 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
+    "./audit": "./src/audit/index.ts",
     "./http": "./src/http/index.ts",
     "./custom-attributes": "./src/custom-attributes.ts"
   },
