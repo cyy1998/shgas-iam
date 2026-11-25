@@ -1,7 +1,9 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, spyOn, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { createAuthApiApp } from "@auth-api/app";
+import { createAuthApiComposition } from "@auth-api/composition";
 import { createApiPasswordHasher } from "@auth-api/composition/runtime/password-hasher";
+import createApp from "@iam/api-core/core/create-app";
 import { customSsoLocalSessionCookieName } from "@iam/api-core/http/custom-sso-transport";
 import { createClientSnapshots } from "@iam/client-snapshot/composition";
 import { createClientSecretAuthenticator } from "@iam/client-snapshot/credentials";
@@ -35,6 +37,7 @@ import { createUnifiedSubjectAccessSessionRevocation } from "@iam/subject-access
 import Redis from "ioredis";
 import pino from "pino";
 import { sm2, sm3 } from "sm-crypto";
+import appConfig from "~auth-api/app.config";
 import { authTestEnv, internalOrigin } from "../support/auth-env.fixture";
 import {
   closeAuthApiRedisConnection,
@@ -54,7 +57,35 @@ const logger = pino({ enabled: false });
 const internalSecret = "internal-fixture";
 afterEach(resetAuthApiRedisTestDatabase);
 
-async function fixture(overrides: NodeJS.ProcessEnv = {}) {
+async function authWithSessionFault(
+  options: Parameters<typeof createAuthApiApp>[0],
+  fault: { action: "revoke" | "create"; after: boolean; armed: boolean },
+) {
+  const composition = await createAuthApiComposition(options);
+  const { redis } = composition.runtime;
+  const evalRedis = redis.eval;
+  const prefix = `${composition.env.sessionKernel.namespace}:unified:v1:`;
+  spyOn(redis, "eval").mockImplementation(async (script, keyCount, ...args) => {
+    const run = (): Promise<unknown> => Reflect.apply(evalRedis, redis, [script, keyCount, ...args]);
+    if (fault.armed && keyCount === 0 && args[0] === prefix && JSON.parse(String(args[1])).action === fault.action) {
+      fault.armed = false;
+      if (fault.after) await run();
+      throw new Error("Injected Redis transport failure");
+    }
+    return await run();
+  });
+  return {
+    app: createApp(appConfig, {
+      env: composition.env,
+      logger: composition.logger,
+      routes: composition.routes,
+      middlewares: {},
+    }),
+    close: composition.close,
+  };
+}
+
+async function fixture(overrides: NodeJS.ProcessEnv = {}, fault?: Parameters<typeof authWithSessionFault>[1]) {
   const pg = getDatabase();
   const keys = sm2.generateKeyPairHex();
   const env = authTestEnv(pg.databaseUrl, {
@@ -62,7 +93,7 @@ async function fixture(overrides: NodeJS.ProcessEnv = {}) {
     ...overrides,
   });
   const sms: { mobile: string; message: string }[] = [];
-  const auth = await createAuthApiApp({
+  const options: NonNullable<Parameters<typeof createAuthApiApp>[0]> = {
     env,
     logger,
     integrationFetch: {
@@ -84,7 +115,8 @@ async function fixture(overrides: NodeJS.ProcessEnv = {}) {
         { preconnect: fetch.preconnect },
       ),
     },
-  });
+  };
+  const auth = fault ? await authWithSessionFault(options, fault) : await createAuthApiApp(options);
   ownAuthApiTestExecutor(auth.close);
   const redis = new Redis(env.redis);
   ownAuthApiTestExecutor(() => closeAuthApiRedisConnection(redis));
@@ -139,6 +171,10 @@ async function fixture(overrides: NodeJS.ProcessEnv = {}) {
   });
   const resolveRoot = (token: string) =>
     operations.run((operation) => kernel.forOperation(operation).resolveUserSession(token));
+  const listRoots = () =>
+    operations.run((operation) =>
+      kernel.forOperation(operation).listSessions({ kind: "userSession", offset: 0, limit: 10 }),
+    );
 
   function post(path: string, body: object, headers: Record<string, string> = {}) {
     return auth.app.request(`${internalOrigin}${path}`, {
@@ -198,7 +234,33 @@ async function fixture(overrides: NodeJS.ProcessEnv = {}) {
     );
   }
 
-  return { auth, pg, userId: user.id, subjectIdentifier, post, passwordLogin, sms, resolveRoot, issueLocalSession };
+  return {
+    auth,
+    pg,
+    redis,
+    userId: user.id,
+    subjectIdentifier,
+    post,
+    passwordLogin,
+    sms,
+    resolveRoot,
+    listRoots,
+    issueLocalSession,
+  };
+}
+
+function oaPath(loginId: string) {
+  const ts = String(Date.now());
+  const token = Buffer.from(sm3(`${loginId}|${ts}|${internalSecret}${internalSecret}`), "hex").toBase64();
+  const query = new URLSearchParams({
+    client: "iam",
+    redirectUrl: redirect,
+    state: "state",
+    loginid: loginId,
+    ts,
+    token,
+  });
+  return `${internalOrigin}/sso/thirdparty/iam?${query}`;
 }
 
 async function loginToken(response: Response) {
@@ -297,18 +359,8 @@ test("OA reuses the current root without renewing it and the legacy WeCom callba
   const f = await fixture({ NODE_ENV: "production" });
   const root = await loginToken(await f.passwordLogin());
   const before = await f.resolveRoot(root);
-  const ts = String(Date.now());
-  const token = Buffer.from(sm3(`${username}|${ts}|${internalSecret}${internalSecret}`), "hex").toBase64();
   const oauth = new URLSearchParams({ client: "iam", redirectUrl: redirect, state: "state" });
-  const oa = await f.auth.app.request(
-    `${internalOrigin}/sso/thirdparty/iam?${new URLSearchParams({
-      ...Object.fromEntries(oauth),
-      loginid: username,
-      ts,
-      token,
-    })}`,
-    { headers: { Cookie: `global_session=${root}` } },
-  );
+  const oa = await f.auth.app.request(oaPath(username), { headers: { Cookie: `global_session=${root}` } });
   expect(oa.status).toBe(302);
   expect(oa.headers.getSetCookie()).toEqual([]);
   expect(oa.headers.get("Location")).toContain("/sso/authorize?");
@@ -324,6 +376,47 @@ test("OA reuses the current root without renewing it and the legacy WeCom callba
   expect(wx.headers.getSetCookie()[0]).toContain(`global_session=${issued};`);
   const rootFromWechat = await f.resolveRoot(issued!);
   expect(rootFromWechat.status).toBe("resolved");
+  const audits = await f.pg.db.select().from(auditLogs);
+  expect(audits.filter((audit) => audit.action === "auth.login.oa")).toHaveLength(0);
+});
+
+test.each([
+  { action: "revoke", after: false, expectedRoot: "resolved" },
+  { action: "revoke", after: true, expectedRoot: "terminated" },
+  { action: "create", after: false, expectedRoot: "terminated" },
+] as const)("OA user switching preserves session state on $action failure (response lost: $after)", async (failure) => {
+  const fault = { ...failure, armed: false };
+  const f = await fixture({ NODE_ENV: "production" }, fault);
+  const oldRoot = await loginToken(await f.passwordLogin());
+  const nextUser = "another-oa-user";
+  const subjectIdentifier = randomUUID();
+  const [user] = await f.pg.db
+    .insert(users)
+    .values({
+      username: nextUser,
+      name: "Another OA user",
+      subjectIdentifier,
+      status: UserStatus.Enable,
+      userType: UserType.Formal,
+    })
+    .returning({ id: users.id });
+  if (!user) throw new Error("Expected secondary OA account");
+  await publishUserDocument(f.pg.db, user.id);
+  await createSubjectAccessBootstrap({ redis: f.redis, random: { uuid: randomUUID } }).seedMany(
+    [{ subjectIdentifier, state: "enabled" }],
+    new Date(),
+  );
+  expect((await f.listRoots()).total).toBe(1);
+  fault.armed = true;
+  const failed = await f.auth.app.request(oaPath(nextUser), { headers: { Cookie: `global_session=${oldRoot}` } });
+  if (failure.action === "revoke") expect(failed.status).toBe(503);
+  else expect(failed.status).toBeGreaterThanOrEqual(500);
+  expect(failed.headers.getSetCookie()).toEqual([]);
+  expect(fault.armed).toBe(false);
+  const previous = await f.resolveRoot(oldRoot);
+  expect(previous.status).toBe(failure.expectedRoot);
+  const after = await f.listRoots();
+  expect(after.total).toBe(failure.expectedRoot === "resolved" ? 1 : 0);
   const audits = await f.pg.db.select().from(auditLogs);
   expect(audits.filter((audit) => audit.action === "auth.login.oa")).toHaveLength(0);
 });

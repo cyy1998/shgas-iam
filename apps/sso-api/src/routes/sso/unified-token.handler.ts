@@ -1,9 +1,9 @@
 import * as resp from "@iam/api-core/http";
 import { getAuditRequestContext } from "@iam/api-core/http/audit-request-context";
+import { mapCustomSsoRetryableError } from "@iam/api-core/http/custom-sso-retryable";
 import type { UnifiedCustomSsoOperations } from "@iam/custom-sso";
 import { CustomSsoExchangeFailure } from "@iam/custom-sso";
 import type { createSubjectAccessOperations } from "@iam/subject-access";
-import { mapCustomSsoRetryableError } from "@sso-api/middlewares/custom-sso-retryable.error";
 import type { Handler } from "hono";
 import { parseBasicClientCredentials } from "./sso.handlers";
 import { SsoTokenResultSchema } from "./sso.schema";

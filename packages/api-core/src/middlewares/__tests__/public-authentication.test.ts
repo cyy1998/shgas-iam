@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createCustomSsoRetryableErrorMapper } from "@iam/api-core/http/custom-sso-retryable";
+import { mapCustomSsoRetryableError } from "@iam/api-core/http/custom-sso-retryable";
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import { createPublicAuthenticationHandler } from "@iam/api-core/middlewares/public-authentication";
 import type { PublicBindings } from "@iam/api-core/types";
@@ -62,7 +62,7 @@ function fixture() {
         }
       },
       shouldPreserveSessionCookie: (error) => error === mismatch,
-      mapRetryableError: createCustomSsoRetryableErrorMapper({ classifyUnavailable: () => undefined }),
+      mapRetryableError: mapCustomSsoRetryableError,
       retryAfterSeconds: 7,
     }),
   );

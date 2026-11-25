@@ -1,3 +1,4 @@
+import { mapCustomSsoRetryableError } from "@iam/api-core/http/custom-sso-retryable";
 import {
   createPublicAuthenticationHandler,
   type PublicAuthenticationDeps,
@@ -7,7 +8,6 @@ import {
   CustomSsoRequestMismatchError,
   type CustomSsoSubjectDeliveryCapability,
 } from "@iam/custom-sso";
-import { mapCustomSsoRetryableError } from "./custom-sso-retryable.error";
 
 export function createApiPublicAuthenticationHandler(
   deps: Omit<

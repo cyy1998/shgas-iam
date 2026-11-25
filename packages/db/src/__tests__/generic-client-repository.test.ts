@@ -1,7 +1,6 @@
 import { expect, test } from "bun:test";
-import { createClientRepository } from "@auth-api/services/client/client.repository";
 import { ClientStatus } from "@iam/contracts";
-import type { GenericClientRecord } from "@iam/domain/client";
+import { createGenericClientRepository } from "@iam/db/client-snapshot";
 
 const genericClientRecord = {
   id: 1,
@@ -14,9 +13,9 @@ const genericClientRecord = {
   isDelete: false,
   createTime: new Date("2026-01-01T00:00:00.000Z"),
   updateTime: new Date("2026-01-01T00:00:00.000Z"),
-} satisfies GenericClientRecord;
+};
 
-function createSelectDb(row: GenericClientRecord) {
+function createSelectDb(row: typeof genericClientRecord) {
   const selections: string[][] = [];
   return {
     db: {
@@ -30,7 +29,7 @@ function createSelectDb(row: GenericClientRecord) {
                 return {
                   limit: async () => [
                     Object.fromEntries(
-                      selectedColumns.map((column) => [column, row[column as keyof GenericClientRecord]]),
+                      selectedColumns.map((column) => [column, row[column as keyof typeof genericClientRecord]]),
                     ),
                   ],
                 };
@@ -49,7 +48,7 @@ test.each([
   { method: "getClientBySecret", value: "general-secret" },
 ] as const)("$method reads only the protocol-neutral projection", async ({ method, value }) => {
   const fake = createSelectDb(genericClientRecord);
-  const repository = createClientRepository(fake.db as never);
+  const repository = createGenericClientRepository(fake.db as never, (record) => record);
 
   const result = await repository[method](value);
   expect(result).toEqual(genericClientRecord);

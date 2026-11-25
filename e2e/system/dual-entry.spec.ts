@@ -353,7 +353,7 @@ test("APISIX preserves M2M authentication on the canonical path and compatibilit
 
 test("APISIX routes the fixed OA and WeCom callbacks on both entry hosts", async ({ request, runtime }) => {
   for (const origin of [runtime.internalOrigin, runtime.origin]) {
-    for (const path of ["/sso/thirdparty/oa", "/sso/third-party/wx"]) {
+    for (const path of ["/sso/thirdparty/oa", "/sso/third-party/wx", "/sso/third-party/wx/"]) {
       const callback = await gatewayRequest(request, origin, path);
       expect(callback.status()).toBe(422);
       expect((await callback.json()).code).toBe("COMMON.VALIDATION_FAILED");

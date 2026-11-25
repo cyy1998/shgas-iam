@@ -1,4 +1,4 @@
-import { ApiErrorCode } from "@iam/contracts";
+import { ApiErrorCode, RETRYABLE_SERVICE_UNAVAILABLE } from "@iam/contracts";
 import { BAD_REQUEST } from "@iam/contracts/http";
 import { CustomError } from "@iam/runtime/errors";
 
@@ -23,6 +23,8 @@ export class InvalidSsoClientError extends CustomError {
 }
 
 export class CustomSsoAdmissionUnavailableError extends Error {
+  public readonly retryability = RETRYABLE_SERVICE_UNAVAILABLE;
+
   constructor() {
     super("Application admission unavailable");
     this.name = "CustomSsoAdmissionUnavailableError";

@@ -15,9 +15,10 @@ Kernel 持有关系、期限与精确撤销，协议持有 Code、Token 和续�
 
 - **精确捕获与撤销** 显式批量撤销先固定原实例集合，重试只处理原批次未完成的实例。
   接受有界索引观察与部分结果，避免自动重扫波及新实例，也无需持久撤销任务。
-  本人全部下线和改密保留当前根，该根的应用关系仍在终止范围内。
+  本人全部下线保留当前根，该根的应用关系仍在终止范围内。
+  公共 API 拆分沿用本人改密的既有行为，保存密码和审计，既有会话继续遵守各自的访问规则与期限。
   第三方本地会话与已签离线 ID Token 仍遵守各自有效期和退出规则。
-  [会话与可信观察](../../packages/session-kernel/README.md#会话与可信观察) · [列表与撤销](../../packages/session-kernel/README.md#列表与撤销)
+  [会话与可信观察](../../packages/session-kernel/README.md#会话与可信观察) · [列表与撤销](../../packages/session-kernel/README.md#列表与撤销) · [Spec #397 裁定](https://github.com/cyy1998/shgas-iam/issues/397#issuecomment-7177186191)
 
 ## 配置维护与凭据
 

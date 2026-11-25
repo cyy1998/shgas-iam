@@ -31,27 +31,25 @@ const unavailableMessages: Record<RetryableUnavailableCode, string> = {
   [ApiErrorCode.SubjectProjectionNotReady]: "主体信息暂未就绪",
 };
 
-export function createCustomSsoRetryableErrorMapper(deps: {
-  classifyUnavailable: (error: unknown) => RetryableUnavailableCode | undefined;
-}) {
-  return function mapCustomSsoRetryableError(error: unknown, { retryAfterSeconds }: MapCustomSsoRetryableErrorOptions) {
-    if (error instanceof AuthzMaintenanceError) {
-      assertRetryAfterSeconds(retryAfterSeconds);
-      return new CustomSsoRetryableUnavailableError(ApiErrorCode.Maintenance, error.message, retryAfterSeconds);
-    }
-
-    const code = deps.classifyUnavailable(error) ?? classifySharedUnavailable(error);
-    if (code === undefined) return error;
-
+export function mapCustomSsoRetryableError(error: unknown, { retryAfterSeconds }: MapCustomSsoRetryableErrorOptions) {
+  if (error instanceof AuthzMaintenanceError) {
     assertRetryAfterSeconds(retryAfterSeconds);
-    return new CustomSsoRetryableUnavailableError(code, unavailableMessages[code], retryAfterSeconds);
-  };
+    return new CustomSsoRetryableUnavailableError(ApiErrorCode.Maintenance, error.message, retryAfterSeconds);
+  }
+
+  const code = classifyUnavailable(error);
+  if (code === undefined) return error;
+
+  assertRetryAfterSeconds(retryAfterSeconds);
+  return new CustomSsoRetryableUnavailableError(code, unavailableMessages[code], retryAfterSeconds);
 }
 
-function classifySharedUnavailable(error: unknown): RetryableUnavailableCode | undefined {
+function classifyUnavailable(error: unknown): RetryableUnavailableCode | undefined {
   if (error instanceof SubjectAccessUnavailableError) return ApiErrorCode.SubjectAccessUnavailable;
-  if (isRetryableServiceUnavailable(error)) return ApiErrorCode.InternalError;
-  return undefined;
+  if (!isRetryableServiceUnavailable(error)) return undefined;
+  return "code" in error && error.code === ApiErrorCode.SubjectProjectionNotReady
+    ? ApiErrorCode.SubjectProjectionNotReady
+    : ApiErrorCode.InternalError;
 }
 
 function assertRetryAfterSeconds(retryAfterSeconds: number) {

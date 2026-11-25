@@ -4,7 +4,6 @@ import { exposeImageCaptchaTicket } from "@auth-api/middlewares/image-captcha-re
 import type { AuditLogWriterPort } from "@auth-api/services/audit/audit.context";
 import { getApiAuditRequestContext, withApiRequestContext } from "@auth-api/services/audit/audit.context";
 import { buildSmsCodeSendAudit, buildSmsCodeVerifyAudit } from "@auth-api/services/audit/events/auth.audit";
-import type { ClientService } from "@auth-api/services/client/client.service";
 import type { CapService } from "@auth-api/services/human-verification/cap.service";
 import { InvalidHumanVerificationSiteError } from "@auth-api/services/human-verification/human-verification.error";
 import type { HumanRiskServicePort } from "@auth-api/services/human-verification/human-verification.port";
@@ -15,7 +14,7 @@ import type { RequestPasswordResetCodeUseCase } from "@auth-api/use-cases/accoun
 import type { ResetPasswordUseCase } from "@auth-api/use-cases/account-recovery/reset-password/reset-password.use-case";
 import type { VerifyPasswordResetCodeUseCase } from "@auth-api/use-cases/account-recovery/verify-password-reset-code/verify-password-reset-code.use-case";
 import * as resp from "@iam/api-core/http";
-import { IMAGE_CAPTCHA_PROOF_HEADER, PublicClientStatusDtoSchema } from "@iam/contracts";
+import { IMAGE_CAPTCHA_PROOF_HEADER, type PublicClientStatusDto, PublicClientStatusDtoSchema } from "@iam/contracts";
 import { OK } from "@iam/contracts/http";
 import { maskMobile } from "./open.presenter";
 import type { OpenRouteHandler } from "./open.type";
@@ -28,7 +27,7 @@ export interface CreateOpenHandlersDeps {
     verifyPasswordResetCode: VerifyPasswordResetCodeUseCase;
   };
   auditLogWriter: AuditLogWriterPort;
-  clientService: Pick<ClientService, "getClientByCode">;
+  clientService: { getClientByCode: (code: string) => Promise<PublicClientStatusDto | null> };
   humanVerification: Pick<CapService, "ensureActionAllowed" | "isValidSiteKey" | "createChallenge" | "redeemChallenge">;
   humanRiskService: Pick<HumanRiskServicePort, "recordOpenUserInfoLookup">;
   mobileService: Pick<MobileService, "sendCode" | "checkVerificationCode">;

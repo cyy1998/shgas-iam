@@ -6,7 +6,6 @@
 pnpm --filter @iam/ops iam-ops --help
 pnpm --filter @iam/ops iam-ops user-document repair --limit 500
 pnpm --filter @iam/ops iam-ops user-document verify-postgres --batch-size 500
-pnpm --filter @iam/ops iam-ops client-snapshot repair --client-code alpha
 pnpm --filter @iam/ops iam-ops employment verify
 ```
 
@@ -23,6 +22,7 @@ pnpm --filter @iam/ops iam-ops employment verify
 | `audit-action`          | `inventory`、`apply`、`verify`    | apply 必须声明 `--writers-stopped`                                                                                                                        |
 
 所有分组与操作支持 `--help`，帮助不连接资源。报告、退出语义、停写前提、重试范围和限额沿用各能力的既有契约。
+Client 缓存传播失败时，按[受影响的缓存范围](../../docs/releases/authentication-and-session.md#client-snapshot-修复)选择维护命令。
 
 从 [.env.example](.env.example) 准备私有 `apps/ops/.env`；CLI 只读取自己的文件，已有进程变量优先。
 配置使用 `IAM_OPS_*`，不读取 Worker 的 `.env`，不接受旧维护变量别名。PostgreSQL-only 命令只需数据库，Redis-only 命令只需 `IAM_OPS_REDIS_URL`；日志使用独立 `iam-ops` 身份。

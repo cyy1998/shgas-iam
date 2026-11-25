@@ -1,6 +1,5 @@
 import { createAccountRecoveryService } from "@auth-api/services/account-recovery/account-recovery.service";
 import { createLoginCredentialParser } from "@auth-api/services/authentication/login-credential.parser";
-import { createClientService } from "@auth-api/services/client/client.service";
 import { createCapService } from "@auth-api/services/human-verification/cap.service";
 import { createHumanRiskService } from "@auth-api/services/human-verification/human-risk.service";
 import { createImageCaptchaService } from "@auth-api/services/human-verification/image-captcha.service";
@@ -11,13 +10,15 @@ import { createUserMobileBinding } from "@auth-api/services/user/user-mobile-bin
 import { createUserPasswordHelper } from "@auth-api/services/user/user-password.helper";
 import { createClientSnapshots } from "@iam/client-snapshot/composition";
 import { createClientSecretAuthenticator } from "@iam/client-snapshot/credentials";
+import { createGenericClientCache } from "@iam/client-snapshot/generic-cache";
 import type { DbClient } from "@iam/db";
 import type { AuditLogWriter } from "@iam/db/audit";
-import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
+import { createClientSnapshotRepository, createGenericClientRepository } from "@iam/db/client-snapshot";
 import { createSubjectFactsReader, createSubjectFactsRedisCache } from "@iam/documents/user";
 import { createUserDocumentQueryService } from "@iam/documents/user/query";
 import { createSubjectAccessTransitionRepository } from "@iam/documents/user/subject-access-transition";
 import { createSubjectFactsLoggerObservability } from "@iam/documents/user/subject-facts";
+import { GenericClientRuntimeDtoSchema, toGenericClientRuntimeDto } from "@iam/domain/client";
 import { createLoginRestriction } from "@iam/login-restriction";
 import { createRedisLoginRestrictionStore } from "@iam/login-restriction/redis";
 import { createUnifiedSessionKernel } from "@iam/session-kernel";
@@ -85,9 +86,10 @@ export function createAuthApiServices(options: CreateAuthApiServicesOptions) {
     cache: createSubjectFactsRedisCache(runtime.redis),
     observability: createSubjectFactsLoggerObservability(runtime.logger),
   });
-  const clientService = createClientService({
+  const clientService = createGenericClientCache({
     redis: runtime.redis,
-    clientRepository: repositories.client,
+    schema: GenericClientRuntimeDtoSchema,
+    source: createGenericClientRepository(db, toGenericClientRuntimeDto),
   });
   const clientSnapshots = createClientSnapshots({
     redis: runtime.redis,

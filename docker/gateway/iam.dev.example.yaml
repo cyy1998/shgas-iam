@@ -111,7 +111,7 @@ routes:
             X-IAM-Entry-Network: internal
             X-Forwarded-Proto: $scheme
   - key: third-party-internal
-    uris: [/sso/thirdparty/*, /sso/third-party/wx]
+    uris: [/sso/thirdparty/*, /sso/third-party/wx, /sso/third-party/wx/]
     vars: [[http_host, "==", "${IAM_SSO_INTERNAL_HOST}"]]
     priority: 10
     upstream: auth-api
@@ -138,7 +138,7 @@ routes:
             X-IAM-Entry-Network: external
             X-Forwarded-Proto: $scheme
   - key: third-party-external
-    uris: [/sso/thirdparty/*, /sso/third-party/wx]
+    uris: [/sso/thirdparty/*, /sso/third-party/wx, /sso/third-party/wx/]
     vars: [[http_host, "==", "${IAM_SSO_EXTERNAL_HOST}"]]
     priority: 10
     upstream: auth-api

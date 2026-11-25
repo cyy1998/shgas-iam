@@ -28,5 +28,5 @@ Admin 写入提交后统一失效普通与凭据缓存。合法配置、启停�
 
 Admin 在事务提交后同时失效受影响的新旧键。失效与回填共用同一 Redis 代际，使进行中的旧读取无法重新发布。跨越失效的回填最多重读一次。
 传播失败仍按 Admin 已提交错误处理。COMMIT 结果未知时也尝试失效相关键，并保留原数据库错误。
-定向修复应重新失效原写入涉及的键，轮换时需要原 Secret 对应的键。
-`/maintenance` 的 Snapshot 修复范围仅包含协议缓存。
+`/maintenance` 的定向修复仅覆盖协议缓存。通用缓存传播失败或影响范围未知时，运维需停流、全量清理两类库存并独立核验。轮换后的旧 Secret 键没有 TTL。
+[缓存恢复步骤](../../docs/releases/authentication-and-session.md#client-snapshot-修复)

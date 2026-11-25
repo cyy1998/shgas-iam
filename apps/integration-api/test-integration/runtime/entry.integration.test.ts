@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { clients } from "@iam/db/schema";
@@ -11,6 +11,7 @@ import {
   spawnOwnedProcessTree,
   terminateProcessTree,
 } from "@iam/test-support/process-smoke-harness";
+import { ownIntegrationTestExecutor, resetIntegrationRedisTestDatabase } from "../support/fixture-lifecycle";
 import { createIntegrationPostgresTestHarness, requireIntegrationRedisUrl } from "../support/resources.fixture";
 
 const workspace = fileURLToPath(new URL("../../", import.meta.url));
@@ -19,7 +20,10 @@ const entry = createProcessSmokeSuite({
   temporaryDirectoryPrefix: "iam-integration-api-entry-",
   hostname: "127.0.0.1",
 });
-afterEach(entry.cleanup);
+beforeEach(() => {
+  ownIntegrationTestExecutor(entry.cleanup);
+});
+afterEach(resetIntegrationRedisTestDatabase);
 
 function startEntry(context: ProcessSmokeAttemptContext, databaseUrl: string) {
   return spawnOwnedProcessTree({

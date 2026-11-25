@@ -56,6 +56,7 @@ export async function runClientSnapshotMaintenance(
     mode: string;
     status: string;
     reason: string;
+    scope: "client-protocol-snapshot" | "all-client-runtime-caches";
     matching?: number;
     clientCode?: string;
   } = {
@@ -64,6 +65,7 @@ export async function runClientSnapshotMaintenance(
     mode: input.mode,
     status: "failed",
     reason: "operation-failed",
+    scope: input.clientCode ? "client-protocol-snapshot" : "all-client-runtime-caches",
     ...(input.clientCode ? { clientCode: input.clientCode } : {}),
   };
   let connection: ReturnType<typeof createOfflineMaintenanceRedis> | undefined;

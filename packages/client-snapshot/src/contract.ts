@@ -1,4 +1,4 @@
-import { ClientCodeSchema, ClientSsoConfigSchema, ClientStatus } from "@iam/contracts";
+import { ClientCodeSchema, ClientSsoConfigSchema, ClientStatus, RETRYABLE_SERVICE_UNAVAILABLE } from "@iam/contracts";
 import { z } from "zod";
 
 export const ClientSnapshotValueSchema = z
@@ -27,6 +27,8 @@ export interface ClientSnapshotRedis {
   readonly eval: (script: string, keyCount: number, ...args: string[]) => Promise<unknown>;
 }
 export class ClientSnapshotUnavailableError extends Error {
+  public readonly retryability = RETRYABLE_SERVICE_UNAVAILABLE;
+
   constructor() {
     super("Client Snapshot unavailable");
     this.name = "ClientSnapshotUnavailableError";

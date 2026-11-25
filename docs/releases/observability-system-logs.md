@@ -66,7 +66,8 @@ docker compose --env-file docker/.env -f docker/compose.dev.yaml --profile obser
 Grafana 自己负责 dashboard/datasource 授权，Admin 只提供链接，不通过 iframe 或 Admin API 代理查询。
 
 Provisioning 位于 [grafana/provisioning](../../docker/observability/grafana/provisioning/)。
-随附告警覆盖 三个公共后端及 Admin API 的错误突增、APISIX 5xx、SSO API 的 OIDC server error 和采集失败；Worker 积压需按[数据维护](data-maintenance.md#周期任务与监控)补充。
+三个公共后端及 Admin API 的错误突增告警按日志的 `env` 和 `service` 分别计算，规则直接评估 Loki 数据。随附规则还覆盖 APISIX 5xx、SSO API 的 OIDC server error 和采集失败。
+Worker 积压需按[数据维护](data-maintenance.md#周期任务与监控)补充。
 开发默认 null webhook；生产用环境管理的 provisioning 替换 contact point，并实际测试通知。
 
 ## 查询错误与关联请求

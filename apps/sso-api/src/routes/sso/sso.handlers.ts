@@ -1,11 +1,11 @@
 import { Buffer } from "node:buffer";
 import * as resp from "@iam/api-core/http";
+import { mapCustomSsoRetryableError } from "@iam/api-core/http/custom-sso-retryable";
 import { decodeCustomSsoClientCode, expireCustomSsoCookies } from "@iam/api-core/http/custom-sso-transport";
 import { createSubjectAccessHttpAdapter } from "@iam/api-core/http/subject-access";
 import { ApiErrorCode, ClientCodeSchema } from "@iam/contracts";
 import { HttpStatusCodes } from "@iam/contracts/http";
 import { InvalidSsoClientError } from "@iam/custom-sso";
-import { mapCustomSsoRetryableError } from "@sso-api/middlewares/custom-sso-retryable.error";
 import type { Context } from "hono";
 import { getCookie } from "hono/cookie";
 import type { SsoRouteHandler } from "./sso.type";

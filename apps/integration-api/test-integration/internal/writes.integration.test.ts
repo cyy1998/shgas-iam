@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { OrganizationLevel, OrganizationType } from "@iam/contracts";
 import {
   auditLogs,
@@ -14,7 +14,10 @@ import {
 import { createIntegrationApiApp } from "@integration-api/app";
 import { eq } from "drizzle-orm";
 import pino from "pino";
+import { ownIntegrationTestExecutor, resetIntegrationRedisTestDatabase } from "../support/fixture-lifecycle";
 import { createIntegrationPostgresTestHarness, testEnvironment } from "../support/resources.fixture";
+
+afterEach(resetIntegrationRedisTestDatabase);
 
 test("legacy writes persist source facts, audit and Outbox before sending the synchronous production welcome SMS", async () => {
   const pg = await createIntegrationPostgresTestHarness();
@@ -37,6 +40,7 @@ test("legacy writes persist source facts, audit and Outbox before sending the sy
       return new Response(null, { status: 502 });
     },
   });
+  const close = ownIntegrationTestExecutor(api.close);
   try {
     const [parent] = await pg.db
       .insert(organizations)
@@ -105,7 +109,10 @@ test("legacy writes persist source facts, audit and Outbox before sending the sy
     const orgAudit = await pg.db.select().from(auditLogs).where(eq(auditLogs.action, "internal.purveyor.register"));
     expect(orgAudit).toMatchObject([{ actorClientCode: "directory", targetCode: "SUP" }]);
   } finally {
-    await api.close();
-    await pg.close();
+    try {
+      await close();
+    } finally {
+      await pg.close();
+    }
   }
 });

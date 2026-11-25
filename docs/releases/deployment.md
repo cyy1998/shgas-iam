@@ -137,8 +137,10 @@ backfill、部分 repair 只登记或唤醒工作，仍须匹配版本的 consum
 ### 切换三个公共后端
 
 1. 按生产模板配置三个镜像和各服务环境变量。迁移 SM2、企微和风控配置到 Auth API，OIDC 签名配置到 SSO API，内部查询与欢迎短信配置到 Integration API。保留现有 PostgreSQL、Redis DB、Session Kernel 与协议 namespace，核对 Auth API 和 SSO API 的内外网 origin 与企微扫码开关。使用当前规范路径构建 Admin 和 SSO 前端，包括 `IAM_SSO_WEB_CAP_ENDPOINT=/api/iam/auth/captcha/cap/iam-sso/`。
-2. 启动三个服务并确认 `/ready`，准备对应的前端制品和环境 manifest。同一宿主并行运行新旧服务时，若旧后端占用宿主端口 `30000`，给 `IAM_AUTH_API_PUBLISHED_PORT` 指定空闲端口，保持 Auth API 容器端口为 `30000`，并按实际网络更新 upstream。切换 Gateway upstream 和前端前，更新业务网关中仍直连旧后端的 `forward-auth.uri`。已有经 APISIX 的三条兼容别名继续保留。[网关切换与兼容路径](apisix-gateway-release.md#拆分后的-iam-路由示例)
-3. 经受控入口验证登录续接、会话鉴权、M2M 鉴权、三个兼容别名及受影响的直接调用。通过后再停旧实例。失败时暂停扩大流量，保留状态与密钥，按配套镜像、前端和路由一并回退或修复，再验受影响的入口。
+2. 新旧版本并行前，冻结 Client 写入（含配置、启停和 Secret 轮换）。关闭 Admin Client 写入入口和直连，暂停相关维护任务，排空在途写入及提交后失效。旧 Admin API 直接删除缓存键，旧公共后端的回填也不检查失效代际。切换期间保留公共读取流量，直至切换并排空旧公共后端。
+3. 启动三个服务并确认 `/ready`，准备对应的前端制品和环境 manifest。同一宿主并行运行新旧服务时，若旧后端占用宿主端口 `30000`，给 `IAM_AUTH_API_PUBLISHED_PORT` 指定空闲端口，保持 Auth API 容器端口为 `30000`，并按实际网络更新 upstream。切换 Gateway upstream 和前端前，更新业务网关中仍直连旧后端的 `forward-auth.uri`。已有经 APISIX 的三条兼容别名继续保留。[网关切换与兼容路径](apisix-gateway-release.md#拆分后的-iam-路由示例)
+4. 经受控入口验证登录续接、会话鉴权、M2M 鉴权、三个兼容别名及受影响的直接调用。切换所有入口后排空并停止旧公共后端，升级全部 Admin API 副本和使用该缓存的维护制品。开放 Client 写入前，通过受限入口验证新 Admin API 提交后旧缓存失效，确认旧 Internal API Secret 被拒绝且当前凭据可用。
+5. 核验失败时暂停扩大流量并保持 Client 写入冻结。缓存异常按[全量修复与独立核验](authentication-and-session.md#client-snapshot-修复)处理。回退时先冻结并排空 Client 写入，协调恢复 Admin API、公共后端、前端及路由，排空退出版本后验证目标版本的写入及失效，再恢复 Client 写入。
 
 ### 开放应用准入策略
 

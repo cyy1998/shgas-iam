@@ -1,9 +1,11 @@
 import type { CreateAppOptions } from "@iam/api-core/core/create-app";
 import { createRouter } from "@iam/api-core/core/create-router";
 import { createClientSnapshots } from "@iam/client-snapshot/composition";
+import { createGenericClientCache } from "@iam/client-snapshot/generic-cache";
 import { createAuditLogWriter, createAuditRepository } from "@iam/db/audit";
-import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
+import { createClientSnapshotRepository, createGenericClientRepository } from "@iam/db/client-snapshot";
 import { createDelegationService } from "@iam/delegation";
+import { GenericClientRuntimeDtoSchema, toGenericClientRuntimeDto } from "@iam/domain/client";
 import { createOrganizationDocumentWriteResources } from "@iam/jobs/documents/organization";
 import { createUserDocumentWriteResources } from "@iam/jobs/documents/user";
 import { createLogger, LoggerSourceApp } from "@iam/runtime/logger";
@@ -16,7 +18,6 @@ import { createPublicDelegationHandlers } from "../routes/delegations/delegation
 import { createPublicDelegationRoute } from "../routes/delegations/delegation.index";
 import { createInternalAuthzRoute } from "../routes/internal/authz";
 import { createProbeRoutes } from "../routes/probes";
-import { createClientService } from "../services/client/client.service";
 import { createInternalRoutes } from "./internal-routes";
 import { createPublicDelegationDependencies } from "./public-delegation";
 import { createIntegrationRepositories } from "./repositories";
@@ -93,7 +94,11 @@ export async function createIntegrationApiComposition(options: CreateIntegration
       userDocumentJobProducer: userDocuments.jobProducer,
       organizationDocumentJobProducer: organizationDocuments.jobProducer,
     });
-    const client = createClientService({ redis, clientRepository: repositories.client });
+    const client = createGenericClientCache({
+      redis,
+      schema: GenericClientRuntimeDtoSchema,
+      source: createGenericClientRepository(primary.db, toGenericClientRuntimeDto),
+    });
     router.route("/", createInternalAuthzRoute(client.getClientBySecret, logger));
     const snapshots = createClientSnapshots({ redis, source: createClientSnapshotRepository(primary.db) });
     const subjectAccess = createIntegrationSubjectAccess(redis, env.sessionKernel, snapshots.client);
@@ -114,7 +119,7 @@ export async function createIntegrationApiComposition(options: CreateIntegration
         userQueryDb: userQuery.db,
         organizationQueryDb: organizationQuery.db,
         delegationQueryDb: delegationQuery.db,
-        client,
+        getClientBySecret: client.getClientBySecret,
         delegation,
         auditLogWriter,
         repositories,

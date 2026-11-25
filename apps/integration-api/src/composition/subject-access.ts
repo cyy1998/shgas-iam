@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { createCustomSsoRetryableErrorMapper } from "@iam/api-core/http/custom-sso-retryable";
+import { mapCustomSsoRetryableError } from "@iam/api-core/http/custom-sso-retryable";
 import { createPublicAuthenticationHandler } from "@iam/api-core/middlewares/public-authentication";
-import { acquireIamRootClient, type ClientSnapshotReader, ClientSnapshotUnavailableError } from "@iam/client-snapshot";
-import { ApiErrorCode } from "@iam/contracts";
+import { acquireIamRootClient, type ClientSnapshotReader } from "@iam/client-snapshot";
 import { AuthzMaintenanceError, AuthzUnauthorizedError } from "@iam/runtime/errors";
 import { createUnifiedSessionKernel, SessionStorageError } from "@iam/session-kernel";
 import {
@@ -72,10 +71,7 @@ export function createIntegrationSubjectAccess(
       });
     },
     runWithCapability: (_context, _capability, next) => next(),
-    mapRetryableError: createCustomSsoRetryableErrorMapper({
-      classifyUnavailable: (error) =>
-        error instanceof ClientSnapshotUnavailableError ? ApiErrorCode.InternalError : undefined,
-    }),
+    mapRetryableError: mapCustomSsoRetryableError,
     shouldPreserveSessionCookie: (error, clientCode) => clientCode !== "iam" || error instanceof IamClientRejectedError,
     retryAfterSeconds: 3,
   });

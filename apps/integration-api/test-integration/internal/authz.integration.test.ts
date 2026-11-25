@@ -1,9 +1,12 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { ClientStatus } from "@iam/contracts";
 import { clients } from "@iam/db/schema";
 import { createIntegrationApiApp } from "@integration-api/app";
 import pino from "pino";
+import { ownIntegrationTestExecutor, resetIntegrationRedisTestDatabase } from "../support/fixture-lifecycle";
 import { createIntegrationPostgresTestHarness, testEnvironment } from "../support/resources.fixture";
+
+afterEach(resetIntegrationRedisTestDatabase);
 
 test("checks the current Internal Client and rejects missing, unknown, disabled and deleted credentials", async () => {
   const pg = await createIntegrationPostgresTestHarness();
@@ -12,6 +15,7 @@ test("checks the current Internal Client and rejects missing, unknown, disabled 
     env: testEnvironment(pg.databaseUrl),
     logger: pino({ level: "info" }, { write: (line) => logLines.push(line) }),
   });
+  const close = ownIntegrationTestExecutor(api.close);
   try {
     await pg.db.insert(clients).values([
       { clientCode: "active", clientName: "Active", extAttributes: {}, clientSecret: "allowed-test-key" },
@@ -46,7 +50,10 @@ test("checks the current Internal Client and rejects missing, unknown, disabled 
     expect(checks[0]).toContain('"hasClientSecret":true');
     expect(logLines.join("")).not.toContain("allowed-test-key");
   } finally {
-    await api.close();
-    await pg.close();
+    try {
+      await close();
+    } finally {
+      await pg.close();
+    }
   }
 });

@@ -1,12 +1,16 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { clients } from "@iam/db/schema";
 import { createIntegrationApiApp } from "@integration-api/app";
 import pino from "pino";
+import { ownIntegrationTestExecutor, resetIntegrationRedisTestDatabase } from "../support/fixture-lifecycle";
 import { createIntegrationPostgresTestHarness, testEnvironment } from "../support/resources.fixture";
+
+afterEach(resetIntegrationRedisTestDatabase);
 
 test("the dedicated query deadlines fail closed and the remaining service stays available", async () => {
   const pg = await createIntegrationPostgresTestHarness();
   const api = await createIntegrationApiApp({ env: testEnvironment(pg.databaseUrl), logger: pino({ enabled: false }) });
+  const close = ownIntegrationTestExecutor(api.close);
   const locked = Promise.withResolvers<void>();
   const release = Promise.withResolvers<void>();
   let holder: Promise<unknown> | undefined;
@@ -62,7 +66,10 @@ test("the dedicated query deadlines fail closed and the remaining service stays 
   } finally {
     release.resolve();
     await holder?.catch(() => undefined);
-    await api.close();
-    await pg.close();
+    try {
+      await close();
+    } finally {
+      await pg.close();
+    }
   }
 }, 10_000);

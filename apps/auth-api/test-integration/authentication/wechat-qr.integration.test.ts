@@ -113,15 +113,21 @@ async function createAuthWithWakeBarrier(
 async function setup(
   protocol: "custom_sso" | "oidc",
   bindAccount: boolean,
-  origin = internalOrigin,
-  suspendWake?: () => Promise<void>,
+  fixture: {
+    origin?: string;
+    suspendWake?: () => Promise<void>;
+    continuationTtlSeconds?: number;
+    environment?: NodeJS.ProcessEnv;
+  } = {},
 ) {
+  const { origin = internalOrigin, suspendWake, continuationTtlSeconds = 90, environment } = fixture;
   const pg = getDatabase();
   const keys = sm2.generateKeyPairHex();
   const env = authTestEnv(pg.databaseUrl, {
     IAM_AUTH_API_WECHAT_QR_AGENT_ID: "1000001",
     IAM_AUTH_API_WECHAT_QR_CALLBACK_URL: qrCallback,
     IAM_AUTH_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON: JSON.stringify({ fixture: keys.privateKey }),
+    ...environment,
   });
   const redis = new Redis(env.redis);
   ownAuthApiTestExecutor(() => closeAuthApiRedisConnection(redis));
@@ -208,7 +214,7 @@ async function setup(
     clients,
     redis,
     codeTtlSeconds: 60,
-    continuationTtlSeconds: 90,
+    continuationTtlSeconds,
     admission: { evaluate: async () => "match" as const },
   };
   const issuer = `${origin}/oidc`;
@@ -350,6 +356,72 @@ function bindPassword(f: Fixture, requestId: string, username = "test-qr-user") 
     body: JSON.stringify({ credential }),
   });
 }
+
+function bindSms(f: Fixture, requestId: string, code?: string) {
+  return desktop(f, `/${requestId}/bind/sms${code === undefined ? "/send" : ""}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ phoneNumber: mobile, code }),
+  });
+}
+
+test("five invalid WeCom binding codes restrict SMS send and verification for the account", async () => {
+  const f = await setup("custom_sso", true, { environment: { IAM_AUTH_API_IMAGE_CAPTCHA_ENABLED: "false" } });
+  const qr = await startQr(f);
+  await confirmOnPhone(f, qr.mobileUrl);
+  const sent = await bindSms(f, qr.requestId);
+  expect(await sent.json()).toMatchObject({ data: { decision: "sent" } });
+  const code = required(f.messages[0]?.match(/\d{4}/u)?.[0] ?? null);
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const rejected = await bindSms(f, qr.requestId, "0000");
+    expect(rejected.status).toBe(400);
+    expect(rejected.headers.getSetCookie()).toEqual([]);
+    expect(await rejected.json()).toMatchObject({ code: ApiErrorCode.LoginFailed });
+  }
+  for (const input of [undefined, code]) {
+    const restricted = await bindSms(f, qr.requestId, input);
+    expect(restricted.status).toBe(400);
+    expect(restricted.headers.getSetCookie()).toEqual([]);
+    expect(await restricted.json()).toMatchObject({
+      code: ApiErrorCode.LoginFailed,
+      message: expect.stringContaining("账号已被临时限制"),
+    });
+  }
+  expect(f.messages).toHaveLength(1);
+});
+
+test("resending a WeCom binding code preserves the original QR expiry", async () => {
+  const f = await setup("custom_sso", true, { continuationTtlSeconds: 4 });
+  if (f.protocol !== "custom_sso") throw new Error("Expected a Custom SSO fixture");
+  const qr = await startQr(f);
+  await confirmOnPhone(f, qr.mobileUrl);
+  const sent = await bindSms(f, qr.requestId);
+  expect(await sent.json()).toMatchObject({ data: { decision: "sent" } });
+  const cooldown = await bindSms(f, qr.requestId);
+  expect(cooldown.status).toBe(429);
+  expect(Number(cooldown.headers.get("Retry-After"))).toBeGreaterThan(0);
+  // Advance only the test phone's cooldown so the original QR stays close to expiry.
+  await f.redis.pexpire(`mobile-code-cooldown:${mobile}`, 1);
+  await Bun.sleep(25);
+  const resent = await bindSms(f, qr.requestId);
+  expect(await resent.json()).toMatchObject({ data: { decision: "sent" } });
+  expect(f.messages).toHaveLength(2);
+  const code = required(f.messages[1]?.match(/\d{4}/u)?.[0] ?? null);
+  const codeKey = `wechat-binding-code:${qr.requestId}:${f.userId}:${mobile}`;
+  const storedCode = await f.redis.get(codeKey);
+  expect(storedCode).toBe(code);
+  const storedDeadline = await f.redis.pexpiretime(codeKey);
+  expect(storedDeadline).toBeGreaterThan(Date.now());
+  expect(storedDeadline).toBeLessThanOrEqual(qr.expiresAt);
+
+  await Bun.sleep(Math.max(0, qr.expiresAt - Date.now()) + 100);
+  const expired = await bindSms(f, qr.requestId, code);
+  expect(expired.status).toBe(400);
+  expect(expired.headers.getSetCookie()).toEqual([]);
+  const remaining = await f.redis.exists(codeKey);
+  expect(remaining).toBe(0);
+}, 15_000);
 
 for (const protocol of ["custom_sso", "oidc"] as const) {
   for (const method of ["linked", "password", "sms"] as const) {
@@ -502,9 +574,11 @@ test("only one account can bind the same external WeCom identity across concurre
 test("replacing a QR after commit preserves the binding, audit and User Document Outbox", async () => {
   const committed = Promise.withResolvers<void>();
   const release = Promise.withResolvers<void>();
-  const f = await setup("custom_sso", true, internalOrigin, async () => {
-    committed.resolve();
-    await release.promise;
+  const f = await setup("custom_sso", true, {
+    async suspendWake() {
+      committed.resolve();
+      await release.promise;
+    },
   });
   const original = await startQr(f);
   await confirmOnPhone(f, original.mobileUrl);
@@ -540,7 +614,7 @@ test("replacing a QR after commit preserves the binding, audit and User Document
 });
 
 test("OIDC desktop start rejects a continuation from the external issuer with its original Cookie", async () => {
-  const f = await setup("oidc", false, externalOrigin);
+  const f = await setup("oidc", false, { origin: externalOrigin });
   const result = await desktop(f, "", { method: "POST" });
   expect(result.status).toBe(400);
   expect(result.headers.getSetCookie()).toEqual([]);
@@ -552,6 +626,27 @@ test("development OpenAPI includes canonical authentication and both WeCom route
   expect(auth.status).toBe(200);
   const authDocument = await auth.json();
   expect(authDocument.openapi).toBe("3.1.0");
+  expect(authDocument.paths["/auth/wechat-qr"].post.parameters).toContainEqual(
+    expect.objectContaining({
+      in: "query",
+      required: true,
+      style: "form",
+      explode: true,
+      schema: { $ref: "#/components/schemas/WechatQrContinuation" },
+    }),
+  );
+  expect(authDocument.components.schemas.WechatQrContinuation.oneOf).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        required: expect.arrayContaining(["protocol", "oidcReturn"]),
+        properties: expect.objectContaining({ ssoReturn: expect.objectContaining({ not: {} }) }),
+      }),
+      expect.objectContaining({
+        required: expect.arrayContaining(["protocol", "ssoReturn", "client", "redirectUrl"]),
+        properties: expect.objectContaining({ oidcReturn: expect.objectContaining({ not: {} }) }),
+      }),
+    ]),
+  );
   expect(authDocument.paths).toMatchObject({
     "/auth/login/password": { post: expect.any(Object) },
     "/auth/login/mobile": { post: expect.any(Object) },

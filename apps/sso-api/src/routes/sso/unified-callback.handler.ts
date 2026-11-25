@@ -1,11 +1,11 @@
 import { getAuditRequestContext } from "@iam/api-core/http/audit-request-context";
+import { mapCustomSsoRetryableError } from "@iam/api-core/http/custom-sso-retryable";
 import { customSsoLocalSessionCookieName } from "@iam/api-core/http/custom-sso-transport";
 import { createSubjectAccessHttpAdapter } from "@iam/api-core/http/subject-access";
 import { HttpStatusCodes } from "@iam/contracts/http";
 import type { UnifiedCustomSsoOperations } from "@iam/custom-sso";
 import { CustomSsoManagedFailure } from "@iam/custom-sso";
 import type { createSubjectAccessOperations } from "@iam/subject-access";
-import { mapCustomSsoRetryableError } from "@sso-api/middlewares/custom-sso-retryable.error";
 import { serialize } from "hono/utils/cookie";
 import type { SsoRouteHandler } from "./sso.type";
 

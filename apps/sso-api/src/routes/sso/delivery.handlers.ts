@@ -1,4 +1,5 @@
 import * as resp from "@iam/api-core/http";
+import { mapCustomSsoRetryableError } from "@iam/api-core/http/custom-sso-retryable";
 import {
   customSsoLocalSessionCookieName,
   decodeCustomSsoClientCode,
@@ -9,7 +10,6 @@ import { ClientCodeSchema } from "@iam/contracts";
 import { HttpStatusCodes } from "@iam/contracts/http";
 import { CustomSsoRequestMismatchError } from "@iam/custom-sso";
 import { AuthzUnauthorizedError } from "@iam/runtime/errors";
-import { mapCustomSsoRetryableError } from "@sso-api/middlewares/custom-sso-retryable.error";
 import type { CustomSsoSubjectProjectionDto } from "@sso-api/services/sso/transport/custom-sso-subject.schema";
 import { getCookie } from "hono/cookie";
 import type { DeliveryRouteHandler } from "./sso.type";

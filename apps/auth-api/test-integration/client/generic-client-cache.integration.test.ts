@@ -1,9 +1,10 @@
 import { afterEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { createClientRepository } from "@auth-api/services/client/client.repository";
-import { createClientService } from "@auth-api/services/client/client.service";
+import { createGenericClientCache } from "@iam/client-snapshot/generic-cache";
 import { ClientStatus } from "@iam/contracts";
+import { createGenericClientRepository } from "@iam/db/client-snapshot";
 import { clients } from "@iam/db/schema";
+import { GenericClientRuntimeDtoSchema, toGenericClientRuntimeDto } from "@iam/domain/client";
 import { requireExternalTestUrl, runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import Redis from "ioredis";
 import {
@@ -45,7 +46,11 @@ test("the API reader warms both Redis aliases with only the generic Client DTO",
       .returning();
     if (!row) throw new Error("Client fixture insert returned no row");
 
-    const reader = createClientService({ redis, clientRepository: createClientRepository(pg.db) });
+    const reader = createGenericClientCache({
+      redis,
+      schema: GenericClientRuntimeDtoSchema,
+      source: createGenericClientRepository(pg.db, toGenericClientRuntimeDto),
+    });
     const byCode = await reader.getClientByCode(clientCode);
     const bySecret = await reader.getClientBySecret(clientSecret);
     const entries = await redis.mget(`cache:client:code:${clientCode}`, `cache:client:secret:${clientSecret}`);

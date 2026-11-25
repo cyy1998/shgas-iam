@@ -153,7 +153,7 @@ IAM 允许过期 ID Token 作退出 hint，未用 exp 限制其使用期限。�
 | ----------------------------------------- | ---------------------------------------------------------------------- |
 | 查询、撤销指定用户/根/应用关系            | 使用[会话管理](../guides/admin.md#会话与登录限制)，不做 namespace 全清 |
 | 清空当前 namespace 中全部会话或协议 owner | 按下节 inventory、clear、verify；不能按 Client 筛选                    |
-| Client 提交后 Snapshot 传播失败           | 执行[定向修复](#client-snapshot-修复)，不重放数据库写入                |
+| Client 提交后缓存传播失败                 | 按[缓存修复范围](#client-snapshot-修复)选择恢复步骤                    |
 | Redis 备份恢复后的 Snapshot 修复          | 停流执行[全量修复与独立核验](#client-snapshot-修复)                    |
 
 ## 会话清理
@@ -192,16 +192,18 @@ IAM 清理不保证第三方本地会话或离线 ID Token 立即失效。
 
 ## Client Snapshot 修复
 
-**定向修复**用于 Client 已提交但缓存传播失败，可在当前 runtime 下执行：
+**定向修复**仅用于已确认故障限于协议 Snapshot 的情况，可在当前 runtime 下执行：
 
 ```bash
 pnpm --filter @iam/ops iam-ops client-snapshot repair -- --client-code alpha
 ```
 
-成功后通过正式入口确认当前 Client 状态/配置和凭据生效。repair 同时失效普通与敏感 payload，不重放 mutation、轮换 Secret 或撤销会话。
-失败先恢复 Redis 等依赖，再重跑同一目标；传播失败前后业务写入是否已提交按[写入结果契约](../engineering/backend-architecture.md#admin-写入结果与失败恢复)判断。
+退出 0 且 `scope=client-protocol-snapshot` 表示该 Client 的协议配置和协议凭据缓存已失效。通过正式协议入口核对当前配置与凭据。
+定向操作失败时先恢复 Redis 等依赖，再重跑同一目标。业务写入是否已提交按[写入结果契约](../engineering/backend-architecture.md#admin-写入结果与失败恢复)判断。
 
-**全量恢复**用于 Redis restore 后：关闭使用 Snapshot 或通用 Client 缓存的认证、协议、集成和管理入口，冻结 Client mutation 及所有缓存读取和回填，排空在途请求和任务后执行：
+**全量恢复**适用于通用 Client 缓存失效失败、无法确定传播失败范围或 Redis 备份恢复。Internal API Secret 轮换后，旧 Secret 仍可能保存在无 TTL 的键中，
+应立即关闭受影响的入口。恢复前关闭使用 Snapshot 或通用 Client 缓存的认证、协议、集成和管理入口及直连，冻结 Client 写入，
+停止相关 reader/writer 和维护任务，排空在途请求后执行：
 
 ```bash
 pnpm --filter @iam/ops iam-ops client-snapshot repair -- --all --writers-stopped --drained
@@ -210,9 +212,9 @@ pnpm --filter @iam/ops iam-ops client-snapshot verify -- --all --writers-stopped
 
 repair 处理 `client-snapshot:v1:{<clientCode>}` 下的 control、payload:client、payload:credential，以及
 `cache:client:code:*`、`cache:client:secret:*` 和 `cache:client:invalidation-generation`。未知键族保留。
-verify 须独立完整扫描、退出 0 且 matching=0，且发生在 reader 回源前。
+repair 须退出 0 并报告 `scope=all-client-runtime-caches`。在 reader 回源前独立运行 verify，须完整扫描、退出 0 且 `matching=0`。
 随后受限开放，检查当前配置、Internal API Secret 认证和旧 Secret 被拒绝，并检查 Admin 配置写入后的缓存失效和受影响协议。通过后恢复公共入口。
-失败或未知时重新关闭并排空，修复后重做适用核验。定向 deadline 默认十秒，全量默认五分钟，均可收紧。
+失败或未知时重新关闭并排空，修复后重做适用核验。缓存修复独立于数据库写入。定向 deadline 默认十秒，全量默认五分钟，均可收紧。
 
 ## 恢复边界
 

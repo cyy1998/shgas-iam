@@ -15,6 +15,7 @@ import {
   createUserDocumentSearchService,
 } from "@iam/documents/user";
 import { createSubjectAccessTransitionRepository } from "@iam/documents/user/subject-access-transition";
+import type { GenericClientRuntimeDto } from "@iam/domain/client";
 import { createSmsTransport, type SmsTransportOptions } from "@iam/sms";
 import type { SubjectAccessBarrier } from "@iam/subject-access";
 import { createSubjectAccessLifecycle } from "@iam/subject-access/lifecycle";
@@ -27,7 +28,6 @@ import { createOrganizationHandlers } from "../routes/internal/organization/orga
 import { createOrganizationRoute } from "../routes/internal/organization/organization.index";
 import { createUserHandlers } from "../routes/internal/user/user.handlers";
 import { createUserRoute } from "../routes/internal/user/user.index";
-import type { ClientService } from "../services/client/client.service";
 import { createOrganizationService } from "../services/organization/organization.service";
 import { createUserDocumentSearchAdapter } from "../services/user-document-search/user-document-search.adapter";
 import { createRegisterPurveyorContactUseCase } from "../use-cases/internal/register-purveyor-contact/register-purveyor-contact.use-case";
@@ -43,7 +43,7 @@ interface InternalRoutesOptions {
   userQueryDb: DbClient;
   organizationQueryDb: DbClient;
   delegationQueryDb: DbClient;
-  client: ClientService;
+  getClientBySecret: (secret: string) => Promise<GenericClientRuntimeDto | null>;
   delegation: DelegationService;
   auditLogWriter: AuditLogWriter;
   repositories: IntegrationRepositories;
@@ -126,7 +126,7 @@ export function createInternalRoutes(options: InternalRoutesOptions) {
 
   return createRouter()
     .basePath("/internal")
-    .use("/*", createInternalAuthenticationHandler({ getClientBySecret: options.client.getClientBySecret }))
+    .use("/*", createInternalAuthenticationHandler({ getClientBySecret: options.getClientBySecret }))
     .route("/", createOrganizationRoute(organizations))
     .route("/", createUserRoute(users))
     .route("/", createDelegationRoute(delegations));

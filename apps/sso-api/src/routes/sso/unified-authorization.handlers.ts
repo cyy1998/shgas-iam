@@ -1,12 +1,12 @@
 import { getRequestId, getTraceId } from "@iam/api-core/core/request-context";
 import * as resp from "@iam/api-core/http";
+import { mapCustomSsoRetryableError } from "@iam/api-core/http/custom-sso-retryable";
 import { expireCustomSsoCookies } from "@iam/api-core/http/custom-sso-transport";
 import { createSubjectAccessHttpAdapter } from "@iam/api-core/http/subject-access";
 import { appendNavigationParameters, buildApplicationAccessDeniedPath } from "@iam/contracts";
 import { HttpStatusCodes } from "@iam/contracts/http";
 import type { CustomSsoLoggerPort, UnifiedCustomSsoAuthorization } from "@iam/custom-sso";
 import type { createSubjectAccessOperations } from "@iam/subject-access";
-import { mapCustomSsoRetryableError } from "@sso-api/middlewares/custom-sso-retryable.error";
 import { getCookie, setCookie } from "hono/cookie";
 import type { SsoRouteHandler } from "./sso.type";
 

@@ -2,6 +2,38 @@ import { and, eq } from "drizzle-orm";
 import type { DbClient } from "./index";
 import { clients } from "./schema/core/clients";
 
+const genericClientSelection = {
+  id: clients.id,
+  clientCode: clients.clientCode,
+  clientName: clients.clientName,
+  clientSecret: clients.clientSecret,
+  url: clients.url,
+  status: clients.status,
+  description: clients.description,
+  isDelete: clients.isDelete,
+  createTime: clients.createTime,
+  updateTime: clients.updateTime,
+};
+
+type GenericClientRow = Pick<typeof clients.$inferSelect, keyof typeof genericClientSelection>;
+
+export function createGenericClientRepository<T>(db: DbClient, toRuntime: (row: GenericClientRow) => T) {
+  return {
+    async getClientByCode(code: string) {
+      const [row] = await db.select(genericClientSelection).from(clients).where(eq(clients.clientCode, code)).limit(1);
+      return row ? toRuntime(row) : null;
+    },
+    async getClientBySecret(secret: string) {
+      const [row] = await db
+        .select(genericClientSelection)
+        .from(clients)
+        .where(eq(clients.clientSecret, secret))
+        .limit(1);
+      return row ? toRuntime(row) : null;
+    },
+  };
+}
+
 export function createClientSnapshotRepository(db: DbClient) {
   const where = (code: string) => and(eq(clients.clientCode, code), eq(clients.isDelete, false));
   return {

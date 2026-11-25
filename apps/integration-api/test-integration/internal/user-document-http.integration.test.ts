@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:te
 import { fileURLToPath } from "node:url";
 import createApp from "@iam/api-core/core/create-app";
 import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares/internal-client-authentication";
+import { createGenericClientCache } from "@iam/client-snapshot/generic-cache";
 import type { RebuildUserDocumentJobPayload, UserDocumentOutboxJobPayload } from "@iam/contracts";
 import {
   ClientStatus,
@@ -12,6 +13,7 @@ import {
   UserStatus,
   UserType,
 } from "@iam/contracts";
+import { createGenericClientRepository } from "@iam/db/client-snapshot";
 import {
   clients,
   employments,
@@ -42,14 +44,13 @@ import {
   createUserDocumentUpdateProcessor,
 } from "@iam/documents/user/worker";
 import type { GenericClientRuntimeDto } from "@iam/domain/client";
+import { GenericClientRuntimeDtoSchema, toGenericClientRuntimeDto } from "@iam/domain/client";
 import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
 import { createUnitOfWork } from "@iam/unit-of-work";
 import { createDatabaseResource } from "@integration-api/composition/resources";
 import { createInternalMiddlewares } from "@integration-api/routes/internal/_middleware";
 import { createUserHandlers } from "@integration-api/routes/internal/user/user.handlers";
 import { createUserRoute } from "@integration-api/routes/internal/user/user.index";
-import { createClientRepository } from "@integration-api/services/client/client.repository";
-import { createClientService } from "@integration-api/services/client/client.service";
 import { createUserDocumentSearchAdapter } from "@integration-api/services/user-document-search/user-document-search.adapter";
 import appConfig from "@integration-api/testing/internal-http.config";
 import { eq } from "drizzle-orm";
@@ -592,9 +593,10 @@ function createCompositeRolePublicationFixture() {
   const fixture = createPublicationFixture();
   const { subjectIdentifier } = publication(1);
   const inspector = createSubjectFactsRedisInspector(fixture.redis);
-  const clientService = createClientService({
-    clientRepository: createClientRepository(pg.db),
+  const clientService = createGenericClientCache({
     redis: fixture.redis,
+    schema: GenericClientRuntimeDtoSchema,
+    source: createGenericClientRepository(pg.db, toGenericClientRuntimeDto),
   });
   const request = createUserRequest(clientService.getClientBySecret);
   const searchPage = (client: string, filter: unknown, page = 1) =>

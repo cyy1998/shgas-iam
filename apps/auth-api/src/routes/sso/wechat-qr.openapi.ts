@@ -15,21 +15,24 @@ import {
   WechatQrStartResultSchema,
 } from "@iam/contracts";
 import { HttpStatusCodes } from "@iam/contracts/http";
+import { WechatQrContinuationQuery } from "./wechat-qr-continuation.http";
 
 const tags = ["企业微信扫码"];
-const query = z.object({
-  protocol: z.enum(["custom_sso", "oidc"]),
-  ssoReturn: z.string().optional().describe("Custom SSO 续接句柄"),
-  oidcReturn: z.string().optional().describe("OIDC 续接句柄"),
-  client: z.string().optional().describe("Custom SSO Client Code"),
-  redirectUrl: z.url().optional().describe("Custom SSO 原始跳转地址"),
-  state: z.string().optional().describe("Custom SSO 原始状态"),
-});
+const continuationSchema = "WechatQrContinuation";
+const continuationParameter = {
+  name: "continuation",
+  in: "query",
+  required: true,
+  style: "form",
+  explode: true,
+  schema: { $ref: `#/components/schemas/${continuationSchema}` },
+} as const;
 const requestId = z.object({ requestId: WechatQrIdSchema });
 const flowId = z.object({ flowId: WechatQrIdSchema });
 const desktopDescription = "仅接受内网入口。发送原协议的续接参数和浏览器绑定 Cookie。";
 
 export function registerWechatQrDesktopPaths(router: ReturnType<typeof createRouter>) {
+  router.openAPIRegistry.register(continuationSchema, WechatQrContinuationQuery);
   router.openAPIRegistry.registerPath(
     createRoute({
       method: "post",
@@ -37,7 +40,7 @@ export function registerWechatQrDesktopPaths(router: ReturnType<typeof createRou
       tags,
       summary: "生成二维码或继续已有登录",
       description: desktopDescription,
-      request: { query },
+      parameters: [continuationParameter],
       responses: {
         ...commonErrorResponses,
         [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(WechatQrStartResultSchema), "扫码或继续"),
@@ -51,7 +54,8 @@ export function registerWechatQrDesktopPaths(router: ReturnType<typeof createRou
       tags,
       summary: "查询二维码状态",
       description: desktopDescription,
-      request: { query, params: requestId },
+      parameters: [continuationParameter],
+      request: { params: requestId },
       responses: {
         ...commonErrorResponses,
         [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(WechatQrEventSchema), "当前状态"),
@@ -65,7 +69,8 @@ export function registerWechatQrDesktopPaths(router: ReturnType<typeof createRou
       tags,
       summary: "订阅二维码状态",
       description: desktopDescription,
-      request: { query, params: requestId },
+      parameters: [continuationParameter],
+      request: { params: requestId },
       responses: {
         ...commonErrorResponses,
         [HttpStatusCodes.OK]: {
@@ -82,7 +87,8 @@ export function registerWechatQrDesktopPaths(router: ReturnType<typeof createRou
       tags,
       summary: "完成扫码登录",
       description: desktopDescription,
-      request: { query, params: requestId },
+      parameters: [continuationParameter],
+      request: { params: requestId },
       responses: {
         ...commonErrorResponses,
         [HttpStatusCodes.OK]: jsonContent(
@@ -105,7 +111,8 @@ export function registerWechatQrDesktopPaths(router: ReturnType<typeof createRou
         tags,
         summary: binding.summary,
         description: desktopDescription,
-        request: { query, params: requestId, body: jsonContentRequired(binding.body, "企业微信身份绑定凭据") },
+        parameters: [continuationParameter],
+        request: { params: requestId, body: jsonContentRequired(binding.body, "企业微信身份绑定凭据") },
         responses: {
           ...commonErrorResponses,
           [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(result.shape.data), "绑定流程结果"),

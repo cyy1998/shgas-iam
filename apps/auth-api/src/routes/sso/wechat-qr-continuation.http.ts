@@ -1,5 +1,6 @@
-import { mapCustomSsoRetryableError } from "@auth-api/middlewares/custom-sso-retryable.error";
 import type { PrepareWechatQrContinuation } from "@auth-api/use-cases/authentication/wechat-qr/wechat-qr-completion.use-case";
+import { z } from "@hono/zod-openapi";
+import { mapCustomSsoRetryableError } from "@iam/api-core/http/custom-sso-retryable";
 import { ClientSnapshotUnavailableError } from "@iam/client-snapshot";
 import { ApiErrorCode, ClientCodeSchema } from "@iam/contracts";
 import { SERVICE_UNAVAILABLE } from "@iam/contracts/http";
@@ -10,15 +11,15 @@ import { SessionStorageError } from "@iam/session-kernel";
 import type { createSubjectAccessOperations } from "@iam/subject-access";
 import type { Context } from "hono";
 import { getCookie } from "hono/cookie";
-import { z } from "zod";
 
 const handle = z.string().regex(/^[\w-]{43}$/u);
+const forbiddenHandle = z.never().openapi({ type: "string", not: {} }).optional();
 export const WechatQrContinuationQuery = z.discriminatedUnion("protocol", [
-  z.object({ protocol: z.literal("oidc"), oidcReturn: handle, ssoReturn: z.never().optional() }),
+  z.object({ protocol: z.literal("oidc"), oidcReturn: handle, ssoReturn: forbiddenHandle }),
   z.object({
     protocol: z.literal("custom_sso"),
     ssoReturn: handle,
-    oidcReturn: z.never().optional(),
+    oidcReturn: forbiddenHandle,
     client: ClientCodeSchema,
     redirectUrl: z.url(),
     state: z.string().optional(),
