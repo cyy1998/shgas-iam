@@ -95,7 +95,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | Document                                                                                             | Type     | Status     | Last verified | Next review | Notes                                                                                                                                   |
 | ---------------------------------------------------------------------------------------------------- | -------- | ---------- | ------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | [ADR-0002](adr/0002-centralize-role-assignment-resolution.md)                                        | decision | Current    | 2026-11-16    | 2026-12-16  | 独立角色解析与正反向有效性边界。                                                                                                        |
-| [ADR-0004](adr/0004-adopt-upstream-first-matt-skills.md)                                             | decision | Current    | 2026-11-24    | 2026-12-24  | 上游优先与手动薄适配；AFK 按 Spec 动态实施、集中评审及 PR 交付（含 `$pr` 描述与 `Status` 看板）。                                       |
+| [ADR-0004](adr/0004-adopt-upstream-first-matt-skills.md)                                             | decision | Current    | 2026-11-25    | 2026-12-25  | 上游优先与手动薄适配；手动与 AFK 均统一按 `$pr` 创建 PR 交付（不改动本地 `main`），AFK 另含动态调度、集中评审与 `Status` 看板。         |
 | [ADR-0005](adr/0005-keep-live-login-state-in-redis.md)                                               | decision | Current    | 2026-11-16    | 2026-12-16  | Redis 实时状态与生命周期时间权威。                                                                                                      |
 | [ADR-0006](adr/0006-elevate-user-subject-identifier.md)                                              | decision | Current    | 2026-11-16    | 2026-12-16  | 跨协议稳定 Subject Identifier 归属 IAM 身份域。                                                                                         |
 | [ADR-0009](adr/0009-adopt-canonical-test-collections.md)                                             | decision | Current    | 2026-11-24    | 2026-12-24  | 按真实资源归类、workspace 声明与临时环境；root 工具链一次性验证；E2E 由 ADR-0055 修订，Integration 模板隔离与有界并发由 ADR-0056 修订。 |
@@ -138,14 +138,14 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 <details>
 <summary>展开Agent 工作流</summary>
 
-| Document                                          | Type         | Status  | Last verified | Next review | Notes                                                                             |
-| ------------------------------------------------- | ------------ | ------- | ------------- | ----------- | --------------------------------------------------------------------------------- |
-| [代码调查子代理](agents/code-investigation.md)    | agent-config | Current | 2026-11-23    | 2026-12-23  | 双引擎只读调查路由、沙箱约束、返回契约与跨会话记忆。                              |
-| [Domain Docs](agents/domain.md)                   | agent-config | Current | 2026-11-16    | 2026-12-16  | 工程 skills 的领域文档消费规则。                                                  |
-| [GitHub 议题跟踪](agents/issue-tracker.md)        | agent-config | Current | 2026-11-24    | 2026-12-24  | GitHub spec、ticket 类型、原生任务图、T3 绑定、PR 自动关票与手动/AFK 交接。       |
-| [Sandcastle AFK 工作流](agents/sandcastle-afk.md) | agent-config | Current | 2026-11-24    | 2026-12-24  | 原生 Spec 图选票、无人值守实施、集中评审、`$pr` PR 交付、Status 看板与最终冒烟。  |
-| [Triage Labels](agents/triage-labels.md)          | agent-config | Current | 2026-10-25    | 2026-11-25  | 默认 canonical triage labels 与 Spec/ticket 互斥类型。                            |
-| [工作流补充](agents/workflow.md)                  | agent-config | Current | 2026-11-24    | 2026-12-24  | 分析设计（T3 Code）与执行交付（Sandcastle AFK）分离、双引擎角色、验证与收尾约束。 |
+| Document                                          | Type         | Status  | Last verified | Next review | Notes                                                                            |
+| ------------------------------------------------- | ------------ | ------- | ------------- | ----------- | -------------------------------------------------------------------------------- |
+| [代码调查子代理](agents/code-investigation.md)    | agent-config | Current | 2026-11-23    | 2026-12-23  | 双引擎只读调查路由、沙箱约束、返回契约与跨会话记忆。                             |
+| [Domain Docs](agents/domain.md)                   | agent-config | Current | 2026-11-16    | 2026-12-16  | 工程 skills 的领域文档消费规则。                                                 |
+| [GitHub 议题跟踪](agents/issue-tracker.md)        | agent-config | Current | 2026-11-25    | 2026-12-25  | GitHub spec、ticket 类型、原生任务图、T3 绑定、PR 自动关票与手动/AFK 交接。      |
+| [Sandcastle AFK 工作流](agents/sandcastle-afk.md) | agent-config | Current | 2026-11-24    | 2026-12-24  | 原生 Spec 图选票、无人值守实施、集中评审、`$pr` PR 交付、Status 看板与最终冒烟。 |
+| [Triage Labels](agents/triage-labels.md)          | agent-config | Current | 2026-10-25    | 2026-11-25  | 默认 canonical triage labels 与 Spec/ticket 互斥类型。                           |
+| [工作流补充](agents/workflow.md)                  | agent-config | Current | 2026-11-25    | 2026-12-25  | 分析设计（T3 Code）、AFK 与 Fast Track `$pr` PR 交付、双引擎角色与验证约束。     |
 
 </details>
 

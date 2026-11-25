@@ -62,8 +62,8 @@ GitHub Issues 与 PR 共用编号空间。遇到裸 `#42` 时，先运行
 - assignee 表达认领，open/closed 表达是否完成，triage label 表达当前处理角色；
 - 评论只追加重要决策、验证摘要、评审结果和下一安全动作，并链接正式来源，不复制整份 spec 或 ticket。
 
-手动工作流通过评论验收结果并关闭 GitHub issue 完成 ticket；父 Spec 按[完成与本地合入](workflow.md#完成与本地合入)收尾。
-Sandcastle AFK 交付时保持 tickets 与父 Spec 为 open，通过 PR 正文逐行 `Closes #<number>` 关联自动关票，并在 PR 创建后移除 `ready-for-agent` 标签；
+手动工作流与 Sandcastle AFK 均通过 Pull Request 交付（分别见[完成与 PR 交付](workflow.md#完成与-pr-交付)与[Spec 交付与清理](sandcastle-afk.md#spec-交付与清理)）：
+交付时保持关联 tickets 与父 Spec 为 open，在 PR 正文逐行附加 `Closes #<number>` 关联自动关票，并在 PR 创建后移除 `ready-for-agent` 标签；
 待维护者在 GitHub 合并 PR 后由 GitHub 自动关闭父 Spec 及全部关联子票。
 
 ### Spec 任务图

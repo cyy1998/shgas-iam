@@ -59,7 +59,7 @@
 - 本仓库将**分析与设计（T3 Code）**和**执行与交付（Sandcastle AFK）**分离，详见[工作流补充](docs/agents/workflow.md)：
   - **分析与设计**：在 T3 Code 完成代码调查、澄清、原型与文档落盘（候选集成分支 `feat/<feature-slug>`），发布 Spec/tickets 并由当前引擎的新鲜只读 subagent 通过 `ready-for-agent` 轻量门禁后交接。
   - **完整 Spec 执行**：默认交由 [Sandcastle AFK](docs/agents/sandcastle-afk.md) 无人值守实施、双轴评审、按 `$pr` 起草描述并推送创建 Pull Request 交付（不改动本地 `main`）；仅在用户明确指定时才在手动会话中运行 [`implement-spec`](.agents/skills/implement-spec/SKILL.md)。
-  - **轻量直改与异常介入**：小型明确任务、文档/配置更新、紧急 bugfix 及 AFK 暂停排障直接在 T3 Code 单会话完成；显式调用 [`implement`](.agents/skills/implement/SKILL.md) 时才走该 skill 的双轴评审流程。
+  - **轻量直改与异常介入**：小型明确任务、文档/配置更新、紧急 bugfix 及 AFK 暂停排障直接在 T3 Code 单会话完成，验证通过后按 `$pr` 起草描述并推送创建 Pull Request 交付（不改动本地 `main`）；显式调用 [`implement`](.agents/skills/implement/SKILL.md) 时才走该 skill 的双轴评审流程。
 - 上游高频流程 skills 需用户点名后直接读取对应 `SKILL.md`：
   [`to-spec`](.agents/skills/to-spec/SKILL.md)、[`to-tickets`](.agents/skills/to-tickets/SKILL.md)、[`wayfinder`](.agents/skills/wayfinder/SKILL.md)、
   [`grill-with-docs`](.agents/skills/grill-with-docs/SKILL.md)、[`grill-me`](.agents/skills/grill-me/SKILL.md)、[`triage`](.agents/skills/triage/SKILL.md)。
