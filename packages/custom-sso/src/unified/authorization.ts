@@ -1,27 +1,15 @@
 import type { ClientSnapshotReader, ClientSnapshotValue } from "@iam/client-snapshot";
-import { ClientSnapshotUnavailableError } from "@iam/client-snapshot";
 import type { ApplicationAdmissionInput, ApplicationAdmissionResult } from "@iam/contracts";
-import { ClientSsoCallbackType, ClientSsoProtocol, ClientStatus, LoginPageGuardDecision } from "@iam/contracts";
-import { AuthzMaintenanceError, AuthzUnauthorizedError, BadRequestError } from "@iam/runtime/errors";
+import { ClientSsoCallbackType, LoginPageGuardDecision } from "@iam/contracts";
+import { AuthzUnauthorizedError } from "@iam/runtime/errors";
 import type { UnifiedSessionKernel } from "@iam/session-kernel";
-import { SessionStorageError } from "@iam/session-kernel";
 import type { SubjectAccessOperation } from "@iam/subject-access";
-import {
-  requireSubjectAccessOperation,
-  SubjectAccessDisabledError,
-  SubjectAccessOperationDeniedError,
-  SubjectAccessUnavailableError,
-} from "@iam/subject-access";
 import { z } from "zod";
-import {
-  CustomSsoAdmissionUnavailableError,
-  InvalidRedirectUriError,
-  InvalidSsoClientError,
-} from "../authorization.error";
+import { CustomSsoAdmissionUnavailableError, InvalidRedirectUriError } from "../authorization.error";
 import type { createSsoRedirectUrlValidator } from "../internal/redirect-url.validator";
-import { CustomSsoTrafficGateUnavailableError } from "../internal/traffic-gate";
+import { type AuthorizationInput, createCustomSsoAuthorizationContext } from "./continuation";
 import type { AcceptedAuthorization, CustomSsoStateRedis } from "./state";
-import { createCustomSsoState, randomHandle } from "./state";
+import { randomHandle } from "./state";
 
 export interface UnifiedCustomSsoAuthorizationOptions {
   kernel: UnifiedSessionKernel<SubjectAccessOperation>;
@@ -36,61 +24,22 @@ export interface UnifiedCustomSsoAuthorizationOptions {
   };
 }
 
-interface AuthorizationInput {
-  clientCode: string;
-  redirectUrl: string;
-  state?: string;
-  globalSessionToken?: string;
-  continuation?: string;
-  browserBinding?: string;
-}
-
 export function createUnifiedCustomSsoAuthorization(options: UnifiedCustomSsoAuthorizationOptions) {
   const codeTtl = z.number().int().positive().parse(options.codeTtlSeconds);
   const continuationTtl = z.number().int().positive().parse(options.continuationTtlSeconds);
-  const state = createCustomSsoState(options.redis, options.namespace);
+  const { state, forOperation } = createCustomSsoAuthorizationContext(options);
   return {
     forOperation(operation: SubjectAccessOperation) {
-      requireSubjectAccessOperation(operation);
+      const { client, continuation, root, inspectLoginContinuation } = forOperation(operation);
       const sessions = options.kernel.forOperation(operation);
       async function accept(input: AuthorizationInput): Promise<{
         accepted: AcceptedAuthorization;
         client: ClientSnapshotValue;
         expiresAt?: number;
       }> {
-        let snapshot: Awaited<ReturnType<typeof options.clients.acquire>>;
-        try {
-          snapshot = await options.clients.acquire(input.clientCode);
-        } catch (error) {
-          if (error instanceof ClientSnapshotUnavailableError) throw new CustomSsoTrafficGateUnavailableError();
-          throw error;
-        }
-        if (snapshot.kind === "present" && snapshot.value.status === ClientStatus.Maintenance)
-          throw new AuthzMaintenanceError();
-        if (
-          snapshot.kind !== "present" ||
-          snapshot.value.clientCode !== input.clientCode ||
-          snapshot.value.status !== ClientStatus.Enable ||
-          !snapshot.value.ssoEnabled ||
-          snapshot.value.ssoConfig?.protocol !== ClientSsoProtocol.CustomSso
-        ) {
-          throw new InvalidSsoClientError("非法Client");
-        }
-        if (input.continuation !== undefined) {
-          const continuation = await state.readContinuation(input.continuation, input.browserBinding ?? "");
-          if (!continuation) throw new BadRequestError("登录请求已失效，请返回应用重新发起登录");
-          const { expiresAt, ...accepted } = continuation;
-          if (
-            accepted.clientCode !== input.clientCode ||
-            accepted.redirectUrl !== input.redirectUrl ||
-            accepted.state !== input.state ||
-            accepted.redeemer !== snapshot.value.ssoConfig.callbackType
-          ) {
-            throw new BadRequestError("登录请求已失效，请返回应用重新发起登录");
-          }
-          return { accepted, client: snapshot.value, expiresAt };
-        }
-        const config = snapshot.value.ssoConfig;
+        const snapshot = await client(input.clientCode);
+        if (input.continuation !== undefined) return await continuation(input, snapshot);
+        const config = snapshot.ssoConfig;
         const redirectUrl = options.redirectUrls.normalizeAllowed(
           input.clientCode,
           input.redirectUrl,
@@ -102,7 +51,7 @@ export function createUnifiedCustomSsoAuthorization(options: UnifiedCustomSsoAut
             ? `${new URL(redirectUrl).origin}/sso/callback`
             : new URL(config.callbackEndpoint).href;
         return {
-          client: snapshot.value,
+          client: snapshot,
           accepted: {
             clientCode: input.clientCode,
             redirectUrl,
@@ -112,38 +61,8 @@ export function createUnifiedCustomSsoAuthorization(options: UnifiedCustomSsoAut
           },
         };
       }
-      async function root(token?: string, failOnIdentityMismatch = false) {
-        if (!token) return null;
-        try {
-          const result = await sessions.resolveUserSession(token);
-          if (result.status === "corrupt") throw new SubjectAccessUnavailableError();
-          if (result.status !== "resolved") return null;
-          const user = result.value.userSession;
-          await operation.acquireForSession({
-            principalSessionId: user.userSessionId,
-            subjectIdentifier: user.subjectIdentifier,
-            subjectContext: user.subjectContext,
-          });
-          return result.value;
-        } catch (error) {
-          if (
-            failOnIdentityMismatch &&
-            error instanceof SubjectAccessOperationDeniedError &&
-            error.reason === "identity_mismatch"
-          ) {
-            throw new SubjectAccessUnavailableError(error);
-          }
-          if (error instanceof SubjectAccessDisabledError || error instanceof AuthzUnauthorizedError) return null;
-          if (error instanceof SessionStorageError) throw new SubjectAccessUnavailableError();
-          throw error;
-        }
-      }
       return {
-        async inspectLoginContinuation(input: AuthorizationInput) {
-          const { accepted, expiresAt } = await accept(input);
-          if (expiresAt === undefined) throw new BadRequestError("登录请求已失效，请返回应用重新发起登录");
-          return { clientCode: accepted.clientCode, expiresAt, root: await root(input.globalSessionToken, true) };
-        },
+        inspectLoginContinuation,
         async checkLoginContinuation(input: AuthorizationInput) {
           await accept(input);
           const observation = await root(input.globalSessionToken);

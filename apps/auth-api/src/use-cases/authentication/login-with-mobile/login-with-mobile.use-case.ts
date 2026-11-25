@@ -1,0 +1,100 @@
+import { HumanVerificationAction } from "@auth-api/enums/humanVerification.action";
+import { VerificationCodeUsage } from "@auth-api/enums/verificationCode.usage";
+import { buildMobileLoginFailureAudit, buildMobileLoginSuccessAudit } from "@auth-api/services/audit/events/auth.audit";
+import { createHumanVerificationContext } from "@auth-api/services/human-verification/human-verification.type";
+import { InvalidVerificationCodeError } from "@auth-api/services/mobile/mobile.error";
+import { toSessionOrigin } from "@auth-api/services/session/session-origin";
+import { UserNotFoundError } from "@iam/domain/user";
+import { runLoginProtectionOperation } from "../login-protection.helper";
+import type { AuthenticationLoginFailureStatus, AuthenticationLoginRestrictionStatus } from "../login-restriction.type";
+import { formatLoginFailureMessage, formatTemporaryLoginRestrictionMessage } from "../login-restriction-message";
+import type { LoginWithMobileDeps } from "./login-with-mobile.port";
+import type { LoginWithMobileInput, LoginWithMobileOptions, MobileLoginUser } from "./login-with-mobile.type";
+
+export function createLoginWithMobileUseCase(deps: LoginWithMobileDeps) {
+  async function execute(input: LoginWithMobileInput, options: LoginWithMobileOptions = {}) {
+    const requestContext = options.requestContext;
+    const context = createHumanVerificationContext(requestContext, input.phoneNumber);
+    if (input.imageCaptchaProof) context.imageCaptchaProof = input.imageCaptchaProof;
+    await deps.humanVerification.ensureActionAllowed(HumanVerificationAction.MobileLogin, input.capToken, context);
+
+    const activeUser = await deps.users.getActiveUserByMobile(input.phoneNumber);
+    const runLoginProtection = <T>(user: MobileLoginUser, operation: () => Promise<T>) =>
+      runLoginProtectionOperation({
+        operation,
+        auditUnavailable: async () => {
+          await deps.auditLogWriter.recordAuditLog({
+            ...requestContext,
+            ...buildMobileLoginFailureAudit(input.phoneNumber, "login_protection_unavailable", user),
+          });
+        },
+      });
+    if (activeUser !== null) {
+      const restriction: AuthenticationLoginRestrictionStatus | null = await runLoginProtection(activeUser, () =>
+        deps.loginRestriction.getRestriction(activeUser.id),
+      );
+      if (restriction !== null) {
+        await deps.auditLogWriter.recordAuditLog({
+          ...requestContext,
+          ...buildMobileLoginFailureAudit(input.phoneNumber, "too_many_login_failures", activeUser),
+        });
+        throw new InvalidVerificationCodeError(formatTemporaryLoginRestrictionMessage(restriction));
+      }
+    }
+
+    const verificationCodeValid =
+      input.code === deps.config.magicCode ||
+      (await deps.verificationCodes.consumeVerificationCode(
+        VerificationCodeUsage.Login,
+        input.phoneNumber,
+        input.code,
+      ));
+    if (!verificationCodeValid) {
+      await deps.humanRisk.recordLoginFailure(HumanVerificationAction.MobileLogin, context);
+      if (activeUser !== null) {
+        const failureResult: AuthenticationLoginFailureStatus = await runLoginProtection(activeUser, () =>
+          deps.loginRestriction.recordFailure({
+            userId: activeUser.id,
+            triggerMethod: "mobile",
+          }),
+        );
+        await deps.auditLogWriter.recordAuditLog({
+          ...requestContext,
+          ...buildMobileLoginFailureAudit(input.phoneNumber, "invalid_verification_code", activeUser),
+        });
+        throw new InvalidVerificationCodeError(formatLoginFailureMessage("验证码错误", failureResult));
+      }
+      await deps.auditLogWriter.recordAuditLog({
+        ...requestContext,
+        ...buildMobileLoginFailureAudit(input.phoneNumber, "invalid_verification_code", null),
+      });
+      throw new InvalidVerificationCodeError("验证码错误");
+    }
+    if (activeUser === null) {
+      throw new UserNotFoundError("用户不存在");
+    }
+
+    const loginProfile = await deps.users.getLoginProfileById(activeUser.id);
+    await runLoginProtection(activeUser, () => deps.loginRestriction.clearLoginState(activeUser.id));
+    const { token, remainingSeconds } = await deps.principalSessions.createPrincipalSession(
+      activeUser.subjectIdentifier,
+      {
+        amr: ["sms"],
+        origin: toSessionOrigin(requestContext),
+      },
+    );
+    await deps.auditLogWriter.recordAuditLog({
+      ...requestContext,
+      ...buildMobileLoginSuccessAudit({ ...loginProfile, id: activeUser.id }),
+    });
+    return {
+      token,
+      ...(remainingSeconds === undefined ? {} : { remainingSeconds }),
+      isMobileSet: loginProfile.mobile !== null,
+    };
+  }
+
+  return { execute };
+}
+
+export type LoginWithMobileUseCase = ReturnType<typeof createLoginWithMobileUseCase>;
