@@ -14,10 +14,10 @@ const tags = ["Authentication"];
 
 export const clientStatus = createRoute({
   method: "get",
-  path: `${routePrefix}/clients/{clientCode}/status`,
+  path: `${routePrefix}/client/status`,
   tags,
   request: {
-    params: z.object({
+    query: z.object({
       clientCode: z.string(),
     }),
   },

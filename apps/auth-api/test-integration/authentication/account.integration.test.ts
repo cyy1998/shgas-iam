@@ -320,13 +320,37 @@ test("OA reuses the current root without renewing it and the legacy WeCom callba
 
 test("canonical recovery and CAP endpoints use the configured security and public projection", async () => {
   const f = await fixture({ IAM_AUTH_API_CAP_ENABLED: "true" });
-  const status = await f.auth.app.request("/auth/clients/iam/status");
+  const status = await f.auth.app.request("/auth/client/status?clientCode=iam");
   expect(await status.json()).toMatchObject({ data: { clientCode: "iam", clientName: "iam" } });
   const lookup = await f.auth.app.request(`/auth/recovery/users/${username}/masked-mobile`);
   expect(await lookup.json()).toMatchObject({ data: { mobile: "177****2865" } });
   const challenge = await f.post("/auth/captcha/cap/iam-sso/challenge", {});
   expect(challenge.status).toBe(200);
   expect(await challenge.json()).toMatchObject({ token: expect.any(String), challenge: expect.any(Object) });
+});
+
+test("public Client status looks up dot, double dot and literal percent codes independently", async () => {
+  const f = await fixture();
+  const cases = [
+    { clientCode: ".", clientName: "Dot", queryValue: "." },
+    { clientCode: "..", clientName: "Double dot", queryValue: ".." },
+    { clientCode: "%2E", clientName: "Literal %2E", queryValue: "%252E" },
+  ];
+  await f.pg.db.insert(clients).values(
+    cases.map(({ clientCode, clientName }) => ({
+      clientCode,
+      clientName,
+      clientSecret: internalSecret,
+      extAttributes: {},
+    })),
+  );
+
+  for (const { clientCode, clientName, queryValue } of cases) {
+    const response = await f.auth.app.request(`/auth/client/status?clientCode=${queryValue}`);
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ code: 200, data: { clientCode, clientName } });
+  }
 });
 
 test("SMS login consumes a delivered code and keeps the same-phone cooldown", async () => {

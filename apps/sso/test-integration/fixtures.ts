@@ -87,16 +87,18 @@ export async function mockSsoApi(page: Page, options: SsoMockOptions = {}) {
     return fulfillJson(route, ok({ isMobileSet: true }));
   });
   await page.route("**/api/iam/auth/login/mobile", (route) => fulfillJson(route, ok({ isMobileSet: true })));
-  await page.route("**/api/iam/auth/clients/*/status", (route) =>
-    fulfillJson(
-      route,
-      ok({
-        clientCode: decodeURIComponent(new URL(route.request().url()).pathname.split("/").at(-2) ?? ""),
-        clientName: "IAM 管理后台",
-        status: ClientStatus.Enable,
-        url: null,
-      }),
-    ),
+  await page.route(
+    (url) => url.pathname === "/api/iam/auth/client/status",
+    (route) =>
+      fulfillJson(
+        route,
+        ok({
+          clientCode: new URL(route.request().url()).searchParams.get("clientCode"),
+          clientName: "IAM 管理后台",
+          status: ClientStatus.Enable,
+          url: null,
+        }),
+      ),
   );
   await page.route("**/api/iam/auth/sms/send", (route) => fulfillJson(route, ok(null)));
   await page.route("**/api/iam/auth/sms/verify", (route) => fulfillJson(route, ok({ result: true })));

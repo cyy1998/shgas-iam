@@ -34,11 +34,11 @@ export function passwordReset(body: { username: string; phoneNumber?: string; co
 }
 
 export function clientStatus(
-  params: { clientCode: string },
+  { clientCode }: { clientCode: string },
   options?: { suppressErrorMessage?: boolean; signal?: AbortSignal },
 ) {
-  const clientCode = encodeURIComponent(params.clientCode);
-  return request<ClientStatusResult>(`/auth/clients/${clientCode}/status`, {
+  const query = toQueryString({ clientCode });
+  return request<ClientStatusResult>(`/auth/client/status?${query}`, {
     skipAuthRedirect: true,
     ...options,
   });

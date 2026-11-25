@@ -12,7 +12,7 @@ export const handlers = [
   http.get("*/api/iam/sso/user-info", () => ok(currentUserInfo)),
   http.post("*/api/iam/delegations/search", () => ok([])),
   http.post("*/api/iam/auth/sms/send", () => ok(null)),
-  http.get("*/api/iam/auth/clients/:clientCode/status", () =>
+  http.get("*/api/iam/auth/client/status", () =>
     ok({
       clientCode: "iam-admin",
       clientName: "IAM 管理后台",
