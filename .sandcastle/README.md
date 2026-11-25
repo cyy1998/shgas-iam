@@ -76,7 +76,7 @@ Pull Requests 和 Git 为依据。看板同步失败会输出告警，AFK 继续
 每个需要安装依赖的执行器以独占匿名卷保存 Linux root/workspace `node_modules`，同时挂载共享的持久化 Docker named volume
 `iam-sandcastle-pnpm-store`（`/home/agent/.pnpm-store`）作为跨容器 pnpm 内容寻址缓存，避免每个容器重复从公网下载全部依赖；
 容器退出与恢复清理只回收独占匿名卷，不删除该共享 store 卷。只读阶段（`plan`、`explore`、`spec-review`）跳过依赖卷准备与安装。
-宿主从 checkout 外的已知 pnpm 入口读取清单。容器验证卷和 workspace 覆盖后安装锁定依赖；新增 workspace 未覆盖时保留改动，在新执行器重新准备。
+宿主从 checkout 外的已知 pnpm 入口读取清单。容器验证卷和 workspace 覆盖后安装锁定依赖；新增 workspace 未覆盖时保留改动并退出，宿主检测到新增依赖目录后自动挂载新匿名卷并有界重建执行器无缝继续（单阶段最多自动重建 2 次），无需人工重启或手工拉起嵌套容器。
 容器内变更依赖后执行 `sh scripts/sandcastle/prepare-workspace.sh`。独占 Turbo cache 可写性在启动模型前验证。
 容器保留 `HUSKY=0` 安装并通过进程级 Git 配置复用仓库 Hook。浏览器与 [`.sandcastle/Dockerfile`](Dockerfile)
 中的 Playwright 版本匹配，升级时重建镜像并复跑 smoke。依赖和 Hook 接线见[安装脚本](../scripts/sandcastle/prepare-workspace.sh)
