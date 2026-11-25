@@ -48,6 +48,7 @@
     "@iam/oidc": "workspace:*",
     "@iam/runtime": "workspace:*",
     "@iam/session-kernel": "workspace:*",
+    "@iam/sms": "workspace:*",
     "@iam/subject-access": "workspace:*",
     "@iam/unit-of-work": "workspace:*",
     "@scalar/hono-api-reference": "^0.11.16",

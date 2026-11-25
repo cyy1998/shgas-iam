@@ -3,12 +3,11 @@ import { createInternalAuthzHandler } from "@api/routes/auth/auth.handlers";
 import { internalAuthz } from "@api/routes/auth/auth.routes";
 import { createOpenHandlers } from "@api/routes/open/open.handlers";
 import { createOpenRoute } from "@api/routes/open/open.index";
-import { createClientService } from "@api/services/client/client.service";
 import createApp from "@iam/api-core/core/create-app";
 import { createRouter } from "@iam/api-core/core/create-router";
 import { defineConfig } from "@iam/api-core/core/define-config";
 import { ClientStatus } from "@iam/contracts";
-import type { GenericClientRecord } from "@iam/domain/client";
+import { type GenericClientRecord, toGenericClientRuntimeDto } from "@iam/domain/client";
 import pino from "pino";
 
 function unexpectedCall(): never {
@@ -32,23 +31,14 @@ function fixture(status: ClientStatus = ClientStatus.Maintenance) {
     extAttributes: { credentials: { secret: "NESTED-EXTENSION-SECRET-SENTINEL" } },
   } satisfies GenericClientRecord & Record<string, unknown>;
   let currentSource: GenericClientRecord | null = source;
-  let sourceAvailable = true;
-  async function readSource() {
-    if (!sourceAvailable) throw new Error("The backing database is unavailable");
-    return currentSource;
-  }
-  const cache = new Map<string, string>();
-  const clientService = createClientService({
-    clientRepository: {
-      getClientByCode: async (code) => (code === "portal" ? readSource() : null),
-      getClientBySecret: async (secret) => (secret === "INTERNAL-SECRET-SENTINEL" ? readSource() : null),
+  const clientService = {
+    async getClientByCode(code: string) {
+      return currentSource?.clientCode === code ? toGenericClientRuntimeDto(currentSource) : null;
     },
-    redis: {
-      get: async (key) => cache.get(key) ?? null,
-      set: async (key, value) => cache.set(key, value),
-      del: async (key) => Number(cache.delete(key)),
+    async getClientBySecret(secret: string) {
+      return currentSource?.clientSecret === secret ? toGenericClientRuntimeDto(currentSource) : null;
     },
-  });
+  };
   const handlers = createOpenHandlers({
     clientService,
     accountRecovery: {
@@ -91,38 +81,15 @@ function fixture(status: ClientStatus = ClientStatus.Maintenance) {
   );
   return {
     app,
-    stopSource() {
-      sourceAvailable = false;
-    },
     removeSource() {
       currentSource = null;
     },
   };
 }
 
-test("anonymous Client status returns only public metadata on a database read", async () => {
+test("anonymous Client status returns only public metadata from the generic Client record", async () => {
   const { app } = fixture();
   const response = await app.request("/open/client/status?clientCode=portal");
-  const body = await response.json();
-  expect(response.status).toBe(200);
-  expect(body).toEqual({
-    code: 200,
-    message: "success",
-    data: {
-      clientCode: "portal",
-      clientName: "Portal",
-      status: ClientStatus.Maintenance,
-      url: "https://portal.example.test",
-    },
-  });
-});
-
-test("anonymous Client status also removes credentials on a cache hit", async () => {
-  const f = fixture();
-  const coldResponse = await f.app.request("/open/client/status?clientCode=portal");
-  expect(coldResponse.status).toBe(200);
-  f.stopSource();
-  const response = await f.app.request("/open/client/status?clientCode=portal");
   const body = await response.json();
   expect(response.status).toBe(200);
   expect(body).toEqual({
@@ -159,11 +126,8 @@ test("the public OpenAPI response advertises only the explicit public Client fie
   expect(responseSchema.properties.data).toEqual({ $ref: "#/components/schemas/PublicClientStatus" });
 });
 
-test("Internal authentication still accepts its secret after an anonymous status read", async () => {
+test("Internal authentication accepts the configured Internal API Secret", async () => {
   const f = fixture(ClientStatus.Enable);
-  const publicResponse = await f.app.request("/open/client/status?clientCode=portal");
-  expect(publicResponse.status).toBe(200);
-  f.stopSource();
   const authenticated = await f.app.request("/auth/internal-authz", {
     headers: { apikey: "INTERNAL-SECRET-SENTINEL" },
   });

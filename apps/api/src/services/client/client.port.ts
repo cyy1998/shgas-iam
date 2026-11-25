@@ -1,10 +1,5 @@
+import type { GenericClientCacheRedis } from "@iam/client-snapshot/generic-cache";
 import type { GenericClientRecord } from "@iam/domain/client";
-
-export interface ClientCachePort {
-  get: (key: string) => Promise<string | null>;
-  set: (key: string, value: string) => Promise<unknown>;
-  del: (key: string) => Promise<number>;
-}
 
 export interface ClientReaderPort {
   getClientByCode: (clientCode: string) => Promise<GenericClientRecord | null>;
@@ -12,6 +7,6 @@ export interface ClientReaderPort {
 }
 
 export interface ClientServiceDeps {
-  redis: ClientCachePort;
+  redis: GenericClientCacheRedis;
   clientRepository: ClientReaderPort;
 }

@@ -488,6 +488,9 @@ importers:
       '@iam/session-kernel':
         specifier: workspace:*
         version: link:../../packages/session-kernel
+      '@iam/sms':
+        specifier: workspace:*
+        version: link:../../packages/sms
       '@iam/subject-access':
         specifier: workspace:*
         version: link:../../packages/subject-access
@@ -1352,6 +1355,18 @@ importers:
       ioredis:
         specifier: ^6.0.0
         version: 6.0.0(supports-color@10.2.2)
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+
+  packages/sms:
+    devDependencies:
+      '@types/bun':
+        specifier: latest
+        version: 1.4.5
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'

@@ -1,72 +1,22 @@
-import type { GenericClientRuntimeDto } from "@iam/domain/client";
+import { createGenericClientCache } from "@iam/client-snapshot/generic-cache";
 import { GenericClientRuntimeDtoSchema, toGenericClientRuntimeDto } from "@iam/domain/client";
-import { ZodError } from "zod";
 import type { ClientServiceDeps } from "./client.port";
 
-const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
-
-function reviveIsoDates(_key: string, value: unknown) {
-  return typeof value === "string" && ISO_DATE_REGEX.test(value) ? new Date(value) : value;
-}
-
-export function createClientService(deps: ClientServiceDeps) {
-  async function setClientCache(clientDto: GenericClientRuntimeDto) {
-    await Promise.all([
-      deps.redis.set(`cache:client:code:${clientDto.clientCode}`, JSON.stringify(clientDto)),
-      deps.redis.set(`cache:client:secret:${clientDto.clientSecret}`, JSON.stringify(clientDto)),
-    ]);
-  }
-
-  async function getClientFromCache(key: string, type: string): Promise<GenericClientRuntimeDto | null> {
-    const cacheString = await deps.redis.get(`cache:client:${type}:${key}`);
-    if (cacheString !== null) {
-      try {
-        const cacheClient = GenericClientRuntimeDtoSchema.parse(JSON.parse(cacheString, reviveIsoDates));
-        return cacheClient;
-      } catch (err) {
-        if (err instanceof ZodError) {
-          await deps.redis.del(`cache:client:${type}:${key}`);
-          return null;
-        } else {
-          throw err;
-        }
-      }
-    }
-    return null;
-  }
-
-  async function getClientByCode(clientCode: string): Promise<GenericClientRuntimeDto | null> {
-    const cachedClient = await getClientFromCache(clientCode, "code");
-    if (cachedClient !== null) {
-      return cachedClient;
-    }
-    const client = await deps.clientRepository.getClientByCode(clientCode);
-    if (client === null) {
-      return null;
-    }
-    const clientDto = toGenericClientRuntimeDto(client);
-    await setClientCache(clientDto);
-    return clientDto;
-  }
-
-  async function getClientBySecret(clientSecret: string): Promise<GenericClientRuntimeDto | null> {
-    const cachedClient = await getClientFromCache(clientSecret, "secret");
-    if (cachedClient !== null) {
-      return cachedClient;
-    }
-    const client = await deps.clientRepository.getClientBySecret(clientSecret);
-    if (client === null) {
-      return null;
-    }
-    const clientDto = toGenericClientRuntimeDto(client);
-    await setClientCache(clientDto);
-    return clientDto;
-  }
-
-  return {
-    getClientByCode,
-    getClientBySecret,
-  };
+export function createClientService({ redis, clientRepository }: ClientServiceDeps) {
+  return createGenericClientCache({
+    redis,
+    schema: GenericClientRuntimeDtoSchema,
+    source: {
+      async getClientByCode(code) {
+        const row = await clientRepository.getClientByCode(code);
+        return row === null ? null : toGenericClientRuntimeDto(row);
+      },
+      async getClientBySecret(secret) {
+        const row = await clientRepository.getClientBySecret(secret);
+        return row === null ? null : toGenericClientRuntimeDto(row);
+      },
+    },
+  });
 }
 
 export type ClientService = ReturnType<typeof createClientService>;

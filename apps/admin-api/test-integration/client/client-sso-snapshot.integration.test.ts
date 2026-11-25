@@ -1,6 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { createAdminClientCache } from "@admin-api/composition/runtime/client-cache";
 import { createClientAdmissionManagement } from "@admin-api/composition/services/client-admission-management";
 import { createClientSsoSnapshotManagement } from "@admin-api/composition/services/client-sso-snapshots";
 import { createClientAdmissionAdapter } from "@admin-api/routes/admin/client-admission/client-admission.adapter";
@@ -11,6 +10,7 @@ import { createClientSsoService } from "@admin-api/services/client-sso/client-ss
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import { createClientSnapshots } from "@iam/client-snapshot/composition";
 import { createClientSecretAuthenticator } from "@iam/client-snapshot/credentials";
+import { createGenericClientCacheInvalidation } from "@iam/client-snapshot/generic-cache";
 import { createClientSnapshotMaintenance } from "@iam/client-snapshot/maintenance";
 import type { ClientSsoConfig } from "@iam/contracts";
 import {
@@ -118,7 +118,7 @@ async function createManagedRestFixture() {
     const code = scope.clientCode("managed");
     await seed(code);
     const candidate = createClientSsoSnapshotManagement({
-      clientCache: createAdminClientCache({ redis: scope.redis }),
+      clientCache: createGenericClientCacheInvalidation({ redis: scope.redis }),
       db: pg.db,
       redis: scope.redis,
       logger,
@@ -256,7 +256,7 @@ test("rotation authentication uses cached current credentials, retains accepted 
     if (!("value" in child)) throw new Error("Expected ClientSession");
     let unavailable = false;
     const candidate = createClientSsoSnapshotManagement({
-      clientCache: createAdminClientCache({ redis: scope.redis }),
+      clientCache: createGenericClientCacheInvalidation({ redis: scope.redis }),
       db: pg.db,
       logger,
 
@@ -337,7 +337,7 @@ test("actual PG projection and candidate Admin mutation invalidate ordinary and 
     const code = scope.clientCode("sso");
     await seed(code);
     const candidate = createClientSsoSnapshotManagement({
-      clientCache: createAdminClientCache({ redis: scope.redis }),
+      clientCache: createGenericClientCacheInvalidation({ redis: scope.redis }),
       db: pg.db,
       redis: scope.redis,
       logger,
@@ -429,7 +429,7 @@ test("actual committed mutation with failed Redis propagation retains old value 
     await seed(code);
     let failInvalidation = false;
     const candidate = createClientSsoSnapshotManagement({
-      clientCache: createAdminClientCache({ redis: scope.redis }),
+      clientCache: createGenericClientCacheInvalidation({ redis: scope.redis }),
       db: pg.db,
       logger,
 
@@ -775,7 +775,7 @@ for (const kind of ["client", "credential"] as const) {
       );
       await reached.promise;
       const admin = createClientSsoSnapshotManagement({
-        clientCache: createAdminClientCache({ redis: scope.redis }),
+        clientCache: createGenericClientCacheInvalidation({ redis: scope.redis }),
         db: pg.db,
         redis: scope.observer,
         logger,
