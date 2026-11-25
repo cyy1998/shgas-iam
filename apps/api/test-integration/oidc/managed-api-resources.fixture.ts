@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import {
   createManagedResourceRun,
   finishManagedResourceRun,
-  managedServicePort,
+  managedServiceEndpoint,
   readManagedResourceRun,
   saveManagedResourceRun,
   startManagedResources,
@@ -72,9 +72,10 @@ export async function runManagedApiFixture(options: {
       timeoutMs: 60000,
       cleanupTimeoutMs: 10000,
     });
+    const redis = await managedServiceEndpoint(run, "redis", 6379, { signal: controller.signal });
     const environment = {
       IAM_API_TEST_DATABASE_URL: databaseUrl,
-      IAM_API_TEST_REDIS_URL: `redis://127.0.0.1:${await managedServicePort(run, "redis", 6379, { signal: controller.signal })}/0`,
+      IAM_API_TEST_REDIS_URL: `redis://${redis.host}:${redis.port}/0`,
       IAM_TEST_POSTGRES_TEMPLATE: templateName,
     };
     controller.signal.throwIfAborted();

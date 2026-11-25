@@ -14,7 +14,8 @@ ENV NODE_USE_ENV_PROXY=1
 ENV COREPACK_NPM_REGISTRY="https://registry.npmmirror.com"
 ENV NPM_CONFIG_REGISTRY="https://registry.npmmirror.com"
 ENV npm_config_registry="https://registry.npmmirror.com"
-RUN corepack enable && corepack prepare pnpm@12.21.0 --activate
+# Warm up pnpm's native binary in the shared base layer so Stage 2 never redownloads it on manifest changes.
+RUN corepack enable && corepack prepare pnpm@12.21.0 --activate && pnpm --version
 
 FROM base AS deps
 WORKDIR /app

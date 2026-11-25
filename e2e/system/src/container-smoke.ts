@@ -7,7 +7,7 @@ import {
   createManagedResourceRun,
   finishManagedResourceRun,
   type ManagedResourceRun,
-  managedServicePort,
+  managedServiceEndpoint,
   runManagedComposeCommand,
   writeAtomicResourceRecord,
 } from "../../../scripts/test-resources/managed-resources.mjs";
@@ -24,6 +24,7 @@ import {
   smokeGatewayApiPort,
 } from "../docker/container-smoke-compose.ts";
 import { runWithCleanup } from "./bounded-operation.ts";
+import { buildContainerSmokeImages, parseContainerSmokeBuildConcurrency } from "./container-smoke-build.ts";
 import { createE2EGatewayApiKey } from "./gateway-credential.ts";
 import { publishGateway } from "./gateway-sync.ts";
 import { apisixAdminKey, e2eDatabaseName, e2eDatabasePassword } from "./hybrid-compose.ts";
@@ -69,12 +70,39 @@ export async function runContainerSmoke(options: {
   });
   console.log(`[container-smoke] Project ${project}; diagnostics ${artifacts}`);
 
+  const buildConcurrency = parseContainerSmokeBuildConcurrency(process.env.IAM_CONTAINER_SMOKE_BUILD_CONCURRENCY);
   let passed = false;
   await runWithCleanup(
     async () => {
-      for (const service of containerSmokeImages) {
-        await compose(run, `build ${service}`, ["build", service], signal, 20 * 60_000);
-      }
+      console.log(`[container-smoke] build ${containerSmokeImages.length} images (concurrency ${buildConcurrency})`);
+      const buildOutcomes = await buildContainerSmokeImages({
+        services: containerSmokeImages,
+        concurrency: buildConcurrency,
+        signal,
+        buildOne: async (service, buildSignal) => {
+          const logPath = join(artifacts, `build-${service}.log`);
+          const relativeLog = `${artifactDirectory}/build-${service}.log`;
+          console.log(`[container-smoke] build ${service} started; log ${relativeLog}`);
+          const started = performance.now();
+          const result = await runManagedComposeCommand(run, ["build", service], {
+            signal: buildSignal,
+            timeoutMs: 20 * 60_000,
+            fullLogFile: logPath,
+          });
+          if (result.exitCode !== 0) {
+            const tail = result.output.trim().split(/\r?\n/u).slice(-40).join("\n");
+            throw new Error(
+              `Container Smoke could not build ${service} (exit ${result.exitCode}; log ${relativeLog})${tail ? `:\n${tail}` : ""}`,
+            );
+          }
+          console.log(`[container-smoke] build ${service} passed in ${Math.round(performance.now() - started)} ms`);
+          return { logPath: relativeLog };
+        },
+      });
+      const totalBuildMs = buildOutcomes.reduce((sum, item) => sum + item.durationMs, 0);
+      console.log(
+        `[container-smoke] built ${buildOutcomes.length} images (sum ${totalBuildMs} ms across ${buildConcurrency} slots)`,
+      );
       const start = (services: string[]) =>
         compose(
           run,
@@ -84,12 +112,12 @@ export async function runContainerSmoke(options: {
           150_000,
         );
       await start(containerSmokeInfrastructure);
-      const port = (service: string, containerPort: number) =>
-        managedServicePort(run, service, containerPort, { signal, timeoutMs: 10_000 });
-      const postgres = await port("postgres", 5432);
-      const redis = await port("redis", 6379);
-      const apisixAdmin = await port("apisix", 9180);
-      const databaseUrl = `postgresql://${e2eDatabaseName}:${e2eDatabasePassword}@127.0.0.1:${postgres}/${e2eDatabaseName}`;
+      const endpoint = (service: string, containerPort: number) =>
+        managedServiceEndpoint(run, service, containerPort, { signal, timeoutMs: 10_000 });
+      const postgres = await endpoint("postgres", 5432);
+      const redis = await endpoint("redis", 6379);
+      const apisixAdmin = await endpoint("apisix", 9180);
+      const databaseUrl = `postgresql://${e2eDatabaseName}:${e2eDatabasePassword}@${postgres.host}:${postgres.port}/${e2eDatabaseName}`;
       await command("migrate", {
         ...pnpmCommand(process.env.npm_execpath ?? "pnpm", ["--filter", "@iam/db", "db:migrate"]),
         cwd: repositoryRoot,
@@ -147,7 +175,7 @@ export async function runContainerSmoke(options: {
         environment: {
           ...process.env,
           IAM_OPS_DATABASE_URL: databaseUrl,
-          IAM_OPS_REDIS_URL: `redis://127.0.0.1:${redis}/0`,
+          IAM_OPS_REDIS_URL: `redis://${redis.host}:${redis.port}/0`,
           IAM_INITIAL_ADMIN_PASSWORD: smokeEnvironment.IAM_E2E_ADMIN_PASSWORD,
           IAM_INITIAL_IAM_CLIENT_SECRET: createE2EGatewayApiKey(runId),
           IAM_INITIAL_IAM_SSO_SECRET: randomUUID(),
@@ -159,12 +187,12 @@ export async function runContainerSmoke(options: {
       });
 
       console.log("[container-smoke] publish APISIX routes");
-      const gatewayApi = await port("gateway-api", smokeGatewayApiPort);
+      const gatewayApi = await endpoint("gateway-api", smokeGatewayApiPort);
       await publishGateway({
         yaml: await readFile(resolve(workspaceRoot, "test-assets/iam.yaml"), "utf8"),
         clientSecret: createE2EGatewayApiKey(runId),
-        gatewayOrigin: `http://127.0.0.1:${gatewayApi}`,
-        adminUrl: `http://127.0.0.1:${apisixAdmin}/apisix/admin`,
+        gatewayOrigin: `http://${gatewayApi.host}:${gatewayApi.port}`,
+        adminUrl: `http://${apisixAdmin.host}:${apisixAdmin.port}/apisix/admin`,
         adminKey: apisixAdminKey,
         includeRpTerminals: false,
         variables: {

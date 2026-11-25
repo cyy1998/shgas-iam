@@ -7,6 +7,7 @@ import {
   createManagedResourceRun,
   type ManagedResourceRun,
   managedCleanupCommand,
+  managedServiceEndpoint,
   readManagedResourceRun,
   runManagedComposeCommand,
   saveManagedResourceRun,
@@ -84,8 +85,8 @@ export async function withHybridMiddleware<T>(
       return await runWithCleanup(
         async () => {
           await startStack(run, options, state);
-          return await withResidentHostProcesses(directory, (env) =>
-            useStack(stackConnection(run, state, modes.upstreamHost, env), use),
+          return await withResidentHostProcesses(directory, async (env) =>
+            useStack(await resolveStackConnection(run, state, modes.upstreamHost, env, options.signal), use),
           );
         },
         async () => {
@@ -104,7 +105,10 @@ export async function withHybridMiddleware<T>(
   return await runWithCleanup(
     async () => {
       await startStack(run, options, state);
-      return await useStack(stackConnection(run, state, modes.upstreamHost, process.env), use);
+      return await useStack(
+        await resolveStackConnection(run, state, modes.upstreamHost, process.env, options.signal),
+        use,
+      );
     },
     async () => {
       if (run.record.keep) {
@@ -300,20 +304,27 @@ async function startStack(run: ManagedResourceRun, options: MiddlewareOptions, s
   await saveManagedResourceRun(run);
 }
 
-function stackConnection(
+async function resolveStackConnection(
   run: ManagedResourceRun,
   state: ResourceState,
   upstreamHost: string,
   hostEnvironment: NodeJS.ProcessEnv,
-): HybridMiddleware {
+  signal?: AbortSignal,
+): Promise<HybridMiddleware> {
   const { ports, project, network } = state;
+  // PostgreSQL and Redis always run on the Compose bridge network; resolve direct bridge endpoints on Linux/AFK.
+  // APISIX uses network_mode: host on Linux/AFK so its admin listener stays on 127.0.0.1:${ports.admin}.
+  const [postgres, redis] = await Promise.all([
+    managedServiceEndpoint(run, "postgres", 5432, { signal, timeoutMs: 10_000 }),
+    managedServiceEndpoint(run, "redis", 6379, { signal, timeoutMs: 10_000 }),
+  ]);
   return {
     project,
     composeFile: join(run.root, run.record.composeFile),
     network,
     ports,
-    databaseUrl: `postgresql://${e2eDatabaseName}:${e2eDatabasePassword}@127.0.0.1:${ports.postgres}/${e2eDatabaseName}`,
-    redisUrl: `redis://127.0.0.1:${ports.redis}/0`,
+    databaseUrl: `postgresql://${e2eDatabaseName}:${e2eDatabasePassword}@${postgres.host}:${postgres.port}/${e2eDatabaseName}`,
+    redisUrl: `redis://${redis.host}:${redis.port}/0`,
     apisixAdminUrl: `http://127.0.0.1:${ports.admin}/apisix/admin`,
     upstreamHost,
     hostEnvironment,
