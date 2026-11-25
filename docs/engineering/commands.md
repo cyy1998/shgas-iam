@@ -166,8 +166,8 @@ pnpm verify:container-smoke --base <target-commit-sha>
 pnpm verify:docs --base <target-commit>
 ```
 
-在干净的候选工作树中执行，传入本次合入目标的固定提交。候选须包含目标提交，且差异仅限 `docs/` 下的普通 Markdown 文件。
-`docs/agents/`、`AGENTS.md`、文件类型或权限变化以及范围外的改动走 `pnpm verify`。轻量入口检查提交范围的
+在干净的候选工作树中执行，传入本次合入目标的固定提交。候选须包含目标提交，且差异仅限 `docs/` 下的普通 Markdown 文件（含 `docs/agents/`）以及根目录 `README.md`、`AGENTS.md`、`GLOSSARY.md`。
+文件类型或权限变化以及范围外的改动（如 `.agents/`、`.codex/`、脚本或源码）走 `pnpm verify`。轻量入口检查提交范围的
 `git diff --check`、变动后仍存在的 Markdown 排版和整个文档索引。范围不符或任一检查失败时非零退出。
 
 ## 工具链排查

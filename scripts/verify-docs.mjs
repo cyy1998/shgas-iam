@@ -7,10 +7,10 @@ function git(...args) {
   return execFileSync("git", args, { encoding: "utf8" });
 }
 
+const ROOT_DOCUMENTATION_FILES = new Set(["README.md", "AGENTS.md", "GLOSSARY.md"]);
+
 function isDocumentation(path) {
-  return (
-    path.startsWith("docs/") && path.endsWith(".md") && !path.startsWith("docs/agents/") && !path.endsWith("/AGENTS.md")
-  );
+  return (path.startsWith("docs/") && path.endsWith(".md")) || ROOT_DOCUMENTATION_FILES.has(path);
 }
 
 function verifyDocs(args) {
