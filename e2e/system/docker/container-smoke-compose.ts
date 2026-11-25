@@ -81,7 +81,7 @@ export function createContainerSmokeCompose(options: {
         environment: {
           IAM_INTEGRATION_API_DATABASE_URL: databaseUrl,
           IAM_INTEGRATION_API_REDIS_URL: redisUrl,
-          IAM_INTEGRATION_API_SMS_URL: "http://127.0.0.1:9/test-sms",
+          IAM_INTEGRATION_API_SMS_URL: "http://sms.example.invalid/test-sms",
           IAM_INTEGRATION_API_SMS_SIGNATURE_KEY: "e2e-sms",
         },
       },
