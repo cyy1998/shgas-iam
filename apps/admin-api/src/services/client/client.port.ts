@@ -1,5 +1,6 @@
 import type { AdminAuditContext } from "@admin-api/services/audit/audit.context";
 import type { AuditLogWriterPort } from "@admin-api/services/audit/audit.service";
+import type { GenericClientCacheIdentity } from "@iam/client-snapshot/generic-cache";
 import type { UnitOfWorkPort } from "@iam/unit-of-work";
 import type { AdminClientRecord, ClientCreateDto, ClientPaginationQueryDto, ClientUpdateDto } from "./client.type";
 
@@ -27,11 +28,6 @@ export interface AdminClientTransactionPorts {
 
 export type AdminClientUnitOfWorkPort = UnitOfWorkPort<AdminClientTransactionPorts>;
 
-export interface AdminClientCacheInvalidationTarget {
-  clientCode: string;
-  clientSecret: string;
-}
-
 export interface AdminClientRuntimeInvalidationPort {
   invalidateClient: (clientCode: string) => Promise<unknown>;
 }
@@ -41,10 +37,10 @@ export interface AdminClientMutationLoggerPort {
 }
 
 export interface AdminClientCachePort {
-  invalidateClient: (client: AdminClientCacheInvalidationTarget) => Promise<unknown>;
+  invalidateClient: (client: GenericClientCacheIdentity) => Promise<unknown>;
   invalidateUpdatedClient: (
-    oldClient: AdminClientCacheInvalidationTarget,
-    newClient: AdminClientCacheInvalidationTarget,
+    oldClient: GenericClientCacheIdentity,
+    newClient: GenericClientCacheIdentity,
   ) => Promise<unknown>;
 }
 
