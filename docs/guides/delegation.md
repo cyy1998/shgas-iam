@@ -1,12 +1,12 @@
 # 应用委托接入
 
-按 [Internal API 认证](README.md#internal-api-认证)准备凭据和访问路径，再管理和解析本应用的委托。
-业务规则见[应用委托](../features/client-delegation.md)。委托仅确定直接代办人，业务系统仍须检查其登录和操作权限。
+向 APISIX 发请求前，先按 [Internal API 认证](README.md#internal-api-认证)准备凭据，再管理和解析本应用的委托。
+个人自助委托由 IAM 门户使用 `/api/iam/delegations/*`，需要 Client 为 `iam` 的根会话。业务系统使用下方的 M2M 接口。业务规则见[应用委托](../features/client-delegation.md)。委托仅确定直接代办人，业务系统仍须检查其登录和操作权限。
 
 ## 解析代办人
 
 ```http
-POST /internal/delegations/resolve
+POST /api/iam/internal/delegations/resolve
 Content-Type: application/json
 apikey: <Internal API Secret>
 
@@ -33,10 +33,10 @@ apikey: <Internal API Secret>
 
 ## 管理记录
 
-创建用 `POST /internal/delegations/`，搜索用 `POST /internal/delegations/search`，修改用 `PATCH /internal/delegations/:id`。
+创建用 `POST /api/iam/internal/delegations/`，搜索用 `POST /api/iam/internal/delegations/search`，修改用 `PATCH /api/iam/internal/delegations/:id`。
 只能操作认证 Client 的记录；创建返回详情，修改返回 boolean，均放入响应 envelope 的 data。
 结果未知时先查询，避免自动重发写请求；冲突或已结束的记录须先处理原因。
 
-字段、错误码和响应以[HTTP 定义](../../apps/api/src/routes/internal/delegation/delegation.routes.ts)及
+字段、错误码和响应以[HTTP 定义](../../apps/integration-api/src/routes/internal/delegation/delegation.routes.ts)及
 [共享 schema](../../packages/delegation/src/wire.ts)为准。旧权限委托参数、错误码和数据结构不兼容；
 一次性迁移见[运维入口](../releases/README.md#一次性迁移与旧版本)，已使用新模型的环境保留现有记录。

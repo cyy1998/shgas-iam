@@ -23,7 +23,10 @@ import { pnpmCommand, runOwnedCommand } from "./test-resources/owned-command.mjs
 import { prepareManagedPostgresTemplate } from "./test-resources/postgres-template.mjs";
 
 const taskPriority = [
-  "@iam/api:bun",
+  "@iam/auth-api:bun",
+  "@iam/sso-api:bun",
+  "@iam/integration-api:bun",
+  "@iam/sso-api:playwright",
   "@iam/admin:playwright",
   "@iam/admin-api:bun",
   "@iam/ops:bun",

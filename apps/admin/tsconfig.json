@@ -13,9 +13,7 @@
       "@admin/*": ["./src/*"],
       "~admin/*": ["./*"],
       "@admin-api/*": ["../admin-api/src/*"],
-      "~admin-api/*": ["../admin-api/*"],
-      "@api/*": ["../api/src/*"],
-      "~api/*": ["../api/*"]
+      "~admin-api/*": ["../admin-api/*"]
     }
   },
   "include": ["src", "test", "test-integration", "scripts", "*.ts"]

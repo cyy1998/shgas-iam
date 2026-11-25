@@ -1,15 +1,15 @@
 # 搜索接入
 
-按 [Internal API 认证](README.md#internal-api-认证)准备凭据和访问路径，再搜索用户或组织。
+向 APISIX 发请求前，先按 [Internal API 认证](README.md#internal-api-认证)准备凭据，再搜索用户或组织。
 
-| 目标 | POST 路径                            | 成功响应的 data                                          |
-| ---- | ------------------------------------ | -------------------------------------------------------- |
-| 用户 | `/internal/users/search-dsl`         | 查询结果对象；items 默认仅含 subjectIdentifier、username |
-| 组织 | `/internal/organizations/search-dsl` | 查询结果对象；items 默认仅含 code、name                  |
+| 目标 | POST 路径                                    | 成功响应的 data                                          |
+| ---- | -------------------------------------------- | -------------------------------------------------------- |
+| 用户 | `/api/iam/internal/users/search-dsl`         | 查询结果对象；items 默认仅含 subjectIdentifier、username |
+| 组织 | `/api/iam/internal/organizations/search-dsl` | 查询结果对象；items 默认仅含 code、name                  |
 
 搜索范围与更新延迟见[目录搜索](../features/directory-management.md#目录搜索)。
 
-`GET /internal/users/:username` 和 `GET /internal/organizations/:orgCode` 使用相同认证，返回完整公开 Document，与同发布版本、同 Client 上下文下显式选择全部根字段的搜索单项一致。
+`GET /api/iam/internal/users/:username` 和 `GET /api/iam/internal/organizations/:orgCode` 使用相同认证，返回完整公开 Document，与同发布版本、同 Client 上下文下显式选择全部根字段的搜索单项一致。
 详情也包含未删除的暂停、禁用用户与组织，只读已发布目录；没有当前可读条目返回 404，损坏或查询失败返回 503。
 404 不保证源对象不存在，接口不会回源拼装另一份详情。
 
@@ -18,7 +18,7 @@
 例如，按用户名查找用户：
 
 ```http
-POST /internal/users/search-dsl
+POST /api/iam/internal/users/search-dsl
 Content-Type: application/json
 apikey: <Internal API Secret>
 
@@ -155,8 +155,8 @@ Internal 角色可见范围独立于 SSO 启用状态和授权声明配置。
 
 字段类型、枚举和错误响应直接查代码，接入指南不另维护字段清单：
 
-- [用户搜索 schema](../../packages/contracts/src/document.ts)与[用户 HTTP 定义](../../apps/api/src/routes/internal/user/user.routes.ts)。
-- [组织搜索 schema](../../packages/documents/src/organization/schema.ts)与[组织 HTTP 定义](../../apps/api/src/routes/internal/organization/organization.routes.ts)。
+- [用户搜索 schema](../../packages/contracts/src/document.ts)与[用户 HTTP 定义](../../apps/integration-api/src/routes/internal/user/user.routes.ts)。
+- [组织搜索 schema](../../packages/documents/src/organization/schema.ts)与[组织 HTTP 定义](../../apps/integration-api/src/routes/internal/organization/organization.routes.ts)。
 - [共有表达式解析](../../packages/filter-engine/src/filter-transport.ts)。
 
 旧 Public 搜索、Internal 非 DSL 搜索和搜索合并委托接口已退役；Internal 详情使用相同已发布文档，管理端查询继续使用管理专属模型。

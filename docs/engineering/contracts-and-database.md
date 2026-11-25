@@ -13,6 +13,7 @@
 | `domain` DTO、mapper、审计 helper | 后端复用的输入输出和纯数据转换，可依赖数据库派生 schema，但不执行查询                        |
 | 专用能力包                        | 完整业务能力及其公开类型；已有 owner 的协议 schema 继续由该包持有                            |
 | `db`、`api-core`、`jobs`          | 持久化与查询、HTTP 装配与适配、队列基础能力                                                  |
+| `sms`                             | 短信网关签名与 HTTP 发送；业务文案和验证码状态由调用方负责                                   |
 | `runtime`                         | 后端共享日志、观测上下文、Redis 配置与常驻连接、进程所有权、维护生命周期、环境解析和通用错误 |
 | `unit-of-work`                    | 事务编排、提交后任务和回滚确认                                                               |
 | `test-support`                    | 外部测试资源和进程 smoke harness，仅作为开发依赖，使用 `runtime`                             |

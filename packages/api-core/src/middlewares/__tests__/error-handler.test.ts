@@ -162,7 +162,7 @@ describe("errorHandler", () => {
   test("logs the source file location with the app logger when request logger is unavailable", async () => {
     const app = new Hono();
     const error = new Error("boom");
-    const sourceLocation = `${process.cwd()}/apps/api/src/routes/auth/auth.handlers.ts:12:34`;
+    const sourceLocation = `${process.cwd()}/apps/auth-api/src/routes/auth/auth.handlers.ts:12:34`;
     error.stack = [
       "Error: boom",
       `    at explode (${sourceLocation})`,
@@ -226,7 +226,7 @@ describe("errorHandler", () => {
   test("prefers the request logger when logging unexpected errors", async () => {
     const app = new Hono<{ Variables: { logger: Parameters<typeof createErrorHandler>[0] } }>();
     const error = new Error("boom");
-    const sourceLocation = `${process.cwd()}/apps/api/src/routes/auth/auth.handlers.ts:56:78`;
+    const sourceLocation = `${process.cwd()}/apps/auth-api/src/routes/auth/auth.handlers.ts:56:78`;
     error.stack = [
       "Error: boom",
       `    at explode (${sourceLocation})`,

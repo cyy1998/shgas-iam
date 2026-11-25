@@ -160,15 +160,15 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | Document                                           | Type         | Status  | Last verified | Next review | Notes                                |
 | -------------------------------------------------- | ------------ | ------- | ------------- | ----------- | ------------------------------------ |
 | [仓库地图](engineering/repository-map.md)          | architecture | Current | 2026-11-25    | 2026-12-25  | 代码、基础设施、工具与生成目录定位。 |
-| [系统架构视图](engineering/system-architecture.md) | architecture | Current | 2026-11-02    | 2026-12-02  | 拓扑、信任边界、数据权威与恢复分工。 |
+| [系统架构视图](engineering/system-architecture.md) | architecture | Current | 2026-11-25    | 2026-12-25  | 拓扑、信任边界、数据权威与恢复分工。 |
 
 #### 修改应用或共享契约
 
 | Document                                                  | Type         | Status  | Last verified | Next review | Notes                                              |
 | --------------------------------------------------------- | ------------ | ------- | ------------- | ----------- | -------------------------------------------------- |
-| [后端架构与实现约定](engineering/backend-architecture.md) | architecture | Current | 2026-11-03    | 2026-12-03  | 依赖与装配、接口响应、事务与恢复、审计与后台协作。 |
+| [后端架构与实现约定](engineering/backend-architecture.md) | architecture | Current | 2026-11-25    | 2026-12-25  | 依赖与装配、接口响应、事务与恢复、审计与后台协作。 |
 | [前端架构](engineering/frontend-architecture.md)          | architecture | Current | 2026-10-25    | 2026-11-25  | 页面、请求、权限、状态与失败恢复的职责。           |
-| [共享契约与数据库](engineering/contracts-and-database.md) | architecture | Current | 2026-11-23    | 2026-12-23  | 代码选址、包出口、运行环境、DTO 演进与持久化边界。 |
+| [共享契约与数据库](engineering/contracts-and-database.md) | architecture | Current | 2026-11-25    | 2026-12-25  | 代码选址、包出口、运行环境、DTO 演进与持久化边界。 |
 
 #### 编写、运行或排查测试
 
@@ -214,7 +214,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 
 | Document                               | Type  | Status  | Last verified | Next review | Notes                            |
 | -------------------------------------- | ----- | ------- | ------------- | ----------- | -------------------------------- |
-| [使用与接入指南入口](guides/README.md) | guide | Current | 2026-10-25    | 2026-11-25  | 按角色选择管理员操作与应用接入。 |
+| [使用与接入指南入口](guides/README.md) | guide | Current | 2026-11-25    | 2026-12-25  | 按角色选择管理员操作与应用接入。 |
 
 #### 管理员操作
 
@@ -226,11 +226,11 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 
 | Document                                    | Type  | Status  | Last verified | Next review | Notes                                      |
 | ------------------------------------------- | ----- | ------- | ------------- | ----------- | ------------------------------------------ |
-| [OIDC 接入指南](guides/oidc.md)             | guide | Current | 2026-10-26    | 2026-11-26  | 端点、参数、示例、Scope、CORS 和退出。     |
-| [Custom SSO 接入指南](guides/custom-sso.md) | guide | Current | 2026-10-26    | 2026-11-26  | 业务与托管接入、可信登录、示例和错误处理。 |
-| [搜索接入](guides/search.md)                | guide | Current | 2026-11-03    | 2026-12-03  | 用户与组织查询示例、过滤条件及结果限制。   |
-| [委托接入](guides/delegation.md)            | guide | Current | 2026-10-25    | 2026-11-25  | Client 范围、代办人解析和失败处理。        |
-| [网关配置接入](guides/gateway.md)           | guide | Current | 2026-10-25    | 2026-11-25  | 凭据、YAML、调用步骤及未知结果处理。       |
+| [OIDC 接入指南](guides/oidc.md)             | guide | Current | 2026-11-25    | 2026-12-25  | 端点、参数、示例、Scope、CORS 和退出。     |
+| [Custom SSO 接入指南](guides/custom-sso.md) | guide | Current | 2026-11-25    | 2026-12-25  | 业务与托管接入、可信登录、示例和错误处理。 |
+| [搜索接入](guides/search.md)                | guide | Current | 2026-11-25    | 2026-12-25  | 用户与组织查询示例、过滤条件及结果限制。   |
+| [委托接入](guides/delegation.md)            | guide | Current | 2026-11-25    | 2026-12-25  | Client 范围、代办人解析和失败处理。        |
+| [网关配置接入](guides/gateway.md)           | guide | Current | 2026-11-25    | 2026-12-25  | 凭据、YAML、调用步骤及未知结果处理。       |
 
 </details>
 
@@ -240,10 +240,10 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 
 | Document                                                                                              | Type    | Status  | Last verified | Next review | Notes                                                           |
 | ----------------------------------------------------------------------------------------------------- | ------- | ------- | ------------- | ----------- | --------------------------------------------------------------- |
-| [运维操作入口](releases/README.md)<a name="runbook-operations"></a>                                   | runbook | Current | 2026-11-13    | 2026-12-13  | 任务导航、简短通用约定、独立迁移与历史版本入口。                |
-| [网关管理](releases/apisix-gateway-release.md)<a name="runbook-gateway"></a>                          | runbook | Current | 2026-10-25    | 2026-11-25  | 首次配置、HTTP 发布、数据面检查和失败恢复。                     |
-| [登录与会话](releases/authentication-and-session.md)<a name="runbook-authentication-and-session"></a> | runbook | Current | 2026-11-02    | 2026-12-02  | 密码配置、OIDC 双入口与密钥、会话清理和 Snapshot 恢复。         |
-| [数据维护](releases/data-maintenance.md)<a name="runbook-data-maintenance"></a>                       | runbook | Current | 2026-11-03    | 2026-12-03  | Document、Subject Access 的两阶段修复、全量重建及完整核验。     |
-| [部署与发布](releases/deployment.md)<a name="runbook-deployment"></a>                                 | runbook | Current | 2026-11-13    | 2026-12-13  | 首次部署、常规更新、任职有效期协调发布、一次性 Ops 制品与回退。 |
+| [运维操作入口](releases/README.md)<a name="runbook-operations"></a>                                   | runbook | Current | 2026-11-25    | 2026-12-25  | 任务导航、简短通用约定、独立迁移与历史版本入口。                |
+| [网关管理](releases/apisix-gateway-release.md)<a name="runbook-gateway"></a>                          | runbook | Current | 2026-11-25    | 2026-12-25  | 首次配置、HTTP 发布、数据面检查和失败恢复。                     |
+| [登录与会话](releases/authentication-and-session.md)<a name="runbook-authentication-and-session"></a> | runbook | Current | 2026-11-25    | 2026-12-25  | 密码配置、OIDC 双入口与密钥、会话清理和 Snapshot 恢复。         |
+| [数据维护](releases/data-maintenance.md)<a name="runbook-data-maintenance"></a>                       | runbook | Current | 2026-11-25    | 2026-12-25  | Document、Subject Access 的两阶段修复、全量重建及完整核验。     |
+| [部署与发布](releases/deployment.md)<a name="runbook-deployment"></a>                                 | runbook | Current | 2026-11-25    | 2026-12-25  | 首次部署、常规更新、任职有效期协调发布、一次性 Ops 制品与回退。 |
 | [新空环境首次初始化](releases/initial-installation.md)                                                | runbook | Current | 2026-11-23    | 2026-12-23  | Ops 初始化、发布核验与托管环境验收。                            |
-| [日志与排障](releases/observability-system-logs.md)<a name="runbook-observability"></a>               | runbook | Current | 2026-10-25    | 2026-11-25  | 日志栈、Grafana、Trace 关联、告警与采集恢复。                   |
+| [日志与排障](releases/observability-system-logs.md)<a name="runbook-observability"></a>               | runbook | Current | 2026-11-25    | 2026-12-25  | 日志栈、Grafana、Trace 关联、告警与采集恢复。                   |

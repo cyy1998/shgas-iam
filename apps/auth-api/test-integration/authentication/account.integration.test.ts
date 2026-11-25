@@ -251,8 +251,18 @@ test("account mobile accepts Local Session authentication and spends the SMS pro
   expect(wrongClient.status).toBe(401);
   expect(wrongClient.headers.getSetCookie()).toEqual([]);
   const headers = { Client: "app", Cookie: `${customSsoLocalSessionCookieName("app")}=${local.token}` };
-  const changed = await f.post("/auth/account/mobile", { phoneNumber: ` ${number} `, code }, headers);
-  expect(changed.status).toBe(200);
+  const responses = await Promise.all([
+    f.post("/auth/account/mobile", { phoneNumber: ` ${number} `, code }, headers),
+    f.post("/auth/account/mobile", { phoneNumber: number, code }, headers),
+  ]);
+  expect(responses.filter((response) => response.status === 200)).toHaveLength(1);
+  const rejected = responses.find((response) => response.status !== 200);
+  if (!rejected) throw new Error("Expected one concurrent bind request to be rejected");
+  const failure = { status: rejected.status, code: (await rejected.json()).code };
+  expect([
+    { status: 400, code: ApiErrorCode.InvalidVerificationCode },
+    { status: 409, code: ApiErrorCode.MobileAlreadyExists },
+  ]).toContainEqual(failure);
   const recorded = await f.pg.db.query.users.findFirst({ where: { id: f.userId } });
   expect(recorded?.mobile).toBe(number);
   const outbox = await f.pg.db.select().from(userDocumentOutboxEntries);

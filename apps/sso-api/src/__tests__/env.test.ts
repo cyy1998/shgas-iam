@@ -10,7 +10,7 @@ const minimum = {
 };
 
 test("SSO API defaults to its own port, protocol namespaces and disabled QR", () => {
-  const env = parseSsoApiEnv({ ...minimum, NODE_ENV: "production", IAM_API_WECHAT_QR_ENABLED: "true" });
+  const env = parseSsoApiEnv({ ...minimum, NODE_ENV: "production", IAM_AUTH_API_WECHAT_QR_ENABLED: "true" });
   expect(env).toMatchObject({
     port: 30002,
     wechatQrEnabled: false,

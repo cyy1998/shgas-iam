@@ -13,6 +13,13 @@
 - `@iam/api-core` 通过显式子路径共享 HTTP 装配、请求上下文和响应能力。Worker、Ops 和共享业务包直接使用各 owner 的能力。
 - `@iam/runtime` 的 workspace 依赖限于共享契约。App 显式传入配置，负责资源和信号接线。业务 owner 负责自身状态与恢复。`@iam/test-support` 只供开发和测试。
 
+### 公共后端依赖边界
+
+- Auth API 持有 SM2 私钥、企业微信和验证码配置，使用 bcrypt。它通过 `@iam/oidc/wechat-qr` 消费 OIDC 扫码续接能力，避免引入 OIDC 签名、Token、退出和委托模块。续接入口及其 OIDC 内部依赖保持独立于完整协议运行时。
+- SSO API 持有 OIDC 签名私钥。它读取业务表并追加登录审计，排除短信、委托、企业微信、CAP、PNG 验证码、bcrypt 和队列生产者。
+- Integration API 独立装配目录查询池、委托及集成写入，可使用纯短信传输。依赖闭包排除 OIDC、Custom SSO、企业微信、CAP、PNG 验证码和 bcrypt。
+- 三个服务经共享 workspace 能力复用状态与行为。生产源码排除跨公共后端的私有模块；生产 workspace 依赖闭包遵守相同的包边界。[拆分决策](../adr/0057-split-public-api-by-trust-and-traffic-boundaries.md) · [静态验证](testing.md#架构守卫)
+
 ### 业务编排模块的选择与命名
 
 - **Application Use Case**。一个调用方目标涉及跨领域编排、多 repository 的事务操作或按事务结果安排副作用时，放在
@@ -24,7 +31,7 @@
 
 ### Composition 与 Port
 
-API、Admin API、Worker、Ops、Gateway 各自在启动时装配依赖。API 与 Admin API 的 Hono 入口将 env 和 logger 交给
+各后端服务、Worker 与 Ops 在启动时装配自身依赖。公共后端与 Admin API 的 Hono 入口将 env 和 logger 交给
 composition，由 composition 创建并接好 repository、UnitOfWork、service、use case、route 和 middleware。
 入口再把装配好的 route、middleware 和 app config 交给共享 `createApp`，注册供请求使用的处理链路。
 
@@ -45,8 +52,8 @@ composition，由 composition 创建并接好 repository、UnitOfWork、service�
 Redis 单例由 composition 或 Redis 基础设施接入，logger 单例由 composition、app 入口或日志基础设施接入。
 App 通过 `@iam/runtime` 显式子路径创建并关闭资源。类型依赖同样遵守边界。
 
-API composition 为用户查询、组织搜索和委托解析装配并关闭各自的专用连接，数据库语句超时独立于 HTTP 请求超时。
-[查询资源](../../apps/api/src/composition/internal-query-resource.ts)
+Integration API 的 composition 为用户查询、组织搜索和委托解析装配并关闭各自的专用连接，数据库语句超时独立于 HTTP 请求超时。
+[查询资源](../../apps/integration-api/src/composition/index.ts)
 
 ## 请求入口与响应
 
@@ -159,7 +166,7 @@ Client 显式删除后可以重试残余会话清理。 [删除应用](../featur
 
 - **Client 配置与凭据**。一次读取固定 Client 状态和单协议配置，凭据走独立接口。Admin 提交后统一失效，传播失败时数据库写入已生效。
   [Client Snapshot](../../packages/client-snapshot/README.md)
-- **登录限制**。API 与 Admin API 使用同一限制能力，应用负责认证和审计。Redis 状态未知时报告暂态失败。
+- **登录限制**。Auth API 与 Admin API 使用同一限制能力，应用负责认证和审计。Redis 状态未知时报告暂态失败。
   [Login Restriction](../../packages/login-restriction/README.md)
 - **账号访问**。一次业务操作只取一次许可，分支和投影共享，下一次操作重新检查。重新启用依赖已发布的完整 Facts，旧代访问仍失效。
   [Subject Access](../../packages/subject-access/README.md)
@@ -170,12 +177,12 @@ Client 显式删除后可以重试残余会话清理。 [删除应用](../featur
 
 ### Custom SSO 与 OIDC
 
-协议各自拥有授权、续接、Code、Token 和补偿，单向消费 Kernel、Snapshot、Subject Access 和主体投影。API 负责 HTTP、Cookie、错误和重定向。HTTP adapter 消费完整协议操作，claims 以及 Code/Token 流程由协议包持有。
+协议各自拥有授权、续接、Code、Token 和补偿，单向消费 Kernel、Snapshot、Subject Access 和主体投影。SSO API 的 HTTP adapter 负责 Cookie、错误和重定向，并消费完整协议操作，claims 以及 Code/Token 流程由协议包持有。
 OIDC 与 Custom SSO 分别独立于另一协议的实现，OIDC 也独立于 app、HTTP 和数据库实现。
 
 Code 固定原 Client、会话实例、用途和授权事实，只消费一次。业务兑换通过适用认证并可靠定位原 ClientSession 后，失败时只对该实例有界尝试撤销。
 兑换边界覆盖响应构造，适用的 Token 补偿仅处理本次原始 Token。Token 保存协议校验事实、期限和原会话绑定。Code 消费后失败须重新授权。
-[兑换与托管回调](../adr/0035-unify-user-and-client-session-lifecycles.md#一次消费与失败作用) · [OIDC 退出](../../packages/oidc/src/logout.ts) · [OIDC 签名装配](../../apps/api/src/composition/runtime/create-runtime.ts)
+[兑换与托管回调](../adr/0035-unify-user-and-client-session-lifecycles.md#一次消费与失败作用) · [OIDC 退出](../../packages/oidc/src/logout.ts) · [OIDC 签名装配](../../apps/sso-api/src/composition/index.ts)
 
 ### 管理授权
 
@@ -197,13 +204,13 @@ Admin 按请求时的数据库事实授权，已获授权的在途操作可能�
 - Runtime diagnostics 使用所属 app 的 logger。优先使用结构化 Pino 调用，data object 在前、message 在后，例如
   `logger.info({ userId }, "user synced")`。应用代码避免使用 console，环境校验、进程生命周期、测试、一次性脚本和集中错误处理可按需使用。
 - 系统日志使用结构化字段，携带 `event`、`sourceApp` 及适用的 `requestId`、`traceId`。事件名使用稳定小写点分命名，
-  不拼接请求 ID、用户标识、client code、动态业务值或原始 URL。OIDC 专属事件沿用 API 的实现。
+  不拼接请求 ID、用户标识、client code、动态业务值或原始 URL。OIDC 专属事件由 SSO API 记录。
 - 系统日志不采集请求体或响应体。输出到 stdout 前脱敏 Authorization、Cookie/Set-Cookie、密码、Token、Secret、私钥、验证码和 OIDC authorization code。
   SM2 私钥、SM4 key material、nonce/credential 原文、Cap token 与 challenge solution 禁止记录。
   APISIX access log 不含敏感 header 或原始 query。生产者遵守最小字段约束，采集端提供二次脱敏。
 
 [HTTP 日志字段](../../packages/api-core/src/http/request-log.ts) · [logger 与默认脱敏路径](../../packages/runtime/src/logger/index.ts) ·
-[OIDC 事件](../../apps/api/src/composition/root-authentication.ts) · [OIDC 错误字段](../../apps/api/src/routes/oidc/oidc.http.ts) · [上下文传递](#请求审计与可观测上下文) · [采集与排障](../releases/observability-system-logs.md)
+[OIDC 事件](../../apps/sso-api/src/composition/oidc.ts) · [OIDC 错误字段](../../apps/sso-api/src/routes/oidc/oidc.http.ts) · [上下文传递](#请求审计与可观测上下文) · [采集与排障](../releases/observability-system-logs.md)
 
 ## 后台处理与恢复
 

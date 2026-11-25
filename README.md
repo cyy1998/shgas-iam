@@ -4,7 +4,9 @@ IAM 提供统一登录、应用接入、组织与任职管理、角色授权和�
 
 ## 仓库结构
 
-- `apps/api` 提供公共、开放、内部、单点登录和认证 API，并承载 OIDC。
+- `apps/auth-api` 提供身份认证、企微回调、风控与账号自助。
+- `apps/sso-api` 提供 Custom SSO、OIDC 和 APISIX 用户会话鉴权。
+- `apps/integration-api` 提供内部应用鉴权、目录查询、应用委托及集成写入。
 - `apps/admin-api` 提供管理端 REST 和 tRPC。
 - `apps/worker` 运行队列消费和周期维护。
 - `apps/ops` 提供人工维护与核验命令。
@@ -34,16 +36,18 @@ Compose 会解析整份开发配置，即使只启动 `db redis`，也需要模�
 
 ```bash
 cp packages/db/.env.example packages/db/.env
-cp apps/api/.env.example apps/api/.env
+cp apps/auth-api/.env.example apps/auth-api/.env
+cp apps/sso-api/.env.example apps/sso-api/.env
+cp apps/integration-api/.env.example apps/integration-api/.env
 cp apps/admin-api/.env.example apps/admin-api/.env
 cp apps/worker/.env.example apps/worker/.env
 cp apps/admin/.env.example apps/admin/.env.local
 cp apps/sso/.env.example apps/sso/.env.local
 ```
 
-开发 Compose 默认将 PostgreSQL 和 Redis 发布到宿主机的 `5432` 和 `6390`。把 API、Admin API 和 Worker 示例中的 Redis URL
-改成 `redis://localhost:6390/0`。如果调整了 Compose 端口或数据库配置，同步修改应用 URL 和迁移工具的 `DATABASE_URL`。
-API 与 SSO 的登录密钥需要配对，OIDC 的内外网 origin 与访问入口需要一致，见[登录与会话手册](docs/releases/authentication-and-session.md)。
+开发 Compose 默认将 PostgreSQL 和 Redis 发布到宿主机的 `5432` 和 `6390`。把 Auth API、SSO API、Integration API、Admin API 和 Worker 示例中的 Redis URL
+统一改成 `redis://localhost:6390/0`。如果调整了 Compose 端口或数据库配置，同步修改应用 URL 和迁移工具的 `DATABASE_URL`。
+Auth API 的 SM2 私钥与 SSO 前端的公钥需要配对。SSO API 的 OIDC 内外网 origin 须匹配访问入口，见[登录与会话手册](docs/releases/authentication-and-session.md)。
 
 ### 3. 执行数据库迁移
 
@@ -56,21 +60,25 @@ pnpm --filter @iam/db db:migrate
 在各自的终端执行对应命令。
 
 ```bash
-pnpm --filter @iam/api dev
+pnpm --filter @iam/auth-api dev
+pnpm --filter @iam/sso-api dev
+pnpm --filter @iam/integration-api dev
 pnpm --filter @iam/admin-api dev
 pnpm --filter @iam/worker dev
 pnpm --filter @iam/admin dev
 pnpm --filter @iam/sso dev
 ```
 
-- 公共 API 和 Scalar 文档首页：<http://localhost:30000>
+- Auth API：<http://localhost:30000>
+- SSO API：<http://localhost:30002>
+- Integration API：<http://localhost:30005>
 - 管理端 API 和 Scalar 文档首页：<http://localhost:30001>
 - 管理后台：<http://localhost:8001/iam-admin/>
 - SSO 门户：<http://localhost:8000/portal/>
 
-源码开发默认启用 Scalar 首页和 OpenAPI JSON，例如 API 的 `/public/doc` 和 Admin API 的 `/admin/doc`。
-两套 API 在 `NODE_ENV=production` 时关闭文档。开发 Compose 默认以生产模式运行两套 API，
-本地调试文档时，可在 `docker/.env` 中用 `IAM_API_NODE_ENV=development` 或 `IAM_ADMIN_API_NODE_ENV=development` 切换对应服务。
+源码开发默认启用 Scalar 首页和 OpenAPI JSON，例如 Auth API 的 `/auth/doc`、SSO API 的 `/oidc/doc`、Integration API 的 `/doc` 和 Admin API 的 `/admin/doc`。
+开发 Compose 默认以生产模式运行这些服务。本地调试时可在 `docker/.env` 中把对应的
+`IAM_AUTH_API_NODE_ENV`、`IAM_SSO_API_NODE_ENV`、`IAM_INTEGRATION_API_NODE_ENV` 或 `IAM_ADMIN_API_NODE_ENV` 设为 `development`。
 
 Gateway 与人工维护命令分别见 [Gateway README](apps/gateway/README.md) 和 [Ops README](apps/ops/README.md)。
 
