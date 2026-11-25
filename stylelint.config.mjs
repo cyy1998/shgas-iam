@@ -4,7 +4,6 @@ export default {
     ".scratch/**",
     ".sandcastle/{auth,dependencies,locks,logs,patches,resources,worktrees}/**",
     "apps/admin-api/static/**",
-    "apps/api/static/**",
     "apps/sso/public/cap/**",
     "openspec/**",
     "packages/db/src/migrations/**",

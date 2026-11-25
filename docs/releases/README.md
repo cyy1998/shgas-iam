@@ -21,6 +21,7 @@
 
 ## 一次性迁移与旧版本
 
+旧公共后端及业务网关直连配置按[三个公共后端的协调切换](deployment.md#切换三个公共后端)升级。
 任职时间戳升级为自然日使用[按日任职有效期的协调发布](deployment.md#启用按日任职有效期)。
 已使用统一 Document 的环境按[目录自定义属性和 Wire v5 的协调发布](deployment.md#启用目录自定义属性和-custom-sso-wire-v5)升级。
 旧 Profile/Organization Search → Document 的升级使用[统一 Document 硬切换](data-maintenance.md#统一-document-硬切换)。

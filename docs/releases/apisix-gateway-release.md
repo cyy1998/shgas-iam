@@ -34,8 +34,8 @@ APISIX 在已配置的入口上按 Host 覆盖 `X-IAM-Entry-Network`，移动回
 | `/api/iam/auth/authz`          | `/api/iam/sso/authz`      |
 | `/api/iam/auth/internal-authz` | `/api/iam/internal/authz` |
 
-直连原后端地址的业务 `forward-auth.uri` 在切换前须改用新服务的目标地址，或经 APISIX 使用上表入口。
-三个新后端的 `/ready` 均通过后，再按下面的流程发布和验证。
+切换前逐个查找业务 manifest 的 `forward-auth.uri`。写死旧容器或宿主地址的配置（例如 `http://api:30000/auth/authz`）必须更新。经 APISIX 使用上表规范入口；保留受控直连时，用户会话转到 `http://sso-api:30002/sso/authz`，M2M 转到 `http://integration-api:30005/internal/authz`，以部署中的服务发现和网络地址为准。上表重写只在经过 APISIX 时生效。
+三个后端的 `/ready` 均通过后，再按下面的流程发布和验证。确认所有业务网关通过后再停旧实例。
 
 ## 发布配置
 

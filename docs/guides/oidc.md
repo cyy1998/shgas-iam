@@ -4,7 +4,7 @@
 
 ## 接入与端点
 
-Issuer 是以 `/oidc` 结尾的完整 URL，例如 `https://iam.example.com/oidc`。
+SSO API 在原 `/oidc` 前缀提供 OIDC 协议与 `/oidc/health`。Issuer 是以 `/oidc` 结尾的完整 URL，例如 `https://iam.example.com/oidc`。
 通过 `GET {issuer}/.well-known/openid-configuration` 发现 authorization、token、JWKS、UserInfo 和 end-session 端点。
 内外入口可能使用不同 issuer。RP 须固定 issuer、使用其端点并校验响应；即使公钥和 sub 相同，两个 issuer 也须分别处理。
 Discovery 缓存须按完整 issuer 区分。续接、Code、Access Token 和退出请求必须回到原 issuer。
@@ -87,7 +87,7 @@ Public Client 省略 Basic，在 Token form 中提交 `client_id`，仍必须使
   scope 去重，忽略不支持的 offline_access。`prompt` 只接受 none/login，none 不可组合；
   max_age 为非负安全整数，0 要求新鲜认证。当前不支持 claims、MFA 或 offline access。
 
-`IAM_API_LOGIN_ENDPOINT` 使用根相对路径。登录、续接、退出确认和默认成功页沿用当前入口；
+`IAM_SSO_API_LOGIN_ENDPOINT` 使用根相对路径。登录、续接、退出确认和默认成功页沿用当前入口；
 拒绝绝对/协议相对 URL、反斜杠、控制字符和改变 authority 的歧义路径。
 Portal 对发现的完整端点先验证属于当前入口，再构造相对导航；登记的业务 redirect 保持完整地址。
 

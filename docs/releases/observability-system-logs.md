@@ -4,8 +4,8 @@
 手册状态与复核日期见[索引条目](../index.md#runbook-observability)。
 
 系统日志经 Docker stdout/stderr → Alloy → Loki → Grafana，采集带 `shgas-iam.logs.enabled=true` 的容器。
-当前包括 API、Admin API、两个 Worker、Worker dashboard 与 APISIX；Admin/SSO 前端未启用采集。
-PostgreSQL 业务审计独立保留。应用字段与脱敏规则见[系统日志](../engineering/backend-architecture.md#系统日志)。
+当前包括 Auth API、SSO API、Integration API、Admin API、两个 Worker、Worker dashboard 与 APISIX；Admin/SSO 前端未启用采集。
+三个公共后端的 `sourceApp` 与 Docker `shgas-iam.logs.service` 同名，分别为 `auth-api`、`sso-api`、`integration-api`。Alloy 将 Docker 服务标签写入 Loki 的 `service`。PostgreSQL 业务审计独立保留。应用字段与脱敏规则见[系统日志](../engineering/backend-architecture.md#系统日志)。
 
 ## 日志栈部署
 
@@ -66,7 +66,7 @@ docker compose --env-file docker/.env -f docker/compose.dev.yaml --profile obser
 Grafana 自己负责 dashboard/datasource 授权，Admin 只提供链接，不通过 iframe 或 Admin API 代理查询。
 
 Provisioning 位于 [grafana/provisioning](../../docker/observability/grafana/provisioning/)。
-随附告警覆盖 API/Admin API service error spike、APISIX 5xx、API OIDC server error 和采集失败；Worker 积压需按[数据维护](data-maintenance.md#周期任务与监控)补充。
+随附告警覆盖 三个公共后端及 Admin API 的错误突增、APISIX 5xx、SSO API 的 OIDC server error 和采集失败；Worker 积压需按[数据维护](data-maintenance.md#周期任务与监控)补充。
 开发默认 null webhook；生产用环境管理的 provisioning 替换 contact point，并实际测试通知。
 
 ## 查询错误与关联请求
@@ -77,7 +77,7 @@ Provisioning 位于 [grafana/provisioning](../../docker/observability/grafana/pr
 | `IAM Error Center` / `iam-error-center`           | 按服务、事件、错误类型/代码聚合，找到相关请求             |
 | `IAM Request Drilldown` / `iam-request-drilldown` | 使用 requestId 或 traceId 查询关联详情与网关/后端时间线   |
 
-- **OIDC 事件区分** OIDC 日志位于 `service=api`：`oidc_server_error` 为依赖/服务失败，`oidc_protocol_error` 为已知协议拒绝。
+- **OIDC 事件区分** 在 `service=sso-api` 中查询 OIDC 事件。`oidc_server_error` 为依赖/服务失败，`oidc_protocol_error` 为已知协议拒绝。
 - **Alloy 标签** 仅用 `env`、`service`、`component`、`level`、`host`，不把请求 ID 或业务标识作为标签。Loki 自动 `service_name` 发现已禁用。
 - **Grafana deep link** 仅携带 env、service、requestId、traceId 和时间范围，不放业务查询参数、用户资料、Token 或请求原文。
 
@@ -92,7 +92,7 @@ Provisioning 位于 [grafana/provisioning](../../docker/observability/grafana/pr
 APISIX access log 应包含 traceId、spanId、traceparent；配置与 Gateway 发布使用配对版本。
 
 1. 带合法 `traceparent` 经 APISIX 访问受控 IAM API，在 Loki 用 requestId/traceId 找到 `gateway.request.completed`。
-2. 确认其 traceId、spanId、traceparent、requestId、statusCode、durationMs、upstream，并找到同请求的 API/Admin API 日志。
+2. 确认其 traceId、spanId、traceparent、requestId、statusCode、durationMs、upstream，并找到同请求的目标后端日志。
 3. 若涉及审计关联，执行受控审计动作，检查 `audit_log.request_id`、`audit_log.trace_id` 与请求一致。
 4. 不带 traceparent 再请求 Gateway，确认 APISIX 创建上下文并传给上游；在 Request Drilldown 查看完整网关/后端时间线。
 

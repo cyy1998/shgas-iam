@@ -9,7 +9,6 @@ playwright-report/
 tmp/
 
 # Vendored or generated browser assets.
-apps/api/static/
 apps/admin-api/static/
 apps/sso/public/cap/*.min.js
 **/*.min.js

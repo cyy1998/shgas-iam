@@ -34,7 +34,7 @@
 ### Internal API 认证
 
 - **Internal API 认证要求** 使用本应用的 Internal API Secret 设置 `apikey` 请求头。搜索、委托及网关配置调用的 Client 须启用且未删除。
-  搜索与委托使用 API 服务的 `/internal/…` 路径，经标准 IAM Gateway 调用时加 `/api/iam`。
+  搜索与委托经 APISIX 使用 Integration API 的规范前缀 `/api/iam/internal/`。受控直连使用该服务的 `/internal/` 前缀。
   网关配置请求发送到 Gateway 配置服务，scope 的应用部分须匹配认证 Client。
 
 ### 单点登录的共同处理

@@ -40,6 +40,10 @@ routes:
 
 普通路由用本地 key 引用 upstream 或 plugin_config，自动关联本应用的 Service。`terminal: true` 的路由可直接返回重定向。SSL 声明提供 `cert` 和 `private_key`。Gateway 生成资源 ID 和归属标签，发布前核对会创建或更新的资源，尤其是集群共享的插件元数据。[配置校验器](../../apps/gateway/src/validators/index.ts)
 
+### 配置业务路由的鉴权
+
+用户会话的 `forward-auth.uri` 使用 APISIX 的 `/api/iam/sso/authz`，M2M 应用密钥使用 `/api/iam/internal/authz`。经 APISIX 读取 Custom SSO 主体使用 `/api/iam/sso/user-info`。三个旧路径均为 APISIX 兼容别名，映射及原后端直连的升级步骤见[网关管理](../releases/apisix-gateway-release.md#拆分后的-iam-路由示例)。
+
 ## 校验、预览、发布
 
 三个端点均用 `POST` 提交 JSON。响应为 `{code,data,message}`。先判断 HTTP 状态，再读取相应端点的结果。

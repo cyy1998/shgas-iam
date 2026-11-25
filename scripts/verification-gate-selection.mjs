@@ -3,12 +3,12 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const smokeProductionApps = {
-  backend: ["apps/api", "apps/admin-api", "apps/worker", "apps/gateway"],
+  backend: ["apps/auth-api", "apps/sso-api", "apps/integration-api", "apps/admin-api", "apps/worker", "apps/gateway"],
   frontend: ["apps/admin", "apps/sso"],
 };
 
 const e2eRuntimeApps = {
-  backend: ["apps/api", "apps/admin-api", "apps/worker", "apps/gateway", "packages/db", "packages/runtime"],
+  backend: [...smokeProductionApps.backend, "packages/db", "packages/runtime"],
   frontend: ["apps/admin", "apps/sso"],
 };
 

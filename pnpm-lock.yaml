@@ -435,148 +435,6 @@ importers:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
 
-  apps/api:
-    dependencies:
-      '@cap.js/server':
-        specifier: ^4.0.5
-        version: 4.0.5
-      '@hono/zod-openapi':
-        specifier: ^1.6.3
-        version: 1.6.3(hono@4.13.19)(zod@4.6.7)
-      '@iam/api-core':
-        specifier: workspace:*
-        version: link:../../packages/api-core
-      '@iam/assignment-resolution':
-        specifier: workspace:*
-        version: link:../../packages/assignment-resolution
-      '@iam/client-snapshot':
-        specifier: workspace:*
-        version: link:../../packages/client-snapshot
-      '@iam/client-subject-projection':
-        specifier: workspace:*
-        version: link:../../packages/client-subject-projection
-      '@iam/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
-      '@iam/custom-sso':
-        specifier: workspace:*
-        version: link:../../packages/custom-sso
-      '@iam/db':
-        specifier: workspace:*
-        version: link:../../packages/db
-      '@iam/delegation':
-        specifier: workspace:*
-        version: link:../../packages/delegation
-      '@iam/documents':
-        specifier: workspace:*
-        version: link:../../packages/documents
-      '@iam/domain':
-        specifier: workspace:*
-        version: link:../../packages/domain
-      '@iam/filter-engine':
-        specifier: workspace:*
-        version: link:../../packages/filter-engine
-      '@iam/jobs':
-        specifier: workspace:*
-        version: link:../../packages/jobs
-      '@iam/login-restriction':
-        specifier: workspace:*
-        version: link:../../packages/login-restriction
-      '@iam/oidc':
-        specifier: workspace:*
-        version: link:../../packages/oidc
-      '@iam/runtime':
-        specifier: workspace:*
-        version: link:../../packages/runtime
-      '@iam/session-kernel':
-        specifier: workspace:*
-        version: link:../../packages/session-kernel
-      '@iam/sms':
-        specifier: workspace:*
-        version: link:../../packages/sms
-      '@iam/subject-access':
-        specifier: workspace:*
-        version: link:../../packages/subject-access
-      '@iam/unit-of-work':
-        specifier: workspace:*
-        version: link:../../packages/unit-of-work
-      '@scalar/hono-api-reference':
-        specifier: ^0.11.16
-        version: 0.11.16(hono@4.13.19)
-      '@trpc/server':
-        specifier: ^11.28.3
-        version: 11.28.3(@typescript/typescript6@6.0.2)
-      bcrypt:
-        specifier: ^6.0.0
-        version: 6.0.0
-      bcrypt-ts:
-        specifier: ^9.0.3
-        version: 9.0.3
-      drizzle-orm:
-        specifier: 1.0.0-rc.2
-        version: 1.0.0-rc.2(bun-types@1.4.4)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.6.7)
-      hono:
-        specifier: ^4.13.19
-        version: 4.13.19
-      hono-pino:
-        specifier: ^0.10.3
-        version: 0.10.3(hono@4.13.19)(pino@10.4.0)
-      ioredis:
-        specifier: ^6.0.0
-        version: 6.0.0(supports-color@10.2.2)
-      p-limit:
-        specifier: ^7.3.3
-        version: 7.3.3
-      pino:
-        specifier: ^10.4.0
-        version: 10.4.0
-      pngjs:
-        specifier: 7.0.0
-        version: 7.0.0
-      postgres:
-        specifier: ^3.4.9
-        version: 3.4.9
-      sm-crypto:
-        specifier: ^0.5.9
-        version: 0.5.9
-      ts-enum-util:
-        specifier: ^4.1.0
-        version: 4.1.0
-      zod:
-        specifier: ^4.6.7
-        version: 4.6.7
-    devDependencies:
-      '@iam/test-support':
-        specifier: workspace:*
-        version: link:../../packages/test-support
-      '@playwright/test':
-        specifier: ^1.65.1
-        version: 1.65.1
-      '@types/bun':
-        specifier: latest
-        version: 1.4.5
-      '@types/pngjs':
-        specifier: 6.0.5
-        version: 6.0.5
-      '@types/sm-crypto':
-        specifier: ^0.3.4
-        version: 0.3.4
-      '@typescript/native':
-        specifier: npm:typescript@7.0.2
-        version: typescript@7.0.2
-      drizzle-kit:
-        specifier: 1.0.0-rc.2
-        version: 1.0.0-rc.2
-      openid-client:
-        specifier: 6.9.0
-        version: 6.9.0
-      tsx:
-        specifier: 4.23.15
-        version: 4.23.15
-      typescript:
-        specifier: npm:@typescript/typescript6@6.0.2
-        version: '@typescript/typescript6@6.0.2'
-
   apps/auth-api:
     dependencies:
       '@cap.js/server':
@@ -4372,10 +4230,6 @@ packages:
   outvariant@1.4.3:
     resolution: {integrity: sha512-+Sl2UErvtsoajRDKCE5/dBz4DIvHXQQnAxtQTF04OJxY0+DyZXSo5P5Bb7XYWOh81syohlYL24hbDwxedPUJCA==}
 
-  p-limit@7.3.3:
-    resolution: {integrity: sha512-SKgVvDU5TNIxQ4r30U75BNLC6a+6GOEjngrk/ysM5+Zu3oJuk1SC5ApzIzY/7PjCEjoVPMWJ0zho/4QUiEB7TQ==}
-    engines: {node: '>=20'}
-
   parent-module@1.0.1:
     resolution: {integrity: sha512-GQ2EWRpQV8/o+Aw8YqtfZZPfNRWZYkbidE9k5rpl/hC3vtHHBfGm2Ifi6qWV+coDGkrUKZAxE3Lot5kcsRlh+g==}
     engines: {node: '>=6'}
@@ -4855,9 +4709,6 @@ packages:
     resolution: {integrity: sha512-BcDSDW+SIGWVOns1Zm6Yg91q9AEj7eaID0QDY9oIqJD1A8dscNwMcl9Sms2DeuWCNov1X0/oXanHGYQBSLwZsg==}
     engines: {node: ^22.14.0 || >=24.0.0}
 
-  ts-enum-util@4.1.0:
-    resolution: {integrity: sha512-kIs48itmNehkzLk0YJW/LfI2+VFYlyscGsY+oDNCnxrDfkex/OfYUV1ip7L7YIN7ppSqj2VmOOssiW81Rno9QA==}
-
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
@@ -5075,10 +4926,6 @@ packages:
   yargs@17.7.3:
     resolution: {integrity: sha512-GZtjxm/J/4TSxuL3FNYjCmLktBTnIw/rVmKSIyKeYAZpmJB2ig9VauCC5xsa82GNKVKDAqpOn3KVzNt0zmrU0g==}
     engines: {node: '>=12'}
-
-  yocto-queue@1.2.2:
-    resolution: {integrity: sha512-4LCcse/U2MHZ63HAJVE+v71o7yOdIe4cZ70Wpf8D/IyjDKYQLV5GD46B+hSTjJsvV5PztjvHoU580EftxjDZFQ==}
-    engines: {node: '>=12.20'}
 
   zod@4.6.7:
     resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
@@ -7441,10 +7288,6 @@ snapshots:
 
   outvariant@1.4.3: {}
 
-  p-limit@7.3.3:
-    dependencies:
-      yocto-queue: 1.2.2
-
   parent-module@1.0.1:
     dependencies:
       callsites: 3.1.0
@@ -7936,8 +7779,6 @@ snapshots:
     dependencies:
       punycode: 2.3.1
 
-  ts-enum-util@4.1.0: {}
-
   tslib@2.8.1: {}
 
   tslib@2.9.1: {}
@@ -8107,7 +7948,5 @@ snapshots:
       string-width: 4.2.3
       y18n: 5.0.8
       yargs-parser: 21.1.1
-
-  yocto-queue@1.2.2: {}
 
   zod@4.6.7: {}

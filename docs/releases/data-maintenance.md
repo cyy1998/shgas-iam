@@ -39,19 +39,9 @@ Custom SSO 调用方同时适配 wire 4；Catalog 保持 3，OIDC 标准字段�
 
 ### 本地跨制品验收
 
-本地验收入口由 `@iam/api` 持有，配置、制品来源、固定候选与结果沿 [Ticket #294](https://github.com/cyy1998/shgas-iam/issues/294) 查阅。
-2026-11-26 前复核临时资产是否仍需保留。此场景显式运行，适用 Windows x64，复用本次 managed resources 和 process-smoke harness。
-在干净的固定候选上，从 `apps/api` 执行，参数路径使用绝对路径：
+旧代 Document 硬切换的 Windows x64 本地验收使用切换时的固定候选与临时夹具。复现时从对应历史 checkout 运行，制品、配置、顺序和结果以记录为准。[固定复现说明](https://github.com/cyy1998/shgas-iam/blob/cbfd4aa60fd6000662026b68576f1aa1409b6ce4/docs/development/commands.md#统一-document-一次性跨制品验收) · [Ticket #294](https://github.com/cyy1998/shgas-iam/issues/294)
 
-```powershell
-bun --no-env-file run test-integration/document-cutover/build.fixture.ts <candidate-full-sha> <new-external-artifact-directory>
-bun --no-env-file run test-integration/document-cutover/cutover.fixture.ts <external-config.json>
-```
-
-配置包括 `candidate`、`baselineManifest`、`candidateManifest` 和 `outputDirectory`。
-候选须匹配 HEAD，旧来源、制品哈希、配置与完整验收顺序见[固定复现说明](https://github.com/cyy1998/shgas-iam/blob/cbfd4aa60fd6000662026b68576f1aa1409b6ce4/docs/development/commands.md#统一-document-一次性跨制品验收)。
-报告保存在 `outputDirectory`，资源记录在 `test-results/integration/<run-id>/run.json`。
-候选或制品变化后重建并重跑，目标环境的放流按上节步骤核验。
+目标环境的放流按上节步骤核验。
 
 ## User Document 日常修复
 
