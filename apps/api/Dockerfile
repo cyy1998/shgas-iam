@@ -40,6 +40,7 @@ COPY packages/login-restriction/package.json ./packages/login-restriction/
 COPY packages/runtime/package.json ./packages/runtime/
 COPY packages/test-support/package.json ./packages/test-support/
 COPY packages/session-kernel/package.json ./packages/session-kernel/
+COPY packages/sms/package.json ./packages/sms/
 COPY packages/domain/package.json ./packages/domain/
 COPY packages/delegation/package.json ./packages/delegation/
 COPY packages/jobs/package.json ./packages/jobs/
@@ -70,6 +71,7 @@ COPY packages/client-snapshot/ ./packages/client-snapshot/
 COPY packages/login-restriction/ ./packages/login-restriction/
 COPY packages/runtime/ ./packages/runtime/
 COPY packages/session-kernel/ ./packages/session-kernel/
+COPY packages/sms/ ./packages/sms/
 COPY packages/domain/ ./packages/domain/
 COPY packages/delegation/ ./packages/delegation/
 COPY packages/jobs/ ./packages/jobs/
