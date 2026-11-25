@@ -10,7 +10,7 @@ import { command } from "./commands.ts";
 import { snapshotHostHooks } from "./hook-smoke.mts";
 import { createRuntime } from "./runtime.mts";
 import type { TrackedIssue } from "./specs.ts";
-import type { WorkspaceAgentInput } from "./ticket-runtime.mts";
+import { createWorkspaceExecutor, type ExecutorOptions, type WorkspaceAgentInput } from "./ticket-runtime.mts";
 import { runWorkflow, type WorkflowResult } from "./workflow.ts";
 import { workspaceDependencyPaths } from "./workspace-dependencies.mts";
 
@@ -795,5 +795,193 @@ export async function controlledWorkflowJourney(options: {
       await writeFile(join(root, "github-fixture-report.json"), JSON.stringify([...records.values()], null, 2));
       console.error(`受控工作流失败；保留临时仓库、受控 GitHub 记录和执行器恢复材料：${root}`);
     }
+  }
+}
+
+/** Verify bounded executor remount behavior when a ticket adds a new workspace mid-run. */
+export async function verifyWorkspaceRemountBehavior(sourceCwd: string): Promise<void> {
+  const assertCheck = (condition: boolean, message: string) => {
+    if (!condition) throw new Error(message);
+  };
+  const root = await mkdtemp(join(tmpdir(), "iam-sandcastle-remount-"));
+  const stubRoles = {} as ExecutorOptions["roles"];
+  const stubAuth = { mode: "chatgpt" as const, env: {}, mounts: [], close: async () => {} };
+  const stubResources: NonNullable<ExecutorOptions["withResources"]> = async (input, callback) => {
+    const anonymousVolumes = input.anonymousVolumes ?? [];
+    return await callback({
+      containerName: `stub-${anonymousVolumes.length}`,
+      network: "host",
+      containerUid: 1000,
+      containerGid: 1000,
+      daemonAccess: { socketGroupId: 0 },
+      env: {},
+      mounts: [],
+      registryFile: join(root, "registry.jsonl"),
+      anonymousVolumes,
+      namedVolumes: [],
+      onAnonymousVolumes: async () => {},
+    });
+  };
+  const baseAgent: NonNullable<ExecutorOptions["agent"]> = () => ({
+    ...codex("controlled-no-model", { captureSessions: false }),
+    buildPrintCommand: ({ prompt }: { prompt: string }) => ({ command: "true", stdin: prompt }),
+  });
+
+  try {
+    // 1. Adding a new workspace triggers automatic remount with updated anonymousVolumes and forwarded HANDOFF.
+    {
+      let volumes = ["/home/agent/workspace/node_modules"];
+      const observedVolumes: string[][] = [];
+      const observedHandoffs: string[] = [];
+      const execute = createWorkspaceExecutor({
+        cwd: root,
+        model: "controlled-no-model",
+        image: "iam-sandcastle:local",
+        signal: new AbortController().signal,
+        roles: stubRoles,
+        auth: stubAuth,
+        mounts: [],
+        githubCredentials: {},
+        onUnsafeClose: () => {},
+        canClose: () => true,
+        resolveDependencyVolumes: async () => [...volumes],
+        withResources: async (input, callback) => {
+          observedVolumes.push([...(input.anonymousVolumes ?? [])]);
+          return await stubResources(input, callback);
+        },
+        agent: baseAgent,
+        run: async (runInput) => {
+          observedHandoffs.push(String(runInput.promptArgs?.HANDOFF ?? ""));
+          if (observedHandoffs.length === 1) {
+            volumes = [...volumes, "/home/agent/workspace/apps/sso-api/node_modules"];
+            return { stdout: "Created apps/sso-api/package.json; waiting for remount.", completionSignal: undefined };
+          }
+          return { stdout: `Finished after remount.\n${complete}`, completionSignal: complete };
+        },
+      });
+      const result = await execute({
+        worktreePath: root,
+        name: "Remount #402",
+        promptFile: join(sourceCwd, ".sandcastle", "implement-prompt.md"),
+        promptArgs: { HANDOFF: "initial" },
+        logName: "remount-pass",
+      });
+      assertCheck(result.completed, "Auto-remount did not complete on second executor");
+      assertCheck(observedVolumes.length === 2, `Expected 2 executor runs, saw ${observedVolumes.length}`);
+      assertCheck(
+        observedVolumes[1]?.includes("/home/agent/workspace/apps/sso-api/node_modules") ?? false,
+        "Second executor missing newly added workspace anonymous volume",
+      );
+      assertCheck(
+        (observedHandoffs[1]?.includes("apps/sso-api/node_modules") ?? false) &&
+          (observedHandoffs[1]?.includes("waiting for remount") ?? false),
+        "Remounted executor did not receive updated HANDOFF context",
+      );
+    }
+
+    // 2. Ordinary incomplete run without new workspaces must not retry.
+    {
+      let runs = 0;
+      const execute = createWorkspaceExecutor({
+        cwd: root,
+        model: "controlled-no-model",
+        image: "iam-sandcastle:local",
+        signal: new AbortController().signal,
+        roles: stubRoles,
+        auth: stubAuth,
+        mounts: [],
+        githubCredentials: {},
+        onUnsafeClose: () => {},
+        canClose: () => true,
+        resolveDependencyVolumes: async () => ["/home/agent/workspace/node_modules"],
+        withResources: stubResources,
+        agent: baseAgent,
+        run: async () => {
+          runs++;
+          return { stdout: "Tests failed without adding workspace.", completionSignal: undefined };
+        },
+      });
+      const result = await execute({
+        worktreePath: root,
+        name: "No-remount failure",
+        promptFile: join(sourceCwd, ".sandcastle", "implement-prompt.md"),
+        promptArgs: { HANDOFF: "initial" },
+        logName: "remount-no-retry",
+      });
+      assertCheck(!result.completed && runs === 1, `Expected 1 run for ordinary failure, saw ${runs}`);
+    }
+
+    // 3. Repeated workspace additions stop at maxWorkspaceRemounts.
+    {
+      let runs = 0;
+      const execute = createWorkspaceExecutor({
+        cwd: root,
+        model: "controlled-no-model",
+        image: "iam-sandcastle:local",
+        signal: new AbortController().signal,
+        roles: stubRoles,
+        auth: stubAuth,
+        mounts: [],
+        githubCredentials: {},
+        onUnsafeClose: () => {},
+        canClose: () => true,
+        maxWorkspaceRemounts: 2,
+        resolveDependencyVolumes: async () =>
+          Array.from({ length: runs + 1 }, (_, index) => `/home/agent/workspace/packages/pkg-${index}/node_modules`),
+        withResources: stubResources,
+        agent: baseAgent,
+        run: async () => {
+          runs++;
+          return { stdout: `Added workspace ${runs}`, completionSignal: undefined };
+        },
+      });
+      const result = await execute({
+        worktreePath: root,
+        name: "Bounded remount cap",
+        promptFile: join(sourceCwd, ".sandcastle", "implement-prompt.md"),
+        promptArgs: { HANDOFF: "initial" },
+        logName: "remount-cap",
+      });
+      assertCheck(!result.completed && runs === 3, `Expected cap at 1 + 2 = 3 runs, saw ${runs}`);
+    }
+
+    // 4. Aborted run must not remount even if a new workspace appeared on disk.
+    {
+      const controller = new AbortController();
+      let runs = 0;
+      const execute = createWorkspaceExecutor({
+        cwd: root,
+        model: "controlled-no-model",
+        image: "iam-sandcastle:local",
+        signal: controller.signal,
+        roles: stubRoles,
+        auth: stubAuth,
+        mounts: [],
+        githubCredentials: {},
+        onUnsafeClose: () => {},
+        canClose: () => true,
+        resolveDependencyVolumes: async () =>
+          runs === 0
+            ? ["/home/agent/workspace/node_modules"]
+            : ["/home/agent/workspace/node_modules", "/home/agent/workspace/apps/new-app/node_modules"],
+        withResources: stubResources,
+        agent: baseAgent,
+        run: async () => {
+          runs++;
+          controller.abort();
+          return { stdout: "Aborted mid-run", completionSignal: undefined };
+        },
+      });
+      const result = await execute({
+        worktreePath: root,
+        name: "Aborted remount",
+        promptFile: join(sourceCwd, ".sandcastle", "implement-prompt.md"),
+        promptArgs: { HANDOFF: "initial" },
+        logName: "remount-abort",
+      });
+      assertCheck(!result.completed && runs === 1, `Expected 1 run when aborted, saw ${runs}`);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 }

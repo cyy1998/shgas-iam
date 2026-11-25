@@ -47,7 +47,12 @@ export type ExecutorDependencies = {
   agent?: (input: WorkspaceAgentInput) => AgentProvider;
   run?: (input: RunOptions) => Promise<Pick<RunResult, "stdout" | "completionSignal">>;
   runGh?: (args: string[]) => Promise<string>;
+  resolveDependencyVolumes?: (cwd: string) => Promise<string[]>;
+  withResources?: typeof withExecutorResources;
+  maxWorkspaceRemounts?: number;
 };
+
+export const defaultMaxWorkspaceRemounts = 2;
 
 export const sandboxExplorationNotesPath = "/home/agent/.iam-afk/exploration.md";
 
@@ -66,6 +71,10 @@ export type ExecutorOptions = ExecutorDependencies & {
 };
 
 export function createWorkspaceExecutor(options: ExecutorOptions) {
+  const resolveDependencyVolumes = options.resolveDependencyVolumes ?? dependencyVolumeTargets;
+  const runWithResources = options.withResources ?? withExecutorResources;
+  const maxWorkspaceRemounts = options.maxWorkspaceRemounts ?? defaultMaxWorkspaceRemounts;
+
   return async (
     input: WorkspaceAgentInput & {
       logName: string;
@@ -75,66 +84,108 @@ export function createWorkspaceExecutor(options: ExecutorOptions) {
   ) => {
     const { cwd, image, signal, roles, auth } = options;
     const prepareWorkspace = input.prepareWorkspace ?? true;
-    if (!options.canClose()) throw new ExecutorInfrastructureError("创建者尚未确认停止，禁止启动后续执行器。");
-    let executionFailure: unknown;
-    let sandboxCreated = false;
-    try {
-      const anonymousVolumes = prepareWorkspace ? await dependencyVolumeTargets(input.worktreePath) : [];
-      return await withExecutorResources(
-        { cwd, image, signal, anonymousVolumes, onUnsafeClose: options.onUnsafeClose },
-        async (resources) => {
-          await mkdir(join(cwd, ".sandcastle", "logs"), { recursive: true });
-          try {
-            // Bind the inspected checkout without SDK branch reuse or managed-directory pruning.
-            const sandbox = dockerSandbox({
-              ...resources,
-              imageName: image,
-              anonymousVolumes,
-              env: { ...options.githubCredentials, ...auth.env, ...resources.env },
-              mounts: [...options.mounts, ...(input.extraMounts ?? []), ...resources.mounts],
-            });
-            const baseProvider = options.agent?.(input) ?? configuredCodex(options.model, roles, input.role);
-            const preparedProvider = prepareWorkspace
-              ? withWorkspacePreparation(baseProvider)
-              : withCachePreflight(baseProvider);
-            const result = await (options.run ?? run)({
-              cwd: input.worktreePath,
-              branchStrategy: { type: "head" },
-              sandbox: {
-                ...sandbox,
-                create: async (input) => {
-                  const handle = await sandbox.create(input);
-                  sandboxCreated = true;
-                  return handle;
+    let promptArgs = input.promptArgs;
+
+    for (let remount = 0; ; remount++) {
+      if (!options.canClose()) throw new ExecutorInfrastructureError("创建者尚未确认停止，禁止启动后续执行器。");
+      let executionFailure: unknown;
+      let sandboxCreated = false;
+      const logPrefix = remount === 0 ? input.logName : `${input.logName}-remount-${remount}`;
+      let anonymousVolumes: string[] = [];
+      let result: { completed: boolean; handoff: string };
+      try {
+        anonymousVolumes = prepareWorkspace ? await resolveDependencyVolumes(input.worktreePath) : [];
+        result = await runWithResources(
+          { cwd, image, signal, anonymousVolumes, onUnsafeClose: options.onUnsafeClose },
+          async (resources) => {
+            await mkdir(join(cwd, ".sandcastle", "logs"), { recursive: true });
+            try {
+              // Bind the inspected checkout without SDK branch reuse or managed-directory pruning.
+              const sandbox = dockerSandbox({
+                ...resources,
+                imageName: image,
+                anonymousVolumes,
+                env: { ...options.githubCredentials, ...auth.env, ...resources.env },
+                mounts: [...options.mounts, ...(input.extraMounts ?? []), ...resources.mounts],
+              });
+              const baseProvider =
+                options.agent?.({ ...input, promptArgs }) ?? configuredCodex(options.model, roles, input.role);
+              const preparedProvider = prepareWorkspace
+                ? withWorkspacePreparation(baseProvider)
+                : withCachePreflight(baseProvider);
+              const runResult = await (options.run ?? run)({
+                cwd: input.worktreePath,
+                branchStrategy: { type: "head" },
+                sandbox: {
+                  ...sandbox,
+                  create: async (createInput) => {
+                    const handle = await sandbox.create(createInput);
+                    sandboxCreated = true;
+                    return handle;
+                  },
                 },
-              },
-              agent: withDockerPreflight(preparedProvider),
-              name: input.name,
-              promptFile: input.promptFile,
-              promptArgs: input.promptArgs,
-              maxIterations: 1,
-              signal,
-              logging: {
-                type: "file",
-                path: join(cwd, ".sandcastle", "logs", `${input.logName}-${Date.now()}.log`),
-                verbose: true,
-              },
-            });
-            return {
-              completed: result.completionSignal === "<promise>COMPLETE</promise>",
-              handoff: result.stdout.replaceAll("<promise>COMPLETE</promise>", "").trim(),
-            };
-          } catch (error) {
-            executionFailure = error;
-            throw error;
-          }
-        },
+                agent: withDockerPreflight(preparedProvider),
+                name: input.name,
+                promptFile: input.promptFile,
+                promptArgs,
+                maxIterations: 1,
+                signal,
+                logging: {
+                  type: "file",
+                  path: join(cwd, ".sandcastle", "logs", `${logPrefix}-${Date.now()}.log`),
+                  verbose: true,
+                },
+              });
+              return {
+                completed: runResult.completionSignal === "<promise>COMPLETE</promise>",
+                handoff: runResult.stdout.replaceAll("<promise>COMPLETE</promise>", "").trim(),
+              };
+            } catch (error) {
+              executionFailure = error;
+              throw error;
+            }
+          },
+        );
+      } catch (error) {
+        if (hasUnstoppedExecutor(error) || signal.aborted || (sandboxCreated && error === executionFailure))
+          throw error;
+        throw new ExecutorInfrastructureError("执行器初始化或资源收尾失败；停止本次运行并保留准确恢复记录。", {
+          cause: error,
+        });
+      }
+
+      if (
+        result.completed ||
+        !prepareWorkspace ||
+        signal.aborted ||
+        !options.canClose() ||
+        remount >= maxWorkspaceRemounts
+      ) {
+        return result;
+      }
+
+      let nextVolumes: string[];
+      try {
+        nextVolumes = await resolveDependencyVolumes(input.worktreePath);
+      } catch {
+        return result;
+      }
+      const mounted = new Set(anonymousVolumes);
+      const addedVolumes = nextVolumes.filter((target) => !mounted.has(target));
+      if (addedVolumes.length === 0) return result;
+
+      console.log(
+        `[Sandcastle] ${input.name} 检测到新增 workspace 依赖目录（${addedVolumes.join(", ")}），使用更新后的匿名卷自动重建执行器（第 ${remount + 1}/${maxWorkspaceRemounts} 次）。`,
       );
-    } catch (error) {
-      if (hasUnstoppedExecutor(error) || signal.aborted || (sandboxCreated && error === executionFailure)) throw error;
-      throw new ExecutorInfrastructureError("执行器初始化或资源收尾失败；停止本次运行并保留准确恢复记录。", {
-        cause: error,
-      });
+      if (Object.hasOwn(promptArgs, "HANDOFF")) {
+        promptArgs = {
+          ...promptArgs,
+          HANDOFF: [
+            `宿主检测到新增 workspace 依赖目录（${addedVolumes.join(", ")}），已重新挂载独立匿名卷并重建执行器（第 ${remount + 1}/${maxWorkspaceRemounts} 次）。请保留工作区已有改动并继续完成实施与验证。`,
+            result.handoff ? `\n\n上一轮交接：\n${result.handoff}` : "",
+          ].join(""),
+        };
+      }
     }
   };
 }
