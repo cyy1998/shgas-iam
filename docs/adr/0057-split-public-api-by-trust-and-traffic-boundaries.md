@@ -23,6 +23,8 @@ status: accepted
 ## 跨界能力归属与克制取舍
 
 - **企微扫码（WeChat QR）全归 `auth-api`**。原 `/sso/wechat-qr/*` 与 `/oidc/wechat-qr/*` 均依赖企微 API、短信验证码、SM2 解密、bcrypt 验密、写库绑定与人机风控。决定将桌面端与移动端扫码流程统一收归 `auth-api`；`auth-api` 仅消费 `@iam/custom-sso` 与 `@iam/oidc` 的只读 continuation inspect 能力，不持有 OIDC 签名私钥，从而保证 `sso-api` 彻底脱离第三方外部集成与账号写入逻辑。
+  - **OIDC 浏览器绑定 Cookie 路径放宽至 `/`**。桌面端 OIDC 企微扫码合并至 `/api/iam/auth/wechat-qr/*` 后，原有 `Path=/oidc` 的 `oidc_interaction_binding` Cookie 不会被浏览器发送到该路径。决定在 `sso-api` 中将 `oidc_interaction_binding` 的路径放宽为 `Path=/`（与 `custom_sso_continuation` 对齐，保留 `HttpOnly`、`SameSite=Lax` 与适用 `Secure` 属性；`oidc_login_completion` 与 `oidc_logout_*` 继续保留原有 `/oidc` 窄路径），并同步更新既有测试中针对 `oidc_interaction_binding` 窄路径的断言。我们放弃在 APISIX 保留 `/oidc/wechat-qr/*` 反向代理到 `auth-api` 的方案，以换取前后端与网关上桌面扫码入口的单一规范前缀。
+  - **`sso-api` 显式非敏感企微扫码开关**。`sso-api` 不持有任何企微凭据，但 `/sso/login-guard` 与 `/oidc/login-guard` 仍需按当前入口向登录页宣告是否展示扫码入口，因此为 `sso-api` 增加显式非敏感布尔配置 `IAM_SSO_API_WECHAT_QR_ENABLED`（默认 `false`），与 `X-IAM-Entry-Network: internal` 共同决定 `wechatQr` 开关结果，并在部署与 E2E 编排中与 `auth-api` 的企微扫码配置保持一致。
 - **`/sso/logout` 归属 `sso-api`**。退出与重定向属于纯 Redis 会话终止操作，与 `/oidc/session/end` 一并收敛在协议层。
 - **3 个历史内部写接口留在 `integration-api`**。`POST /internal/users/purveyor/contacts`、`POST /internal/organizations/purveyors` 与 `PUT /internal/organizations/:orgCode` 继续由 `integration-api` 承载（目录查询仍使用独立语句超时连接池），其中联系人注册在生产环境发送的欢迎短信复用抽出的纯短信客户端按需注入。我们拒绝在本次架构拆分中夹带“欢迎短信异步化改走 Worker”的行为变更，也不为此额外拆分第 4 个写服务。
 - **暂维持统一 PostgreSQL 账号**。本次任务聚焦于服务与路由边界拆分，暂不引入新的 PostgreSQL 专用只读/追加角色与运维授权变更；`sso-api` 在代码层严格限定为只读业务表 + 追加 `log.audit_logs`，为后续按需收紧专用最小权限账号保留无阻碍切口。
