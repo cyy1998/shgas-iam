@@ -8,7 +8,8 @@
     "./credentials": "./src/credentials.ts",
     "./composition": "./src/composition.ts",
     "./maintenance": "./src/maintenance.ts",
-    "./testing": "./src/testing.ts"
+    "./testing": "./src/testing.ts",
+    "./generic-cache": "./src/generic-cache.ts"
   },
   "scripts": {
     "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",

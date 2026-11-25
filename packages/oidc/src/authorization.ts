@@ -3,22 +3,19 @@ import type { ApplicationAdmissionInput, ApplicationAdmissionResult } from "@iam
 import {
   buildApplicationAccessDeniedPath,
   ClientCodeSchema,
-  ClientSsoProtocol,
-  ClientStatus,
   getClientSsoTokenEndpointAuthMethod,
   OIDC_SUPPORTED_SCOPES,
 } from "@iam/contracts";
 import type { UnifiedSessionKernel, UserSessionObservation } from "@iam/session-kernel";
 import type { SubjectAccessOperation } from "@iam/subject-access";
-import {
-  requireSubjectAccessOperation,
-  SubjectAccessDisabledError,
-  SubjectAccessOperationDeniedError,
-} from "@iam/subject-access";
 import { z } from "zod";
+import { createOidcAuthorizationContext, type OidcBrowserInput, qrRootDigest } from "./continuation";
 import { OidcProtocolError } from "./errors";
 import type { AcceptedAuthorization, OidcStateRedis } from "./state";
-import { createOidcState, digest, randomHandle } from "./state";
+import { digest, randomHandle } from "./state";
+
+export type { OidcBrowserInput } from "./continuation";
+
 import type { OidcAuthorizationResponse } from "./wire";
 import { OidcResponseModeSchema } from "./wire";
 
@@ -33,11 +30,6 @@ export interface OidcAuthorizationOptions {
     evaluate(input: ApplicationAdmissionInput): Promise<ApplicationAdmissionResult>;
   };
 }
-export interface OidcBrowserInput {
-  globalSessionToken?: string;
-  browserBinding?: string;
-  completion?: string;
-}
 export type OidcAuthorizationResult =
   | { kind: "response"; response: OidcAuthorizationResponse; clearGlobalSessionCookie?: boolean }
   | { kind: "denied"; clientCode: string; response: OidcAuthorizationResponse }
@@ -47,10 +39,6 @@ type AdmissionPolicy = Pick<ClientSnapshotValue, "admissionEnabled" | "admission
 
 function invalid(description: string): never {
   throw new OidcProtocolError("invalid_request", description);
-}
-
-function qrRootDigest({ userSession }: UserSessionObservation) {
-  return digest(JSON.stringify([userSession.userSessionId, userSession.instance]));
 }
 
 function hasFirstLoginProof(
@@ -71,27 +59,14 @@ function hasFirstLoginProof(
 export function createOidcAuthorization(options: OidcAuthorizationOptions) {
   const codeTtl = z.number().int().positive().parse(options.codeTtlSeconds);
   const continuationTtl = z.number().int().positive().parse(options.continuationTtlSeconds);
-  const state = createOidcState(options.redis, options.namespace);
+  const { state, forOperation } = createOidcAuthorizationContext(options);
   return {
     forOperation(operation: SubjectAccessOperation, issuer: string) {
-      requireSubjectAccessOperation(operation);
+      const { client, root, continuation, inspectLoginContinuation, prepareWechatQrCompletion } = forOperation(
+        operation,
+        issuer,
+      );
       const sessions = options.kernel.forOperation(operation);
-      async function client(clientId: string) {
-        const snapshot = await options.clients.acquire(clientId);
-        if (snapshot.kind !== "present" || snapshot.value.clientCode !== clientId)
-          throw new OidcProtocolError("invalid_client", "Unknown client");
-        if (snapshot.value.status === ClientStatus.Maintenance)
-          throw new OidcProtocolError("temporarily_unavailable", "Client is under maintenance", 503);
-        if (
-          snapshot.value.status !== ClientStatus.Enable ||
-          !snapshot.value.ssoEnabled ||
-          snapshot.value.ssoConfig?.protocol !== ClientSsoProtocol.Oidc
-        ) {
-          throw new OidcProtocolError("unauthorized_client", "Client is not enabled for OIDC");
-        }
-        const { ssoConfig, admissionEnabled, admissionFilter } = snapshot.value;
-        return { ssoConfig, admissionEnabled, admissionFilter };
-      }
       async function accept(parameters: URLSearchParams) {
         // Only known parameters participate. Disabled claims/resource and arbitrary extensions stay ignored.
         const known = [
@@ -175,32 +150,6 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
           ...(maxAge === undefined ? {} : { maxAge }),
         };
         return { accepted, observedClient };
-      }
-      async function root(token?: string, failOnIdentityMismatch = false) {
-        if (!token) return null;
-        const result = await sessions.resolveUserSession(token);
-        if (result.status === "corrupt")
-          throw new OidcProtocolError("temporarily_unavailable", "Session state unavailable", 503);
-        if (result.status !== "resolved") return null;
-        const user = result.value.userSession;
-        try {
-          await operation.acquireForSession({
-            principalSessionId: user.userSessionId,
-            subjectIdentifier: user.subjectIdentifier,
-            subjectContext: user.subjectContext,
-          });
-        } catch (error) {
-          if (
-            failOnIdentityMismatch &&
-            error instanceof SubjectAccessOperationDeniedError &&
-            error.reason === "identity_mismatch"
-          ) {
-            throw new OidcProtocolError("temporarily_unavailable", "Session state unavailable", 503);
-          }
-          if (error instanceof SubjectAccessDisabledError) return null;
-          throw error;
-        }
-        return result.value;
       }
       function needsReauthentication(accepted: AcceptedAuthorization, observed: UserSessionObservation) {
         return (
@@ -327,12 +276,6 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
           },
         };
       }
-      async function continuation(handle: string, browser: OidcBrowserInput) {
-        const saved = await state.readContinuation(handle, browser.browserBinding ?? "");
-        if (!saved || saved.authorization.issuer !== issuer) invalid("Login request is invalid or expired");
-        const observedClient = await client(saved.authorization.clientId);
-        return { saved, observedClient };
-      }
       return {
         async authorize(parameters: URLSearchParams, browser: OidcBrowserInput): Promise<OidcAuthorizationResult> {
           const { accepted, observedClient } = await accept(parameters);
@@ -357,14 +300,7 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
             clearGlobalSessionCookie: Boolean(browser.globalSessionToken),
           };
         },
-        async inspectLoginContinuation(handle: string, browser: OidcBrowserInput) {
-          const { saved } = await continuation(handle, browser);
-          return {
-            clientCode: saved.authorization.clientId,
-            expiresAt: saved.expiresAt,
-            root: await root(browser.globalSessionToken, true),
-          };
-        },
+        inspectLoginContinuation,
         async checkLoginContinuation(handle: string, browser: OidcBrowserInput) {
           await continuation(handle, browser);
           const parent = await root(browser.globalSessionToken);
@@ -386,18 +322,7 @@ export function createOidcAuthorization(options: OidcAuthorizationOptions) {
             ttl: continuationTtl,
           };
         },
-        async prepareWechatQrCompletion(
-          handle: string,
-          browserBinding: string,
-          root: { kind: "created" | "existing"; observation: UserSessionObservation },
-        ) {
-          const proof =
-            root.kind === "created"
-              ? { kind: "qr" as const, digest: qrRootDigest(root.observation) }
-              : { kind: "existing" as const };
-          if (!(await state.updateCompletion(handle, browserBinding, issuer, proof)))
-            invalid("Login request is invalid or expired");
-        },
+        prepareWechatQrCompletion,
         async resume(handle: string, browser: OidcBrowserInput): Promise<OidcAuthorizationResult> {
           const { saved, observedClient } = await continuation(handle, browser);
           const parent = await root(browser.globalSessionToken);

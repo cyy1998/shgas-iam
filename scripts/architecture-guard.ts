@@ -70,6 +70,7 @@ const architectureWorkspaces: readonly (readonly [
   ["@iam/api-core", "packages/api-core", ["source", "docker", "canonical"]],
   ["@iam/unit-of-work", "packages/unit-of-work", ["source", "docker", "canonical"]],
   ["@iam/client-snapshot", "packages/client-snapshot", ["source", "docker", "canonical"]],
+  ["@iam/sms", "packages/sms", ["source", "docker", "canonical"]],
   ["@iam/runtime", "packages/runtime", ["source", "docker", "canonical"]],
   ["@iam/contracts", "packages/contracts", ["canonical"]],
   ["@iam/test-support", "packages/test-support", ["canonical"]],

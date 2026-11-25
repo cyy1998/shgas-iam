@@ -20,3 +20,13 @@ Admin 写入提交后统一失效普通与凭据缓存。合法配置、启停�
 
 `/maintenance` 的 repair 与独立 verify 只处理当前 owner 的目标库存，保留其他布局与未知键族。Redis 备份恢复后须停流排空、全量修复并独立核验。
 [Snapshot 修复](../../docs/releases/authentication-and-session.md#client-snapshot-修复) · [并发测试](test-integration/client-snapshot/client-snapshot.integration.test.ts)
+
+## 通用 Client 缓存
+
+`/generic-cache` 保留 `cache:client:code:*` 与 `cache:client:secret:*` 的键和 DTO 表示。消费方注入数据源、DTO schema 和 Redis。任一键查找未命中时回源，
+只为存在的 Client 同时回填两键。载荷损坏或查找身份不符时清理所读的键并回源。
+
+Admin 在事务提交后同时失效受影响的新旧键。失效与回填共用同一 Redis 代际，使进行中的旧读取无法重新发布。跨越失效的回填最多重读一次。
+传播失败仍按 Admin 已提交错误处理。COMMIT 结果未知时也尝试失效相关键，并保留原数据库错误。
+定向修复应重新失效原写入涉及的键，轮换时需要原 Secret 对应的键。
+`/maintenance` 的 Snapshot 修复范围仅包含协议缓存。
