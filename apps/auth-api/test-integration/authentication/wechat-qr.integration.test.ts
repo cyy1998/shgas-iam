@@ -17,7 +17,7 @@ import {
 import { createSsoRedirectUrlValidator, createUnifiedCustomSsoAuthorization } from "@iam/custom-sso";
 import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
 import { clients as clientTable, users } from "@iam/db/schema";
-import { createOidcAuthorization } from "@iam/oidc";
+import { createOidcAuthorization, OidcProtocolError } from "@iam/oidc";
 import { createUnifiedSessionKernel } from "@iam/session-kernel";
 import {
   createSubjectAccessBarrier,
@@ -71,7 +71,7 @@ const wechatFetch: typeof fetch = Object.assign(
   { preconnect: fetch.preconnect },
 );
 
-async function setup(protocol: "custom_sso" | "oidc", bindAccount: boolean) {
+async function setup(protocol: "custom_sso" | "oidc", bindAccount: boolean, origin = internalOrigin) {
   const pg = getDatabase();
   const keys = sm2.generateKeyPairHex();
   const env = authTestEnv(pg.databaseUrl, {
@@ -166,7 +166,7 @@ async function setup(protocol: "custom_sso" | "oidc", bindAccount: boolean) {
     continuationTtlSeconds: 90,
     admission: { evaluate: async () => "match" as const },
   };
-  const issuer = `${internalOrigin}/oidc`;
+  const issuer = `${origin}/oidc`;
   const state = "client-state";
   if (protocol === "oidc") {
     const oidc = createOidcAuthorization({ ...protocolOptions, namespace: env.oidc.namespace });
@@ -348,6 +348,27 @@ for (const protocol of ["custom_sso", "oidc"] as const) {
       const replayed = await desktop(f, completePath, { method: "POST" });
       expect(await replayed.json()).toMatchObject({ data: { decision: "restart" } });
       expect(replayed.headers.getSetCookie()).toEqual([]);
+      if (protocol === "oidc" && method === "linked") {
+        const passwordResponse = await f.auth.app.request("/auth/login/password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            credential: createLoginCredential({
+              username: "test-qr-user",
+              password,
+              kid: "fixture",
+              publicKey: f.keys.publicKey,
+              now: Date.now(),
+              nonce: randomUUID(),
+            }),
+          }),
+        });
+        expect(passwordResponse.status).toBe(200);
+        const otherRoot = cookie(passwordResponse, "global_session").slice("global_session=".length);
+        expect(otherRoot).not.toBe(root);
+        const wrongRoot = await f.resume(otherRoot);
+        expect(wrongRoot).toMatchObject({ kind: "response", response: { parameters: { error: "login_required" } } });
+      }
       const result = await f.resume(root);
       expect(result).toMatchObject(
         protocol === "oidc"
@@ -357,6 +378,11 @@ for (const protocol of ["custom_sso", "oidc"] as const) {
             }
           : { kind: "granted", redirectUrl: redirectUri, state: "client-state", code: expect.any(String) },
       );
+      if (protocol === "oidc") {
+        const failure = await f.resume(root).catch((error: unknown) => error);
+        expect(failure).toBeInstanceOf(OidcProtocolError);
+        expect(failure).toMatchObject({ errorCode: "invalid_request" });
+      }
       if (bindAccount) {
         const bound = await getDatabase().db.query.users.findFirst({ where: { id: f.userId } });
         expect(bound?.wxId).toBe("qr-member");
@@ -364,6 +390,13 @@ for (const protocol of ["custom_sso", "oidc"] as const) {
     });
   }
 }
+
+test("OIDC desktop start rejects a continuation from the external issuer with its original Cookie", async () => {
+  const f = await setup("oidc", false, externalOrigin);
+  const result = await desktop(f, "", { method: "POST" });
+  expect(result.status).toBe(400);
+  expect(result.headers.getSetCookie()).toEqual([]);
+});
 
 test("development OpenAPI includes canonical authentication and both WeCom route families", async () => {
   const f = await setup("oidc", false);
