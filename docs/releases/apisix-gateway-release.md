@@ -21,7 +21,7 @@
 将 manifest 的发布变量写入请求的 `variables`；内外网 Host 包含请求实际使用的端口。启用企微扫码时，
 `IAM_WECHAT_MOBILE_HOST` 取 HTTPS 回调的 authority，Auth API 配置回调 URL 和 Agent ID，SSO API 使用同一开关状态。
 APISIX 在已配置的入口上按 Host 覆盖 `X-IAM-Entry-Network`，移动回调使用公网 HTTPS 入口。
-扫码和第三方回调路由关闭 OpenTelemetry 采样，APISIX 的访问日志格式也应省略查询串和扫码路径中的句柄。
+扫码和第三方回调路由关闭 OpenTelemetry 采样，APISIX 的访问日志格式也应省略查询串和扫码路径中的句柄。脱敏规则应同时匹配原始路径和 rewrite 后的路径。
 
 更新已有 scope 时，把示例的 upstream、URI、优先级和 rewrite 合并进该环境的 YAML，沿用现有路由的
 `real-ip`、限流、CORS 和其他插件配置。检查新优先级路由与原路径继承同一组策略，包括可信代理 CIDR、限流 key、

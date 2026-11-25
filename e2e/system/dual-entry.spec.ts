@@ -371,3 +371,10 @@ test("APISIX uses the entry host to gate desktop WeCom QR creation", async ({ re
   });
   expect(external.status()).toBe(404);
 });
+
+test("APISIX separates SSO protocol URLs from the subject delivery prefix", async ({ request, runtime }) => {
+  for (const path of ["/api/iam/sso/.well-known/authentication-configuration", "/sso/user-info", "/sso/authz"]) {
+    const response = await gatewayRequest(request, runtime.origin, path);
+    expect(response.status()).toBe(404);
+  }
+});

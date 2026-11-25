@@ -105,13 +105,13 @@ test("an internal OIDC request completes with WeCom confirmation on a separate p
     });
     const { code } = receiveOidcAuthorizationCallback(page.url(), { redirectUri, state });
     const oauthQuery = new URL(callback.url()).searchParams;
-    const secretValues = [
-      qrUrl.pathname.split("/").at(-1),
-      confirmUrl.pathname.split("/").at(-1),
-      oauthQuery.get("code"),
-      oauthQuery.get("state"),
-      login.searchParams.get("oidcReturn"),
-    ];
+    const secretValues = {
+      requestId: qrUrl.pathname.split("/").at(-1),
+      mobileFlow: confirmUrl.pathname.split("/").at(-1),
+      oauthCode: oauthQuery.get("code"),
+      oauthState: oauthQuery.get("state"),
+      oidcContinuation: login.searchParams.get("oidcReturn"),
+    };
     await expectRedactedQrLogs(runtime, startedAt, apiLogs, secretValues);
     expect(new URL(page.url()).searchParams.get("iss")).toBe(issuer);
 
@@ -157,7 +157,7 @@ async function expectRedactedQrLogs(
   runtime: HybridRunContext,
   startTime: Date,
   apiLogs: Array<{ path: string; offset: number }>,
-  secretValues: Array<string | null | undefined>,
+  secretValues: Record<string, string | null | undefined>,
 ) {
   async function readLogs(service: "auth-api" | "apisix") {
     if (service === "auth-api") {
@@ -194,9 +194,9 @@ async function expectRedactedQrLogs(
         async () => {
           const logs = await readLogs(service);
           expect(logs.includes("/sso/wechat-qr/mobile/callback?"), `${service} logged the callback query`).toBe(false);
-          for (const value of secretValues) {
-            if (!value) throw new Error("The WeCom browser journey omitted a sensitive value under test");
-            expect(logs.includes(value), `${service} logged a WeCom request secret`).toBe(false);
+          for (const [name, value] of Object.entries(secretValues)) {
+            if (!value) throw new Error(`The WeCom browser journey omitted ${name}`);
+            expect(logs.includes(value), `${service} logged the WeCom ${name}`).toBe(false);
           }
           return [
             "/api/iam/auth/wechat-qr/:requestId/complete",

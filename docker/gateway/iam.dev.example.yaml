@@ -56,7 +56,8 @@ routes:
         headers:
           remove: [X-IAM-Entry-Network]
   - key: sso-api
-    uri: /api/iam/sso/*
+    # Delivery and protocol endpoints share /sso upstream. Keep protocol traffic on the entry routes.
+    uris: [/api/iam/sso/authz, /api/iam/sso/authz/, /api/iam/sso/user-info, /api/iam/sso/user-info/]
     upstream: sso-api
     plugin_config: api
     plugins:
@@ -173,10 +174,10 @@ routes:
         regex_uri: *strip-iam-prefix
   - key: sso-internal
     uri: /sso/*
-    # The mobile QR path is served only by the dedicated TLS route.
+    # Mobile QR and delivery endpoints have their own routes.
     vars:
       - [http_host, "==", "${IAM_SSO_INTERNAL_HOST}"]
-      - [uri, "!", "~~", "^/sso/wechat-qr/mobile(/|$)"]
+      - [uri, "!", "~~", "^/sso/(wechat-qr/mobile|authz|user-info)(/|$)"]
     upstream: sso-api
     plugin_config: api
     plugins:
@@ -189,7 +190,7 @@ routes:
     uri: /sso/*
     vars:
       - [http_host, "==", "${IAM_SSO_EXTERNAL_HOST}"]
-      - [uri, "!", "~~", "^/sso/wechat-qr/mobile(/|$)"]
+      - [uri, "!", "~~", "^/sso/(wechat-qr/mobile|authz|user-info)(/|$)"]
     upstream: sso-api
     plugin_config: api
     plugins:

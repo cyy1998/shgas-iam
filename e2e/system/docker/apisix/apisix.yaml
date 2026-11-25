@@ -38,13 +38,15 @@ nginx_config:
   error_log: /dev/shm/iam-e2e-apisix-error.log
   error_log_level: warn
   http_configuration_snippet: |
+    # proxy-rewrite can replace $uri before the access log is written.
     map $uri $iam_log_path {
       default $uri;
       ~^/sso/wechat-qr/mobile/confirm/[^/]+/?$ /sso/wechat-qr/mobile/confirm/:flowId;
       ~^/sso/wechat-qr/mobile/(callback|decision)$ $uri;
       ~^/sso/wechat-qr/mobile/[^/]+/?$ /sso/wechat-qr/mobile/:requestId;
-      ~^/api/iam/auth/wechat-qr/[^/]+/(?<qr_action>status|events|complete|bind/(?:password|sms(?:/send)?))/?$ /api/iam/auth/wechat-qr/:requestId/${qr_action};
-      ~^/api/iam/auth/wechat-qr/ /api/iam/auth/wechat-qr/*;
+      ~^(?:/api/iam)?/auth/wechat-qr/[^/]+/(?<qr_action>status|events|complete|bind/(?:password|sms(?:/send)?))/?$ /api/iam/auth/wechat-qr/:requestId/${qr_action};
+      ~^(?:/api/iam)?/auth/wechat-qr/?$ /api/iam/auth/wechat-qr;
+      ~^(?:/api/iam)?/auth/wechat-qr/ /api/iam/auth/wechat-qr/*;
       ~^/sso/thirdparty/ /sso/thirdparty/:clientCode;
       ~^/sso/wechat-qr/ /sso/wechat-qr/*;
       ~^/oidc/wechat-qr/ /oidc/wechat-qr/*;
