@@ -2,17 +2,15 @@
 
 本仓库采用**分析设计与执行交付分离**的工作流：
 
-- **Stage 1：分析与设计（T3 Code，Antigravity + Codex 协作）** 负责只读代码调查、需求澄清、原型验证、在候选集成分支落盘
-  `ADR`/`GLOSSARY.md`/设计文档，以及产出带原生任务图的 Spec 与 tickets。
-- **Stage 2：执行与交付（Sandcastle AFK）** 承担完整 Spec 的无人值守实施、双轴评审（`gpt-6.2-astra` `xhigh`）、集中修复、
-  全量验证、按 `$pr` 生成描述并推送创建 Pull Request（不改动本地 `main`）与临时工作树回收，详见[AFK 工作流](sandcastle-afk.md)。
-- **Fast Track：轻量直改与异常介入（T3 Code 单会话）** 负责小型明确改动、文档/配置修改、紧急 bugfix、主观 UI/交互微调，
-  以及 AFK 暂停（`Needs Attention`）时的人工排障回流，在单会话内完成实施、验证，并按 `$pr` 起草描述推送创建 Pull Request 交付（不改动本地 `main`）。
+- **Stage 1：分析与设计（T3 Code）** 负责只读代码调查、需求澄清、原型验证、在候选集成分支落盘 `ADR`/`GLOSSARY.md`/设计文档，以及产出带原生任务图的 Spec 与 tickets。准备标为 `ready-for-agent` 交接或处理 AFK `Needs Attention` 回流时，读[设计与执行交接](sandcastle-afk.md#设计与执行交接)。
+- **Stage 2：执行与交付（Sandcastle AFK）** 承担完整 Spec 的无人值守实施、集中双轴评审、全量验证与 `$pr` Pull Request 交付，详见[AFK 工作流](sandcastle-afk.md)。
+- **Fast Track：轻量直改与异常介入（T3 Code 单会话）** 负责小型明确改动、文档/配置修改、紧急 bugfix、主观 UI/交互微调，以及 AFK 暂停时的人工排障回流，在单会话内完成实施、验证，并按 `$pr` 推送创建 Pull Request 交付（不改动本地 `main`）。
 
 小型明确任务在单会话内直接实施并验证；需要额外流程时，由用户显式调用
 [`implement`](../../.agents/skills/implement/SKILL.md)、[`code-review`](../../.agents/skills/code-review/SKILL.md) 或
 [`implement-spec`](../../.agents/skills/implement-spec/SKILL.md)。
-需求与恢复记录见[议题跟踪](issue-tracker.md)，当前行为与修改目标的判断见[文档索引](../index.md#当前事实与修改目标)。
+需要跨引擎派发子代理、执行只读调查或显式双轴评审时，读[代码调查与双引擎编排](code-investigation.md#双引擎角色与评审编排)。
+需求与跨会话恢复见[议题跟踪](issue-tracker.md)，当前行为与修改目标的判断见[文档索引](../index.md#当前事实与修改目标)。
 
 ## 授权与分支
 
@@ -22,57 +20,6 @@
 - **跨会话恢复** 文档随相关工作正常提交。跨会话按[议题跟踪](issue-tracker.md#当-skill-要求publish-to-the-issue-tracker)恢复同一分支与基线，保留未知改动并在覆盖前先解决重叠。
 - **交付授权** 手动单会话或异常收尾任务在推送功能分支并创建 Pull Request 前，按[完成与 PR 交付](#完成与-pr-交付)单独确认（若用户在指令中已明确授权提交 PR，则直接执行）；
   Sandcastle AFK 的交付授权在启动 AFK 时统一授予。两种路径均不改动本地目标分支，最终合入由维护者在 GitHub 完成。
-
-## 设计与执行交接
-
-在 T3 Code 完成分析设计、准备为 Spec 与 tickets 标记 `ready-for-agent` 并交接给 Sandcastle AFK 前，按顺序完成以下门禁与 Git 准备：
-
-1. **`ready-for-agent` 轻量门禁** 标记 `ready-for-agent` 前，由当前主会话启动一个**同引擎的新鲜只读 subagent**
-   （Antigravity 用原生 `research`，Codex 用原生 `code_researcher`）独立核查四项：
-   - 每张 ticket 的验收条件客观可测，且已明确测试 seam 与所需验证层级（Unit / Integration / E2E / Gateway）；
-   - GitHub 原生父子关系（`--parent`）与阻塞边（`--blocked-by`）完整、无环且覆盖全部前置依赖；
-   - 阻塞实现的 `ADR`、`GLOSSARY.md` 与设计决策均已提交到候选集成分支；
-   - Spec 正文与本地 Git 状态满足下方 AFK 分支契约。
-2. **AFK 候选集成分支契约**（与 [`scripts/sandcastle/tickets.ts`](../../scripts/sandcastle/tickets.ts) 对齐）：
-   - **唯一分支声明**：存在设计产物分支时，在 Spec 正文仅声明一行 `集成分支：feat/<feature-slug>`（runner 据此确定唯一归属）；
-   - **祖先关系成立**：确保候选集成分支包含当前调用分支（满足 `git merge-base --is-ancestor main feat/<feature-slug>`）；若期间
-     `main` 前进，交接前先将最新 `main` 合入候选集成分支；
-   - **切回调用分支、对齐远端且工作区干净**：启动 `pnpm sandcastle` 前，将主仓库工作区切回目标调用分支（如 `main`）、保持工作区干净且与远端
-     `github/<branch>` 对齐（无未推送本地提交、未落后远端）；设计阶段若使用独立 worktree，必须先移除该外部 worktree（保留分支，避免被 runner 拒绝接管）。
-3. **AFK 异常回流（`Needs Attention`）** Sandcastle 因设计歧义或难解失败暂停时，切回 T3 Code 处理：
-   - 读取对应 Spec/ticket 的交接评论与集成分支现场；
-   - 复杂问题交给 `deep_researcher` 定位根因；
-   - 补齐 Spec 或修复阻塞点并重新满足上述分支契约后继续运行 AFK，或经用户确认在 T3 单会话完成收口并走[完成与 PR 交付](#完成与-pr-交付)。
-
-## 双引擎角色与评审编排
-
-仓库的 7 个角色契约统一维护在 `.codex/agents/*.toml`（供 Codex 原生子代理与 Sandcastle AFK 直接加载）。
-在 T3 Code 交互阶段，Antigravity 与 Codex 按下表分工：
-
-| 角色                                                                | 适用场景                                                                | 引擎与模型                                                                                                                 | 思考档位                                                                                             | 调用方式与隔离                                                               |
-| ------------------------------------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| [`code_researcher`](../../.codex/agents/code-researcher.toml)       | 跨文件入口定位、调用链追踪、隔离搜索噪声、`ready-for-agent` 轻量门禁    | 同引擎原生优先：Antigravity 用 `research`（默认 `inherit`，轻扫可选 `flash`）；Codex 用 `code_researcher`（`gpt-6.2-sol`） | Antigravity 默认 `high`；Codex `reasoningEffort: "high"`                                             | 同引擎原生子代理，`shared`（硬只读沙箱）                                     |
-| [`deep_researcher`](../../.codex/agents/deep-researcher.toml)       | 事务边界、并发/幂等、安全边界、证据冲突反证、AFK 难解失败定位           | 默认 Codex `gpt-6.2-sol`（Codex 主会话需异构复核时可选 Antigravity `gemini-4-neon`）                                       | Codex `reasoningEffort: "xhigh"`（极端疑难可由用户指定 `max`）；Antigravity `thought_level: "xhigh"` | 跨引擎走 `delegate_task`（`isolation: "shared"`）；同引擎走原生              |
-| [`standards_reviewer`](../../.codex/agents/standards-reviewer.toml) | 显式 `code-review` 的 Standards 轴（仓库规范 + Fowler smell baseline）  | **固定** Codex `gpt-6.2-astra`                                                                                             | `reasoningEffort: "xhigh"`                                                                           | 与 `spec_reviewer` 并发走 `delegate_task`（`isolation: "shared"`）           |
-| [`spec_reviewer`](../../.codex/agents/spec-reviewer.toml)           | 显式 `code-review` 的 Spec 轴（完整 Spec、tickets、验收与 scope creep） | **固定** Codex `gpt-6.2-astra`                                                                                             | `reasoningEffort: "xhigh"`                                                                           | 与 `standards_reviewer` 并发走 `delegate_task`（`isolation: "shared"`）      |
-| 浏览器与 UI 视觉验收（按需）                                        | 仅用户明确要求页面检查、交互验证、截图或可视化原型时                    | **固定** Antigravity `gemini-4-neon`                                                                                       | `thought_level: "high"`                                                                              | Antigravity 主会话或独立 `delegate_task`（使用 `preview_*` / `html_render`） |
-
-`implementer_light`、`implementer_standard`、`implementer_deep`（见 `.codex/agents/implementer-*.toml`）由 Sandcastle AFK
-按票风险自动调度；T3 Code 下的 Fast Track 轻量直改由主会话单线完成。
-
-编排约定：
-
-1. **能力探测与阻塞上报** 每条线程首次调用 `delegate_task` 前先调用一次 `orchestrator_capabilities`。
-   目标 provider 或模型不可用时直接报告阻塞并交由用户决策。
-2. **跨引擎角色契约与只读核验** 通过 `delegate_task` 委派角色时，`task` 传递稀疏上下文指针（对应 `.codex/agents/<role>.toml`、
-   `AGENTS.md`、issue/spec 编号、固定 base/candidate SHA 与范围）。经 `delegate_task` 执行的只读角色
-   （`deep_researcher`、`standards_reviewer`、`spec_reviewer`）在 `task` 中明确限定为只读范围，返回后由主会话核对 `git status` 干净。
-3. **显式双轴评审** 调用 `code-review` 时提供起始基线、固定候选 SHA 和已确认需求来源，评审期间保持候选固定。
-   两轴并发启动两个独立的 Codex `gpt-6.2-astra`（`reasoningEffort: "xhigh"`）`delegate_task`；每轮复审均新建独立
-   `delegate_task`，评审 findings 由主会话直接修复并验证。
-4. **T3 Code 工作树与子任务管理** 主会话需要脱离主目录隔离工作时使用 `t3_worktree_handoff`。
-   用户显式要求在 T3 Code 派发独立工作树子任务时，先提交父分支基线，再由父会话通过 `delegate_task(isolation: "worktree")`
-   创建隔离 checkout；异步任务等待系统通知推进，需要停止时调用 `task_cancel`。
 
 ## 验证节奏
 

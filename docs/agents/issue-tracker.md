@@ -62,9 +62,8 @@ GitHub Issues 与 PR 共用编号空间。遇到裸 `#42` 时，先运行
 - assignee 表达认领，open/closed 表达是否完成，triage label 表达当前处理角色；
 - 评论只追加重要决策、验证摘要、评审结果和下一安全动作，并链接正式来源，不复制整份 spec 或 ticket。
 
-手动工作流与 Sandcastle AFK 均通过 Pull Request 交付（分别见[完成与 PR 交付](workflow.md#完成与-pr-交付)与[Spec 交付与清理](sandcastle-afk.md#spec-交付与清理)）：
-交付时保持关联 tickets 与父 Spec 为 open，在 PR 正文逐行附加 `Closes #<number>` 关联自动关票，并在 PR 创建后移除 `ready-for-agent` 标签；
-待维护者在 GitHub 合并 PR 后由 GitHub 自动关闭父 Spec 及全部关联子票。
+手动工作流与 Sandcastle AFK 均通过 Pull Request 交付（规则见[完成与 PR 交付](workflow.md#完成与-pr-交付)与[Spec 交付与清理](sandcastle-afk.md#spec-交付与清理)）：
+交付时保持关联 tickets 与父 Spec 为 open，PR 正文逐行附加 `Closes #<number>` 并在创建 PR 后移除 `ready-for-agent` 标签，待维护者在 GitHub 合并 PR 时自动关票。
 
 ### Spec 任务图
 
@@ -85,9 +84,8 @@ Spec 与 implementation ticket 使用[互斥类型标签](triage-labels.md#spec-
 ## Sandcastle AFK 交接
 
 AFK 使用上述类型与原生任务图，沿用 triage、assignee 和普通交接，不另建 tracker schema。设计产物落在候选集成分支并在
-Spec 正文唯一声明 `集成分支：feat/<feature-slug>`；标为 `ready-for-agent` 前的轻量门禁与交接分支前提见
-[设计与执行交接](workflow.md#设计与执行交接)。AFK 评论另记录目标分支、ticket 分支、基线、候选提交与 PR 链接，PR 交付、移除 `ready-for-agent` 与恢复职责见
-[AFK 工作流](sandcastle-afk.md)。
+Spec 正文唯一声明 `集成分支：feat/<feature-slug>`；标为 `ready-for-agent` 前的轻量门禁、交接分支前提及 PR 交付恢复见
+[Sandcastle AFK 工作流](sandcastle-afk.md#设计与执行交接)。
 
 ## 当 skill 要求“fetch the relevant ticket”
 

@@ -24,7 +24,7 @@ Admin 和 SSO 各自按 app 的 `.env.example` 准备 `.env.local`。默认入�
 - **数据库迁移与 schema** 使用 `pnpm --filter @iam/db <script>`。常用入口为 `db:generate`、`db:check`、`db:migrate` 和 `db:push`。
   目标环境的迁移与回退见[部署手册](../releases/deployment.md)。
 - **人工维护 CLI** 人工维护命令见 [Ops README](../../apps/ops/README.md)，按目标选择[运维手册](../releases/README.md)。
-- **Sandcastle AFK** 见 [AFK 启动与诊断](../agents/sandcastle-afk.md#启动与诊断)。
+- **Sandcastle AFK** 见 [AFK 运维与启动手册](../../.sandcastle/README.md#启动与诊断)。
 
 ## 日常检查
 
