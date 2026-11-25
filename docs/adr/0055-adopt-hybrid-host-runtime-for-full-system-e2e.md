@@ -37,9 +37,9 @@ Full-system E2E（`pnpm test:e2e`）改用 **Hybrid 混合拓扑**作为默认�
 
 ## 独立生产容器冒烟（Container Smoke）
 
-新增独立命令 `pnpm test:e2e:container-smoke` 并挂入 `pnpm verify:release`（`verify:ci → test:e2e → test:e2e:container-smoke`），日常开发与普通 `pnpm test:e2e` 不触发；当变更命中 `**/Dockerfile`、`**/nginx.conf`、依赖打包清单（`package.json` / `pnpm-lock.yaml`）或 `e2e/system/docker/**` 时，手动交付与 Sandcastle AFK 最终验证阶段须自动追加执行一次 Container Smoke，避免打包回归拖延至发布阶段才暴露。
+新增独立命令 `pnpm test:e2e:container-smoke` 并挂入 `pnpm verify:release`（`verify:ci → e2e-runtime → test:e2e → test:e2e:container-smoke`），日常开发与普通 `pnpm test:e2e` 不触发；当变更命中生产打包路径（`**/Dockerfile`、`**/nginx.conf`、`**/pnpm-lock.yaml`、`pnpm-workspace.yaml`、`.npmrc`、`.husky/install.mjs`、`patches/**`、`e2e/system/docker/**`、Container Smoke 编排/spec 或门禁脚本），或命中 6 个冒烟生产镜像依赖闭包内（及根）`package.json` 的打包敏感字段（如 `dependencies`、`optionalDependencies`、`peerDependencies`、`exports`/`main`/`module`/`bin`/`files`、`packageManager`/`engines`/`pnpm`；前端构建闭包另含 `devDependencies` 与 `scripts.build`）时，手动交付与 Sandcastle AFK 最终验证阶段须自动追加执行一次 Container Smoke，避免打包回归拖延至发布阶段才暴露，同时避免仅修改测试脚本或无关 `package.json` 触发整套镜像重建。
 
-该冒烟负责构建 6 个生产 Dockerfile 与 APISIX 镜像，启动容器组并通过全部 healthcheck，执行 migration、最小 seed 与网关路由同步，经真实 APISIX 在浏览器跑通 1 条最短登录与后台调用链路（覆盖 Nginx SPA 路由、静态资源、API/Admin-API 转发与 Worker 文档发布），结束后精确清理本次 Compose project。
+该冒烟负责按有界并发（默认 `2`，支持 `IAM_CONTAINER_SMOKE_BUILD_CONCURRENCY` 在 `1–4` 之间覆盖，单镜像写入独立构建日志并首错取消）构建 6 个生产 Dockerfile 与 APISIX 镜像（全部生产 Dockerfile 在共享 `base` 层预热固化 `pnpm` 原生二进制并统一 `id=iam-pnpm-v12` BuildKit store 缓存），启动容器组并通过全部 healthcheck，执行 migration、最小 seed 与网关路由同步（Linux/AFK 下 PostgreSQL、Redis、APISIX Admin 与 Gateway API 优先经 `managedServiceEndpoint()` 直连容器 bridge IP，浏览器仍经 `*.iam.localhost` 双域名访问网关以验证 Cookie 隔离），经真实 APISIX 在浏览器跑通 1 条最短登录与后台调用链路（覆盖 Nginx SPA 路由、静态资源、API/Admin-API 转发与 Worker 文档发布），结束后精确清理本次 Compose project。
 
 实施落地后同步更新[测试与验证](../engineering/testing.md)与[构建、测试与开发命令](../engineering/commands.md)中的现行入口与生命周期说明；本决策不涉及业务领域概念，不修改 `GLOSSARY.md`。
 

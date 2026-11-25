@@ -148,7 +148,7 @@ Playwright 临时产物保存到 `e2e/system/test-results/<run-id>/playwright/`�
 
 ## Container Smoke
 
-`pnpm test:e2e:container-smoke` 在独占 Compose project 中构建六个生产镜像和 APISIX，等候全部容器健康。候选工作树在专用库执行迁移，经正式 Ops 初始化命令建立合成基线并验证 Worker 发布，随后通过真实 Gateway API 发布路由。单条 Chromium 用例经 APISIX 验证 Worker 发布的 User Document、`/portal/login` 登录、Admin 与 SSO 的 Nginx SPA 和静态资源，以及 API 和 Admin API 的真实响应。
+`pnpm test:e2e:container-smoke` 在独占 Compose project 中按有界并发（默认 `2`，可通过 `IAM_CONTAINER_SMOKE_BUILD_CONCURRENCY` 调整，每镜像独立写入 `build-<service>.log` 并首错取消）构建六个生产镜像和 APISIX，等候全部容器健康。候选工作树在专用库执行迁移，经正式 Ops 初始化命令建立合成基线并验证 Worker 发布，随后通过真实 Gateway API 发布路由。Linux/AFK 下对 Compose bridge 服务的迁移、初始化与网关管理连接优先复用 `managedServiceEndpoint()` 直连容器 IP；单条 Chromium 用例仍经 APISIX 双域名验证 Worker 发布的 User Document、`/portal/login` 登录、Admin 与 SSO 的 Nginx SPA 和静态资源，以及 API 和 Admin API 的真实响应。
 
 命令按本次登记回收容器、网络、数据卷和本地构建镜像。失败或可捕获中断时先采集有限的容器状态和日志，清理本身出错时也尝试采集。诊断、浏览器失败产物与资源记录留在命令输出的运行目录。强制结束或清理失败时，按准确记录恢复。[命令与门禁](commands.md#container-smoke)
 

@@ -104,8 +104,7 @@ GitHub Issues 保存需求与恢复说明，Git 提交保存实现历史；日�
   按父 Spec 与全部 tickets 的风险、验收和已确认测试决策补齐所需 Integration、E2E、Gateway 等检查，重复覆盖按范围去重。
   各票分支结果不替代最终组合验证。
 - **Container Smoke 门禁** 集中修复提交后，在候选工作树执行 `pnpm verify:container-smoke --base <review-base-sha>`。
-  该命令对比固定 review base 与当前 HEAD，新增、修改、删除或移动命中任意目录的 `Dockerfile`、`nginx.conf`、
-  `package.json`、`pnpm-lock.yaml` 或 `e2e/system/docker/` 下的文件时，串行追加一次 `pnpm test:e2e:container-smoke`。
+  该命令对比固定 review base 与当前 HEAD，按[命令入口](../engineering/commands.md#container-smoke)的打包路径与生产镜像闭包 `package.json` 语义规则判定命中时，串行追加一次 `pnpm test:e2e:container-smoke`。
   无命中时记录跳过，Git 比较失败时门禁失败。同一最终候选已通过 `pnpm verify:release` 时复用其中的冒烟结果。
   启动分支提供最终验证 prompt，执行器在候选工作树读取本页和运行门禁，因此本次 Spec 引入的门禁也在本次生效。
 - **E2E Runtime 门禁** 编排器 Integration 由独立入口 `pnpm --filter @iam/e2e-system test:integration` 运行。集中修复提交后，在候选工作树执行
