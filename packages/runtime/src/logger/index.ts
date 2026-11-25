@@ -6,6 +6,7 @@ export type LogLevel = "info" | "warn" | "error";
 export const LoggerSourceApp = {
   Api: "iam-api",
   AuthApi: "auth-api",
+  IntegrationApi: "integration-api",
   AdminApi: "iam-admin-api",
   OidcProvider: "iam-oidc-provider",
   Worker: "iam-worker",
