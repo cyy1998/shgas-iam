@@ -11,8 +11,7 @@
     "./observability": "./src/observability/index.ts",
     "./process": "./src/process/owned-process-tree.mjs",
     "./redis/config": "./src/redis/config.ts",
-    "./redis/connection": "./src/redis/connection.ts",
-    "./security/bcrypt": "./src/security/bcrypt.ts"
+    "./redis/connection": "./src/redis/connection.ts"
   },
   "scripts": {
     "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
@@ -31,18 +30,9 @@
     "pino-pretty": "^13.2.0",
     "zod": "^4.6.7"
   },
-  "peerDependencies": {
-    "bcrypt-ts": "^9.0.3"
-  },
-  "peerDependenciesMeta": {
-    "bcrypt-ts": {
-      "optional": true
-    }
-  },
   "devDependencies": {
     "@types/bun": "latest",
     "@typescript/native": "npm:typescript@7.0.2",
-    "bcrypt-ts": "^9.0.3",
     "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "iamTest": {

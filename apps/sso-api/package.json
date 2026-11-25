@@ -1,0 +1,65 @@
+{
+  "name": "@iam/sso-api",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "devEngines": {
+    "runtime": {
+      "name": "bun",
+      "version": "1.4.4"
+    }
+  },
+  "scripts": {
+    "dev": "bun --hot src/index.ts",
+    "serve": "bun run src/index.ts",
+    "lint": "biome check --formatter-enabled=false .",
+    "lint:fix": "biome check --formatter-enabled=false --write .",
+    "test": "pnpm test:unit",
+    "test:unit": "bun test --max-concurrency=2 src",
+    "typecheck": "pnpm exec tsc --noEmit",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "test:integration:bun": "node ../../scripts/run-package-integration.mjs bun -- bun test test-integration",
+    "test:integration:playwright": "node ../../scripts/run-package-integration.mjs playwright -- playwright test"
+  },
+  "dependencies": {
+    "@hono/zod-openapi": "^1.6.3",
+    "@iam/api-core": "workspace:*",
+    "@iam/client-snapshot": "workspace:*",
+    "@iam/client-subject-projection": "workspace:*",
+    "@iam/contracts": "workspace:*",
+    "@iam/custom-sso": "workspace:*",
+    "@iam/db": "workspace:*",
+    "@iam/documents": "workspace:*",
+    "@iam/oidc": "workspace:*",
+    "@iam/runtime": "workspace:*",
+    "@iam/session-kernel": "workspace:*",
+    "@iam/subject-access": "workspace:*",
+    "drizzle-orm": "1.0.0-rc.2",
+    "hono": "^4.13.19",
+    "ioredis": "^6.0.0",
+    "postgres": "^3.4.9",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@iam/test-support": "workspace:*",
+    "@playwright/test": "^1.65.1",
+    "@types/bun": "latest",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "openid-client": "6.9.0",
+    "tsx": "4.23.15",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  },
+  "iamTest": {
+    "integration": {
+      "bun": {
+        "postgres": "IAM_SSO_API_TEST_DATABASE_URL",
+        "redis": "IAM_SSO_API_TEST_REDIS_URL"
+      },
+      "playwright": {
+        "postgres": "IAM_SSO_API_TEST_DATABASE_URL",
+        "redis": "IAM_SSO_API_TEST_REDIS_URL"
+      }
+    }
+  }
+}

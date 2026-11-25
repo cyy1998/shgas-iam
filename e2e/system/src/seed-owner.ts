@@ -40,8 +40,8 @@ import {
 } from "@iam/documents/user/subject-facts";
 import type { CreateUserDocumentWorkerModuleInput } from "@iam/documents/user/worker";
 import { createUserDocumentWorkerModule } from "@iam/documents/user/worker";
-import { hashSecret } from "@iam/runtime/security/bcrypt";
 import { createSubjectAccessBootstrap } from "@iam/subject-access/redis";
+import { hash as hashSecret } from "bcrypt-ts";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Redis } from "ioredis";
 import { createE2EGatewayApiKey } from "./gateway-credential";

@@ -3,7 +3,7 @@ import env from "@admin-api/env";
 import redis from "@admin-api/lib/infra/redis";
 import { logger } from "@admin-api/lib/logger";
 import { createGenericClientCacheInvalidation } from "@iam/client-snapshot/generic-cache";
-import { hashSecret } from "@iam/runtime/security/bcrypt";
+import { hash as hashSecret } from "bcrypt-ts";
 import type { AdminApiRuntimePorts } from "./types";
 
 export interface CreateAdminApiRuntimeOptions {

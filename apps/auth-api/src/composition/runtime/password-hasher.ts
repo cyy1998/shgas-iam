@@ -1,4 +1,4 @@
-import { hashSecret, verifySecret } from "@iam/runtime/security/bcrypt";
+import { hash as hashSecret, compare as verifySecret } from "bcrypt-ts";
 import type { PasswordHasherPort } from "./types";
 
 export function createApiPasswordHasher(cost: number): PasswordHasherPort {

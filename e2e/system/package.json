@@ -12,6 +12,7 @@
     "@iam/jobs": "workspace:*",
     "@iam/runtime": "workspace:*",
     "@iam/subject-access": "workspace:*",
+    "bcrypt-ts": "^9.0.3",
     "drizzle-orm": "1.0.0-rc.2",
     "ioredis": "^6.0.0"
   },
