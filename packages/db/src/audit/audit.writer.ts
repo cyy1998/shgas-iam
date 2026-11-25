@@ -1,9 +1,5 @@
-import type { AuditDetails } from "@iam/domain/audit";
-import { AuditLogWriteDtoSchema, normalizeAuditActor, redactAuditDetails } from "@iam/domain/audit";
-import type { Context } from "hono";
-import type { AuditLogInput } from "./audit.context";
-import { getApiAuditRequestContext, withApiRequestContext } from "./audit.context";
-import type { AuditRepository } from "./audit.repository";
+import type { AuditDetails, AuditLogInput, AuditLogWrite } from "@iam/contracts/audit";
+import { AuditLogWriteSchema, normalizeAuditActor, redactAuditDetails } from "@iam/contracts/audit";
 
 function enrichAuditDetails(input: AuditLogInput): AuditDetails {
   const details = { ...(input.details ?? {}) };
@@ -25,11 +21,12 @@ function enrichAuditDetails(input: AuditLogInput): AuditDetails {
   return details;
 }
 
-export interface CreateApiAuditLogWriterDeps {
-  auditRepository: Pick<AuditRepository, "createAuditLog">;
+export interface CreateAuditLogWriterDeps {
+  auditRepository: { createAuditLog: (input: AuditLogWrite) => Promise<void> };
+  sourceApp: string;
 }
 
-export function createApiAuditLogWriter(deps: CreateApiAuditLogWriterDeps) {
+export function createAuditLogWriter(deps: CreateAuditLogWriterDeps) {
   async function recordAuditLog(input: AuditLogInput) {
     const actor = normalizeAuditActor({
       actorType: input.actorType,
@@ -38,10 +35,10 @@ export function createApiAuditLogWriter(deps: CreateApiAuditLogWriterDeps) {
       actorClientCode: input.actorClientCode ?? null,
       actorSystemKey: input.actorSystemKey ?? null,
     });
-    const auditLog = AuditLogWriteDtoSchema.parse({
+    const auditLog = AuditLogWriteSchema.parse({
       ...input,
       ...actor,
-      sourceApp: input.sourceApp ?? "iam",
+      sourceApp: input.sourceApp ?? deps.sourceApp,
       targetId: input.targetId ?? null,
       targetCode: input.targetCode ?? null,
       requestId: input.requestId ?? null,
@@ -55,15 +52,7 @@ export function createApiAuditLogWriter(deps: CreateApiAuditLogWriterDeps) {
     await deps.auditRepository.createAuditLog(auditLog);
   }
 
-  async function recordAuditLogFromContext(c: Context, input: AuditLogInput) {
-    await recordAuditLog(withApiRequestContext(getApiAuditRequestContext(c), input));
-  }
-
-  return {
-    recordAuditLog,
-    recordAuditLogFromContext,
-  };
+  return { recordAuditLog };
 }
 
-export type ApiAuditLogWriter = ReturnType<typeof createApiAuditLogWriter>;
-export type AuditLogWriterPort = Pick<ApiAuditLogWriter, "recordAuditLog" | "recordAuditLogFromContext">;
+export type AuditLogWriter = ReturnType<typeof createAuditLogWriter>;

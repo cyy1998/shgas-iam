@@ -1,11 +1,10 @@
 import type { LoggerPort } from "@api/composition/runtime";
 import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
 import { getApiAuditRequestContext } from "@api/services/audit/audit.context";
-import { decodeCustomSsoClientCode } from "@api/services/sso/transport/custom-sso-client-code.transport";
-import { expireCustomSsoCookies } from "@api/services/sso/transport/custom-sso-cookie";
 import type { LoginWithOaUseCase } from "@api/use-cases/authentication/login-with-oa/login-with-oa.use-case";
 import type { LoginWithWechatUseCase } from "@api/use-cases/authentication/login-with-wechat/login-with-wechat.use-case";
 import * as resp from "@iam/api-core/http";
+import { decodeCustomSsoClientCode, expireCustomSsoCookies } from "@iam/api-core/http/custom-sso-transport";
 import { createSubjectAccessHttpAdapter } from "@iam/api-core/http/subject-access";
 import { ApiErrorCode, ClientCodeSchema } from "@iam/contracts";
 import { HttpStatusCodes } from "@iam/contracts/http";

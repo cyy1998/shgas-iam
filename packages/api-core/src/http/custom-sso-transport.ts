@@ -1,3 +1,5 @@
+import { setCookie } from "hono/cookie";
+
 const URI_COMPONENT_EXTRA_CHARACTER_PATTERN = /[!'()*]/gu;
 
 export function encodeCustomSsoClientCode(clientCode: string) {
@@ -17,4 +19,14 @@ export function decodeCustomSsoClientCode(encodedClientCode: string): string | n
 
 export function customSsoLocalSessionCookieName(clientCode: string) {
   return `local_${encodeCustomSsoClientCode(clientCode)}_session`;
+}
+
+export function expireCustomSsoCookies(context: Parameters<typeof setCookie>[0], cookieNames: readonly string[]) {
+  for (const cookieName of cookieNames) {
+    setCookie(context, cookieName, "", {
+      expires: new Date(0),
+      maxAge: 0,
+      path: "/",
+    });
+  }
 }

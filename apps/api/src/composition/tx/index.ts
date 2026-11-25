@@ -1,11 +1,11 @@
-import type { ApiAuditLogWriter } from "@api/services/audit/audit.service";
-import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import {
   createOrganizationResponsibilityParentLifecycleGuard,
   createOrganizationResponsibilityParentLifecycleReader,
   type OrganizationResponsibilityParentLifecycleGuard,
 } from "@iam/assignment-resolution/organization-responsibility/parent-lifecycle";
 import type { DbClient } from "@iam/db";
+import type { AuditLogWriter } from "@iam/db/audit";
+import { createAuditLogWriter } from "@iam/db/audit";
 import {
   type CreateOrganizationDocumentInvalidationInput,
   createOrganizationDocumentInvalidation,
@@ -23,7 +23,7 @@ import type { ClockPort } from "../runtime";
 
 export interface ApiTxPorts {
   repositories: ApiRepositories;
-  auditLogWriter: ApiAuditLogWriter;
+  auditLogWriter: AuditLogWriter;
   subjectAccessMutation: Pick<SubjectAccessTransitionRepository, "runMutation">;
   userDocumentInvalidation: UserDocumentInvalidation;
   organizationDocumentInvalidation: OrganizationDocumentInvalidation;
@@ -46,7 +46,7 @@ export function createApiUnitOfWork(options: CreateApiUnitOfWorkOptions): UnitOf
       const repositories = createApiRepositories(tx);
       return {
         repositories,
-        auditLogWriter: createApiAuditLogWriter({ auditRepository: repositories.audit }),
+        auditLogWriter: createAuditLogWriter({ sourceApp: "iam", auditRepository: repositories.audit }),
         subjectAccessMutation: createSubjectAccessTransitionRepository(tx),
         responsibilityParentLifecycle: createOrganizationResponsibilityParentLifecycleGuard(
           createOrganizationResponsibilityParentLifecycleReader(tx),

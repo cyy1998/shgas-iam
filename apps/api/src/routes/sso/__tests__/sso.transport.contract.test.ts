@@ -3,11 +3,8 @@ import { randomUUID } from "node:crypto";
 import * as routes from "@api/routes/sso/sso.routes";
 import { createUnifiedCallbackHandler } from "@api/routes/sso/unified-callback.handler";
 import { createUnifiedTokenHandler } from "@api/routes/sso/unified-token.handler";
-import {
-  customSsoLocalSessionCookieName,
-  encodeCustomSsoClientCode,
-} from "@api/services/sso/transport/custom-sso-client-code.transport";
 import { createRouter } from "@iam/api-core/core/create-router";
+import { customSsoLocalSessionCookieName, encodeCustomSsoClientCode } from "@iam/api-core/http/custom-sso-transport";
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import type { CustomSsoExchangeResult } from "@iam/custom-sso";

@@ -56,7 +56,7 @@ function fixture(status: ClientStatus = ClientStatus.Maintenance) {
       resetPassword: { execute: unexpectedCall },
       verifyPasswordResetCode: { execute: unexpectedCall },
     },
-    auditLogWriter: { recordAuditLog: unexpectedCall, recordAuditLogFromContext: unexpectedCall },
+    auditLogWriter: { recordAuditLog: unexpectedCall },
     humanVerification: {
       createChallenge: unexpectedCall,
       ensureActionAllowed: unexpectedCall,

@@ -1,4 +1,4 @@
-import { createApiAuthenticationHandlers } from "@api/middlewares/authentication.handler";
+import { createApiPublicAuthenticationHandler } from "@api/middlewares/public-authentication";
 import type { CreateAuthHandlersDeps } from "@api/routes/auth/auth.handlers";
 import {
   createInternalAuthzHandler,
@@ -353,21 +353,16 @@ export function createRootAuthenticationComposition(options: RootAuthenticationC
   );
   publicRouter.use(
     "*",
-    async (context, next) =>
-      await operations.run(async (operation) => {
-        const handlers = createApiAuthenticationHandlers({
-          clientService: options.internalClients,
-          customSsoSession: {
-            resolvePublicAuthentication: (token, client) =>
-              client === "iam" || !customAccess
-                ? roots.forOperation(operation).resolvePublicAuthentication(token, client)
-                : customAccess.forOperation(operation).resolvePublicAuthentication(token, client),
-          },
-          subjectDeliveryRequests: delivery,
-          config: options.config,
-        });
-        await handlers.publicAuthenticationHandler(context, next);
-      }),
+    createApiPublicAuthenticationHandler({
+      runWithAuthentication: (token, clientCode, deliver) =>
+        operations.run(async (operation) => {
+          const session = clientCode === "iam" || !customAccess ? roots : customAccess;
+          const resolved = await session.forOperation(operation).resolvePublicAuthentication(token, clientCode);
+          await deliver(resolved);
+        }),
+      runWithCapability: delivery.runWithCapability,
+      retryAfterSeconds: options.config.projectionRetryAfterSeconds,
+    }),
   );
   publicRouter.openapi(publicRoutes.userInfo, publicHandlers.userInfo);
   if (options.publicDelegation) {

@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { AUDIT_REDACTED_VALUE, normalizeAuditActor, redactAuditDetails } from "../helpers";
-import { maskMobileForAudit } from "../masking";
+import { AUDIT_REDACTED_VALUE, normalizeAuditActor, redactAuditDetails } from "@iam/contracts/audit";
 
 describe("audit actor normalization", () => {
   test("requires user actors to have a user id or username", () => {
@@ -57,17 +56,5 @@ describe("audit detail redaction", () => {
       },
       users: [{ name: "alice", cookie: AUDIT_REDACTED_VALUE }],
     });
-  });
-});
-
-describe("audit masking helpers", () => {
-  test("masks mobile numbers for audit details", () => {
-    expect(maskMobileForAudit("17721462865")).toBe("177****2865");
-  });
-
-  test("passes through non-matching values and keeps nullish values null", () => {
-    expect(maskMobileForAudit("bad-phone")).toBe("bad-phone");
-    expect(maskMobileForAudit(null)).toBeNull();
-    expect(maskMobileForAudit(undefined)).toBeNull();
   });
 });

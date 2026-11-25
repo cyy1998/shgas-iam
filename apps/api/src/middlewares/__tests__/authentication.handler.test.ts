@@ -1,26 +1,37 @@
 import { describe, expect, mock, test } from "bun:test";
-import { createApiAuthenticationHandlers as createApiAuthenticationHandlersImpl } from "@api/middlewares/authentication.handler";
 import { mapCustomSsoRetryableError } from "@api/middlewares/custom-sso-retryable.error";
+import { createApiPublicAuthenticationHandler } from "@api/middlewares/public-authentication";
 import { createCustomSsoSubjectDeliveryRequestScope } from "@api/services/sso/subject-delivery/custom-sso-subject-delivery-request-scope";
-import {
-  customSsoLocalSessionCookieName,
-  encodeCustomSsoClientCode,
-} from "@api/services/sso/transport/custom-sso-client-code.transport";
+import { customSsoLocalSessionCookieName, encodeCustomSsoClientCode } from "@iam/api-core/http/custom-sso-transport";
 import { SubjectAccessSessionInvalidHttpError } from "@iam/api-core/http/subject-access";
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import { SubjectProjectionNotReadyError } from "@iam/client-subject-projection";
 import { ApiErrorCode } from "@iam/contracts";
-import { CustomSsoClientDeliveryUnauthorizedError } from "@iam/custom-sso";
+import {
+  CustomSsoClientDeliveryUnauthorizedError,
+  CustomSsoRequestMismatchError,
+  type CustomSsoSubjectDeliveryCapability,
+} from "@iam/custom-sso";
 import { AuthzMaintenanceError, AuthzUnauthorizedError } from "@iam/runtime/errors";
 import { SubjectAccessDisabledError, SubjectAccessUnavailableError } from "@iam/subject-access";
 import { Hono } from "hono";
 
-type AuthenticationHandlerDeps = Parameters<typeof createApiAuthenticationHandlersImpl>[0];
-
-function createApiAuthenticationHandlers(deps: Omit<AuthenticationHandlerDeps, "subjectDeliveryRequests">) {
-  return createApiAuthenticationHandlersImpl({
-    ...deps,
-    subjectDeliveryRequests: createCustomSsoSubjectDeliveryRequestScope(),
+function createTestPublicAuthenticationHandler(deps: {
+  resolvePublicAuthentication: (
+    token: string,
+    clientCode: string,
+  ) => Promise<{
+    authenticationContext: { authenticatedClientCode: string; subjectIdentifier: string };
+    subjectDeliveryCapability: CustomSsoSubjectDeliveryCapability;
+  }>;
+  subjectDeliveryRequests?: ReturnType<typeof createCustomSsoSubjectDeliveryRequestScope>;
+}) {
+  const delivery = deps.subjectDeliveryRequests ?? createCustomSsoSubjectDeliveryRequestScope();
+  return createApiPublicAuthenticationHandler({
+    runWithAuthentication: async (token, clientCode, deliver) =>
+      await deliver(await deps.resolvePublicAuthentication(token, clientCode)),
+    runWithCapability: delivery.runWithCapability,
+    retryAfterSeconds: 3,
   });
 }
 
@@ -54,13 +65,11 @@ describe("publicAuthenticationHandler", () => {
     const resolvePublicAuthentication = mock(async () => {
       throw new AuthzMaintenanceError();
     });
-    const handlers = createApiAuthenticationHandlers({
-      clientService: { getClientBySecret: mock(async () => null) },
-      customSsoSession: { resolvePublicAuthentication },
-      config: { projectionRetryAfterSeconds: 3 },
+    const middleware = createTestPublicAuthenticationHandler({
+      resolvePublicAuthentication,
     });
     const app = new Hono();
-    app.use("*", handlers.publicAuthenticationHandler);
+    app.use("*", middleware);
     app.get("/public/user-info", (c) => c.json({ ok: true }));
     app.onError(createErrorHandler(logger));
 
@@ -82,16 +91,10 @@ describe("publicAuthenticationHandler", () => {
 
   test("returns bad request when Client header is missing", async () => {
     const logger = createMockLogger();
-    const handlers = createApiAuthenticationHandlers({
-      clientService: {
-        getClientBySecret: mock(async () => null),
-      },
-      customSsoSession: {
-        resolvePublicAuthentication: mock(async () => {
-          throw new AuthzMaintenanceError();
-        }),
-      },
-      config: { projectionRetryAfterSeconds: 3 },
+    const middleware = createTestPublicAuthenticationHandler({
+      resolvePublicAuthentication: mock(async () => {
+        throw new AuthzMaintenanceError();
+      }),
     });
     const app = new Hono<{
       Variables: {
@@ -99,7 +102,7 @@ describe("publicAuthenticationHandler", () => {
         subjectIdentifier: string;
       };
     }>();
-    app.use("*", handlers.publicAuthenticationHandler);
+    app.use("*", middleware);
     app.get("/public/ping", (c) => c.json({ ok: true }));
     app.onError(createErrorHandler(logger));
 
@@ -118,17 +121,11 @@ describe("publicAuthenticationHandler", () => {
     const resolvePublicAuthentication = mock(async () => {
       throw new AuthzMaintenanceError();
     });
-    const handlers = createApiAuthenticationHandlers({
-      clientService: {
-        getClientBySecret: mock(async () => null),
-      },
-      customSsoSession: {
-        resolvePublicAuthentication,
-      },
-      config: { projectionRetryAfterSeconds: 3 },
+    const middleware = createTestPublicAuthenticationHandler({
+      resolvePublicAuthentication,
     });
     const app = new Hono();
-    app.use("*", handlers.publicAuthenticationHandler);
+    app.use("*", middleware);
     app.get("/public/ping", (c) => c.json({ ok: true }));
     app.onError(createErrorHandler(logger));
 
@@ -145,19 +142,13 @@ describe("publicAuthenticationHandler", () => {
 
   test("writes only the protocol-neutral authentication context for an IAM Principal Session", async () => {
     const logger = createMockLogger();
-    const handlers = createApiAuthenticationHandlers({
-      clientService: {
-        getClientBySecret: mock(async () => null),
-      },
-      customSsoSession: {
-        resolvePublicAuthentication: mock(async () =>
-          resolvedAuthentication({
-            authenticatedClientCode: "iam",
-            subjectIdentifier: "00000000-0000-4000-8000-000000001001",
-          }),
-        ),
-      },
-      config: { projectionRetryAfterSeconds: 3 },
+    const middleware = createTestPublicAuthenticationHandler({
+      resolvePublicAuthentication: mock(async () =>
+        resolvedAuthentication({
+          authenticatedClientCode: "iam",
+          subjectIdentifier: "00000000-0000-4000-8000-000000001001",
+        }),
+      ),
     });
     const app = new Hono<{
       Variables: {
@@ -165,7 +156,7 @@ describe("publicAuthenticationHandler", () => {
         subjectIdentifier: string;
       };
     }>();
-    app.use("*", handlers.publicAuthenticationHandler);
+    app.use("*", middleware);
     app.get("/public/context", (c) =>
       c.json({
         authenticatedClientCode: c.get("authenticatedClientCode"),
@@ -198,14 +189,8 @@ describe("publicAuthenticationHandler", () => {
         subjectIdentifier: "00000000-0000-4000-8000-000000001001",
       }),
     );
-    const handlers = createApiAuthenticationHandlers({
-      clientService: {
-        getClientBySecret: mock(async () => null),
-      },
-      customSsoSession: {
-        resolvePublicAuthentication,
-      },
-      config: { projectionRetryAfterSeconds: 3 },
+    const middleware = createTestPublicAuthenticationHandler({
+      resolvePublicAuthentication,
     });
     const app = new Hono<{
       Variables: {
@@ -213,7 +198,7 @@ describe("publicAuthenticationHandler", () => {
         subjectIdentifier: string;
       };
     }>();
-    app.use("*", handlers.publicAuthenticationHandler);
+    app.use("*", middleware);
     app.get("/public/context", (c) =>
       c.json({
         authenticatedClientCode: c.get("authenticatedClientCode"),
@@ -247,17 +232,11 @@ describe("publicAuthenticationHandler", () => {
         subjectIdentifier: "00000000-0000-4000-8000-000000001001",
       }),
     );
-    const handlers = createApiAuthenticationHandlers({
-      clientService: {
-        getClientBySecret: mock(async () => null),
-      },
-      customSsoSession: {
-        resolvePublicAuthentication,
-      },
-      config: { projectionRetryAfterSeconds: 3 },
+    const middleware = createTestPublicAuthenticationHandler({
+      resolvePublicAuthentication,
     });
     const app = new Hono();
-    app.use("*", handlers.publicAuthenticationHandler);
+    app.use("*", middleware);
     app.get("/public/ping", (c) => c.json({ ok: true }));
     app.onError(createErrorHandler(logger));
 
@@ -281,17 +260,11 @@ describe("publicAuthenticationHandler", () => {
         subjectIdentifier: "00000000-0000-4000-8000-000000001001",
       }),
     );
-    const handlers = createApiAuthenticationHandlers({
-      clientService: {
-        getClientBySecret: mock(async () => null),
-      },
-      customSsoSession: {
-        resolvePublicAuthentication,
-      },
-      config: { projectionRetryAfterSeconds: 3 },
+    const middleware = createTestPublicAuthenticationHandler({
+      resolvePublicAuthentication,
     });
     const app = new Hono();
-    app.use("*", handlers.publicAuthenticationHandler);
+    app.use("*", middleware);
     app.get("/public/ping", (c) => c.json({ ok: true }));
     app.onError(createErrorHandler(logger));
 
@@ -313,25 +286,19 @@ describe("publicAuthenticationHandler", () => {
       version: 5 as const,
       subjectIdentifier: "00000000-0000-4000-8000-000000001001",
     }));
-    const handlers = createApiAuthenticationHandlersImpl({
-      clientService: {
-        getClientBySecret: mock(async () => null),
-      },
-      customSsoSession: {
-        resolvePublicAuthentication: mock(async () => ({
-          authenticationContext: {
-            authenticatedClientCode: "gateway",
-            subjectIdentifier: "00000000-0000-4000-8000-000000001001",
-          },
-          subjectDeliveryCapability: { resolveUserInfo },
-        })),
-      },
+    const middleware = createTestPublicAuthenticationHandler({
+      resolvePublicAuthentication: mock(async () => ({
+        authenticationContext: {
+          authenticatedClientCode: "gateway",
+          subjectIdentifier: "00000000-0000-4000-8000-000000001001",
+        },
+        subjectDeliveryCapability: { resolveUserInfo },
+      })),
       subjectDeliveryRequests,
-      config: { projectionRetryAfterSeconds: 3 },
     });
     let downstreamContext: object | undefined;
     const app = new Hono();
-    app.use("*", handlers.publicAuthenticationHandler);
+    app.use("*", middleware);
     app.get("/public/user-info", async (c) => {
       downstreamContext = c;
       const projection = await subjectDeliveryRequests.resolveUserInfoForRequest(c);
@@ -365,19 +332,13 @@ describe("publicAuthenticationHandler", () => {
 
   test("returns SESSION_INVALID and clears cookies for a disabled Subject", async () => {
     const logger = createMockLogger();
-    const handlers = createApiAuthenticationHandlers({
-      clientService: {
-        getClientBySecret: mock(async () => null),
-      },
-      customSsoSession: {
-        resolvePublicAuthentication: mock(async () => {
-          throw new SubjectAccessSessionInvalidHttpError();
-        }),
-      },
-      config: { projectionRetryAfterSeconds: 3 },
+    const middleware = createTestPublicAuthenticationHandler({
+      resolvePublicAuthentication: mock(async () => {
+        throw new SubjectAccessSessionInvalidHttpError();
+      }),
     });
     const app = new Hono();
-    app.use("*", handlers.publicAuthenticationHandler);
+    app.use("*", middleware);
     app.get("/public/ping", (c) => c.json({ ok: true }));
     app.onError(createErrorHandler(logger));
 
@@ -407,17 +368,11 @@ describe("publicAuthenticationHandler", () => {
     const resolvePublicAuthentication = mock(async () => {
       throw new AuthzUnauthorizedError("未登录");
     });
-    const handlers = createApiAuthenticationHandlers({
-      clientService: {
-        getClientBySecret: mock(async () => null),
-      },
-      customSsoSession: {
-        resolvePublicAuthentication,
-      },
-      config: { projectionRetryAfterSeconds: 3 },
+    const middleware = createTestPublicAuthenticationHandler({
+      resolvePublicAuthentication,
     });
     const app = new Hono();
-    app.use("*", handlers.publicAuthenticationHandler);
+    app.use("*", middleware);
     app.get("/public/user-info", (c) => c.json({ ok: true }));
     app.onError(createErrorHandler(logger));
 
@@ -444,17 +399,11 @@ describe("publicAuthenticationHandler", () => {
         subjectIdentifier: "00000000-0000-4000-8000-000000001001",
       }),
     );
-    const handlers = createApiAuthenticationHandlers({
-      clientService: {
-        getClientBySecret: mock(async () => null),
-      },
-      customSsoSession: {
-        resolvePublicAuthentication,
-      },
-      config: { projectionRetryAfterSeconds: 3 },
+    const middleware = createTestPublicAuthenticationHandler({
+      resolvePublicAuthentication,
     });
     const app = new Hono();
-    app.use("*", handlers.publicAuthenticationHandler);
+    app.use("*", middleware);
     app.get("/public/user-info", () => {
       throw new CustomSsoClientDeliveryUnauthorizedError();
     });
@@ -475,19 +424,13 @@ describe("publicAuthenticationHandler", () => {
 
   test("returns SUBJECT_ACCESS_UNAVAILABLE without clearing cookies for an uncertain Barrier", async () => {
     const logger = createMockLogger();
-    const handlers = createApiAuthenticationHandlers({
-      clientService: {
-        getClientBySecret: mock(async () => null),
-      },
-      customSsoSession: {
-        resolvePublicAuthentication: mock(async () => {
-          throw new SubjectAccessUnavailableError();
-        }),
-      },
-      config: { projectionRetryAfterSeconds: 3 },
+    const middleware = createTestPublicAuthenticationHandler({
+      resolvePublicAuthentication: mock(async () => {
+        throw new SubjectAccessUnavailableError();
+      }),
     });
     const app = new Hono();
-    app.use("*", handlers.publicAuthenticationHandler);
+    app.use("*", middleware);
     app.get("/public/ping", (c) => c.json({ ok: true }));
     app.onError(createErrorHandler(logger));
 
@@ -510,22 +453,16 @@ describe("publicAuthenticationHandler", () => {
 
   test("does not clear local cookie when the downstream projection is retryable", async () => {
     const logger = createMockLogger();
-    const handlers = createApiAuthenticationHandlers({
-      clientService: {
-        getClientBySecret: mock(async () => null),
-      },
-      customSsoSession: {
-        resolvePublicAuthentication: mock(async () =>
-          resolvedAuthentication({
-            authenticatedClientCode: "gateway",
-            subjectIdentifier: "00000000-0000-4000-8000-000000001001",
-          }),
-        ),
-      },
-      config: { projectionRetryAfterSeconds: 3 },
+    const middleware = createTestPublicAuthenticationHandler({
+      resolvePublicAuthentication: mock(async () =>
+        resolvedAuthentication({
+          authenticatedClientCode: "gateway",
+          subjectIdentifier: "00000000-0000-4000-8000-000000001001",
+        }),
+      ),
     });
     const app = new Hono();
-    app.use("*", handlers.publicAuthenticationHandler);
+    app.use("*", middleware);
     app.get("/public/user-info", () => {
       throw mapCustomSsoRetryableError(new SubjectProjectionNotReadyError(), { retryAfterSeconds: 3 });
     });
@@ -545,22 +482,16 @@ describe("publicAuthenticationHandler", () => {
 
   test("maps downstream Subject Access disable to SESSION_INVALID and clears source cookies", async () => {
     const logger = createMockLogger();
-    const handlers = createApiAuthenticationHandlers({
-      clientService: {
-        getClientBySecret: mock(async () => null),
-      },
-      customSsoSession: {
-        resolvePublicAuthentication: mock(async () =>
-          resolvedAuthentication({
-            authenticatedClientCode: "gateway",
-            subjectIdentifier: "00000000-0000-4000-8000-000000001001",
-          }),
-        ),
-      },
-      config: { projectionRetryAfterSeconds: 3 },
+    const middleware = createTestPublicAuthenticationHandler({
+      resolvePublicAuthentication: mock(async () =>
+        resolvedAuthentication({
+          authenticatedClientCode: "gateway",
+          subjectIdentifier: "00000000-0000-4000-8000-000000001001",
+        }),
+      ),
     });
     const app = new Hono();
-    app.use("*", handlers.publicAuthenticationHandler);
+    app.use("*", middleware);
     app.get("/public/user-info", () => {
       throw new SubjectAccessDisabledError();
     });
@@ -584,22 +515,16 @@ describe("publicAuthenticationHandler", () => {
 
   test("maps downstream Subject Access uncertainty to retryable 503 without clearing cookies", async () => {
     const logger = createMockLogger();
-    const handlers = createApiAuthenticationHandlers({
-      clientService: {
-        getClientBySecret: mock(async () => null),
-      },
-      customSsoSession: {
-        resolvePublicAuthentication: mock(async () =>
-          resolvedAuthentication({
-            authenticatedClientCode: "gateway",
-            subjectIdentifier: "00000000-0000-4000-8000-000000001001",
-          }),
-        ),
-      },
-      config: { projectionRetryAfterSeconds: 3 },
+    const middleware = createTestPublicAuthenticationHandler({
+      resolvePublicAuthentication: mock(async () =>
+        resolvedAuthentication({
+          authenticatedClientCode: "gateway",
+          subjectIdentifier: "00000000-0000-4000-8000-000000001001",
+        }),
+      ),
     });
     const app = new Hono();
-    app.use("*", handlers.publicAuthenticationHandler);
+    app.use("*", middleware);
     app.get("/public/user-info", () => {
       throw new SubjectAccessUnavailableError();
     });
@@ -619,22 +544,16 @@ describe("publicAuthenticationHandler", () => {
 
   test("clears the local cookie when a downstream config-version race invalidates a cookie session", async () => {
     const logger = createMockLogger();
-    const handlers = createApiAuthenticationHandlers({
-      clientService: {
-        getClientBySecret: mock(async () => null),
-      },
-      customSsoSession: {
-        resolvePublicAuthentication: mock(async () =>
-          resolvedAuthentication({
-            authenticatedClientCode: "gateway",
-            subjectIdentifier: "00000000-0000-4000-8000-000000001001",
-          }),
-        ),
-      },
-      config: { projectionRetryAfterSeconds: 3 },
+    const middleware = createTestPublicAuthenticationHandler({
+      resolvePublicAuthentication: mock(async () =>
+        resolvedAuthentication({
+          authenticatedClientCode: "gateway",
+          subjectIdentifier: "00000000-0000-4000-8000-000000001001",
+        }),
+      ),
     });
     const app = new Hono();
-    app.use("*", handlers.publicAuthenticationHandler);
+    app.use("*", middleware);
     app.get("/public/user-info", () => {
       throw new CustomSsoClientDeliveryUnauthorizedError();
     });
@@ -656,22 +575,16 @@ describe("publicAuthenticationHandler", () => {
 
   test("does not manufacture cookie deletion when a downstream config-version race invalidates a header session", async () => {
     const logger = createMockLogger();
-    const handlers = createApiAuthenticationHandlers({
-      clientService: {
-        getClientBySecret: mock(async () => null),
-      },
-      customSsoSession: {
-        resolvePublicAuthentication: mock(async () =>
-          resolvedAuthentication({
-            authenticatedClientCode: "gateway",
-            subjectIdentifier: "00000000-0000-4000-8000-000000001001",
-          }),
-        ),
-      },
-      config: { projectionRetryAfterSeconds: 3 },
+    const middleware = createTestPublicAuthenticationHandler({
+      resolvePublicAuthentication: mock(async () =>
+        resolvedAuthentication({
+          authenticatedClientCode: "gateway",
+          subjectIdentifier: "00000000-0000-4000-8000-000000001001",
+        }),
+      ),
     });
     const app = new Hono();
-    app.use("*", handlers.publicAuthenticationHandler);
+    app.use("*", middleware);
     app.get("/public/user-info", () => {
       throw new CustomSsoClientDeliveryUnauthorizedError();
     });
@@ -688,4 +601,22 @@ describe("publicAuthenticationHandler", () => {
     expect(response.status).toBe(401);
     expect(response.headers.getSetCookie()).toEqual([]);
   });
+});
+
+test("keeps the local session on a Custom SSO Client or purpose mismatch", async () => {
+  const middleware = createTestPublicAuthenticationHandler({
+    async resolvePublicAuthentication() {
+      throw new CustomSsoRequestMismatchError();
+    },
+  });
+  const app = new Hono();
+  app.onError(createErrorHandler(createMockLogger()));
+  app.use(middleware);
+  app.get("/", (c) => c.text("unreachable"));
+
+  const response = await app.request("/", {
+    headers: { Client: "gateway", Cookie: "local_gateway_session=session-token" },
+  });
+  expect(response.status).toBe(401);
+  expect(response.headers.getSetCookie()).toEqual([]);
 });

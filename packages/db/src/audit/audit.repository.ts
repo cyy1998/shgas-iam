@@ -1,11 +1,11 @@
-import type { DbClient } from "@iam/db";
-import { auditLogs } from "@iam/db/schema";
-import type { AuditLogWriteDto } from "@iam/domain/audit";
+import type { AuditLogWrite } from "@iam/contracts/audit";
 import type { Json } from "drizzle-orm";
+import type { DbClient } from "../index";
+import { auditLogs } from "../schema/log/audit-logs";
 
 export function createAuditRepository(db: DbClient) {
   return {
-    async createAuditLog(input: AuditLogWriteDto) {
+    async createAuditLog(input: AuditLogWrite) {
       const values: typeof auditLogs.$inferInsert = {
         action: input.action,
         outcome: input.outcome,

@@ -1,7 +1,4 @@
 import { createAccountRecoveryService } from "@api/services/account-recovery/account-recovery.service";
-import { createAuditRepository } from "@api/services/audit/audit.repository";
-import type { ApiAuditLogWriter } from "@api/services/audit/audit.service";
-import { createApiAuditLogWriter } from "@api/services/audit/audit.service";
 import { createLoginCredentialParser } from "@api/services/authentication/login-credential.parser";
 import { createClientService } from "@api/services/client/client.service";
 import { createCapService } from "@api/services/human-verification/cap.service";
@@ -18,6 +15,8 @@ import { createClientSnapshots } from "@iam/client-snapshot/composition";
 import { createClientSecretAuthenticator } from "@iam/client-snapshot/credentials";
 import type { DbClient } from "@iam/db";
 import db from "@iam/db";
+import type { AuditLogWriter } from "@iam/db/audit";
+import { createAuditLogWriter, createAuditRepository } from "@iam/db/audit";
 import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
 import { createDelegationService } from "@iam/delegation";
 import {
@@ -63,7 +62,7 @@ type ApiUnitOfWork = ReturnType<typeof createApiUnitOfWork>;
 export interface CreateApiServicesOptions {
   runtime: ApiRuntimePorts;
   repositories: ApiRepositories;
-  auditLogWriter: ApiAuditLogWriter;
+  auditLogWriter: AuditLogWriter;
   unitOfWork: ApiUnitOfWork;
   userDocumentQueryDb: DbClient;
   organizationQueryDb: DbClient;
@@ -226,7 +225,7 @@ export function createApiServices(options: CreateApiServicesOptions) {
   const delegationService = createDelegationService({
     db,
     recordAudit: async (tx, event) =>
-      createApiAuditLogWriter({ auditRepository: createAuditRepository(tx) }).recordAuditLog(event),
+      createAuditLogWriter({ sourceApp: "iam", auditRepository: createAuditRepository(tx) }).recordAuditLog(event),
   });
 
   const loginRestriction = createLoginRestriction({

@@ -57,14 +57,16 @@ use case 或 service。Admin REST 与 tRPC 复用同一管理操作，Internal C
 Gateway 的 `src/http/` 同样保持薄协议入口。
 
 REST 使用 `*.routes.ts`、`*.handlers.ts`、`*.type.ts`。`*.index.ts` 暴露接收已创建依赖的 router factory。
-Tier middleware 导出 factory 或注入数组，共享认证 handler 放 app-local `src/middlewares/`。
+Tier middleware 导出 factory 或注入数组。公共会话和 Internal Client 的共享 HTTP 认证位于 `@iam/api-core` 的显式子路径，
+由应用注入会话认证、主体交付、协议错误分类及客户端读取。
 框架与协议适配模块按 Adapter、Resolver、Policy、Verifier 等实际职责命名。
 [协议边界](#custom-sso-与-oidc) · [Admin API 装配与路由](../../apps/admin-api/README.md#装配与路由)
 
 ### 请求、审计与可观测上下文
 
 Hono Context 留在协议层。Actor、审计上下文、requestId 和 traceId 显式传给业务、事务和外部 adapter。
-下层不重读请求头或依赖全局请求状态。审计上下文独立定义，事件构造保持纯函数，写入通过注入接口。
+下层不重读请求头或依赖全局请求状态。HTTP 审计上下文由 `@iam/api-core/http/audit-request-context` 提取，
+事件构造保持纯函数，公共 API 通过 `@iam/db/audit` 装配审计写入。
 
 Trace ID 依次取 `traceparent` 的 trace-id、`x-b3-traceid`、`x-trace-id`。缺失时保留缺失值。
 [请求头解析 getTraceIdFromHeaders](../../packages/api-core/src/http/request-log.ts) ·

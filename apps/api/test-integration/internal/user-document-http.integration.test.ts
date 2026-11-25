@@ -1,7 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import { createInternalUserQueryResource } from "@api/composition/internal-user-query";
-import { createInternalAuthenticationHandler } from "@api/middlewares/internal-client-authentication";
 import { createInternalMiddlewares } from "@api/routes/internal/_middleware";
 import { createUserHandlers } from "@api/routes/internal/user/user.handlers";
 import { createUserRoute } from "@api/routes/internal/user/user.index";
@@ -9,6 +8,7 @@ import { createClientRepository } from "@api/services/client/client.repository";
 import { createClientService } from "@api/services/client/client.service";
 import { createUserDocumentSearchAdapter } from "@api/services/user-document-search/user-document-search.adapter";
 import createApp from "@iam/api-core/core/create-app";
+import { createInternalAuthenticationHandler } from "@iam/api-core/middlewares/internal-client-authentication";
 import type { RebuildUserDocumentJobPayload, UserDocumentOutboxJobPayload } from "@iam/contracts";
 import {
   ClientStatus,
