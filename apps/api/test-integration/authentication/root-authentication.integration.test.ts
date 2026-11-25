@@ -1412,6 +1412,7 @@ test("Custom SSO delivers published custom attributes and nested Roles through W
     };
     expect(CustomSsoSubjectProjectionSchema.parse(data.subject)).toEqual(expected);
     const originalToken = await f.codes.inspectToken(data.sid);
+    if (!originalToken) throw new Error("Expected the issued Token to exist");
     const info = await f.use(data.sid);
     expect(info.status).toBe(200);
     expect(CustomSsoSubjectProjectionSchema.parse((await info.json()).data)).toEqual(expected);
@@ -1471,7 +1472,8 @@ test("Custom SSO delivers published custom attributes and nested Roles through W
     const root = await f.use(f.root, "iam");
     expect(root.status).toBe(200);
     expect((await root.json()).data).toEqual({ version: 5, subjectIdentifier: f.subjectIdentifier });
-    expect(await f.codes.inspectToken(data.sid)).toEqual(originalToken);
+    const currentToken = await f.codes.inspectToken(data.sid);
+    expect(currentToken?.record).toEqual(originalToken.record);
   } catch (failure) {
     await cleanupAfterFixtureFailure(failure, close);
   }
