@@ -11,7 +11,7 @@ registerMswLifecycle();
 test("switching to received delegations requests that direction and removes every management action", async () => {
   const directions: unknown[] = [];
   server.use(
-    http.post("*/public/delegations/search", async ({ request }) => {
+    http.post("*/api/iam/delegations/search", async ({ request }) => {
       directions.push(await request.json());
       return HttpResponse.json({ code: 200, data: [delegationRecord] });
     }),
@@ -29,20 +29,20 @@ test("creates a delegation with selected safe identities and refreshes the manag
   let submitted: Record<string, unknown> | undefined;
   let searches = 0;
   server.use(
-    http.post("*/public/delegations/search", () => {
+    http.post("*/api/iam/delegations/search", () => {
       searches += 1;
       return HttpResponse.json({ code: 200, data: submitted ? [delegationRecord] : [] });
     }),
-    http.get("*/public/delegations/choices/clients", () =>
+    http.get("*/api/iam/delegations/choices/clients", () =>
       HttpResponse.json({ code: 200, data: [{ id: 7, clientCode: "expenses", clientName: "报销系统" }] }),
     ),
-    http.get("*/public/delegations/choices/users", () =>
+    http.get("*/api/iam/delegations/choices/users", () =>
       HttpResponse.json({ code: 200, data: [{ id: 2, username: "bob", name: "Bob" }] }),
     ),
-    http.get("*/public/delegations/choices/organizations", () =>
+    http.get("*/api/iam/delegations/choices/organizations", () =>
       HttpResponse.json({ code: 200, data: [{ id: 9, orgCode: "FINANCE", orgName: "财务部" }] }),
     ),
-    http.post("*/public/delegations", async ({ request }) => {
+    http.post("*/api/iam/delegations", async ({ request }) => {
       submitted = (await request.json()) as Record<string, unknown>;
       return HttpResponse.json({ code: 200, data: { changed: true, result: delegationRecord } });
     }),
@@ -86,10 +86,10 @@ test("creates a delegation with selected safe identities and refreshes the manag
 test("editing changes only the period and description and refreshes the current row", async () => {
   let submitted: Record<string, unknown> | undefined;
   server.use(
-    http.post("*/public/delegations/search", () =>
+    http.post("*/api/iam/delegations/search", () =>
       HttpResponse.json({ code: 200, data: [{ ...delegationRecord, description: submitted?.description ?? "出差" }] }),
     ),
-    http.patch("*/public/delegations/42", async ({ request }) => {
+    http.patch("*/api/iam/delegations/42", async ({ request }) => {
       submitted = (await request.json()) as Record<string, unknown>;
       return HttpResponse.json({ code: 200, data: { changed: true, result: { ...delegationRecord, ...submitted } } });
     }),
@@ -108,13 +108,13 @@ test("pause and resume refresh available actions, and ending removes further man
   let status = ClientDelegationStatus.Enable;
   const patches: unknown[] = [];
   server.use(
-    http.post("*/public/delegations/search", () =>
+    http.post("*/api/iam/delegations/search", () =>
       HttpResponse.json({
         code: 200,
         data: [{ ...delegationRecord, startTime: "2000-01-01T00:00:00Z", endTime: "2050-01-01T00:00:00Z", status }],
       }),
     ),
-    http.patch("*/public/delegations/42", async ({ request }) => {
+    http.patch("*/api/iam/delegations/42", async ({ request }) => {
       const patch = (await request.json()) as { status: ClientDelegationStatus };
       patches.push(patch);
       status = patch.status;
@@ -139,7 +139,7 @@ test("pause and resume refresh available actions, and ending removes further man
 });
 test("history filters keep expired open records manageable and ended records read-only", async () => {
   server.use(
-    http.post("*/public/delegations/search", () =>
+    http.post("*/api/iam/delegations/search", () =>
       HttpResponse.json({
         code: 200,
         data: [
@@ -179,13 +179,13 @@ test("a rejected write stays visible and manual refresh reads facts without repl
   let patches = 0;
   let ended = false;
   server.use(
-    http.post("*/public/delegations/search", () =>
+    http.post("*/api/iam/delegations/search", () =>
       HttpResponse.json({
         code: 200,
         data: [{ ...delegationRecord, status: ended ? ClientDelegationStatus.Disable : ClientDelegationStatus.Enable }],
       }),
     ),
-    http.patch("*/public/delegations/42", () => {
+    http.patch("*/api/iam/delegations/42", () => {
       patches += 1;
       ended = true;
       return HttpResponse.json({ code: "ENDED", message: "委托已结束，不能修改" }, { status: 409 });
@@ -203,8 +203,8 @@ test("editing a description preserves the original period precision", async () =
   const precise = { ...delegationRecord, startTime: "2026-10-20T00:01:23.456Z", endTime: "2026-10-30T00:02:34.567Z" };
   let submitted: Record<string, unknown> | undefined;
   server.use(
-    http.post("*/public/delegations/search", () => HttpResponse.json({ code: 200, data: [precise] })),
-    http.patch("*/public/delegations/42", async ({ request }) => {
+    http.post("*/api/iam/delegations/search", () => HttpResponse.json({ code: 200, data: [precise] })),
+    http.patch("*/api/iam/delegations/42", async ({ request }) => {
       submitted = (await request.json()) as Record<string, unknown>;
       return HttpResponse.json({ code: 200, data: { changed: true, result: precise } });
     }),
@@ -225,11 +225,11 @@ test("a pending or unknown write cannot be automatically replayed and can be fol
   let patches = 0;
   let searches = 0;
   server.use(
-    http.post("*/public/delegations/search", () => {
+    http.post("*/api/iam/delegations/search", () => {
       searches += 1;
       return HttpResponse.json({ code: 200, data: [delegationRecord] });
     }),
-    http.patch("*/public/delegations/42", async () => {
+    http.patch("*/api/iam/delegations/42", async () => {
       patches += 1;
       await responseReady;
       return HttpResponse.error();

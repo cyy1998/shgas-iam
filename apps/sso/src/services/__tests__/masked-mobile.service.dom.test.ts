@@ -29,7 +29,7 @@ describe("masked mobile service", () => {
       capToken: "cap-token",
     });
     expect(result).toEqual({ mobile: "138****1234" });
-    expect(requestedUrl?.pathname).toContain(`/open/users/${segment}/masked-mobile`);
+    expect(requestedUrl?.pathname).toBe(`/api/iam/auth/recovery/users/${segment}/masked-mobile`);
     expect(requestedUrl?.searchParams.get("capToken")).toBe("cap-token");
     expect(requestedUrl?.searchParams.has("username")).toBe(false);
   });

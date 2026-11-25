@@ -411,7 +411,7 @@ test("development OpenAPI includes canonical authentication and both WeCom route
     "/auth/captcha/cap/{siteKey}/redeem": { post: expect.any(Object) },
     "/auth/captcha/image/challenge": { post: expect.any(Object) },
     "/auth/captcha/image/answer": { post: expect.any(Object) },
-    "/auth/clients/{clientCode}/status": { get: expect.any(Object) },
+    "/auth/client/status": { get: expect.any(Object) },
     "/auth/recovery/users/{username}/masked-mobile": { get: expect.any(Object) },
     "/auth/recovery/password-reset": { post: expect.any(Object) },
     "/auth/sms/send": { post: expect.any(Object) },

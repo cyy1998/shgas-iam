@@ -8,7 +8,7 @@ export function sendMessage(
   body: { phoneNumber?: string; username?: string; usage: SmsUsage; capToken?: string },
   imageCaptchaProof?: string,
 ) {
-  return request<void>("/open/code/send", {
+  return request<void>("/auth/sms/send", {
     ...imageCaptchaProofOptions(imageCaptchaProof),
     method: "POST",
     body: JSON.stringify(body),
@@ -23,22 +23,22 @@ export function selfMobileSendMsg(
 }
 
 export function codeVerify(body: { phoneNumber?: string; username?: string; usage: SmsUsage; code: string }) {
-  return request<{ result: boolean }>("/open/code/verify", {
+  return request<{ result: boolean }>("/auth/sms/verify", {
     method: "POST",
     body: JSON.stringify(body),
   });
 }
 
 export function passwordReset(body: { username: string; phoneNumber?: string; code: string; newPassword: string }) {
-  return submitSmsCode("/open/password/reset", body, "返回上一步重新获取验证码");
+  return submitSmsCode("/auth/recovery/password-reset", body, "返回上一步重新获取验证码");
 }
 
 export function clientStatus(
-  params: { clientCode: string },
+  { clientCode }: { clientCode: string },
   options?: { suppressErrorMessage?: boolean; signal?: AbortSignal },
 ) {
-  const qs = toQueryString(params);
-  return request<ClientStatusResult>(`/open/client/status?${qs}`, {
+  const query = toQueryString({ clientCode });
+  return request<ClientStatusResult>(`/auth/client/status?${query}`, {
     skipAuthRedirect: true,
     ...options,
   });
@@ -48,7 +48,7 @@ export function getMaskedMobile(params: { username: string; capToken?: string },
   const qs = toQueryString({ capToken: params.capToken });
   // The inner encoding preserves opaque usernames, including URL dot segments.
   const username = encodeURIComponent(encodeURIComponent(params.username).replace(/\./g, "%2E"));
-  return request<MaskedMobile>(`/open/users/${username}/masked-mobile?${qs}`, {
+  return request<MaskedMobile>(`/auth/recovery/users/${username}/masked-mobile?${qs}`, {
     ...imageCaptchaProofOptions(imageCaptchaProof),
     skipAuthRedirect: true,
   });

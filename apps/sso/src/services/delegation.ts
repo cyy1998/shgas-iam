@@ -13,19 +13,25 @@ export type PersonalDelegationCreate = Omit<DelegationCreateInput, "delegatorUse
   clientId: number;
 };
 
+function requestPersonalDelegation<T>(path: string, init?: RequestInit) {
+  return request<T>(`/delegations${path}`, {
+    ...init,
+    headers: { Client: "iam" },
+    suppressErrorMessage: true,
+  });
+}
+
 export async function createPersonalDelegation(input: PersonalDelegationCreate) {
-  const result = await request<{ changed: boolean; result: unknown }>("/public/delegations", {
+  const result = await requestPersonalDelegation<{ changed: boolean; result: unknown }>("", {
     method: "POST",
     body: JSON.stringify(input),
-    suppressErrorMessage: true,
   });
   return { changed: result.changed, result: DelegationDetailSchema.parse(result.result) };
 }
 export async function updatePersonalDelegation(id: number, input: DelegationUpdateInput) {
-  const result = await request<{ changed: boolean; result: unknown }>(`/public/delegations/${id}`, {
+  const result = await requestPersonalDelegation<{ changed: boolean; result: unknown }>(`/${id}`, {
     method: "PATCH",
     body: JSON.stringify(input),
-    suppressErrorMessage: true,
   });
   return { changed: result.changed, result: DelegationDetailSchema.parse(result.result) };
 }
@@ -33,10 +39,9 @@ export async function searchPersonalDelegations(
   direction: DelegationDirection,
   query: DelegationSearchInput = {},
 ): Promise<DelegationDetail[]> {
-  const result = await request<unknown[]>("/public/delegations/search", {
+  const result = await requestPersonalDelegation<unknown[]>("/search", {
     method: "POST",
     body: JSON.stringify({ ...query, direction }),
-    suppressErrorMessage: true,
   });
   return result.map((record) => DelegationDetailSchema.parse(record));
 }
@@ -45,7 +50,7 @@ export type DelegationClientChoice = Pick<DelegationDetail["client"], "id" | "cl
 export type DelegationOrganizationChoice = Pick<DelegationDetail["organizationScope"], "id" | "orgCode" | "orgName">;
 function choices<T>(kind: string, search = "") {
   const query = new URLSearchParams({ search });
-  return request<T[]>(`/public/delegations/choices/${kind}?${query}`, { suppressErrorMessage: true });
+  return requestPersonalDelegation<T[]>(`/choices/${kind}?${query}`);
 }
 export const getDelegationUsers = (search?: string) => choices<DelegationUserChoice>("users", search);
 export const getDelegationClients = (search?: string) => choices<DelegationClientChoice>("clients", search);

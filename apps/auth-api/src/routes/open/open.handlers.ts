@@ -37,7 +37,7 @@ export interface CreateOpenHandlersDeps {
 
 export function createOpenHandlers(deps: CreateOpenHandlersDeps) {
   const clientStatus: OpenRouteHandler<"clientStatus"> = async (c) => {
-    const { clientCode } = c.req.valid("param");
+    const { clientCode } = c.req.valid("query");
     const client = await deps.clientService.getClientByCode(clientCode);
     const data = client === null ? null : PublicClientStatusDtoSchema.parse(client);
     return c.json(resp.ok(data), OK);

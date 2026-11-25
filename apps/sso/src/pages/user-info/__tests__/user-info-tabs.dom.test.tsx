@@ -10,7 +10,7 @@ registerMswLifecycle();
 test("loads delegations on tab entry and preserves security drafts across switches", async () => {
   let searches = 0;
   server.use(
-    http.post("*/public/delegations/search", () => {
+    http.post("*/api/iam/delegations/search", () => {
       searches += 1;
       return HttpResponse.json({ code: 200, data: [] });
     }),

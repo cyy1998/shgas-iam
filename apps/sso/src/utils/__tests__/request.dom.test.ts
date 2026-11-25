@@ -8,14 +8,14 @@ import { restoreLoginRedirectState } from "../url";
 describe("request retry metadata", () => {
   it("preserves the server retry delay on a failed SMS request", async () => {
     server.use(
-      http.post("*/open/code/send", () =>
+      http.post("*/api/iam/auth/sms/send", () =>
         HttpResponse.json(
           { code: "SMS.COOLDOWN", message: "稍后重试", data: null },
           { status: 429, headers: { "Retry-After": "37" } },
         ),
       ),
     );
-    const failure = await request("/open/code/send", {
+    const failure = await request("/auth/sms/send", {
       method: "POST",
       suppressErrorMessage: true,
     }).catch((error) => error);
@@ -32,7 +32,7 @@ describe("request auth redirect", () => {
   beforeEach(() => {
     window.history.pushState({}, "", "/portal/userInfo");
     server.use(
-      http.get("*/public/user-info", () =>
+      http.get("*/api/iam/sso/user-info", () =>
         HttpResponse.json({ code: 401, message: "未登录", data: null }, { status: 401 }),
       ),
     );
@@ -40,7 +40,7 @@ describe("request auth redirect", () => {
 
   async function requestUserInfo() {
     const historyLength = window.history.length;
-    void request("/public/user-info");
+    void request("/sso/user-info");
     await vi.waitFor(() => {
       expect(window.location.pathname).toBe("/portal/login");
     });
