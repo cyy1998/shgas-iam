@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { createOrganizationDocumentJobProducer } from "../jobs";
+import { createOrganizationDocumentJobProducer } from "../job-producer";
 
 test("maps validated Outbox and rebuild payloads while preserving the owner report shape", async () => {
   const attempts: Array<{ name: string; data: unknown }> = [];

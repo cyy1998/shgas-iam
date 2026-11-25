@@ -155,9 +155,11 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   const initialUserInfo = await userInfoRequest();
   expect(initialUserInfo.status()).toBe(200);
   const initialUserInfoBody = await initialUserInfo.json();
-  const legacyUserInfo = await userInfoRequest("/api/iam/public/user-info");
-  expect(legacyUserInfo.status()).toBe(200);
-  expect(await legacyUserInfo.json()).toEqual(initialUserInfoBody);
+  for (const path of ["/api/iam/public/user-info", "/api/iam/public/user-info/"]) {
+    const legacyUserInfo = await userInfoRequest(path);
+    expect(legacyUserInfo.status()).toBe(200);
+    expect(await legacyUserInfo.json()).toEqual(initialUserInfoBody);
+  }
   expect(initialUserInfoBody).toMatchObject({
     data: {
       version: 5,
@@ -197,10 +199,12 @@ test("Admin prepares Custom SSO in Maintenance and existing access resumes after
   expect(authzResponse.status()).toBe(200);
   const authzBody = (await authzResponse.json()) as { data: string };
   expect(authzResponse.headers()["x-user-info"]).toBe(authzBody.data);
-  const legacyAuthz = await context.request.get(`${origin}/api/iam/auth/authz`, { headers: authzHeaders });
-  expect(legacyAuthz.status()).toBe(200);
-  expect(await legacyAuthz.json()).toEqual(authzBody);
-  expect(legacyAuthz.headers()["x-user-info"]).toBe(authzBody.data);
+  for (const path of ["/api/iam/auth/authz", "/api/iam/auth/authz/"]) {
+    const legacyAuthz = await context.request.get(new URL(path, origin).href, { headers: authzHeaders });
+    expect(legacyAuthz.status()).toBe(200);
+    expect(await legacyAuthz.json()).toEqual(authzBody);
+    expect(legacyAuthz.headers()["x-user-info"]).toBe(authzBody.data);
+  }
   const gatewaySubject = Buffer.from(authzBody.data, "base64").toString("utf8");
   expect(gatewaySubject).not.toMatch(/responsibilit|employment|authorization/iu);
 

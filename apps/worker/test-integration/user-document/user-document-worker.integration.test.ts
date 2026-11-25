@@ -8,17 +8,17 @@ import {
   UserStatus,
 } from "@iam/contracts";
 import { organizations, positions } from "@iam/db/schema";
-import { createUnitOfWork } from "@iam/unit-of-work";
-import { eq } from "drizzle-orm";
-import { USER_DOCUMENT_SCHEMA_VERSION } from "../../../src/user/index";
-import { createUserDocumentInvalidation, createUserDocumentJobProducer } from "../../../src/user/producer";
+import { USER_DOCUMENT_SCHEMA_VERSION } from "@iam/documents/user";
+import { createUserDocumentInvalidation } from "@iam/documents/user/producer";
 import {
   createCurrentUserDocumentProjectionBundle,
   createUserDocumentPostgresGate,
   createUserDocumentReadinessRepository,
-  createUserDocumentWorkerModule,
-} from "../../../src/user/worker";
-import { createPostgresTestHarness } from "../support/postgres-test-harness";
+} from "@iam/documents/user/worker";
+import { createUserDocumentJobProducer, createUserDocumentWorkerModule } from "@iam/jobs/documents/user";
+import { createUnitOfWork } from "@iam/unit-of-work";
+import { eq } from "drizzle-orm";
+import { createWorkerPostgresTestHarness as createPostgresTestHarness } from "../support/postgres-test-harness";
 
 const OBSERVED_AT = new Date("2026-08-22T10:00:00.000Z");
 

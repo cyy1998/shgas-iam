@@ -4,7 +4,6 @@ import {
   createCurrentUserDocumentProjectionBundle,
   createSubjectAccessAuthorityRepository,
   createUserDocumentUpdateProcessor,
-  createUserDocumentWriteResources,
   repairSubjectAccess,
   repairUserDocument,
   type UserDocumentRepairOptions,
@@ -13,6 +12,7 @@ import {
   createSubjectAccessTransitionRecoveryAuthority,
   createSubjectAccessTransitionRepository,
 } from "@iam/documents/user/subject-access-transition";
+import { createUserDocumentWriteResources } from "@iam/jobs/documents/user";
 import { closeMaintenanceResources, createOfflineMaintenanceRedis } from "@iam/runtime/maintenance";
 import { createSubjectAccessRepair, createSubjectAccessTransitionRecovery } from "@iam/subject-access/recovery";
 import type { DocumentRepairInvocation } from "@worker/env";

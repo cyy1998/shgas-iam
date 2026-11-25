@@ -8,7 +8,6 @@ import { createPublicHandlers } from "@auth-api/routes/public/public.handlers";
 import * as accountRoutes from "@auth-api/routes/public/public.routes";
 import { createRootSsoHandlers } from "@auth-api/routes/sso/sso.handlers";
 import * as ssoRoutes from "@auth-api/routes/sso/sso.routes";
-import { createRootSessionService } from "@auth-api/services/authentication/root-session.service";
 import { createUserSessionAuthenticationAdapter } from "@auth-api/services/authentication/user-session.adapter";
 import {
   CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_DEFINITION,
@@ -18,7 +17,9 @@ import type { CreateAppOptions } from "@iam/api-core/core/create-app";
 import { createRouter } from "@iam/api-core/core/create-router";
 import type { PublicBindings } from "@iam/api-core/types";
 import { createPermittedClientSubjectProjectionService } from "@iam/client-subject-projection";
+import { OK, SERVICE_UNAVAILABLE } from "@iam/contracts/http";
 import { createUnifiedCustomSsoOperations } from "@iam/custom-sso";
+import { createRootSessionService } from "@iam/custom-sso/root-session";
 import type { AuditLogWriter } from "@iam/db/audit";
 import { AuthzUnauthorizedError } from "@iam/runtime/errors";
 import type { SubjectAccessOperation } from "@iam/subject-access";
@@ -110,17 +111,17 @@ export function createAuthApiRoutes(options: {
   health.get("/health", async (c) => {
     try {
       await runtime.redis.ping();
-      return c.json({ status: "ok" });
+      return c.json({ status: "ok" }, OK);
     } catch {
-      return c.json({ status: "unavailable" }, 503);
+      return c.json({ status: "unavailable" }, SERVICE_UNAVAILABLE);
     }
   });
   health.get("/ready", async (c) => {
     try {
       await Promise.all([runtime.redis.ping(), options.verifyDatabase()]);
-      return c.json({ status: "ok" });
+      return c.json({ status: "ok" }, OK);
     } catch {
-      return c.json({ status: "unavailable" }, 503);
+      return c.json({ status: "unavailable" }, SERVICE_UNAVAILABLE);
     }
   });
 

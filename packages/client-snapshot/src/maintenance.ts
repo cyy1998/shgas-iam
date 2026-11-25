@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { ClientCodeSchema } from "@iam/contracts";
 import type { ClientSnapshotRedis } from "./contract";
 import { ClientSnapshotInvalidationError, ClientSnapshotUnavailableError } from "./contract";
+import { GENERIC_CLIENT_CACHE_INVENTORY } from "./generic-cache";
 import { createClientSnapshotRedisStore } from "./redis-store";
 
 interface ClientRuntimeRestoreScanRedis {
@@ -26,10 +27,11 @@ export const CLIENT_SNAPSHOT_INVENTORY = [
   "client-snapshot:v1:{*}:payload:client",
   "client-snapshot:v1:{*}:payload:credential",
 ] as const;
+const CLIENT_RUNTIME_INVENTORY = [...CLIENT_SNAPSHOT_INVENTORY, ...GENERIC_CLIENT_CACHE_INVENTORY];
 function inventory(redis: ClientRuntimeRestoreScanRedis) {
   return {
     async forEachOwnedBatch(visit: (keys: readonly string[]) => void | Promise<void>) {
-      for (const pattern of CLIENT_SNAPSHOT_INVENTORY) {
+      for (const pattern of CLIENT_RUNTIME_INVENTORY) {
         let cursor = "0";
         do {
           const result = await redis.scan(cursor, "MATCH", pattern, "COUNT", "100");

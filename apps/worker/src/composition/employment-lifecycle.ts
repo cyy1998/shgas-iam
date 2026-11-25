@@ -4,8 +4,9 @@ import type { DbClient, DbTransaction, db as database } from "@iam/db";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import { firstRow } from "@iam/db/query-utils";
 import { auditLogs, employments } from "@iam/db/schema";
-import { createUserDocumentInvalidation, createUserDocumentWriteResources } from "@iam/documents/user/worker";
+import { createUserDocumentInvalidation } from "@iam/documents/user/worker";
 import { AuditLogWriteDtoSchema, redactAuditDetails } from "@iam/domain/audit";
+import { createUserDocumentWriteResources } from "@iam/jobs/documents/user";
 import { LoggerSourceApp } from "@iam/runtime/logger";
 import { createUnitOfWork, type TransactionalDbPort } from "@iam/unit-of-work";
 import type {

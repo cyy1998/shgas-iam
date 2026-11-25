@@ -3,6 +3,7 @@ import type { CreateAppOptions } from "@iam/api-core/core/create-app";
 import { createRouter } from "@iam/api-core/core/create-router";
 import { createClientSnapshots } from "@iam/client-snapshot/composition";
 import { createClientSecretAuthenticator } from "@iam/client-snapshot/credentials";
+import { OK, SERVICE_UNAVAILABLE } from "@iam/contracts/http";
 import { createAuditLogWriter, createAuditRepository } from "@iam/db/audit";
 import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
 import { relations } from "@iam/db/relations";
@@ -125,9 +126,9 @@ export async function createSsoApiComposition(options: { env?: Env; logger?: Ret
     const redisHealth = async (c: Context) => {
       try {
         await redis.ping();
-        return c.json({ status: "ok" });
+        return c.json({ status: "ok" }, OK);
       } catch {
-        return c.json({ status: "unavailable" }, 503);
+        return c.json({ status: "unavailable" }, SERVICE_UNAVAILABLE);
       }
     };
     health.get("/health", redisHealth);
@@ -135,9 +136,9 @@ export async function createSsoApiComposition(options: { env?: Env; logger?: Ret
     health.get("/ready", async (c) => {
       try {
         await Promise.all([redis.ping(), db.execute(sql`SELECT 1`)]);
-        return c.json({ status: "ok" });
+        return c.json({ status: "ok" }, OK);
       } catch {
-        return c.json({ status: "unavailable" }, 503);
+        return c.json({ status: "unavailable" }, SERVICE_UNAVAILABLE);
       }
     });
     const routes: CreateAppOptions["routes"] = {

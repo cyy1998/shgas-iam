@@ -9,7 +9,7 @@ import {
   UserDocumentJobName,
   UserDocumentOutboxJobPayloadSchema,
 } from "@iam/contracts";
-import { createJobWakeUpProducer, type JobWakeUpQueuePort } from "@iam/jobs";
+import { createJobWakeUpProducer, type JobWakeUpQueuePort } from "../../index";
 
 export type UserDocumentRebuildJobQueuePort = JobWakeUpQueuePort<UserDocumentJobPayload, UserDocumentJobName>;
 

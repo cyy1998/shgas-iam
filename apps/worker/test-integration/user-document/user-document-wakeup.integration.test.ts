@@ -1,9 +1,16 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { createServer, type Socket } from "node:net";
-import type { UserDocumentJobName, UserDocumentJobPayload } from "@iam/contracts";
+import type { UserDocumentJobName, UserDocumentJobPayload, UserDocumentOutboxJobPayload } from "@iam/contracts";
 import { userDocumentOutboxEntries, userDocumentRebuildStates, userDocuments, users } from "@iam/db/schema";
+import { type CreateUserDocumentInvalidationDeps, createUserDocumentInvalidation } from "@iam/documents/user/producer";
+import { createSubjectFactsRedisPublisher, DocumentFactsCacheRecordSchema } from "@iam/documents/user/subject-facts";
+import {
+  createCurrentUserDocumentProjectionBundle,
+  createUserDocumentUpdateProcessor,
+} from "@iam/documents/user/worker";
 import { createJobWorker } from "@iam/jobs";
+import { createUserDocumentJobProcessor, createUserDocumentWriteResources } from "@iam/jobs/documents/user";
 import {
   parseDedicatedRedisTestUrl,
   requireExternalTestUrl,
@@ -11,34 +18,16 @@ import {
 } from "@iam/test-support/external-test-resources";
 import { createUnitOfWork } from "@iam/unit-of-work";
 import { eq } from "drizzle-orm";
-import type { DocumentOutboxJob } from "../../../src/update";
-import {
-  type CreateUserDocumentInvalidationDeps,
-  createUserDocumentInvalidation,
-  createUserDocumentWriteResources,
-} from "../../../src/user/producer";
-import {
-  createCurrentUserDocumentProjectionBundle,
-  createUserDocumentJobProcessor,
-  createUserDocumentUpdateProcessor,
-} from "../../../src/user/worker";
-import { createPostgresTestHarness } from "../support/postgres-test-harness";
-import { createRedisTestHarness } from "../support/redis-test-harness";
+import { createWorkerPostgresTestHarness as createPostgresTestHarness } from "../support/postgres-test-harness";
+import { createWorkerRedisTestHarness, resetWorkerRedisTestDatabase } from "../support/redis-test-harness";
 
 const subjectIdentifier = "10000000-0000-4000-8000-000000000296";
 const clock = { nowDate: () => new Date() };
 const logger = { info() {}, warn() {}, error() {} };
 let pg: Awaited<ReturnType<typeof createPostgresTestHarness>>;
-let redis: Awaited<ReturnType<typeof createRedisTestHarness>>;
 
 beforeAll(async () => {
   pg = await createPostgresTestHarness();
-  try {
-    redis = await createRedisTestHarness();
-  } catch (error) {
-    await pg.close();
-    throw error;
-  }
 });
 
 beforeEach(async () => {
@@ -47,13 +36,12 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await redis?.reset();
+  await resetWorkerRedisTestDatabase([]);
 });
 
 afterAll(async () => {
   await runWithOwnedTestResources(async ({ registerCleanup }) => {
     registerCleanup(() => pg?.close());
-    registerCleanup(() => redis?.close());
   });
 });
 
@@ -75,7 +63,7 @@ function createWritingUnitOfWork(
 }
 
 test("one committed transaction wakes all persisted Outbox entries once", async () => {
-  const wakes: DocumentOutboxJob[][] = [];
+  const wakes: UserDocumentOutboxJobPayload[][] = [];
   const uow = createWritingUnitOfWork({
     async enqueueOutboxEntries(jobs) {
       wakes.push(jobs);
@@ -194,15 +182,20 @@ test("a silent Redis peer bounds the committed save and repair publishes it afte
     expect(performance.now() - closeStarted).toBeLessThan(1_000);
 
     const redisConfig = parseDedicatedRedisTestUrl({
-      name: "IAM_DOCUMENTS_TEST_REDIS_URL",
+      name: "IAM_WORKER_TEST_REDIS_URL",
       value: requireExternalTestUrl({
         environment: process.env,
         lane: "User Document wake-up integration",
-        name: "IAM_DOCUMENTS_TEST_REDIS_URL",
+        name: "IAM_WORKER_TEST_REDIS_URL",
       }),
     });
-    const scope = await redis.createScope();
-    registerCleanup(() => scope.close());
+    const redis = await createWorkerRedisTestHarness();
+    registerCleanup(redis.close);
+    const keyPrefix = `iam:test:user-document:${randomUUID()}:`;
+    const readFacts = async () => {
+      const raw = await redis.observer.get(`${keyPrefix}${subjectIdentifier}`);
+      return raw === null ? null : DocumentFactsCacheRecordSchema.parse(JSON.parse(raw));
+    };
     const recovered = createUserDocumentWriteResources({ redis: redisConfig, prefix, logger });
     registerCleanup(() => recovered.close());
     await recovered.queue.waitUntilReady();
@@ -210,7 +203,7 @@ test("a silent Redis peer bounds the committed save and repair publishes it afte
       db: pg.db,
       projection: createCurrentUserDocumentProjectionBundle(),
       jobProducer: recovered.jobProducer,
-      subjectFactsPublisher: scope.firstFactsPublisher,
+      subjectFactsPublisher: createSubjectFactsRedisPublisher(redis.writer, { keyPrefix }),
       subjectAccessRepair: {
         async repairSubject() {
           return { status: "stable" as const };
@@ -238,7 +231,7 @@ test("a silent Redis peer bounds the committed save and repair publishes it afte
     });
     const [document] = await pg.db.select().from(userDocuments);
     const [publishedState] = await pg.db.select().from(userDocumentRebuildStates);
-    const facts = await scope.readPublishedUserDocumentRecord(subjectIdentifier);
+    const facts = await readFacts();
     expect(document?.document).toMatchObject({ name: "After" });
     expect(facts?.sourceVersion).toBe(publishedState?.version);
 
@@ -248,7 +241,7 @@ test("a silent Redis peer bounds the committed save and repair publishes it afte
       return counts.waiting === 0 && counts.active === 0 && counts.delayed === 0;
     });
     const [replayedState] = await pg.db.select().from(userDocumentRebuildStates);
-    const replayedFacts = await scope.readPublishedUserDocumentRecord(subjectIdentifier);
+    const replayedFacts = await readFacts();
     expect(replayedState?.version).toBe(publishedState?.version);
     expect(replayedFacts?.sourceVersion).toBe(publishedState?.version);
   });

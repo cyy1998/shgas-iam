@@ -3,6 +3,7 @@ import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-
 import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
 import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
 import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
+import { StandardErrorResponseSchema } from "@iam/api-core/core/openapi/schemas/error-response-schema";
 import { HttpStatusCodes } from "@iam/contracts/http";
 import {
   DelegationCreateSchema,
@@ -15,7 +16,11 @@ const createInput = DelegationCreateSchema.omit({ delegatorUsername: true }).req
 const searchInput = DelegationSearchSchema.extend({ direction: z.enum(["outgoing", "incoming"]).default("outgoing") });
 const tags = ["Personal Delegation"];
 const description =
-  "Requires Client: iam and an IAM root session (UserSession). Use the global_session cookie or the raw root session token in Authorization.";
+  "Requires Client: iam and an IAM root session (UserSession). Use the global_session cookie or the raw root session token in Authorization. The IAM portal Client must be enabled for Custom SSO.";
+const personalDelegationErrors = {
+  ...commonErrorResponses,
+  [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(StandardErrorResponseSchema, "IAM 应用维护中或访问状态暂不可用"),
+};
 const headers = z.object({
   Client: z
     .string()
@@ -34,7 +39,7 @@ export const create = createRoute({
   security,
   request: { headers, body: jsonContentRequired(createInput, "创建本人委托") },
   responses: {
-    ...commonErrorResponses,
+    ...personalDelegationErrors,
     [HttpStatusCodes.OK]: jsonContent(
       createSuccessResponseSchema(z.object({ changed: z.boolean(), result: DelegationDetailSchema })),
       "本人委托",
@@ -52,7 +57,7 @@ export const search = createRoute({
     body: jsonContentRequired(searchInput, "查询本人发起或收到的委托"),
   },
   responses: {
-    ...commonErrorResponses,
+    ...personalDelegationErrors,
     [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(DelegationDetailSchema)), "本人委托列表"),
   },
 });
@@ -68,7 +73,7 @@ export const update = createRoute({
     body: jsonContentRequired(DelegationUpdateSchema, "修改本人委托期间、说明或状态"),
   },
   responses: {
-    ...commonErrorResponses,
+    ...personalDelegationErrors,
     [HttpStatusCodes.OK]: jsonContent(
       createSuccessResponseSchema(z.object({ changed: z.boolean(), result: DelegationDetailSchema })),
       "本人委托修改结果",
@@ -85,7 +90,7 @@ function choiceRoute<const Path extends string, Schema extends z.ZodType>(path: 
     security,
     request: { headers, query: choiceQuery },
     responses: {
-      ...commonErrorResponses,
+      ...personalDelegationErrors,
       [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(schema)), "启用的可选对象安全摘要"),
     },
   });

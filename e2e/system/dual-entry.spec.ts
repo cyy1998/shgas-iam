@@ -340,10 +340,13 @@ test("APISIX preserves M2M authentication on the canonical path and compatibilit
     ] as const) {
       const headers = { apikey };
       const canonical = await gatewayRequest(request, origin, "/api/iam/internal/authz", { headers });
-      const legacy = await gatewayRequest(request, origin, "/api/iam/auth/internal-authz", { headers });
       expect(canonical.status()).toBe(status);
-      expect(legacy.status()).toBe(status);
-      expect(await legacy.json()).toEqual(await canonical.json());
+      const body = await canonical.json();
+      for (const path of ["/api/iam/auth/internal-authz", "/api/iam/auth/internal-authz/"]) {
+        const legacy = await gatewayRequest(request, origin, path, { headers });
+        expect(legacy.status()).toBe(status);
+        expect(await legacy.json()).toEqual(body);
+      }
     }
   }
 });

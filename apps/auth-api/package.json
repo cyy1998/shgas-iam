@@ -32,6 +32,7 @@
     "@iam/db": "workspace:*",
     "@iam/documents": "workspace:*",
     "@iam/domain": "workspace:*",
+    "@iam/jobs": "workspace:*",
     "@iam/login-restriction": "workspace:*",
     "@iam/oidc": "workspace:*",
     "@iam/runtime": "workspace:*",

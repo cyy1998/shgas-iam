@@ -19,6 +19,7 @@ import {
   testEnvironment,
 } from "../support/resources.fixture";
 import { createSessionFixture } from "../support/session.fixture";
+import { personalDelegationClient } from "./personal-delegation.fixture";
 
 const aliceSubject = "00000000-0000-4000-8000-000000000001";
 const bobSubject = "00000000-0000-4000-8000-000000000002";
@@ -55,6 +56,7 @@ beforeEach(async () => {
   await harness.db
     .insert(clients)
     .values({ clientCode: "expenses", clientName: "报销系统", clientSecret: "private-secret", extAttributes: {} });
+  await harness.db.insert(clients).values(personalDelegationClient);
   await harness.db.insert(organizations).values({
     orgCode: "FINANCE",
     orgName: "财务部",
@@ -143,7 +145,10 @@ test("selection directories expose only enabled safe identities and exclude the 
     { id: 3, username: "carol", name: "Carol" },
   ]);
   const applications = await request("/choices/clients", undefined, { method: "GET" });
-  expect(applications.body.data).toEqual([{ id: 1, clientCode: "expenses", clientName: "报销系统" }]);
+  expect(applications.body.data).toEqual([
+    { id: 1, clientCode: "expenses", clientName: "报销系统" },
+    { id: 2, clientCode: "iam", clientName: "IAM Portal" },
+  ]);
   const scopes = await request("/choices/organizations", undefined, { method: "GET" });
   expect(scopes.body.data).toEqual([{ id: 1, orgCode: "FINANCE", orgName: "财务部" }]);
   const searched = await request("/choices/users?search=car", undefined, { method: "GET" });

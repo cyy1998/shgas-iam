@@ -9,3 +9,4 @@ export {
   ClientSnapshotUnavailableError,
   ClientSnapshotValueSchema,
 } from "./contract";
+export { acquireIamRootClient } from "./iam-root-client";

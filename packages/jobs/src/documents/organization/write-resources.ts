@@ -1,7 +1,7 @@
-import type { BullMqRedisConfig } from "@iam/jobs";
-import { createJobProducerResources } from "@iam/jobs";
-import { createOrganizationDocumentJobProducer } from "../jobs";
-import { ORGANIZATION_DOCUMENT_QUEUE_NAME } from "../work.types";
+import { ORGANIZATION_DOCUMENT_QUEUE_NAME } from "@iam/documents/organization/worker";
+import type { BullMqRedisConfig } from "../../index";
+import { createJobProducerResources } from "../../index";
+import { createOrganizationDocumentJobProducer } from "./job-producer";
 
 export function createOrganizationDocumentWriteResources(options: {
   redis: BullMqRedisConfig;

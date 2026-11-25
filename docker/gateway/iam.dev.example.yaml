@@ -71,7 +71,7 @@ routes:
       proxy-rewrite:
         regex_uri: *strip-iam-prefix
   - key: legacy-user-info
-    uri: /api/iam/public/user-info
+    uris: [/api/iam/public/user-info, /api/iam/public/user-info/]
     priority: 10
     upstream: sso-api
     plugin_config: api
@@ -79,7 +79,7 @@ routes:
       proxy-rewrite:
         uri: /sso/user-info
   - key: legacy-authz
-    uri: /api/iam/auth/authz
+    uris: [/api/iam/auth/authz, /api/iam/auth/authz/]
     priority: 10
     upstream: sso-api
     plugin_config: api
@@ -87,7 +87,7 @@ routes:
       proxy-rewrite:
         uri: /sso/authz
   - key: legacy-internal-authz
-    uri: /api/iam/auth/internal-authz
+    uris: [/api/iam/auth/internal-authz, /api/iam/auth/internal-authz/]
     priority: 10
     upstream: integration-api
     plugin_config: api

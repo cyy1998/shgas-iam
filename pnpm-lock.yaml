@@ -467,6 +467,9 @@ importers:
       '@iam/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@iam/jobs':
+        specifier: workspace:*
+        version: link:../../packages/jobs
       '@iam/login-restriction':
         specifier: workspace:*
         version: link:../../packages/login-restriction
@@ -613,6 +616,9 @@ importers:
       '@iam/filter-engine':
         specifier: workspace:*
         version: link:../../packages/filter-engine
+      '@iam/jobs':
+        specifier: workspace:*
+        version: link:../../packages/jobs
       '@iam/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
@@ -1272,18 +1278,12 @@ importers:
       '@iam/filter-engine':
         specifier: workspace:*
         version: link:../filter-engine
-      '@iam/jobs':
-        specifier: workspace:*
-        version: link:../jobs
       '@iam/runtime':
         specifier: workspace:*
         version: link:../runtime
       '@iam/subject-access':
         specifier: workspace:*
         version: link:../subject-access
-      bullmq:
-        specifier: ^6.7.7
-        version: 6.7.7(ioredis@6.0.0(supports-color@10.2.2))
       drizzle-orm:
         specifier: 1.0.0-rc.2
         version: 1.0.0-rc.2(bun-types@1.4.4)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.6.7)
@@ -1362,6 +1362,15 @@ importers:
 
   packages/jobs:
     dependencies:
+      '@iam/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@iam/db':
+        specifier: workspace:*
+        version: link:../db
+      '@iam/documents':
+        specifier: workspace:*
+        version: link:../documents
       bullmq:
         specifier: ^6.7.7
         version: 6.7.7(ioredis@6.0.0(supports-color@10.2.2))
@@ -1378,6 +1387,9 @@ importers:
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
 
   packages/login-restriction:
     devDependencies:

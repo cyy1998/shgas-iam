@@ -6,10 +6,12 @@ import { organizationClosures, organizations } from "@iam/db/schema";
 import {
   type CreateOrganizationDocumentInvalidationInput,
   createOrganizationDocumentInvalidation,
-  createOrganizationDocumentWriteResources,
   type OrganizationOutboxJobPayload,
 } from "@iam/documents/organization/producer";
-import { createOrganizationDocumentWorkerModule } from "@iam/documents/organization/worker";
+import {
+  createOrganizationDocumentWorkerModule,
+  createOrganizationDocumentWriteResources,
+} from "@iam/jobs/documents/organization";
 import { parseDedicatedRedisTestUrl, runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import { createUnitOfWork } from "@iam/unit-of-work";
 import { eq } from "drizzle-orm";

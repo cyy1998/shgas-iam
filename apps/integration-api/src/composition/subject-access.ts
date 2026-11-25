@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
+import { createCustomSsoRetryableErrorMapper } from "@iam/api-core/http/custom-sso-retryable";
 import { createPublicAuthenticationHandler } from "@iam/api-core/middlewares/public-authentication";
-import { AuthzUnauthorizedError } from "@iam/runtime/errors";
+import { acquireIamRootClient, type ClientSnapshotReader, ClientSnapshotUnavailableError } from "@iam/client-snapshot";
+import { ApiErrorCode } from "@iam/contracts";
+import { AuthzMaintenanceError, AuthzUnauthorizedError } from "@iam/runtime/errors";
 import { createUnifiedSessionKernel, SessionStorageError } from "@iam/session-kernel";
 import {
   createSubjectAccessBarrier,
@@ -14,7 +17,13 @@ import { createUnifiedSubjectAccessSessionRevocation } from "@iam/subject-access
 import type Redis from "ioredis";
 import type { Env } from "../env";
 
-export function createIntegrationSubjectAccess(redis: Redis, sessionConfig: Env["sessionKernel"]) {
+class IamClientRejectedError extends AuthzUnauthorizedError {}
+
+export function createIntegrationSubjectAccess(
+  redis: Redis,
+  sessionConfig: Env["sessionKernel"],
+  clients: ClientSnapshotReader,
+) {
   const barrier = createSubjectAccessBarrier({
     clock: { nowDate: () => new Date() },
     random: { uuid: randomUUID },
@@ -53,6 +62,9 @@ export function createIntegrationSubjectAccess(redis: Redis, sessionConfig: Env[
           subjectIdentifier: user.subjectIdentifier,
           subjectContext: user.subjectContext,
         });
+        const client = await acquireIamRootClient(clients);
+        if (client.kind === "maintenance") throw new AuthzMaintenanceError();
+        if (client.kind !== "accepted") throw new IamClientRejectedError("非法访问");
         await deliver({
           authenticationContext: { subjectIdentifier: user.subjectIdentifier, authenticatedClientCode: clientCode },
           subjectDeliveryCapability: undefined,
@@ -60,8 +72,11 @@ export function createIntegrationSubjectAccess(redis: Redis, sessionConfig: Env[
       });
     },
     runWithCapability: (_context, _capability, next) => next(),
-    mapRetryableError: (error) => error,
-    shouldPreserveSessionCookie: (_error, clientCode) => clientCode !== "iam",
+    mapRetryableError: createCustomSsoRetryableErrorMapper({
+      classifyUnavailable: (error) =>
+        error instanceof ClientSnapshotUnavailableError ? ApiErrorCode.InternalError : undefined,
+    }),
+    shouldPreserveSessionCookie: (error, clientCode) => clientCode !== "iam" || error instanceof IamClientRejectedError,
     retryAfterSeconds: 3,
   });
   return { authenticate, barrier };

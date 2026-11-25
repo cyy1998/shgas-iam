@@ -5,7 +5,7 @@ import {
   createUserDocumentJobProcessor,
   createUserDocumentWorkerModule,
   USER_DOCUMENT_WORKER_MODULE_KEY,
-} from "../user-document-worker.module";
+} from "../worker-module";
 
 describe("createUserDocumentJobProcessor", () => {
   test("awaits a bounded batch once and leaves individual target recovery to the processor", async () => {

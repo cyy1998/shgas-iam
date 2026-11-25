@@ -99,7 +99,7 @@ Gateway 配置 API 通过固定 APISIX Admin API 发布配置，首次发布可�
 | Organization Search                  | PostgreSQL Outbox、Rebuild State、文档与墓碑                     | 独立读模型与 Worker 恢复两阶段工作                       |
 | UserSession、ClientSession、登录限制 | Redis 实时状态                                                   | Session Kernel / Login Restriction；丢失后不能从审计重建 |
 | Subject Access                       | Redis 请求时屏障，恢复依据为 PostgreSQL 账号和 transition intent | 生命周期协调器与 Worker 对照当前 Facts 收敛              |
-| Client Snapshot                      | PostgreSQL Client 配置                                           | Snapshot 模块维护缓存，Ops 执行修复与独立核验            |
+| Client Snapshot 与通用 Client 缓存   | PostgreSQL Client 配置与凭据                                     | `@iam/client-snapshot` 维护缓存，Ops 执行修复与独立核验  |
 | 重建队列                             | PostgreSQL 保存待处理事实                                        | 队列负责唤醒，repair 补偿丢失的唤醒                      |
 | 审计与运行日志                       | PostgreSQL 审计记录、Loki 应用日志                               | 各应用写入，Alloy 采集日志                               |
 | Gateway 配置                         | 调用方保管源 YAML，APISIX/etcd 保存实际配置                      | Gateway 进程内补偿；未知或崩溃后人工恢复                 |

@@ -1,19 +1,19 @@
 import type { db as database } from "@iam/db";
-import type { BullMqRedisConfig, CreateJobQueueInput, CreateJobWorkerInput, JobQueue } from "@iam/jobs";
-import { createJobQueue, createJobWorker } from "@iam/jobs";
 import {
-  createOrganizationDocumentJobProducer,
-  type OrganizationDocumentJobName,
-  type OrganizationDocumentJobPayload,
-} from "../jobs";
-import {
+  createOrganizationDocumentProcessor,
   ORGANIZATION_DOCUMENT_QUEUE_NAME,
   ORGANIZATION_OUTBOX_JOB_NAME,
   ORGANIZATION_REBUILD_JOB_NAME,
   OrganizationOutboxJobPayloadSchema,
   OrganizationRebuildJobPayloadSchema,
-} from "../work.types";
-import { createOrganizationDocumentProcessor } from "./processor";
+} from "@iam/documents/organization/worker";
+import type { BullMqRedisConfig, CreateJobQueueInput, CreateJobWorkerInput, JobQueue } from "../../index";
+import { createJobQueue, createJobWorker } from "../../index";
+import {
+  createOrganizationDocumentJobProducer,
+  type OrganizationDocumentJobName,
+  type OrganizationDocumentJobPayload,
+} from "./job-producer";
 
 export const ORGANIZATION_DOCUMENT_WORKER_MODULE_KEY = "organization-document";
 

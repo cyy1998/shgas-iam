@@ -69,6 +69,7 @@ const architectureWorkspaces: readonly (readonly [
   ["@iam/client-subject-projection", "packages/client-subject-projection", ["source", "docker", "canonical"]],
   ["@iam/assignment-resolution", "packages/assignment-resolution", ["source", "docker", "canonical"]],
   ["@iam/documents", "packages/documents", ["source", "docker", "canonical"]],
+  ["@iam/jobs", "packages/jobs", ["source", "docker", "canonical"]],
   ["@iam/delegation", "packages/delegation", ["source", "docker", "canonical"]],
   ["@iam/filter-engine", "packages/filter-engine", ["source", "docker"]],
   ["@iam/admin", "apps/admin", ["canonical"]],
@@ -133,7 +134,15 @@ interface WorkspaceDependencyNode {
 const loginIntegrationPackages = ["bcrypt", "bcrypt-ts", "@cap.js/server", "pngjs"];
 const publicApiForbiddenPackages = {
   "auth-api": ["@iam/delegation", "@iam/sso-api", "@iam/integration-api"],
-  "sso-api": ["@iam/sms", "@iam/delegation", "@iam/auth-api", "@iam/integration-api", ...loginIntegrationPackages],
+  "sso-api": [
+    "@iam/sms",
+    "@iam/delegation",
+    "@iam/auth-api",
+    "@iam/integration-api",
+    "@iam/jobs",
+    "bullmq",
+    ...loginIntegrationPackages,
+  ],
   "integration-api": ["@iam/oidc", "@iam/custom-sso", "@iam/auth-api", "@iam/sso-api", ...loginIntegrationPackages],
 } satisfies Record<(typeof publicApiApps)[number], readonly string[]>;
 const publicApiDependencyRuleId = "public-api-dependency-boundary";
@@ -182,8 +191,6 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
     ruleId: publicApiDependencyRuleId,
     sourceScopes: ["apps/sso-api/src"],
     targets: [
-      { kind: "package", module: "@iam/jobs" },
-      { kind: "prefix", module: "packages/jobs/src" },
       { kind: "exact", module: "packages/documents/src/user/producer" },
       { kind: "exact", module: "packages/documents/src/organization/producer" },
       { kind: "prefix", module: "packages/documents/src/user/invalidation" },
@@ -1038,7 +1045,11 @@ function isUserDocumentProducerOwner(file: string) {
 }
 
 function isUserDocumentWorkerOwner(file: string) {
-  return file.startsWith("packages/documents/src/user/") || /^apps\/worker\/src\/composition(?:\/|$)/u.test(file);
+  return (
+    file.startsWith("packages/documents/src/user/") ||
+    file === "packages/jobs/src/documents/user/worker-module.ts" ||
+    /^apps\/worker\/src\/composition(?:\/|$)/u.test(file)
+  );
 }
 
 function isUserDocumentQueryRepositoryOwner(file: string) {

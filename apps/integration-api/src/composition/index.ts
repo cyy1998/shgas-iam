@@ -1,9 +1,11 @@
 import type { CreateAppOptions } from "@iam/api-core/core/create-app";
 import { createRouter } from "@iam/api-core/core/create-router";
+import { createClientSnapshots } from "@iam/client-snapshot/composition";
 import { createAuditLogWriter, createAuditRepository } from "@iam/db/audit";
+import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
 import { createDelegationService } from "@iam/delegation";
-import { createOrganizationDocumentWriteResources } from "@iam/documents/organization/producer";
-import { createUserDocumentWriteResources } from "@iam/documents/user/producer";
+import { createOrganizationDocumentWriteResources } from "@iam/jobs/documents/organization";
+import { createUserDocumentWriteResources } from "@iam/jobs/documents/user";
 import { createLogger, LoggerSourceApp } from "@iam/runtime/logger";
 import { createOwnedRedisClient } from "@iam/runtime/redis/connection";
 import type { SmsTransportOptions } from "@iam/sms";
@@ -93,7 +95,8 @@ export async function createIntegrationApiComposition(options: CreateIntegration
     });
     const client = createClientService({ redis, clientRepository: repositories.client });
     router.route("/", createInternalAuthzRoute(client.getClientBySecret, logger));
-    const subjectAccess = createIntegrationSubjectAccess(redis, env.sessionKernel);
+    const snapshots = createClientSnapshots({ redis, source: createClientSnapshotRepository(primary.db) });
+    const subjectAccess = createIntegrationSubjectAccess(redis, env.sessionKernel, snapshots.client);
     const delegation = createDelegationService({
       db: primary.db,
       recordAudit: async (tx, event) =>

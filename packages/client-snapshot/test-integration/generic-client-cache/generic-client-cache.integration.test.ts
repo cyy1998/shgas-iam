@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { createGenericClientCache, createGenericClientCacheInvalidation } from "@iam/client-snapshot/generic-cache";
+import { createClientSnapshotMaintenance, createClientSnapshotVerifier } from "@iam/client-snapshot/maintenance";
 import { createExclusiveRedisTestHarness, createRedisTestScopeCloser } from "@iam/test-support/external-test-resources";
 import Redis from "ioredis";
 import { z } from "zod";
@@ -42,6 +43,38 @@ afterEach(async () => {
 });
 afterAll(async () => {
   await harness.close();
+});
+
+test("restore verification finds generic Client keys and repair makes a rotated secret unusable", async () => {
+  let current = client;
+  const cache = createGenericClientCache({
+    redis: readerRedis,
+    schema,
+    source: {
+      getClientByCode: async () => current,
+      getClientBySecret: async (secret) => (current.clientSecret === secret ? current : null),
+    },
+  });
+  const beforeRestore = await cache.getClientBySecret(client.clientSecret);
+  expect(beforeRestore).toEqual(client);
+  current = { ...client, clientSecret: "rotated-after-backup" };
+  await adminRedis.set("cache:client:unowned", "preserve");
+
+  const stopped = { protocolTrafficStopped: true } as const;
+  const verifier = createClientSnapshotVerifier(adminRedis);
+  const restored = await verifier.verifyAllAfterRedisRestore(stopped);
+  expect(restored.matchingKeys).toBe(3);
+  await createClientSnapshotMaintenance(adminRedis).repairAllAfterRedisRestore(stopped);
+  const repaired = await verifier.verifyAllAfterRedisRestore(stopped);
+  const unrelated = await adminRedis.get("cache:client:unowned");
+  const oldSecret = await cache.getClientBySecret(client.clientSecret);
+  const currentCode = await cache.getClientByCode(client.clientCode);
+  const currentSecret = await cache.getClientBySecret(current.clientSecret);
+  expect(repaired.matchingKeys).toBe(0);
+  expect(unrelated).toBe("preserve");
+  expect(oldSecret).toBeNull();
+  expect(currentCode).toEqual(current);
+  expect(currentSecret).toEqual(current);
 });
 
 test.each(["code", "secret"] as const)(

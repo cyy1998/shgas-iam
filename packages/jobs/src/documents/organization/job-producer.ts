@@ -1,4 +1,3 @@
-import { createJobWakeUpProducer, type JobWakeUpQueuePort } from "@iam/jobs";
 import {
   ORGANIZATION_OUTBOX_JOB_NAME,
   ORGANIZATION_REBUILD_JOB_NAME,
@@ -7,7 +6,8 @@ import {
   OrganizationOutboxJobPayloadSchema,
   type OrganizationRebuildJobPayload,
   OrganizationRebuildJobPayloadSchema,
-} from "./work.types";
+} from "@iam/documents/organization/worker";
+import { createJobWakeUpProducer, type JobWakeUpQueuePort } from "../../index";
 
 export type OrganizationDocumentJobName = typeof ORGANIZATION_OUTBOX_JOB_NAME | typeof ORGANIZATION_REBUILD_JOB_NAME;
 export type OrganizationDocumentJobPayload = OrganizationOutboxJobPayload | OrganizationRebuildJobPayload;

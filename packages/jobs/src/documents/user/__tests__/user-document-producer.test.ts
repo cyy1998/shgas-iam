@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import type { UserDocumentJobPayload } from "@iam/contracts";
 import { MAX_USER_DOCUMENT_REBUILD_BATCH_SIZE, UserDocumentJobName, UserDocumentRebuildReason } from "@iam/contracts";
-import { createUserDocumentJobProducer } from "../../producer";
+import { createUserDocumentJobProducer } from "../job-producer";
 
 test("chunks rebuild wakes while reporting target coverage to repair", async () => {
   const jobs: Array<{ name: UserDocumentJobName; data: UserDocumentJobPayload }> = [];

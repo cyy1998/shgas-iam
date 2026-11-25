@@ -38,8 +38,8 @@ import {
   createSubjectFactsRedisInspector,
   createSubjectFactsRedisPublisher,
 } from "@iam/documents/user/subject-facts";
-import type { CreateUserDocumentWorkerModuleInput } from "@iam/documents/user/worker";
-import { createUserDocumentWorkerModule } from "@iam/documents/user/worker";
+import type { CreateUserDocumentWorkerModuleInput } from "@iam/jobs/documents/user";
+import { createUserDocumentWorkerModule } from "@iam/jobs/documents/user";
 import { createSubjectAccessBootstrap } from "@iam/subject-access/redis";
 import { hash as hashSecret } from "bcrypt-ts";
 import { and, eq, inArray } from "drizzle-orm";

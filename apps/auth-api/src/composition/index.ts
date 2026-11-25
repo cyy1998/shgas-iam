@@ -1,7 +1,7 @@
 import { type Env, parseAuthApiEnv } from "@auth-api/env";
 import { createAuditLogWriter } from "@iam/db/audit";
 import { relations } from "@iam/db/relations";
-import { createUserDocumentWriteResources } from "@iam/documents/user/producer";
+import { createUserDocumentWriteResources } from "@iam/jobs/documents/user";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import type { Logger } from "pino";

@@ -11,6 +11,7 @@ import {
   type UnifiedCustomSsoAuthorizationOptions,
   type UnifiedCustomSsoOperationsOptions,
 } from "@iam/custom-sso";
+import { createRootSessionService } from "@iam/custom-sso/root-session";
 import type { createSubjectAccessOperations, SubjectAccessOperation } from "@iam/subject-access";
 import { requireSubjectAccessOperation } from "@iam/subject-access";
 import { createSsoPublicAuthenticationHandler } from "@sso-api/middlewares/public-authentication";
@@ -25,7 +26,6 @@ import { CUSTOM_SSO_BASIC_SECURITY_SCHEME } from "@sso-api/routes/sso/sso.securi
 import { createUnifiedAuthorizationHandlers } from "@sso-api/routes/sso/unified-authorization.handlers";
 import { createUnifiedCallbackHandler } from "@sso-api/routes/sso/unified-callback.handler";
 import { createUnifiedTokenHandler } from "@sso-api/routes/sso/unified-token.handler";
-import { createRootSessionService } from "@sso-api/services/authentication/root-session.service";
 import { createCustomSsoSubjectDeliveryRequestScope } from "@sso-api/services/sso/subject-delivery/custom-sso-subject-delivery-request-scope";
 import {
   CUSTOM_SSO_SESSION_AUTHORIZATION_SECURITY_DEFINITION,

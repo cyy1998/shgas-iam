@@ -1,9 +1,13 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, spyOn, test } from "bun:test";
 import { createHash, randomUUID } from "node:crypto";
 import { createAuthApiApp } from "@auth-api/app";
+import { createAuthApiComposition } from "@auth-api/composition";
 import { createApiPasswordHasher } from "@auth-api/composition/runtime/password-hasher";
+import { getWechatLoginLogPath } from "@auth-api/routes/sso/wechat-login-log-path";
+import createApp from "@iam/api-core/core/create-app";
 import { createClientSnapshots } from "@iam/client-snapshot/composition";
 import {
+  ApiErrorCode,
   ClientSsoCallbackType,
   ClientSsoProtocol,
   ClientStatus,
@@ -16,7 +20,13 @@ import {
 } from "@iam/contracts";
 import { createSsoRedirectUrlValidator, createUnifiedCustomSsoAuthorization } from "@iam/custom-sso";
 import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
-import { clients as clientTable, users } from "@iam/db/schema";
+import {
+  auditLogs,
+  clients as clientTable,
+  userDocumentOutboxEntries,
+  users,
+  userWechatExternalBindings,
+} from "@iam/db/schema";
 import { createOidcAuthorization, OidcProtocolError } from "@iam/oidc";
 import { createUnifiedSessionKernel } from "@iam/session-kernel";
 import {
@@ -27,9 +37,11 @@ import {
 } from "@iam/subject-access";
 import { createRedisSubjectAccessStore, createSubjectAccessBootstrap } from "@iam/subject-access/redis";
 import { createUnifiedSubjectAccessSessionRevocation } from "@iam/subject-access/session-kernel";
+import { eq } from "drizzle-orm";
 import Redis from "ioredis";
 import pino from "pino";
 import { sm2 } from "sm-crypto";
+import appConfig from "~auth-api/app.config";
 import { authTestEnv, externalOrigin, internalOrigin, qrCallback } from "../support/auth-env.fixture";
 import {
   closeAuthApiRedisConnection,
@@ -65,13 +77,45 @@ const wechatFetch: typeof fetch = Object.assign(
     const url = new URL(String(input));
     if (url.pathname === "/cgi-bin/gettoken")
       return Response.json({ errcode: 0, access_token: "test-access-token", expires_in: 7200 });
-    if (url.pathname === "/cgi-bin/auth/getuserinfo") return Response.json({ errcode: 0, userid: "qr-member" });
+    if (url.pathname === "/cgi-bin/auth/getuserinfo") {
+      const code = required(url.searchParams.get("code"));
+      if (code.startsWith("external-")) return Response.json({ errcode: 0, openid: code });
+      return Response.json({ errcode: 0, userid: code.startsWith("member-") ? code : "qr-member" });
+    }
     throw new Error("Unexpected WeCom API request");
   },
   { preconnect: fetch.preconnect },
 );
 
-async function setup(protocol: "custom_sso" | "oidc", bindAccount: boolean, origin = internalOrigin) {
+async function createAuthWithWakeBarrier(
+  options: Parameters<typeof createAuthApiApp>[0],
+  suspendWake: () => Promise<void>,
+) {
+  const composition = await createAuthApiComposition(options);
+  const queue = composition.userDocumentQueue;
+  const addBulk = queue.addBulk.bind(queue);
+  spyOn(queue, "addBulk").mockImplementation(async (jobs) => {
+    await suspendWake();
+    return await addBulk(jobs);
+  });
+  return {
+    app: createApp(appConfig, {
+      env: composition.env,
+      logger: composition.logger,
+      redactLogPath: getWechatLoginLogPath,
+      routes: composition.routes,
+      middlewares: {},
+    }),
+    close: composition.close,
+  };
+}
+
+async function setup(
+  protocol: "custom_sso" | "oidc",
+  bindAccount: boolean,
+  origin = internalOrigin,
+  suspendWake?: () => Promise<void>,
+) {
   const pg = getDatabase();
   const keys = sm2.generateKeyPairHex();
   const env = authTestEnv(pg.databaseUrl, {
@@ -82,7 +126,7 @@ async function setup(protocol: "custom_sso" | "oidc", bindAccount: boolean, orig
   const redis = new Redis(env.redis);
   ownAuthApiTestExecutor(() => closeAuthApiRedisConnection(redis));
   const messages: string[] = [];
-  const auth = await createAuthApiApp({
+  const options = {
     env,
     logger,
     integrationFetch: {
@@ -95,7 +139,8 @@ async function setup(protocol: "custom_sso" | "oidc", bindAccount: boolean, orig
         { preconnect: fetch.preconnect },
       ),
     },
-  });
+  };
+  const auth = suspendWake ? await createAuthWithWakeBarrier(options, suspendWake) : await createAuthApiApp(options);
   ownAuthApiTestExecutor(auth.close);
   const subjectIdentifier = randomUUID();
   const [user] = await pg.db
@@ -204,35 +249,42 @@ async function setup(protocol: "custom_sso" | "oidc", bindAccount: boolean, orig
     namespace: env.sessionKernel.namespace,
     redirectUrls: createSsoRedirectUrlValidator({ logger }),
   });
-  const initial = await operations.run((operation) =>
-    custom.forOperation(operation).authorize({ clientCode, redirectUrl: redirectUri, state }),
-  );
-  if (initial.kind !== "login") throw new Error("Expected a Custom SSO continuation");
+  async function newCustomBrowser() {
+    const initial = await operations.run((operation) =>
+      custom.forOperation(operation).authorize({ clientCode, redirectUrl: redirectUri, state }),
+    );
+    if (initial.kind !== "login") throw new Error("Expected a Custom SSO continuation");
+    return {
+      browserCookie: `custom_sso_continuation=${initial.browserBinding}`,
+      query: new URLSearchParams({
+        protocol,
+        client: clientCode,
+        redirectUrl: redirectUri,
+        state,
+        ssoReturn: initial.continuation,
+      }),
+      resume: (token: string) =>
+        operations.run((operation) =>
+          custom.forOperation(operation).authorize({
+            clientCode,
+            redirectUrl: redirectUri,
+            state,
+            continuation: initial.continuation,
+            browserBinding: initial.browserBinding,
+            globalSessionToken: token,
+          }),
+        ),
+    };
+  }
   return {
     auth,
     userId: user.id,
     keys,
     protocol,
     messages,
-    browserCookie: `custom_sso_continuation=${initial.browserBinding}`,
-    query: new URLSearchParams({
-      protocol,
-      client: clientCode,
-      redirectUrl: redirectUri,
-      state,
-      ssoReturn: initial.continuation,
-    }),
-    resume: (token: string) =>
-      operations.run((operation) =>
-        custom.forOperation(operation).authorize({
-          clientCode,
-          redirectUrl: redirectUri,
-          state,
-          continuation: initial.continuation,
-          browserBinding: initial.browserBinding,
-          globalSessionToken: token,
-        }),
-      ),
+    ...(await newCustomBrowser()),
+    newCustomBrowser,
+    redis,
   };
 }
 
@@ -244,7 +296,7 @@ function desktop(f: Fixture, suffix: string, init: RequestInit = {}) {
   return f.auth.app.request(`${internalOrigin}/auth/wechat-qr${suffix}?${f.query}`, { ...init, headers });
 }
 
-async function confirmOnPhone(f: Fixture, mobileUrl: string) {
+async function confirmOnPhone(f: Fixture, mobileUrl: string, code = "fixture-oauth-code") {
   const headers = { "X-IAM-Entry-Network": "external" };
   const mobile = await f.auth.app.request(mobileUrl, { headers });
   expect(mobile.status).toBe(302);
@@ -252,7 +304,7 @@ async function confirmOnPhone(f: Fixture, mobileUrl: string) {
   const state = required(provider.searchParams.get("state"));
   const callback = new URL(required(provider.searchParams.get("redirect_uri")));
   expect(callback.href).toBe(qrCallback);
-  callback.search = new URLSearchParams({ state, code: "fixture-oauth-code" }).toString();
+  callback.search = new URLSearchParams({ state, code }).toString();
   const authorized = await f.auth.app.request(callback, {
     headers: { ...headers, Cookie: cookie(mobile, `__Host-wecom_oauth_${state}`) },
   });
@@ -274,6 +326,31 @@ async function confirmOnPhone(f: Fixture, mobileUrl: string) {
   await confirmed.body?.cancel();
 }
 
+async function startQr(f: Fixture) {
+  const started = await desktop(f, "", { method: "POST" });
+  expect(started.status).toBe(200);
+  const { data: qr } = WechatQrStartResponseSchema.parse(await started.json());
+  if (qr.decision !== "scan") throw new Error("Expected a QR request");
+  return qr;
+}
+
+function bindPassword(f: Fixture, requestId: string, username = "test-qr-user") {
+  const credential = createLoginCredential({
+    username,
+    password,
+    kid: "fixture",
+    publicKey: f.keys.publicKey,
+    now: Date.now(),
+    nonce: randomUUID(),
+    wechatQrRequestId: requestId,
+  });
+  return desktop(f, `/${requestId}/bind/password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ credential }),
+  });
+}
+
 for (const protocol of ["custom_sso", "oidc"] as const) {
   for (const method of ["linked", "password", "sms"] as const) {
     test(`${protocol} resumes the original browser after WeCom confirmation (${method})`, async () => {
@@ -283,10 +360,7 @@ for (const protocol of ["custom_sso", "oidc"] as const) {
       expect(missingBinding.status).toBe(400);
       const external = await desktop(f, "", { method: "POST", headers: { "X-IAM-Entry-Network": "external" } });
       expect(external.status).toBe(404);
-      const started = await desktop(f, "", { method: "POST" });
-      expect(started.status).toBe(200);
-      const { data: qr } = WechatQrStartResponseSchema.parse(await started.json());
-      if (qr.decision !== "scan") throw new Error("Expected a QR request");
+      const qr = await startQr(f);
       const events = await desktop(f, `/${qr.requestId}/events`);
       expect(events.headers.get("Content-Type")).toStartWith("text/event-stream");
       const reader = events.body!.getReader();
@@ -303,20 +377,7 @@ for (const protocol of ["custom_sso", "oidc"] as const) {
       const completePath = `/${qr.requestId}/complete`;
       let completed: Response;
       if (method === "password") {
-        const credential = createLoginCredential({
-          username: "test-qr-user",
-          password,
-          kid: "fixture",
-          publicKey: f.keys.publicKey,
-          now: Date.now(),
-          nonce: randomUUID(),
-          wechatQrRequestId: qr.requestId,
-        });
-        completed = await desktop(f, `/${qr.requestId}/bind/password`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ credential }),
-        });
+        completed = await bindPassword(f, qr.requestId);
       } else if (method === "sms") {
         const send = await desktop(f, `/${qr.requestId}/bind/sms/send`, {
           method: "POST",
@@ -390,6 +451,92 @@ for (const protocol of ["custom_sso", "oidc"] as const) {
     });
   }
 }
+
+test("only one account can bind the same external WeCom identity across concurrent QR requests", async () => {
+  const first = await setup("custom_sso", true);
+  if (!first.newCustomBrowser) throw new Error("Expected a Custom SSO fixture");
+  const second = { ...first, ...(await first.newCustomBrowser()) };
+  const { db } = getDatabase();
+  const subjectIdentifier = randomUUID();
+  const [account] = await db
+    .insert(users)
+    .values({
+      username: "second-qr-user",
+      name: "Second QR User",
+      subjectIdentifier,
+      password: await createApiPasswordHasher(4).hashPassword(password),
+    })
+    .returning({ id: users.id });
+  if (!account) throw new Error("Expected second fixture account");
+  await publishUserDocument(db, account.id);
+  await createSubjectAccessBootstrap({ redis: first.redis, random: { uuid: randomUUID } }).seedMany(
+    [{ subjectIdentifier, state: "enabled" }],
+    new Date(),
+  );
+  const [firstQr, secondQr] = await Promise.all([startQr(first), startQr(second)]);
+  const openId = "external-same-identity";
+  await Promise.all([
+    confirmOnPhone(first, firstQr.mobileUrl, openId),
+    confirmOnPhone(second, secondQr.mobileUrl, openId),
+  ]);
+  const responses = await Promise.all([
+    bindPassword(first, firstQr.requestId),
+    bindPassword(second, secondQr.requestId, "second-qr-user"),
+  ]);
+  expect(responses.map((response) => response.status).sort()).toEqual([200, 400]);
+  const winner = responses.findIndex((response) => response.ok);
+  const success = responses[winner]!;
+  expect(await success.json()).toMatchObject({ data: { decision: "continue" } });
+  expect(cookie(success, "global_session")).toStartWith("global_session=");
+  const denied = responses.find((response) => !response.ok)!;
+  expect(await denied.json()).toMatchObject({
+    code: ApiErrorCode.LoginFailed,
+    message: "企业微信绑定冲突，请联系管理员",
+  });
+  expect(denied.headers.getSetCookie()).toEqual([]);
+  const bindings = await db.select().from(userWechatExternalBindings);
+  expect(bindings).toMatchObject([{ openId, userId: winner === 0 ? first.userId : account.id, revokedAt: null }]);
+});
+
+test("replacing a QR after commit preserves the binding, audit and User Document Outbox", async () => {
+  const committed = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const f = await setup("custom_sso", true, internalOrigin, async () => {
+    committed.resolve();
+    await release.promise;
+  });
+  const original = await startQr(f);
+  await confirmOnPhone(f, original.mobileUrl);
+  const binding = bindPassword(f, original.requestId);
+  try {
+    const milestone = await Promise.race([committed.promise, binding]);
+    expect(milestone).toBeUndefined();
+    const { db } = getDatabase();
+    const next = await startQr(f);
+    expect(next.requestId).not.toBe(original.requestId);
+    release.resolve();
+    const result = await binding;
+    expect(await result.json()).toMatchObject({ data: { decision: "restart" } });
+    expect(result.headers.getSetCookie()).toEqual([]);
+
+    const bound = await db.query.users.findFirst({ where: { id: f.userId } });
+    const audit = await db.select().from(auditLogs).where(eq(auditLogs.action, "self.wecom.bind"));
+    const entries = await db.select().from(userDocumentOutboxEntries);
+    expect(bound?.wxId).toBe("qr-member");
+    expect(audit).toMatchObject([{ outcome: "success", targetId: f.userId }]);
+    expect(entries).toHaveLength(1);
+
+    await confirmOnPhone(f, next.mobileUrl);
+    const status = await desktop(f, `/${next.requestId}/status`);
+    expect(await status.json()).toMatchObject({ data: { status: "confirmed" } });
+    const completed = await desktop(f, `/${next.requestId}/complete`, { method: "POST" });
+    expect(await completed.json()).toMatchObject({ data: { decision: "continue" } });
+    expect(cookie(completed, "global_session")).toStartWith("global_session=");
+  } finally {
+    release.resolve();
+    await Promise.allSettled([binding]);
+  }
+});
 
 test("OIDC desktop start rejects a continuation from the external issuer with its original Cookie", async () => {
   const f = await setup("oidc", false, externalOrigin);

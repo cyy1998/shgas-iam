@@ -201,16 +201,17 @@ pnpm --filter @iam/ops iam-ops client-snapshot repair -- --client-code alpha
 成功后通过正式入口确认当前 Client 状态/配置和凭据生效。repair 同时失效普通与敏感 payload，不重放 mutation、轮换 Secret 或撤销会话。
 失败先恢复 Redis 等依赖，再重跑同一目标；传播失败前后业务写入是否已提交按[写入结果契约](../engineering/backend-architecture.md#admin-写入结果与失败恢复)判断。
 
-**全量恢复**用于 Redis restore 后：关闭使用 Snapshot 的认证、协议、集成和管理入口，冻结 Client mutation 及所有 acquisition，排空在途请求和任务后执行：
+**全量恢复**用于 Redis restore 后：关闭使用 Snapshot 或通用 Client 缓存的认证、协议、集成和管理入口，冻结 Client mutation 及所有缓存读取和回填，排空在途请求和任务后执行：
 
 ```bash
 pnpm --filter @iam/ops iam-ops client-snapshot repair -- --all --writers-stopped --drained
 pnpm --filter @iam/ops iam-ops client-snapshot verify -- --all --writers-stopped --drained
 ```
 
-repair 只处理 `client-snapshot:v1:{<clientCode>}` 下的 control、payload:client、payload:credential 三族，未知键族保留。
+repair 处理 `client-snapshot:v1:{<clientCode>}` 下的 control、payload:client、payload:credential，以及
+`cache:client:code:*`、`cache:client:secret:*` 和 `cache:client:invalidation-generation`。未知键族保留。
 verify 须独立完整扫描、退出 0 且 matching=0，且发生在 reader 回源前。
-随后受限开放，检查当前配置、Secret 认证及 Admin 配置写入后的双 reader 失效，并验证受影响协议；通过后恢复公共入口。
+随后受限开放，检查当前配置、Internal API Secret 认证和旧 Secret 被拒绝，并检查 Admin 配置写入后的缓存失效和受影响协议。通过后恢复公共入口。
 失败或未知时重新关闭并排空，修复后重做适用核验。定向 deadline 默认十秒，全量默认五分钟，均可收紧。
 
 ## 恢复边界

@@ -12,15 +12,16 @@ import {
   UserDocumentOutboxJobPayloadSchema,
 } from "@iam/contracts";
 import type { db as database } from "@iam/db";
-import type { BullMqRedisConfig, CreateJobQueueInput, CreateJobWorkerInput, JobQueue } from "@iam/jobs";
-import { createJobQueue, createJobWorker } from "@iam/jobs";
-import type { PublishedUserDocument } from "../document";
-import { createUserDocumentJobProducer } from "../invalidation/user-document-job.producer";
-import type { SubjectFactsRedisClient } from "../subject-facts/subject-facts-redis-publisher.core";
-import type { UserDocumentProjectionBundle } from "./user-document-projection";
-import { createCurrentUserDocumentProjectionBundle } from "./user-document-projection";
-import type { SubjectAccessRepairPort } from "./user-document-rebuild.processor";
-import { createUserDocumentUpdateProcessor } from "./user-document-update.processor";
+import type { PublishedUserDocument } from "@iam/documents/user/document";
+import type { SubjectFactsRedisClient } from "@iam/documents/user/subject-facts";
+import type { SubjectAccessRepairPort, UserDocumentProjectionBundle } from "@iam/documents/user/worker";
+import {
+  createCurrentUserDocumentProjectionBundle,
+  createUserDocumentUpdateProcessor,
+} from "@iam/documents/user/worker";
+import type { BullMqRedisConfig, CreateJobQueueInput, CreateJobWorkerInput, JobQueue } from "../../index";
+import { createJobQueue, createJobWorker } from "../../index";
+import { createUserDocumentJobProducer } from "./job-producer";
 
 export const USER_DOCUMENT_WORKER_MODULE_KEY = "user-document";
 

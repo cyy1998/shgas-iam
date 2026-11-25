@@ -1,10 +1,10 @@
 import { UserDocumentJobName } from "@iam/contracts";
 import type { DbClient } from "@iam/db";
 import { userDocumentOutboxEntries } from "@iam/db/schema";
+import type { UserDocumentSourceChange } from "@iam/documents/user/producer";
 import type { BullMqRedisConfig } from "@iam/jobs";
+import { createUserDocumentWriteResources } from "@iam/jobs/documents/user";
 import { and, eq, sql } from "drizzle-orm";
-import type { UserDocumentSourceChange } from "./user/invalidation/user-document-source";
-import { createUserDocumentWriteResources } from "./user/producer/write-resources";
 
 export function createUserDocumentWakeFault(options: { db: DbClient; redis: BullMqRedisConfig }) {
   const { queue, close } = createUserDocumentWriteResources({ redis: options.redis, logger: console });

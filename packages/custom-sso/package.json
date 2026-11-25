@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./wechat-qr": "./src/wechat-qr.ts",
+    "./root-session": "./src/root-session.ts",
     "./wire": "./src/wire.ts",
     "./maintenance": "./src/maintenance.ts",
     "./testing": "./src/testing.ts"

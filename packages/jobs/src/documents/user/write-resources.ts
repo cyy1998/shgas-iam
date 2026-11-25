@@ -1,6 +1,6 @@
 import { USER_DOCUMENT_QUEUE_NAME, type UserDocumentJobName, type UserDocumentJobPayload } from "@iam/contracts";
-import { type BullMqRedisConfig, createJobProducerResources } from "@iam/jobs";
-import { createUserDocumentJobProducer } from "../invalidation/user-document-job.producer";
+import { type BullMqRedisConfig, createJobProducerResources } from "../../index";
+import { createUserDocumentJobProducer } from "./job-producer";
 
 export function createUserDocumentWriteResources(options: {
   redis: BullMqRedisConfig;

@@ -10,12 +10,12 @@ import {
   createOrganizationDocumentQueryRepository,
   createOrganizationDocumentQueryService,
 } from "@iam/documents/organization";
-import { createOrganizationDocumentWriteResources } from "@iam/documents/organization/producer";
 import {
   createOrganizationDocumentProcessor,
   type OrganizationRebuildJobPayload,
 } from "@iam/documents/organization/worker";
 import { OrganizationCreateDtoSchema } from "@iam/domain/organization";
+import { createOrganizationDocumentWriteResources } from "@iam/jobs/documents/organization";
 import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import { mapUnitOfWork } from "@iam/unit-of-work";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";

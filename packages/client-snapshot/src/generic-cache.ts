@@ -17,7 +17,13 @@ interface GenericClientCacheSource<T> {
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
-const INVALIDATION_GENERATION_KEY = "cache:client:invalidation-generation";
+const CLIENT_CACHE_PREFIX = "cache:client";
+const INVALIDATION_GENERATION_KEY = `${CLIENT_CACHE_PREFIX}:invalidation-generation`;
+export const GENERIC_CLIENT_CACHE_INVENTORY = [
+  cacheKey("code", "*"),
+  cacheKey("secret", "*"),
+  INVALIDATION_GENERATION_KEY,
+] as const;
 
 const READ = `
 local generation = redis.call("GET", KEYS[1])
@@ -51,7 +57,7 @@ return redis.call("DEL", unpack(KEYS, 2))
 `;
 
 function cacheKey(kind: LookupKind, value: string) {
-  return `cache:client:${kind}:${value}`;
+  return `${CLIENT_CACHE_PREFIX}:${kind}:${value}`;
 }
 
 function clientKeys(client: GenericClientCacheIdentity) {

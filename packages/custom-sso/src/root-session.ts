@@ -1,18 +1,14 @@
-import type { ClientSnapshotReader } from "@iam/client-snapshot";
-import { ClientSnapshotUnavailableError } from "@iam/client-snapshot";
+import { acquireIamRootClient, type ClientSnapshotReader, ClientSnapshotUnavailableError } from "@iam/client-snapshot";
 import { parseSubjectClaimSelection, SUBJECT_CLAIM_CATALOG } from "@iam/client-subject-projection";
-import { ClientSsoProtocol, ClientStatus } from "@iam/contracts";
-import {
-  CustomSsoClientDeliveryUnauthorizedError,
-  CustomSsoRequestMismatchError,
-  CustomSsoTrafficGateUnavailableError,
-} from "@iam/custom-sso";
-import { resolveCustomSsoSubjectProjection } from "@iam/custom-sso/wire";
 import { AuthzMaintenanceError, AuthzUnauthorizedError } from "@iam/runtime/errors";
 import type { UnifiedSessionKernel } from "@iam/session-kernel";
 import { SessionStorageError } from "@iam/session-kernel";
 import type { SubjectAccessOperation } from "@iam/subject-access";
 import { SubjectAccessUnavailableError } from "@iam/subject-access";
+import { CustomSsoClientDeliveryUnauthorizedError } from "./client-delivery.error";
+import { CustomSsoTrafficGateUnavailableError } from "./internal/traffic-gate";
+import { CustomSsoRequestMismatchError } from "./protocol-validation.error";
+import { resolveCustomSsoSubjectProjection } from "./wire";
 
 interface RootSessionServiceDeps {
   kernel: UnifiedSessionKernel<SubjectAccessOperation>;
@@ -36,26 +32,14 @@ export function createRootSessionService(deps: RootSessionServiceDeps) {
           throw error;
         }
       }
-      async function acceptClient(clientCode: string) {
-        let snapshot: Awaited<ReturnType<typeof deps.clients.acquire>>;
-        try {
-          snapshot = await deps.clients.acquire(clientCode);
-        } catch (error) {
+      async function acceptClient() {
+        const client = await acquireIamRootClient(deps.clients).catch((error: unknown) => {
           if (error instanceof ClientSnapshotUnavailableError) throw new CustomSsoTrafficGateUnavailableError();
           throw error;
-        }
-        if (snapshot.kind === "present" && snapshot.value.status === ClientStatus.Maintenance)
-          throw new AuthzMaintenanceError();
-        if (
-          snapshot.kind !== "present" ||
-          snapshot.value.clientCode !== clientCode ||
-          snapshot.value.status !== ClientStatus.Enable ||
-          !snapshot.value.ssoEnabled ||
-          snapshot.value.ssoConfig?.protocol !== ClientSsoProtocol.CustomSso
-        ) {
-          throw new CustomSsoClientDeliveryUnauthorizedError();
-        }
-        return snapshot.value.ssoConfig;
+        });
+        if (client.kind === "maintenance") throw new AuthzMaintenanceError();
+        if (client.kind !== "accepted") throw new CustomSsoClientDeliveryUnauthorizedError();
+        return client.config;
       }
       async function resolvePermittedRoot(token: string) {
         const root = await resolve(token);
@@ -73,7 +57,7 @@ export function createRootSessionService(deps: RootSessionServiceDeps) {
         async resolvePublicAuthentication(token: string, clientCode: string) {
           if (clientCode !== "iam") throw new CustomSsoRequestMismatchError();
           const root = await resolvePermittedRoot(token);
-          const config = await acceptClient(clientCode);
+          const config = await acceptClient();
           const subjectIdentifier = root.observation.userSession.subjectIdentifier;
           const selection = parseSubjectClaimSelection({
             catalogVersion: SUBJECT_CLAIM_CATALOG.version,

@@ -67,7 +67,7 @@ Use case 由 root 的 `useCases` 交给路由。Admin API 的入口与审计实�
 | `packages/contracts/src`                 | 跨端或跨 app/package 的稳定枚举、常量、schemas、类型与协议 helper。`http/` 提供静态 HTTP 状态码和短语。               |
 | `packages/domain/src`                    | 后端 DTO、mapper、纯业务规则、audit helper 与业务错误。                                                               |
 | `packages/db/src`                        | Drizzle schema、relations、migrations、client 与 query helpers；领域为 `core`、`log`，列 helper 在 `schema/_shard/`。 |
-| `packages/jobs/src`                      | BullMQ connection、queue、worker、producer 资源与有界唤醒、job ID 和默认选项。                                        |
+| `packages/jobs/src`                      | BullMQ connection、queue、worker、producer 资源与有界唤醒、job ID、默认选项及 Document 队列接线。                     |
 | `packages/assignment-resolution/src`     | Effective Role 与 Organization Responsibility 的正反向解析，以及组织责任的父生命周期检查。                            |
 | `packages/documents/src`                 | User Document、Organization Document 与包内共享更新核心，提供失效、构建、发布、查询与维护。                           |
 | `packages/filter-engine/src`             | 共享 Filter 校验与 JSONB 查询编译。                                                                                   |

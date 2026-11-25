@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import type { CreateOrganizationDocumentWorkerModuleInput } from "../module";
-import { createOrganizationDocumentWorkerModule } from "../module";
+import type { CreateOrganizationDocumentWorkerModuleInput } from "../worker-module";
+import { createOrganizationDocumentWorkerModule } from "../worker-module";
 
 test("organization consumer attempts queue shutdown after worker shutdown fails and preserves both errors", async () => {
   const closed: string[] = [];
