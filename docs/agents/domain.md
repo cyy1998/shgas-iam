@@ -1,37 +1,14 @@
-# Domain Docs
+# 领域文档消费规则
 
-How the engineering skills should consume this repo's domain documentation when exploring the codebase.
+本仓库采用单上下文（single-context）领域布局，工程 skills 在探索或设计业务改动前按以下入口消费领域知识：
 
-## Before exploring, read these
+- **[功能与业务规则](../features/README.md)**：查找相关业务主题、权限范围、生命周期与失败语义。
+- **[`GLOSSARY.md`](../../GLOSSARY.md)**：稳定领域术语字典。
+- **`docs/adr/`**：相关已接受架构决策（完整清单见[文档索引](../index.md#架构决策)）。
 
-- **[功能与业务规则](../features/README.md)** — find the relevant feature and its current business rules.
-- **`GLOSSARY.md`** at the repo root.
-- **`docs/adr/`** — read ADRs that touch the area you're about to work in.
+## 术语与决策约束
 
-If either location doesn't exist, **proceed silently**. Don't flag its absence or suggest creating it upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates domain documentation lazily when terms or decisions actually get resolved.
+- **术语一致**：issue 标题、重构方案、假设、类型与测试命名统一沿用 `GLOSSARY.md` 定义的领域词汇，不随意漂移到明确避免的同义词。若出现词表尚未收录的新概念，评估是否为词汇漂移或真实领域缺口（后者交由 `/domain-modeling` 补齐）。
+- **显式上报 ADR 冲突**：产出若与现有已接受 ADR 冲突，必须显式标出并说明理由，不得静默覆盖：
 
-## File structure
-
-This repo uses a single-context layout:
-
-```text
-/
-├── GLOSSARY.md
-├── docs/
-│   ├── adr/
-│   └── features/
-├── apps/
-└── packages/
-```
-
-## Use the glossary's vocabulary
-
-When your output names a domain concept (in an issue title, a refactor proposal, a hypothesis, a test name), use the term as defined in `GLOSSARY.md`. Don't drift to synonyms the glossary explicitly avoids.
-
-If the concept you need isn't in the glossary yet, that's a signal — either you're inventing language the project doesn't use (reconsider) or there's a real gap (note it for `/domain-modeling`).
-
-## Flag ADR conflicts
-
-If your output contradicts an existing ADR, surface it explicitly rather than silently overriding:
-
-> _Contradicts ADR-0007 (`<decision title>`) — but worth reopening because…_
+  > _Contradicts ADR-0007 (`<decision title>`) — but worth reopening because…_

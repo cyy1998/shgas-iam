@@ -4,11 +4,10 @@
 
 ## 阅读顺序
 
-1. 先读[文档索引](docs/index.md)的状态约定与“当前事实与修改目标”，确认本次涉及文档的状态。
-2. 调查、设计或改动前，按下表读取所有命中项。跨边界任务叠加阅读；每篇先读通用规则，再读涉及模块的小节。
-   范围扩大时补读新命中项，已读且未变化的内容无需重复加载。
-3. 讨论首次落盘、开始实施、修改文件或执行提交、合并、发布、关闭 Spec 前，必须先读
-   [工作流补充](docs/agents/workflow.md)，核对仓库的分支、验证与本地收尾约束。
+1. **判断事实与目标**：当前行为以实现、生效配置与可执行测试为最高依据，其次是 `Current` 文档，最后是其他历史线索；证据冲突时调查并上报，修改范围以用户授权与适用 Spec/ticket 为准（详细约定及全仓清单按需查[文档索引](docs/index.md#当前事实与修改目标)）。
+2. 调查、设计或改动前，按下表读取所有命中项。跨边界任务叠加阅读；每篇先读通用规则，再读涉及模块的小节。范围扩大时补读新命中项，已读且未变化的内容无需重复加载。
+3. 讨论首次落盘、开始实施、修改文件或执行提交、推送、PR 交付、发布前，必须先读
+   [工作流补充](docs/agents/workflow.md)，核对仓库的分支、验证与 PR 交付约束。
 
 | 任务触发条件                                                                                   | 必读文档                                                                                                                                                                     |
 | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -27,43 +26,28 @@
 | Gateway、Docker、observability 配置，或部署、数据切换、运维修复                                | [仓库地图](docs/engineering/repository-map.md)及[发布与维护](docs/index.md#发布与维护)中对应的 Current runbook。执行命令前读完整的适用流程                                   |
 | 修改文档、AGENTS.md 或 skill                                                                   | [文档索引的维护方式](docs/index.md#维护方式)；涉及的架构或领域规则仍按上表叠加                                                                                               |
 
-具体模块的功能契约和发布手册沿所涉架构文档及索引继续定位；本入口不复制其规则。
-
 `openspec/` 已冻结为只读历史参考。除非维护者明确要求修正历史记录，否则不得在其中新增、修改、同步或归档产物，也不得把其中的规格视为当前事实来源。
 
 ## Agent 交互与 Shell 约定
 
 - 在聊天 UI 中，面向用户的回复默认使用自然、地道的中文。代码标识符、命令、文件路径、API 名称和引用的源文本保持原语言。
-- 本仓库明确授权在 T3 Code 下由 Antigravity 与 Codex 协作使用原生子代理及 `delegate_task` 并行调查或拆分边界清晰的任务；
-  主代理仍负责整合结论、执行集成和最终串行验证。角色选型、模型与思考档位、工作树约束见
-  [双引擎角色与评审编排](docs/agents/workflow.md#双引擎角色与评审编排)。
-- 跨文件、跨模块或高搜索噪声的只读代码调查优先使用 `code_researcher`（Antigravity 主会话优先用原生只读 `research`）；
-  事务一致性、并发、安全边界或证据冲突等复杂问题再升级到 `deep_researcher`。调用边界、返回契约和外置记忆规则见
-  [docs/agents/code-investigation.md](docs/agents/code-investigation.md)。
-- Windows 环境默认使用 PowerShell 7（`pwsh`）执行命令；只有目标脚本明确要求时才切换到 Windows PowerShell 5.1、
-  `cmd.exe` 或其他 shell。
-- PowerShell 会把命令参数位置中未引用的 `@name` 解释为 splatting。向原生命令传递字面量 `@...` 时必须加引号，
-  例如使用 `gh issue edit <number> --repo cyy1998/shgas-iam --add-assignee '@me'`，不要传递裸 `@me`。
-- 在 PowerShell 中读取文本文件时显式指定 UTF-8 编码，例如 `Get-Content -Path "AGENTS.md" -Encoding utf8`，避免中文乱码。
+- 本仓库授权在 T3 Code 下由 Antigravity 与 Codex 使用原生子代理及 `delegate_task` 并行调查或拆分任务；主代理负责整合与串行验证。
+  只读调查、跨引擎委派与双轴评审的角色、模型、档位及返回契约见[代码调查与双引擎编排](docs/agents/code-investigation.md)。
+- Windows 环境默认使用 PowerShell 7（`pwsh`）执行命令；向原生命令传递字面量 `@...` 时加引号（如 `'@me'`），读取文本文件显式指定 `-Encoding utf8`。
 
 ## Bun 测试硬约束
 
-- 数据库、Redis、HTTP、subprocess、readiness 等真实 I/O Promise 必须先用普通 `await` 完成，再做同步断言：
-  `const report = await gate.verify(...); expect(report).toMatchObject(...)`。
-- 禁止对真实 I/O 使用 `await expect(gate.verify(...)).resolves...`、`.rejects...` 或 async `toThrow`；Bun 1.3.14
-  可能在 async matcher 内重入 event loop，导致测试悬挂。失败路径先捕获 rejection，再同步断言错误。完整说明见
-  [Bun 异步断言](docs/engineering/testing.md#bun-异步断言)。
+- 对数据库、Redis、HTTP、subprocess、readiness 等真实 I/O Promise，先用普通 `await` 完成（失败路径先捕获 rejection），再做同步断言；
+  禁止使用 `await expect(...).resolves` / `.rejects` 或 async `toThrow`（规避 Bun 1.3.14 event loop 重入悬挂，详见[Bun 异步断言](docs/engineering/testing.md#bun-异步断言)）。
 
 ## 开发方法与 Issue 路由
 
-- 本仓库将**分析与设计（T3 Code）**和**执行与交付（Sandcastle AFK）**分离，详见[工作流补充](docs/agents/workflow.md)：
-  - **分析与设计**：在 T3 Code 完成代码调查、澄清、原型与文档落盘（候选集成分支 `feat/<feature-slug>`），发布 Spec/tickets 并由当前引擎的新鲜只读 subagent 通过 `ready-for-agent` 轻量门禁后交接。
-  - **完整 Spec 执行**：默认交由 [Sandcastle AFK](docs/agents/sandcastle-afk.md) 无人值守实施、双轴评审、按 `$pr` 起草描述并推送创建 Pull Request 交付（不改动本地 `main`）；仅在用户明确指定时才在手动会话中运行 [`implement-spec`](.agents/skills/implement-spec/SKILL.md)。
-  - **轻量直改与异常介入**：小型明确任务、文档/配置更新、紧急 bugfix 及 AFK 暂停排障直接在 T3 Code 单会话完成；显式调用 [`implement`](.agents/skills/implement/SKILL.md) 时才走该 skill 的双轴评审流程。
+- **三轨开发流**（详见[工作流补充](docs/agents/workflow.md)）：
+  - **分析与设计（T3 Code）**：调查、澄清、落盘设计与发布 Spec/tickets；准备交接 AFK 时读[设计与执行交接](docs/agents/sandcastle-afk.md#设计与执行交接)。
+  - **完整 Spec 执行**：默认交由[Sandcastle AFK](docs/agents/sandcastle-afk.md)；仅在用户明确指定时手动运行 [`implement-spec`](.agents/skills/implement-spec/SKILL.md)。
+  - **轻量直改与异常介入（Fast Track）**：T3 Code 单会话完成并按 `$pr` 创建 PR 交付；显式调用 [`implement`](.agents/skills/implement/SKILL.md) 时走其 TDD 与双轴评审流程。
 - 上游高频流程 skills 需用户点名后直接读取对应 `SKILL.md`：
   [`to-spec`](.agents/skills/to-spec/SKILL.md)、[`to-tickets`](.agents/skills/to-tickets/SKILL.md)、[`wayfinder`](.agents/skills/wayfinder/SKILL.md)、
   [`grill-with-docs`](.agents/skills/grill-with-docs/SKILL.md)、[`grill-me`](.agents/skills/grill-me/SKILL.md)、[`triage`](.agents/skills/triage/SKILL.md)。
   正文中的 `Call the Skill tool with "<name>"` 在无独立 `Skill` 工具的环境中等效于直接读取对应 `.agents/skills/<name>/SKILL.md`。
-- 跨会话 feature 使用 `cyy1998/shgas-iam` GitHub Issues 保存 spec、tickets 和状态。
-  创建、读取、更新 issue 或恢复跨会话工作前，先读[议题跟踪规则](docs/agents/issue-tracker.md)。
-- 执行 triage 或设置 issue 标签前，先读[标签约定](docs/agents/triage-labels.md)，沿用默认 canonical labels。
+- 跨会话 Spec/tickets 存放在 `cyy1998/shgas-iam` GitHub Issues：操作 issue 或恢复工作前读[议题跟踪规则](docs/agents/issue-tracker.md)，设置标签或 triage 前读[标签约定](docs/agents/triage-labels.md)。
