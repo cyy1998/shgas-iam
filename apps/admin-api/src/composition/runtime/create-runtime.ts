@@ -2,7 +2,7 @@ import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import env from "@admin-api/env";
 import redis from "@admin-api/lib/infra/redis";
 import { logger } from "@admin-api/lib/logger";
-import { hashSecret } from "@iam/runtime/security/bcrypt";
+import { hash as hashSecret } from "bcrypt-ts";
 import { createAdminClientCache } from "./client-cache";
 import type { AdminApiRuntimePorts } from "./types";
 

@@ -1,0 +1,39 @@
+import { z } from "@hono/zod-openapi";
+import { LoginPageGuardDecision } from "@iam/contracts";
+import { CustomSsoSubjectProjectionSchema } from "@sso-api/services/sso/transport/custom-sso-subject.schema";
+
+export const LoginPageGuardResultSchema = z
+  .object({
+    decision: z.enum([LoginPageGuardDecision.Continue, LoginPageGuardDecision.Login]),
+    wechatQr: z.literal(true).optional(),
+  })
+  .strict()
+  .openapi("LoginPageGuardResult");
+
+export const SSOMetaInfoSchema = z
+  .object({
+    authorizationEndpoint: z.url().openapi({
+      description:
+        "Authorize endpoint composed from the selected SSO public origin and IAM_SSO_API_AUTHORIZATION_ENDPOINT.",
+      example: "https://iam.example.com/sso/authorize",
+    }),
+    logoutEndpoint: z.url().openapi({
+      description: "Logout endpoint composed from the selected SSO public origin and IAM_SSO_API_LOGOUT_ENDPOINT.",
+      example: "https://iam.example.com/sso/logout",
+    }),
+    thirdPartyOAEndpoint: z.url().openapi({
+      description:
+        "Third-party OA endpoint composed from the selected SSO public origin and IAM_SSO_API_THIRDPARTY_OA_ENDPOINT.",
+      example: "https://iam.example.com/sso/thirdparty/oa",
+    }),
+  })
+  .openapi("SSOMetaInfo");
+
+export const SsoTokenResultSchema = z
+  .object({
+    sid: z.string().min(1),
+    ttl: z.number().int().positive(),
+    subject: CustomSsoSubjectProjectionSchema,
+  })
+  .strict()
+  .openapi("SsoTokenResult");

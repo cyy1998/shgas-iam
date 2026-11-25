@@ -397,6 +397,9 @@ importers:
       '@trpc/server':
         specifier: ^11.28.3
         version: 11.28.3(@typescript/typescript6@6.0.2)
+      bcrypt-ts:
+        specifier: ^9.0.3
+        version: 9.0.3
       drizzle-orm:
         specifier: 1.0.0-rc.2
         version: 1.0.0-rc.2(bun-types@1.4.4)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.6.7)
@@ -503,6 +506,9 @@ importers:
       bcrypt:
         specifier: ^6.0.0
         version: 6.0.0
+      bcrypt-ts:
+        specifier: ^9.0.3
+        version: 9.0.3
       drizzle-orm:
         specifier: 1.0.0-rc.2
         version: 1.0.0-rc.2(bun-types@1.4.4)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.6.7)
@@ -643,6 +649,9 @@ importers:
       '@iam/subject-access':
         specifier: workspace:*
         version: link:../../packages/subject-access
+      bcrypt-ts:
+        specifier: ^9.0.3
+        version: 9.0.3
       drizzle-orm:
         specifier: 1.0.0-rc.2
         version: 1.0.0-rc.2(bun-types@1.4.4)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.6.7)
@@ -766,6 +775,82 @@ importers:
         specifier: 5.1.0
         version: 5.1.0(@types/node@25.9.1)(@vitest/coverage-v8@5.1.0)(jsdom@30.1.3)(msw@2.15.0(@types/node@25.9.1)(@typescript/typescript6@6.0.2))(vite@8.3.8(@types/node@25.9.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.9.1(supports-color@10.2.2))(terser@5.49.0)(tsx@4.23.15)(yaml@2.9.1))
 
+  apps/sso-api:
+    dependencies:
+      '@hono/zod-openapi':
+        specifier: ^1.6.3
+        version: 1.6.3(hono@4.13.19)(zod@4.6.7)
+      '@iam/api-core':
+        specifier: workspace:*
+        version: link:../../packages/api-core
+      '@iam/client-snapshot':
+        specifier: workspace:*
+        version: link:../../packages/client-snapshot
+      '@iam/client-subject-projection':
+        specifier: workspace:*
+        version: link:../../packages/client-subject-projection
+      '@iam/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@iam/custom-sso':
+        specifier: workspace:*
+        version: link:../../packages/custom-sso
+      '@iam/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@iam/documents':
+        specifier: workspace:*
+        version: link:../../packages/documents
+      '@iam/oidc':
+        specifier: workspace:*
+        version: link:../../packages/oidc
+      '@iam/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+      '@iam/session-kernel':
+        specifier: workspace:*
+        version: link:../../packages/session-kernel
+      '@iam/subject-access':
+        specifier: workspace:*
+        version: link:../../packages/subject-access
+      drizzle-orm:
+        specifier: 1.0.0-rc.2
+        version: 1.0.0-rc.2(bun-types@1.4.4)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.6.7)
+      hono:
+        specifier: ^4.13.19
+        version: 4.13.19
+      ioredis:
+        specifier: ^6.0.0
+        version: 6.0.0(supports-color@10.2.2)
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@iam/test-support':
+        specifier: workspace:*
+        version: link:../../packages/test-support
+      '@playwright/test':
+        specifier: ^1.65.1
+        version: 1.65.1
+      '@types/bun':
+        specifier: latest
+        version: 1.4.5
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      openid-client:
+        specifier: 6.9.0
+        version: 6.9.0
+      tsx:
+        specifier: 4.23.15
+        version: 4.23.15
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+
   apps/worker:
     dependencies:
       '@bull-board/api':
@@ -862,6 +947,9 @@ importers:
       '@iam/subject-access':
         specifier: workspace:*
         version: link:../../packages/subject-access
+      bcrypt-ts:
+        specifier: ^9.0.3
+        version: 9.0.3
       drizzle-orm:
         specifier: 1.0.0-rc.2
         version: 1.0.0-rc.2(bun-types@1.4.4)(postgres@3.4.9)(valibot@1.5.0(@typescript/typescript6@6.0.2))(zod@4.6.7)
@@ -1311,9 +1399,6 @@ importers:
       '@iam/contracts':
         specifier: workspace:*
         version: link:../contracts
-      bcrypt-ts:
-        specifier: ^9.0.3
-        version: 9.0.3
       ioredis:
         specifier: ^6.0.0
         version: 6.0.0(supports-color@10.2.2)

@@ -16,7 +16,7 @@ import {
 import type { DbTransaction, db as database } from "@iam/db";
 import { clients, employments, organizationClosures, organizations, positions, roles, users } from "@iam/db/schema";
 import { roleAssignments } from "@iam/db/schema/role-assignments";
-import { hashSecret, verifySecret } from "@iam/runtime/security/bcrypt";
+import { hash as hashSecret, compare as verifySecret } from "bcrypt-ts";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { InitializationInput, InitializationSecrets } from "./initialization-input";
 

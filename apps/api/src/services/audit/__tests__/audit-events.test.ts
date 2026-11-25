@@ -61,8 +61,8 @@ describe("api audit event builders", () => {
     );
     expect(gatewayAudit).toEqual({
       action: "auth.login.local",
-      actorType: "user",
-      actorUserId: null,
+      actorType: "system",
+      actorSystemKey: "protocol:custom-sso",
       outcome: "success",
       targetCode: "00000000-0000-4000-8000-000000001001",
       targetId: null,
@@ -79,8 +79,8 @@ describe("api audit event builders", () => {
     );
     expect(independentAudit).toEqual({
       action: "auth.login.local",
-      actorType: "user",
-      actorUserId: null,
+      actorType: "system",
+      actorSystemKey: "protocol:custom-sso",
       outcome: "success",
       targetCode: "00000000-0000-4000-8000-000000001001",
       targetId: null,

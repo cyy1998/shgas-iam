@@ -1,0 +1,280 @@
+import { randomUUID } from "node:crypto";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { ClientSsoProtocol, OidcClientType, OidcScope } from "@iam/contracts";
+import { clients } from "@iam/db/schema";
+import { createUnifiedSessionKernel } from "@iam/session-kernel";
+import {
+  createSubjectAccessBarrier,
+  requireSubjectAccessOperation,
+  type SubjectAccessOperation,
+} from "@iam/subject-access";
+import { createRedisSubjectAccessStore, createSubjectAccessBootstrap } from "@iam/subject-access/redis";
+import { parseDedicatedRedisTestUrl } from "@iam/test-support/external-test-resources";
+import { spawnOwnedProcessTree, terminateProcessTree } from "@iam/test-support/process-smoke-harness";
+import { createProtocolOperations } from "@sso-api/composition/sessions";
+import { eq } from "drizzle-orm";
+import Redis from "ioredis";
+import type { OidcConformanceLifecycle } from "../../src/testing/oidc-conformance-lifecycle.fixture";
+import { runConformanceCleanup } from "../../src/testing/oidc-conformance-lifecycle.fixture";
+import { createEntryEnvironment } from "../support/api-env.fixture";
+import { closeApiRedisConnection, ownApiTestExecutor } from "../support/fixture-lifecycle";
+import { createApiPostgresTestHarness } from "../support/postgres-test-harness";
+import { createTestUserSession } from "../support/test-user-session.fixture";
+import { publishUserDocument } from "../support/user-document.fixture";
+import { requireManagedApiResources } from "./managed-api-resources.fixture";
+
+/** The root owner supplies this run's managed PG/Redis; this fixture owns its executors. */
+export async function createOidcConformanceCandidate(options: {
+  redirectUris: string[];
+  postLogoutRedirectUris: string[];
+  tls?: { keyPath: string; certPath: string };
+  logPath: string;
+  lifecycle?: OidcConformanceLifecycle;
+  issuerMode?: "same-origin" | "dual";
+  /** Caller owns loopback DNS mapping and, for TLS, matching certificate SANs. */
+  hostnames?: { internal: string; external: string };
+}) {
+  let stopped = false;
+  const checkpoint = async (phase: string) => {
+    await options.lifecycle?.checkpoint(phase);
+    if (stopped) throw new Error("OIDC candidate stopped during initialization");
+  };
+  await checkpoint("setup");
+  await requireManagedApiResources();
+  const redisUrl = process.env.IAM_SSO_API_TEST_REDIS_URL;
+  if (!redisUrl) throw new Error("IAM_SSO_API_TEST_REDIS_URL is required");
+  parseDedicatedRedisTestUrl({ name: "IAM_SSO_API_TEST_REDIS_URL", value: redisUrl });
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), "iam195-candidate-"));
+  const cleanups: (() => unknown | Promise<unknown>)[] = [];
+  function registerCleanup(cleanup: () => unknown | Promise<unknown>) {
+    cleanups.push(cleanup);
+  }
+  registerCleanup(() => rm(temporaryDirectory, { recursive: true, force: true }));
+  const close = ownApiTestExecutor(async () => {
+    stopped = true;
+    const failures: unknown[] = [];
+    for (const cleanup of cleanups.toReversed()) {
+      try {
+        await runConformanceCleanup(cleanup);
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    if (failures.length) throw new AggregateError(failures, "OIDC candidate cleanup failed");
+  });
+  options.lifecycle?.own(close);
+  try {
+    const ownerPath = `${options.logPath}.owner.json`;
+    await writeFile(ownerPath, JSON.stringify({ temporaryDirectory }));
+    await checkpoint("temporary-directory-ready");
+    const pg = await createApiPostgresTestHarness(registerCleanup);
+    const database = new URL(pg.databaseUrl).pathname.slice(1);
+    await writeFile(ownerPath, JSON.stringify({ temporaryDirectory, database }));
+    await checkpoint("postgres-ready");
+    const redis = new Redis(redisUrl, { maxRetriesPerRequest: 1 });
+    registerCleanup(() => closeApiRedisConnection(redis));
+    const namespace = `oidc-conformance:${randomUUID()}`;
+    const secret = "conformance195-synthetic-secret-for-local-testing";
+    const kernel = createUnifiedSessionKernel<SubjectAccessOperation>({
+      redis,
+      namespace,
+      userSessionTtlSeconds: 86400,
+      clientSessionTtlSeconds: 86400,
+      assertOperationActive: requireSubjectAccessOperation,
+    });
+    const operations = createProtocolOperations(
+      kernel,
+      createSubjectAccessBarrier({
+        clock: { nowDate: () => new Date() },
+        random: { uuid: randomUUID },
+        store: createRedisSubjectAccessStore({ redis }),
+      }),
+    );
+    const fixtureIdentities = new Map<string, string>();
+    let nextMobileSuffix = 195;
+    await checkpoint("before-seed");
+    async function seedIdentity() {
+      if (stopped) throw new Error("OIDC candidate has stopped");
+      const subjectIdentifier = randomUUID();
+      const username = `oidc-${randomUUID()}`;
+      const clientId = `oidc-${randomUUID()}`;
+      const publicClientId = `oidc-${randomUUID()}`;
+      const secondClientId = `oidc-${randomUUID()}`;
+      const mobile = `+86138${String(nextMobileSuffix++).padStart(8, "0")}`;
+      const sql = pg.sql;
+      const [user] =
+        await sql`INSERT INTO "user" (subject_identifier, username, name, mobile_phone) VALUES (${subjectIdentifier}, ${username}, 'Conformance User', ${mobile}) RETURNING id`;
+      if (!user) throw new Error("Synthetic user insert did not return an id");
+      await publishUserDocument(pg.db, user.id);
+      await sql`INSERT INTO user_document_rebuild_state (user_id, version, status, reason_codes, dirty_at, processed_at) VALUES (${user.id}, 1, 'processed', '["user-updated"]'::jsonb, NOW(), NOW())`;
+      for (const code of [clientId, secondClientId, publicClientId]) {
+        const config = {
+          protocol: ClientSsoProtocol.Oidc,
+          clientType: code === publicClientId ? OidcClientType.Public : OidcClientType.Confidential,
+          redirectUris: options.redirectUris,
+          postLogoutRedirectUris: options.postLogoutRedirectUris,
+          allowedScopes: [OidcScope.OpenId, OidcScope.Profile, OidcScope.Phone],
+        };
+        await sql`INSERT INTO client (client_code, client_name, client_secret, status, is_delete, ext_attributes, sso_enabled, sso_config, sso_secret, sso_credential_id, sso_secret_updated_at) VALUES (${code}, 'Conformance synthetic client', ${`internal-${code}`}, 1, FALSE, '{}'::jsonb, TRUE, ${JSON.stringify(config)}::jsonb, ${code === publicClientId ? null : secret}, ${code === publicClientId ? null : randomUUID()}, ${code === publicClientId ? null : new Date().toISOString()})`;
+      }
+      await createSubjectAccessBootstrap({ redis, random: { uuid: randomUUID } }).seedMany(
+        [{ subjectIdentifier, state: "enabled" }],
+        new Date(),
+      );
+      const fixtureLoginKey = randomUUID();
+      fixtureIdentities.set(fixtureLoginKey, subjectIdentifier);
+      return { subjectIdentifier, username, clientId, publicClientId, secondClientId, secret, mobile, fixtureLoginKey };
+    }
+    const identity = await seedIdentity();
+    await checkpoint("redis-seeded");
+    const allocation = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response() });
+    const port = allocation.port!;
+    await allocation.stop(true);
+    const apiOrigin = `http://127.0.0.1:${port}`;
+    const tls = options.tls
+      ? { key: await readFile(options.tls.keyPath), cert: await readFile(options.tls.certPath) }
+      : undefined;
+    await checkpoint("before-proxy-start");
+    function entryProxy(network: "internal" | "external") {
+      // Test-owned trusted entry; actual APISIX routing belongs to system E2E.
+      const proxy = Bun.serve({
+        hostname: "127.0.0.1",
+        port: 0,
+        ...(tls ? { tls } : {}),
+        async fetch(request) {
+          const incoming = new URL(request.url);
+          // Only the isolated loopback fixture can issue sessions for its synthetic identities.
+          if (incoming.pathname === "/__fixture/login") {
+            const subject = fixtureIdentities.get(request.headers.get("X-Fixture-Login-Key") ?? "");
+            if (request.method !== "POST" || !subject || stopped) return new Response(null, { status: 404 });
+            const bearer = await createTestUserSession(kernel, operations, subject);
+            return new Response(null, {
+              headers: {
+                "Cache-Control": "no-store",
+                "Set-Cookie": `global_session=${bearer}; Path=/; HttpOnly; SameSite=Lax${tls ? "; Secure" : ""}`,
+              },
+            });
+          }
+          const forwarded = new Request(`${apiOrigin}${incoming.pathname}${incoming.search}`, request);
+          forwarded.headers.set("X-IAM-Entry-Network", network);
+          return await fetch(forwarded, { redirect: "manual" });
+        },
+      });
+      registerCleanup(() => proxy.stop(true));
+      return proxy;
+    }
+    const externalProxy = entryProxy("external");
+    const internalProxy = options.issuerMode === "dual" ? entryProxy("internal") : externalProxy;
+    const scheme = tls ? "https" : "http";
+    const externalOrigin = `${scheme}://${options.hostnames?.external ?? "127.0.0.1"}:${externalProxy.port}`;
+    const internalOrigin =
+      options.issuerMode === "dual"
+        ? `${scheme}://${options.hostnames?.internal ?? "127.0.0.1"}:${internalProxy.port}`
+        : externalOrigin;
+    const origins = { internal: internalOrigin, external: externalOrigin };
+    const origin = externalOrigin;
+    const context = { attemptNumber: 1, hostname: "127.0.0.1", port, temporaryDirectory };
+    const resourceEnvironment = createEntryEnvironment(context, {
+      IAM_SSO_API_DATABASE_URL: pg.databaseUrl,
+      IAM_SSO_API_REDIS_URL: redisUrl,
+      IAM_SSO_API_SESSION_KERNEL_NAMESPACE: namespace,
+      IAM_SSO_API_OIDC_NAMESPACE: `${namespace}:oidc`,
+      IAM_SSO_API_LOGIN_ENDPOINT: "/login",
+      IAM_SSO_API_SSO_INTERNAL_ORIGIN: internalOrigin,
+      IAM_SSO_API_SSO_EXTERNAL_ORIGIN: externalOrigin,
+      IAM_SSO_API_OIDC_COOKIE_SECURE: String(Boolean(options.tls)),
+    });
+    let child: ReturnType<typeof spawnOwnedProcessTree> | undefined;
+    let log = "";
+    async function stopCandidate() {
+      if (!child) return;
+      const stopping = child;
+      try {
+        await terminateProcessTree(stopping, { timeoutMs: 5000 });
+        child = undefined;
+      } finally {
+        await writeFile(options.logPath, log, "utf8");
+      }
+    }
+    registerCleanup(stopCandidate);
+    async function startCandidate() {
+      await checkpoint("before-api-start");
+      const env = { ...resourceEnvironment };
+      child = spawnOwnedProcessTree({
+        executable: process.execPath,
+        args: ["--no-env-file", "run", "src/index.ts"],
+        cwd: fileURLToPath(new URL("../../", import.meta.url)),
+        env,
+      });
+      let spawnError: unknown;
+      child.once("error", (error) => {
+        spawnError = error;
+      });
+      const capture = (chunk: unknown) => {
+        log = `${log}${String(chunk)}`.slice(-2 * 1024 * 1024);
+      };
+      child.stdout?.on("data", capture);
+      child.stderr?.on("data", capture);
+      await writeFile(
+        ownerPath,
+        JSON.stringify({
+          pid: child.pid,
+          port,
+          proxyPort: externalProxy.port,
+          internalProxyPort: internalProxy.port,
+          namespace,
+          temporaryDirectory,
+          database,
+        }),
+      );
+      const deadline = Date.now() + 30000;
+      while (true) {
+        await checkpoint("api-readiness");
+        let ready = false;
+        try {
+          ready = (await fetch(`${apiOrigin}/ready`, { signal: AbortSignal.timeout(1000) })).status === 200;
+        } catch {
+          /* Readiness only; behavioral requests are never retried. */
+        }
+        if (spawnError || child.exitCode !== null || child.signalCode !== null)
+          throw new Error(`Candidate API exited before readiness: ${String(spawnError ?? log)}`);
+        if (ready) break;
+        if (Date.now() >= deadline) throw new Error(`Candidate API did not become ready: ${log}`);
+        await Bun.sleep(100);
+      }
+      await checkpoint("api-ready");
+    }
+    await startCandidate();
+    return {
+      origin,
+      origins,
+      internalOrigin,
+      externalOrigin,
+      namespace,
+      ...identity,
+      close,
+      async createIdentity(publicClientAdmissionFilter?: Record<string, unknown>) {
+        // Fresh identities isolate Redis sessions, replay/limit state and cached Client facts
+        // while the command-owned API, schema and signing configuration stay alive.
+        const identity = await seedIdentity();
+        if (publicClientAdmissionFilter) {
+          await pg.db
+            .update(clients)
+            .set({ admissionEnabled: true, admissionFilter: publicClientAdmissionFilter })
+            .where(eq(clients.clientCode, identity.publicClientId));
+        }
+        return identity;
+      },
+    };
+  } catch (error) {
+    try {
+      await close();
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], "Candidate setup and cleanup failed");
+    }
+    throw error;
+  }
+}

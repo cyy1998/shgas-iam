@@ -205,19 +205,19 @@ Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit�
 
 ## OIDC 协议套件
 
-正式 fixture 位于 [oidc-suite.fixture.ts](../../apps/api/test-integration/oidc/oidc-suite.fixture.ts)，
-独立 RP 位于 [oidc-rp.integration.test.ts](../../apps/api/test-integration/oidc/oidc-rp.integration.test.ts)。
+正式 fixture 位于 [oidc-suite.fixture.ts](../../apps/sso-api/test-integration/oidc/oidc-suite.fixture.ts)，
+独立 RP 位于 [oidc-rp.integration.test.ts](../../apps/sso-api/test-integration/oidc/oidc-rp.integration.test.ts)。
 它们不是普通浏览器旅程，也不由基础 verify 自动运行。
 
 ### 固定套件与运行配置
 
 复现使用 OpenID conformance-suite release-v5.2.4，固定提交
 `ab35a8df4864da35b49eff11483e204e01aa7961`。在对应源码目录应用
-[S256 补丁](../../apps/api/test-integration/oidc/patches/conformance-suite-s256.patch)，以 Java 21.0.4、Maven 3.9.11 构建。
+[S256 补丁](../../apps/sso-api/test-integration/oidc/patches/conformance-suite-s256.patch)，以 Java 21.0.4、Maven 3.9.11 构建。
 补丁作为 API OIDC Integration 的测试资产，与 fixture、runner 一同维护：
 
 ```bash
-git apply --unidiff-zero <iam-checkout>/apps/api/test-integration/oidc/patches/conformance-suite-s256.patch
+git apply --unidiff-zero <iam-checkout>/apps/sso-api/test-integration/oidc/patches/conformance-suite-s256.patch
 mvn -B -Dmaven.test.skip -Dpmd.skip clean package
 ```
 
@@ -228,8 +228,8 @@ mvn -B -Dmaven.test.skip -Dpmd.skip clean package
 独立 fixture 自动创建并销毁本次 PostgreSQL/Redis，与根资源入口复用同一 owner、运行记录和恢复能力。
 调用方准备固定套件及其 MongoDB 6.0.13、Java 原生 HTTPS 与合成 PKCS12、loopback 端口和
 fintechlabs.devmode=true。Node/tsx/Playwright 使用仓库锁定依赖。
-API 候选由 fixture 启动，TLS 代理不改协议参数，NODE_EXTRA_CA_CERTS 只传给任务 Node 子进程，
-不修改机器 trust store。
+fixture 启动 SSO API 候选，经 loopback TLS 代理转发协议请求。测试代理仅为本次生成的合成用户准备根会话。
+`NODE_EXTRA_CA_CERTS` 只传给任务 Node 子进程。
 
 config.json 示例（填写本次真实路径与候选 SHA）：
 
@@ -248,8 +248,8 @@ issuerMode 默认 dual；需要指定主机时使用 fixture 的 hostnames 配�
 outputDirectory 使用独立任务目录，不放在会被 API Browser 清理的默认产物根。
 
 ```bash
-pnpm --filter @iam/api exec bun run test-integration/oidc/oidc-suite.fixture.ts <config.json>
-pnpm test:integration --workspace @iam/api
+pnpm --filter @iam/sso-api exec bun run test-integration/oidc/oidc-suite.fixture.ts <config.json>
+pnpm test:integration --workspace @iam/sso-api
 ```
 
 需要调试保留时，在独立 fixture 命令的配置路径后增加 `--keep`；结束时按打印的准确记录清理，内部 marker 不作为公开运行模式。
