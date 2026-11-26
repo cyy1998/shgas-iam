@@ -75,7 +75,7 @@ expect(failure).toBeInstanceOf(ExpectedError);
 ## Root 工具链的一次性验证
 
 仓库级 runner、资源管理、Git hook、质量命令和静态守卫通常采用一次性行为验证。静态检查与显式诊断继续保留，各 app/package 及 `e2e/system` 维护各自的测试集合。
-[ADR-0009](../adr/0009-adopt-canonical-test-collections.md#收集检查与-root-工具链) 规定根工具链通常采用一次性验证，[ADR-0059](../adr/0059-converge-sandcastle-afk-on-native-sdk-and-repo-config.md) 为 Sandcastle 编排核心保留常驻单测。
+[ADR-0009](../adr/0009-adopt-canonical-test-collections.md#收集检查与-root-工具链) 规定根工具链通常采用一次性验证，[ADR-0059](../adr/0059-converge-sandcastle-afk-on-minimal-extractable-core.md) 为 Sandcastle 编排核心保留常驻单测。
 
 1. 用实际命令或临时 fixture 验证正常结果及相关失败、退出码和清理。对只读守卫，分别验证应通过和应拒绝的输入。涉及 Git、进程或 Docker 时使用独立临时资源。
 2. 涉及消费方接线或跨服务行为时，从[正式入口](commands.md#测试与验证通道)运行受影响的 Integration 或 E2E。
