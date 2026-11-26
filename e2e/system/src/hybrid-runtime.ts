@@ -103,8 +103,8 @@ async function runHybridRuntime<T>(
     internalOrigin,
     adminPassword,
     signal: startup,
+    onSeedStart: () => memory.enter("seed"),
   });
-  memory.enter("seed");
   const references = await baseline.reset(startup);
   memory.enter("build");
   const frontends = await startFrontendServers({

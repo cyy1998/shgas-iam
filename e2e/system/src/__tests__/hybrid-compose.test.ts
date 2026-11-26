@@ -8,6 +8,16 @@ describe("hybrid middleware topology", () => {
     expect(() => selectHybridLifecycle({ platform, env: { IAM_AFK_HOST_PROBE_URL: "probe" } })).toThrow(/Linux.*WSL2/u);
   });
 
+  test("rejects a direct Compose request on a non-Linux host", () => {
+    const platform = process.platform;
+    Object.defineProperty(process, "platform", { value: "darwin" });
+    try {
+      expect(() => createHybridCompose({ project: "iam-e2e-test", ports })).toThrow(/Linux.*WSL2/u);
+    } finally {
+      Object.defineProperty(process, "platform", { value: platform });
+    }
+  });
+
   test("selects the lifecycle for local, CI and AFK runs", () => {
     expect(selectHybridLifecycle({ platform: "linux", env: {} })).toBe("resident");
     expect(selectHybridLifecycle({ platform: "linux", env: { CI: "true" } })).toBe("fresh");

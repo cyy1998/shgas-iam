@@ -2,7 +2,6 @@ import type { ChildProcess } from "node:child_process";
 import type { Readable } from "node:stream";
 
 export type OwnedProcessTree = ChildProcess & {
-  readonly processTreeOwner: "posix-process-group";
   readonly stdout: Readable;
   readonly stderr: Readable;
   /** Linux owner 有界停止并等待全部继承本次 ancestry 的执行者，包括 detached / reparented 后代。 */

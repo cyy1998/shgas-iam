@@ -14,7 +14,7 @@
     "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
     "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "test": "pnpm test:unit",
-    "test:unit": "turbo test:unit --concurrency=2",
+    "test:unit": "node scripts/require-linux.mjs && turbo test:unit --concurrency=2",
     "test:integration": "node scripts/run-test-integration.mjs",
     "test:e2e": "pnpm --filter @iam/e2e-system test:e2e",
     "test:e2e:container-smoke": "pnpm --filter @iam/e2e-system test:e2e:container-smoke",

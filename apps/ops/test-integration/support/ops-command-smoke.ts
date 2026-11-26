@@ -29,8 +29,12 @@ export async function runOpsCommandSmoke(
     ]);
     if (!child.kill("SIGTERM")) throw new Error(`${options.label}: could not send SIGTERM`);
     return await completion;
-  } finally {
+  } catch (error) {
     controller.abort();
-    await Promise.allSettled([ready, completion]);
+    const [, command] = await Promise.allSettled([ready, completion]);
+    if (command.status === "rejected" && command.reason !== error) {
+      throw new AggregateError([error, command.reason], `${options.label}: interruption and command both failed`);
+    }
+    throw error;
   }
 }

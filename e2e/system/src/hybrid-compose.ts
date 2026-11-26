@@ -6,9 +6,7 @@ export function selectHybridLifecycle(
   options: { env?: NodeJS.ProcessEnv; platform?: NodeJS.Platform; fresh?: boolean; lifecycle?: HybridLifecycle } = {},
 ): HybridLifecycle {
   const { env = process.env, platform = process.platform } = options;
-  if (platform !== "linux") {
-    throw new Error(`Hybrid E2E requires Linux (native Linux or WSL2). Current platform: ${platform}`);
-  }
+  requireLinux(platform);
 
   const afk = Boolean(env.IAM_AFK_HOST_PROBE_URL);
   return options.lifecycle ?? (options.fresh || afk || env.CI === "true" ? "fresh" : "resident");
@@ -31,6 +29,7 @@ export function createHybridCompose(options: {
   buildContext?: string;
   env?: NodeJS.ProcessEnv;
 }) {
+  requireLinux();
   const { ports } = options;
   const infrastructure = createE2EMiddlewareCompose(options);
   const { services } = infrastructure;
@@ -54,6 +53,12 @@ export function createHybridCompose(options: {
       },
     },
   };
+}
+
+function requireLinux(platform = process.platform) {
+  if (platform !== "linux") {
+    throw new Error(`Hybrid E2E requires Linux (native Linux or WSL2). Current platform: ${platform}`);
+  }
 }
 
 function publish(hostPort: number, containerPort: number) {

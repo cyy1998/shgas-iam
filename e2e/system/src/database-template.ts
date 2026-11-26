@@ -24,6 +24,7 @@ interface TemplateOptions {
   adminPassword: string;
   sourceFingerprint?: string;
   signal?: AbortSignal;
+  onSeedStart?: () => void;
 }
 
 const busyStacks = new WeakSet<HybridMiddleware>();
@@ -59,6 +60,10 @@ export async function prepareE2EDatabaseTemplate(options: TemplateOptions) {
       await recreateBusinessDatabase(sql, "template0");
       await runMigrations(options);
       options.signal?.throwIfAborted();
+    }
+
+    options.onSeedStart?.();
+    if (receipt === null) {
       await clearSeedRedis(middleware.redisUrl);
       await seedWithWorker(options, seedEnv);
       receipt = await readFile(receiptPath, "utf8");

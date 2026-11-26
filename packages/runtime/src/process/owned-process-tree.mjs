@@ -131,11 +131,8 @@ export function spawnOwnedProcessTree(options) {
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
-  Object.defineProperties(child, {
-    processTreeOwner: { value: "posix-process-group" },
-    closeOwnedProcessTree: {
-      value: (cleanupOptions) => closeLinuxOwnedProcesses(() => linuxOwnedProcesses(marker), cleanupOptions),
-    },
+  Object.defineProperty(child, "closeOwnedProcessTree", {
+    value: (cleanupOptions) => closeLinuxOwnedProcesses(() => linuxOwnedProcesses(marker), cleanupOptions),
   });
   return child;
 }

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { setTimeout } from "node:timers/promises";
@@ -255,8 +255,19 @@ test("SIGTERM stops backends and Vite and releases the resident lock", async () 
     const outcome = await finished;
     expect(outcome.outcome).toEqual({ exitCode: 1, signal: null });
     expect(outcome.cleanupFailure).toBeUndefined();
-    const profile = JSON.parse(await readFile(join(dirname(path), "host-memory.json"), "utf8"));
+    const artifactDirectory = dirname(path);
+    const profile: { stages: { stage: string; startedAt: string; endedAt: string }[] } = JSON.parse(
+      await readFile(join(artifactDirectory, "host-memory.json"), "utf8"),
+    );
     expect(profile.stages.at(-1)).toMatchObject({ stage: "cleanup", endedAt: expect.any(String) });
+    const seed = profile.stages.find(({ stage }) => stage === "seed");
+    if (!seed) throw new Error("Cold runtime profile omitted the seed stage");
+    for (const log of ["template-seed.log", "template-worker.log"]) {
+      const { mtimeMs } = await stat(join(artifactDirectory, log));
+      const lastWrite = Math.floor(mtimeMs);
+      expect(lastWrite).toBeGreaterThanOrEqual(Date.parse(seed.startedAt));
+      expect(lastWrite).toBeLessThanOrEqual(Date.parse(seed.endedAt));
+    }
     expect(context.frontendOrigins.admin).not.toBe(context.frontendOrigins.sso);
     await expectHostServicesStopped(context);
     const gateway = await fetch(context.origin.replace("external.iam.localhost", "127.0.0.1"));

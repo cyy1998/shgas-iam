@@ -452,9 +452,14 @@ async function stopWorkerDuringRepair(
     if (!child.kill("SIGTERM")) throw new Error(`Could not signal Worker\n${logs.snapshot()}`);
     const result = await completion;
     return { result, shutdownMs: performance.now() - started };
-  } finally {
+  } catch (error) {
     observer.abort();
-    await Promise.allSettled([blocked, completion]);
+    const [, command] = await Promise.allSettled([blocked, completion]);
+    if (command.status === "rejected" && command.reason !== error) {
+      throw new AggregateError([error, command.reason], "Worker interruption and command both failed");
+    }
+    throw error;
+  } finally {
     logs.dispose();
   }
 }
