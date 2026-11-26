@@ -37,6 +37,10 @@ type RepoConfigOptions = {
   projectToken?: string;
 };
 
+export function repoSandboxImage(env: NodeJS.ProcessEnv) {
+  return { image: env.SANDCASTLE_IMAGE?.trim() || "iam-sandcastle:local", dockerfile: ".sandcastle/Dockerfile" };
+}
+
 export async function loadRepoSandcastleConfig({
   cwd,
   env = process.env,
@@ -93,14 +97,17 @@ export async function loadRepoSandcastleConfig({
   return defineSandcastleConfig({
     repo: "cyy1998/shgas-iam",
     sandbox: {
-      image: env.SANDCASTLE_IMAGE?.trim() || "iam-sandcastle:local",
-      dockerfile: ".sandcastle/Dockerfile",
+      ...repoSandboxImage(env),
       dockerAccess: true,
       mounts: [{ hostPath: hostStore, sandboxPath: sandboxStore }],
       env: {
         IAM_AFK_PNPM_STORE_DIR: sandboxStore,
         IAM_E2E_LIFECYCLE: "fresh",
         TURBO_CACHE_DIR: "/tmp/iam-sandcastle-turbo/cache",
+        // Local Git config outranks the container-global value set by enable-git-hooks.sh.
+        GIT_CONFIG_COUNT: "1",
+        GIT_CONFIG_KEY_0: "core.hooksPath",
+        GIT_CONFIG_VALUE_0: "/tmp/iam-sandcastle-hooks",
         ...(ghToken ? { GH_TOKEN: ghToken } : {}),
       },
       dockerAuth: dockerConfigSource
