@@ -25,8 +25,9 @@ status: accepted
   2026-11-24 进一步将 AFK 交付从“本地 squash 合入调用分支”修订为“推送 Spec 集成分支并创建 Pull Request（默认 Ready for Review，正文按 `$pr` 生成并附 `Closes #...`）”，
   保持本地调用分支全程只读、保留本地 Spec 分支 ref 供维护者本地调试验收，合入与关票交由人工在 GitHub 完成，并以系统内置 `Status` 列同步看板进度。
   这样换取了人工合入把关、按提交审查与主干零污染，代价是启动前须与远端基线对齐，跨 Spec 前置核验须同时验证 PR `MERGED` 与本地 `mergeCommit` 祖先关系（向下兼容历史本地 squash 记录）。
-  保留独立于在线聊天的宿主 runner，接受维护调度代码的成本。准入、依赖和交付由 runner 和授权状态协调，
-  执行者职责与模型配置可审查，未完成工作保存在集成分支与 issue 中。
+  > 注：[ADR-0059](0059-adopt-native-sandcastle-afk-orchestration.md) 已取代上述 AFK 中以 GitHub Projects `Status` 列同步看板进度、启动前要求本地调用分支与远端零偏差对齐，以及跨 Spec 依赖核验 PR `mergeCommit` / 历史 squash 的条款；改用 `needs-attention` 标签加暂停评论、`origin/<base>` 与 `merge-base` 动态基线，以及以 `CLOSED` 判定外部前置完成。
+  > 保留独立于在线聊天的宿主 runner，接受维护调度代码的成本。准入、依赖和交付由 runner 和授权状态协调，
+  > 执行者职责与模型配置可审查，未完成工作保存在集成分支与 issue 中。
 
 [开发工作流](../agents/workflow.md) · [议题跟踪](../agents/issue-tracker.md) · [AFK 编排与恢复](../agents/sandcastle-afk.md) · [事实与目标](../index.md#当前事实与修改目标)
 

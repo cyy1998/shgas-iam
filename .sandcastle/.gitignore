@@ -1,9 +1,7 @@
 .env
+cache/
 logs/
-locks/
 worktrees/
-patches/
 resources/
-dependencies/
-auth/
-run.lock
+# External flock file for single-instance runs.
+runner.lock

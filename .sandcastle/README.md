@@ -1,101 +1,53 @@
 # Sandcastle AFK 运维与启动手册
 
-本页供维护者在宿主配置、启动、诊断与恢复 Sandcastle AFK runner。AFK 的交接门禁、分支工作区、评审、验证与 PR 交付契约见
-[Sandcastle AFK 工作流](../docs/agents/sandcastle-afk.md)。
+本页供维护者配置、启动和恢复本仓 AFK。任务准入、票级并行与按需 Merger、集中验证与 PR 交付见 [Sandcastle AFK 工作流](../docs/agents/sandcastle-afk.md)。
 
 ## 启动与诊断
 
-宿主准备仓库工具链、Git、GitHub CLI 和运行中的 Docker。首次按[环境模板](.env.example)
-创建未跟踪的 `.sandcastle/.env`，填写具有 Issues 与 Pull Requests 写入权限的 `GH_TOKEN`，选择作为 PR 目标分支的调用分支
-（如 `main`）。GitHub 仓库固定为 `cyy1998/shgas-iam`，远端 remote 默认自动解析调用分支追踪的 remote（通常为 `github`，
-也可用 `SANDCASTLE_GIT_REMOTE` 显式指定）。
+1. 准备 Linux 环境、仓库锁定的工具链、Git、GitHub CLI、`flock` 与运行中的 Docker（原生 Linux 或 WSL2；WSL2 + Docker Desktop 需 4.34+、开启 host networking 并关闭 Enhanced Container Isolation）。沙箱镜像由 [Dockerfile](Dockerfile) 定义，`pnpm sandcastle:build` 会自动透传当前宿主 UID/GID 作为 `AGENT_UID`/`AGENT_GID`（默认 `1000`），确保容器用户可写宿主绑定的 worktree、pnpm store 与 Turbo 缓存目录。
+2. 按[环境模板](.env.example)创建未跟踪的 `.sandcastle/.env`。宿主经 `gh auth login` 登录或在启动进程环境中提供 `GH_TOKEN`（需对 `cyy1998/shgas-iam` 具备 Issues 与 Pull Requests 写权限）。**严禁在 `.sandcastle/.env` 中声明 `GH_TOKEN` 或 `GITHUB_TOKEN`（含空值）**，同时确保 `.git/config` 不含内嵌凭据或 HTTP Authorization header。按下节准备 Codex 认证。
+3. 无需切换本地分支或清空当前工作区。启动时 runner 自动 `git fetch <remote> <baseBranch>`（默认 `origin` / `main`，若远端命名为 `github` 则设置 `SANDCASTLE_GIT_REMOTE=github`），不读取也不改动本地当前 checkout。
+4. 在仓库根构建镜像并运行预检（镜像标签默认 `iam-sandcastle:local`，可用 `SANDCASTLE_IMAGE` 覆盖）：
 
 ```bash
+pnpm sandcastle --help
 pnpm sandcastle:build
 pnpm sandcastle:check
-pnpm sandcastle --smoke-docker
-pnpm sandcastle:smoke:workflow
 pnpm sandcastle:smoke
 pnpm sandcastle
-pnpm sandcastle --iterations 2 --parallel 2 --model <model> [--draft]
 ```
 
-- `sandcastle:check` 预检工具、镜像、Codex 认证、指向 `cyy1998/shgas-iam` 的 Git remote 连通性、GitHub PR API 可达性以及
-  Projects `Status` 列配置。Registry 配置通过预检后仍需实际拉取确认认证。
-- 启动正式运行（新 Spec 或非已建 PR 的恢复）前，runner 只读执行 `git fetch <remote> <branch>` 并核对本地调用分支与远端
-  `<remote>/<branch>` 对齐：若本地存在未推送提交或落后于远端，立即阻断并提示先同步，绝不静默改写本地调用分支，也避免无关本地提交混入 PR。
-- `--smoke-docker` 用两个 UID 1000 sandbox 验证共享 daemon、Compose/Buildx、host networking、浏览器、文件传输和准确清理。结果保存在 `.sandcastle/resources/docker-smoke-<run-id>/`。
-- `sandcastle:smoke:workflow` 仅在宿主执行全部 4 个受控工作流场景（`complete`、`conflict`、`interrupt`、`pr-interrupt`），跳过 Docker 适合快速回归编排与 PR 交付逻辑。
-- `sandcastle:smoke` 先执行 Docker smoke，再用临时仓库、本地 bare remote 和受控模型/GitHub 验证编排、真实提交 Hook、资源隔离、并行任务、PR 交付与清理。工作流报告在 `.sandcastle/resources/workflow-smoke-<run-id>/`。Smoke 证明编排和接线，真实模型和 backlog 由实际 Spec 运行观察。
-- 默认尝试 1 个 Spec，同一 Spec 最多并行实施 4 张 ticket。`--iterations` / `SANDCASTLE_ITERATIONS` 与
-  `--parallel` / `SANDCASTLE_PARALLEL` 接受正整数，CLI 优先，恢复也计一次 Spec 额度。
-  `--model` / `SANDCASTLE_MODEL` 只覆盖 Planner 和最终评审协调者，CLI 优先。角色自身的模型和思考程度见 `.codex/agents/`。
-  默认创建 **Ready for Review** PR；传入 `--draft` 或设置 `SANDCASTLE_PR_DRAFT=true` 可改为创建 Draft PR。
+- `pnpm sandcastle` 通过 `flock -n .sandcastle/runner.lock node .sandcastle/run.mts` 启动，由内核排他锁保证单实例运行。
+- `--build`、`--check`、`--smoke` 每次只选一个：`--check` 核验 Docker daemon、本地镜像、socket、Codex 凭据、`.sandcastle/.env` 与 `.git/config` 凭据边界、远端 push/fetch URL、基线 fetch（会更新远端跟踪 ref）及 GitHub 访问；`--smoke` 从当前 `HEAD` 克隆临时仓库，用本地探测 Provider 经真实 Docker 串行验证 linked worktree 只读评审沙箱与可写实施沙箱（无需 Codex 登录或 `GH_TOKEN`）。
+- 正式运行默认按编号最早尝试 1 个 `ready-for-agent` Spec（`--spec <N>` 可显式指定），同一 Spec 内最多并行 4 张子票（`--parallel` / `SANDCASTLE_PARALLEL`），`--iterations` / `SANDCASTLE_ITERATIONS` 限制本次最多尝试的 Spec 数；`--draft` 或 `SANDCASTLE_PR_DRAFT=true`（亦接受 `1`）创建 Draft PR。
 
-### 在 GitHub Projects 查看进度
+### 目录结构
 
-在本机 `.sandcastle/.env` 设置 `SANDCASTLE_PROJECT_URL=https://github.com/users/cyy1998/projects/1`，使用
-[Sandcastle AFK](https://github.com/users/cyy1998/projects/1) 看板。看板直接复用系统内置的 `Status` 单选字段作为 Board 分列，
-按下表配置选项后，Board 视图天然按列呈现各阶段，并与 GitHub 内置 `Item closed` → `Done` 自动化联动。运行 `pnpm sandcastle:check`
-可预检 Project 和 `Status` 列配置。
-
-Projects 使用宿主的 `gh` 登录，可用 `gh auth refresh --hostname github.com --scopes project` 授权。
-使用独立令牌时，将有 Projects 写入和源仓库读取权限的 `SANDCASTLE_PROJECT_TOKEN` 注入宿主进程环境。
-Projects 凭据留在宿主，`GH_TOKEN` 继续用于 Issues 与 Pull Requests。
-
-| `Status` 列       | 同步时机                                                     |
-| ----------------- | ------------------------------------------------------------ |
-| `Todo`            | 待开始或人工入队默认状态（由维护者或默认规则使用）           |
-| `Implementing`    | Spec 已选定并准备好集成工作树，或 ticket 开始实施            |
-| `Integrated`      | ticket 已完成实施并合入 Spec 集成分支                        |
-| `Reviewing`       | Spec 进入集中双轴评审、修复、最终验证与 PR 推送准备          |
-| `PR Open`         | PR 已创建并核验完成，Spec 与全部子票移入此列等待人工验收合入 |
-| `Needs Attention` | ticket 实施或集成失败，或尚未交付 PR 的 Spec 暂停            |
-| `Done`            | 人工合入 PR 触发自动关票后，由 GitHub 内置自动化移入         |
-
-Runner 把实际处理的 Spec 和 ticket 加入看板，并在恢复时补报已确认的集成或 PR 进度。任务准入、依赖、恢复和交付仍以 GitHub Issues、
-Pull Requests 和 Git 为依据。看板同步失败会输出告警，AFK 继续执行，界面可能保留最近一次成功同步的列。强制结束后，看板也可能保留旧列。
-详细模型输出和验证日志仍从本地查看。
+- [`.sandcastle/afk.ts`](afk.ts)：流程编排核心，负责任务图调度、并行实施与按需 Merger、双轴只读评审、集中修复验证与有序交付。
+- [`.sandcastle/github.ts`](github.ts)：GitHub 接口层，封装有界懒加载 GraphQL、`linkedBranches` 分支解析、暂停标注、幂等 PR 复用与标签更新。
+- [`.sandcastle/git.ts`](git.ts)：Git 与宿主安全辅助层，封装命令执行、凭据预检、远端校验、宿主 worktree 生命周期与合并提交核验。
+- [`.sandcastle/session.ts`](session.ts)：本仓装配层，从 [`.codex/agents/`](../.codex/agents/) 加载 6 个角色槽位（显式 `captureSessions: false`），提供单向只读 `auth.json` / `CODEX_API_KEY` 认证、自洽的 `createSession({ worktree, readonly, runId })` 只读/可写 Docker 会话、离线 pnpm store + Turbo 跨次缓存挂载、私有 Docker registry 只读挂载与基于 `docker inspect <sandboxId>` 的测试资源回收。
+- [`.sandcastle/run.mts`](run.mts)：薄 CLI 入口，校验参数、加载 `.sandcastle/.env`（跳过 GitHub 凭据）并分派运行。
+- [`.sandcastle/smoke.mts`](smoke.mts)：真实 Docker 沙箱冒烟脚本。
+- [`.sandcastle/prompts/`](prompts/)：5 阶段 Prompt 模板（`implement`、`merge`、`review-standards`、`review-spec`、`repair-and-verify`）。
 
 ### 认证与宿主资源
 
-默认先执行 `codex login` 并使用文件凭据存储。`CODEX_AUTH_FILE` 可指定来源；使用 API 计费时设置 `CODEX_AUTH=api-key`
-与 `CODEX_API_KEY`。Runner 将本次 `auth.json` 复制到私有临时目录再挂载，退出前写回刷新结果。来源登录已变化或写回失败时保留来源并报告恢复目录。运行期间保持同一份宿主登录稳定，强制退出后核对启动时打印的恢复目录。
+- **GitHub**：任务图读取、标签更新、暂停评论与 PR 交付均在宿主完成，上下文经 `promptArgs` 注入沙箱。需要衔接设计期 ADR 分支时，建完 Spec 后执行 `gh issue develop <spec> --name feat/<slug>` 将分支关联到 Spec 的 Development 栏（交接前确保外部工作树未占用该分支）。
+- **Codex**：显式配置 `captureSessions: false`。默认使用 ChatGPT 文件凭据（`CODEX_AUTH=chatgpt`，需先在宿主 `codex login`，默认读取 `${CODEX_HOME:-$HOME/.codex}/auth.json`，可由 `CODEX_HOME` / `CODEX_AUTH_FILE` 覆盖）。每次沙箱启动单向只读复制到临时目录并挂载，退出即删（token 过期时在宿主重新登录即可）。API 计费使用 `CODEX_AUTH=api-key` 与 `CODEX_API_KEY`。
+- **私有镜像**：设置 `SANDCASTLE_DOCKER_CONFIG_FILE`（相对仓库根解析）即可将可读配置文件只读挂载至可写沙箱的 `/home/agent/.docker/config.json`。
+- **Docker 与只读隔离**：可写阶段使用原生 `docker()` 挂载 `/var/run/docker.sock`、传入 socket GID 至 `groups`、启用 `network: "host"` 并设 `DOCKER_HOST=unix:///var/run/docker.sock`。只读评审阶段由 `createSession({ worktree, readonly: true })` 直接将工作树与 `.git` 在内的全部挂载设为只读，仅挂单向只读认证，不挂 `docker.sock`、`pnpm-store`、Turbo 缓存与 Docker registry。
+- **依赖、Turbo 缓存与提交 Hook**：宿主 pnpm store 默认共用 `${XDG_DATA_HOME:-$HOME/.local/share}/pnpm/store`（可用 `SANDCASTLE_PNPM_STORE_DIR` 覆盖），挂载至 `/home/agent/.pnpm-store`，可写沙箱在 `onSandboxReady` 执行单行 `HUSKY=0 pnpm install --frozen-lockfile --prefer-offline --store-dir /home/agent/.pnpm-store`；`.sandcastle/cache/turbo` 挂载至 `/home/agent/.turbo-cache`（设 `TURBO_CACHE_DIR`）跨次复用缓存；经 `GIT_CONFIG_VALUE_0=.husky` 直接启用仓库 `.husky/pre-commit`，不修改宿主 `.git/config`。
 
-私有 `docker.xuanyuan.run` 镜像使用显式 `SANDCASTLE_DOCKER_CONFIG_FILE`。相对路径从调用仓库根解析。
-配置仅接受顶层 `auths`、单一该 registry 以及非空 `auth`、`identitytoken` 或 `registrytoken`，
-宿主配置和 credential helper 不参与。每个执行器重验来源，创建私有副本，只读挂载到 `/home/agent/.docker/config.json`。
-调用者保管并保持源文件可读，runner 只回收自己的副本。来源路径及认证内容不写入日志、记录或错误。
+### 暂停处理与恢复
 
-宿主使用原生 Linux 或 WSL2。需要 Linux Docker Engine，或在 WSL2 下使用 Docker Desktop 4.34+ 并开启 host networking、关闭 Enhanced Container Isolation。
-Runner 读取宿主 `/var/run/docker.sock` 的 GID，为执行器添加访问共享 daemon 所需的附加组。
-共享 daemon 和 host network 提供宿主 Docker 管理与网络访问能力，project 名用于资源归属。
-运行前以实际执行用户检查 socket、Docker 工具和宿主 loopback，条件不满足时退出。
-测试走正式根入口，每条命令独立创建环境、使用动态端口并清理。根 Integration 在单条命令内并发运行所选任务，
-并为每个需要 Redis 的任务分配独立 DB。同一宿主上的顶层验证命令仍按顺序执行。资源规则见[专用资源与隔离](../docs/engineering/testing.md#专用资源与隔离)。
-
-每个需要安装依赖的执行器以独占匿名卷保存 Linux root/workspace `node_modules`，同时挂载共享的持久化 Docker named volume
-`iam-sandcastle-pnpm-store`（`/home/agent/.pnpm-store`）作为跨容器 pnpm 内容寻址缓存，避免每个容器重复从公网下载全部依赖；
-容器退出与恢复清理只回收独占匿名卷，不删除该共享 store 卷。只读阶段（`plan`、`explore`、`spec-review`）跳过依赖卷准备与安装。
-宿主从 checkout 外的已知 pnpm 入口读取清单。容器验证卷和 workspace 覆盖后安装锁定依赖；新增 workspace 未覆盖时保留改动并退出，宿主检测到新增依赖目录后自动挂载新匿名卷并有界重建执行器无缝继续（单阶段最多自动重建 2 次），无需人工重启或手工拉起嵌套容器。
-容器内变更依赖后执行 `sh scripts/sandcastle/prepare-workspace.sh`。独占 Turbo cache 可写性在启动模型前验证。
-容器保留 `HUSKY=0` 安装并通过进程级 Git 配置复用仓库 Hook。浏览器与 [`.sandcastle/Dockerfile`](Dockerfile)
-中的 Playwright 版本匹配，升级时重建镜像并复跑 smoke。依赖和 Hook 接线见[安装脚本](../scripts/sandcastle/prepare-workspace.sh)
-与 [Hook 启动器](../scripts/sandcastle/enable-git-hooks.sh)。
-
-### 恢复执行器资源
-
-普通失败或 Ctrl+C 先停止并等待准确的创建者 sandbox，再按其 registry 有界清理。无法确认停止时保留挂载、锁、
-私有认证副本和恢复记录。强杀或清理失败时使用准确执行器记录：
+- **单实例互斥**：`flock -n .sandcastle/runner.lock` 由内核在进程退出或被强杀后自动释放；遇锁占用时先核实正在运行的进程，勿手动删除锁文件。
+- **`needs-attention` 暂停与续跑**：异常暂停时 runner 保留 worktrees 与本地分支，给 Spec 添加 `needs-attention` 标签并评论原因。解除阻塞并移除 `needs-attention` 后重跑 `pnpm sandcastle` 即可从 Git `Sandcastle-Ticket: #<N>` 合并提交自动续跑；提前软停止正在推进的 Spec 可直接移除其 `ready-for-agent` 或添加 `needs-attention`。
+- **测试资源回收**：可写沙箱关闭后，宿主先用 `docker inspect <sandboxId>` 确认容器明确处于停止或已移除状态，再按 `.sandcastle/resources/run-*/registry.jsonl` 回收测试资源并尊重 `keep`；无保留项时同步删除仓库根与 worktree 下的空 `run-*` 目录。模型日志位于 `.sandcastle/logs/`，测试产物与 Compose `run.json` 位于 `test-results/`。
+- **强制中断后的手工恢复**：先用 `docker inspect` / `docker ps` 核对并停止残留沙箱，再从 `.sandcastle/resources/run-*/registry.jsonl` 找到需回收的 `run.json`，在仓库根目录执行：
 
 ```bash
-pnpm sandcastle --recover-executor .sandcastle/resources/executor-<run-id>/executor.json
+pnpm test:resources:cleanup --record <repo-relative-run.json>
 ```
 
-执行器恢复覆盖 sandbox 及其登记资源，遵守显式 keep。需要清理单个保留环境时按其 `run.json` 执行
-`pnpm test:resources:cleanup --record <repo-relative-run.json>`。容器已移除时只按预先登记且核验归属的匿名卷 ID 回收，
-在用或归属未知时保留。旧 `run.lock` 仅在确认旧进程结束后移除。
-
-Docker smoke 异常后按对应报告里的准确 `project` 和 `composePath` 执行
-`docker compose --project-name <project> --file <composePath> down --volumes --remove-orphans --rmi local`，
-随后清理同一报告中的准确 `sandboxName`。按[Spec 交付与清理](../docs/agents/sandcastle-afk.md#spec-交付与清理)另行恢复 Git 与 issue 进度。
+确认容器、网络与数据卷均已回收后再清理对应临时目录。[资源归属与清理](../docs/engineering/testing.md#专用资源与隔离)

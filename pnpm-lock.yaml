@@ -179,16 +179,13 @@ overrides:
   '@typescript/native': npm:typescript@7.0.2
   typescript: npm:@typescript/typescript6@6.0.2
 
-patchedDependencies:
-  '@ai-hero/sandcastle@0.12.0': 7dc2f5414ccc270334479c3c8cb79ae1431019a51772b0fb1c37e6d55d81c992
-
 importers:
 
   .:
     devDependencies:
       '@ai-hero/sandcastle':
-        specifier: 0.12.0
-        version: 0.12.0(patch_hash=7dc2f5414ccc270334479c3c8cb79ae1431019a51772b0fb1c37e6d55d81c992)
+        specifier: 0.14.0
+        version: 0.14.0
       '@biomejs/biome':
         specifier: ^2.6.8
         version: 2.6.8
@@ -1582,16 +1579,25 @@ packages:
   '@adobe/css-tools@4.5.0':
     resolution: {integrity: sha512-6OzddxPio9UiWTCemp4N8cYLV2ZN1ncRnV1cVGtve7dhPOtRkleRyx32GQCYSwDYgaHU3USMm84tNsvKzRCa1Q==}
 
-  '@ai-hero/sandcastle@0.12.0':
-    resolution: {integrity: sha512-kdQ414rM8t1QiWeqZ3Klz4KSd0PqQG4bRVuqGpRDUomWhojSZkEAc1tbcEcThVmBEaHkCt8LmYR49vqEPNIoYQ==}
+  '@ai-hero/sandcastle@0.14.0':
+    resolution: {integrity: sha512-s9B/23nPWL6y2sZkVxksqTge0MqGWr2HtjneGDf/V1npReiqDRlUJUvQ4+7K0oWORLqgHU5wLK0pfukg+UqTqQ==}
     hasBin: true
     peerDependencies:
-      '@daytona/sdk': ^0.164.0
+      '@daytona/sdk': '>=0.164.0 <1.0.0'
+      '@fly/sprites': '>=0.2.4 <1.0.0'
       '@vercel/sandbox': '>=1.0.0'
+      e2b: '>=2.62.0 <3.0.0'
+      modal: '>=0.11.0 <1.0.0'
     peerDependenciesMeta:
       '@daytona/sdk':
         optional: true
+      '@fly/sprites':
+        optional: true
       '@vercel/sandbox':
+        optional: true
+      e2b:
+        optional: true
+      modal:
         optional: true
 
   '@ant-design/colors@8.0.1':
@@ -4946,7 +4952,7 @@ snapshots:
 
   '@adobe/css-tools@4.5.0': {}
 
-  '@ai-hero/sandcastle@0.12.0(patch_hash=7dc2f5414ccc270334479c3c8cb79ae1431019a51772b0fb1c37e6d55d81c992)':
+  '@ai-hero/sandcastle@0.14.0':
     dependencies:
       '@clack/prompts': 1.7.0
 

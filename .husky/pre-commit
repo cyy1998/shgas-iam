@@ -1,3 +1,4 @@
+#!/bin/sh
 set -e
 node node_modules/lint-staged/bin/lint-staged.js --config lint-staged.config.mjs --concurrent false
 git diff --cached --check

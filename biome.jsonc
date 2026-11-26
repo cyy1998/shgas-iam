@@ -10,6 +10,7 @@
     "includes": [
       "**/*.{cjs,css,cts,js,json,jsonc,jsx,mjs,mts,ts,tsx}",
       "!!.agents/skills",
+      "!!.sandcastle/cache",
       "!!.sandcastle/logs",
       "!!.sandcastle/resources",
       "!!.sandcastle/worktrees",

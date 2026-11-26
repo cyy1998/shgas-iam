@@ -74,17 +74,24 @@ expect(failure).toBeInstanceOf(ExpectedError);
 
 ## Root 工具链的一次性验证
 
-仓库级 runner、资源管理、Sandcastle、Git hook、质量命令和静态守卫采用一次性行为验证。静态检查与显式诊断继续保留。各 app/package 及 `e2e/system` 继续维护自己的测试集合，根工具链不另建或借用 workspace 常驻集合。[取舍见 ADR-0009](../adr/0009-adopt-canonical-test-collections.md#收集检查与-root-工具链)
+仓库级 runner、资源管理、Git hook、质量命令和静态守卫通常采用一次性行为验证。静态检查与显式诊断继续保留，各 app/package 及 `e2e/system` 维护各自的测试集合。
+[ADR-0009](../adr/0009-adopt-canonical-test-collections.md#收集检查与-root-工具链) 规定根工具链通常采用一次性验证，[ADR-0059](../adr/0059-adopt-native-sandcastle-afk-orchestration.md) 为 Sandcastle AFK 保留窄范围常驻边界单测。
 
 1. 用实际命令或临时 fixture 验证正常结果及相关失败、退出码和清理。对只读守卫，分别验证应通过和应拒绝的输入。涉及 Git、进程或 Docker 时使用独立临时资源。
 2. 涉及消费方接线或跨服务行为时，从[正式入口](commands.md#测试与验证通道)运行受影响的 Integration 或 E2E。
 3. 交付时记录实际命令、结果与未验证范围，删除临时脚本和 fixture。需要保留的日志放在忽略的 `test-results/`。
 
+### Sandcastle 验证
+
+- **窄范围常驻边界单测**。根 `pnpm test:unit`（含在 `pnpm verify` 内）先执行 `pnpm test:unit:sandcastle`（`bun test ./.sandcastle/__tests__`），再用 Turbo 执行各 workspace 的 Unit。`.sandcastle/__tests__/boundaries.test.ts` 聚焦覆盖 GraphQL 过滤 / 分页溢出 / `linkedBranches` / Spec 完整范围判据 / 同仓库 Open PR 复用、凭据预检 / 远端 URL / 精确 Git ref / 兼容后续修复提交的 `verifyMergeCommit` / 末次闭合 `extractTag`、`docker inspect <sandboxId>` 停机核验与主仓/worktree 空 `run-*` 同步清理、以及单向只读 `auth.json` 与 `createSession({ worktree, readonly: true })` 自洽只读隔离。单实例互斥由根 `package.json` 的外部 `flock -n .sandcastle/runner.lock` 提供。
+- **类型检查**。`pnpm typecheck:root` 通过 [Sandcastle tsconfig](../../.sandcastle/tsconfig.json) 检查 `.sandcastle/` 全部 `.ts` / `.mts` 代码与测试。
+- **真实 Docker 冒烟**。`pnpm sandcastle:smoke`（经 `node .sandcastle/run.mts --smoke` 调用 [`.sandcastle/smoke.mts`](../../.sandcastle/smoke.mts)）在临时克隆仓库上用本地探测 Provider 串行验证两类沙箱：linked worktree 自洽只读评审沙箱（工作树与 `.git` 不可写、`auth.json` 单向只读、无 `docker.sock` / `pnpm-store` / Turbo 缓存 / Docker registry / GitHub 凭据）与可写实施沙箱（宿主独占 worktree + `head` 模式、单行 `onSandboxReady` 离线安装、Turbo 跨次缓存落盘宿主、经 `core.hooksPath=.husky` 直接启用 `.husky/pre-commit` 且不改宿主 `.git/config`、`docker.sock` 与 host network 连通、测试资源回收后同步删除主仓与 worktree 的空 `run-*` 目录）。准备、诊断与恢复见[运维手册](../../.sandcastle/README.md#启动与诊断)。
+
 ### 架构守卫
 
 #### 观察范围
 
-永久规则只根据生产源码路径、规范的静态 import/re-export（含类型或值、裸 side-effect import）、供 `consumer-owned-port` 使用的生产 `*.port.ts` 中直接 `Pick<T, ...>` 的未解析基类型名，以及 workspace 依赖闭包和 Dockerfile 字面量 `COPY` 建立。Specifier 按已支持的 alias、相对路径、扩展名和包子路径做词法归一化，裸 side-effect import 按值依赖处理，第三方依赖按包名或其子路径匹配。公共后端的包边界沿生产 workspace 清单检查传递依赖，包含 dependencies、optionalDependencies 和 peerDependencies。符号来源、第三方内部依赖、类型解析、动态加载、控制流和数据流超出守卫范围。[规则与例外](../../scripts/architecture-guard.ts)
+永久规则只根据生产源码路径、规范的静态 import/re-export（含类型或值、裸 side-effect import）、供 `consumer-owned-port` 使用的生产 `*.port.ts` 中直接 `Pick<T, ...>` 的未解析基类型名，以及 workspace 依赖闭包和 Dockerfile 字面量 `COPY` 建立。Specifier 按已支持的 alias、相对路径、扩展名和包子路径做词法归一化，裸 side-effect import 按值依赖处理，第三方依赖按包名或其子路径匹配。公共后端的包边界沿生产 workspace 清单检查传递依赖，包含 dependencies、optionalDependencies 和 peerDependencies。符号来源、第三方内部依赖、类型解析、计算所得的加载路径、控制流和数据流超出守卫范围。[规则与例外](../../scripts/architecture-guard.ts)
 
 #### 永久规则准入与验证
 

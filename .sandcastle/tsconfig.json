@@ -11,5 +11,6 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true
   },
-  "include": ["./**/*.ts", "./**/*.mts"]
+  "include": ["./**/*.ts", "./**/*.mts"],
+  "exclude": ["./cache/**", "./logs/**", "./resources/**", "./worktrees/**"]
 }

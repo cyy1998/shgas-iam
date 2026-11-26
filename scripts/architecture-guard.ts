@@ -468,7 +468,7 @@ function collectProductionTypeScriptFiles(root: string): string[] {
 }
 
 function isProductionTypeScriptFile(file: string) {
-  return /\.(?:ts|tsx)$/u.test(file) && !/\.(?:spec|test)\.(?:ts|tsx)$/u.test(file);
+  return /\.(?:ts|tsx|mts)$/u.test(file) && !/\.(?:spec|test)\.(?:ts|tsx|mts)$/u.test(file);
 }
 
 function indexSourceFile(file: string, sourceFile: ts.SourceFile): IndexedSourceFile {
