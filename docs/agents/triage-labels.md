@@ -17,7 +17,7 @@ Skills 使用五种 canonical triage roles；本仓库保持原标签字符串�
 
 ## AFK 执行档位与暂停标签
 
-Sandcastle AFK 在上述准入与类型标签之外，固定使用三个额外标签控制实施档位与异常暂停（详见 [Sandcastle AFK 工作流](sandcastle-afk.md) 与 [ADR-0059](../adr/0059-converge-sandcastle-afk-on-minimal-extractable-core.md)）：
+Sandcastle AFK 在上述准入与类型标签之外，固定使用三个额外标签控制实施档位与异常暂停（详见 [Sandcastle AFK 工作流](sandcastle-afk.md) 与 [ADR-0059](../adr/0059-adopt-native-sandcastle-afk-orchestration.md)）：
 
 | Label             | Scope  | Meaning                                                                                                                                   |
 | ----------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------- |

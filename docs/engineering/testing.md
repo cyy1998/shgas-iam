@@ -75,7 +75,7 @@ expect(failure).toBeInstanceOf(ExpectedError);
 ## Root 工具链的一次性验证
 
 仓库级 runner、资源管理、Git hook、质量命令和静态守卫通常采用一次性行为验证。静态检查与显式诊断继续保留，各 app/package 及 `e2e/system` 维护各自的测试集合。
-[ADR-0009](../adr/0009-adopt-canonical-test-collections.md#收集检查与-root-工具链) 规定根工具链通常采用一次性验证，[ADR-0059](../adr/0059-converge-sandcastle-afk-on-minimal-extractable-core.md) 为 Sandcastle 编排核心保留常驻单测。
+[ADR-0009](../adr/0009-adopt-canonical-test-collections.md#收集检查与-root-工具链) 规定根工具链通常采用一次性验证，[ADR-0059](../adr/0059-adopt-native-sandcastle-afk-orchestration.md) 为 Sandcastle AFK 保留窄范围常驻边界单测。
 
 1. 用实际命令或临时 fixture 验证正常结果及相关失败、退出码和清理。对只读守卫，分别验证应通过和应拒绝的输入。涉及 Git、进程或 Docker 时使用独立临时资源。
 2. 涉及消费方接线或跨服务行为时，从[正式入口](commands.md#测试与验证通道)运行受影响的 Integration 或 E2E。
@@ -83,9 +83,9 @@ expect(failure).toBeInstanceOf(ExpectedError);
 
 ### Sandcastle 验证
 
-- **窄范围常驻边界单测**。根 `pnpm test:unit`（含在 `pnpm verify` 内）先执行 `pnpm test:unit:sandcastle`（`bun test ./.sandcastle/__tests__`），再用 Turbo 执行各 workspace 的 Unit。`.sandcastle/__tests__/boundaries.test.ts` 仅覆盖 4 类真实高风险边界：GraphQL `ready-for-agent` 过滤 / 分页溢出 / 原生 `linkedBranches` 解析、`.sandcastle/.env` 与 `.git/config` 凭据预检 / `--push --all` 远端 URL / 精确 Git ref 检查、`docker inspect <sandboxId>` 停机核验与测试资源 registry 保留、以及单向只读 `auth.json` 与只读评审挂载隔离。单实例互斥由根 `package.json` 的外部 `flock -n .sandcastle/runner.lock` 提供。
+- **窄范围常驻边界单测**。根 `pnpm test:unit`（含在 `pnpm verify` 内）先执行 `pnpm test:unit:sandcastle`（`bun test ./.sandcastle/__tests__`），再用 Turbo 执行各 workspace 的 Unit。`.sandcastle/__tests__/boundaries.test.ts` 聚焦覆盖 GraphQL 过滤 / 分页溢出 / `linkedBranches` / Spec 完整范围判据、凭据预检 / 远端 URL / 精确 Git ref、`docker inspect <sandboxId>` 停机核验与测试资源 registry 保留、以及单向只读 `auth.json` 与只读评审挂载隔离。单实例互斥由根 `package.json` 的外部 `flock -n .sandcastle/runner.lock` 提供。
 - **类型检查**。`pnpm typecheck:root` 通过 [Sandcastle tsconfig](../../.sandcastle/tsconfig.json) 检查 `.sandcastle/` 全部 `.ts` / `.mts` 代码与测试。
-- **真实 Docker 冒烟**。`pnpm sandcastle:smoke`（经 `node .sandcastle/run.mts --smoke` 调用 [`.sandcastle/smoke.mts`](../../.sandcastle/smoke.mts)）在临时克隆仓库上用本地探测 Provider 串行验证两类沙箱：只读评审沙箱（`readonlySandbox` 包装后工作树与 `.git` 不可写、`auth.json` 单向只读且不修改宿主源文件、无 `docker.sock`、无 `pnpm-store`、无 Turbo 缓存、无 GitHub 凭据环境变量）与可写实施沙箱（宿主独占 worktree + `head` 模式、`pnpm install --prefer-offline`、Turbo 跨次缓存挂载、容器内提交 Hook 排版提交且不改宿主 `.git/config`、`docker.sock` 与 host network 连通、测试资源回收后删除空 `run-*` 目录）。准备、诊断与恢复见[运维手册](../../.sandcastle/README.md#启动与诊断)。
+- **真实 Docker 冒烟**。`pnpm sandcastle:smoke`（经 `node .sandcastle/run.mts --smoke` 调用 [`.sandcastle/smoke.mts`](../../.sandcastle/smoke.mts)）在临时克隆仓库上用本地探测 Provider 串行验证两类沙箱：linked worktree 只读评审沙箱（工作树与 `.git` 不可写、`auth.json` 单向只读、无 `docker.sock` / `pnpm-store` / Turbo 缓存 / GitHub 凭据）与可写实施沙箱（宿主独占 worktree + `head` 模式、`pnpm install --prefer-offline`、Turbo 跨次缓存落盘宿主、容器内提交 Hook 排版提交且不改宿主 `.git/config`、`docker.sock` 与 host network 连通、测试资源回收后删除空 `run-*` 目录）。准备、诊断与恢复见[运维手册](../../.sandcastle/README.md#启动与诊断)。
 
 ### 架构守卫
 

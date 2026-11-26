@@ -74,15 +74,13 @@ Spec 与 implementation ticket 使用[互斥类型标签](triage-labels.md#spec-
 
 当前 GitHub CLI 支持创建时传 `--parent <spec-number>` 与 `--blocked-by <numbers>`，
 修改已有子票时可用 `--parent`、`--add-blocked-by`；仍须显式指定仓库。
-Sandcastle AFK 通过有界懒加载 GraphQL 查询读取带 `type:spec` 与 `ready-for-agent` 的 open Spec 编号及单条 Spec 的 `linkedBranches`、子票、评论与阻塞边（规避 GitHub 50 万节点上限，检测 `pageInfo.hasNextPage` 溢出即显式报错）。
-关系或必要 API 不可用时报告阻塞，AFK 不降级到正文猜测归属、分支或依赖。
+Sandcastle AFK 通过有界懒加载 GraphQL 读取带 `type:spec` 与 `ready-for-agent` 的 open Spec 及单条 Spec 的 `linkedBranches`、子票、评论与阻塞边（检测 `pageInfo.hasNextPage` 溢出即显式报错）。关系或必要 API 不可用时报告阻塞。
 
-AFK 不要求使用 assignee 认领（assignee 仅用于人工开发与 wayfinding 认领）。父 Spec 与待实施子票按 `OPEN ∧ 类型标签正确 ∧ ready-for-agent ∧ !needs-attention`、原生父子匹配与阻塞关系判定就绪（Spec 内前置看 Git 合并提交 `Sandcastle-Ticket: #<N>` trailer，Spec 外前置直接信任 `CLOSED`）。子票缺少准入、依赖矛盾或循环时，受影响切片保持阻塞，独立切片仍可推进；运行中新增的 `ready-for-agent` 子票会在评审前自动纳入。
-空子票列表和 issue 的 closed 状态本身不构成 Spec 已验收、代码已集成或已交付的证明。
+父 Spec 与待实施子票按 `OPEN ∧ 类型标签正确 ∧ ready-for-agent ∧ !needs-attention`、原生父子匹配与阻塞关系判定就绪（Spec 内前置看 Git 合并提交 `Sandcastle-Ticket: #<N>` trailer，Spec 外前置以 GitHub `CLOSED` 为准）。子票阻塞时受影响切片等待，独立切片继续推进；全部 `OPEN` 子票均须集成完成后才允许进入评审交付。
 
 ## Sandcastle AFK 交接
 
-AFK 使用上述类型、原生任务图与 `agent:light` / `agent:deep` / `needs-attention` 标签，不依赖 assignee 认领与 GitHub Projects 看板，也不另建 tracker schema。失败暂停时由 runner 为 Spec 添加 `needs-attention` 标签并评论原因。若设计产物落在候选集成分支，建完 Spec 后通过 `gh issue develop <spec> --name feat/<slug>` 将分支原生关联到 Spec 的 Development 栏（`linkedBranches`，未关联时默认 `sandcastle/spec-<N>`，交接前确保本地未在外部分支工作树检出该分支）；标为 `ready-for-agent` 前的轻量门禁、分支契约及有序幂等 PR 交付恢复见
+AFK 使用上述类型、原生任务图、`linkedBranches` 与 `agent:light` / `agent:deep` / `needs-attention` 标签；异常暂停时由 runner 为 Spec 添加 `needs-attention` 标签并评论原因。若设计产物落在候选集成分支，建完 Spec 后通过 `gh issue develop <spec> --name feat/<slug>` 将分支原生关联到 Spec 的 Development 栏（未关联时默认 `sandcastle/spec-<N>`，交接前确保本地外部工作树未检出该分支）；标为 `ready-for-agent` 前的轻量门禁、分支契约及 PR 交付见
 [Sandcastle AFK 工作流](sandcastle-afk.md#设计与执行交接)。
 
 ## 当 skill 要求“fetch the relevant ticket”
