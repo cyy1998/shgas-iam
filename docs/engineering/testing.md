@@ -91,6 +91,11 @@ expect(failure).toBeInstanceOf(ExpectedError);
 
 #### 观察范围
 
+守卫通过[共享 workspace 图](../../scripts/workspace-graph.mjs)按 `pnpm-workspace.yaml` 发现 workspace。
+清单无法读取或解析时，守卫报告路径并终止检查，修复清单后可重新运行。
+生产源码扫描覆盖 `packages/*` 下的非测试支持包及 `apps/*` 下的非前端应用，排除 `iamWorkspace.kind` 为 `e2e` 的 workspace。
+包名导入映射到非 E2E workspace 的 `src`，公共 API 与分层后端由 `iamWorkspace.architecture.tier` 标识，公共 API 同时属于分层后端。
+
 永久规则只根据生产源码路径、规范的静态 import/re-export（含类型或值、裸 side-effect import）、供 `consumer-owned-port` 使用的生产 `*.port.ts` 中直接 `Pick<T, ...>` 的未解析基类型名，以及 workspace 依赖闭包和 Dockerfile 字面量 `COPY` 建立。Specifier 按已支持的 alias、相对路径、扩展名和包子路径做词法归一化，裸 side-effect import 按值依赖处理，第三方依赖按包名或其子路径匹配。公共后端的包边界沿生产 workspace 清单检查传递依赖，包含 dependencies、optionalDependencies 和 peerDependencies。符号来源、第三方内部依赖、类型解析、计算所得的加载路径、控制流和数据流超出守卫范围。[规则与例外](../../scripts/architecture-guard.ts)
 
 #### 永久规则准入与验证
@@ -99,7 +104,9 @@ expect(failure).toBeInstanceOf(ExpectedError);
 
 #### Docker 依赖闭包
 
-从镜像 workspace 及 Dockerfile 复制的 manifest 出发，沿 dependencies、devDependencies 和 optionalDependencies 展开。消费方满足 peerDependencies，通向受保护包的中间节点须复制 manifest，受保护包还须复制源码。实际构建验证 `RUN`、shell 和构建参数。
+从镜像 workspace 及 Dockerfile 复制的 manifest 出发，沿 dependencies、devDependencies 和 optionalDependencies 的 `workspace:` 边展开。
+闭包内 `packages/*` 下未标记为 `test-support` 的包须分别 `COPY` 清单和包目录。通向受保护包的中间节点（例如 `test-support`）仅须复制清单。
+镜像 app 须复制自己的清单和 app 目录，也可用 `src/` 代替 app 目录。消费方满足 peerDependencies，实际构建验证 `RUN`、shell 和构建参数。
 
 ## 收集与编排
 
