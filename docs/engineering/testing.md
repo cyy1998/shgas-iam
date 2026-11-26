@@ -74,11 +74,18 @@ expect(failure).toBeInstanceOf(ExpectedError);
 
 ## Root 工具链的一次性验证
 
-仓库级 runner、资源管理、Sandcastle、Git hook、质量命令和静态守卫采用一次性行为验证。静态检查与显式诊断继续保留。各 app/package 及 `e2e/system` 继续维护自己的测试集合，根工具链不另建或借用 workspace 常驻集合。[取舍见 ADR-0009](../adr/0009-adopt-canonical-test-collections.md#收集检查与-root-工具链)
+仓库级 runner、资源管理、Git hook、质量命令和静态守卫通常采用一次性行为验证。静态检查与显式诊断继续保留，各 app/package 及 `e2e/system` 维护各自的测试集合。
+[ADR-0009](../adr/0009-adopt-canonical-test-collections.md#收集检查与-root-工具链) 规定根工具链通常采用一次性验证，[ADR-0059](../adr/0059-converge-sandcastle-afk-on-native-sdk-and-repo-config.md) 为 Sandcastle 编排核心保留常驻单测。
 
 1. 用实际命令或临时 fixture 验证正常结果及相关失败、退出码和清理。对只读守卫，分别验证应通过和应拒绝的输入。涉及 Git、进程或 Docker 时使用独立临时资源。
 2. 涉及消费方接线或跨服务行为时，从[正式入口](commands.md#测试与验证通道)运行受影响的 Integration 或 E2E。
 3. 交付时记录实际命令、结果与未验证范围，删除临时脚本和 fixture。需要保留的日志放在忽略的 `test-results/`。
+
+### Sandcastle 验证
+
+- **常驻单测**。根 `pnpm test:unit`（含在 `pnpm verify` 内）先执行 `pnpm test:unit:sandcastle`，再用 Turbo 执行各 workspace 的 Unit。独立入口收集 [core](../../scripts/sandcastle/core/__tests__/) 与 [adapters](../../scripts/sandcastle/adapters/__tests__/) 的 Bun 单测。高层编排用例驱动临时 Git 仓库和本地 bare remote，以执行器和 GitHub CLI 为外部替身，覆盖任务图、并行实施与串行集成、评审与交付、以及中断恢复。
+- **静态边界**。`pnpm check:architecture` 执行 [Sandcastle 核心依赖规则](#sandcastle-核心依赖边界)。`pnpm typecheck:root` 通过 [Sandcastle tsconfig](../../scripts/sandcastle/tsconfig.json) 收集核心、适配器、CLI 和仓库配置。
+- **真实 Docker 冒烟**。`pnpm sandcastle:smoke` 启动一个原生 Docker 沙箱，用本地探测 Provider 验证工作树、Git 元数据保护、锁定安装、容器内真实提交 Hook 与宿主 Git 配置不变，以及 socket、host network 和单执行器资源回收。准备、诊断与恢复见[运维手册](../../.sandcastle/README.md#启动与诊断)。
 
 ### 架构守卫
 
@@ -89,6 +96,10 @@ expect(failure).toBeInstanceOf(ExpectedError);
 #### 永久规则准入与验证
 
 新增永久规则须对应 `Current` 文档中的依赖或模块归属约束，能由上述事实完整表达，且现有包出口、类型或行为验证无法更直接地覆盖。例外限于明确路径或模块，退役路径或标识符的迁移检查随迁移结束移除。每个受影响的语义事实用允许和违规的临时 fixture 调用 `analyzeRepositoryArchitecture(repoRoot)` 验证，诊断须含稳定 rule ID、文件、行号及原因。工具性能单独观察，保留既有超时和重试策略。
+
+#### Sandcastle 核心依赖边界
+
+`sandcastle-core-dependency-boundary` 检查 `scripts/sandcastle/core/` 生产源码的静态导入与重导出，只允许核心目录内的相对路径、Node 内置模块和 `@ai-hero/sandcastle` 及其子路径。本仓配置和适配器依赖核心，仓库私有工具通过配置和生命周期契约接入。允许与违规的 fixture 由 Sandcastle 常驻集合验证。
 
 #### Docker 依赖闭包
 
