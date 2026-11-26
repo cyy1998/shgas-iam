@@ -83,23 +83,19 @@ expect(failure).toBeInstanceOf(ExpectedError);
 
 ### Sandcastle 验证
 
-- **常驻单测**。根 `pnpm test:unit`（含在 `pnpm verify` 内）先执行 `pnpm test:unit:sandcastle`，再用 Turbo 执行各 workspace 的 Unit。独立入口收集 [core](../../scripts/sandcastle/core/__tests__/) 与 [本仓装配](../../.sandcastle/__tests__/) 的 Bun 单测。核心用例驱动临时 Git 仓库和本地 bare remote，以 `runAgent` 与 GitHub CLI 为外部替身，覆盖有界两段 `first:100` GraphQL 任务图与重试、`specFrontier`、`agent:light`/`agent:deep` 档位路由、`origin/main` + `merge-base` 推导、并行实施与串行合并/冲突解决、Git trailer 与合并正文恢复、信任边界断言、`Promise.all` 只读双轴评审与 candidate SHA 缓存、有序幂等交付、宿主回退 PR 正文、`readonlySandbox` 及凭据预检。本仓装配用例覆盖 Codex TOML 角色解析与并发认证回写降级告警、Docker registry 只读挂载，以及 `withTestResources` 绑定目录预建、容器停止核验、资源清理与空 `executor-*` 目录删除。单实例互斥由根 `package.json` 的外部 `flock -n .sandcastle/runner.lock` 提供。
-- **静态边界**。`pnpm check:architecture` 执行 [Sandcastle 核心依赖规则](#sandcastle-核心依赖边界)。`pnpm typecheck:root` 通过 [Sandcastle tsconfig](../../scripts/sandcastle/tsconfig.json) 收集核心库（`scripts/sandcastle/core/`）与本仓装配（`.sandcastle/`）。
-- **真实 Docker 冒烟**。`pnpm sandcastle:smoke`（经 `node .sandcastle/run.mts --smoke` 调用 [`.sandcastle/smoke.mts`](../../.sandcastle/smoke.mts)）在临时克隆仓库上用本地探测 Provider 串行验证两类沙箱：只读评审沙箱（`readonlySandbox` 包装后工作树与 `.git` 不可写、无 `docker.sock`、无 GitHub 凭据环境变量）与可写实施沙箱（原生 `branchStrategy` worktree、`pnpm install`、容器内提交 Hook 排版提交且不改宿主 `.git/config`、`docker.sock` 与 host network 连通、测试资源回收后删除空 `executor-*` 目录）。准备、诊断与恢复见[运维手册](../../.sandcastle/README.md#启动与诊断)。
+- **窄范围常驻边界单测**。根 `pnpm test:unit`（含在 `pnpm verify` 内）先执行 `pnpm test:unit:sandcastle`（`bun test ./.sandcastle/__tests__`），再用 Turbo 执行各 workspace 的 Unit。`.sandcastle/__tests__/boundaries.test.ts` 仅覆盖 4 类真实高风险边界：GraphQL `ready-for-agent` 过滤 / 分页溢出 / 原生 `linkedBranches` 解析、`.sandcastle/.env` 与 `.git/config` 凭据预检 / `--push --all` 远端 URL / 精确 Git ref 检查、`docker inspect <sandboxId>` 停机核验与测试资源 registry 保留、以及单向只读 `auth.json` 与只读评审挂载隔离。单实例互斥由根 `package.json` 的外部 `flock -n .sandcastle/runner.lock` 提供。
+- **类型检查**。`pnpm typecheck:root` 通过 [Sandcastle tsconfig](../../.sandcastle/tsconfig.json) 检查 `.sandcastle/` 全部 `.ts` / `.mts` 代码与测试。
+- **真实 Docker 冒烟**。`pnpm sandcastle:smoke`（经 `node .sandcastle/run.mts --smoke` 调用 [`.sandcastle/smoke.mts`](../../.sandcastle/smoke.mts)）在临时克隆仓库上用本地探测 Provider 串行验证两类沙箱：只读评审沙箱（`readonlySandbox` 包装后工作树与 `.git` 不可写、`auth.json` 单向只读且不修改宿主源文件、无 `docker.sock`、无 `pnpm-store`、无 Turbo 缓存、无 GitHub 凭据环境变量）与可写实施沙箱（宿主独占 worktree + `head` 模式、`pnpm install --prefer-offline`、Turbo 跨次缓存挂载、容器内提交 Hook 排版提交且不改宿主 `.git/config`、`docker.sock` 与 host network 连通、测试资源回收后删除空 `run-*` 目录）。准备、诊断与恢复见[运维手册](../../.sandcastle/README.md#启动与诊断)。
 
 ### 架构守卫
 
 #### 观察范围
 
-永久规则只根据生产源码路径、规范的静态 import/re-export（含类型或值、裸 side-effect import）、供 `consumer-owned-port` 使用的生产 `*.port.ts` 中直接 `Pick<T, ...>` 的未解析基类型名，Sandcastle 核心的字面量动态导入，以及 workspace 依赖闭包和 Dockerfile 字面量 `COPY` 建立。Specifier 按已支持的 alias、相对路径、扩展名和包子路径做词法归一化，裸 side-effect import 按值依赖处理，第三方依赖按包名或其子路径匹配。公共后端的包边界沿生产 workspace 清单检查传递依赖，包含 dependencies、optionalDependencies 和 peerDependencies。符号来源、第三方内部依赖、类型解析、计算所得的加载路径、控制流和数据流超出守卫范围。[规则与例外](../../scripts/architecture-guard.ts)
+永久规则只根据生产源码路径、规范的静态 import/re-export（含类型或值、裸 side-effect import）、供 `consumer-owned-port` 使用的生产 `*.port.ts` 中直接 `Pick<T, ...>` 的未解析基类型名，以及 workspace 依赖闭包和 Dockerfile 字面量 `COPY` 建立。Specifier 按已支持的 alias、相对路径、扩展名和包子路径做词法归一化，裸 side-effect import 按值依赖处理，第三方依赖按包名或其子路径匹配。公共后端的包边界沿生产 workspace 清单检查传递依赖，包含 dependencies、optionalDependencies 和 peerDependencies。符号来源、第三方内部依赖、类型解析、计算所得的加载路径、控制流和数据流超出守卫范围。[规则与例外](../../scripts/architecture-guard.ts)
 
 #### 永久规则准入与验证
 
 新增永久规则须对应 `Current` 文档中的依赖或模块归属约束，能由上述事实完整表达，且现有包出口、类型或行为验证无法更直接地覆盖。例外限于明确路径或模块，退役路径或标识符的迁移检查随迁移结束移除。每个受影响的语义事实用允许和违规的临时 fixture 调用 `analyzeRepositoryArchitecture(repoRoot)` 验证，诊断须含稳定 rule ID、文件、行号及原因。工具性能单独观察，保留既有超时和重试策略。
-
-#### Sandcastle 核心依赖边界
-
-`sandcastle-core-dependency-boundary` 检查 `scripts/sandcastle/core/` 生产源码的静态导入、重导出及字符串字面量 `import()`，只允许核心目录内的相对路径、Node 内置模块和 `@ai-hero/sandcastle` 及其子路径。本仓极薄装配（`.sandcastle/`）单向依赖核心，仓库私有工具（如测试资源回收与 `.codex/agents/` 角色加载）通过核心库公开接口（`sandbox` 工厂、`agents` 与 `hooks`）接入。允许与违规的 fixture 由 Sandcastle 常驻集合验证。
 
 #### Docker 依赖闭包
 

@@ -1,7 +1,16 @@
 {
-  "extends": "./sandcastle/tsconfig.json",
   "compilerOptions": {
-    "allowJs": true
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleResolution": "bundler",
+    "types": ["bun", "node"],
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true
   },
   "include": ["./architecture-guard.ts", "./check-docs-index.ts"]
 }

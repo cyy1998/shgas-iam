@@ -1,5 +1,4 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { isBuiltin } from "node:module";
 import { join, posix, relative, sep } from "node:path";
 import ts from "typescript";
 
@@ -15,7 +14,6 @@ type IndexedSourceFile = Readonly<{
   sourceFile: ts.SourceFile;
   imports: readonly ts.ImportDeclaration[];
   reExports: readonly ts.ExportDeclaration[];
-  dynamicImports: readonly ts.CallExpression[];
   typeReferences: readonly ts.TypeReferenceNode[];
 }>;
 
@@ -87,11 +85,9 @@ const architectureWorkspaces: readonly (readonly [
   ["@iam/sso", "apps/sso", ["canonical"]],
 ];
 
-const sandcastleCore = "scripts/sandcastle/core";
-const protectedSourceRoots = [
-  ...architectureWorkspaces.filter(([, , views]) => views.includes("source")).map(([, root]) => `${root}/src`),
-  sandcastleCore,
-];
+const protectedSourceRoots = architectureWorkspaces
+  .filter(([, , views]) => views.includes("source"))
+  .map(([, root]) => `${root}/src`);
 
 const architectureWorkspaceRoots = new Map(
   architectureWorkspaces.filter(([, , views]) => views.includes("docker")).map(([name, root]) => [name, root]),
@@ -424,7 +420,6 @@ export function analyzeRepositoryArchitecture(repoRoot: string): readonly Archit
     ...collectRoleResolutionOwnerViolations(sources),
     ...collectUserDocumentOwnerViolations(sources),
     ...collectStaticModuleOwnershipViolations(sources),
-    ...collectSandcastleCoreViolations(sources),
     ...collectPublicApiProductionDependencyViolations(workspaceDependencies),
     ...collectDockerBuildClosureViolations(repoRoot, workspaceDependencies),
   ].sort(compareViolations);
@@ -479,7 +474,6 @@ function isProductionTypeScriptFile(file: string) {
 function indexSourceFile(file: string, sourceFile: ts.SourceFile): IndexedSourceFile {
   const imports: ts.ImportDeclaration[] = [];
   const reExports: ts.ExportDeclaration[] = [];
-  const dynamicImports: ts.CallExpression[] = [];
   const typeReferences: ts.TypeReferenceNode[] = [];
 
   visit(sourceFile);
@@ -488,7 +482,6 @@ function indexSourceFile(file: string, sourceFile: ts.SourceFile): IndexedSource
     sourceFile,
     imports,
     reExports,
-    dynamicImports,
     typeReferences,
   };
 
@@ -496,7 +489,6 @@ function indexSourceFile(file: string, sourceFile: ts.SourceFile): IndexedSource
     if (ts.isImportDeclaration(node)) imports.push(node);
     if (ts.isExportDeclaration(node) && node.moduleSpecifier) reExports.push(node);
     if (ts.isTypeReferenceNode(node)) typeReferences.push(node);
-    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) dynamicImports.push(node);
     ts.forEachChild(node, visit);
   }
 }
@@ -684,36 +676,6 @@ function collectStaticModuleOwnershipViolations(sources: readonly IndexedSourceF
         }),
       ),
   );
-}
-
-function collectSandcastleCoreViolations(sources: readonly IndexedSourceFile[]): ArchitectureViolation[] {
-  return sources
-    .filter(({ file }) => isPathAtOrBelow(file, sandcastleCore))
-    .flatMap((source) =>
-      [...source.imports, ...source.reExports, ...source.dynamicImports].flatMap(
-        (declaration): ArchitectureViolation[] => {
-          const dynamic = ts.isCallExpression(declaration);
-          const module = dynamic ? declaration.arguments[0] : declaration.moduleSpecifier;
-          if (!module || !ts.isStringLiteralLike(module)) return [];
-          const specifier = module.text;
-          if (isBuiltin(specifier) || isPathAtOrBelow(specifier, "@ai-hero/sandcastle")) return [];
-          if (
-            /^\.\.?\//.test(specifier) &&
-            isPathAtOrBelow(posix.join(posix.dirname(source.file), specifier), sandcastleCore)
-          ) {
-            return [];
-          }
-          return [
-            {
-              ruleId: "sandcastle-core-dependency-boundary",
-              file: source.file,
-              line: lineOf(source.sourceFile, declaration),
-              message: `Sandcastle core must not ${dynamic ? "import" : dependencyOperation(declaration)} "${specifier}". Use core modules, Node builtins, or the Sandcastle SDK.`,
-            },
-          ];
-        },
-      ),
-    );
 }
 
 function collectSourceDependencyDirectionViolations(source: IndexedSourceFile): ArchitectureViolation[] {

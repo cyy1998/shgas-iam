@@ -6,4 +6,4 @@ if [ -n "${IAM_AFK_PNPM_STORE_DIR:-}" ]; then
 else
   set --
 fi
-HUSKY=0 pnpm install --frozen-lockfile "$@"
+HUSKY=0 pnpm install --frozen-lockfile --prefer-offline "$@"

@@ -3,7 +3,7 @@
 ## 集中修复、最终验证与 PR 正文起草
 
 - 按 `AGENTS.md` 路由阅读命中的工程文档、`docs/agents/workflow.md`、`docs/agents/sandcastle-afk.md`、`GLOSSARY.md` 与 `.agents/skills/pr/SKILL.md`。
-- 先核对 `git rev-parse HEAD` 精确等于 `{{CANDIDATE_SHA}}` 且工作树干净；通过 `git log --first-parent {{BASE_SHA}}..{{CANDIDATE_SHA}}` 查阅合并提交正文中记录的票级验证交接。父 Spec、全部 tickets 与双轴评审报告已由宿主注入下方，不要在沙箱内调用 GitHub API。
+- 先核对 `git rev-parse HEAD` 精确等于 `{{CANDIDATE_SHA}}` 且工作树干净；通过 `git log --first-parent {{BASE_SHA}}..{{CANDIDATE_SHA}}` 查阅各票合并历史。父 Spec、全部 tickets 与双轴评审报告已由宿主注入下方，不要在沙箱内调用 GitHub API。
 - 集中处理下方双轴评审报告中的全部可执行 findings，保留全部已集成票的功能与提交历史，并在交接中逐项说明每个 finding 的处置结果。
 - Bun 真实 I/O 测试先用普通 `await` 完成（失败路径先捕获 rejection），再做同步断言；禁止使用 `.resolves`、`.rejects` 或 async `toThrow`。真实资源测试从根入口 `pnpm test:integration` 或 `pnpm test:e2e` 运行。
 - 保留提交 Hook（禁止 `--no-verify`），核对 Hook 修复并提交聚焦修复（引用相关 issue 编号），对失效范围重跑检查。
