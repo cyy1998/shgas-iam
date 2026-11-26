@@ -1,8 +1,9 @@
 #!/usr/bin/env node
+import "./require-linux.mjs";
 import { spawnSync } from "node:child_process";
 import process from "node:process";
 
-if (process.env.PLAYWRIGHT_E2E_SKIP_PREFLIGHT === "1" || process.platform !== "linux") {
+if (process.env.PLAYWRIGHT_E2E_SKIP_PREFLIGHT === "1") {
   process.exit(0);
 }
 

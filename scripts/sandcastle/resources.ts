@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { join } from "node:path";
 import type { DockerOptions } from "@ai-hero/sandcastle/sandboxes/docker";
@@ -20,41 +20,12 @@ import type { DockerDaemonAccess } from "./sandbox.mts";
 export const pnpmStoreVolumeName = "iam-sandcastle-pnpm-store";
 export const pnpmStoreDirectory = "/home/agent/.pnpm-store";
 
-const cachedSocketGroupIds = new Map<string, Promise<number>>();
 const initializedNamedVolumes = new Map<string, Promise<void>>();
 
-async function resolveSocketGroupId(cwd: string, image: string, probeName: string): Promise<number> {
-  const existing = cachedSocketGroupIds.get(image);
-  if (existing) return existing;
-  const pending = (async () => {
-    const gid = Number(
-      await command(
-        "docker",
-        [
-          "run",
-          "--rm",
-          "--name",
-          probeName,
-          "--mount",
-          "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock,readonly",
-          "--entrypoint",
-          "stat",
-          image,
-          "-c",
-          "%g",
-          "/var/run/docker.sock",
-        ],
-        cwd,
-      ),
-    );
-    if (!Number.isSafeInteger(gid) || gid < 0) throw new Error("无法读取 Docker socket GID。");
-    return gid;
-  })().catch((error) => {
-    cachedSocketGroupIds.delete(image);
-    throw error;
-  });
-  cachedSocketGroupIds.set(image, pending);
-  return pending;
+export async function resolveSocketGroupId(): Promise<number> {
+  const socket = await stat("/var/run/docker.sock");
+  if (!socket.isSocket()) throw new Error("/var/run/docker.sock 不是 Unix socket。");
+  return socket.gid;
 }
 
 async function ensurePnpmStoreVolume(cwd: string, image: string): Promise<void> {
@@ -90,7 +61,7 @@ async function ensurePnpmStoreVolume(cwd: string, image: string): Promise<void> 
 }
 
 export const hostNetworkRequirements =
-  "需要 Linux Docker Engine，或 Docker Desktop 4.34+ 已启用 host networking 且关闭 Enhanced Container Isolation；" +
+  "需要 Linux Docker Engine，或 WSL2 下 Docker Desktop 4.34+ 已启用 host networking 且关闭 Enhanced Container Isolation；" +
   "需要实际 UID 1000 访问共享 Docker socket，不自动切换网络、DinD 或代理。";
 
 export class ExecutorTerminationError extends Error {}
@@ -210,9 +181,12 @@ export async function recoverExecutorResources(cwd: string, descriptorFile: stri
     !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(record.runId) ||
     path !== `.sandcastle/resources/executor-${record.runId}/executor.json` ||
     record.containerName !== `iam-afk-executor-${record.runId}` ||
-    record.socketProbeName !== `iam-afk-socket-${record.runId}` ||
     record.registryFile !== `.sandcastle/resources/executor-${record.runId}/registry.jsonl`
   )
+    throw new Error("Invalid executor recovery record");
+  // Older executor records may still own a dedicated socket probe.
+  const socketProbeName = record.socketProbeName;
+  if (socketProbeName !== undefined && socketProbeName !== `iam-afk-socket-${record.runId}`)
     throw new Error("Invalid executor recovery record");
   const targets = dependencyTargets(record.dependencyTargets ?? []);
   let volumes = dependencyVolumes(record.dependencyVolumes ?? []);
@@ -225,8 +199,9 @@ export async function recoverExecutorResources(cwd: string, descriptorFile: stri
     await writeAtomicResourceRecord(join(cwd, path), { ...record, dependencyVolumes: volumes });
   }
   await cleanupExecutorResources(cwd, record.registryFile);
-  for (const name of [record.containerName, record.socketProbeName])
-    if (await inspectSandbox(cwd, name)) await command("docker", ["rm", "--force", "--volumes", name], cwd, 10_000);
+  for (const name of [record.containerName, socketProbeName])
+    if (name && (await inspectSandbox(cwd, name)))
+      await command("docker", ["rm", "--force", "--volumes", name], cwd, 10_000);
   await cleanupDependencyVolumes(cwd, volumes);
   await closeDockerConfig(record.runId);
   console.log(`执行器准确恢复清理完成：${path}`);
@@ -248,7 +223,6 @@ export async function withExecutorResources<T>(
   const directory = `.sandcastle/resources/executor-${runId}`;
   const registryFile = `${directory}/registry.jsonl`;
   const containerName = `iam-afk-executor-${runId}`;
-  const socketProbeName = `iam-afk-socket-${runId}`;
   const descriptor = join(cwd, directory, "executor.json");
   const failures: unknown[] = [];
   const targets = dependencyTargets(options.anonymousVolumes ?? []);
@@ -263,7 +237,6 @@ export async function withExecutorResources<T>(
     writeAtomicResourceRecord(descriptor, {
       runId,
       containerName,
-      socketProbeName,
       registryFile,
       dependencyTargets: targets,
       dependencyVolumes: volumes,
@@ -295,7 +268,7 @@ export async function withExecutorResources<T>(
     dockerConfig = await prepareDockerConfig(runId, cwd);
     if ((await command("docker", ["info", "--format", "{{.OSType}}"], cwd)) !== "linux")
       throw new Error(hostNetworkRequirements);
-    const socketGroupId = await resolveSocketGroupId(cwd, image, socketProbeName);
+    const socketGroupId = await resolveSocketGroupId();
     const namedVolumes: NonNullable<DockerOptions["namedVolumes"]> = targets.length
       ? [{ name: pnpmStoreVolumeName, target: pnpmStoreDirectory }]
       : [];
@@ -375,12 +348,6 @@ export async function withExecutorResources<T>(
       if (dockerConfig?.recoveryDirectory)
         failures.push(new ExecutorTerminationError(`保留 Docker 配置暂存目录：${dockerConfig.recoveryDirectory}`));
       options.onUnsafeClose?.();
-    }
-    try {
-      if (await inspectSandbox(cwd, socketProbeName))
-        await command("docker", ["rm", "--force", "--volumes", socketProbeName], cwd, 10_000);
-    } catch (error) {
-      failures.push(error);
     }
     await new Promise<void>((resolve, reject) =>
       server.close((error) => {

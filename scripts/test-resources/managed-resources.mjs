@@ -7,7 +7,7 @@ import { runOwnedCommand } from "./owned-command.mjs";
 
 export function repositoryPath(root, path) {
   if (typeof path !== "string" || !path) throw new Error("A repository-relative path is required");
-  const normalized = relative(root, resolve(root, path)).replaceAll("\\", "/");
+  const normalized = relative(root, resolve(root, path));
   if (isAbsolute(path) || normalized === ".." || normalized.startsWith("../") || isAbsolute(normalized))
     throw new Error(`Path must stay inside the repository: ${path}`);
   return normalized;
@@ -16,17 +16,7 @@ export function repositoryPath(root, path) {
 export async function writeAtomicResourceRecord(destination, record) {
   const temporary = `${destination}.${randomUUID()}.tmp`;
   await writeFile(temporary, `${JSON.stringify(record, null, 2)}\n`, { mode: 0o600 });
-  // Windows readers may briefly deny replacement; retain atomic replacement and a bounded deadline.
-  for (let attempt = 0; ; attempt++) {
-    try {
-      await rename(temporary, destination);
-      return;
-    } catch (error) {
-      if (process.platform !== "win32" || !["EPERM", "EACCES", "EBUSY"].includes(error.code) || attempt === 20)
-        throw error;
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-  }
+  await rename(temporary, destination);
 }
 
 export async function saveManagedResourceRun(run) {
@@ -219,13 +209,11 @@ async function managedContainerBridgeIp(run, service, options = {}) {
     .find((line) => /^\d{1,3}(?:\.\d{1,3}){3}$/u.test(line));
 }
 
-/** Prefer direct Compose bridge connectivity on Linux/AFK to bypass WSL2 loopback proxy SYN drops. */
+/** Prefer direct Compose bridge connectivity on Linux, WSL2 and AFK, with published loopback as a fallback. */
 export async function managedServiceEndpoint(run, service, port, options = {}) {
-  if (process.platform === "linux") {
-    const containerIp = await managedContainerBridgeIp(run, service, options);
-    if (containerIp && (await probeTcpEndpoint(containerIp, port, options.signal))) {
-      return { host: containerIp, port };
-    }
+  const containerIp = await managedContainerBridgeIp(run, service, options);
+  if (containerIp && (await probeTcpEndpoint(containerIp, port, options.signal))) {
+    return { host: containerIp, port };
   }
   return { host: "127.0.0.1", port: await managedServicePort(run, service, port, options) };
 }
@@ -250,10 +238,7 @@ export async function collectManagedResourceDiagnostics(run, options = {}) {
 }
 
 export function managedCleanupCommand(run) {
-  const path =
-    process.platform === "win32"
-      ? `'${run.recordPath.replaceAll("'", "''")}'`
-      : `'${run.recordPath.replaceAll("'", "'\\''")}'`;
+  const path = `'${run.recordPath.replaceAll("'", "'\\''")}'`;
   return `pnpm test:resources:cleanup --record ${path}`;
 }
 

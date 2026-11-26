@@ -1,3 +1,4 @@
+import "../require-linux.mjs";
 import { closeSync } from "node:fs";
 import { mkdir, open, readFile, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -109,7 +110,6 @@ async function main() {
     const code = await new Promise<number | null>((resolveCode, reject) => {
       const child = spawn("docker", ["build", "-t", image, "-f", ".sandcastle/Dockerfile", ".sandcastle"], {
         cwd,
-        windowsHide: true,
         stdio: ["ignore", "pipe", "pipe"],
       });
       child.stdout.pipe(log, { end: false });

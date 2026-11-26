@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import "./require-linux.mjs";
 import process from "node:process";
 import { runPnpmCommand } from "./run-pnpm-command.mjs";
 
