@@ -10,23 +10,23 @@ test("Sandcastle core imports only its own modules, platform builtins and the SD
     await mkdir(join(cwd, "scripts/sandcastle/core/nested"), { recursive: true });
     await mkdir(join(cwd, ".sandcastle"));
     await writeFile(
-      join(cwd, ".sandcastle/config.ts"),
-      'export { config } from "../scripts/sandcastle/core/config.ts";\n',
+      join(cwd, ".sandcastle/run.mts"),
+      'export { runAfk } from "../scripts/sandcastle/core/index.ts";\n',
     );
     await writeFile(
-      join(cwd, "scripts/sandcastle/core/config.ts"),
+      join(cwd, "scripts/sandcastle/core/index.ts"),
       'import { readFile } from "node:fs/promises";\nimport { createWorktree } from "@ai-hero/sandcastle";\n' +
-        'import type { DockerOptions } from "@ai-hero/sandcastle/sandboxes/docker";\nexport const config = {};\n',
+        'import type { DockerOptions } from "@ai-hero/sandcastle/sandboxes/docker";\nexport const runAfk = {};\n',
     );
     await writeFile(
       join(cwd, "scripts/sandcastle/core/nested/allowed.mts"),
-      'export { config } from "../config.ts";\nvoid import("../config.ts");\n',
+      'export { runAfk } from "../index.ts";\nvoid import("../index.ts");\n',
     );
     expect(analyzeRepositoryArchitecture(cwd)).toEqual([]);
 
     const file = "scripts/sandcastle/core/nested/blocked.mts";
     const specifiers = [
-      "../../../../.sandcastle/config.ts",
+      "../../../../.sandcastle/run.mts",
       "../../../test-resources/managed-resources.mjs",
       "@iam/contracts",
       "../../legacy.ts",
