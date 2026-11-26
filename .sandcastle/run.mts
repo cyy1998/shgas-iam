@@ -60,6 +60,78 @@ async function loadDotEnv(): Promise<void> {
   }
 }
 
+export type RepoSandboxFactoryOptions = {
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  imageName: string;
+  hostStore: string;
+  dockerGid: number;
+  registryMount?: MountConfig;
+};
+
+export function createRepoSandboxFactory({
+  cwd: rootCwd,
+  env,
+  imageName,
+  hostStore,
+  dockerGid,
+  registryMount,
+}: RepoSandboxFactoryOptions): Extract<AfkOptions["sandbox"], (...args: never[]) => unknown> {
+  return async (ctx) => {
+    const stagedAuth = await stageCodexAuth({ cwd: rootCwd, env, readonly: ctx.readonly });
+    try {
+      // In api-key mode, loadCodexAgents already injects CODEX_API_KEY on AgentProvider.env; avoid SDK env overlap.
+      const authEnv = stagedAuth.mode === "chatgpt" ? stagedAuth.env : {};
+      const mounts: MountConfig[] = [
+        { hostPath: hostStore, sandboxPath: sandboxStore, readonly: ctx.readonly },
+        ...(registryMount ? [registryMount] : []),
+        ...stagedAuth.mounts,
+        ...(!ctx.readonly ? [{ hostPath: dockerSocket, sandboxPath: dockerSocket }] : []),
+      ];
+      const sandboxEnv: Record<string, string> = ctx.readonly
+        ? { ...authEnv }
+        : {
+            ...authEnv,
+            IAM_AFK_PNPM_STORE_DIR: sandboxStore,
+            IAM_E2E_LIFECYCLE: "fresh",
+            TURBO_CACHE_DIR: "/tmp/iam-sandcastle-turbo/cache",
+            GIT_CONFIG_COUNT: "1",
+            GIT_CONFIG_KEY_0: "core.hooksPath",
+            GIT_CONFIG_VALUE_0: "/tmp/iam-sandcastle-hooks",
+            DOCKER_HOST: `unix://${dockerSocket}`,
+          };
+      const rawProvider = docker({
+        imageName,
+        mounts,
+        env: sandboxEnv,
+        groups: ctx.readonly ? undefined : [dockerGid],
+        network: ctx.readonly ? undefined : "host",
+      });
+      if (ctx.readonly) {
+        return {
+          sandbox: asBindMountSandbox(rawProvider),
+          cleanup: () => stagedAuth.close(),
+        };
+      }
+      const managed = withTestResources({ cwd: rootCwd, id: ctx.runId, sandbox: rawProvider });
+      return {
+        sandbox: managed.sandbox,
+        hooks: writableHooks,
+        cleanup: async () => {
+          const errors: unknown[] = [];
+          await managed.cleanup().catch((error: unknown) => errors.push(error));
+          await stagedAuth.close().catch((error: unknown) => errors.push(error));
+          if (errors.length === 1) throw errors[0];
+          if (errors.length > 1) throw new AggregateError(errors, "Sandbox session cleanup failed.");
+        },
+      };
+    } catch (error) {
+      await stagedAuth.close().catch(() => {});
+      throw error;
+    }
+  };
+}
+
 async function main(): Promise<void> {
   const { values } = parseArgs({
     options: {
@@ -125,60 +197,7 @@ async function main(): Promise<void> {
 
   const hostStore = resolve(cwd, env.SANDCASTLE_PNPM_STORE_DIR?.trim() || join(homedir(), ".pnpm-store"));
   await mkdir(hostStore, { recursive: true });
-
-  const sandbox: AfkOptions["sandbox"] = async (ctx) => {
-    const stagedAuth = await stageCodexAuth({ cwd, env });
-    try {
-      // In api-key mode, loadCodexAgents already injects CODEX_API_KEY on AgentProvider.env; avoid SDK env overlap.
-      const authEnv = stagedAuth.mode === "chatgpt" ? stagedAuth.env : {};
-      const mounts: MountConfig[] = [
-        { hostPath: hostStore, sandboxPath: sandboxStore, readonly: ctx.readonly },
-        ...(registryMount ? [registryMount] : []),
-        ...stagedAuth.mounts,
-        ...(!ctx.readonly ? [{ hostPath: dockerSocket, sandboxPath: dockerSocket }] : []),
-      ];
-      const sandboxEnv: Record<string, string> = ctx.readonly
-        ? { ...authEnv }
-        : {
-            ...authEnv,
-            IAM_AFK_PNPM_STORE_DIR: sandboxStore,
-            IAM_E2E_LIFECYCLE: "fresh",
-            TURBO_CACHE_DIR: "/tmp/iam-sandcastle-turbo/cache",
-            GIT_CONFIG_COUNT: "1",
-            GIT_CONFIG_KEY_0: "core.hooksPath",
-            GIT_CONFIG_VALUE_0: "/tmp/iam-sandcastle-hooks",
-            DOCKER_HOST: `unix://${dockerSocket}`,
-          };
-      const rawProvider = docker({
-        imageName,
-        mounts,
-        env: sandboxEnv,
-        groups: ctx.readonly ? undefined : [dockerGid],
-        network: ctx.readonly ? undefined : "host",
-      });
-      if (ctx.readonly) {
-        return {
-          sandbox: asBindMountSandbox(rawProvider),
-          cleanup: () => stagedAuth.close(),
-        };
-      }
-      const managed = withTestResources({ cwd, id: ctx.runId, sandbox: rawProvider });
-      return {
-        sandbox: managed.sandbox,
-        hooks: writableHooks,
-        cleanup: async () => {
-          const errors: unknown[] = [];
-          await managed.cleanup().catch((error: unknown) => errors.push(error));
-          await stagedAuth.close().catch((error: unknown) => errors.push(error));
-          if (errors.length === 1) throw errors[0];
-          if (errors.length > 1) throw new AggregateError(errors, "Sandbox session cleanup failed.");
-        },
-      };
-    } catch (error) {
-      await stagedAuth.close().catch(() => {});
-      throw error;
-    }
-  };
+  const sandbox = createRepoSandboxFactory({ cwd, env, imageName, hostStore, dockerGid, registryMount });
 
   const result = await runAfk({
     repo,
@@ -196,7 +215,9 @@ async function main(): Promise<void> {
   if (result.failed.length > 0 || result.paused.length > 0) process.exitCode = 1;
 }
 
-main().catch((error: unknown) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error: unknown) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}

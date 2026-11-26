@@ -32,7 +32,7 @@ status: accepted
 - **以 `origin/<base>` 与 `merge-base` 取代冻结调用分支**。runner 启动时通过 `git fetch <remote> <baseBranch>`（默认 `origin` / `main`）获取最新远端基线作为新 Spec 分支起点，不读取也不校验本地当前 checkout 分支或工作区状态；双轴评审基线始终由 `git merge-base <specBranch> <remote>/<baseBranch>` 动态推导。运行期间 `main` 前进不再造成交付失败、恢复卡死或评审全量重跑，潜在合并冲突由 GitHub PR 处理。
 - **以边界断言与交付顺序取代本地双写状态**。
   - **集成事实与边界断言**：并行派发 `ready` tickets，宿主在串行队列中以 `git merge --no-ff` 合入 Spec 分支，提交消息包含 `Sandcastle-Ticket: #<N>` trailer 并将票级验证交接直接写入合并提交正文（删除票级 GitHub 交接评论与子票交付评论）；真实冲突交由一次冲突解决会话处理。Agent 会话结束时仅在信任边界执行两项断言：candidate 包含派发基线、Spec tip 未被 Agent 移动；派发新票前读一次 Spec 标签作为软停止开关。
-  - **单次 GraphQL 与简化前沿**：任务图读取收敛为单次 `first:100` GraphQL 查询（溢出即显式报错）配瞬断重试 `retryGhRead`；`specFrontier` 简化为 `open ∧ ready-for-agent ∧ 未集成 ∧ 阻塞已满足`（Spec 外部前置直接信任 `CLOSED`）；运行中新增子票不暂停整个 Spec。
+  - **有界 GraphQL 与简化前沿**：任务图读取采用有界两段 `first:100` GraphQL 查询（先列 open Spec 编号，再逐 Spec 读子票、评论与阻塞边，规避 GitHub 50 万节点上限，任一连接溢出即显式报错）配瞬断重试 `retryGhRead`；`specFrontier` 简化为 `open ∧ ready-for-agent ∧ 未集成 ∧ 阻塞已满足`（Spec 外部前置直接信任 `CLOSED`）；运行中新增草稿子票不暂停整个 Spec，新增已批准 `ready-for-agent` 子票在评审前刷新纳入。
   - **交付顺序即恢复协议**：保留以 candidate SHA 为键的单文件评审缓存（避免修复/验证抖动时重跑双轴评审），删除探索缓存、交付证据缓存、`pendingDeliveries` 与 `recoveringDelivery`。修复并验证通过后，按固定顺序执行：**非强制 `git push` → 复用或创建 PR（缺失 `<pr-body>` 时回退宿主拼装正文，不做补发会话）→ 移除子票 `ready-for-agent` → 清理临时 worktrees 与票分支 → 最后移除 Spec `ready-for-agent`**。在最后一步之前崩溃，Spec 仍留在队列中，重启发现已有匹配 Open PR 即可幂等补完收尾；暂停失败时加 `needs-attention` 标签并在 Spec 评论原因。
 
 ## 测试收敛与文档影响

@@ -278,3 +278,25 @@ test("dockerRegistryAuthMount directly bind-mounts the source file readonly with
     await rm(cwd, { recursive: true, force: true });
   }
 });
+
+test("stageCodexAuth readonly mode mounts auth.json readonly and skips writeback on close", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "sandcastle-codex-readonly-"));
+  try {
+    const source = join(cwd, "auth.json");
+    const original = '{"tokens":{"access_token":"orig"}}\n';
+    await writeFile(source, original, { mode: 0o600 });
+
+    const staged = await stageCodexAuth({ cwd, source, readonly: true });
+    expect(staged.mode).toBe("chatgpt");
+    expect(staged.mounts).toHaveLength(1);
+    expect(staged.mounts[0]?.sandboxPath).toBe("/home/agent/.codex/auth.json");
+    expect(staged.mounts[0]?.readonly).toBe(true);
+
+    // Even if staged file were altered locally, readonly close must never write back to host source.
+    await writeFile(staged.mounts[0]!.hostPath, '{"tokens":{"access_token":"tampered"}}\n');
+    await staged.close();
+    expect(await readFile(source, "utf8")).toBe(original);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});

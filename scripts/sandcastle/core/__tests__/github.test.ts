@@ -94,51 +94,60 @@ async function expectReject(operation: () => Promise<unknown>): Promise<Error> {
   return caught as Error;
 }
 
-test("readSpecGraph reads open specs, sub-issues, comments, and blockers in a single first:100 GraphQL query", async () => {
+test("readSpecGraph reads open specs, sub-issues, comments, and blockers via bounded two-stage first:100 GraphQL queries", async () => {
   const calls: string[][] = [];
   const graphs = await readSpecGraph(repo, {
     runGh: async (args) => {
       calls.push(args);
       expect(args.slice(0, 2)).toEqual(["api", "graphql"]);
+      const queryArg = args.find((arg) => arg.startsWith("query=")) ?? "";
+      if (queryArg.includes("ListOpenSpecs")) {
+        return JSON.stringify({
+          data: {
+            repository: {
+              issues: page([{ number: 433 }]),
+            },
+          },
+        });
+      }
+      expect(args).toContain("number=433");
       return JSON.stringify({
         data: {
           repository: {
-            issues: page([
-              {
-                ...graphIssueNode(433, {
-                  type: "spec",
-                  body: "集成分支：feat/sandcastle-native-convergence",
-                  comments: [
-                    { author: { login: "alice" }, body: "Approved", createdAt: "2026-11-20T00:00:00Z" },
-                    { author: null, body: "Deleted user note", createdAt: "2026-11-21T00:00:00Z" },
-                  ],
-                }),
-                subIssues: page([
-                  {
-                    ...graphIssueNode(434, {
-                      type: "ticket",
-                      labels: ["type:ticket", "ready-for-agent", "agent:deep"],
-                      blockedBy: [{ number: 10, state: "CLOSED", repository: { nameWithOwner: "other/repo" } }],
-                    }),
-                    parent: { number: 433, state: "OPEN", repository: { nameWithOwner: repo } },
-                  },
-                  {
-                    ...graphIssueNode(436, {
-                      type: "ticket",
-                      blockedBy: [{ number: 434, state: "OPEN", repository: { nameWithOwner: repo } }],
-                    }),
-                    parent: { number: 433, state: "OPEN", repository: { nameWithOwner: repo } },
-                  },
-                ]),
-              },
-            ]),
+            issue: {
+              ...graphIssueNode(433, {
+                type: "spec",
+                body: "集成分支：feat/sandcastle-native-convergence",
+                comments: [
+                  { author: { login: "alice" }, body: "Approved", createdAt: "2026-11-20T00:00:00Z" },
+                  { author: null, body: "Deleted user note", createdAt: "2026-11-21T00:00:00Z" },
+                ],
+              }),
+              subIssues: page([
+                {
+                  ...graphIssueNode(434, {
+                    type: "ticket",
+                    labels: ["type:ticket", "ready-for-agent", "agent:deep"],
+                    blockedBy: [{ number: 10, state: "CLOSED", repository: { nameWithOwner: "other/repo" } }],
+                  }),
+                  parent: { number: 433, state: "OPEN", repository: { nameWithOwner: repo } },
+                },
+                {
+                  ...graphIssueNode(436, {
+                    type: "ticket",
+                    blockedBy: [{ number: 434, state: "OPEN", repository: { nameWithOwner: repo } }],
+                  }),
+                  parent: { number: 433, state: "OPEN", repository: { nameWithOwner: repo } },
+                },
+              ]),
+            },
           },
         },
       });
     },
   });
 
-  expect(calls).toHaveLength(1);
+  expect(calls).toHaveLength(2);
   expect(graphs).toHaveLength(1);
   const [graph] = graphs;
   expect(graph?.spec.number).toBe(433);
@@ -155,36 +164,42 @@ test.each(["issues", "subIssues", "specComments", "ticketBlockedBy"] as const)(
   async (overflowTarget) => {
     const err = await expectReject(() =>
       readSpecGraph(repo, {
-        runGh: async () =>
-          JSON.stringify({
+        runGh: async (args) => {
+          const queryArg = args.find((arg) => arg.startsWith("query=")) ?? "";
+          if (queryArg.includes("ListOpenSpecs")) {
+            return JSON.stringify({
+              data: {
+                repository: {
+                  issues: page([{ number: 433 }], overflowTarget === "issues"),
+                },
+              },
+            });
+          }
+          return JSON.stringify({
             data: {
               repository: {
-                issues: page(
-                  [
-                    {
-                      ...graphIssueNode(433, {
-                        type: "spec",
-                        hasNextPage: { comments: overflowTarget === "specComments" },
-                      }),
-                      subIssues: page(
-                        [
-                          {
-                            ...graphIssueNode(434, {
-                              type: "ticket",
-                              hasNextPage: { blockedBy: overflowTarget === "ticketBlockedBy" },
-                            }),
-                            parent: { number: 433, state: "OPEN", repository: { nameWithOwner: repo } },
-                          },
-                        ],
-                        overflowTarget === "subIssues",
-                      ),
-                    },
-                  ],
-                  overflowTarget === "issues",
-                ),
+                issue: {
+                  ...graphIssueNode(433, {
+                    type: "spec",
+                    hasNextPage: { comments: overflowTarget === "specComments" },
+                  }),
+                  subIssues: page(
+                    [
+                      {
+                        ...graphIssueNode(434, {
+                          type: "ticket",
+                          hasNextPage: { blockedBy: overflowTarget === "ticketBlockedBy" },
+                        }),
+                        parent: { number: 433, state: "OPEN", repository: { nameWithOwner: repo } },
+                      },
+                    ],
+                    overflowTarget === "subIssues",
+                  ),
+                },
               },
             },
-          }),
+          });
+        },
       }),
     );
     expect(err.message.toLowerCase()).toContain("overflow");
@@ -384,7 +399,7 @@ test("findOpenPr and ensurePr reuse matching Open PR, reject mismatched SHA, and
     [435, { number: 435, mergeSha: shaB, candidateSha: shaC, handoff: "ok" }],
   ]);
 
-  // 1. Reuse matching open PR without calling gh pr create.
+  // 1. Reuse matching open PR without calling gh pr create when all Closes lines are present.
   const existingPr = {
     number: 428,
     url: `https://github.com/${repo}/pull/428`,
@@ -393,6 +408,7 @@ test("findOpenPr and ensurePr reuse matching Open PR, reject mismatched SHA, and
     baseRefName: "main",
     headRefOid: shaC,
     isCrossRepository: false,
+    body: "Existing summary\n\nCloses #433\nCloses #434\nCloses #435",
   };
   const reuseCalls: string[][] = [];
   const reused = await ensurePr(
@@ -415,6 +431,38 @@ test("findOpenPr and ensurePr reuse matching Open PR, reject mismatched SHA, and
   );
   expect(reused).toEqual(existingPr);
   expect(reuseCalls).toHaveLength(1);
+
+  // 1b. Reuse matching open PR with missing Closes lines appends them via gh pr edit.
+  let editedBody = "";
+  const reusedWithEdit = await ensurePr(
+    repo,
+    {
+      spec,
+      tickets,
+      integrated,
+      headBranch: "feat/sandcastle-native-convergence",
+      baseBranch: "main",
+      headSha: shaC,
+    },
+    {
+      runGh: async (args) => {
+        if (args[0] === "pr" && args[1] === "list") {
+          return JSON.stringify([{ ...existingPr, body: "Legacy PR\n\nCloses #422" }]);
+        }
+        if (args[0] === "pr" && args[1] === "edit") {
+          const bodyFileIndex = args.indexOf("--body-file");
+          editedBody = await readFile(args[bodyFileIndex + 1]!, "utf8");
+          return "";
+        }
+        throw new Error(`Unexpected gh call: ${args.join(" ")}`);
+      },
+    },
+  );
+  expect(reusedWithEdit.number).toBe(428);
+  expect(editedBody).toContain("Closes #422");
+  expect(editedBody).toContain("Closes #433");
+  expect(editedBody).toContain("Closes #434");
+  expect(editedBody).toContain("Closes #435");
 
   // 2. Reject open PR whose headRefOid does not match expected headSha.
   const mismatchErr = await expectReject(() =>

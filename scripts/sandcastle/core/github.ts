@@ -60,23 +60,33 @@ type RawSpecNode = RawIssueNode & {
   subIssues: Page<RawTicketNode>;
 };
 
-const prFields = "number,url,state,headRefName,baseRefName,headRefOid,isCrossRepository";
+const prFields = "number,url,state,headRefName,baseRefName,headRefOid,isCrossRepository,body";
 
-const specGraphQuery = `
-  query ReadSpecGraph($owner: String!, $name: String!) {
+const listSpecsQuery = `
+  query ListOpenSpecs($owner: String!, $name: String!) {
     repository(owner: $owner, name: $name) {
       issues(first: 100, states: OPEN, labels: ["type:spec"]) {
         nodes {
-          ...IssueFields
-          subIssues(first: 100) {
-            nodes {
-              ...IssueFields
-              parent { ...IssueRefFields }
-            }
-            pageInfo { hasNextPage }
-          }
+          number
         }
         pageInfo { hasNextPage }
+      }
+    }
+  }
+`;
+
+const singleSpecQuery = `
+  query ReadSingleSpecGraph($owner: String!, $name: String!, $number: Int!) {
+    repository(owner: $owner, name: $name) {
+      issue(number: $number) {
+        ...IssueFields
+        subIssues(first: 100) {
+          nodes {
+            ...IssueFields
+            parent { ...IssueRefFields }
+          }
+          pageInfo { hasNextPage }
+        }
       }
     }
   }
@@ -194,6 +204,61 @@ function parseIssueNode(raw: RawIssueNode): IssueDetails {
   };
 }
 
+function parseSpecNode(specNode: RawSpecNode, expectedRepo: string): SpecGraph {
+  const spec: SpecIssue = parseIssueNode(specNode);
+  const subNodes = assertNotOverflowed(specNode.subIssues, `spec #${spec.number} subIssues`);
+  const seenTickets = new Set<number>();
+  const tickets: TicketIssue[] = subNodes.map((ticketNode) => {
+    const details = parseIssueNode(ticketNode);
+    if (details.repo !== expectedRepo || details.number === spec.number || seenTickets.has(details.number)) {
+      throw new Error(`Spec #${spec.number} has an invalid or duplicate sub-issue #${details.number}.`);
+    }
+    seenTickets.add(details.number);
+    return {
+      ...details,
+      parent: ticketNode.parent ? parseIssueRef(ticketNode.parent) : null,
+    };
+  });
+  return { spec, tickets };
+}
+
+export async function readSingleSpecGraph(repo: string, specNumber: number, options?: GhOptions): Promise<SpecGraph> {
+  const normalizedRepo = validateRepository(repo);
+  const number = assertPositiveInt(specNumber, "specNumber");
+  const [owner, name] = normalizedRepo.split("/");
+  if (!owner || !name) throw new Error(`Invalid GitHub repository "${repo}".`);
+  const gh = defaultGh(options);
+
+  const rawText = await retryGhRead(() =>
+    gh([
+      "api",
+      "graphql",
+      "-f",
+      `query=${singleSpecQuery}`,
+      "-f",
+      `owner=${owner}`,
+      "-f",
+      `name=${name}`,
+      "-F",
+      `number=${number}`,
+    ]),
+  );
+  const parsed: {
+    data?: { repository?: { issue?: RawSpecNode | null } };
+    errors?: Array<{ message?: string }>;
+  } = JSON.parse(rawText);
+
+  if (parsed.errors?.length || !parsed.data?.repository?.issue) {
+    const details = parsed.errors
+      ?.map((err) => err.message)
+      .filter(Boolean)
+      .join("; ");
+    throw new Error(`GitHub GraphQL query failed for ${normalizedRepo}#${number}${details ? `: ${details}` : "."}`);
+  }
+
+  return parseSpecNode(parsed.data.repository.issue, normalizedRepo.toLowerCase());
+}
+
 export async function readSpecGraph(repo: string, options?: GhOptions): Promise<SpecGraph[]> {
   const normalizedRepo = validateRepository(repo);
   const [owner, name] = normalizedRepo.split("/");
@@ -201,10 +266,10 @@ export async function readSpecGraph(repo: string, options?: GhOptions): Promise<
   const gh = defaultGh(options);
 
   const rawText = await retryGhRead(() =>
-    gh(["api", "graphql", "-f", `query=${specGraphQuery}`, "-f", `owner=${owner}`, "-f", `name=${name}`]),
+    gh(["api", "graphql", "-f", `query=${listSpecsQuery}`, "-f", `owner=${owner}`, "-f", `name=${name}`]),
   );
   const parsed: {
-    data?: { repository?: { issues?: Page<RawSpecNode> } };
+    data?: { repository?: { issues?: Page<{ number?: unknown }> } };
     errors?: Array<{ message?: string }>;
   } = JSON.parse(rawText);
 
@@ -216,26 +281,15 @@ export async function readSpecGraph(repo: string, options?: GhOptions): Promise<
     throw new Error(`GitHub GraphQL query failed for ${normalizedRepo}${details ? `: ${details}` : "."}`);
   }
 
-  const specNodes = assertNotOverflowed(parsed.data.repository.issues, `${normalizedRepo} open specs`);
-  const expectedRepo = normalizedRepo.toLowerCase();
-
-  return specNodes.map((specNode) => {
-    const spec: SpecIssue = parseIssueNode(specNode);
-    const subNodes = assertNotOverflowed(specNode.subIssues, `spec #${spec.number} subIssues`);
-    const seenTickets = new Set<number>();
-    const tickets: TicketIssue[] = subNodes.map((ticketNode) => {
-      const details = parseIssueNode(ticketNode);
-      if (details.repo !== expectedRepo || details.number === spec.number || seenTickets.has(details.number)) {
-        throw new Error(`Spec #${spec.number} has an invalid or duplicate sub-issue #${details.number}.`);
-      }
-      seenTickets.add(details.number);
-      return {
-        ...details,
-        parent: ticketNode.parent ? parseIssueRef(ticketNode.parent) : null,
-      };
-    });
-    return { spec, tickets };
+  const specRefs = assertNotOverflowed(parsed.data.repository.issues, `${normalizedRepo} open specs`);
+  const specNumbers = specRefs.map((entry) => {
+    if (typeof entry?.number !== "number" || !Number.isSafeInteger(entry.number) || entry.number < 1) {
+      throw new Error(`GitHub returned an invalid Spec number for ${normalizedRepo}.`);
+    }
+    return entry.number;
   });
+
+  return Promise.all(specNumbers.map((specNumber) => readSingleSpecGraph(normalizedRepo, specNumber, options)));
 }
 
 function hasExclusiveType(labels: readonly string[], expected: "spec" | "ticket"): boolean {
@@ -534,6 +588,20 @@ function parseCreatedPrNumber(output: string, repo: string): number {
   return number;
 }
 
+function missingClosesLines(
+  existingBody: string,
+  spec: Pick<SpecIssue, "number">,
+  tickets: ReadonlyArray<Pick<TicketIssue, "number">>,
+): string[] {
+  const requiredNumbers = [spec.number, ...tickets.map((ticket) => ticket.number)];
+  return requiredNumbers
+    .filter(
+      (number) =>
+        !new RegExp(`(?:^|\\s)(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\\s+#${number}\\b`, "i").test(existingBody),
+    )
+    .map((number) => `Closes #${number}`);
+}
+
 export async function ensurePr(
   repo: string,
   params: {
@@ -550,12 +618,24 @@ export async function ensurePr(
   options?: GhOptions,
 ): Promise<PullRequestInfo> {
   const normalizedRepo = validateRepository(repo);
+  const gh = defaultGh(options);
   const existing = await findOpenPr(
     normalizedRepo,
     { headBranch: params.headBranch, baseBranch: params.baseBranch, headSha: params.headSha },
     options,
   );
-  if (existing) return existing;
+  if (existing) {
+    const existingBody = existing.body ?? "";
+    const missing = missingClosesLines(existingBody, params.spec, params.tickets);
+    if (missing.length > 0) {
+      const updatedBody = [existingBody.trimEnd(), missing.join("\n")].filter(Boolean).join("\n\n");
+      await withBodyFile(updatedBody, (bodyPath) =>
+        gh(["pr", "edit", String(existing.number), "--repo", normalizedRepo, "--body-file", bodyPath]),
+      );
+      return { ...existing, body: updatedBody };
+    }
+    return existing;
+  }
 
   const trimmedDraft = params.draftBody?.trim();
   const body = trimmedDraft
@@ -569,7 +649,6 @@ export async function ensurePr(
         headSha: params.headSha,
       });
 
-  const gh = defaultGh(options);
   const title = params.title ?? `Spec #${params.spec.number}: ${params.spec.title}`;
   const createdOutput = await withBodyFile(body, (bodyPath) =>
     gh([

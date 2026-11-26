@@ -16,9 +16,10 @@
 
 若受阻或未完成，报告阻碍原因与安全恢复点，且不要输出 `<promise>COMPLETE</promise>`。
 
-## Conflict Base SHA
+## Conflict Context
 
-{{CONFLICT_BASE}}
+- Ticket Candidate SHA: `{{CANDIDATE_SHA}}`
+- Conflict Base SHA: `{{CONFLICT_BASE}}`
 
 ## Parent Spec
 

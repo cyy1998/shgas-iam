@@ -146,6 +146,17 @@ test("preflightCredentials rejects embedded credentials in .git/config remote UR
     const err = await expectReject(() => preflightCredentials(cwd, "origin"));
     expect(err.message.toLowerCase()).toContain("credential");
   });
+
+  // Reject local http.extraHeader / http.<url>.extraHeader embedding Authorization headers.
+  await withGitDir(async (cwd) => {
+    await command(
+      "git",
+      ["config", "--local", "http.https://github.com/.extraheader", "AUTHORIZATION: basic dG9rZW4="],
+      cwd,
+    );
+    const err = await expectReject(() => preflightCredentials(cwd, "origin"));
+    expect(err.message.toLowerCase()).toContain("authorization");
+  });
 });
 
 test("readReviewCache and writeReviewCache persist reports keyed solely by candidate SHA in a single JSON file", async () => {

@@ -188,29 +188,43 @@ async function createFixture(root: string, ticketNumbers: number[]) {
     const [op, sub] = args;
 
     if (op === "api" && sub === "graphql") {
-      const specNodes = [...issues.values()]
-        .filter((item) => item.state === "OPEN" && item.labels.has("type:spec"))
-        .map((spec) => ({
-          ...formatGraphNode(spec),
-          subIssues: page(
-            (spec.subIssues ?? []).map((num) => {
-              const child = issues.get(num);
-              if (!child) throw new Error(`Missing fixture sub-issue #${num}`);
-              return {
-                ...formatGraphNode(child),
-                parent:
-                  child.parent !== undefined
-                    ? {
-                        number: child.parent,
-                        state: issues.get(child.parent)?.state ?? "OPEN",
-                        repository: { nameWithOwner: repo },
-                      }
-                    : null,
-              };
-            }),
-          ),
-        }));
-      return JSON.stringify({ data: { repository: { issues: page(specNodes) } } });
+      const queryArg = args.find((arg) => arg.startsWith("query=")) ?? "";
+      if (queryArg.includes("ListOpenSpecs")) {
+        const specNumbers = [...issues.values()]
+          .filter((item) => item.state === "OPEN" && item.labels.has("type:spec"))
+          .map((spec) => ({ number: spec.number }));
+        return JSON.stringify({ data: { repository: { issues: page(specNumbers) } } });
+      }
+      const numArg = args.find((arg) => arg.startsWith("number="));
+      const specNum = Number(numArg?.slice("number=".length));
+      const spec = issues.get(specNum);
+      if (!spec) return JSON.stringify({ data: { repository: { issue: null } } });
+      return JSON.stringify({
+        data: {
+          repository: {
+            issue: {
+              ...formatGraphNode(spec),
+              subIssues: page(
+                (spec.subIssues ?? []).map((num) => {
+                  const child = issues.get(num);
+                  if (!child) throw new Error(`Missing fixture sub-issue #${num}`);
+                  return {
+                    ...formatGraphNode(child),
+                    parent:
+                      child.parent !== undefined
+                        ? {
+                            number: child.parent,
+                            state: issues.get(child.parent)?.state ?? "OPEN",
+                            repository: { nameWithOwner: repo },
+                          }
+                        : null,
+                  };
+                }),
+              ),
+            },
+          },
+        },
+      });
     }
 
     if (op === "api" && sub?.startsWith(`repos/${repo}/issues/`)) {
@@ -246,9 +260,19 @@ async function createFixture(root: string, ticketNumbers: number[]) {
         baseRefName: base,
         headRefOid: remoteSha,
         isCrossRepository: false,
+        body: lastPrBody,
       };
       events.push("pr:create");
       return pr.url;
+    }
+
+    if (op === "pr" && sub === "edit") {
+      if (!pr) throw new Error("No open PR to edit.");
+      const bodyFile = args[args.indexOf("--body-file") + 1] ?? "";
+      lastPrBody = await readFile(bodyFile, "utf8");
+      pr = { ...pr, body: lastPrBody };
+      events.push("pr:edit");
+      return "";
     }
 
     if (op === "pr" && sub === "view") {
@@ -1047,12 +1071,15 @@ test("intercepts trust boundary violations (rewritten baseline, moved specBranch
     expect(fixture.issues.get(40)?.comments.at(-1)?.body).toContain(specBranch);
   });
 
-  // Violation 3: Agent mutated remote tracking ref refs/remotes/origin/main.
+  // Violation 3: Agent rewrote remote tracking ref refs/remotes/origin/main non-fast-forward.
   await withFixture(async (fixture) => {
     fixture.onAgent = async ({ options, worktreePath }) => {
       if (options.name === "implement") {
-        const newSha = await commit(worktreePath, "ok.txt", "ticket work\n");
-        await fixture.git("update-ref", "refs/remotes/origin/main", newSha);
+        await commit(worktreePath, "ok.txt", "ticket work\n");
+        await command("git", ["checkout", "--orphan", "bad-remote-tip"], worktreePath);
+        const unrelatedSha = await commit(worktreePath, "unrelated.txt", "unrelated\n");
+        await command("git", ["checkout", "sandcastle/ticket-41"], worktreePath);
+        await fixture.git("update-ref", "refs/remotes/origin/main", unrelatedSha);
         return makeResult(`Done.\n${complete}`);
       }
       return undefined;
@@ -1063,6 +1090,105 @@ test("intercepts trust boundary violations (rewritten baseline, moved specBranch
     expect(result.failed).toEqual([41]);
     expect(fixture.issues.get(40)?.labels.has("needs-attention")).toBe(true);
     expect(fixture.issues.get(40)?.comments.at(-1)?.body).toContain("refs/remotes/origin/main");
+  });
+
+  // Legitimate concurrent `git fetch origin main` fast-forward must NOT trip the trust boundary.
+  await withFixture(async (fixture) => {
+    fixture.onAgent = async ({ options, worktreePath }) => {
+      if (options.name === "implement") {
+        const extra = await commit(worktreePath, "ok.txt", "ticket work\n");
+        // Fast-forward refs/remotes/origin/main as if maintainer/IDE fetched an updated main mid-run.
+        await fixture.git("update-ref", "refs/remotes/origin/main", extra);
+        return makeResult(`Done.\n${complete}`);
+      }
+      return undefined;
+    };
+    const result = await fixture.run();
+    expect(result.delivered).toEqual([40]);
+    expect(result.paused).toEqual([]);
+  });
+
+  // Dirty/preserved ticket worktree must fail the ticket rather than merging partial commits.
+  await withFixture(async (fixture) => {
+    fixture.onAgent = async ({ options, worktreePath }) => {
+      if (options.name === "implement") {
+        await commit(worktreePath, "ok.txt", "committed part\n");
+        return {
+          ...makeResult(`Done.\n${complete}`),
+          preservedWorktreePath: worktreePath,
+        };
+      }
+      return undefined;
+    };
+    const result = await fixture.run();
+    expect(result.paused).toEqual([40]);
+    expect(result.failed).toEqual([41]);
+    expect(result.integrated).toEqual([]);
+    expect(fixture.issues.get(40)?.comments.at(-1)?.body).toContain("preserved worktree");
+  });
+
+  // Newly added ready-for-agent sub-issue mid-run is integrated before review and included in PR Closes.
+  await withFixture(async (fixture) => {
+    fixture.onAgent = async ({ options }) => {
+      if (options.name === "implement" && options.branchStrategy?.type === "branch") {
+        if (options.branchStrategy.branch === "sandcastle/ticket-41") {
+          fixture.issues.set(43, {
+            number: 43,
+            title: "Approved mid-run ticket 43",
+            body: "Must be integrated before review",
+            state: "OPEN",
+            labels: new Set(["type:ticket", "ready-for-agent"]),
+            comments: [],
+            blockers: [],
+            parent: 40,
+          });
+          fixture.issues.get(40)?.subIssues?.push(43);
+        }
+      }
+      return undefined;
+    };
+    const result = await fixture.run({ maxParallel: 1 });
+    expect(result.delivered).toEqual([40]);
+    expect(result.integrated).toEqual([41, 43]);
+    expect(fixture.lastPrBody).toContain("Closes #43");
+  });
+
+  // External worktree checking out an integrated ticket branch must block cleanup before deleteBranchCas.
+  await withFixture(async (fixture) => {
+    const extPath = join(fixture.cwd, "..", "external-t41");
+    fixture.onAgent = async ({ options }) => {
+      if (options.name === "repair-and-verify") {
+        // Maintainer checks out sandcastle/ticket-41 in an external worktree before delivery cleanup.
+        await fixture.git("worktree", "add", extPath, "sandcastle/ticket-41");
+      }
+      return undefined;
+    };
+    const result = await fixture.run();
+    expect(result.paused).toEqual([40]);
+    expect(result.delivered).toEqual([]);
+    expect(fixture.issues.get(40)?.labels.has("ready-for-agent")).toBe(true);
+    expect(fixture.issues.get(40)?.comments.at(-1)?.body).toContain("external or locked worktree");
+    expect(await fixture.git("for-each-ref", "--format=%(objectname)", "refs/heads/sandcastle/ticket-41")).not.toBe("");
+    await fixture.git("worktree", "remove", "--force", extPath);
+  });
+
+  // Spec worktree containing force-committed forbidden .sandcastle/.env is rejected before review starts.
+  await withFixture(async (fixture) => {
+    fixture.onAgent = async ({ options, worktreePath }) => {
+      if (options.name === "implement") {
+        await mkdir(join(worktreePath, ".sandcastle"), { recursive: true });
+        await writeFile(join(worktreePath, ".sandcastle", ".env"), "GH_TOKEN=\n");
+        await command("git", ["add", "-f", "--", ".sandcastle/.env"], worktreePath);
+        await command("git", ["-c", "core.hooksPath=/dev/null", "commit", "-m", "inject dotenv"], worktreePath);
+        return makeResult(`Done.\n${complete}`);
+      }
+      return undefined;
+    };
+    const result = await fixture.run();
+    expect(result.paused).toEqual([40]);
+    expect(result.delivered).toEqual([]);
+    expect(fixture.calls.some((c) => c.options.name === "review-standards")).toBe(false);
+    expect(fixture.issues.get(40)?.comments.at(-1)?.body).toContain("GH_TOKEN");
   });
 
   // Violation 4: Read-only review mutates Spec worktree tip -> rejected before caching or repair.

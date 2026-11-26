@@ -74,7 +74,7 @@ Spec 与 implementation ticket 使用[互斥类型标签](triage-labels.md#spec-
 
 当前 GitHub CLI 支持创建时传 `--parent <spec-number>` 与 `--blocked-by <numbers>`，
 修改已有子票时可用 `--parent`、`--add-blocked-by`；仍须显式指定仓库。
-Sandcastle AFK 通过单次 `first:100` GraphQL 查询读取全部 open Spec、子票、评论与阻塞边（检测 `pageInfo.hasNextPage` 溢出即显式报错，并经有限退避重试应对瞬断）。
+Sandcastle AFK 通过有界两段 `first:100` GraphQL 查询读取全部 open Spec 编号及各 Spec 的子票、评论与阻塞边（规避 GitHub 50 万节点上限，检测 `pageInfo.hasNextPage` 溢出即显式报错，并经有限退避重试应对瞬断）。
 关系或必要 API 不可用时报告阻塞，AFK 不降级到正文猜测归属或依赖。
 
 AFK 不要求使用 assignee 认领（assignee 仅用于人工开发与 wayfinding 认领）。父 Spec 与待实施子票按 `OPEN ∧ 类型标签正确 ∧ ready-for-agent ∧ !needs-attention`、原生父子匹配与阻塞关系判定就绪（Spec 内前置看 Git 合并提交 trailer，Spec 外前置直接信任 `CLOSED`）。子票缺少准入、依赖矛盾或循环时，受影响切片保持阻塞，独立切片仍可推进；未准入的必要子票仍属于完整 Spec 范围，运行中新增子票不会暂停整个 Spec。

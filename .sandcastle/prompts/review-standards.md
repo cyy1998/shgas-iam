@@ -16,3 +16,11 @@
 
 - Base SHA: `{{BASE_SHA}}`
 - Candidate SHA: `{{CANDIDATE_SHA}}`
+
+## Parent Spec
+
+{{SPEC}}
+
+## Tickets
+
+{{TICKETS}}

@@ -1,48 +1,17 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import {
-  type AgentProvider,
-  type BindMountSandboxProvider,
-  run,
-  type SandboxHooks,
-  type SandboxProvider,
-} from "@ai-hero/sandcastle";
-import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
+import { type AgentProvider, run } from "@ai-hero/sandcastle";
 import { command } from "../scripts/sandcastle/core/command.ts";
 import { findManagedWorktree, removeWorktreeSafe } from "../scripts/sandcastle/core/git.ts";
 import { readonlySandbox } from "../scripts/sandcastle/core/index.ts";
-import { withTestResources } from "./test-resources.ts";
+import { createRepoSandboxFactory } from "./run.mts";
 
 const complete = "<promise>COMPLETE</promise>";
-const sandboxStore = "/home/agent/.pnpm-store";
 const dockerSocket = "/var/run/docker.sock";
-const writableHooks: SandboxHooks = {
-  sandbox: {
-    onSandboxReady: [
-      {
-        command:
-          "sh .sandcastle/hooks/prepare-workspace.sh </dev/null && sh .sandcastle/hooks/enable-git-hooks.sh </dev/null",
-        timeoutMs: 1_200_000,
-      },
-    ],
-  },
-};
-
-function asBindMount(provider: SandboxProvider): BindMountSandboxProvider {
-  if (
-    "tag" in provider &&
-    provider.tag === "bind-mount" &&
-    "create" in provider &&
-    typeof provider.create === "function"
-  ) {
-    return provider as BindMountSandboxProvider;
-  }
-  throw new Error(`Expected bind-mount sandbox provider, got "${provider.name}".`);
-}
 
 function probeAgent(script: string): AgentProvider {
   return {
@@ -64,13 +33,15 @@ export async function smoke(cwd: string): Promise<void> {
   await mkdir(hostStore, { recursive: true });
 
   const root = await mkdtemp(join(tmpdir(), "sandcastle-smoke-"));
+  const authFixturePath = join(root, "smoke-auth.json");
+  const authFixtureContent = '{"token":"smoke-fixture"}\n';
   const project = `sandcastle-smoke-${randomUUID()}`;
   const network = `${project}_default`;
   const git = (...args: string[]) => command("git", args, root);
   console.log(`Sandcastle smoke fixture ${root}, Compose project ${project}`);
 
   const probe = createServer((_request, response) => response.end(project));
-  let managedCleanup: (() => Promise<void>) | undefined;
+  let activeCleanup: (() => Promise<void>) | undefined;
   try {
     await git("init", "--quiet");
     await git("fetch", "--quiet", "--depth=1", cwd, "HEAD");
@@ -78,6 +49,7 @@ export async function smoke(cwd: string): Promise<void> {
     await git("config", "user.name", "Sandcastle smoke");
     await git("config", "user.email", "smoke@example.invalid");
     await git("config", "core.hooksPath", ".husky/_");
+    await writeFile(authFixturePath, authFixtureContent, { mode: 0o600 });
     const configPath = join(root, ".git", "config");
     const hostConfig = await readFile(configPath, "utf8");
     const logsDir = join(root, ".sandcastle", "logs");
@@ -90,52 +62,51 @@ export async function smoke(cwd: string): Promise<void> {
     const address = probe.address();
     assert(address && typeof address === "object");
 
-    // 1. Read-only review sandbox
-    const readOnlyDocker = asBindMount(
-      docker({ imageName, mounts: [{ hostPath: hostStore, sandboxPath: sandboxStore, readonly: true }], env: {} }),
-    );
-    const readOnlyResult = await run({
+    const createSession = createRepoSandboxFactory({
       cwd: root,
-      agent: probeAgent(`set -eu
+      env: { CODEX_AUTH: "chatgpt", CODEX_AUTH_FILE: authFixturePath },
+      imageName,
+      hostStore,
+      dockerGid: socketInfo.gid,
+    });
+
+    // 1. Read-only review sandbox (exercises exact production factory + readonlySandbox + readonly auth.json mount)
+    const readOnlySession = await createSession({ phase: "review-standards", readonly: true, runId: "smoke-ro" });
+    activeCleanup = readOnlySession.cleanup;
+    try {
+      const readOnlyResult = await run({
+        cwd: root,
+        agent: probeAgent(`set -eu
 if touch smoke-readonly-probe 2>/dev/null; then echo 'Worktree is writable' >&2; exit 1; fi
 if (printf '' >> .git/HEAD) 2>/dev/null || git config --local smoke.ro true 2>/dev/null; then echo 'Git controls are writable' >&2; exit 1; fi
+if (printf 'tampered' > "$CODEX_HOME/auth.json") 2>/dev/null; then echo 'Codex auth.json is writable in read-only sandbox' >&2; exit 1; fi
 if env | grep -Eq '^(GH_TOKEN|GITHUB_TOKEN)='; then echo 'GitHub credentials reached read-only sandbox' >&2; exit 1; fi
 test ! -e /var/run/docker.sock
 test -z "\${DOCKER_HOST:-}"
 test ! -e /tmp/iam-sandcastle-hooks/pre-commit
 printf '%s\n' '${complete}'`),
-      sandbox: readonlySandbox(readOnlyDocker),
-      branchStrategy: { type: "head" },
-      prompt: "Run the read-only Docker smoke probe.",
-      logging: { type: "file", path: join(logsDir, "smoke-readonly.log") },
-      completionSignal: complete,
-      maxIterations: 1,
-    });
-    assert.equal(readOnlyResult.completionSignal, complete, "Read-only sandbox probe did not complete.");
+        sandbox: readonlySandbox(readOnlySession.sandbox),
+        branchStrategy: { type: "head" },
+        prompt: "Run the read-only Docker smoke probe.",
+        logging: { type: "file", path: join(logsDir, "smoke-readonly.log") },
+        completionSignal: complete,
+        maxIterations: 1,
+      });
+      assert.equal(readOnlyResult.completionSignal, complete, "Read-only sandbox probe did not complete.");
+    } finally {
+      await readOnlySession.cleanup?.();
+      activeCleanup = undefined;
+    }
+    assert.equal(await readFile(authFixturePath, "utf8"), authFixtureContent);
 
-    // 2. Writable implement sandbox
-    const writableDocker = docker({
-      imageName,
-      mounts: [
-        { hostPath: hostStore, sandboxPath: sandboxStore },
-        { hostPath: dockerSocket, sandboxPath: dockerSocket },
-      ],
-      env: {
-        IAM_AFK_PNPM_STORE_DIR: sandboxStore,
-        GIT_CONFIG_COUNT: "1",
-        GIT_CONFIG_KEY_0: "core.hooksPath",
-        GIT_CONFIG_VALUE_0: "/tmp/iam-sandcastle-hooks",
-        DOCKER_HOST: `unix://${dockerSocket}`,
-      },
-      groups: [socketInfo.gid],
-      network: "host",
-    });
-    const managed = withTestResources({ cwd: root, id: "smoke", sandbox: writableDocker });
-    managedCleanup = managed.cleanup;
-
-    const writableResult = await run({
-      cwd: root,
-      agent: probeAgent(String.raw`set -eu
+    // 2. Writable implement sandbox (exercises exact production factory, hooks, and test-resources cleanup)
+    const writableSession = await createSession({ phase: "implement", readonly: false, runId: "smoke-rw" });
+    activeCleanup = writableSession.cleanup;
+    let writableResult: Awaited<ReturnType<typeof run>>;
+    try {
+      writableResult = await run({
+        cwd: root,
+        agent: probeAgent(String.raw`set -eu
 test -x node_modules/.bin/lint-staged
 test "$(git config --get core.hooksPath)" = /tmp/iam-sandcastle-hooks
 test -x /tmp/iam-sandcastle-hooks/pre-commit
@@ -158,15 +129,18 @@ printf '#    Sandcastle smoke\n' > sandcastle-smoke.md
 git add sandcastle-smoke.md
 git commit -m 'Probe the repository pre-commit hook'
 printf '%s\n' '${complete}'`),
-      sandbox: managed.sandbox,
-      hooks: writableHooks,
-      branchStrategy: { type: "branch", branch: "smoke" },
-      prompt: "Run the writable Docker smoke probe.",
-      logging: { type: "file", path: join(logsDir, "smoke-writable.log") },
-      completionSignal: complete,
-      maxIterations: 1,
-    });
-    await managed.cleanup();
+        sandbox: writableSession.sandbox,
+        hooks: writableSession.hooks,
+        branchStrategy: { type: "branch", branch: "smoke" },
+        prompt: "Run the writable Docker smoke probe.",
+        logging: { type: "file", path: join(logsDir, "smoke-writable.log") },
+        completionSignal: complete,
+        maxIterations: 1,
+      });
+    } finally {
+      await writableSession.cleanup?.();
+      activeCleanup = undefined;
+    }
 
     assert.equal(writableResult.completionSignal, complete, "Writable sandbox probe did not complete.");
     assert.equal(await git("show", "smoke:sandcastle-smoke.md"), "# Sandcastle smoke");
@@ -186,7 +160,7 @@ printf '%s\n' '${complete}'`),
     console.log("Sandcastle Docker smoke passed.");
   } finally {
     await new Promise<void>((resolveClose) => probe.close(() => resolveClose()));
-    await managedCleanup?.().catch(() => {});
+    await activeCleanup?.().catch(() => {});
     await command("docker", ["network", "rm", network], cwd).catch(() => {});
     const sandboxId = await readFile(join(root, "test-results/integration/sandbox-id"), "utf8")
       .then((value) => value.trim())

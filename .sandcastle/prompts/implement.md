@@ -18,6 +18,10 @@
 
 若受阻或未完成，报告阻碍原因与安全恢复点，且不要输出 `<promise>COMPLETE</promise>`。
 
+## Dispatch Baseline
+
+- Baseline SHA: `{{BASE_SHA}}`
+
 ## Parent Spec
 
 {{SPEC}}

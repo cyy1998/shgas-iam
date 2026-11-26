@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, stat, symlink, unlink } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, rm, stat, symlink, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -405,6 +405,72 @@ test("refuses cleanup when registry is replaced by a symlink and rejects non-bin
     expect(failure).toBeInstanceOf(Error);
     expect(String(failure)).toContain(registry);
     expect(projects).toEqual([]);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test("refuses cleanup and preserves executor registry when sandbox container is still running", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "sandcastle-test-resources-running-"));
+  const worktreePath = join(cwd, "worktree");
+  await mkdir(worktreePath, { recursive: true });
+  const cleaned: string[] = [];
+  let registry: string | undefined;
+
+  const provider = createBindMountSandboxProvider({
+    name: "fake-docker",
+    create: async (options) => {
+      registry = options.env.IAM_TEST_RESOURCE_REGISTRY;
+      return {
+        worktreePath: "/home/agent/workspace",
+        sandboxId: "a".repeat(64),
+        exec: async () => ({ stdout: "", stderr: "", exitCode: 0 }),
+        copyFileIn: async () => {},
+        copyFileOut: async () => {},
+        close: async () => {},
+      };
+    },
+  });
+
+  const wrapped = withTestResources({
+    cwd,
+    id: "still-running",
+    sandbox: provider,
+    runCommand: async ({ args = [] }) => {
+      cleaned.push(args.join(" "));
+      return { exitCode: 0, output: "", signal: null };
+    },
+    verifySandboxStopped: async (sandboxId) => {
+      throw new Error(`Container ${sandboxId} still running`);
+    },
+  });
+
+  try {
+    await invokeCreate(wrapped.sandbox, {
+      worktreePath,
+      hostRepoPath: cwd,
+      mounts: [{ hostPath: worktreePath, sandboxPath: "/home/agent/workspace" }],
+      env: {},
+    });
+    if (!registry) throw new Error("Expected registry");
+    await createManagedResourceRun({
+      root: cwd,
+      composeFile: "compose.yaml",
+      project: "active-project",
+      registryFile: registry,
+    });
+
+    let failure: unknown;
+    try {
+      await wrapped.cleanup();
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(Error);
+    expect(String(failure)).toContain("无法确认沙箱已停止");
+    expect(cleaned).toEqual([]);
+    const statInfo = await lstat(join(cwd, registry));
+    expect(statInfo.isFile()).toBe(true);
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }

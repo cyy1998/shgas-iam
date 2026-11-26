@@ -48,6 +48,7 @@ export type CodexAuthOptions = {
 
 export type StageCodexAuthOptions = CodexAuthOptions & {
   sandboxHome?: string;
+  readonly?: boolean;
   warn?: (message: string) => void;
 };
 
@@ -93,11 +94,23 @@ function resolveAuthInputs(options: CodexAuthOptions) {
   return { mode, apiKey, source, codexHome };
 }
 
-async function readAuthFile(path: string): Promise<{ contents: string; mode: number }> {
+async function readAuthFile(path: string): Promise<{
+  contents: string;
+  mode: number;
+  ino: number;
+  size: number;
+  mtimeMs: number;
+}> {
   try {
     const file = await lstat(path);
     if (!file.isFile()) throw new Error();
-    return { contents: await readFile(path, "utf8"), mode: file.mode & 0o777 };
+    return {
+      contents: await readFile(path, "utf8"),
+      mode: file.mode & 0o777,
+      ino: file.ino,
+      size: file.size,
+      mtimeMs: file.mtimeMs,
+    };
   } catch {
     throw new Error("Codex chatgpt authentication requires a readable auth.json.");
   }
@@ -241,6 +254,18 @@ export async function stageCodexAuth(options: StageCodexAuthOptions): Promise<St
   }
 
   let closePromise: Promise<void> | undefined;
+  if (options.readonly) {
+    return {
+      mode,
+      env: { CODEX_HOME: sandboxHome },
+      mounts: [{ hostPath: stagedPath, sandboxPath: `${sandboxHome}/auth.json`, readonly: true }],
+      close: () => {
+        closePromise ??= rm(directory, { recursive: true, force: true });
+        return closePromise;
+      },
+    };
+  }
+
   return {
     mode,
     env: { CODEX_HOME: sandboxHome },
@@ -251,7 +276,12 @@ export async function stageCodexAuth(options: StageCodexAuthOptions): Promise<St
         if (refreshed.contents !== original.contents) {
           const current = await readAuthFile(source);
           if (current.contents !== refreshed.contents) {
-            if (current.contents !== original.contents) {
+            if (
+              current.contents !== original.contents ||
+              current.ino !== original.ino ||
+              current.size !== original.size ||
+              current.mtimeMs !== original.mtimeMs
+            ) {
               warn(
                 `Codex authentication writeback skipped because ${source} was updated concurrently. Staged credentials retained in ${directory}.`,
               );
@@ -260,6 +290,18 @@ export async function stageCodexAuth(options: StageCodexAuthOptions): Promise<St
             const temp = `${source}.${randomUUID()}.tmp`;
             try {
               await writeFile(temp, refreshed.contents, { flag: "wx", mode: current.mode });
+              const recheck = await lstat(source);
+              if (
+                !recheck.isFile() ||
+                recheck.ino !== current.ino ||
+                recheck.size !== current.size ||
+                recheck.mtimeMs !== current.mtimeMs
+              ) {
+                warn(
+                  `Codex authentication writeback skipped because ${source} changed before rename. Staged credentials retained in ${directory}.`,
+                );
+                return;
+              }
               await rename(temp, source);
             } finally {
               await rm(temp, { force: true });

@@ -5,13 +5,14 @@ import { type BindMountBranchStrategy, run as nativeRun, type RunResult } from "
 import { command, retryGhRead } from "./command.ts";
 import {
   assertBoundary,
+  assertRemoteMatchesRepo,
   assertValidBranchName,
   branchTip,
   createSerialQueue,
   deleteBranchCas,
   ensureSpecWorktree,
   fetchBase,
-  findManagedWorktree,
+  findBranchWorktree,
   isAncestor,
   mergeBase,
   mergeTicket,
@@ -28,6 +29,7 @@ import {
   findOpenPr,
   type GhOptions,
   pauseSpec,
+  readSingleSpecGraph,
   readSpecGraph,
   readSpecLabels,
   removeLabel,
@@ -193,6 +195,7 @@ export async function checkAfk(options: CheckAfkOptions, deps: Pick<AfkDeps, "ru
   const baseBranch = options.baseBranch?.trim() || "main";
 
   await preflightCredentials(cwd, remote);
+  await assertRemoteMatchesRepo(cwd, remote, repo);
   const { remoteRef, sha: baseSha } = await fetchBase(cwd, remote, baseBranch);
   const runGh =
     deps.runGh ?? ((args: string[]) => command("gh", args, cwd, { ...process.env, GH_PROMPT_DISABLED: "1" }));
@@ -215,6 +218,7 @@ export async function runAfk(options: AfkOptions, deps: AfkDeps = {}): Promise<A
   const report = deps.report ?? console.log;
 
   await preflightCredentials(cwd, remote);
+  await assertRemoteMatchesRepo(cwd, remote, repo);
   const initialBase = await fetchBase(cwd, remote, baseBranch);
 
   const result: AfkRunResult = {
@@ -247,6 +251,9 @@ export async function runAfk(options: AfkOptions, deps: AfkDeps = {}): Promise<A
     tag: string;
   }): Promise<RunResult> {
     const { phase, readonly, slot, phaseCwd, branchStrategy, promptArgs, tag } = input;
+    if (phaseCwd !== cwd) {
+      await preflightCredentials(phaseCwd, remote);
+    }
     const { provider, instructions } = resolveSlot(slot);
     const promptFile = await resolvePromptFile(phase, promptsDir);
     const runId = `${phase}-${tag}-${randomUUID().slice(0, 8)}`;
@@ -314,8 +321,15 @@ export async function runAfk(options: AfkOptions, deps: AfkDeps = {}): Promise<A
     // 4. Non-force cleanup of worktrees & CAS delete local ticket branches (preserving local Spec branch ref).
     for (const ticket of graph.tickets) {
       const tBranch = ticketBranchName(ticket.number);
-      const tWorktree = await findManagedWorktree(cwd, tBranch);
-      if (tWorktree) await removeWorktreeSafe(cwd, tWorktree);
+      const tWorktree = await findBranchWorktree(cwd, tBranch);
+      if (tWorktree) {
+        if (!tWorktree.managed || tWorktree.unavailable) {
+          throw new Error(
+            `Refusing to clean up ticket branch ${tBranch}: checked out in external or locked worktree (${tWorktree.path}).`,
+          );
+        }
+        await removeWorktreeSafe(cwd, tWorktree.path);
+      }
       const tTip = await branchTip(cwd, tBranch);
       if (tTip) {
         const expected = integrated.get(ticket.number)?.candidateSha;
@@ -326,9 +340,18 @@ export async function runAfk(options: AfkOptions, deps: AfkDeps = {}): Promise<A
       }
     }
 
-    const activeSpecWorktree = specWorktreePath ?? (await findManagedWorktree(cwd, specBranch));
-    if (activeSpecWorktree) {
-      await removeWorktreeSafe(cwd, activeSpecWorktree);
+    if (specWorktreePath) {
+      await removeWorktreeSafe(cwd, specWorktreePath);
+    } else {
+      const specWorktreeInfo = await findBranchWorktree(cwd, specBranch);
+      if (specWorktreeInfo) {
+        if (!specWorktreeInfo.managed || specWorktreeInfo.unavailable) {
+          throw new Error(
+            `Refusing to clean up Spec branch ${specBranch}: checked out in external or locked worktree (${specWorktreeInfo.path}).`,
+          );
+        }
+        await removeWorktreeSafe(cwd, specWorktreeInfo.path);
+      }
     }
 
     const retainedTip = await branchTip(cwd, specBranch);
@@ -442,13 +465,26 @@ export async function runAfk(options: AfkOptions, deps: AfkDeps = {}): Promise<A
         stage = "check existing open pull request";
         const existingPr = await findOpenPr(repo, { headBranch: specBranch, baseBranch }, ghOptions);
         if (existingPr && existingPr.headRefOid === selected.existingTip) {
+          const syncedPr = await ensurePr(
+            repo,
+            {
+              spec: graph.spec,
+              tickets: graph.tickets,
+              integrated: selected.integrated,
+              headBranch: specBranch,
+              baseBranch,
+              headSha: selected.existingTip,
+              draft,
+            },
+            ghOptions,
+          );
           stage = "finish idempotent PR delivery cleanup";
           await finishCleanupAndUntag({
             graph,
             specBranch,
             specTip: selected.existingTip,
             integrated: selected.integrated,
-            pr: existingPr,
+            pr: syncedPr,
           });
           continue;
         }
@@ -458,9 +494,11 @@ export async function runAfk(options: AfkOptions, deps: AfkDeps = {}): Promise<A
       const specWorktree = await ensureSpecWorktree(cwd, specBranch, baseSha);
       const specMergeBase = await mergeBase(cwd, specBranch, remoteRef);
       const integrated = await readIntegratedTickets(cwd, specBranch, specMergeBase);
-      const specContext = formatSpecContext(graph.spec, specBranch);
+      const activeGraph: SpecGraph = { spec: graph.spec, tickets: [...graph.tickets] };
+      const specContext = formatSpecContext(activeGraph.spec, specBranch);
 
       let expectedSpecTip = specWorktree.head;
+      let expectedRemoteSha = baseSha;
       const serialize = createSerialQueue();
 
       // Parallel ticket dispatch + serial merge loop.
@@ -480,6 +518,18 @@ export async function runAfk(options: AfkOptions, deps: AfkDeps = {}): Promise<A
       let softStopped = false;
       let fatalError: unknown;
       const ticketFailures: Array<{ number: number; reason: string }> = [];
+
+      const assertCleanTicketWorktree = async (ticketNumber: number, tBranch: string, runRes: RunResult) => {
+        if (runRes.preservedWorktreePath) {
+          throw new Error(
+            `Ticket #${ticketNumber} left uncommitted changes in preserved worktree ${runRes.preservedWorktreePath}.`,
+          );
+        }
+        const lingering = await findBranchWorktree(cwd, tBranch);
+        if (lingering && lingering.managed && !lingering.unavailable) {
+          await observeCleanCheckout(lingering.path);
+        }
+      };
 
       const dispatchTicket = async (
         ticket: TicketIssue,
@@ -501,6 +551,7 @@ export async function runAfk(options: AfkOptions, deps: AfkDeps = {}): Promise<A
             },
             tag: `ticket-${ticket.number}`,
           });
+          await assertCleanTicketWorktree(ticket.number, tBranch, runRes);
           const handoff = completionReport(runRes);
           if (!handoff) {
             throw new Error(`Ticket #${ticket.number} did not complete with a verification handoff.`);
@@ -513,7 +564,7 @@ export async function runAfk(options: AfkOptions, deps: AfkDeps = {}): Promise<A
 
       try {
         for (;;) {
-          const frontier = specFrontier(graph, new Set(integrated.keys()));
+          const frontier = specFrontier(activeGraph, new Set(integrated.keys()));
           const nextReady = frontier.ready.filter((ticket) => !attemptedTickets.has(ticket.number));
 
           while (!softStopped && !fatalError && inFlight.size < maxParallel && nextReady.length > 0) {
@@ -548,7 +599,29 @@ export async function runAfk(options: AfkOptions, deps: AfkDeps = {}): Promise<A
             );
           }
 
-          if (fatalError !== undefined || inFlight.size === 0) break;
+          if (fatalError !== undefined) break;
+          if (inFlight.size === 0) {
+            // Before leaving the ticket loop for review, refresh once to pick up any newly added ready-for-agent sub-issues.
+            // Draft sub-issues added mid-run without ready-for-agent are intentionally ignored so they do not pause the Spec.
+            if (!softStopped && ticketFailures.length === 0) {
+              const refreshed = await readSingleSpecGraph(repo, specNumber, ghOptions);
+              const known = new Set(activeGraph.tickets.map((ticket) => ticket.number));
+              const newlyReady = refreshed.tickets.filter(
+                (ticket) =>
+                  !known.has(ticket.number) &&
+                  ticket.state === "OPEN" &&
+                  ticket.labels.includes("type:ticket") &&
+                  !ticket.labels.includes("type:spec") &&
+                  ticket.labels.includes("ready-for-agent") &&
+                  !ticket.labels.includes("needs-attention"),
+              );
+              if (newlyReady.length > 0) {
+                activeGraph.tickets.push(...newlyReady);
+                continue;
+              }
+            }
+            break;
+          }
 
           const finished = await Promise.race(inFlight.values());
           inFlight.delete(finished.ticket.number);
@@ -560,11 +633,11 @@ export async function runAfk(options: AfkOptions, deps: AfkDeps = {}): Promise<A
               result.failed.push(ticket.number);
               ticketFailures.push({ number: ticket.number, reason: describeError(outcome.error) });
               try {
-                await assertBoundary(cwd, {
+                expectedRemoteSha = await assertBoundary(cwd, {
                   specBranch,
                   expectedSpecTip,
                   remoteRef,
-                  expectedRemoteSha: baseSha,
+                  expectedRemoteSha,
                 });
               } catch (boundaryErr) {
                 fatalError ??= boundaryErr;
@@ -573,13 +646,13 @@ export async function runAfk(options: AfkOptions, deps: AfkDeps = {}): Promise<A
             }
 
             try {
-              await assertBoundary(cwd, {
+              expectedRemoteSha = await assertBoundary(cwd, {
                 ticketBranch: outcome.ticketBranch,
                 baselineSha: outcome.baselineSha,
                 specBranch,
                 expectedSpecTip,
                 remoteRef,
-                expectedRemoteSha: baseSha,
+                expectedRemoteSha,
               });
             } catch (boundaryErr) {
               result.failed.push(ticket.number);
@@ -618,18 +691,19 @@ export async function runAfk(options: AfkOptions, deps: AfkDeps = {}): Promise<A
                   },
                   tag: `ticket-${ticket.number}`,
                 });
+                await assertCleanTicketWorktree(ticket.number, outcome.ticketBranch, resolveRes);
                 const resolveHandoff = completionReport(resolveRes);
                 if (!resolveHandoff) {
                   throw new Error(`Conflict resolution for ticket #${ticket.number} did not complete.`);
                 }
 
-                await assertBoundary(cwd, {
+                expectedRemoteSha = await assertBoundary(cwd, {
                   ticketBranch: outcome.ticketBranch,
                   baselineSha: preResolveTip,
                   specBranch,
                   expectedSpecTip: conflictBase,
                   remoteRef,
-                  expectedRemoteSha: baseSha,
+                  expectedRemoteSha,
                 });
                 const resolvedTip = await branchTip(cwd, outcome.ticketBranch);
                 if (!resolvedTip || !(await isAncestor(cwd, conflictBase, resolvedTip))) {
@@ -668,11 +742,11 @@ export async function runAfk(options: AfkOptions, deps: AfkDeps = {}): Promise<A
               result.failed.push(ticket.number);
               ticketFailures.push({ number: ticket.number, reason: describeError(mergeError) });
               try {
-                await assertBoundary(cwd, {
+                expectedRemoteSha = await assertBoundary(cwd, {
                   specBranch,
                   expectedSpecTip,
                   remoteRef,
-                  expectedRemoteSha: baseSha,
+                  expectedRemoteSha,
                 });
               } catch (boundaryErr) {
                 fatalError ??= boundaryErr;
@@ -698,7 +772,7 @@ export async function runAfk(options: AfkOptions, deps: AfkDeps = {}): Promise<A
         throw new Error(`Ticket execution/integration failed:\n${details}`);
       }
 
-      const finalFrontier = specFrontier(graph, new Set(integrated.keys()));
+      const finalFrontier = specFrontier(activeGraph, new Set(integrated.keys()));
       if (!finalFrontier.complete) {
         throw new Error(
           `Spec #${specNumber} still has unintegrated or blocked tickets: ${JSON.stringify(finalFrontier.blocked)}`,
@@ -713,7 +787,7 @@ export async function runAfk(options: AfkOptions, deps: AfkDeps = {}): Promise<A
         throw new Error(`Spec worktree HEAD ${candidateSha} diverged from expected tip ${expectedSpecTip}.`);
       }
 
-      const ticketsContext = formatTicketsContext(graph.tickets, integrated);
+      const ticketsContext = formatTicketsContext(activeGraph.tickets, integrated);
       let reviewReport = await readReviewCache(cwd, candidateSha);
       if (!reviewReport) {
         const reviewArgs = {
@@ -749,11 +823,11 @@ export async function runAfk(options: AfkOptions, deps: AfkDeps = {}): Promise<A
           await Promise.allSettled([standardsPromise, specPromise]);
         }
 
-        await assertBoundary(cwd, {
+        expectedRemoteSha = await assertBoundary(cwd, {
           specBranch,
           expectedSpecTip: candidateSha,
           remoteRef,
-          expectedRemoteSha: baseSha,
+          expectedRemoteSha,
         });
         const afterReviewHead = await observeCleanCheckout(specWorktree.worktreePath);
         if (afterReviewHead !== candidateSha) {
@@ -795,23 +869,24 @@ export async function runAfk(options: AfkOptions, deps: AfkDeps = {}): Promise<A
       if (!(await isAncestor(cwd, candidateSha, finalCandidateSha))) {
         throw new Error(`Repair and verification rewrote reviewed history before ${candidateSha}.`);
       }
-      await assertBoundary(cwd, {
+      expectedRemoteSha = await assertBoundary(cwd, {
         specBranch,
         expectedSpecTip: finalCandidateSha,
         remoteRef,
-        expectedRemoteSha: baseSha,
+        expectedRemoteSha,
       });
 
       const draftBody = extractPrBody(repairRes.stdout);
 
       // Ordered delivery: 1. non-force push -> 2. ensurePr -> 3. untag tickets -> 4. cleanup -> 5. untag Spec LAST.
       stage = "deliver pull request";
+      await assertRemoteMatchesRepo(cwd, remote, repo);
       await pushBranchNonForce(cwd, remote, specBranch, finalCandidateSha);
       const pr = await ensurePr(
         repo,
         {
-          spec: graph.spec,
-          tickets: graph.tickets,
+          spec: activeGraph.spec,
+          tickets: activeGraph.tickets,
           integrated,
           headBranch: specBranch,
           baseBranch,
@@ -823,7 +898,7 @@ export async function runAfk(options: AfkOptions, deps: AfkDeps = {}): Promise<A
       );
 
       await finishCleanupAndUntag({
-        graph,
+        graph: activeGraph,
         specBranch,
         specTip: finalCandidateSha,
         integrated,

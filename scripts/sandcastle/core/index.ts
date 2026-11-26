@@ -1,4 +1,4 @@
-export { readSpecGraph } from "./github.ts";
+export { readSingleSpecGraph, readSpecGraph } from "./github.ts";
 export { readonlySandbox } from "./sandbox.ts";
 export type {
   AfkCheckResult,

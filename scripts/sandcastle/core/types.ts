@@ -137,6 +137,13 @@ export type PullRequestInfo = {
   baseRefName: string;
   headRefOid: string;
   isCrossRepository?: boolean;
+  body?: string;
+};
+
+export type BranchWorktreeInfo = {
+  path: string;
+  managed: boolean;
+  unavailable: boolean;
 };
 
 export type RunGh = (args: string[]) => Promise<string>;

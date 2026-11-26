@@ -20,6 +20,11 @@ type ReviewCacheFile = {
   entries: Record<string, ReviewReport>;
 };
 
+/**
+ * Wraps a bind-mount provider via public SDK API so every worktree/git mount passed to `create()` is forced read-only.
+ * Note: static `docker({ mounts })` appends constructor mounts after `createOptions.mounts`, so callers needing writable
+ * host mounts or `docker.sock` must use the `SandboxFactory` callback and omit them when `ctx.readonly` is true.
+ */
 export function readonlySandbox(base: BindMountSandboxProvider): BindMountSandboxProvider {
   const create =
     "create" in base && typeof base.create === "function"
@@ -47,9 +52,24 @@ function parseEnvKey(line: string): string | undefined {
   return normalized.slice(0, eqIndex).trim();
 }
 
-function assertCleanRemoteUrls(remoteUrls: readonly string[]): void {
-  for (const remoteUrl of remoteUrls) {
-    const url = /^[\w+.-]+:\/\//.test(remoteUrl) ? URL.parse(remoteUrl) : null;
+function assertCleanGitConfig(entries: readonly string[]): void {
+  for (const line of entries) {
+    const space = line.indexOf(" ");
+    if (space === -1) continue;
+    const key = line.slice(0, space).trim().toLowerCase();
+    const value = line.slice(space + 1).trim();
+    if (!value) continue;
+
+    if (key.endsWith(".extraheader")) {
+      if (/^(?:authorization|proxy-authorization)\s*:/i.test(value) || /\b(?:bearer|basic|token)\b/i.test(value)) {
+        throw new Error(
+          "Local Git configuration must not embed HTTP Authorization headers because sandboxes can read .git/config.",
+        );
+      }
+      continue;
+    }
+
+    const url = /^[\w+.-]+:\/\//.test(value) ? URL.parse(value) : null;
     if (!url) continue;
     const isHttp = url.protocol === "http:" || url.protocol === "https:";
     if (url.password || (isHttp && url.username)) {
@@ -75,21 +95,20 @@ export async function preflightCredentials(cwd: string, _remote?: string): Promi
     }
   }
 
-  const configuredUrls = await command("git", ["config", "--get-regexp", "^remote\\..*\\.(url|pushurl)$"], cwd).catch(
-    (error) => {
-      if (hasCode(error, 1)) return "";
-      throw error;
-    },
-  );
-  const urls = configuredUrls
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => {
-      const space = line.indexOf(" ");
-      return space === -1 ? "" : line.slice(space + 1).trim();
-    })
-    .filter(Boolean);
-  assertCleanRemoteUrls(urls);
+  const configured = await command(
+    "git",
+    [
+      "config",
+      "--local",
+      "--get-regexp",
+      "^(remote\\..*\\.(url|pushurl)|url\\..*\\.(insteadof|pushinsteadof)|http(\\..+)?\\.extraheader)$",
+    ],
+    cwd,
+  ).catch((error) => {
+    if (hasCode(error, 1)) return "";
+    throw error;
+  });
+  assertCleanGitConfig(configured.split("\n").filter(Boolean));
 }
 
 function assertSha(value: string): string {

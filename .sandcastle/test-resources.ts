@@ -1,5 +1,7 @@
+import { execFile } from "node:child_process";
 import { lstat, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join, posix, relative } from "node:path";
+import { promisify } from "node:util";
 import {
   type BindMountSandboxProvider,
   type BindMountSandboxProviderConfig,
@@ -15,6 +17,7 @@ import {
   repositoryPath,
 } from "../scripts/test-resources/managed-resources.mjs";
 
+const exec = promisify(execFile);
 const registryRoot = ".sandcastle/resources";
 const artifacts = "test-results/integration";
 const defaultSandboxWorktreePath = "/home/agent/workspace";
@@ -28,6 +31,7 @@ type RuntimeBindMountProvider = BindMountSandboxProvider & {
 type TrackedRegistry = {
   directory: string;
   registryFile: string;
+  sandboxId?: string;
 };
 
 export type TestResourceSandboxOptions = {
@@ -35,8 +39,16 @@ export type TestResourceSandboxOptions = {
   id: string;
   sandbox: SandboxProvider;
   runCommand?: ManagedComposeCommandOptions["runCommand"];
+  verifySandboxStopped?: (sandboxId: string) => Promise<void>;
   log?: (message: string) => void;
 };
+
+async function defaultVerifySandboxStopped(cwd: string, sandboxId: string): Promise<void> {
+  const { stdout } = await exec("docker", ["ps", "-aq", "--no-trunc", "--filter", `id=${sandboxId}`], { cwd });
+  if (stdout.trim().length > 0) {
+    throw new Error(`Sandbox container ${sandboxId} is still present; refusing to clean active test resources.`);
+  }
+}
 
 export type TestResourceSandbox = {
   sandbox: BindMountSandboxProvider;
@@ -62,7 +74,12 @@ function sanitizeExecutorId(id: string): string {
 export function withTestResources(options: TestResourceSandboxOptions): TestResourceSandbox {
   const inner = assertBindMountProvider(options.sandbox);
   const innerCreate = inner.create.bind(inner);
-  const { cwd, runCommand, log = console.log } = options;
+  const {
+    cwd,
+    runCommand,
+    verifySandboxStopped = (sandboxId) => defaultVerifySandboxStopped(cwd, sandboxId),
+    log = console.log,
+  } = options;
   const safeId = sanitizeExecutorId(options.id);
   let tracked: TrackedRegistry[] = [];
 
@@ -104,7 +121,7 @@ export function withTestResources(options: TestResourceSandboxOptions): TestReso
             },
           ],
         });
-        tracked.push({ directory, registryFile });
+        tracked.push({ directory, registryFile, sandboxId: handle.sandboxId });
         return handle;
       } catch (error) {
         await rm(directory, { recursive: true, force: true });
@@ -118,7 +135,16 @@ export function withTestResources(options: TestResourceSandboxOptions): TestReso
     const errors: unknown[] = [];
 
     for (const entry of [...tracked].reverse()) {
-      const { directory, registryFile } = entry;
+      const { directory, registryFile, sandboxId } = entry;
+      if (sandboxId) {
+        try {
+          await verifySandboxStopped(sandboxId);
+        } catch (cause) {
+          remaining.push(entry);
+          errors.push(new Error(`无法确认沙箱已停止（${sandboxId}）；保留准确 registry：${registryFile}`, { cause }));
+          continue;
+        }
+      }
       let records: string[];
       try {
         const registry = await lstat(join(cwd, repositoryPath(cwd, registryFile)));

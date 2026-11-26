@@ -5,10 +5,13 @@ import { join } from "node:path";
 import { command } from "../command.ts";
 import {
   assertBoundary,
+  assertRemoteMatchesRepo,
   branchTip,
   deleteBranchCas,
   ensureSpecWorktree,
   fetchBase,
+  findBranchWorktree,
+  findManagedWorktree,
   mergeBase,
   mergeTicket,
   pushBranchNonForce,
@@ -239,8 +242,20 @@ test("assertBoundary enforces candidate-contains-baseline and untouched spec/rem
     );
     expect(baseErr.message).toContain(t21);
 
-    // Fail 3: remote tracking ref moved.
+    // Fast-forward on remote tracking ref (e.g. concurrent git fetch) is allowed and returns the new SHA.
     await git("update-ref", remoteRef, movedSpecTip);
+    const advancedRemote = await assertBoundary(cwd, {
+      ticketBranch: t21,
+      baselineSha: baseSha,
+      specBranch,
+      expectedSpecTip: movedSpecTip,
+      remoteRef,
+      expectedRemoteSha: baseSha,
+    });
+    expect(advancedRemote).toBe(movedSpecTip);
+
+    // Fail 3: remote tracking ref rewound / moved non-fast-forward.
+    await git("update-ref", remoteRef, baseSha);
     const remoteErr = await expectReject(() =>
       assertBoundary(cwd, {
         ticketBranch: t21,
@@ -248,10 +263,23 @@ test("assertBoundary enforces candidate-contains-baseline and untouched spec/rem
         specBranch,
         expectedSpecTip: movedSpecTip,
         remoteRef,
-        expectedRemoteSha: baseSha,
+        expectedRemoteSha: movedSpecTip,
       }),
     );
     expect(remoteErr.message).toContain(remoteRef);
+
+    // Verify findBranchWorktree distinguishes external worktrees from managed ones.
+    const externalInfo = await findBranchWorktree(cwd, t21);
+    expect(externalInfo).toMatchObject({ managed: false, unavailable: false });
+    expect(await findManagedWorktree(cwd, t21)).toBeUndefined();
+
+    // Verify assertRemoteMatchesRepo accepts matching GitHub URLs and rejects mismatched forks/push URLs.
+    await assertRemoteMatchesRepo(cwd, "origin", "cyy1998/shgas-iam");
+    await git("remote", "add", "upstream", "git@github.com:cyy1998/shgas-iam.git");
+    await assertRemoteMatchesRepo(cwd, "upstream", "cyy1998/shgas-iam");
+    await git("remote", "set-url", "--push", "upstream", "https://github.com/someone-else/shgas-iam.git");
+    const forkErr = await expectReject(() => assertRemoteMatchesRepo(cwd, "upstream", "cyy1998/shgas-iam"));
+    expect(forkErr.message).toContain("does not match");
 
     await git("worktree", "remove", t21Path);
   });

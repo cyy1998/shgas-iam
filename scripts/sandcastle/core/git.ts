@@ -2,7 +2,13 @@ import { lstat, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { command, hasCode } from "./command.ts";
-import type { BoundaryAssertionInput, IntegratedTicket, MergeTicketResult, SpecWorktree } from "./types.ts";
+import type {
+  BoundaryAssertionInput,
+  BranchWorktreeInfo,
+  IntegratedTicket,
+  MergeTicketResult,
+  SpecWorktree,
+} from "./types.ts";
 
 const shaPattern = /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/;
 const unfinishedGitMarkers = [
@@ -263,7 +269,7 @@ export async function mergeTicket(
   return { merged: true, mergeSha, candidateSha };
 }
 
-export async function assertBoundary(cwd: string, input: BoundaryAssertionInput): Promise<void> {
+export async function assertBoundary(cwd: string, input: BoundaryAssertionInput): Promise<string> {
   const { ticketBranch, baselineSha, specBranch, expectedSpecTip, remoteRef, expectedRemoteSha } = input;
   if ((ticketBranch === undefined) !== (baselineSha === undefined)) {
     throw new Error("assertBoundary requires both ticketBranch and baselineSha when validating a ticket candidate.");
@@ -290,23 +296,71 @@ export async function assertBoundary(cwd: string, input: BoundaryAssertionInput)
     );
   }
 
+  const expectedRemote = assertSha(expectedRemoteSha, "expected remote SHA");
   const actualRemoteSha = await resolveCommit(cwd, remoteRef).catch(() => undefined);
-  if (actualRemoteSha !== assertSha(expectedRemoteSha, "expected remote SHA")) {
+  if (!actualRemoteSha || !(await isAncestor(cwd, expectedRemote, actualRemoteSha))) {
     throw new Error(
-      `Trust boundary violation: remote ref ${remoteRef} moved (expected ${expectedRemoteSha}, got ${actualRemoteSha ?? "missing"}).`,
+      `Trust boundary violation: remote ref ${remoteRef} moved non-fast-forward (expected descendant of ${expectedRemote}, got ${actualRemoteSha ?? "missing"}).`,
     );
   }
+  return actualRemoteSha;
 }
 
-export async function findManagedWorktree(cwd: string, branch: string): Promise<string | undefined> {
+export async function findBranchWorktree(cwd: string, branch: string): Promise<BranchWorktreeInfo | undefined> {
   await assertValidBranchName(cwd, branch);
   const root = await realpath(cwd);
   const managedDir = join(root, ".sandcastle", "worktrees");
   const entries = await listWorktrees(root);
-  const match = entries.find(
-    (entry) => entry.ref === `refs/heads/${branch}` && dirname(entry.path) === managedDir && !entry.unavailable,
-  );
-  return match?.path;
+  const match = entries.find((entry) => entry.ref === `refs/heads/${branch}`);
+  if (!match) return undefined;
+  return {
+    path: match.path,
+    managed: dirname(match.path) === managedDir,
+    unavailable: match.unavailable,
+  };
+}
+
+export async function findManagedWorktree(cwd: string, branch: string): Promise<string | undefined> {
+  const info = await findBranchWorktree(cwd, branch);
+  return info && info.managed && !info.unavailable ? info.path : undefined;
+}
+
+function extractNetworkRepo(remoteUrl: string): string | undefined {
+  const isUrl = /^[\w+.-]+:\/\//.test(remoteUrl);
+  const scpMatch = !isUrl ? /^(?:[^@/:]+@)?(?:\[[^\]]+\]|[^/:]+):(.+)$/.exec(remoteUrl) : null;
+  if (!isUrl && !scpMatch) return undefined;
+  const parsed = isUrl ? URL.parse(remoteUrl) : null;
+  if (isUrl && (!parsed || parsed.protocol === "file:")) return undefined;
+  const rawPath = parsed?.pathname ?? scpMatch?.[1] ?? "";
+  const segments = rawPath.replace(/\/+$/, "").split("/").filter(Boolean);
+  if (segments.length < 2) return "";
+  const owner = segments.at(-2);
+  const name = segments.at(-1)?.replace(/\.git$/i, "");
+  if (!owner || !name) return "";
+  try {
+    return `${decodeURIComponent(owner)}/${decodeURIComponent(name)}`.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+export async function assertRemoteMatchesRepo(cwd: string, remote: string, repo: string): Promise<void> {
+  if (!remote || remote.startsWith("-")) throw new Error(`Invalid Git remote name: ${remote}`);
+  const expectedRepo = repo.toLowerCase();
+  const fetchUrl = await command("git", ["remote", "get-url", "--", remote], cwd);
+  const pushUrl = await command("git", ["remote", "get-url", "--push", "--", remote], cwd);
+  const fetchRepo = extractNetworkRepo(fetchUrl);
+  const pushRepo = extractNetworkRepo(pushUrl);
+
+  if (fetchRepo === undefined && pushRepo === undefined) {
+    if (fetchUrl !== pushUrl) {
+      throw new Error(`Git remote "${remote}" has mismatched local fetch and push URLs.`);
+    }
+    return;
+  }
+  if (fetchRepo !== expectedRepo || pushRepo !== expectedRepo) {
+    throw new Error(`Git remote "${remote}" fetch/push destination does not match GitHub repository "${repo}".`);
+  }
 }
 
 export async function ensureSpecWorktree(cwd: string, specBranch: string, baseSha: string): Promise<SpecWorktree> {
