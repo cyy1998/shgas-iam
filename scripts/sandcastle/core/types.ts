@@ -1,4 +1,4 @@
-import type { AgentProvider, BindMountSandboxProvider, SandboxHooks } from "@ai-hero/sandcastle";
+import type { AgentProvider, BindMountSandboxProvider, RunOptions, RunResult, SandboxHooks } from "@ai-hero/sandcastle";
 
 export const phases = [
   "implement",
@@ -140,3 +140,32 @@ export type PullRequestInfo = {
 };
 
 export type RunGh = (args: string[]) => Promise<string>;
+
+export type RunAgent = (options: RunOptions) => Promise<RunResult>;
+
+export type CheckAfkOptions = Pick<AfkOptions, "repo" | "cwd" | "remote" | "baseBranch">;
+
+export type AfkDeps = {
+  runAgent?: RunAgent;
+  runGh?: RunGh;
+  report?: (message: string) => void;
+};
+
+export type AfkCheckResult = {
+  repo: string;
+  cwd: string;
+  remote: string;
+  baseBranch: string;
+  remoteRef: string;
+  baseSha: string;
+};
+
+export type AfkRunResult = {
+  attemptedSpecs: number[];
+  integrated: number[];
+  failed: number[];
+  delivered: number[];
+  paused: number[];
+  stopped: number[];
+  exhausted: boolean;
+};

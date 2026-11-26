@@ -3,6 +3,7 @@ logs/
 locks/
 worktrees/
 resources/
-# Legacy lock file left by pre-flock crashes so upgrades keep the invocation tree clean.
+# External flock file for single-instance runs and legacy lock file.
+runner.lock
 run.lock
 state/

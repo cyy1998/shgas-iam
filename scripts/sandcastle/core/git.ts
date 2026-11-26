@@ -30,7 +30,7 @@ async function resolveCommit(cwd: string, ref: string): Promise<string> {
   return command("git", ["rev-parse", "--verify", "--end-of-options", `${ref}^{commit}`], cwd);
 }
 
-async function observeCleanCheckout(worktreePath: string): Promise<string> {
+export async function observeCleanCheckout(worktreePath: string): Promise<string> {
   const gitDir = await command("git", ["rev-parse", "--absolute-git-dir"], worktreePath);
   for (const marker of unfinishedGitMarkers) {
     if (await inspectPath(join(gitDir, marker))) {
@@ -296,6 +296,17 @@ export async function assertBoundary(cwd: string, input: BoundaryAssertionInput)
       `Trust boundary violation: remote ref ${remoteRef} moved (expected ${expectedRemoteSha}, got ${actualRemoteSha ?? "missing"}).`,
     );
   }
+}
+
+export async function findManagedWorktree(cwd: string, branch: string): Promise<string | undefined> {
+  await assertValidBranchName(cwd, branch);
+  const root = await realpath(cwd);
+  const managedDir = join(root, ".sandcastle", "worktrees");
+  const entries = await listWorktrees(root);
+  const match = entries.find(
+    (entry) => entry.ref === `refs/heads/${branch}` && dirname(entry.path) === managedDir && !entry.unavailable,
+  );
+  return match?.path;
 }
 
 export async function ensureSpecWorktree(cwd: string, specBranch: string, baseSha: string): Promise<SpecWorktree> {

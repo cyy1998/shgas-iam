@@ -11,5 +11,11 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true
   },
-  "include": ["./**/*.ts", "./**/*.mts", "../../.sandcastle/config.ts"]
+  "include": ["./core/**/*.ts", "./core/**/*.mts", "../../.sandcastle/**/*.ts", "../../.sandcastle/**/*.mts"],
+  "exclude": [
+    "../../.sandcastle/logs/**",
+    "../../.sandcastle/resources/**",
+    "../../.sandcastle/state/**",
+    "../../.sandcastle/worktrees/**"
+  ]
 }
