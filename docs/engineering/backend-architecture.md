@@ -84,7 +84,8 @@ Trace ID 依次取 `traceparent` 的 trace-id、`x-b3-traceid`、`x-trace-id`。
 - Route handler 应返回来自 `@iam/api-core/http` 的共享 response envelope，例如成功 JSON response 使用
   `c.json(resp.ok(data))`，显式失败 envelope 使用 `resp.fail(...)`。
 - 当现有 error middleware 已能正确映射 domain/API error 时，优先 throw error。
-- 在 OpenAPI route definition 和显式非 200 response 中使用 `@iam/contracts/http` 的状态常量。
+- 在 OpenAPI route definition 和显式非 200 response 中使用 `@iam/contracts/http` 的数字字面量状态码。
+  未匹配路由的 404 消息由 `@iam/api-core` 的 not-found handler 生成。
 
 [响应实现](../../packages/api-core/src/http/response.ts) · [错误映射](../../packages/api-core/src/middlewares/error-handler.ts)
 

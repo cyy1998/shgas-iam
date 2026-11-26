@@ -3,6 +3,12 @@
   "type": "module",
   "version": "0.0.1",
   "private": true,
+  "iamWorkspace": {
+    "kind": "cli",
+    "gates": [
+      "container-smoke"
+    ]
+  },
   "devEngines": {
     "runtime": {
       "name": "bun",

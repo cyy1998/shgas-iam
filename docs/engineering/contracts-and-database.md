@@ -29,8 +29,8 @@
 
 - **公开出口** 跨包只消费 `package.json` 声明的公开出口，不访问相对源码或未公开深层路径。
 - **浏览器安全边界** 浏览器运行时代码使用 `contracts` 或明确支持浏览器的专用出口，不 value-import `domain`、`db` 或服务端基础设施。
-- **状态码与错误** HTTP 状态码和短语通过浏览器可加载的 `@iam/contracts/http` 出口共享。`@iam/runtime/errors` 定义通用错误及
-  结构识别，业务错误归所属能力或 app。Hono 与 tRPC 的错误映射和安全响应呈现由 `@iam/api-core` 维护。
+- **状态码与错误** 浏览器可加载的 `@iam/contracts/http` 通过命名导出和 `HttpStatusCodes` 命名空间导出常用 HTTP 状态码，保留数字字面量类型。
+  `@iam/runtime/errors` 定义通用错误及结构识别，业务错误归所属能力或 app。Hono 与 tRPC 的错误映射和安全响应呈现由 `@iam/api-core` 维护。
 - **类型派生与推断** Admin 的 tRPC 类型推断集中在 app-local service/client，通过后端公开入口 type-only 导入，不复制一套 DTO。
 - 已有 runtime schema 时由它派生类型，例如用 `z.infer<typeof Schema>` 派生 Zod 类型。解析和 mapper 共用 shape，协议入口只补协议元数据。
 - **协议辅助函数** 协议 helper 仅实现编码、解码和续接等协议能力；平台适配通过窄接口传入，不绑定 app 实例或承载业务流程。

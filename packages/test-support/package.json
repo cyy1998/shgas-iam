@@ -3,6 +3,9 @@
   "type": "module",
   "version": "0.0.1",
   "private": true,
+  "iamWorkspace": {
+    "kind": "test-support"
+  },
   "exports": {
     "./external-test-resources": "./src/external-test-resources.ts",
     "./postgres-test-harness": "./src/postgres-test-harness.ts",

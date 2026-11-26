@@ -3,6 +3,12 @@
   "type": "module",
   "version": "0.0.1",
   "private": true,
+  "iamWorkspace": {
+    "kind": "e2e",
+    "gates": [
+      "e2e-runtime"
+    ]
+  },
   "dependencies": {
     "@iam/assignment-resolution": "workspace:*",
     "@iam/contracts": "workspace:*",
