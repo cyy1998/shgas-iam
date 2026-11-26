@@ -55,6 +55,8 @@ export type PreparedAuth = SandboxInputs & { close: () => Promise<void> };
 
 export type AuthAdapter = {
   appliesTo: (provider: AgentProvider) => boolean;
+  /** Default: provider. Use adapter scope when matching providers share one credential source. */
+  checkScope?: "adapter" | "provider";
   check: (context: AuthContext) => Promise<void>;
   prepare: (context: AuthContext) => Promise<PreparedAuth>;
 };
@@ -76,6 +78,8 @@ export type ProjectConfig = {
 
 export type WorkflowConfig = {
   branchPrefix?: string;
+  /** Additional literal Spec declaration headings, matched case-insensitively. */
+  branchDeclarationKeywords?: readonly string[];
   explore?: boolean;
   review?: boolean;
   projects?: boolean;
@@ -102,7 +106,7 @@ export type SandcastleConfig = {
     implementers: Readonly<Record<string, Role>>;
     reviewers: { standards: Role; spec: Role };
     repairer: Role;
-    repairerDeep: Role;
+    repairerDeep?: Role;
   };
   authAdapters?: readonly AuthAdapter[];
   promptExtras?: Partial<Record<PromptPhase, string | { replace: string }>>;
@@ -110,6 +114,7 @@ export type SandcastleConfig = {
 
 export type ResolvedSandcastleConfig = SandcastleConfig & {
   sandbox: { dockerAccess: boolean };
+  roles: { repairerDeep: Role };
   workflow: Required<Omit<WorkflowConfig, "project" | "maxIterations">> & {
     maxIterations: Record<ExecutionPhase, number>;
   };
@@ -141,9 +146,11 @@ export function defineSandcastleConfig(config: SandcastleConfig): ResolvedSandca
   return {
     ...config,
     sandbox: { ...config.sandbox, dockerAccess: config.sandbox.dockerAccess ?? false },
+    roles: { ...config.roles, repairerDeep: config.roles.repairerDeep ?? config.roles.repairer },
     workflow: {
       ...workflow,
       branchPrefix: workflow?.branchPrefix ?? "sandcastle",
+      branchDeclarationKeywords: workflow?.branchDeclarationKeywords ?? [],
       explore: workflow?.explore ?? true,
       review: workflow?.review ?? true,
       projects: workflow?.projects ?? true,

@@ -25,12 +25,14 @@ pnpm sandcastle
 
 [`.sandcastle/config.ts`](config.ts) 通过 [`defineSandcastleConfig()`](../scripts/sandcastle/core/config.ts) 装配本仓镜像、共享的 `mounts` / `env`、仅用于可写阶段的 `sandbox.writable` 配置、生命周期命令和资源钩子。它显式指定 GitHub 仓库，并从 [`.codex/agents/`](../.codex/agents/) 读取 Planner 以外的 AFK 角色配置。配置契约可省略 `repo` 以从 Git remote 推断，可绑定不同的原生 `AgentProvider`、按 Provider 接入认证适配器，以及通过 `promptExtras` 追加或覆盖阶段指引。
 
-`workflow` 支持 `branchPrefix`、`explore` / `review` / `projects` 开关、阶段内 `maxIterations`、Draft 默认值和看板映射。本仓启用探索与评审，设置 Projects URL 时才启用看板。每个阶段的 `maxIterations` 默认 `1`，与 CLI 的 Spec 数量 `--iterations` 分开配置。默认分支为 `sandcastle/spec-<N>` 和 `sandcastle/issue-<N>`；Spec 正文显式声明的集成分支优先。
+`workflow` 支持 `branchPrefix`、`explore` / `review` / `projects` 开关、阶段内 `maxIterations`、Draft 默认值和看板映射。本仓启用探索与评审，设置 Projects URL 时才启用看板。每个阶段的 `maxIterations` 默认 `1`，与 CLI 的 Spec 数量 `--iterations` 分开配置。默认分支为 `sandcastle/spec-<N>` 和 `sandcastle/issue-<N>`，Spec 正文显式声明的集成分支优先。核心默认识别 `Integration-Branch:` 和 `Integration branch:`，本仓通过 `workflow.branchDeclarationKeywords` 增加 `集成分支`、`功能分支` 和 `复用功能/集成分支`。
+
+本仓通过 `promptExtras` 提供 `AGENTS.md`、本地 skills 与验证入口。相同模型和推理档位的角色共享 Codex Provider，`repairer` 和 `repairerDeep` 分别复用标准与深度实施角色。其他仓库可省略 `repairerDeep`，此时高风险修复使用 `repairer`。
 
 ### 认证与宿主资源
 
 - **GitHub**。认领、评论和 PR 交付由宿主执行。沙箱通过公开 REST API 匿名读取议题正文、评论和任务关系。
-- **Codex**。默认使用 ChatGPT 文件凭据，先执行 `codex login`。文件默认取 `${CODEX_HOME:-$HOME/.codex}/auth.json`，可通过 `CODEX_AUTH_FILE` 覆盖。每个执行器暂存私有副本，收尾时将刷新结果写回仍匹配的来源。若写回失败，错误会指向保留的副本。API 计费使用 `CODEX_AUTH=api-key` 和 `CODEX_API_KEY`。
+- **Codex**。默认使用 ChatGPT 文件凭据，先执行 `codex login`。文件默认取 `${CODEX_HOME:-$HOME/.codex}/auth.json`，可通过 `CODEX_AUTH_FILE` 覆盖。每轮预检只读取一次共享来源。每个执行器暂存私有副本，收尾时将刷新结果写回仍匹配的来源。若写回失败，错误会指向保留的副本。API 计费使用 `CODEX_AUTH=api-key` 和 `CODEX_API_KEY`。
 - **私有镜像**。需要沙箱内拉取私有镜像时，设置 `SANDCASTLE_DOCKER_CONFIG_FILE`，相对路径从调用仓库根解析。文件仅接受顶层 `auths`、允许的 registry 及非空 `auth`、`identitytoken` 或 `registrytoken`。`SANDCASTLE_DOCKER_REGISTRIES` 接受逗号分隔的允许列表，默认 `docker.xuanyuan.run`。写入阶段将每次执行器的私有副本只读挂载至 `/home/agent/.docker/config.json`。
 - **Docker**。本仓使用零补丁的 `@ai-hero/sandcastle@0.14.0` 原生 `docker()`。写入阶段绑定 `/var/run/docker.sock`，将宿主 socket GID 传给原生 `groups`，并启用 `network: "host"`，设置 `DOCKER_HOST=unix:///var/run/docker.sock`。容器使用宿主 daemon，测试环境按各自记录区分归属。Planner、探索和评审的工作树及共享缓存为只读，使用执行器专属认证副本，并跳过宿主 socket、依赖与 Hook 安装以及测试资源挂载。
 - **依赖与提交**。宿主 pnpm store 默认 `$HOME/.pnpm-store`，可用 `SANDCASTLE_PNPM_STORE_DIR` 指定，容器内挂载到 `/home/agent/.pnpm-store`。原生 `onSandboxReady` 先执行锁定安装，再启用提交 Hook。各 worktree 的 `node_modules` 随 worktree 回收，宿主 store 留作后续缓存。变更依赖或新增 workspace 时，更新清单与锁定文件后在当前执行器执行 `sh scripts/sandcastle/prepare-workspace.sh`。Hook 启动器在 `/tmp/iam-sandcastle-hooks` 创建 wrapper。可写沙箱通过 `GIT_CONFIG_*` 选择该路径，提交时转调仓库 `.husky/pre-commit`。[依赖准备](../scripts/sandcastle/prepare-workspace.sh) · [Hook 启动器](../scripts/sandcastle/enable-git-hooks.sh)
@@ -43,7 +45,9 @@ pnpm sandcastle
 
 ### 恢复执行器资源
 
-工作流采用 crash-only 恢复。写入阶段正常返回且沙箱关闭后，宿主通过 `afterExecutor` 按该执行器的 `.sandcastle/resources/executor-*/registry.jsonl` 清理登记的测试资源并尊重 `keep`。沙箱关闭状态未知时保留 registry，使用输出中的执行器 ID 对照日志和 registry 路径。正常进程退出释放 `.sandcastle/run.lock`，下次启动可接管 PID 已退出的锁。遇到存活 PID 或无法辨认的锁，保留现场并核实归属。模型输出参考 `.sandcastle/logs/`，测试产物和 Compose `run.json` 位于 `test-results/` 下。
+工作流采用 crash-only 恢复。宿主以 `flock` 独占 `.sandcastle/locks/runner`，进程退出或被强制结束时由内核释放锁。锁文件中的 PID 供诊断，文件可保留供下次启动复用。收到锁占用错误时，先核实占用的 runner。
+
+写入阶段正常返回且沙箱关闭后，宿主通过 `afterExecutor` 按该执行器的 `.sandcastle/resources/executor-*/registry.jsonl` 清理登记的测试资源并尊重 `keep`。沙箱关闭状态未知时保留 registry，使用输出中的执行器 ID 对照日志和 registry 路径。模型输出参考 `.sandcastle/logs/`，测试产物和 Compose `run.json` 位于 `test-results/` 下。
 
 强制结束或清理失败后，先用 Docker 核对相关沙箱的挂载和工作树，确认归属并在必要时停止该沙箱。根据该执行器的 registry 找到需要回收的 `run.json`，从记录所属仓库的根目录按准确记录清理。
 

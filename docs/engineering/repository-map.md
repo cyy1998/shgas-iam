@@ -98,6 +98,8 @@ Use case 由 root 的 `useCases` 交给路由。Admin API 的入口与审计实�
 | `.codex/agents/`               | 仓库 7 个角色契约定义（调查角色、手动与 AFK 共用的三档实施者、Standards/Spec 只读评审角色）；供 Codex 原生子代理、T3 跨引擎委派与 AFK runner 复用。                                        |
 | `.husky/`                      | Git hooks 与安装脚本。                                                                                                                                                                     |
 
+Sandcastle 在 `.sandcastle/locks/` 持有 runner 互斥锁，在 `.sandcastle/resources/` 登记各执行器的测试资源。
+
 ## 文档与 Agent 工作流
 
 - `AGENTS.md`：仓库级指引入口；详细规则通过它链接到 `docs/`。

@@ -24,6 +24,7 @@ export function codexFileAuth(config: {
   let writebacks: Promise<void> = Promise.resolve();
   return {
     appliesTo: (provider) => providers.has(provider),
+    checkScope: "adapter",
     async check({ cwd }) {
       await readAuth(resolve(cwd, config.source));
     },

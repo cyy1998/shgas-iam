@@ -62,9 +62,12 @@ export async function checkExecutors(cwd: string, config: ResolvedSandcastleConf
     ...(config.workflow.explore ? [researcher] : []),
     ...(config.workflow.review ? [reviewers.standards, reviewers.spec] : []),
   ];
-  for (const provider of new Set(roles.map((role) => role.provider))) {
-    for (const adapter of config.authAdapters ?? []) {
-      if (adapter.appliesTo(provider)) await adapter.check({ cwd, provider });
+  const providers = new Set(roles.map((role) => role.provider));
+  for (const adapter of config.authAdapters ?? []) {
+    for (const provider of providers) {
+      if (!adapter.appliesTo(provider)) continue;
+      await adapter.check({ cwd, provider });
+      if (adapter.checkScope === "adapter") break;
     }
   }
   if (config.sandbox.dockerAccess) await dockerSocket();

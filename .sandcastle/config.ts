@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { codex } from "@ai-hero/sandcastle";
 import { codexFileAuth } from "../scripts/sandcastle/adapters/codex-auth.ts";
-import { type AgentRole, implementerNames, loadAgentRoles } from "../scripts/sandcastle/adapters/codex-roles.ts";
+import { type AgentRole, loadAgentRoles } from "../scripts/sandcastle/adapters/codex-roles.ts";
 import { createTestResourceLifecycle } from "../scripts/sandcastle/adapters/test-resources.ts";
 import { defineSandcastleConfig, type Role, type SandcastleConfig } from "../scripts/sandcastle/core/config.ts";
 
@@ -21,10 +21,11 @@ const promptExtras = {
   plan: `${repositoryDocs}
 结合 GLOSSARY.md 理解业务术语。范围明确且风险低时选 implementer_light，常规切片选 implementer_standard。安全或授权边界、事务和并发一致性、跨 runtime 生命周期、复杂重构或难解失败选 implementer_deep。`,
   explore: `${repositoryDocs}\n${issueReads}\n按需要核对 GLOSSARY.md 和相关 ADR，记录各票可复用的模块位置、公开验证入口及未决问题。`,
-  implement: `${repositoryDocs}\n${issueReads}${validation}`,
-  "resolve-conflict": `${repositoryDocs}${validation}`,
-  "review-standards": `${repositoryDocs}\n依据仓库工程文档与 code-review skill 的 Standards 轴检查适用约定。`,
-  "review-spec": `${repositoryDocs}\n${issueReads}\n按父 Spec、全部相关 tickets 的实际验收条款及 GLOSSARY.md 核对固定候选。`,
+  implement: `${repositoryDocs}\n${issueReads}\n按 .agents/skills/tdd/SKILL.md 实施。${validation}`,
+  "resolve-conflict": `${repositoryDocs}\n按 .agents/skills/resolving-merge-conflicts/SKILL.md 处理冲突。${validation}`,
+  "review-standards": `${repositoryDocs}\n按 .agents/skills/code-review/SKILL.md 的 Standards 轴核对仓库工程约定。`,
+  "review-spec": `${repositoryDocs}\n${issueReads}
+按 .agents/skills/code-review/SKILL.md 的 Spec 轴，依据父 Spec、全部相关 tickets 的实际验收条款及 GLOSSARY.md 核对固定候选。`,
   "repair-and-verify": `${repositoryDocs}\n${issueReads}${validation}
 按 docs/agents/sandcastle-afk.md 的最终验证要求选择基础门禁，并在修复提交后以固定评审基线运行 pnpm verify:container-smoke --base <sha> 和 pnpm verify:e2e-runtime --base <sha>。按 Spec 与风险补齐 Integration、E2E 和其他必要检查。
 按 .agents/skills/pr/SKILL.md 和 GLOSSARY.md 起草 PR 正文。`,
@@ -59,34 +60,38 @@ export async function loadRepoSandcastleConfig({
   if (authMode === "api-key" && !apiKey) throw new Error("CODEX_AUTH=api-key 时需要 CODEX_API_KEY。");
 
   const codexHome = resolve(cwd, env.CODEX_HOME?.trim() || join(homedir(), ".codex"));
-  const nativeCodex = (roleModel: string, effort: AgentRole["effort"]) =>
-    codex(roleModel, {
+  const providers = new Map<string, ReturnType<typeof codex>>();
+  const nativeCodex = (roleModel: string, effort: AgentRole["effort"]) => {
+    const key = JSON.stringify([roleModel, effort]);
+    const existing = providers.get(key);
+    if (existing) return existing;
+    const provider = codex(roleModel, {
       effort,
       env: authMode === "api-key" && apiKey ? { CODEX_API_KEY: apiKey } : {},
       sessionStorage: { hostSessionsDir: join(codexHome, "sessions") },
     });
+    providers.set(key, provider);
+    return provider;
+  };
   const bindRole = ({ model: roleModel, effort, instructions, description }: AgentRole): Role => ({
     provider: nativeCodex(roleModel, effort),
     description,
     instructions,
   });
+  const repairer = bindRole(definitions.implementer_standard);
+  const repairerDeep = bindRole(definitions.implementer_deep);
   const roles = {
     planner: { provider: nativeCodex(model ?? (env.SANDCASTLE_MODEL?.trim() || "gpt-6-astra"), "high") },
     researcher: bindRole(definitions.code_researcher),
-    implementers: Object.fromEntries(implementerNames.map((name) => [name, bindRole(definitions[name])])),
+    implementers: {
+      implementer_light: bindRole(definitions.implementer_light),
+      implementer_standard: repairer,
+      implementer_deep: repairerDeep,
+    },
     reviewers: { standards: bindRole(definitions.standards_reviewer), spec: bindRole(definitions.spec_reviewer) },
-    repairer: bindRole(definitions.implementer_standard),
-    repairerDeep: bindRole(definitions.implementer_deep),
+    repairer,
+    repairerDeep,
   };
-  const providers = [
-    roles.planner,
-    roles.researcher,
-    ...Object.values(roles.implementers),
-    roles.reviewers.standards,
-    roles.reviewers.spec,
-    roles.repairer,
-    roles.repairerDeep,
-  ].map(({ provider }) => provider);
   const projectUrl = env.SANDCASTLE_PROJECT_URL?.trim();
   const dockerConfigSource = env.SANDCASTLE_DOCKER_CONFIG_FILE?.trim();
   const registries = (env.SANDCASTLE_DOCKER_REGISTRIES?.trim() || "docker.xuanyuan.run")
@@ -126,6 +131,7 @@ export async function loadRepoSandcastleConfig({
       ...createTestResourceLifecycle(),
     },
     workflow: {
+      branchDeclarationKeywords: ["集成分支", "功能分支", "复用功能/集成分支"],
       draft: draft ?? /^(?:1|true)$/i.test(env.SANDCASTLE_PR_DRAFT?.trim() ?? ""),
       projects: Boolean(projectUrl),
       project: projectUrl ? { url: projectUrl, token: projectToken?.trim() || undefined } : undefined,
@@ -137,7 +143,7 @@ export async function loadRepoSandcastleConfig({
             codexFileAuth({
               source: env.CODEX_AUTH_FILE?.trim() || join(codexHome, "auth.json"),
               sandboxHome: `${sandboxHome}/.codex`,
-              providers,
+              providers: [...providers.values()],
             }),
           ]
         : [],

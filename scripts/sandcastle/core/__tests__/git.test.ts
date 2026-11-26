@@ -23,12 +23,15 @@ async function withRepository(run: (cwd: string, base: string) => Promise<void>)
   }
 }
 
-test("resolves Chinese and English branch declarations and rejects conflicting declarations", () => {
+test("resolves English and configured literal branch declarations", () => {
   expect(specBranchName(40, "Integration-Branch: `feat/design`")).toBe("feat/design");
-  expect(specBranchName(40, "集成分支：feat/design")).toBe("feat/design");
-  expect(() => specBranchName(40, "集成分支：feat/design\nIntegration-Branch: feat/other")).toThrow(
-    "conflicting integration branches",
-  );
+  expect(specBranchName(40, "Candidate (custom): feat/design")).toBe("sandcastle/spec-40");
+  expect(specBranchName(40, "Candidate (custom): feat/design", "flow", ["Candidate (custom)"])).toBe("feat/design");
+  expect(() =>
+    specBranchName(40, "Candidate (custom): feat/design\nIntegration-Branch: feat/other", "flow", [
+      "Candidate (custom)",
+    ]),
+  ).toThrow("conflicting integration branches");
 });
 
 test("the synchronized invocation is verified against a freshly fetched bare remote", async () => {

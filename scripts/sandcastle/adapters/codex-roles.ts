@@ -5,8 +5,8 @@ import { parse } from "smol-toml";
 export const implementerNames = ["implementer_light", "implementer_standard", "implementer_deep"] as const;
 export type ImplementerName = (typeof implementerNames)[number];
 export const reviewerNames = ["standards_reviewer", "spec_reviewer"] as const;
-export const researcherNames = ["code_researcher", "deep_researcher"] as const;
-export type RoleName = ImplementerName | (typeof reviewerNames)[number] | (typeof researcherNames)[number];
+const roleNames = [...implementerNames, ...reviewerNames, "code_researcher"] as const;
+export type RoleName = (typeof roleNames)[number];
 export type AgentRole = {
   name: RoleName;
   description: string;
@@ -43,7 +43,7 @@ export function parseAgentRole(source: string, name: RoleName): AgentRole {
 
 export async function loadAgentRoles(cwd: string): Promise<AgentRoles> {
   const roles = await Promise.all(
-    [...implementerNames, ...reviewerNames, ...researcherNames].map(async (name) => {
+    roleNames.map(async (name) => {
       const source = await readFile(join(cwd, ".codex", "agents", `${name.replaceAll("_", "-")}.toml`), "utf8");
       return [name, parseAgentRole(source, name)] as const;
     }),
