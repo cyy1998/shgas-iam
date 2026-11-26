@@ -12,7 +12,7 @@ const server = await createServer({
     host: "127.0.0.1",
     port: 0,
     strictPort: true,
-    allowedHosts: ["internal.iam.localhost", "external.iam.localhost", "host.docker.internal"],
+    allowedHosts: ["internal.iam.localhost", "external.iam.localhost"],
   },
   plugins: [
     {

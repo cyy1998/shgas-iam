@@ -1,7 +1,12 @@
 import { generateKeyPairSync } from "node:crypto";
 import { frontendEnvironment } from "../src/frontend/frontend-config.ts";
-import { apisixAdminKey, createHybridCompose, e2eDatabaseName, e2eDatabasePassword } from "../src/hybrid-compose.ts";
 import { e2eLoginCredentialEnvironment } from "../src/login-credential-config.ts";
+import {
+  apisixAdminKey,
+  createE2EMiddlewareCompose,
+  e2eDatabaseName,
+  e2eDatabasePassword,
+} from "../src/middleware-compose.ts";
 
 export const containerSmokeImages = [
   "apisix",
@@ -31,17 +36,15 @@ export function createContainerSmokeCompose(options: {
 }) {
   const { project, repositoryRoot, origin, internalOrigin, gatewayPort, adminClientCode } = options;
   const frontend = { repoRoot: repositoryRoot, adminClientCode };
-  const infrastructure = createHybridCompose({
-    network: "bridge",
-    project,
-    ports: { postgres: 0, redis: 0, etcd: 0, http: gatewayPort, https: 0, admin: 0 },
-  });
+  const infrastructure = createE2EMiddlewareCompose({ project });
   const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
   const jwk = { ...privateKey.export({ format: "jwk" }), kid: "e2e-container-smoke-rs256", alg: "RS256", use: "sig" };
   return {
     ...infrastructure,
     services: {
       ...infrastructure.services,
+      postgres: { ...infrastructure.services.postgres, ports: ["127.0.0.1:0:5432"] },
+      redis: { ...infrastructure.services.redis, ports: ["127.0.0.1:0:6379"] },
       apisix: {
         ...infrastructure.services.apisix,
         ports: [`127.0.0.1:${gatewayPort}:9080`, "127.0.0.1:0:9180"],

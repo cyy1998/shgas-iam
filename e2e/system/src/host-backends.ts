@@ -2,10 +2,10 @@ import { generateKeyPairSync } from "node:crypto";
 import { join } from "node:path";
 import { runWithCleanup } from "./bounded-operation.ts";
 import { startHostProcess } from "./host-process.ts";
-import { apisixAdminKey } from "./hybrid-compose.ts";
 import type { HybridRunContext } from "./hybrid-context.ts";
 import type { HybridMiddleware } from "./hybrid-middleware.ts";
 import { e2eLoginCredentialEnvironment } from "./login-credential-config.ts";
+import { apisixAdminKey } from "./middleware-compose.ts";
 import { allocateAvailablePort } from "./port-allocation.ts";
 import { wecomAgent, wecomCorp, wecomMobileCallbackPath, wecomSecret } from "./wecom-provider.ts";
 
