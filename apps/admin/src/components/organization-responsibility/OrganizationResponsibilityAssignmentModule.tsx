@@ -638,6 +638,7 @@ export default function OrganizationResponsibilityAssignmentModule({ host }: { h
         loading={detailLoading}
         size={840}
         onClose={closeDetail}
+        focusable={{ focusTriggerAfterClose: !createOpen }}
         classNames={{ header: styles["drawer-header"], extra: styles["drawer-actions"] }}
         styles={{ header: { padding: "14px 20px" }, body: { padding: "16px 20px", background: token.colorBgLayout } }}
         extra={
