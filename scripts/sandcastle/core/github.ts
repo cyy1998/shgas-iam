@@ -1,378 +1,600 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { command, retryGhRead } from "./command.ts";
-import { validateRepository } from "./config.ts";
+import { specBranchName } from "./git.ts";
+import type {
+  BlockedTicket,
+  BranchConflict,
+  FrontierResult,
+  ImplementerTier,
+  IntegratedTicket,
+  IssueComment,
+  IssueDetails,
+  IssueRef,
+  IssueState,
+  PullRequestInfo,
+  RunGh,
+  SpecGraph,
+  SpecIssue,
+  TicketIssue,
+} from "./types.ts";
 
-export type RunGh = (args: string[]) => Promise<string>;
-type IssueState = "OPEN" | "CLOSED";
+export { retryGhRead } from "./command.ts";
 
-export type IssueReference = { repo: string; number: number; state: IssueState };
-export type TrackedIssue = IssueReference & {
-  title: string;
-  body: string;
-  labels: string[];
-  assignees: string[];
-  blockers: IssueReference[];
+export type GhOptions = {
+  cwd?: string;
+  runGh?: RunGh;
 };
-export type TicketIssue = TrackedIssue & { parent: IssueReference | null };
-export type SpecGraph = { spec: TrackedIssue; tickets: TicketIssue[] };
 
-type GitHubIssue = {
+type Page<T> = {
+  nodes: T[];
+  pageInfo: { hasNextPage: boolean };
+};
+
+type RawIssueRef = {
   number: number;
-  title: string;
-  body: string | null;
-  state: "open" | "closed";
-  repository_url: string;
-  labels: { name: string }[];
-  assignees: { login: string }[];
-  pull_request?: unknown;
+  state: IssueState;
+  repository: { nameWithOwner: string };
 };
 
-type Page<T> = { nodes: T[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } };
-type GraphReference = { number: number; state: IssueState; repository: { nameWithOwner: string } };
-type GraphIssue = GraphReference & {
+type RawComment = {
+  author: { login: string } | null;
+  body: string;
+  createdAt: string;
+};
+
+type RawIssueNode = RawIssueRef & {
   title: string;
   body: string;
   labels: Page<{ name: string }>;
-  assignees: Page<{ login: string }>;
-  blockedBy: Page<GraphReference>;
+  comments: Page<RawComment>;
+  blockedBy: Page<RawIssueRef>;
 };
-type GraphTicket = GraphIssue & { parent: GraphReference | null };
-type GraphSpec = GraphIssue & { subIssues: Page<GraphTicket> };
 
-const referenceFragment = `
-  fragment IssueReference on Issue { number state repository { nameWithOwner } }
-`;
-const pageInfo = "pageInfo { hasNextPage endCursor }";
-const issueConnections = {
-  labels: "name",
-  assignees: "login",
-  blockedBy: "...IssueReference",
+type RawTicketNode = RawIssueNode & {
+  parent: RawIssueRef | null;
 };
-type IssueConnection = keyof typeof issueConnections;
-const connectionFields = Object.keys(issueConnections) as IssueConnection[];
 
-function connectionSelection(field: IssueConnection, after = "") {
-  return `${field}(first: 100${after}) { nodes { ${issueConnections[field]} } ${pageInfo} }`;
-}
+type RawSpecNode = RawIssueNode & {
+  subIssues: Page<RawTicketNode>;
+};
+
+const prFields = "number,url,state,headRefName,baseRefName,headRefOid,isCrossRepository";
 
 const specGraphQuery = `
-  query SpecGraph($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+  query ReadSpecGraph($owner: String!, $name: String!) {
     repository(owner: $owner, name: $name) {
-      issue(number: $number) {
-        ...IssueDetails
-        subIssues(first: 25, after: $cursor) {
-          nodes { ...IssueDetails parent { ...IssueReference } }
-          ${pageInfo}
+      issues(first: 100, states: OPEN, labels: ["type:spec"]) {
+        nodes {
+          ...IssueFields
+          subIssues(first: 100) {
+            nodes {
+              ...IssueFields
+              parent { ...IssueRefFields }
+            }
+            pageInfo { hasNextPage }
+          }
         }
+        pageInfo { hasNextPage }
       }
     }
   }
-  fragment IssueDetails on Issue {
-    ...IssueReference
+  fragment IssueRefFields on Issue {
+    number
+    state
+    repository { nameWithOwner }
+  }
+  fragment IssueFields on Issue {
+    ...IssueRefFields
     title
     body
-    ${connectionFields.map((field) => connectionSelection(field)).join("\n")}
+    labels(first: 100) {
+      nodes { name }
+      pageInfo { hasNextPage }
+    }
+    comments(first: 100) {
+      nodes { author { login } body createdAt }
+      pageInfo { hasNextPage }
+    }
+    blockedBy(first: 100) {
+      nodes { ...IssueRefFields }
+      pageInfo { hasNextPage }
+    }
   }
-  ${referenceFragment}
 `;
 
-function reference(repo: string | undefined, number: number, state: IssueState): IssueReference {
-  if (!repo || !Number.isSafeInteger(number) || number < 1 || (state !== "OPEN" && state !== "CLOSED")) {
-    throw new Error("GitHub returned an invalid native issue relationship.");
+export function validateRepository(repo: string): string {
+  if (!/^[\w-]+\/[\w.-]+$/.test(repo) || /\/\.{1,2}$/.test(repo)) {
+    throw new Error(`Invalid GitHub repository "${repo}". Expected "owner/repo".`);
   }
-  return { repo: validateRepository(repo).toLowerCase(), number, state };
+  return repo;
 }
 
-function graphReference(issue: GraphReference | null): IssueReference {
-  if (!issue?.repository) throw new Error("GitHub returned an invalid native issue relationship.");
-  return reference(issue.repository.nameWithOwner, issue.number, issue.state);
+function assertPositiveInt(value: number, label: string): number {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new Error(`Expected a positive integer for ${label}, got: ${value}`);
+  }
+  return value;
 }
 
-function nextCursor(page: Page<unknown>, seen: Set<string>): string | undefined {
-  if (!Array.isArray(page?.nodes) || typeof page.pageInfo?.hasNextPage !== "boolean") {
-    throw new Error("GitHub returned an invalid graph connection.");
-  }
-  if (!page.pageInfo.hasNextPage) return;
-  const cursor = page.pageInfo.endCursor;
-  if (typeof cursor !== "string" || !cursor || seen.has(cursor)) {
-    throw new Error("GitHub returned an invalid or repeated graph cursor.");
-  }
-  seen.add(cursor);
-  return cursor;
+function defaultGh(options?: GhOptions): RunGh {
+  if (options?.runGh) return options.runGh;
+  const cwd = options?.cwd ?? process.cwd();
+  return (args) => command("gh", args, cwd, { ...process.env, GH_PROMPT_DISABLED: "1" });
 }
 
-function hasType(issue: TrackedIssue, type: "spec" | "ticket") {
-  return issue.labels.includes(`type:${type}`) && !issue.labels.includes(type === "spec" ? "type:ticket" : "type:spec");
+async function withBodyFile<T>(body: string, use: (path: string) => Promise<T>): Promise<T> {
+  const dir = await mkdtemp(join(tmpdir(), "sandcastle-gh-body-"));
+  try {
+    const filePath = join(dir, "body.md");
+    await writeFile(filePath, body, { mode: 0o600, flag: "wx" });
+    return await use(filePath);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 }
 
-function admitted(issue: TrackedIssue) {
-  return issue.state === "OPEN" && issue.labels.includes("ready-for-agent");
+function assertNotOverflowed<T>(page: Page<T> | undefined, context: string): T[] {
+  if (!page || !Array.isArray(page.nodes) || typeof page.pageInfo?.hasNextPage !== "boolean") {
+    throw new Error(`GitHub GraphQL returned an invalid connection for ${context}.`);
+  }
+  if (page.pageInfo.hasNextPage) {
+    throw new Error(`GitHub GraphQL first:100 page overflowed for ${context}.`);
+  }
+  return page.nodes;
 }
 
-export function createGitHubIssueTracker(
-  options: { cwd: string; repo: string },
-  runGh: RunGh = (args) => command("gh", args, options.cwd),
-) {
-  const repo = validateRepository(options.repo).toLowerCase();
-  const issuesPath = `repos/${repo}/issues`;
-  const [owner, name] = repo.split("/");
-  const read = (args: string[]) => retryGhRead(() => runGh(args));
-
-  async function graphql<T>(query: string, args: string[]): Promise<T> {
-    const result: { data?: { repository?: T }; errors?: unknown[] } = JSON.parse(
-      await read(["api", "graphql", "-f", `query=${query}`, "-f", `owner=${owner}`, "-f", `name=${name}`, ...args]),
-    );
-    if (result.errors?.length || !result.data?.repository) {
-      throw new Error("GitHub returned an incomplete GraphQL issue graph.");
-    }
-    return result.data.repository;
-  }
-  async function pages(path: string): Promise<GitHubIssue[]> {
-    // gh applies the jq filter to each page. Each issue is a single JSON line, including multiline bodies.
-    const output = await read(["api", path, "--paginate", "--jq", ".[] | @json"]);
-    return output
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => JSON.parse(line));
-  }
-  function details(issue: GitHubIssue): Omit<TrackedIssue, "blockers"> {
-    const repository = /^https:\/\/api\.github\.com\/repos\/(.+)$/.exec(issue.repository_url)?.[1];
-    if (issue.pull_request || (issue.state !== "open" && issue.state !== "closed")) {
-      throw new Error("GitHub returned an invalid native issue relationship.");
-    }
-    const ref = reference(repository, issue.number, issue.state === "open" ? "OPEN" : "CLOSED");
-    if (
-      ref.repo !== repo ||
-      typeof issue.title !== "string" ||
-      (issue.body !== null && typeof issue.body !== "string") ||
-      !Array.isArray(issue.labels) ||
-      !issue.labels.every(({ name }) => typeof name === "string") ||
-      !Array.isArray(issue.assignees) ||
-      !issue.assignees.every(({ login }) => typeof login === "string")
-    ) {
-      throw new Error("GitHub returned invalid issue details.");
-    }
-    return {
-      ...ref,
-      title: issue.title,
-      body: issue.body ?? "",
-      labels: issue.labels.map(({ name }) => name),
-      assignees: issue.assignees.map(({ login }) => login),
-    };
-  }
-  async function readIssue(number: number) {
-    const issue: GitHubIssue = JSON.parse(await read(["api", `${issuesPath}/${number}`]));
-    if (issue.number !== number) throw new Error(`GitHub returned a different issue for #${number}.`);
-    return details(issue);
-  }
-
-  async function loadSpecGraph(number: number): Promise<SpecGraph> {
-    type Continuation = {
-      expected: IssueReference;
-      field: IssueConnection;
-      cursor: string;
-      append: (issue: GraphIssue) => void;
-    };
-    const pending: Continuation[] = [];
-    function track(issue: GraphIssue): TrackedIssue {
-      const ref = graphReference(issue);
-      if (typeof issue.title !== "string" || typeof issue.body !== "string") {
-        throw new Error("GitHub returned invalid issue details.");
-      }
-      function collect<K extends IssueConnection, T>(field: K, parse: (page: GraphIssue[K]) => T[]): T[] {
-        const values: T[] = [];
-        const seen = new Set<string>();
-        function append(current: GraphIssue) {
-          const page = current[field];
-          const cursor = nextCursor(page, seen);
-          values.push(...parse(page));
-          if (cursor) pending.push({ expected: ref, field, cursor, append });
-        }
-        append(issue);
-        return values;
-      }
-      function text(value: string) {
-        if (typeof value !== "string") throw new Error("GitHub returned invalid issue details.");
-        return value;
-      }
-      return {
-        ...ref,
-        title: issue.title,
-        body: issue.body,
-        labels: collect("labels", (page) => page.nodes.map(({ name }) => text(name))),
-        assignees: collect("assignees", (page) => page.nodes.map(({ login }) => text(login))),
-        blockers: collect("blockedBy", (page) => page.nodes.map(graphReference)),
-      };
-    }
-
-    const tickets: TicketIssue[] = [];
-    const numbers = new Set<number>();
-    const seen = new Set<string>();
-    let spec: TrackedIssue | undefined;
-    let cursor: string | undefined;
-    do {
-      const { issue } = await graphql<{ issue: GraphSpec | null }>(specGraphQuery, [
-        "-F",
-        `number=${number}`,
-        ...(cursor ? ["-f", `cursor=${cursor}`] : []),
-      ]);
-      const ref = graphReference(issue);
-      if (!issue || ref.repo !== repo || ref.number !== number) {
-        throw new Error(`GitHub returned a different issue for #${number}.`);
-      }
-      spec ??= track(issue);
-      cursor = nextCursor(issue.subIssues, seen);
-      for (const child of issue.subIssues.nodes) {
-        const ticket = track(child);
-        if (ticket.repo !== repo || ticket.number === number || numbers.has(ticket.number)) {
-          throw new Error(`Spec #${number} has an invalid or duplicate child relationship.`);
-        }
-        numbers.add(ticket.number);
-        tickets.push({ ...ticket, parent: child.parent ? graphReference(child.parent) : null });
-      }
-    } while (cursor);
-
-    // Nested connections have independent cursors. Batch their continuation pages in the same request.
-    while (pending.length) {
-      const batch = pending.splice(0, 25);
-      const variables = batch.map((_, index) => `$cursor${index}: String!`).join(", ");
-      const selections = batch.map(
-        ({ expected, field }, index) =>
-          `page${index}: issue(number: ${expected.number}) { ...IssueReference ${connectionSelection(field, `, after: $cursor${index}`)} }`,
-      );
-      const pages = await graphql<Record<string, GraphIssue>>(
-        `query SpecGraphConnections($owner: String!, $name: String!, ${variables}) {
-          repository(owner: $owner, name: $name) { ${selections.join("\n")} }
-        } ${referenceFragment}`,
-        batch.flatMap(({ cursor }, index) => ["-f", `cursor${index}=${cursor}`]),
-      );
-      for (const [index, { expected, append }] of batch.entries()) {
-        const issue = pages[`page${index}`];
-        const actual = graphReference(issue ?? null);
-        if (!issue || actual.number !== expected.number || actual.repo !== expected.repo) {
-          throw new Error(`GitHub returned a different issue for #${expected.number}.`);
-        }
-        append(issue);
-      }
-    }
-    return { spec, tickets };
+function parseIssueRef(raw: RawIssueRef | null | undefined): IssueRef {
+  if (
+    !raw?.repository?.nameWithOwner ||
+    !Number.isSafeInteger(raw.number) ||
+    raw.number < 1 ||
+    (raw.state !== "OPEN" && raw.state !== "CLOSED")
+  ) {
+    throw new Error("GitHub returned an invalid issue reference.");
   }
   return {
-    readIssue,
-    loadSpecGraph,
-    async listOpenSpecs() {
-      const candidates = await pages(`${issuesPath}?state=open&labels=type%3Aspec&per_page=100`);
-      return candidates.filter((issue) => !issue.pull_request).map(details);
-    },
+    repo: validateRepository(raw.repository.nameWithOwner).toLowerCase(),
+    number: raw.number,
+    state: raw.state,
   };
 }
 
-export function specFrontier(
-  graph: SpecGraph,
-  progress: {
-    integrated?: ReadonlySet<number>;
-    resumable?: ReadonlySet<number>;
-    actor?: string;
-    deliveryRecovery?: boolean;
-  } = {},
-) {
+function parseIssueNode(raw: RawIssueNode): IssueDetails {
+  const ref = parseIssueRef(raw);
+  if (typeof raw.title !== "string" || typeof raw.body !== "string") {
+    throw new Error(`GitHub returned invalid title/body for #${ref.number}.`);
+  }
+  const labelNodes = assertNotOverflowed(raw.labels, `issue #${ref.number} labels`);
+  const commentNodes = assertNotOverflowed(raw.comments, `issue #${ref.number} comments`);
+  const blockerNodes = assertNotOverflowed(raw.blockedBy, `issue #${ref.number} blockedBy`);
+  const labels = labelNodes.map((node) => {
+    if (typeof node?.name !== "string") throw new Error(`Invalid label on #${ref.number}.`);
+    return node.name;
+  });
+  const comments: IssueComment[] = commentNodes.map((node) => {
+    if (typeof node?.body !== "string" || typeof node?.createdAt !== "string") {
+      throw new Error(`Invalid comment on #${ref.number}.`);
+    }
+    return {
+      author: typeof node.author?.login === "string" && node.author.login ? node.author.login : "ghost",
+      body: node.body,
+      createdAt: node.createdAt,
+    };
+  });
+  const blockers = blockerNodes.map((node) => parseIssueRef(node));
+  return {
+    ...ref,
+    title: raw.title,
+    body: raw.body,
+    labels,
+    comments,
+    blockers,
+  };
+}
+
+export async function readSpecGraph(repo: string, options?: GhOptions): Promise<SpecGraph[]> {
+  const normalizedRepo = validateRepository(repo);
+  const [owner, name] = normalizedRepo.split("/");
+  if (!owner || !name) throw new Error(`Invalid GitHub repository "${repo}".`);
+  const gh = defaultGh(options);
+
+  const rawText = await retryGhRead(() =>
+    gh(["api", "graphql", "-f", `query=${specGraphQuery}`, "-f", `owner=${owner}`, "-f", `name=${name}`]),
+  );
+  const parsed: {
+    data?: { repository?: { issues?: Page<RawSpecNode> } };
+    errors?: Array<{ message?: string }>;
+  } = JSON.parse(rawText);
+
+  if (parsed.errors?.length || !parsed.data?.repository?.issues) {
+    const details = parsed.errors
+      ?.map((err) => err.message)
+      .filter(Boolean)
+      .join("; ");
+    throw new Error(`GitHub GraphQL query failed for ${normalizedRepo}${details ? `: ${details}` : "."}`);
+  }
+
+  const specNodes = assertNotOverflowed(parsed.data.repository.issues, `${normalizedRepo} open specs`);
+  const expectedRepo = normalizedRepo.toLowerCase();
+
+  return specNodes.map((specNode) => {
+    const spec: SpecIssue = parseIssueNode(specNode);
+    const subNodes = assertNotOverflowed(specNode.subIssues, `spec #${spec.number} subIssues`);
+    const seenTickets = new Set<number>();
+    const tickets: TicketIssue[] = subNodes.map((ticketNode) => {
+      const details = parseIssueNode(ticketNode);
+      if (details.repo !== expectedRepo || details.number === spec.number || seenTickets.has(details.number)) {
+        throw new Error(`Spec #${spec.number} has an invalid or duplicate sub-issue #${details.number}.`);
+      }
+      seenTickets.add(details.number);
+      return {
+        ...details,
+        parent: ticketNode.parent ? parseIssueRef(ticketNode.parent) : null,
+      };
+    });
+    return { spec, tickets };
+  });
+}
+
+function hasExclusiveType(labels: readonly string[], expected: "spec" | "ticket"): boolean {
+  const other = expected === "spec" ? "type:ticket" : "type:spec";
+  return labels.includes(`type:${expected}`) && !labels.includes(other);
+}
+
+export function specFrontier(graph: SpecGraph, integrated: ReadonlySet<number> = new Set()): FrontierResult {
   const { spec, tickets } = graph;
   const children = new Map(tickets.map((ticket) => [ticket.number, ticket]));
-  const integrated = progress.integrated ?? new Set<number>();
   const ready: TicketIssue[] = [];
-  const plannable: TicketIssue[] = [];
-  const blocked: { number: number; reasons: string[] }[] = [];
-  const visiting = new Set<number>();
-  const cyclic = new Map<number, boolean>();
+  const blocked: BlockedTicket[] = [];
 
-  function localBlockers(issue: TrackedIssue) {
-    return issue.blockers.flatMap((blocker) => {
-      const local =
-        blocker.repo === spec.repo && (blocker.number === spec.number ? spec : children.get(blocker.number));
+  const localBlockers = (issue: IssueDetails): IssueDetails[] =>
+    issue.blockers.flatMap((blocker) => {
+      if (blocker.repo !== spec.repo) return [];
+      const local = blocker.number === spec.number ? spec : children.get(blocker.number);
       return local ? [local] : [];
     });
-  }
-  function hasCycle(issue: TrackedIssue): boolean {
+
+  const externalBlockers = (issue: IssueDetails): IssueRef[] =>
+    issue.blockers.filter(
+      (blocker) => blocker.repo !== spec.repo || (blocker.number !== spec.number && !children.has(blocker.number)),
+    );
+
+  const visiting = new Set<number>();
+  const cyclicCache = new Map<number, boolean>();
+  const hasCycle = (issue: IssueDetails): boolean => {
     if (visiting.has(issue.number)) return true;
-    const known = cyclic.get(issue.number);
-    if (known !== undefined) return known;
+    const cached = cyclicCache.get(issue.number);
+    if (cached !== undefined) return cached;
     visiting.add(issue.number);
     const result = localBlockers(issue).some(hasCycle);
     visiting.delete(issue.number);
-    cyclic.set(issue.number, result);
+    cyclicCache.set(issue.number, result);
     return result;
-  }
-  function owned(issue: TrackedIssue) {
-    return (
-      issue.assignees.length === 0 ||
-      Boolean(progress.resumable?.has(issue.number) && issue.assignees.every((login) => login === progress.actor))
-    );
-  }
-  function pendingExternal(issue: TrackedIssue) {
-    return issue.blockers
-      .filter(
-        (blocker) =>
-          (blocker.repo !== spec.repo || (blocker.number !== spec.number && !children.has(blocker.number))) &&
-          blocker.state !== "CLOSED",
-      )
-      .map((blocker) => `External blocker ${blocker.repo}#${blocker.number} is open.`);
-  }
-  const belongsToSpec = (ticket: TicketIssue) =>
-    Boolean(ticket.parent && ticket.parent.repo === spec.repo && ticket.parent.number === spec.number);
-  const specReasons = pendingExternal(spec);
-  if (!hasType(spec, "spec") || (progress.deliveryRecovery ? spec.state !== "OPEN" : !admitted(spec))) {
-    specReasons.push("Spec type or admission is invalid.");
-  }
-  if (!owned(spec)) specReasons.push("Spec is assigned.");
-  if (hasCycle(spec)) specReasons.push("Spec dependency cycle.");
-  if (localBlockers(spec).length) specReasons.push("Spec depends on an issue within its own graph.");
+  };
 
-  const eligible = new Set<number>();
+  const specReasons: string[] = [];
+  if (spec.state !== "OPEN") specReasons.push("Spec is not OPEN.");
+  if (!hasExclusiveType(spec.labels, "spec")) specReasons.push("Spec type label is missing or conflicting.");
+  if (!spec.labels.includes("ready-for-agent")) specReasons.push("Spec is missing ready-for-agent label.");
+  if (spec.labels.includes("needs-attention")) specReasons.push("Spec has needs-attention label.");
+  if (localBlockers(spec).length > 0) specReasons.push("Spec depends on an issue within its own graph.");
+  for (const blocker of externalBlockers(spec)) {
+    if (blocker.state !== "CLOSED") {
+      specReasons.push(`External blocker ${blocker.repo}#${blocker.number} is ${blocker.state}.`);
+    }
+  }
+
   for (const ticket of tickets) {
-    const reasons = [...specReasons];
-    if (!hasType(ticket, "ticket")) reasons.push("Ticket type is missing or conflicts with Spec.");
-    if (ticket.state !== "OPEN" && integrated.has(ticket.number)) reasons.push("Integrated ticket is closed.");
-    if (!belongsToSpec(ticket)) {
+    if (integrated.has(ticket.number)) {
+      if (specReasons.length > 0) {
+        blocked.push({ number: ticket.number, reasons: [...specReasons] });
+      }
+      continue;
+    }
+
+    const reasons: string[] = [...specReasons];
+    if (ticket.state !== "OPEN") reasons.push("Ticket is not OPEN.");
+    if (!hasExclusiveType(ticket.labels, "ticket")) reasons.push("Ticket type label is missing or conflicting.");
+    if (!ticket.labels.includes("ready-for-agent")) reasons.push("Ticket is missing ready-for-agent label.");
+    if (ticket.labels.includes("needs-attention")) reasons.push("Ticket has needs-attention label.");
+    if (!ticket.parent || ticket.parent.repo !== spec.repo || ticket.parent.number !== spec.number) {
       reasons.push("Ticket native parent does not match the Spec.");
     }
-    if (hasCycle(ticket)) reasons.push("Ticket dependency cycle.");
-    if (!integrated.has(ticket.number)) {
-      if (!admitted(ticket)) reasons.push("Ticket is not ready for agent.");
-      if (!owned(ticket)) reasons.push("Ticket is assigned.");
-      reasons.push(...pendingExternal(ticket));
-      const local = localBlockers(ticket);
-      for (const blocker of local) {
-        const child = children.get(blocker.number);
-        if (!child || !hasType(child, "ticket") || !belongsToSpec(child)) {
-          reasons.push(`Blocker #${blocker.number} has an invalid type or parent.`);
-        }
-      }
-      if (!reasons.length) eligible.add(ticket.number);
-      for (const blocker of local) {
-        if (!integrated.has(blocker.number)) reasons.push(`Blocker #${blocker.number} is not integrated.`);
-      }
-      if (!reasons.length) ready.push(ticket);
+    if (hasCycle(ticket)) {
+      reasons.push("Ticket is part of a local dependency cycle.");
     }
-    if (reasons.length) blocked.push({ number: ticket.number, reasons });
-  }
-  const planned = new Map<number, boolean>();
-  function plan(ticket: TrackedIssue): boolean {
-    if (integrated.has(ticket.number)) return true;
-    if (!eligible.has(ticket.number)) return false;
-    const known = planned.get(ticket.number);
-    if (known !== undefined) return known;
-    const possible = localBlockers(ticket).every(plan);
-    planned.set(ticket.number, possible);
-    if (possible) {
-      const child = children.get(ticket.number);
-      if (child) plannable.push(child);
+    for (const blocker of externalBlockers(ticket)) {
+      if (blocker.state !== "CLOSED") {
+        reasons.push(`External blocker ${blocker.repo}#${blocker.number} is ${blocker.state}.`);
+      }
     }
-    return possible;
+    for (const blocker of localBlockers(ticket)) {
+      if (blocker.number === spec.number) {
+        reasons.push(`Ticket depends on its own parent Spec #${spec.number}.`);
+      } else if (!integrated.has(blocker.number)) {
+        reasons.push(`Internal blocker #${blocker.number} is not integrated.`);
+      }
+    }
+
+    if (reasons.length === 0) {
+      ready.push(ticket);
+    } else {
+      blocked.push({ number: ticket.number, reasons });
+    }
   }
-  for (const ticket of tickets) plan(ticket);
-  return {
-    ready,
-    plannable,
-    blocked,
-    complete: tickets.length > 0 && blocked.length === 0 && tickets.every(({ number }) => integrated.has(number)),
-  };
+
+  const complete =
+    specReasons.length === 0 &&
+    tickets.length > 0 &&
+    blocked.length === 0 &&
+    tickets.every((ticket) => integrated.has(ticket.number));
+
+  return { ready, blocked, complete };
+}
+
+export function resolveTicketTier(
+  labelsOrTicket: readonly string[] | { number?: number; labels: readonly string[] },
+): ImplementerTier {
+  const isTicket = "labels" in labelsOrTicket;
+  const labels = isTicket ? labelsOrTicket.labels : labelsOrTicket;
+  const ticketRef = isTicket && labelsOrTicket.number !== undefined ? `Ticket #${labelsOrTicket.number}` : "Ticket";
+  const hasDeep = labels.includes("agent:deep");
+  const hasLight = labels.includes("agent:light");
+  if (hasDeep && hasLight) {
+    throw new Error(`${ticketRef} has conflicting tier labels: both agent:light and agent:deep are set.`);
+  }
+  if (hasDeep) return "deep";
+  if (hasLight) return "light";
+  return "standard";
+}
+
+export function findBranchConflicts(specs: readonly SpecIssue[]): BranchConflict[] {
+  const byBranch = new Map<string, number[]>();
+  for (const spec of specs) {
+    if (spec.state !== "OPEN" || !spec.labels.includes("ready-for-agent")) continue;
+    const branch = specBranchName(spec.number, spec.body);
+    const list = byBranch.get(branch) ?? [];
+    list.push(spec.number);
+    byBranch.set(branch, list);
+  }
+  const conflicts: BranchConflict[] = [];
+  for (const [branch, specNumbers] of byBranch) {
+    if (specNumbers.length > 1) {
+      conflicts.push({ branch, specNumbers: [...specNumbers].sort((a, b) => a - b) });
+    }
+  }
+  return conflicts.sort((a, b) => a.branch.localeCompare(b.branch));
+}
+
+export async function readSpecLabels(repo: string, specNumber: number, options?: GhOptions): Promise<string[]> {
+  const normalizedRepo = validateRepository(repo);
+  const number = assertPositiveInt(specNumber, "specNumber");
+  const gh = defaultGh(options);
+  const output = await retryGhRead(() => gh(["api", `repos/${normalizedRepo}/issues/${number}`]));
+  const parsed: { labels?: Array<{ name?: unknown }> } = JSON.parse(output);
+  if (!Array.isArray(parsed.labels)) {
+    throw new Error(`GitHub returned invalid labels payload for ${normalizedRepo}#${number}.`);
+  }
+  return parsed.labels.map((label) => {
+    if (typeof label?.name !== "string") {
+      throw new Error(`GitHub returned an invalid label entry for ${normalizedRepo}#${number}.`);
+    }
+    return label.name;
+  });
+}
+
+export async function pauseSpec(repo: string, specNumber: number, reason: string, options?: GhOptions): Promise<void> {
+  const normalizedRepo = validateRepository(repo);
+  const number = assertPositiveInt(specNumber, "specNumber");
+  const trimmedReason = reason.trim();
+  if (!trimmedReason) throw new Error("Pause reason must not be empty.");
+  const gh = defaultGh(options);
+  await gh(["issue", "edit", String(number), "--repo", normalizedRepo, "--add-label", "needs-attention"]);
+  await withBodyFile(trimmedReason, (bodyPath) =>
+    gh(["issue", "comment", String(number), "--repo", normalizedRepo, "--body-file", bodyPath]),
+  );
+}
+
+export async function removeLabel(
+  repo: string,
+  issueNumber: number,
+  label: string,
+  options?: GhOptions,
+): Promise<void> {
+  const normalizedRepo = validateRepository(repo);
+  const number = assertPositiveInt(issueNumber, "issueNumber");
+  if (!label.trim()) throw new Error("Label must not be empty.");
+  const gh = defaultGh(options);
+  await gh(["issue", "edit", String(number), "--repo", normalizedRepo, "--remove-label", label]);
+}
+
+function verifyPullRequest(
+  pr: PullRequestInfo,
+  headBranch: string,
+  baseBranch: string,
+  headSha?: string,
+): PullRequestInfo {
+  if (
+    !Number.isSafeInteger(pr.number) ||
+    pr.number < 1 ||
+    !pr.url ||
+    pr.isCrossRepository === true ||
+    pr.state !== "OPEN" ||
+    pr.headRefName !== headBranch ||
+    pr.baseRefName !== baseBranch
+  ) {
+    throw new Error(`Open PR #${pr.number} does not match ${headBranch} -> ${baseBranch}.`);
+  }
+  if (headSha !== undefined && pr.headRefOid !== headSha) {
+    throw new Error(`Open PR #${pr.number} for ${headBranch} points to ${pr.headRefOid}, expected ${headSha}.`);
+  }
+  return pr;
+}
+
+export async function findOpenPr(
+  repo: string,
+  params: { headBranch: string; baseBranch: string; headSha?: string },
+  options?: GhOptions,
+): Promise<PullRequestInfo | undefined> {
+  const normalizedRepo = validateRepository(repo);
+  const gh = defaultGh(options);
+  const output = await retryGhRead(() =>
+    gh([
+      "pr",
+      "list",
+      "--repo",
+      normalizedRepo,
+      "--state",
+      "open",
+      "--head",
+      params.headBranch,
+      "--base",
+      params.baseBranch,
+      "--limit",
+      "100",
+      "--json",
+      prFields,
+    ]),
+  );
+  const list: PullRequestInfo[] = JSON.parse(output);
+  const matches = list.filter(
+    (pr) =>
+      pr.isCrossRepository !== true &&
+      pr.state === "OPEN" &&
+      pr.headRefName === params.headBranch &&
+      pr.baseRefName === params.baseBranch,
+  );
+  if (matches.length > 1) {
+    throw new Error(`Multiple open PRs exist for ${params.headBranch} -> ${params.baseBranch}.`);
+  }
+  const found = matches[0];
+  if (!found) return undefined;
+  return verifyPullRequest(found, params.headBranch, params.baseBranch, params.headSha);
+}
+
+function formatClosesAndTable(
+  spec: Pick<SpecIssue, "number" | "title">,
+  tickets: ReadonlyArray<Pick<TicketIssue, "number" | "title">>,
+  integrated: ReadonlyMap<number, IntegratedTicket>,
+): string {
+  const closes = [spec.number, ...tickets.map((ticket) => ticket.number)].map((number) => `Closes #${number}`);
+  const rows = tickets.map((ticket) => {
+    const safeTitle = ticket.title.replaceAll("|", "\\|").replaceAll("\n", " ");
+    const sha = integrated.get(ticket.number)?.mergeSha ?? "—";
+    return `| #${ticket.number} | ${safeTitle} | \`${sha}\` |`;
+  });
+  return [
+    ...closes,
+    "",
+    "## Integrated Tickets",
+    "",
+    "| Ticket | Title | Merge commit |",
+    "| --- | --- | --- |",
+    ...rows,
+  ].join("\n");
+}
+
+export function buildFallbackPrBody(input: {
+  spec: Pick<SpecIssue, "number" | "title">;
+  tickets: ReadonlyArray<Pick<TicketIssue, "number" | "title">>;
+  integrated: ReadonlyMap<number, IntegratedTicket>;
+  baseBranch: string;
+  headBranch: string;
+  headSha: string;
+}): string {
+  const { spec, tickets, integrated, baseBranch, headBranch, headSha } = input;
+  return [
+    "## Summary",
+    "",
+    `Automated AFK delivery for Spec #${spec.number}: ${spec.title}.`,
+    "",
+    formatClosesAndTable(spec, tickets, integrated),
+    "",
+    "---",
+    `Spec: #${spec.number}`,
+    `Base-Branch: ${baseBranch}`,
+    `Head-Branch: ${headBranch}`,
+    `Head-SHA: ${headSha}`,
+  ].join("\n");
+}
+
+function parseCreatedPrNumber(output: string, repo: string): number {
+  const url = URL.parse(output.trim());
+  const number = Number(url?.pathname.split("/").at(-1));
+  if (
+    url?.origin !== "https://github.com" ||
+    !Number.isSafeInteger(number) ||
+    number < 1 ||
+    url.pathname.toLowerCase() !== `/${repo.toLowerCase()}/pull/${number}`
+  ) {
+    throw new Error(`GitHub did not return a valid PR URL for ${repo}: ${output.trim()}`);
+  }
+  return number;
+}
+
+export async function ensurePr(
+  repo: string,
+  params: {
+    spec: Pick<SpecIssue, "number" | "title">;
+    tickets: ReadonlyArray<Pick<TicketIssue, "number" | "title">>;
+    integrated: ReadonlyMap<number, IntegratedTicket>;
+    headBranch: string;
+    baseBranch: string;
+    headSha: string;
+    title?: string;
+    draftBody?: string;
+    draft?: boolean;
+  },
+  options?: GhOptions,
+): Promise<PullRequestInfo> {
+  const normalizedRepo = validateRepository(repo);
+  const existing = await findOpenPr(
+    normalizedRepo,
+    { headBranch: params.headBranch, baseBranch: params.baseBranch, headSha: params.headSha },
+    options,
+  );
+  if (existing) return existing;
+
+  const trimmedDraft = params.draftBody?.trim();
+  const body = trimmedDraft
+    ? `${trimmedDraft}\n\n${formatClosesAndTable(params.spec, params.tickets, params.integrated)}`
+    : buildFallbackPrBody({
+        spec: params.spec,
+        tickets: params.tickets,
+        integrated: params.integrated,
+        baseBranch: params.baseBranch,
+        headBranch: params.headBranch,
+        headSha: params.headSha,
+      });
+
+  const gh = defaultGh(options);
+  const title = params.title ?? `Spec #${params.spec.number}: ${params.spec.title}`;
+  const createdOutput = await withBodyFile(body, (bodyPath) =>
+    gh([
+      "pr",
+      "create",
+      "--repo",
+      normalizedRepo,
+      "--base",
+      params.baseBranch,
+      "--head",
+      params.headBranch,
+      "--title",
+      title,
+      "--body-file",
+      bodyPath,
+      ...(params.draft ? ["--draft"] : []),
+    ]),
+  );
+
+  const prNumber = parseCreatedPrNumber(createdOutput, normalizedRepo);
+  const viewed: PullRequestInfo = JSON.parse(
+    await retryGhRead(() => gh(["pr", "view", String(prNumber), "--repo", normalizedRepo, "--json", prFields])),
+  );
+  if (viewed.number !== prNumber) {
+    throw new Error(`GitHub returned PR #${viewed.number} when verifying created PR #${prNumber}.`);
+  }
+  return verifyPullRequest(viewed, params.headBranch, params.baseBranch, params.headSha);
 }

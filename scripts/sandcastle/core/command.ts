@@ -19,7 +19,7 @@ export function hasCode(error: unknown, code: string | number): boolean {
   return error instanceof Error && "code" in error && error.code === code;
 }
 
-function isTransientGhFailure(error: unknown): boolean {
+export function isTransientGhFailure(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
   const stderr = "stderr" in error && typeof error.stderr === "string" ? error.stderr.trim() : "";
   const message = stderr || error.message;
@@ -28,6 +28,7 @@ function isTransientGhFailure(error: unknown): boolean {
   }
   return (
     hasCode(error, "ECONNRESET") ||
+    hasCode(error, "ETIMEDOUT") ||
     /\bHTTP(?:\/\d(?:\.\d)?)? 50[0234]\b|\b500 Internal Server Error\b|\b502 Bad Gateway\b|\b503 Service Unavailable\b|\b504 Gateway Timeout\b/i.test(
       message,
     ) ||
@@ -36,13 +37,18 @@ function isTransientGhFailure(error: unknown): boolean {
   );
 }
 
-export async function retryGhRead<T>(read: () => Promise<T>): Promise<T> {
+export async function retryGhRead<T>(
+  read: () => Promise<T>,
+  options: { maxAttempts?: number; baseDelayMs?: number } = {},
+): Promise<T> {
+  const maxAttempts = options.maxAttempts ?? 3;
+  const baseDelayMs = options.baseDelayMs ?? 100;
   for (let attempt = 0; ; attempt++) {
     try {
       return await read();
     } catch (error) {
-      if (attempt === 2 || !isTransientGhFailure(error)) throw error;
-      await delay(100 * 2 ** attempt);
+      if (attempt >= maxAttempts - 1 || !isTransientGhFailure(error)) throw error;
+      if (baseDelayMs > 0) await delay(baseDelayMs * 2 ** attempt);
     }
   }
 }
