@@ -1,10 +1,10 @@
 import { afterEach, expect, test } from "bun:test";
-import { writeFile } from "node:fs/promises";
-import path from "node:path";
+import { once } from "node:events";
 import { fileURLToPath } from "node:url";
 import { ClientStatus } from "@iam/contracts";
 import { clients } from "@iam/db/schema";
 import {
+  createBoundedProcessLogCapture,
   createProcessSmokeEnvironment,
   createProcessSmokeSuite,
   spawnOwnedProcessTree,
@@ -19,8 +19,8 @@ const getDatabase = useGatewayPostgresTestHarness();
 
 test("the formal Gateway process serves authenticated validation and closes its owned database pool", async () => {
   const database = getDatabase();
-  let shutdownPath = "";
   let origin = "";
+  let logs: ReturnType<typeof createBoundedProcessLogCapture> | undefined;
   await database.db.insert(clients).values({
     clientCode: "tender",
     clientName: "Test",
@@ -30,11 +30,10 @@ test("the formal Gateway process serves authenticated validation and closes its 
   });
   const outcome = await smoke.run({
     start(context) {
-      shutdownPath = path.join(context.temporaryDirectory, "shutdown");
       origin = `http://${context.hostname}:${context.port}`;
-      return spawnOwnedProcessTree({
+      const child = spawnOwnedProcessTree({
         executable: process.execPath,
-        args: ["run", "--no-env-file", "--preload", "./test-integration/runtime/shutdown.fixture.ts", "src/main.ts"],
+        args: ["run", "--no-env-file", "src/main.ts"],
         cwd: packageRoot,
         env: createProcessSmokeEnvironment({
           source: process.env,
@@ -46,12 +45,15 @@ test("the formal Gateway process serves authenticated validation and closes its 
             IAM_GATEWAY_HOSTNAME: context.hostname,
             IAM_GATEWAY_PORT: String(context.port),
             IAM_GATEWAY_MAX_REQUEST_BYTES: "4096",
-            IAM_GATEWAY_TEST_SHUTDOWN_PATH: shutdownPath,
             NO_PROXY: "127.0.0.1,localhost",
             no_proxy: "127.0.0.1,localhost",
           },
         }),
       });
+      const capture = createBoundedProcessLogCapture(child, { maxBytes: 32_768 });
+      child.once("close", capture.dispose);
+      logs = capture;
+      return child;
     },
     childReadinessEvidence: "gateway_started",
     async probe(_context, signal) {
@@ -76,12 +78,11 @@ test("the formal Gateway process serves authenticated validation and closes its 
     async stop(child) {
       if (child.exitCode !== null || child.signalCode !== null)
         throw new Error("Gateway exited before the graceful shutdown request");
-      const exited = new Promise<{ code: number | null; signal: string | null }>((resolve) =>
-        child.once("exit", (code, signal) => resolve({ code, signal })),
-      );
-      await writeFile(shutdownPath, "shutdown", "utf8");
-      const result = await exited;
-      expect(result).toEqual({ code: 0, signal: null });
+      const closed = once(child, "close", { signal: AbortSignal.timeout(5_000) });
+      child.kill("SIGTERM");
+      const result = await closed;
+      expect(result).toEqual([0, null]);
+      expect(logs?.snapshot()).toContain('"event":"gateway_stopped"');
     },
   });
   expect(outcome.status).toBe(200);

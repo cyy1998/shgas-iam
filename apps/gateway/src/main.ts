@@ -7,7 +7,6 @@ const logger = createLogger({ nodeEnv: "production", logFormat: "json" }).child(
 try {
   const env = parseGatewayEnv();
   const runtime = await startGatewayRuntime(env);
-  logger.info({ event: "gateway_started", port: runtime.port }, "Gateway API started");
   let stopping = false;
   const shutdown = async () => {
     if (stopping) return;
@@ -27,6 +26,7 @@ try {
   };
   process.once("SIGTERM", shutdown);
   process.once("SIGINT", shutdown);
+  logger.info({ event: "gateway_started", port: runtime.port }, "Gateway API started");
 } catch {
   logger.error(
     { event: "gateway_startup_failed" },

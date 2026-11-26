@@ -3,7 +3,6 @@ import { createSsoApiApp } from "./app";
 
 const { app, close, logger, port, hostname } = await createSsoApiApp();
 const server = await bind();
-logger.info({ event: "sso.api.started", port: server.port }, `server: http://localhost:${server.port}`);
 
 async function bind() {
   try {
@@ -42,3 +41,4 @@ function stop() {
 
 process.once("SIGINT", stop);
 process.once("SIGTERM", stop);
+logger.info({ event: "sso.api.started", port: server.port }, `server: http://localhost:${server.port}`);
