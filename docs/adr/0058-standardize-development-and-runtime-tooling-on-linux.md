@@ -21,9 +21,9 @@ status: accepted
 ## E2E、测试资源与 Sandcastle AFK 宿主收口
 
 - **Full-system E2E 单一 `host` 拓扑与精简内存采样**。在 [hybrid-compose.ts](../../e2e/system/src/hybrid-compose.ts) 及相关 E2E 代码中移除 `bridge` 网络模式、`IAM_E2E_UPSTREAM_HOST`、`host.docker.internal`（含 `vite-dev.mjs` 允许列表）以及 `host-memory.ts` 中的 `windowsMemoryReader()`（`bun:ffi` `kernel32.dll`），统一为 `network_mode: "host"` + `127.0.0.1` 与 `os.freemem()` 采样；`docker/compose.dev.yaml` 中 Grafana 的 `host.docker.internal:host-gateway` 属 Linux 容器访问宿主机代理的标准写法，保持不变。
-- **克制裁剪 `@ai-hero/sandcastle` 补丁**。[patches/@ai-hero__sandcastle@0.12.0.patch](../../patches/@ai-hero__sandcastle@0.12.0.patch) 仅移除 2 处 Windows 专属 hunk（`execGit` 的 `-c core.longpaths=true` 与 `patchGitMountsForWindows`），完整保留其余 7 处 Linux/AFK 必需改动（`daemonSocket`、匿名卷/命名卷生命周期、`SANDCASTLE_HOST_HANDLES_SIGNALS` 与 Codex stream 错误解析）；不把摆脱上游 SDK 补丁的更大重构混入本次范围。
+- **克制裁剪 `@ai-hero/sandcastle` 补丁**。`patches/@ai-hero__sandcastle@0.12.0.patch` 仅移除 2 处 Windows 专属 hunk（`execGit` 的 `-c core.longpaths=true` 与 `patchGitMountsForWindows`），完整保留其余 7 处 Linux/AFK 必需改动（`daemonSocket`、匿名卷/命名卷生命周期、`SANDCASTLE_HOST_HANDLES_SIGNALS` 与 Codex stream 错误解析）；不把摆脱上游 SDK 补丁的更大重构混入本次范围。
 - **简化 Sandcastle 与测试资源宿主调用**。
-  - [workspace-dependencies.mts](../../scripts/sandcastle/workspace-dependencies.mts) 移除 `windowsPnpm` 与 `.cmd`/`.bat` 分支，保留简洁的 Linux `pnpm list` 实现（同时保留 `packageManager` 精确版本核验与 pnpm 原生 workspace 解析）；
+  - `workspace-dependencies.mts` 移除 `windowsPnpm` 与 `.cmd`/`.bat` 分支，保留简洁的 Linux `pnpm list` 实现（同时保留 `packageManager` 精确版本核验与 pnpm 原生 workspace 解析）；
   - `scripts/sandcastle/commands.ts` 移除 `win32` 的 `-c core.longpaths=true`；
   - `scripts/sandcastle/resources.ts` 与 `scripts/sandcastle/docker-smoke.mts` 的 `resolveSocketGroupId()` 改为宿主直接 `fs.stat("/var/run/docker.sock").gid` 零容器开销读取（在原生 Linux Docker Engine 与 WSL2 + Docker Desktop 下均与容器内 socket GID 一致）；`.sandcastle/README.md` 与 `hostNetworkRequirements` 继续保留 Linux Docker Engine 或 WSL2 下 Docker Desktop 4.34+ 开启 host networking 的要求；
   - [managed-resources.mjs](../../scripts/test-resources/managed-resources.mjs) 移除 `win32` 的 20×50ms `rename` 重试与 PowerShell 引号转义，保留 `managedServiceEndpoint()` 的 Compose bridge IP 优先直连策略（失败回退 `127.0.0.1:<port>`，兼容原生 Linux、WSL2 与 AFK）。

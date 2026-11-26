@@ -17,7 +17,7 @@
    - GitHub 原生父子关系（`--parent`）与阻塞边（`--blocked-by`）完整、无环且覆盖全部前置依赖；
    - 阻塞实现的 `ADR`、`GLOSSARY.md` 与设计决策均已提交到候选集成分支；
    - Spec 正文与本地 Git 状态满足下方 AFK 分支契约。
-2. **AFK 候选集成分支契约**（与 [`scripts/sandcastle/tickets.ts`](../../scripts/sandcastle/tickets.ts) 对齐）：
+2. **AFK 候选集成分支契约**（与 [`scripts/sandcastle/core/git.ts`](../../scripts/sandcastle/core/git.ts) 对齐）：
    - **唯一分支声明**：存在设计产物分支时，在 Spec 正文仅声明一行 `集成分支：feat/<feature-slug>`（runner 据此确定唯一归属）；
    - **祖先关系成立**：确保候选集成分支包含当前调用分支（满足 `git merge-base --is-ancestor main feat/<feature-slug>`）；若期间
      `main` 前进，交接前先将最新 `main` 合入候选集成分支；

@@ -22,7 +22,6 @@ FROM base AS workspace
 ENV HUSKY=0
 WORKDIR /workspace
 COPY .npmrc pnpm-workspace.yaml package.json pnpm-lock.yaml ./
-COPY patches/ ./patches/
 COPY packages/api-core/package.json ./packages/api-core/package.json
 COPY packages/subject-access/package.json ./packages/subject-access/package.json
 COPY packages/unit-of-work/package.json ./packages/unit-of-work/package.json

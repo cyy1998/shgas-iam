@@ -25,7 +25,6 @@ WORKDIR /app
 ENV HUSKY=0
 COPY .npmrc pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 # pnpm reads patchedDependencies before --prod; this is build metadata, not a runtime dependency.
-COPY patches/ ./patches/
 COPY .husky/install.mjs ./.husky/install.mjs
 COPY packages/api-core/package.json ./packages/api-core/
 COPY packages/assignment-resolution/package.json ./packages/assignment-resolution/

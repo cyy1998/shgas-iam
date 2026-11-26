@@ -101,6 +101,10 @@ export async function loadRepoSandcastleConfig({
         IAM_AFK_PNPM_STORE_DIR: sandboxStore,
         IAM_E2E_LIFECYCLE: "fresh",
         TURBO_CACHE_DIR: "/tmp/iam-sandcastle-turbo/cache",
+        // Local Git config outranks the container-global value set by enable-git-hooks.sh.
+        GIT_CONFIG_COUNT: "1",
+        GIT_CONFIG_KEY_0: "core.hooksPath",
+        GIT_CONFIG_VALUE_0: "/tmp/iam-sandcastle-hooks",
         ...(ghToken ? { GH_TOKEN: ghToken } : {}),
       },
       dockerAuth: dockerConfigSource
