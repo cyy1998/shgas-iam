@@ -37,6 +37,10 @@ type RepoConfigOptions = {
   projectToken?: string;
 };
 
+export function repoSandboxImage(env: NodeJS.ProcessEnv) {
+  return { image: env.SANDCASTLE_IMAGE?.trim() || "iam-sandcastle:local", dockerfile: ".sandcastle/Dockerfile" };
+}
+
 export async function loadRepoSandcastleConfig({
   cwd,
   env = process.env,
@@ -93,8 +97,7 @@ export async function loadRepoSandcastleConfig({
   return defineSandcastleConfig({
     repo: "cyy1998/shgas-iam",
     sandbox: {
-      image: env.SANDCASTLE_IMAGE?.trim() || "iam-sandcastle:local",
-      dockerfile: ".sandcastle/Dockerfile",
+      ...repoSandboxImage(env),
       dockerAccess: true,
       mounts: [{ hostPath: hostStore, sandboxPath: sandboxStore }],
       env: {

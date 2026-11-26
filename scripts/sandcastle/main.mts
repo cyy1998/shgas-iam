@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { loadRepoSandcastleConfig } from "../../.sandcastle/config.ts";
+import { loadRepoSandcastleConfig, repoSandboxImage } from "../../.sandcastle/config.ts";
 import { command, hasCode } from "./core/command.ts";
 import { checkWorkflow, runWorkflow } from "./core/workflow.ts";
 import { smoke } from "./smoke.mts";
@@ -51,9 +51,8 @@ async function main() {
     return;
   }
 
-  const config = await loadRepoSandcastleConfig({ cwd, env, model: values.model, draft: values.draft, projectToken });
-  const { image, dockerfile } = config.sandbox;
   if (values.build) {
+    const { image, dockerfile } = repoSandboxImage(env);
     await new Promise<void>((resolve, reject) => {
       const build = spawn("docker", ["build", "-t", image, "-f", dockerfile, dirname(dockerfile)], {
         cwd,
@@ -67,11 +66,14 @@ async function main() {
     });
     return;
   }
-  await command("docker", ["image", "inspect", image, "--format", "{{.Id}}"], cwd);
+  const config = await loadRepoSandcastleConfig({ cwd, env, model: values.model, draft: values.draft, projectToken });
+  await command("docker", ["image", "inspect", config.sandbox.image, "--format", "{{.Id}}"], cwd);
   if (!config.sandbox.env?.GH_TOKEN) throw new Error("缺少 GH_TOKEN，请检查 .sandcastle/.env。");
   const options = { cwd, config, remote: env.SANDCASTLE_GIT_REMOTE?.trim() || undefined };
   if (values.check) {
-    console.log("Sandcastle 预检通过。", await checkWorkflow(options));
+    const result = await checkWorkflow(options);
+    await command("gh", ["pr", "list", "--repo", result.repo, "--limit", "1", "--json", "number"], cwd);
+    console.log("Sandcastle 预检通过。", result);
     return;
   }
   const result = await runWorkflow({
