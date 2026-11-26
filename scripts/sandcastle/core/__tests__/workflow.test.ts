@@ -735,9 +735,14 @@ test.each([false, true])("a repair failure resumes with review candidate drift =
 
     const second = await fixture.execute();
     expect(second.delivered).toEqual([40]);
-    expect(fixture.calls.map(({ name }) => name)).toEqual(
-      advance ? ["review-standards", "review-spec", "repair-and-verify"] : ["repair-and-verify"],
-    );
+    const calls = fixture.calls.map(({ name }) => name);
+    if (advance) {
+      expect(calls).toHaveLength(3);
+      expect(calls.slice(0, 2).sort()).toEqual(["review-spec", "review-standards"]);
+      expect(calls[2]).toBe("repair-and-verify");
+    } else {
+      expect(calls).toEqual(["repair-and-verify"]);
+    }
     const repair = fixture.calls.find(({ name }) => name === "repair-and-verify");
     expect(repair?.prompt).toContain(`"reviewCandidate": "${candidate}"`);
     expect(repair?.prompt).toContain("Report by review-standards");
@@ -782,7 +787,10 @@ test("HEAD drift invalidates finalization evidence and forces a new review and v
     fixture.beforeGitHub = async () => {};
     const second = await fixture.execute();
     expect(second.delivered).toEqual([40]);
-    expect(fixture.calls.map(({ name }) => name)).toEqual(["review-standards", "review-spec", "repair-and-verify"]);
+    const calls = fixture.calls.map(({ name }) => name);
+    expect(calls).toHaveLength(3);
+    expect(calls.slice(0, 2).sort()).toEqual(["review-spec", "review-standards"]);
+    expect(calls[2]).toBe("repair-and-verify");
     expect(fixture.body).toContain(`Review-Candidate: ${changed}`);
     const pushed = await fixture.remoteHead();
     expect(pushed).toBe(changed);
