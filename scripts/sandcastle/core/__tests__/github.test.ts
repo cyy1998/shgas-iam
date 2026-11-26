@@ -25,7 +25,7 @@ test("consolidated graph pages preserve native relationships and external CLOSED
   const spec = issue(40, "spec");
   const ticket = (number: number, blockers = connection<ReturnType<typeof issue>>([])) => ({
     ...issue(number, "ticket", number === 42 ? "CLOSED" : "OPEN"),
-    parent: number === 46 ? issue(999, "spec") : spec,
+    parent: number === 46 ? issue(999, "spec") : number === 47 ? null : spec,
     blockedBy: blockers,
   });
   const calls: string[][] = [];
@@ -47,6 +47,7 @@ test("consolidated graph pages preserve native relationships and external CLOSED
           ticket(44, connection([issue(45)])),
           ticket(45, connection([issue(44)])),
           ticket(46),
+          ticket(47),
         ])
       : connection(
           [ticket(41, connection([issue(42, "ticket", "CLOSED", "other/engine")], "blockers-41")), ticket(42)],
@@ -57,38 +58,43 @@ test("consolidated graph pages preserve native relationships and external CLOSED
   const graph = await tracker.loadSpecGraph(40);
   expect(calls).toHaveLength(3);
   expect(graph.spec.labels).toContain("type:spec");
-  expect(graph.tickets.map(({ number }) => number)).toEqual([41, 42, 43, 44, 45, 46]);
+  expect(graph.tickets.map(({ number }) => number)).toEqual([41, 42, 43, 44, 45, 46, 47]);
   expect(graph.tickets[0]?.blockers.map(({ number }) => number)).toEqual([42, 3]);
   const initial = specFrontier(graph);
   expect(initial.ready.map(({ number }) => number)).toEqual([41]);
   expect(initial.blocked.find(({ number }) => number === 43)?.reasons.join()).toContain("not integrated");
   expect(initial.blocked.find(({ number }) => number === 44)?.reasons.join()).toContain("cycle");
   expect(initial.blocked.find(({ number }) => number === 46)?.reasons.join()).toContain("native parent");
+  expect(initial.blocked.find(({ number }) => number === 47)?.reasons.join()).toContain("native parent");
   const resumed = specFrontier(graph, { integrated: new Set([42]) });
   expect(resumed.ready.map(({ number }) => number)).toEqual([41, 43]);
 });
 
-test.each(["EOF", "connection reset by peer", "gh: Bad Gateway (HTTP 502)", "gh: HTTP 503", "gh: HTTP 504"])(
-  "an idempotent read retries a transient %s error",
-  async (message) => {
-    let calls = 0;
-    const tracker = createGitHubIssueTracker({ cwd: ".", repo }, async () => {
-      if (++calls === 1) throw Object.assign(new Error("Command failed: gh api"), { stderr: message });
-      return JSON.stringify({
-        number: 41,
-        state: "open",
-        title: "Issue 41",
-        body: "",
-        repository_url: `https://api.github.com/repos/${repo}`,
-        labels: [],
-        assignees: [],
-      });
+test.each([
+  "EOF",
+  "connection reset by peer",
+  "gh: Internal Server Error (HTTP 500)",
+  "gh: Bad Gateway (HTTP 502)",
+  "gh: HTTP 503",
+  "gh: HTTP 504",
+])("an idempotent read retries a transient %s error", async (message) => {
+  let calls = 0;
+  const tracker = createGitHubIssueTracker({ cwd: ".", repo }, async () => {
+    if (++calls === 1) throw Object.assign(new Error("Command failed: gh api"), { stderr: message });
+    return JSON.stringify({
+      number: 41,
+      state: "open",
+      title: "Issue 41",
+      body: "",
+      repository_url: `https://api.github.com/repos/${repo}`,
+      labels: [],
+      assignees: [],
     });
-    const actual = await tracker.readIssue(41);
-    expect(actual).toMatchObject({ number: 41, state: "OPEN" });
-    expect(calls).toBe(2);
-  },
-);
+  });
+  const actual = await tracker.readIssue(41);
+  expect(actual).toMatchObject({ number: 41, state: "OPEN" });
+  expect(calls).toBe(2);
+});
 
 test.each([
   ["gh: Validation failed (HTTP 422): EOF", 1],
@@ -109,6 +115,7 @@ test.each([
 
 test("Projects validates only configured columns and silently skips unmapped stages", async () => {
   const calls: string[][] = [];
+  let preflightAttempts = 0;
   const report = await connectGitHubProject(
     {
       cwd: ".",
@@ -119,7 +126,12 @@ test("Projects validates only configured columns and silently skips unmapped sta
     },
     async (args) => {
       calls.push(args);
-      if (args.includes("fieldName=Delivery state"))
+      if (args.includes("fieldName=Delivery state")) {
+        if (++preflightAttempts === 1) {
+          throw Object.assign(new Error("Command failed: gh api graphql"), {
+            stderr: "Post https://api.github.com/graphql: EOF",
+          });
+        }
         return JSON.stringify({
           data: {
             owner: {
@@ -132,6 +144,7 @@ test("Projects validates only configured columns and silently skips unmapped sta
             },
           },
         });
+      }
       if (args.includes("number=41")) return JSON.stringify({ data: { repository: { issue: { id: "issue" } } } });
       if (args.includes("content=issue"))
         return JSON.stringify({ data: { addProjectV2ItemById: { item: { id: "item" } } } });
@@ -141,7 +154,8 @@ test("Projects validates only configured columns and silently skips unmapped sta
     },
   );
   await report(41, "Reviewing");
-  expect(calls).toHaveLength(1);
+  expect(preflightAttempts).toBe(2);
+  expect(calls).toHaveLength(2);
   await report(41, "Implementing");
   expect(calls.at(-1)).toContain("option=active");
   const disabled = await connectGitHubProject(

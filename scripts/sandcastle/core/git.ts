@@ -20,12 +20,33 @@ function repoFromUrl(remoteUrl: string): string {
   throw new Error("The remote URL does not identify owner/repo. Set repo explicitly.");
 }
 
+function assertNoEmbeddedCredentials(remoteUrls: readonly string[]) {
+  for (const remoteUrl of remoteUrls) {
+    const url = /^[\w+.-]+:\/\//.test(remoteUrl) ? URL.parse(remoteUrl) : null;
+    if (!url) continue;
+    const isHttp = url.protocol === "http:" || url.protocol === "https:";
+    if (url.password || (isHttp && url.username)) {
+      throw new Error("Git remote URL must not embed credentials in .git/config because sandboxes can read it.");
+    }
+  }
+}
+
 export async function resolveRepository(
   cwd: string,
   branch: string,
   options: { repo?: string; remote?: string } = {},
 ): Promise<{ repo: string; remote: string }> {
   const git = (...args: string[]) => command("git", args, cwd);
+  const configuredUrls = await git("config", "--get-regexp", "^remote\\..*\\.url$").catch((error) => {
+    if (!hasCode(error, 1)) throw error;
+    return "";
+  });
+  assertNoEmbeddedCredentials(
+    configuredUrls
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => line.slice(line.indexOf(" ") + 1)),
+  );
   const remotes = (await git("remote")).split("\n").filter(Boolean);
   const tracked = await git("config", "--get", `branch.${branch}.remote`).catch((error) => {
     if (!hasCode(error, 1)) throw error;
@@ -50,11 +71,7 @@ export function specBranchName(
   prefix = "sandcastle",
   keywords: readonly string[] = [],
 ): string {
-  const headings = new Set([
-    "integration-branch",
-    "integration branch",
-    ...keywords.map((keyword) => keyword.toLowerCase()),
-  ]);
+  const headings = new Set(["integration-branch", ...keywords.map((keyword) => keyword.toLowerCase())]);
   const declared = new Set<string>();
   for (const [, heading, branch] of body.matchAll(/^([^:\r\n：]+)[:：][ \t]*`?([^\s`]+)`?[ \t]*$/gm)) {
     if (heading && branch && headings.has(heading.trim().toLowerCase())) declared.add(branch);

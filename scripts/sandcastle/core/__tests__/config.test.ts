@@ -47,6 +47,14 @@ test("repository identification works with real Git remotes and explicit overrid
     expect(scp.repo).toBe("other/repo");
     const explicit = await resolveRepository(cwd, "main", { repo: "target/engine" });
     expect(explicit.repo).toBe("target/engine");
+    await command(
+      "git",
+      ["remote", "set-url", "upstream", "https://x-access-token:secret@example.test/team/engine.git"],
+      cwd,
+    );
+    const embedded = await resolveRepository(cwd, "main", { repo: "target/engine" }).catch((error: unknown) => error);
+    expect(embedded).toBeInstanceOf(Error);
+    expect((embedded as Error).message).toContain("must not embed credentials");
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }

@@ -288,11 +288,15 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
           : undefined;
         if (!branch || !role) throw new Error(`Missing branch or implementer for #${ticket.number}.`);
         const resuming = spec.progress.resumable.has(ticket.number);
+        signal?.throwIfAborted();
+        await gh(["issue", "edit", String(ticket.number), "--repo", repo, "--add-assignee", "@me"]);
+        const claimed = await tracker.readIssue(ticket.number);
+        if (claimed.assignees.length !== 1 || claimed.assignees[0] !== actor) {
+          throw new Error(`Ticket #${ticket.number} is assigned to another actor.`);
+        }
         const worktree = await git.open(branch, baseline, { allowDirty: resuming });
         const startedAt = await git.observe(worktree, resuming);
         await project(ticket.number, "Implementing");
-        signal?.throwIfAborted();
-        await gh(["issue", "edit", String(ticket.number), "--repo", repo, "--add-assignee", "@me"]);
         const response = await phase("implement", "implement", role, worktree, {
           specNumber: spec.number,
           ticketNumber: ticket.number,

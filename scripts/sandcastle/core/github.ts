@@ -12,7 +12,7 @@ export type TrackedIssue = IssueReference & {
   assignees: string[];
   blockers: IssueReference[];
 };
-export type TicketIssue = TrackedIssue & { parent: IssueReference };
+export type TicketIssue = TrackedIssue & { parent: IssueReference | null };
 export type SpecGraph = { spec: TrackedIssue; tickets: TicketIssue[] };
 
 type GitHubIssue = {
@@ -227,7 +227,7 @@ export function createGitHubIssueTracker(
           throw new Error(`Spec #${number} has an invalid or duplicate child relationship.`);
         }
         numbers.add(ticket.number);
-        tickets.push({ ...ticket, parent: graphReference(child.parent) });
+        tickets.push({ ...ticket, parent: child.parent ? graphReference(child.parent) : null });
       }
     } while (cursor);
 
@@ -317,7 +317,7 @@ export function specFrontier(
       .map((blocker) => `External blocker ${blocker.repo}#${blocker.number} is open.`);
   }
   const belongsToSpec = (ticket: TicketIssue) =>
-    ticket.parent.repo === spec.repo && ticket.parent.number === spec.number;
+    Boolean(ticket.parent && ticket.parent.repo === spec.repo && ticket.parent.number === spec.number);
   const specReasons = pendingExternal(spec);
   if (!hasType(spec, "spec") || (progress.deliveryRecovery ? spec.state !== "OPEN" : !admitted(spec))) {
     specReasons.push("Spec type or admission is invalid.");

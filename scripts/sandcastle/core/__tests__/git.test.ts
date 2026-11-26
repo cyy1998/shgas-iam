@@ -2,10 +2,11 @@ import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createWorktree } from "@ai-hero/sandcastle";
 import { command } from "../command.ts";
 import { createGitWorkspace, specBranchName } from "../git.ts";
 import { createSpecState, pendingDeliveries } from "../state.ts";
-import { commit } from "./git-fixture.ts";
+import { commit, withGitTrace } from "./git-fixture.ts";
 
 async function withRepository(run: (cwd: string, base: string) => Promise<void>) {
   const directory = await mkdtemp(join(tmpdir(), "sandcastle-git-"));
@@ -25,6 +26,7 @@ async function withRepository(run: (cwd: string, base: string) => Promise<void>)
 
 test("resolves English and configured literal branch declarations", () => {
   expect(specBranchName(40, "Integration-Branch: `feat/design`")).toBe("feat/design");
+  expect(specBranchName(40, "Integration branch: `feat/design`")).toBe("sandcastle/spec-40");
   expect(specBranchName(40, "Candidate (custom): feat/design")).toBe("sandcastle/spec-40");
   expect(specBranchName(40, "Candidate (custom): feat/design", "flow", ["Candidate (custom)"])).toBe("feat/design");
   expect(() =>
@@ -53,7 +55,7 @@ test("the synchronized invocation is verified against a freshly fetched bare rem
 test("restart recovers serial merges by trailer and preserves an unfinished zero-commit ticket", async () => {
   await withRepository(async (cwd, base) => {
     const git = createGitWorkspace(cwd);
-    const spec = await git.open(specBranchName(40, "Integration branch: `feat/migration`"), base);
+    const spec = await git.open(specBranchName(40, "Integration-Branch: `feat/migration`"), base);
     const branches = new Map([
       [41, "sandcastle/issue-41"],
       [42, "sandcastle/issue-42"],
@@ -126,39 +128,36 @@ test("worktree open adds one host listing and cleanup removes a ticket directly"
   await withRepository(async (cwd, base) => {
     const branch = "sandcastle/issue-41";
     const workspace = createGitWorkspace(cwd);
-    await workspace.open("sandcastle/spec-40", base);
     const trace = join(cwd, ".git", "worktree.trace");
-    const traceVariable = "GIT_TRACE2_EVENT";
-    const originalTrace = process.env[traceVariable];
-    process.env[traceVariable] = trace;
-    let opening: string;
-    let cleanup: string;
-    try {
+    const countWorktree = (commands: string[][], action: string) =>
+      commands.filter((argv) => argv.includes("worktree") && argv.includes(action)).length;
+
+    await workspace.open("sandcastle/spec-40", base);
+    await withGitTrace(trace, async ({ readCommands, reset }) => {
+      const baselineTree = await createWorktree({
+        cwd,
+        branchStrategy: { type: "branch", branch: "sandcastle/issue-40", baseBranch: base },
+      });
+      const sdkLists = countWorktree(await readCommands(), "list");
+      await baselineTree.close();
+      await reset();
+
       const ticket = await workspace.open(branch, base);
+      const openingLists = countWorktree(await readCommands(), "list");
+      expect(openingLists - sdkLists).toBeLessThanOrEqual(1);
+
       const candidate = await commit(ticket.worktreePath, ".gitignore", "node_modules/\n");
       const dependencies = join(ticket.worktreePath, "node_modules");
       await mkdir(dependencies);
       await writeFile(join(dependencies, "fixture"), "generated dependency");
-      opening = await readFile(trace, "utf8");
-      await writeFile(trace, "");
-      await workspace.closeTicket(branch, candidate);
-      cleanup = await readFile(trace, "utf8");
-    } finally {
-      if (originalTrace === undefined) delete process.env[traceVariable];
-      else process.env[traceVariable] = originalTrace;
-    }
+      await reset();
 
-    function worktreeCommands(events: string, action: string) {
-      return events
-        .trim()
-        .split("\n")
-        .map((line) => JSON.parse(line))
-        .filter(({ event, argv }) => event === "start" && argv.includes("worktree") && argv.includes(action));
-    }
-    // The native SDK lists once while pruning and once while creating an explicit branch.
-    expect(worktreeCommands(opening, "list")).toHaveLength(3);
-    expect(worktreeCommands(cleanup, "list")).toHaveLength(1);
-    expect(worktreeCommands(cleanup, "remove")).toHaveLength(1);
+      await workspace.closeTicket(branch, candidate);
+      const cleanup = await readCommands();
+      expect(countWorktree(cleanup, "list")).toBeLessThanOrEqual(1);
+      expect(countWorktree(cleanup, "remove")).toBe(1);
+    });
+
     const tip = await workspace.branchTip(branch);
     expect(tip).toBeUndefined();
   });

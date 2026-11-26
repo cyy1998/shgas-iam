@@ -3,4 +3,6 @@ logs/
 locks/
 worktrees/
 resources/
+# Legacy lock file left by pre-flock crashes so upgrades keep the invocation tree clean.
+run.lock
 state/

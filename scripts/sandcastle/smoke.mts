@@ -96,6 +96,8 @@ if env | grep -Eq '^(GH_TOKEN=|GITHUB_TOKEN=|GIT_CONFIG_)'; then
 fi
 test "$(git config --get core.hooksPath)" = .husky/_
 test ! -e /tmp/iam-sandcastle-hooks/pre-commit
+test ! -e /var/run/docker.sock
+test -z "\${DOCKER_HOST:-}"
 printf '%s\n' '${complete}'`,
       }),
     };

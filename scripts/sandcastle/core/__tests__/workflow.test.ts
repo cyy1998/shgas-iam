@@ -7,7 +7,7 @@ import { noSandbox } from "@ai-hero/sandcastle/sandboxes/no-sandbox";
 import { command } from "../command.ts";
 import type { SandcastleConfig } from "../config.ts";
 import { runWorkflow } from "../workflow.ts";
-import { commit } from "./git-fixture.ts";
+import { commit, withGitTrace } from "./git-fixture.ts";
 
 const repo = "fixture/engine";
 const complete = "<promise>COMPLETE</promise>";
@@ -82,8 +82,8 @@ async function createFixture(root: string, numbers: number[]) {
   let agent: ((options: RunOptions) => Promise<RunResult | undefined>) | undefined;
   const checkout = (branch: string) => join(cwd, ".sandcastle", "worktrees", branch.replaceAll("/", "-"));
   const remoteHead = async () => {
-    const ref = await git("ls-remote", "--heads", "origin", `refs/heads/${specBranch}`);
-    return ref.split(/\s+/)[0] || undefined;
+    const ref = await command("git", ["for-each-ref", "--format=%(objectname)", `refs/heads/${specBranch}`], remote);
+    return ref || undefined;
   };
   function issue(number: number, state = closed.has(number) ? "closed" : "open", repository_url = repositoryUrl) {
     const spec = specs.get(number);
@@ -92,7 +92,7 @@ async function createFixture(root: string, numbers: number[]) {
       state,
       repository_url,
       title: `Issue ${number}`,
-      body: spec ? `${spec.heading ?? "Integration branch"}: ${spec.branch}` : "",
+      body: spec ? `${spec.heading ?? "Integration-Branch"}: ${spec.branch}` : "",
       labels: [
         { name: specs.has(number) ? "type:spec" : "type:ticket" },
         ...(labels.has(number) ? [{ name: "ready-for-agent" }] : []),
@@ -332,8 +332,25 @@ test("a failed host claim pauses the ticket before an implementation session sta
     expect(fixture.calls.map(({ name }) => name)).toEqual(["plan"]);
     expect(fixture.assignees.has(41)).toBe(false);
     expect(fixture.reports.join("\n")).toContain("GitHub refused the assignment");
-    const retained = await fixture.git("rev-parse", ticketBranch(41));
-    expect(retained).toBe(fixture.base);
+    const createdBranch = await fixture.git("branch", "--list", ticketBranch(41));
+    expect(createdBranch).toBe("");
+  });
+});
+
+test("a concurrent claim by another actor pauses the ticket before opening its worktree or starting implementation", async () => {
+  await withWorkflow(async (fixture) => {
+    fixture.beforeGitHub = async (args) => {
+      if (args.includes("--add-assignee") && args[2] === "41") {
+        fixture.assignees.set(41, ["other-developer"]);
+      }
+    };
+    const result = await fixture.execute();
+    expect(result.failed).toEqual([41]);
+    expect(fixture.calls.map(({ name }) => name)).toEqual(["plan"]);
+    expect(fixture.assignees.get(41)).toEqual(["other-developer", actor]);
+    expect(fixture.reports.join("\n")).toContain("assigned to another actor");
+    const createdBranch = await fixture.git("branch", "--list", ticketBranch(41));
+    expect(createdBranch).toBe("");
   });
 });
 
@@ -557,8 +574,6 @@ test("a zero-commit failure pauses delivery and restart resumes the same dirty c
 test("publishing verifies one candidate, reads the created PR by identity and skips blocker lookups during handoff", async () => {
   await withWorkflow(async (fixture) => {
     const trace = join(fixture.cwd, ".git", "delivery.trace");
-    const traceVariable = "GIT_TRACE2_EVENT";
-    const originalTrace = process.env[traceVariable];
     const afterCreate: string[][] = [];
     let repaired = false;
     let tracing = false;
@@ -566,37 +581,30 @@ test("publishing verifies one candidate, reads the created PR by identity and sk
       if (name === "repair-and-verify") repaired = true;
       return undefined;
     };
-    fixture.beforeGitHub = async (args) => {
-      if (repaired && !tracing && args[1] === `repos/${repo}/issues/40`) {
-        tracing = true;
-        process.env[traceVariable] = trace;
-      }
-      if (fixture.created) afterCreate.push(args);
-    };
-    let result: Awaited<ReturnType<typeof fixture.execute>>;
-    try {
-      result = await fixture.execute();
-    } finally {
-      if (originalTrace === undefined) delete process.env[traceVariable];
-      else process.env[traceVariable] = originalTrace;
-    }
-    expect(result.delivered).toEqual([40]);
-    expect(afterCreate.filter(([section]) => section === "pr").map((args) => args.slice(0, 3))).toEqual([
-      ["pr", "view", "99"],
-    ]);
-    expect(afterCreate.some(([, endpoint]) => endpoint?.includes("/dependencies/"))).toBe(false);
-    expect(fixture.labels.size).toBe(0);
+    await withGitTrace(
+      trace,
+      async ({ start, readCommands }) => {
+        fixture.beforeGitHub = async (args) => {
+          if (repaired && !tracing && args[1] === `repos/${repo}/issues/40`) {
+            tracing = true;
+            start();
+          }
+          if (fixture.created) afterCreate.push(args);
+        };
+        const result = await fixture.execute();
+        expect(result.delivered).toEqual([40]);
+        expect(afterCreate.filter(([section]) => section === "pr").map((args) => args.slice(0, 3))).toEqual([
+          ["pr", "view", "99"],
+        ]);
+        expect(afterCreate.some(([, endpoint]) => endpoint?.includes("/dependencies/"))).toBe(false);
+        expect(fixture.labels.size).toBe(0);
 
-    const traceContents = await readFile(trace, "utf8");
-    const commands: string[][] = traceContents
-      .trim()
-      .split("\n")
-      .map((line) => JSON.parse(line))
-      .filter(({ event }) => event === "start")
-      .map(({ argv }) => argv);
-    expect(commands.filter((argv) => argv.includes("--first-parent") && argv.includes("--merges"))).toHaveLength(1);
-    // Count both delivery checks and the test double's lookup of the remote SHA for the created PR.
-    expect(commands.filter((argv) => argv.includes("ls-remote"))).toHaveLength(3);
+        const commands = await readCommands();
+        expect(commands.filter((argv) => argv.includes("--first-parent") && argv.includes("--merges"))).toHaveLength(1);
+        expect(commands.filter((argv) => argv.includes("ls-remote")).length).toBeLessThanOrEqual(2);
+      },
+      false,
+    );
     const upstream = await fixture.git("rev-parse", "--symbolic-full-name", `${specBranch}@{upstream}`);
     expect(upstream).toBe(`refs/remotes/origin/${specBranch}`);
   });
@@ -605,13 +613,15 @@ test("publishing verifies one candidate, reads the created PR by identity and sk
 test("a ticket advancing during handoff pauses cleanup before removing any worktree", async () => {
   await withWorkflow(
     async (fixture) => {
-      fixture.beforeGitHub = async ([section, action, number]) => {
-        if (section === "issue" && action === "edit" && number === "42") {
+      fixture.beforeGitHub = async ([section, action, number, ...flags]) => {
+        if (section === "issue" && action === "edit" && number === "42" && flags.includes("--remove-label")) {
           await commit(fixture.checkout(ticketBranch(41)), "late.txt", "work after verification");
         }
       };
       const result = await fixture.execute();
       expect(result.incompleteSpecs).toEqual([40]);
+      expect(fixture.created).toBe(1);
+      expect(fixture.reports.join("\n")).toContain("unmerged changes");
       const trees = await fixture.git("worktree", "list", "--porcelain");
       expect(trees).toContain(fixture.checkout(ticketBranch(41)));
       expect(trees).toContain(fixture.checkout(ticketBranch(42)));

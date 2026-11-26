@@ -25,7 +25,7 @@ pnpm sandcastle
 
 [`.sandcastle/config.ts`](config.ts) 通过 [`defineSandcastleConfig()`](../scripts/sandcastle/core/config.ts) 装配本仓镜像、共享的 `mounts` / `env`、仅用于可写阶段的 `sandbox.writable` 配置、生命周期命令和资源钩子。它显式指定 GitHub 仓库，并从 [`.codex/agents/`](../.codex/agents/) 读取 Planner 以外的 AFK 角色配置。配置契约可省略 `repo` 以从 Git remote 推断，可绑定不同的原生 `AgentProvider`、按 Provider 接入认证适配器，以及通过 `promptExtras` 追加或覆盖阶段指引。
 
-`workflow` 支持 `branchPrefix`、`explore` / `review` / `projects` 开关、阶段内 `maxIterations`、Draft 默认值和看板映射。本仓启用探索与评审，设置 Projects URL 时才启用看板。每个阶段的 `maxIterations` 默认 `1`，与 CLI 的 Spec 数量 `--iterations` 分开配置。默认分支为 `sandcastle/spec-<N>` 和 `sandcastle/issue-<N>`，Spec 正文显式声明的集成分支优先。核心默认识别 `Integration-Branch:` 和 `Integration branch:`，本仓通过 `workflow.branchDeclarationKeywords` 增加 `集成分支`、`功能分支` 和 `复用功能/集成分支`。
+`workflow` 支持 `branchPrefix`、`explore` / `review` / `projects` 开关、阶段内 `maxIterations`、Draft 默认值和看板映射。本仓启用探索与评审，设置 Projects URL 时才启用看板。每个阶段的 `maxIterations` 默认 `1`，与 CLI 的 Spec 数量 `--iterations` 分开配置。默认分支为 `sandcastle/spec-<N>` 和 `sandcastle/issue-<N>`，Spec 正文显式声明的集成分支优先。核心默认识别 `Integration-Branch:`，本仓通过 `workflow.branchDeclarationKeywords` 增加 `集成分支`、`功能分支` 和 `复用功能/集成分支`。
 
 本仓通过 `promptExtras` 提供 `AGENTS.md`、本地 skills 与验证入口。相同模型和推理档位的角色共享 Codex Provider，`repairer` 和 `repairerDeep` 分别复用标准与深度实施角色。其他仓库可省略 `repairerDeep`，此时高风险修复使用 `repairer`。
 

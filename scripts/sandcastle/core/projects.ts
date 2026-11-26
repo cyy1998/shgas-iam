@@ -1,4 +1,4 @@
-import { command } from "./command.ts";
+import { command, retryGhRead } from "./command.ts";
 import { type ProjectConfig, type ProjectStage, projectStages, validateRepository } from "./config.ts";
 import type { RunGh } from "./github.ts";
 
@@ -37,10 +37,9 @@ export async function connectGitHubProject(
   const [, ownerType, owner, number] = match;
   const ownerField = ownerType === "users" ? "user" : "organization";
 
-  async function graphql<T>(query: string, variables: string[]): Promise<T> {
-    const result = JSON.parse(
-      await runGh(["api", "graphql", "--hostname", "github.com", "-f", `query=${query}`, ...variables]),
-    ) as {
+  async function graphql<T>(query: string, variables: string[], idempotent = false): Promise<T> {
+    const args = ["api", "graphql", "--hostname", "github.com", "-f", `query=${query}`, ...variables];
+    const result = JSON.parse(await (idempotent ? retryGhRead(() => runGh(args)) : runGh(args))) as {
       data?: T;
       errors?: unknown[];
     };
@@ -62,6 +61,7 @@ export async function connectGitHubProject(
       }
     }`,
     ["-f", `owner=${owner}`, "-F", `number=${number}`, "-f", `fieldName=${fieldName}`],
+    true,
   );
   const project = projectOwner?.projectV2;
   if (!project?.id || project.closed || !project.viewerCanUpdate) {
@@ -93,6 +93,7 @@ export async function connectGitHubProject(
         repository(owner: $owner, name: $name) { issue(number: $number) { id } }
       }`,
       ["-f", `owner=${repoOwner}`, "-f", `name=${repoName}`, "-F", `number=${issue}`],
+      true,
     );
     const contentId = repository?.issue?.id;
     if (!contentId) throw new Error(`Could not read ${githubRepo} issue #${issue}.`);

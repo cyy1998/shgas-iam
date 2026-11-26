@@ -28,7 +28,7 @@ function isTransientGhFailure(error: unknown): boolean {
   }
   return (
     hasCode(error, "ECONNRESET") ||
-    /\bHTTP(?:\/\d(?:\.\d)?)? 50[234]\b|\b502 Bad Gateway\b|\b503 Service Unavailable\b|\b504 Gateway Timeout\b/i.test(
+    /\bHTTP(?:\/\d(?:\.\d)?)? 50[0234]\b|\b500 Internal Server Error\b|\b502 Bad Gateway\b|\b503 Service Unavailable\b|\b504 Gateway Timeout\b/i.test(
       message,
     ) ||
     /connection reset(?: by peer)?\b/i.test(message) ||
