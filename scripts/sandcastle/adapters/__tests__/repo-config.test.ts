@@ -34,14 +34,16 @@ test("assembles the IAM sandbox and native providers with API key and Projects c
       image: "iam-sandcastle:local",
       dockerAccess: true,
       mounts: [{ hostPath: store, sandboxPath: "/home/agent/.pnpm-store" }],
-      env: {
-        GH_TOKEN: "fixture-issue-token",
-        IAM_AFK_PNPM_STORE_DIR: "/home/agent/.pnpm-store",
-        IAM_E2E_LIFECYCLE: "fresh",
-        TURBO_CACHE_DIR: expect.any(String),
-      },
     });
-    expect(Object.values(config.sandbox.env ?? {})).not.toContain("fixture-project-token");
+    expect(config.sandbox.env).toBeUndefined();
+    expect(config.sandbox.writable?.env).toEqual({
+      IAM_AFK_PNPM_STORE_DIR: "/home/agent/.pnpm-store",
+      IAM_E2E_LIFECYCLE: "fresh",
+      TURBO_CACHE_DIR: expect.any(String),
+      GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_KEY_0: "core.hooksPath",
+      GIT_CONFIG_VALUE_0: "/tmp/iam-sandcastle-hooks",
+    });
     expect(config.authAdapters).toEqual([]);
     const roles = await loadAgentRoles(cwd);
     const bindings = [

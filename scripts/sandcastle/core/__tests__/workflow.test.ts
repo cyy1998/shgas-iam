@@ -209,6 +209,11 @@ async function createFixture(root: string, numbers: number[]) {
       comments.set(number, [...(comments.get(number) ?? []), content]);
       return `https://github.com/${repo}/issues/${number}`;
     }
+    if (operation === "issue" && action === "edit" && args.slice(3).join(" ") === `--repo ${repo} --add-assignee @me`) {
+      const number = Number(args[2]);
+      assignees.set(number, [...new Set([...(assignees.get(number) ?? []), actor])]);
+      return `https://github.com/${repo}/issues/${number}`;
+    }
     if (operation === "issue" && action === "edit" && args.includes("--remove-label")) {
       labels.delete(Number(args[2]));
       return "";
@@ -306,6 +311,38 @@ function response(stdout: string, output?: unknown) {
     completionSignal: stdout.includes(complete) ? complete : undefined,
   };
 }
+
+test("the host claims a ticket before starting its implementation session", async () => {
+  await withWorkflow(async (fixture) => {
+    let assigneesAtDispatch: string[] | undefined;
+    let implementationPrompt: string | undefined;
+    fixture.agent = async ({ name, prompt }) => {
+      if (name !== "implement") return;
+      assigneesAtDispatch = fixture.assignees.get(41);
+      implementationPrompt = prompt;
+    };
+    const result = await fixture.execute();
+    expect(assigneesAtDispatch).toEqual([actor]);
+    expect(implementationPrompt).not.toContain("--add-assignee");
+    expect(result.delivered).toEqual([40]);
+    expect(fixture.assignees.has(40)).toBe(false);
+  });
+});
+
+test("a failed host claim pauses the ticket before an implementation session starts", async () => {
+  await withWorkflow(async (fixture) => {
+    fixture.beforeGitHub = async (args) => {
+      if (args.includes("--add-assignee")) throw new Error("GitHub refused the assignment");
+    };
+    const result = await fixture.execute();
+    expect(result.failed).toEqual([41]);
+    expect(fixture.calls.map(({ name }) => name)).toEqual(["plan"]);
+    expect(fixture.assignees.has(41)).toBe(false);
+    expect(fixture.reports.join("\n")).toContain("GitHub refused the assignment");
+    const retained = await fixture.git("rev-parse", ticketBranch(41));
+    expect(retained).toBe(fixture.base);
+  });
+});
 
 test("failed final verification cannot trigger a format-only PR body request", async () => {
   await withWorkflow(async (fixture) => {
@@ -464,7 +501,6 @@ test("a zero-commit failure pauses delivery and restart resumes the same dirty c
     fixture.agent = async (options) => {
       if (options.name === "plan") return response("", plan([41], true));
       if (options.name !== "implement") return;
-      fixture.assignees.set(41, [actor]);
       await writeFile(join(requiredCwd(options), "unfinished.txt"), "preserve this");
       return response("Interrupted before the first commit");
     };
@@ -589,8 +625,10 @@ test("an interrupted PR creation resumes from the exact verified SHA", async () 
 
 test("an interruption after label removal reuses the matching Open PR and only finishes pending handoffs", async () => {
   await withWorkflow(async (fixture) => {
-    fixture.beforeGitHub = async ([section, action, number]) => {
-      if (section === "issue" && action === "edit" && number === "41") throw new Error("network unavailable");
+    fixture.beforeGitHub = async ([section, action, number, ...flags]) => {
+      if (section === "issue" && action === "edit" && number === "41" && flags.includes("--remove-label")) {
+        throw new Error("network unavailable");
+      }
     };
     const first = await fixture.execute();
     expect(first.incompleteSpecs).toEqual([40]);
@@ -864,11 +902,22 @@ test.each([
   },
 );
 
-test("read-only sessions leave the write-stage resource lifecycle untouched", async () => {
+test("only writable sessions receive hook configuration and run the resource lifecycle", async () => {
   await withWorkflow(async (fixture) => {
     const allocated: string[] = [];
     const cleaned: string[] = [];
+    const hookEnv = {
+      GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_KEY_0: "core.hooksPath",
+      GIT_CONFIG_VALUE_0: "/tmp/fixture-hooks",
+    };
+    fixture.config.sandbox = {
+      ...fixture.config.sandbox,
+      env: { SHARED_SETTING: "fixture" },
+      writable: { env: hookEnv },
+    };
     fixture.config.lifecycle = {
+      hooksCommand: "install-hooks",
       async beforeExecutor({ phase }) {
         allocated.push(phase);
         return { env: { RESOURCE_REGISTRY: phase } };
@@ -877,10 +926,30 @@ test("read-only sessions leave the write-stage resource lifecycle untouched", as
         cleaned.push(inputs?.env?.RESOURCE_REGISTRY ?? "missing");
       },
     };
+    fixture.agent = async ({ name }) => {
+      if (name === "plan") return response("", plan([41], true));
+    };
     const result = await fixture.execute();
     expect(result.delivered).toEqual([40]);
     expect(allocated).toEqual(["implement", "repair-and-verify"]);
     expect(cleaned).toEqual(allocated);
+    expect(fixture.calls.map(({ name }) => name).toSorted()).toEqual([
+      "explore",
+      "implement",
+      "plan",
+      "repair-and-verify",
+      "review-spec",
+      "review-standards",
+    ]);
+    for (const { name, sandbox, hooks } of fixture.calls) {
+      if (name === "implement" || name === "repair-and-verify") {
+        expect(sandbox?.env).toEqual({ SHARED_SETTING: "fixture", ...hookEnv, RESOURCE_REGISTRY: name });
+        expect(hooks?.sandbox?.onSandboxReady).toBeDefined();
+      } else {
+        expect(sandbox?.env).toEqual({ SHARED_SETTING: "fixture" });
+        expect(hooks).toBeUndefined();
+      }
+    }
   });
 });
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -41,13 +41,12 @@ export async function smoke(cwd: string) {
       buildPrintCommand: () => ({
         command: String.raw`set -eu
 test -x node_modules/.bin/lint-staged
-test -x "$(git config --global --get core.hooksPath)/pre-commit"
-(
-  export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgSign GIT_CONFIG_VALUE_0=false
-  . scripts/sandcastle/enable-git-hooks.sh
-  test "$(git config --get commit.gpgSign)" = false
-  test "$(git config --get core.hooksPath)" = "$(git config --global --get core.hooksPath)"
-)
+test "$(git config --get core.hooksPath)" = /tmp/iam-sandcastle-hooks
+test -x /tmp/iam-sandcastle-hooks/pre-commit
+if env | grep -Eq '^(GH_TOKEN|GITHUB_TOKEN)='; then
+  echo 'GitHub credentials reached the writable sandbox' >&2
+  exit 1
+fi
 if (printf '' >> .git) 2>/dev/null || git config --local smoke.writable true; then
   echo 'Native Git controls are writable' >&2
   exit 1
@@ -74,9 +73,37 @@ printf '%s\n' '${complete}'`,
     const { SANDCASTLE_IMAGE, SANDCASTLE_PNPM_STORE_DIR } = process.env;
     const config = await loadRepoSandcastleConfig({
       cwd,
-      env: { SANDCASTLE_IMAGE, SANDCASTLE_PNPM_STORE_DIR },
+      env: { SANDCASTLE_IMAGE, SANDCASTLE_PNPM_STORE_DIR, GH_TOKEN: "fixture-host-credential" },
     });
     const execute = createExecutor(root, config);
+    // Use the invocation checkout so the probe exercises the SDK's dotenv merge.
+    await writeFile(
+      join(root, ".sandcastle", ".env"),
+      `GH_TOKEN=fixture-dotenv-credential
+GITHUB_TOKEN=fixture-dotenv-token
+GIT_CONFIG_COUNT=1
+GIT_CONFIG_KEY_0=core.hooksPath
+GIT_CONFIG_VALUE_0=/tmp/iam-sandcastle-hooks
+`,
+    );
+    const readOnlyProbe: AgentProvider = {
+      ...agent,
+      buildPrintCommand: () => ({
+        command: `set -eu
+if env | grep -Eq '^(GH_TOKEN=|GITHUB_TOKEN=|GIT_CONFIG_)'; then
+  echo 'Writable environment variables reached the read-only sandbox' >&2
+  exit 1
+fi
+test "$(git config --get core.hooksPath)" = .husky/_
+test ! -e /tmp/iam-sandcastle-hooks/pre-commit
+printf '%s\n' '${complete}'`,
+      }),
+    };
+    const readOnlyResult = await execute(
+      { phase: "plan", worktreePath: root, role: { provider: readOnlyProbe } },
+      (options, runAgent) => runAgent({ ...options, prompt: "Run the read-only Docker smoke probe." }),
+    );
+    assert(completed(readOnlyResult), "The read-only container probe did not complete.");
     const result = await execute(
       { phase: "implement", worktreePath: worktree.worktreePath, role: { provider: agent } },
       (options, runAgent) => runAgent({ ...options, prompt: "Run the local Docker smoke probe." }),

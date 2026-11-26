@@ -91,6 +91,8 @@ export type SandcastleConfig = {
     dockerfile: string;
     dockerAccess?: boolean;
     dockerAuth?: DockerAuthConfig;
+    /** Additional sandbox inputs for phases that can modify the worktree. */
+    writable?: SandboxInputs;
   };
   lifecycle?: LifecycleConfig;
   workflow?: WorkflowConfig;
