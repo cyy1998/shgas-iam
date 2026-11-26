@@ -6,7 +6,7 @@ import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import type { FullConfig, Reporter, TestCase, TestError, TestResult, TestStep } from "@playwright/test/reporter";
 import { captureCommand } from "../command-runner.ts";
-import { apisixErrorLog } from "../hybrid-compose.ts";
+import { apisixErrorLog } from "../middleware-compose.ts";
 import { collectFailureLogs, type EvidenceWindow } from "./failure-logs.ts";
 import { publishLastFailure, writeReportHistory } from "./publish-report.ts";
 import {

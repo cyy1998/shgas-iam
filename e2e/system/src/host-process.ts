@@ -1,9 +1,7 @@
 import { createWriteStream } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { setTimeout } from "node:timers/promises";
-import { fileURLToPath } from "node:url";
 import { spawnOwnedProcessTree, waitForOwnedProcessTree } from "@iam/runtime/process";
 import { runWithCleanup } from "./bounded-operation.ts";
 
@@ -23,22 +21,17 @@ export async function startHostProcess(options: HostProcessOptions) {
   options.signal?.throwIfAborted();
   const stdout = join(options.logDirectory, `${options.service}.stdout.log`);
   const stderr = join(options.logDirectory, `${options.service}.stderr.log`);
-  const windowsControl =
-    process.platform === "win32" ? await mkdtemp(join(options.logDirectory, "host-stop-")) : undefined;
-  const stopFile = windowsControl ? join(windowsControl, "stop") : undefined;
-  const preload = fileURLToPath(new URL("./host-windows-shutdown.mjs", import.meta.url));
   const child = spawnOwnedProcessTree({
     executable: process.execPath,
-    args: ["--no-env-file", ...(stopFile ? ["--preload", preload] : []), ...options.args],
+    args: ["--no-env-file", ...options.args],
     cwd: options.cwd,
-    env: stopFile ? { ...options.env, IAM_E2E_HOST_STOP_FILE: stopFile } : options.env,
+    env: options.env,
   });
   const stopSignal = new AbortController();
   const finished = waitForOwnedProcessTree(child, {
     signal: stopSignal.signal,
     forceAfterMs: 3_000,
     cleanupTimeoutMs: 5_000,
-    requestGracefulStop: stopFile ? () => writeFile(stopFile, "", { mode: 0o600 }) : undefined,
   });
   const output = Promise.allSettled([
     pipeline(child.stdout, createWriteStream(stdout, { flags: "a", mode: 0o600 })),
@@ -58,8 +51,6 @@ export async function startHostProcess(options: HostProcessOptions) {
     }
     const failures = (await output).flatMap((result) => (result.status === "rejected" ? [result.reason] : []));
     if (report.cleanupFailure) failures.push(report.cleanupFailure);
-    if (windowsControl)
-      await rm(windowsControl, { recursive: true, force: true }).catch((error) => failures.push(error));
     if (failures.length) throw new AggregateError(failures, `E2E ${options.service} cleanup or log write failed`);
   }
 

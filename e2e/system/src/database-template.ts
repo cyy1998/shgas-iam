@@ -5,8 +5,8 @@ import Redis from "ioredis";
 import { pnpmCommand, runOwnedCommand } from "../../../scripts/test-resources/owned-command.mjs";
 import { writeAtomicJsonFile } from "./atomic-json-file.ts";
 import { runWithCleanup } from "./bounded-operation.ts";
-import { e2eDatabaseName } from "./hybrid-compose.ts";
 import { assertActiveHybridMiddleware, type HybridMiddleware } from "./hybrid-middleware.ts";
+import { e2eDatabaseName } from "./middleware-compose.ts";
 import { readTemplateSeedReceipt } from "./seed-receipt.ts";
 import {
   fingerprintTemplateInputs,

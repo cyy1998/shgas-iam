@@ -57,7 +57,7 @@ async function createBuildWorkspace(root: string) {
   ] as const) {
     const directory = join(root, "apps", app);
     await mkdir(join(directory, "dist"), { recursive: true });
-    await symlink(installed, join(directory, "node_modules"), "junction");
+    await symlink(installed, join(directory, "node_modules"));
     await writeFile(join(directory, "dist", "index.html"), `${app} ordinary build`);
     await writeFile(
       join(directory, "package.json"),

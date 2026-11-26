@@ -15,15 +15,13 @@ import {
 } from "../../../scripts/test-resources/managed-resources.mjs";
 import { runWithCleanup } from "./bounded-operation.ts";
 import {
-  apisixBuildContext,
   createHybridCompose,
-  e2eDatabaseName,
-  e2eDatabasePassword,
   type HybridLifecycle,
-  type HybridNetwork,
   type HybridPorts,
-  selectHybridModes,
+  hybridUpstreamHost,
+  selectHybridLifecycle,
 } from "./hybrid-compose.ts";
+import { apisixBuildContext, e2eDatabaseName, e2eDatabasePassword } from "./middleware-compose.ts";
 import { allocateAvailablePort } from "./port-allocation.ts";
 import { recoverResidentHostProcesses, withResidentHostProcesses } from "./resident-host-processes.ts";
 import { acquireResidentLock } from "./resident-lock.ts";
@@ -31,12 +29,10 @@ import { acquireResidentLock } from "./resident-lock.ts";
 export interface HybridMiddleware {
   project: string;
   composeFile: string;
-  network: HybridNetwork;
   ports: HybridPorts;
   databaseUrl: string;
   redisUrl: string;
   apisixAdminUrl: string;
-  upstreamHost: string;
   hostEnvironment: NodeJS.ProcessEnv;
   probeUpstream: (upstream: { service: string; port: number }, signal?: AbortSignal) => Promise<void>;
 }
@@ -55,7 +51,8 @@ interface MiddlewareOptions extends ResidentOptions {
 
 interface ResourceState {
   project: string;
-  network: HybridNetwork;
+  // Legacy bridge records remain readable for exact cleanup with their saved Compose snapshot.
+  network: "bridge" | "host";
   ports: HybridPorts;
 }
 
@@ -72,21 +69,21 @@ export async function withHybridMiddleware<T>(
   options: MiddlewareOptions,
   use: (stack: HybridMiddleware) => Promise<T>,
 ) {
-  const modes = selectHybridModes(options);
-  if (modes.lifecycle === "resident") {
+  const lifecycle = selectHybridLifecycle(options);
+  if (lifecycle === "resident") {
     const directory = residentDirectory(options);
     return await withResidentLock(directory, options.repositoryRoot, async () => {
       const existing = await readResidentState(directory);
-      if (existing && existing.network !== modes.network) {
+      if (existing && existing.network !== "host") {
         throw new Error("E2E resident APISIX network mode changed; run test:e2e:down before restarting the stack");
       }
       await recoverResidentHostProcesses(directory);
-      const { state, run } = await prepareResidentRun(options, directory, modes.network, existing);
+      const { state, run } = await prepareResidentRun(options, directory, existing);
       return await runWithCleanup(
         async () => {
           await startStack(run, options, state);
           return await withResidentHostProcesses(directory, async (env) =>
-            useStack(await resolveStackConnection(run, state, modes.upstreamHost, env, options.signal), use),
+            useStack(await resolveStackConnection(run, state, env, options.signal), use),
           );
         },
         async () => {
@@ -100,15 +97,12 @@ export async function withHybridMiddleware<T>(
     });
   }
 
-  const state = await allocateState(modes.network, "fresh");
+  const state = await allocateState("fresh");
   const run = await registerRun(options.repositoryRoot, state, options, options.keep ?? false);
   return await runWithCleanup(
     async () => {
       await startStack(run, options, state);
-      return await useStack(
-        await resolveStackConnection(run, state, modes.upstreamHost, process.env, options.signal),
-        use,
-      );
+      return await useStack(await resolveStackConnection(run, state, process.env, options.signal), use);
     },
     async () => {
       if (run.record.keep) {
@@ -193,7 +187,7 @@ async function withResidentLock<T>(directory: string, worktree: string, use: () 
   return await runWithCleanup(use, lock.release);
 }
 
-async function allocateState(network: HybridNetwork, lifecycle: HybridLifecycle): Promise<ResourceState> {
+async function allocateState(lifecycle: HybridLifecycle): Promise<ResourceState> {
   const allocated = new Set<number>();
   while (allocated.size < portNames.length) allocated.add(await allocateAvailablePort());
   const [postgres, redis, etcd, http, https, admin] = [...allocated] as [
@@ -207,7 +201,7 @@ async function allocateState(network: HybridNetwork, lifecycle: HybridLifecycle)
   const id = randomUUID().replaceAll("-", "");
   return {
     project: `iam-e2e-${lifecycle === "resident" ? "resident-" : ""}${id}`,
-    network,
+    network: "host",
     ports: { postgres, redis, etcd, http, https, admin },
   };
 }
@@ -224,12 +218,7 @@ async function readRun(root: string, project: string) {
   return run;
 }
 
-async function prepareResidentRun(
-  options: MiddlewareOptions,
-  directory: string,
-  network: HybridNetwork,
-  existing: ResourceState | undefined,
-) {
+async function prepareResidentRun(options: MiddlewareOptions, directory: string, existing: ResourceState | undefined) {
   const root = residentResourceRoot(options.repositoryRoot, directory);
   const residentRecord = join(directory, "resident.json");
   if (existing) {
@@ -240,7 +229,7 @@ async function prepareResidentRun(
     await cleanupManagedResources(run, { timeoutMs: 120_000 });
     await rm(residentRecord);
   }
-  const state = await allocateState(network, "resident");
+  const state = await allocateState("resident");
   const run = await registerRun(root, state, options, false);
   await writeAtomicResourceRecord(residentRecord, state);
   return { state, run };
@@ -278,7 +267,7 @@ async function prepareCompose(root: string, artifacts: string, repositoryRoot: s
     writeFile(join(directory, "apisix.yaml"), config),
   ]);
   const snapshot = join(root, artifacts, "compose.json");
-  const topology = createHybridCompose({ ...state, buildContext: context });
+  const topology = createHybridCompose({ project: state.project, ports: state.ports, buildContext: context });
   if ((await readOptional(snapshot)) === `${JSON.stringify(topology, null, 2)}\n`) return false;
   await writeAtomicResourceRecord(snapshot, topology);
   return true;
@@ -307,11 +296,10 @@ async function startStack(run: ManagedResourceRun, options: MiddlewareOptions, s
 async function resolveStackConnection(
   run: ManagedResourceRun,
   state: ResourceState,
-  upstreamHost: string,
   hostEnvironment: NodeJS.ProcessEnv,
   signal?: AbortSignal,
 ): Promise<HybridMiddleware> {
-  const { ports, project, network } = state;
+  const { ports, project } = state;
   // PostgreSQL and Redis always run on the Compose bridge network; resolve direct bridge endpoints on Linux/AFK.
   // APISIX uses network_mode: host on Linux/AFK so its admin listener stays on 127.0.0.1:${ports.admin}.
   const [postgres, redis] = await Promise.all([
@@ -321,16 +309,14 @@ async function resolveStackConnection(
   return {
     project,
     composeFile: join(run.root, run.record.composeFile),
-    network,
     ports,
     databaseUrl: `postgresql://${e2eDatabaseName}:${e2eDatabasePassword}@${postgres.host}:${postgres.port}/${e2eDatabaseName}`,
     redisUrl: `redis://${redis.host}:${redis.port}/0`,
     apisixAdminUrl: `http://127.0.0.1:${ports.admin}/apisix/admin`,
-    upstreamHost,
     hostEnvironment,
     async probeUpstream({ service, port }, signal) {
-      const address = new URL(`http://${upstreamHost}:${port}`);
-      const message = `APISIX cannot reach ${service} at ${address.href} (project ${project}, ${network} networking)`;
+      const address = new URL(`http://${hybridUpstreamHost}:${port}`);
+      const message = `APISIX cannot reach ${service} at ${address.href} (project ${project}, host networking)`;
       try {
         const result = await runManagedComposeCommand(
           run,

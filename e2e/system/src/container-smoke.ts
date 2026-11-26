@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { mkdir, readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { ClientSsoCallbackType, ClientSsoProtocol, OrganizationType, SubjectClaim, UserType } from "@iam/contracts";
 import {
@@ -27,7 +27,7 @@ import { runWithCleanup } from "./bounded-operation.ts";
 import { buildContainerSmokeImages, parseContainerSmokeBuildConcurrency } from "./container-smoke-build.ts";
 import { createE2EGatewayApiKey } from "./gateway-credential.ts";
 import { iamGatewayManifest, publishGateway } from "./gateway-sync.ts";
-import { apisixAdminKey, e2eDatabaseName, e2eDatabasePassword } from "./hybrid-compose.ts";
+import { apisixAdminKey, e2eDatabaseName, e2eDatabasePassword } from "./middleware-compose.ts";
 import { allocateAvailablePort } from "./port-allocation.ts";
 import { createE2EScenarioIdentity, createE2EScenarioInternalApiKey } from "./seed.ts";
 
