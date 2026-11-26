@@ -20,6 +20,7 @@
     "//#typecheck:root": {
       "inputs": [
         "$TURBO_ROOT$/scripts/**",
+        "$TURBO_ROOT$/.sandcastle/config.ts",
         "$TURBO_ROOT$/package.json",
         "$TURBO_ROOT$/pnpm-lock.yaml",
         "$TURBO_ROOT$/packages/runtime/package.json",
