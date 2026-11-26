@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { hasCode } from "./command.ts";
 
@@ -59,6 +59,18 @@ export function createSpecState(cwd: string, number: number) {
     assertSha(base);
     return join(directory, `spec-${number}-exploration-${base}.md`);
   }
+  async function readDeliveryRecord(head: string) {
+    assertSha(head);
+    const text = await read(delivery);
+    if (text === undefined) return;
+    let record: { version?: unknown; head?: unknown; evidence?: unknown; prNumber?: unknown } | null;
+    try {
+      record = JSON.parse(text);
+    } catch {
+      return;
+    }
+    if (record?.version === 1 && record.head === head) return record;
+  }
   return {
     async saveExploration(base: string, notes: string): Promise<string> {
       const path = explorationPath(base);
@@ -76,16 +88,30 @@ export function createSpecState(cwd: string, number: number) {
       await replace(delivery, JSON.stringify({ version: 1, head, evidence }));
     },
     async readDelivery(head: string): Promise<DeliveryEvidence | undefined> {
-      assertSha(head);
-      const text = await read(delivery);
-      if (text === undefined) return;
-      let record: { version?: unknown; head?: unknown; evidence?: unknown } | null;
-      try {
-        record = JSON.parse(text);
-      } catch {
-        return;
-      }
-      if (record?.version === 1 && record.head === head && isDelivery(record.evidence)) return record.evidence;
+      const evidence = (await readDeliveryRecord(head))?.evidence;
+      if (isDelivery(evidence)) return evidence;
+    },
+    async readOpenPr(head: string) {
+      const number = (await readDeliveryRecord(head))?.prNumber;
+      if (typeof number === "number" && Number.isSafeInteger(number) && number > 0) return number;
+    },
+    async saveOpenPr(head: string, prNumber: number) {
+      const record = await readDeliveryRecord(head);
+      await replace(delivery, JSON.stringify({ version: 1, head, evidence: record?.evidence, prNumber }));
+    },
+    async clearDelivery() {
+      await rm(delivery, { force: true });
     },
   };
+}
+
+export async function pendingDeliveries(cwd: string): Promise<number[]> {
+  const entries = await readdir(join(cwd, ".sandcastle", "state"), { withFileTypes: true }).catch((error) => {
+    if (!hasCode(error, "ENOENT")) throw error;
+    return [];
+  });
+  return entries.flatMap((entry) => {
+    const number = Number(/^spec-([1-9]\d*)\.json$/.exec(entry.name)?.[1]);
+    return entry.isFile() && Number.isSafeInteger(number) ? [number] : [];
+  });
 }

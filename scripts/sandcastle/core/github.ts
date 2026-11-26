@@ -133,6 +133,7 @@ export function specFrontier(
     integrated?: ReadonlySet<number>;
     resumable?: ReadonlySet<number>;
     actor?: string;
+    deliveryRecovery?: boolean;
   } = {},
 ) {
   const { spec, tickets } = graph;
@@ -179,7 +180,9 @@ export function specFrontier(
   const belongsToSpec = (ticket: TicketIssue) =>
     ticket.parent.repo === spec.repo && ticket.parent.number === spec.number;
   const specReasons = pendingExternal(spec);
-  if (!hasType(spec, "spec") || !admitted(spec)) specReasons.push("Spec type or admission is invalid.");
+  if (!hasType(spec, "spec") || (progress.deliveryRecovery ? spec.state !== "OPEN" : !admitted(spec))) {
+    specReasons.push("Spec type or admission is invalid.");
+  }
   if (!owned(spec)) specReasons.push("Spec is assigned.");
   if (hasCycle(spec)) specReasons.push("Spec dependency cycle.");
   if (localBlockers(spec).length) specReasons.push("Spec depends on an issue within its own graph.");

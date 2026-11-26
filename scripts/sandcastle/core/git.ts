@@ -117,7 +117,7 @@ export function createGitWorkspace(cwd: string) {
       if (await inspectPath(join(directory, entry)))
         throw new Error(`Unfinished Git operation at ${checkout.worktreePath}.`);
     }
-    if (!allowDirty && (await at(checkout, "status", "--porcelain"))) {
+    if (!allowDirty && (await at(checkout, "status", "--porcelain", "--untracked-files=all"))) {
       throw new Error(`Uncommitted changes at ${checkout.worktreePath}.`);
     }
     return at(checkout, "rev-parse", "HEAD");
@@ -129,6 +129,9 @@ export function createGitWorkspace(cwd: string) {
 
   return {
     observe,
+    ancestor,
+    branchTip,
+    assertBranch,
     async synchronizeInvocation(branch: string, remote: string): Promise<string> {
       await assertBranch(branch);
       const invocation = { branch, worktreePath: cwd };
@@ -218,6 +221,23 @@ export function createGitWorkspace(cwd: string) {
         }
       });
     },
+    async closeTicket(branch: string, candidate: string) {
+      const tip = await branchTip(branch);
+      if (!tip) return;
+      if (!(await ancestor(tip, candidate))) throw new Error(`Ticket branch ${branch} has unmerged changes.`);
+      const registered = (await git("worktree", "list", "--porcelain", "-z"))
+        .split("\0\0")
+        .filter((entry) => entry.split("\0").includes(`branch refs/heads/${branch}`));
+      if (registered.length) {
+        const worktree = await this.open(branch, tip);
+        if ((await observe(worktree)) !== tip) throw new Error(`Ticket branch ${branch} moved before cleanup.`);
+        await this.close(worktree, tip);
+      } else {
+        const path = join(await realpath(cwd), ".sandcastle", "worktrees", branch.replaceAll("/", "-"));
+        if (await inspectPath(path)) throw new Error(`Unexpected unregistered worktree at ${path}.`);
+      }
+      await git("update-ref", "-d", `refs/heads/${branch}`, tip);
+    },
     integrate(spec: Checkout, ticket: Checkout, number: number, candidate: string): Promise<IntegrationResult> {
       return serial(async () => {
         if (!Number.isSafeInteger(number) || number <= 0) throw new Error("Invalid ticket number.");
@@ -264,12 +284,11 @@ export function createGitWorkspace(cwd: string) {
         return { status: "merged", mergeSha, candidate };
       });
     },
-    async inspectTickets(spec: Checkout, invocationBase: string, tickets: ReadonlyMap<number, string>) {
-      const head = await observe(spec);
+    async inspectTickets(spec: Checkout | string, invocationBase: string, tickets: ReadonlyMap<number, string>) {
+      const head = typeof spec === "string" ? spec : await observe(spec);
       const base = await git("rev-parse", "--verify", "--end-of-options", `${invocationBase}^{commit}`);
       if (!(await ancestor(base, head))) throw new Error("Spec does not include the invocation base.");
-      const history = await at(
-        spec,
+      const history = await git(
         "log",
         "--first-parent",
         "--merges",
