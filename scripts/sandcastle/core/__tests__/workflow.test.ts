@@ -2,14 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  claudeCode,
-  codex,
-  run as nativeRun,
-  type RunOptions,
-  type RunResult,
-  StructuredOutputError,
-} from "@ai-hero/sandcastle";
+import { claudeCode, codex, run as nativeRun, type RunOptions, type RunResult } from "@ai-hero/sandcastle";
 import { noSandbox } from "@ai-hero/sandcastle/sandboxes/no-sandbox";
 import { command } from "../command.ts";
 import type { SandcastleConfig } from "../config.ts";
@@ -284,10 +277,7 @@ async function createFixture(root: string, numbers: number[]) {
               await commit(path, `${path.split("/").at(-1)}.txt`, "ticket implemented");
             }
             if (options.agent === repairer.provider) {
-              return response(
-                `Checks passed.\n<pr-body>Custom release summary</pr-body>\n${complete}`,
-                "Custom release summary",
-              );
+              return response(`Checks passed.\n<pr-body>Custom release summary</pr-body>\n${complete}`);
             }
             return response(`Report by ${options.name}\n${complete}`);
           },
@@ -348,13 +338,7 @@ test("failed final verification cannot trigger a format-only PR body request", a
   await withWorkflow(async (fixture) => {
     fixture.agent = async (options) => {
       if (options.agent !== repairer.provider) return;
-      throw new StructuredOutputError("PR body absent", {
-        tag: "pr-body",
-        rawMatched: undefined,
-        sessionId: "fixture-session",
-        branch: specBranch,
-        commits: [],
-      });
+      return response("Verification timed out.\n<pr-body>Premature draft</pr-body>");
     };
     const result = await fixture.execute();
     expect(result.incompleteSpecs).toEqual([40]);
@@ -363,6 +347,17 @@ test("failed final verification cannot trigger a format-only PR body request", a
     expect(fixture.labels.has(40)).toBe(true);
     const remote = await fixture.remoteHead();
     expect(remote).toBeUndefined();
+  });
+});
+
+test("completed repair publishes the draft from standard agent stdout", async () => {
+  await withWorkflow(async (fixture) => {
+    const result = await fixture.execute();
+    expect(result.delivered).toEqual([40]);
+    expect(fixture.body).toStartWith("Custom release summary");
+    const repairs = fixture.calls.filter(({ name }) => name === "repair-and-verify");
+    expect(repairs).toHaveLength(1);
+    expect(repairs[0]?.output).toBeUndefined();
   });
 });
 
@@ -599,6 +594,76 @@ test("a ticket advancing during handoff pauses cleanup before removing any workt
   );
 });
 
+test("planning the remaining tickets resumes at the partial integration tip", async () => {
+  await withWorkflow(
+    async (fixture) => {
+      fixture.blockers.set(42, [{ number: 41, state: "open" }]);
+      fixture.agent = async (options) => {
+        if (options.name === "implement" && requiredCwd(options).endsWith("-42")) {
+          return response("Second ticket interrupted");
+        }
+      };
+      const first = await fixture.execute();
+      expect(first.integrated).toEqual([41]);
+      expect(first.failed).toEqual([42]);
+      const tip = await fixture.git("rev-parse", specBranch);
+      expect(tip).not.toBe(fixture.base);
+
+      fixture.specs.set(50, { branch: "feat/fresh", numbers: [51] });
+      fixture.labels.add(50);
+      fixture.labels.add(51);
+      fixture.calls.length = 0;
+      fixture.agent = async (options) => {
+        if (options.name !== "plan") return;
+        const checkout = requiredCwd(options);
+        const head = await command("git", ["rev-parse", "HEAD"], checkout);
+        expect(head).toBe(tip);
+        const integrated = await readFile(join(checkout, "sandcastle-issue-41.txt"), "utf8");
+        expect(integrated).toBe("ticket implemented");
+        expect(options.prompt).toContain(`"baseline": "${tip}"`);
+        expect(options.prompt).not.toContain('"title": "Issue 50"');
+        return response("", plan([42]));
+      };
+      const second = await fixture.execute();
+      expect(second.integrated).toEqual([42]);
+      expect(second.delivered).toEqual([40]);
+      expect(fixture.calls.filter(({ name }) => name === "plan")).toHaveLength(1);
+      expect(await fixture.git("rev-parse", "main")).toBe(fixture.base);
+    },
+    [41, 42],
+  );
+});
+
+test("fresh planning remains available when the planner declines a partial integration", async () => {
+  await withWorkflow(
+    async (fixture) => {
+      fixture.blockers.set(42, [{ number: 41, state: "open" }]);
+      fixture.agent = async (options) => {
+        if (options.name === "implement" && requiredCwd(options).endsWith("-42")) {
+          return response("Second ticket interrupted");
+        }
+      };
+      const first = await fixture.execute();
+      expect(first.integrated).toEqual([41]);
+      fixture.specs.set(50, { branch: "feat/fresh", numbers: [51] });
+      fixture.labels.add(50);
+      fixture.labels.add(51);
+      fixture.calls.length = 0;
+      fixture.agent = async ({ name }) => {
+        if (name === "plan") return response("", { ...plan([]), spec: null });
+      };
+
+      const second = await fixture.execute();
+      expect(second.exhausted).toBe(true);
+      const planning = fixture.calls.filter(({ name }) => name === "plan");
+      expect(planning.map(({ cwd }) => cwd)).toEqual([fixture.checkout(specBranch), fixture.cwd]);
+      expect(planning[1]?.prompt).toContain('"title": "Issue 50"');
+      expect(planning[1]?.prompt).not.toContain('"title": "Issue 40"');
+    },
+    [41, 42],
+  );
+});
+
 test("an interrupted PR creation resumes from the exact verified SHA", async () => {
   await withWorkflow(async (fixture) => {
     let attempts = 0;
@@ -620,6 +685,33 @@ test("an interrupted PR creation resumes from the exact verified SHA", async () 
     expect(restarted.delivered).toEqual([40]);
     expect(fixture.calls).toHaveLength(0);
     expect(fixture.created).toBe(1);
+  });
+});
+
+test.each([false, true])("a repair failure resumes with review candidate drift = %p", async (advance) => {
+  await withWorkflow(async (fixture) => {
+    fixture.agent = async ({ name }) => {
+      if (name === "repair-and-verify") {
+        if (advance) await commit(fixture.checkout(specBranch), "new.txt", "repair advanced HEAD");
+        throw new Error("Verification timed out");
+      }
+    };
+    const first = await fixture.execute();
+    expect(first.incompleteSpecs).toEqual([40]);
+    expect(fixture.created).toBe(0);
+    const candidate = await fixture.git("rev-parse", specBranch);
+    fixture.calls.length = 0;
+    fixture.agent = undefined;
+
+    const second = await fixture.execute();
+    expect(second.delivered).toEqual([40]);
+    expect(fixture.calls.map(({ name }) => name)).toEqual(
+      advance ? ["review-standards", "review-spec", "repair-and-verify"] : ["repair-and-verify"],
+    );
+    const repair = fixture.calls.find(({ name }) => name === "repair-and-verify");
+    expect(repair?.prompt).toContain(`"reviewCandidate": "${candidate}"`);
+    expect(repair?.prompt).toContain("Report by review-standards");
+    expect(repair?.prompt).toContain("Report by review-spec");
   });
 });
 
@@ -772,6 +864,12 @@ test("native repair continues configured verification turns and requests a missi
       );
     });
     fixture.config.workflow = { maxIterations: { "repair-and-verify": 2 } };
+    fixture.config.lifecycle = {
+      prepareCommand: "true",
+      async beforeExecutor({ phase }) {
+        if (phase === "repair-and-verify") return { env: { REPAIR_RESOURCE: "registered" } };
+      },
+    };
     fixture.config.roles.repairerDeep = { provider: scripted };
     fixture.config.roles.repairer = { provider: scripted };
     fixture.agent = async (options) => {
@@ -786,6 +884,10 @@ test("native repair continues configured verification turns and requests a missi
     expect(sessions).toEqual([undefined, "native-session", "native-session"]);
     expect(prompts[1]).toBe(prompts[0]);
     expect(prompts[2]).toContain("Re-emit only the missing <pr-body>");
+    const repairs = fixture.calls.filter(({ agent }) => agent === scripted);
+    expect(repairs.map(({ hooks }) => Boolean(hooks?.sandbox?.onSandboxReady?.length))).toEqual([true, true, false]);
+    expect(repairs.map(({ sandbox }) => sandbox.env?.REPAIR_RESOURCE)).toEqual(["registered", "registered", undefined]);
+    expect(repairs.map(({ maxIterations }) => maxIterations)).toEqual([1, 1, 1]);
     expect(fixture.body).toStartWith("A release note using custom structure.");
     expect(fixture.body).toContain("All required checks passed.");
   });
@@ -853,15 +955,13 @@ test("a cyclic slice stays blocked while its independent sibling integrates", as
   );
 });
 
-test("a stale runner lock is reclaimed before starting an otherwise eligible Spec", async () => {
+test("a legacy PID lock is ignored before starting an otherwise eligible Spec", async () => {
   await withWorkflow(async (fixture) => {
     const directory = join(fixture.cwd, ".sandcastle");
     await mkdir(directory);
-    await writeFile(join(directory, "run.lock"), JSON.stringify({ pid: 2_147_483_647 }));
+    await writeFile(join(directory, "run.lock"), JSON.stringify({ pid: process.pid }));
     const result = await fixture.execute();
     expect(result.delivered).toEqual([40]);
-    const lock = await readFile(join(directory, "run.lock"), "utf8").catch((error: unknown) => error);
-    expect(lock).toMatchObject({ code: "ENOENT" });
   });
 });
 
