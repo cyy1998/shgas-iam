@@ -64,7 +64,7 @@ Use case 由 root 的 `useCases` 交给路由。Admin API 的入口与审计实�
 | `packages/oidc/src`                      | OIDC 授权、Code / Token、续接、退出、UserInfo 与密钥；在线操作由 SSO API 装配，Auth API 使用独立续接入口。            |
 | `packages/client-subject-projection/src` | 中性主体裁剪、Catalog 与责任任职投影。                                                                                |
 | `packages/delegation/src`                | Client 委托；`/wire` 提供浏览器契约。                                                                                 |
-| `packages/contracts/src`                 | 跨端或跨 app/package 的稳定枚举、常量、schemas、类型与协议 helper。`http/` 提供静态 HTTP 状态码和短语。               |
+| `packages/contracts/src`                 | 跨端或跨 app/package 的稳定枚举、常量、schemas、类型与协议 helper。`http/` 提供常用 HTTP 状态码常量。                 |
 | `packages/domain/src`                    | 后端 DTO、mapper、纯业务规则、audit helper 与业务错误。                                                               |
 | `packages/db/src`                        | Drizzle schema、relations、migrations、client 与 query helpers；领域为 `core`、`log`，列 helper 在 `schema/_shard/`。 |
 | `packages/jobs/src`                      | BullMQ connection、queue、worker、producer 资源与有界唤醒、job ID、默认选项及 Document 队列接线。                     |
