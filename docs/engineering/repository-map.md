@@ -19,7 +19,7 @@ APISIX 和可观测性配置属于仓库级运行和运维资产，不是 worksp
 ├── scripts/          # 仓库级检查、canonical test collection/Integration 编排和辅助脚本
 ├── docs/             # 当前架构、功能、runbook、ADR 与历史记录
 ├── GLOSSARY.md       # 稳定领域语言
-├── .sandcastle/      # AFK 仓库配置、Dockerfile、环境模板与运维手册
+├── .sandcastle/      # AFK 本仓极薄装配入口、hooks、prompts、Dockerfile、环境模板与运维手册
 ├── .scratch/         # 已退役本地 tracker 的只读历史归档
 └── openspec/         # 冻结的历史需求与设计记录
 ```
@@ -84,21 +84,19 @@ Use case 由 root 的 `useCases` 交给路由。Admin API 的入口与审计实�
 
 ## 基础设施与仓库工具
 
-| 路径                           | 职责                                                                                                                                                                                       |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `apps/gateway/`                | 独立 Gateway 配置 API 与应用镜像构建；常规配置发布经 HTTP。                                                                                                                                |
-| `docker/`                      | 统一开发入口 `compose.dev.yaml`；生产按 data、apps、gateway、observability 与独立一次性 ops 编排，其中 apps 包含 Gateway API。                                                             |
-| `tmp/gateway-config/apisix/`   | APISIX dev/prod config template 与 `manifests/<env>/<app>.yaml`；manifest 是调用方持有的 HTTP 发布输入。                                                                                   |
-| `docker/observability/`        | Alloy 日志/OTLP pipeline、Loki 配置、Grafana datasource/dashboard/alert provisioning，以及版本化 dashboards。                                                                              |
-| `scripts/`                     | 文档和架构守卫、测试编排、验证入口及 tooling performance helpers。                                                                                                                         |
-| `scripts/sandcastle/main.mts`  | AFK CLI，加载仓库配置并分派预检、构建、冒烟与正式运行。                                                                                                                                    |
-| `scripts/sandcastle/core/`     | 通用编排引擎、配置契约、阶段 prompts、Git 与 GitHub 生命周期和本地恢复。依赖范围由[架构守卫](testing.md#sandcastle-核心依赖边界)检查。                                                     |
-| `scripts/sandcastle/adapters/` | 本仓 Codex 角色、文件认证和单执行器测试资源适配。                                                                                                                                          |
-| `.sandcastle/`                 | [仓库配置](../../.sandcastle/config.ts)、Dockerfile、环境模板和[运维手册](../../.sandcastle/README.md#启动与诊断)。本地 `worktrees/`、`state/` 和 `logs/` 保存工作树、恢复状态与执行日志。 |
-| `.codex/agents/`               | 仓库 7 个角色契约定义（调查角色、手动与 AFK 共用的三档实施者、Standards/Spec 只读评审角色）；供 Codex 原生子代理、T3 跨引擎委派与 AFK runner 复用。                                        |
-| `.husky/`                      | Git hooks 与安装脚本。                                                                                                                                                                     |
+| 路径                         | 职责                                                                                                                                                                                                                                                                                                                                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/gateway/`              | 独立 Gateway 配置 API 与应用镜像构建；常规配置发布经 HTTP。                                                                                                                                                                                                                                                                                                                                |
+| `docker/`                    | 统一开发入口 `compose.dev.yaml`；生产按 data、apps、gateway、observability 与独立一次性 ops 编排，其中 apps 包含 Gateway API。                                                                                                                                                                                                                                                             |
+| `tmp/gateway-config/apisix/` | APISIX dev/prod config template 与 `manifests/<env>/<app>.yaml`；manifest 是调用方持有的 HTTP 发布输入。                                                                                                                                                                                                                                                                                   |
+| `docker/observability/`      | Alloy 日志/OTLP pipeline、Loki 配置、Grafana datasource/dashboard/alert provisioning，以及版本化 dashboards。                                                                                                                                                                                                                                                                              |
+| `scripts/`                   | 文档和架构守卫、测试编排、验证入口及 tooling performance helpers。                                                                                                                                                                                                                                                                                                                         |
+| `scripts/sandcastle/core/`   | 极简可拆分 AFK 核心库（`runAfk`、`checkAfk`、`readonlySandbox`、`readSpecGraph`、内置阶段 prompts、Git/GitHub 原语）。零仓库耦合，依赖范围由[架构守卫](testing.md#sandcastle-核心依赖边界)检查。                                                                                                                                                                                           |
+| `.sandcastle/`               | 本仓极薄装配入口（[`run.mts`](../../.sandcastle/run.mts)、[`codex.ts`](../../.sandcastle/codex.ts)、[`test-resources.ts`](../../.sandcastle/test-resources.ts)、[`smoke.mts`](../../.sandcastle/smoke.mts)、`hooks/`、`prompts/`）、Dockerfile、环境模板和[运维手册](../../.sandcastle/README.md#启动与诊断)。本地 `worktrees/`、`state/`、`logs/`、`resources/` 与 `runner.lock` 不入库。 |
+| `.codex/agents/`             | 仓库 7 个角色契约定义（调查角色、手动与 AFK 共用的三档实施者、Standards/Spec 只读评审角色）；供 Codex 原生子代理、T3 跨引擎委派与 AFK runner 复用。                                                                                                                                                                                                                                        |
+| `.husky/`                    | Git hooks 与安装脚本。                                                                                                                                                                                                                                                                                                                                                                     |
 
-Sandcastle 在 `.sandcastle/locks/` 持有 runner 互斥锁，在 `.sandcastle/resources/` 登记各执行器的测试资源。
+Sandcastle 通过根脚本外层 `flock -n .sandcastle/runner.lock` 保证单实例互斥，在 `.sandcastle/resources/` 登记各执行器的测试资源并在回收后删除空的 `executor-*` 目录。
 
 ## 文档与 Agent 工作流
 

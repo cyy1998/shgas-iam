@@ -83,9 +83,9 @@ expect(failure).toBeInstanceOf(ExpectedError);
 
 ### Sandcastle 验证
 
-- **常驻单测**。根 `pnpm test:unit`（含在 `pnpm verify` 内）先执行 `pnpm test:unit:sandcastle`，再用 Turbo 执行各 workspace 的 Unit。独立入口收集 [core](../../scripts/sandcastle/core/__tests__/) 与 [adapters](../../scripts/sandcastle/adapters/__tests__/) 的 Bun 单测。高层编排用例驱动临时 Git 仓库和本地 bare remote，以执行器和 GitHub CLI 为外部替身，覆盖任务图、并行实施与串行集成、按 Git trailer 和 SHA 恢复、评审与幂等交付。适配器用例还覆盖共享凭据预检，锁用例验证内核 `flock` 互斥与强杀释放。
-- **静态边界**。`pnpm check:architecture` 执行 [Sandcastle 核心依赖规则](#sandcastle-核心依赖边界)。`pnpm typecheck:root` 通过 [Sandcastle tsconfig](../../scripts/sandcastle/tsconfig.json) 收集核心、适配器、CLI 和仓库配置。
-- **真实 Docker 冒烟**。`pnpm sandcastle:smoke` 使用本地探测 Provider 串行验证只读和可写沙箱。验证覆盖只读环境隔离、工作树、Git 元数据保护、锁定安装、容器内真实提交 Hook 与宿主 Git 配置，以及 socket、host network 和单执行器资源回收。准备、诊断与恢复见[运维手册](../../.sandcastle/README.md#启动与诊断)。
+- **常驻单测**。根 `pnpm test:unit`（含在 `pnpm verify` 内）先执行 `pnpm test:unit:sandcastle`，再用 Turbo 执行各 workspace 的 Unit。独立入口收集 [core](../../scripts/sandcastle/core/__tests__/) 与 [本仓装配](../../.sandcastle/__tests__/) 的 Bun 单测。核心用例驱动临时 Git 仓库和本地 bare remote，以 `runAgent` 与 GitHub CLI 为外部替身，覆盖单次 `first:100` GraphQL 任务图与重试、`specFrontier`、`agent:light`/`agent:deep` 档位路由、`origin/main` + `merge-base` 推导、并行实施与串行合并/冲突解决、Git trailer 与合并正文恢复、信任边界断言、`Promise.all` 只读双轴评审与 candidate SHA 缓存、有序幂等交付、宿主回退 PR 正文、`readonlySandbox` 及凭据预检。本仓装配用例覆盖 Codex TOML 角色解析与并发认证回写降级告警、Docker registry 只读挂载，以及 `withTestResources` 绑定目录预建、容器清理与空 `executor-*` 目录删除。单实例互斥由根 `package.json` 的外部 `flock -n .sandcastle/runner.lock` 提供。
+- **静态边界**。`pnpm check:architecture` 执行 [Sandcastle 核心依赖规则](#sandcastle-核心依赖边界)。`pnpm typecheck:root` 通过 [Sandcastle tsconfig](../../scripts/sandcastle/tsconfig.json) 收集核心库（`scripts/sandcastle/core/`）与本仓装配（`.sandcastle/`）。
+- **真实 Docker 冒烟**。`pnpm sandcastle:smoke`（经 `node .sandcastle/run.mts --smoke` 调用 [`.sandcastle/smoke.mts`](../../.sandcastle/smoke.mts)）在临时克隆仓库上用本地探测 Provider 串行验证两类沙箱：只读评审沙箱（`readonlySandbox` 包装后工作树与 `.git` 不可写、无 `docker.sock`、无 GitHub 凭据环境变量）与可写实施沙箱（原生 `branchStrategy` worktree、`pnpm install`、容器内提交 Hook 排版提交且不改宿主 `.git/config`、`docker.sock` 与 host network 连通、测试资源回收后删除空 `executor-*` 目录）。准备、诊断与恢复见[运维手册](../../.sandcastle/README.md#启动与诊断)。
 
 ### 架构守卫
 
@@ -99,7 +99,7 @@ expect(failure).toBeInstanceOf(ExpectedError);
 
 #### Sandcastle 核心依赖边界
 
-`sandcastle-core-dependency-boundary` 检查 `scripts/sandcastle/core/` 生产源码的静态导入、重导出及字符串字面量 `import()`，只允许核心目录内的相对路径、Node 内置模块和 `@ai-hero/sandcastle` 及其子路径。本仓配置和适配器依赖核心，仓库私有工具通过配置和生命周期契约接入。允许与违规的 fixture 由 Sandcastle 常驻集合验证。
+`sandcastle-core-dependency-boundary` 检查 `scripts/sandcastle/core/` 生产源码的静态导入、重导出及字符串字面量 `import()`，只允许核心目录内的相对路径、Node 内置模块和 `@ai-hero/sandcastle` 及其子路径。本仓极薄装配（`.sandcastle/`）单向依赖核心，仓库私有工具（如测试资源回收与 `.codex/agents/` 角色加载）通过核心库公开接口（`sandbox` 工厂、`agents` 与 `hooks`）接入。允许与违规的 fixture 由 Sandcastle 常驻集合验证。
 
 #### Docker 依赖闭包
 

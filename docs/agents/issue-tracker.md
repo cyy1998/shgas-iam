@@ -67,24 +67,23 @@ GitHub Issues 与 PR 共用编号空间。遇到裸 `#42` 时，先运行
 
 ### Spec 任务图
 
-Spec 与 implementation ticket 使用[互斥类型标签](triage-labels.md#spec-与实施票类型)。
-`/to-tickets` 为每张有父 Spec 的票应用 `type:ticket` 与 `ready-for-agent`，
+Spec 与 implementation ticket 使用[互斥类型标签](triage-labels.md#spec-与实施票类型)，AFK 实施档位与异常暂停使用[执行档位与暂停标签](triage-labels.md#afk-执行档位与暂停标签)。
+`/to-tickets` 为每张有父 Spec 的票应用 `type:ticket` 与 `ready-for-agent`（并在设计期按需打 `agent:light` 或 `agent:deep`，缺省为 standard，两者互斥），
 通过 GitHub 原生父子关系关联到父 Spec，通过原生 blocking 关系登记前置条件。
 正文中的 Parent 或依赖解释用于阅读，不替代这两种关系，也不授权自动推断或修正关系。
 
 当前 GitHub CLI 支持创建时传 `--parent <spec-number>` 与 `--blocked-by <numbers>`，
 修改已有子票时可用 `--parent`、`--add-blocked-by`；仍须显式指定仓库。
-读取列表和原生关系须分页，完整子票不能只取当前 `ready-for-agent` 子集。
+Sandcastle AFK 通过单次 `first:100` GraphQL 查询读取全部 open Spec、子票、评论与阻塞边（检测 `pageInfo.hasNextPage` 溢出即显式报错，并经有限退避重试应对瞬断）。
 关系或必要 API 不可用时报告阻塞，AFK 不降级到正文猜测归属或依赖。
 
-父 Spec 和待实施子票分别检查准入及认领。子票缺少准入、被他人认领、依赖矛盾或循环时，
-受影响切片保持阻塞，独立切片仍可推进；未准入的必要子票仍属于完整 Spec 范围。
+AFK 不要求使用 assignee 认领（assignee 仅用于人工开发与 wayfinding 认领）。父 Spec 与待实施子票按 `OPEN ∧ 类型标签正确 ∧ ready-for-agent ∧ !needs-attention`、原生父子匹配与阻塞关系判定就绪（Spec 内前置看 Git 合并提交 trailer，Spec 外前置直接信任 `CLOSED`）。子票缺少准入、依赖矛盾或循环时，受影响切片保持阻塞，独立切片仍可推进；未准入的必要子票仍属于完整 Spec 范围，运行中新增子票不会暂停整个 Spec。
 空子票列表和 issue 的 closed 状态本身不构成 Spec 已验收、代码已集成或已交付的证明。
 
 ## Sandcastle AFK 交接
 
-AFK 使用上述类型与原生任务图，沿用 triage、assignee 和普通交接，不另建 tracker schema。设计产物落在候选集成分支并在
-Spec 正文唯一声明 `集成分支：feat/<feature-slug>`；标为 `ready-for-agent` 前的轻量门禁、交接分支前提及 PR 交付恢复见
+AFK 使用上述类型、原生任务图与 `agent:light` / `agent:deep` / `needs-attention` 标签，不依赖 assignee 认领与 GitHub Projects 看板，也不另建 tracker schema。票级验证交接写入 Spec 合并提交正文而非子票评论；失败暂停时由 runner 为 Spec 添加 `needs-attention` 标签并评论原因。设计产物落在候选集成分支并在
+Spec 正文唯一声明 `Integration branch: <branch>` 或 `集成分支：<branch>`；标为 `ready-for-agent` 前的轻量门禁、分支契约及有序幂等 PR 交付恢复见
 [Sandcastle AFK 工作流](sandcastle-afk.md#设计与执行交接)。
 
 ## 当 skill 要求“fetch the relevant ticket”
