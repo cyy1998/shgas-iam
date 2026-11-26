@@ -67,11 +67,25 @@ async function main(): Promise<void> {
 
   await exec("docker", ["info", "--format", "{{.ServerVersion}}"], { cwd });
   if (values.build) {
+    const uid = process.getuid?.() ?? 1000;
+    const gid = process.getgid?.() ?? 1000;
     await new Promise<void>((ok, fail) => {
-      const child = spawn("docker", ["build", "-t", imageName, "-f", ".sandcastle/Dockerfile", ".sandcastle"], {
-        cwd,
-        stdio: "inherit",
-      });
+      const child = spawn(
+        "docker",
+        [
+          "build",
+          "--build-arg",
+          `AGENT_UID=${uid}`,
+          "--build-arg",
+          `AGENT_GID=${gid}`,
+          "-t",
+          imageName,
+          "-f",
+          ".sandcastle/Dockerfile",
+          ".sandcastle",
+        ],
+        { cwd, stdio: "inherit" },
+      );
       child.once("error", fail);
       child.once("close", (code, sig) =>
         code === 0 ? ok() : fail(new Error(`Docker 镜像构建失败（${sig ?? code}）。`)),

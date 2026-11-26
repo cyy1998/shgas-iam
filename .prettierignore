@@ -8,11 +8,8 @@ playwright-report/
 test-results/
 .agents/skills/
 .scratch/
-.sandcastle/auth/
-.sandcastle/dependencies/
-.sandcastle/locks/
+.sandcastle/cache/
 .sandcastle/logs/
-.sandcastle/patches/
 .sandcastle/resources/
 .sandcastle/worktrees/
 openspec/

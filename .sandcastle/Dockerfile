@@ -2,7 +2,7 @@ FROM docker.xuanyuan.run/library/node:24.22.3-bookworm
 
 ARG CODEX_VERSION=0.171.0
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl git gh ripgrep unzip postgresql-client redis-tools \
+    ca-certificates curl git ripgrep unzip postgresql-client redis-tools \
     && rm -rf /var/lib/apt/lists/*
 RUN npm install -g pnpm@12.21.0 @openai/codex@${CODEX_VERSION}
 RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.4" \
@@ -23,7 +23,6 @@ RUN install -m 0755 -d /etc/apt/keyrings \
        > /etc/apt/sources.list.d/docker.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends docker-ce-cli docker-buildx-plugin docker-compose-plugin \
-    && npm install -g playwright@${PLAYWRIGHT_VERSION} \
     && rm -rf /var/lib/apt/lists/*
 
 ARG AGENT_UID=1000

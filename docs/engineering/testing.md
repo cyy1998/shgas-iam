@@ -83,9 +83,9 @@ expect(failure).toBeInstanceOf(ExpectedError);
 
 ### Sandcastle 验证
 
-- **窄范围常驻边界单测**。根 `pnpm test:unit`（含在 `pnpm verify` 内）先执行 `pnpm test:unit:sandcastle`（`bun test ./.sandcastle/__tests__`），再用 Turbo 执行各 workspace 的 Unit。`.sandcastle/__tests__/boundaries.test.ts` 聚焦覆盖 GraphQL 过滤 / 分页溢出 / `linkedBranches` / Spec 完整范围判据、凭据预检 / 远端 URL / 精确 Git ref、`docker inspect <sandboxId>` 停机核验与测试资源 registry 保留、以及单向只读 `auth.json` 与只读评审挂载隔离。单实例互斥由根 `package.json` 的外部 `flock -n .sandcastle/runner.lock` 提供。
+- **窄范围常驻边界单测**。根 `pnpm test:unit`（含在 `pnpm verify` 内）先执行 `pnpm test:unit:sandcastle`（`bun test ./.sandcastle/__tests__`），再用 Turbo 执行各 workspace 的 Unit。`.sandcastle/__tests__/boundaries.test.ts` 聚焦覆盖 GraphQL 过滤 / 分页溢出 / `linkedBranches` / Spec 完整范围判据 / 同仓库 Open PR 复用、凭据预检 / 远端 URL / 精确 Git ref / 兼容后续修复提交的 `verifyMergeCommit` / 末次闭合 `extractTag`、`docker inspect <sandboxId>` 停机核验与主仓/worktree 空 `run-*` 同步清理、以及单向只读 `auth.json` 与 `createSession({ worktree, readonly: true })` 自洽只读隔离。单实例互斥由根 `package.json` 的外部 `flock -n .sandcastle/runner.lock` 提供。
 - **类型检查**。`pnpm typecheck:root` 通过 [Sandcastle tsconfig](../../.sandcastle/tsconfig.json) 检查 `.sandcastle/` 全部 `.ts` / `.mts` 代码与测试。
-- **真实 Docker 冒烟**。`pnpm sandcastle:smoke`（经 `node .sandcastle/run.mts --smoke` 调用 [`.sandcastle/smoke.mts`](../../.sandcastle/smoke.mts)）在临时克隆仓库上用本地探测 Provider 串行验证两类沙箱：linked worktree 只读评审沙箱（工作树与 `.git` 不可写、`auth.json` 单向只读、无 `docker.sock` / `pnpm-store` / Turbo 缓存 / GitHub 凭据）与可写实施沙箱（宿主独占 worktree + `head` 模式、`pnpm install --prefer-offline`、Turbo 跨次缓存落盘宿主、容器内提交 Hook 排版提交且不改宿主 `.git/config`、`docker.sock` 与 host network 连通、测试资源回收后删除空 `run-*` 目录）。准备、诊断与恢复见[运维手册](../../.sandcastle/README.md#启动与诊断)。
+- **真实 Docker 冒烟**。`pnpm sandcastle:smoke`（经 `node .sandcastle/run.mts --smoke` 调用 [`.sandcastle/smoke.mts`](../../.sandcastle/smoke.mts)）在临时克隆仓库上用本地探测 Provider 串行验证两类沙箱：linked worktree 自洽只读评审沙箱（工作树与 `.git` 不可写、`auth.json` 单向只读、无 `docker.sock` / `pnpm-store` / Turbo 缓存 / Docker registry / GitHub 凭据）与可写实施沙箱（宿主独占 worktree + `head` 模式、单行 `onSandboxReady` 离线安装、Turbo 跨次缓存落盘宿主、经 `core.hooksPath=.husky` 直接启用 `.husky/pre-commit` 且不改宿主 `.git/config`、`docker.sock` 与 host network 连通、测试资源回收后同步删除主仓与 worktree 的空 `run-*` 目录）。准备、诊断与恢复见[运维手册](../../.sandcastle/README.md#启动与诊断)。
 
 ### 架构守卫
 

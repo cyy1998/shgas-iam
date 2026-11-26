@@ -5,7 +5,7 @@ import { createServer } from "node:http";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { type AgentProvider, run } from "@ai-hero/sandcastle";
-import { readonlySandbox, runCommand } from "./afk.ts";
+import { runCommand } from "./git.ts";
 import { createRepoSessionFactory } from "./session.ts";
 
 const COMPLETE = "<promise>COMPLETE</promise>";
@@ -74,7 +74,7 @@ export async function smoke(cwd: string): Promise<void> {
     // worktree RO, auth RO, no docker.sock, no pnpm-store, no turbo cache.
     const roWorktreeDir = join(root, ".sandcastle", "worktrees", "smoke-ro");
     await git("worktree", "add", "-b", "smoke-ro", roWorktreeDir, "smoke-base");
-    const ro = await createSession({ phase: "review-standards", readonly: true, runId: "smoke-ro" });
+    const ro = await createSession({ worktree: roWorktreeDir, readonly: true, runId: "smoke-ro" });
     activeCleanup = ro.cleanup;
     try {
       const roResult = await run({
@@ -87,10 +87,10 @@ if env | grep -Eq '^(GH_TOKEN|GITHUB_TOKEN)='; then exit 1; fi
 test ! -e /var/run/docker.sock
 test ! -e /home/agent/.pnpm-store
 test ! -e /home/agent/.turbo-cache
+test ! -e /home/agent/.docker/config.json
 test -z "\${DOCKER_HOST:-}"
-test ! -e /tmp/iam-sandcastle-hooks/pre-commit
 printf '%s\n' '${COMPLETE}'`),
-        sandbox: readonlySandbox(ro.sandbox),
+        sandbox: ro.sandbox,
         branchStrategy: { type: "head" },
         prompt: "Read-only Docker smoke probe.",
         logging: { type: "file", path: join(logsDir, "smoke-ro.log") },
@@ -108,7 +108,7 @@ printf '%s\n' '${COMPLETE}'`),
     // 2. Writable session on host-owned worktree (head mode): pnpm offline, turbo cache, hooks, Docker cleanup.
     const worktreeDir = join(root, ".sandcastle", "worktrees", "smoke");
     await git("worktree", "add", "-b", "smoke", worktreeDir, "smoke-base");
-    const rw = await createSession({ phase: "implement", readonly: false, runId: "smoke-rw" });
+    const rw = await createSession({ worktree: worktreeDir, readonly: false, runId: "smoke-rw" });
     activeCleanup = rw.cleanup;
     try {
       const rwResult = await run({
@@ -118,8 +118,8 @@ test -x node_modules/.bin/lint-staged
 test "$TURBO_CACHE_DIR" = /home/agent/.turbo-cache
 test -d /home/agent/.turbo-cache
 printf '%s\n' '${project}' > "$TURBO_CACHE_DIR/smoke-probe"
-test "$(git config --get core.hooksPath)" = /tmp/iam-sandcastle-hooks
-test -x /tmp/iam-sandcastle-hooks/pre-commit
+test "$(git config --get core.hooksPath)" = .husky
+test -x .husky/pre-commit
 if env | grep -Eq '^(GH_TOKEN|GITHUB_TOKEN)='; then exit 1; fi
 if (printf '' >> .git) 2>/dev/null || git config --local smoke.rw true 2>/dev/null; then exit 1; fi
 test "$(curl --silent --show-error --fail --max-time 10 http://127.0.0.1:${address.port})" = '${project}'
@@ -164,6 +164,7 @@ printf '%s\n' '${COMPLETE}'`),
       "",
     );
     assert.deepEqual(await readdir(join(root, ".sandcastle", "resources")), []);
+    assert.deepEqual(await readdir(join(worktreeDir, ".sandcastle", "resources")), []);
     await git("worktree", "remove", worktreeDir);
     assert.equal((await git("worktree", "list", "--porcelain")).match(/^worktree /gm)?.length, 1);
     assert.equal(await readFile(join(root, ".git", "config"), "utf8"), hostConfig);

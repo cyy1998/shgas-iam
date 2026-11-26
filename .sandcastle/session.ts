@@ -5,7 +5,6 @@ import { homedir, tmpdir } from "node:os";
 import { join, posix, relative, resolve } from "node:path";
 import { promisify } from "node:util";
 import {
-  type AgentProvider,
   type BindMountSandboxProvider,
   type BindMountSandboxProviderConfig,
   type CodexOptions,
@@ -40,8 +39,7 @@ const WRITABLE_HOOKS: SandboxHooks = {
   sandbox: {
     onSandboxReady: [
       {
-        command:
-          "sh .sandcastle/hooks/prepare-workspace.sh </dev/null && sh .sandcastle/hooks/enable-git-hooks.sh </dev/null",
+        command: `HUSKY=0 pnpm install --frozen-lockfile --prefer-offline --store-dir ${SANDBOX_STORE}`,
         timeoutMs: 1_200_000,
       },
     ],
@@ -62,33 +60,42 @@ const ROLE_NAMES = [
   "spec_reviewer",
 ] as const;
 
-function asBindMount(provider: SandboxProvider): RuntimeBindMount {
+function wrapBindMount(
+  provider: SandboxProvider,
+  wrapCreate: (innerCreate: BindMountSandboxProviderConfig["create"]) => BindMountSandboxProviderConfig["create"],
+): BindMountSandboxProvider {
   if (
-    "tag" in provider &&
-    provider.tag === "bind-mount" &&
-    "create" in provider &&
-    typeof provider.create === "function"
+    !(
+      "tag" in provider &&
+      provider.tag === "bind-mount" &&
+      "create" in provider &&
+      typeof provider.create === "function"
+    )
   ) {
-    return provider as RuntimeBindMount;
+    throw new Error(`Expected bind-mount sandbox provider, got "${provider.name}".`);
   }
-  throw new Error(`Expected bind-mount sandbox provider, got "${provider.name}".`);
+  const inner = provider as RuntimeBindMount;
+  return createBindMountSandboxProvider({
+    name: inner.name,
+    env: inner.env,
+    sandboxHomedir: inner.sandboxHomedir,
+    create: wrapCreate(inner.create.bind(inner)),
+  });
 }
 
 function resolveCodexAuth(cwd: string, env: NodeJS.ProcessEnv) {
   const mode = (env.CODEX_AUTH?.trim().toLowerCase() || "chatgpt") as "chatgpt" | "api-key";
   if (mode !== "chatgpt" && mode !== "api-key") throw new Error("CODEX_AUTH 仅接受 chatgpt 或 api-key。");
   const apiKey = env.CODEX_API_KEY?.trim();
+  if (mode === "api-key" && !apiKey) throw new Error("CODEX_AUTH=api-key 时需要 CODEX_API_KEY。");
   const codexHome = resolve(cwd, env.CODEX_HOME?.trim() || join(homedir(), ".codex"));
   const authFile = resolve(cwd, env.CODEX_AUTH_FILE?.trim() || join(codexHome, "auth.json"));
-  return { mode, apiKey, codexHome, authFile };
+  return { mode, apiKey, authFile };
 }
 
 export async function checkCodexAuth(cwd: string, env: NodeJS.ProcessEnv = process.env): Promise<void> {
-  const { mode, apiKey, authFile } = resolveCodexAuth(cwd, env);
-  if (mode === "api-key") {
-    if (!apiKey) throw new Error("CODEX_AUTH=api-key 时需要 CODEX_API_KEY。");
-    return;
-  }
+  const { mode, authFile } = resolveCodexAuth(cwd, env);
+  if (mode === "api-key") return;
   const info = await lstat(authFile).catch(() => undefined);
   if (!info?.isFile()) throw new Error(`Codex chatgpt 认证需要可读文件：${authFile}`);
   await access(authFile, constants.R_OK);
@@ -102,11 +109,8 @@ export async function stageCodexAuth(
   mounts: MountConfig[];
   close: () => Promise<void>;
 }> {
-  const { mode, apiKey, authFile } = resolveCodexAuth(cwd, env);
-  if (mode === "api-key") {
-    if (!apiKey) throw new Error("CODEX_AUTH=api-key 时需要 CODEX_API_KEY。");
-    return { env: {}, mounts: [], close: async () => {} };
-  }
+  const { mode, authFile } = resolveCodexAuth(cwd, env);
+  if (mode === "api-key") return { env: {}, mounts: [], close: async () => {} };
   const contents = await readFile(authFile, "utf8");
   const dir = await mkdtemp(join(tmpdir(), "sandcastle-codex-auth-"));
   const staged = join(dir, "auth.json");
@@ -127,9 +131,7 @@ export async function loadCodexAgents(
   cwd: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<AfkOptions["agents"]> {
-  const { mode, apiKey, codexHome } = resolveCodexAuth(cwd, env);
-  if (mode === "api-key" && !apiKey) throw new Error("CODEX_AUTH=api-key 时需要 CODEX_API_KEY。");
-  const providers = new Map<string, AgentProvider>();
+  const { mode, apiKey } = resolveCodexAuth(cwd, env);
   const loadSlot = async (name: (typeof ROLE_NAMES)[number]): Promise<AgentSlot> => {
     const raw = await readFile(join(cwd, ".codex", "agents", `${name.replaceAll("_", "-")}.toml`), "utf8");
     const role = parse(raw);
@@ -144,16 +146,11 @@ export async function loadCodexAgents(
     ) {
       throw new Error(`无效的 AFK 角色配置：${name}`);
     }
-    const key = `${role.model}:${effort}`;
-    let provider = providers.get(key);
-    if (!provider) {
-      provider = codex(role.model, {
-        effort: effort as CodexEffort,
-        env: mode === "api-key" && apiKey ? { CODEX_API_KEY: apiKey } : {},
-        sessionStorage: { hostSessionsDir: join(codexHome, "sessions") },
-      });
-      providers.set(key, provider);
-    }
+    const provider = codex(role.model, {
+      effort: effort as CodexEffort,
+      captureSessions: false,
+      env: mode === "api-key" && apiKey ? { CODEX_API_KEY: apiKey } : {},
+    });
     return { provider, instructions: role.developer_instructions };
   };
 
@@ -219,18 +216,19 @@ export type RepoSessionFactoryOptions = {
 
 export function createRepoSessionFactory(opts: RepoSessionFactoryOptions): AfkOptions["createSession"] {
   const makeDocker = opts.createDockerProvider ?? docker;
-  return async ({ readonly, runId }) => {
+  return async ({ worktree, readonly, runId }) => {
     const auth = await stageCodexAuth(opts.cwd, opts.env);
     try {
       if (readonly) {
-        return {
-          sandbox: asBindMount(
-            makeDocker({ imageName: opts.imageName, mounts: [...auth.mounts], env: { ...auth.env } }),
-          ),
-          cleanup: () => auth.close(),
-        };
+        const sandbox = wrapBindMount(
+          makeDocker({ imageName: opts.imageName, mounts: [...auth.mounts], env: { ...auth.env } }),
+          (innerCreate) => (createOpts) =>
+            innerCreate({ ...createOpts, mounts: createOpts.mounts.map((m) => ({ ...m, readonly: true })) }),
+        );
+        return { sandbox, cleanup: () => auth.close() };
       }
 
+      const worktreeRoot = resolve(worktree);
       const safeId = runId.replace(/[^a-zA-Z0-9_-]/g, "-") || "run";
       const mounts: MountConfig[] = [
         { hostPath: opts.hostStore, sandboxPath: SANDBOX_STORE },
@@ -239,32 +237,26 @@ export function createRepoSessionFactory(opts: RepoSessionFactoryOptions): AfkOp
         ...auth.mounts,
         { hostPath: DOCKER_SOCKET, sandboxPath: DOCKER_SOCKET },
       ];
-      const rawProvider = asBindMount(
+      let sandboxId: string | undefined;
+      let created: { dir: string; relDir: string; registryFile: string } | undefined;
+
+      const sandbox = wrapBindMount(
         makeDocker({
           imageName: opts.imageName,
           mounts,
           env: {
             ...auth.env,
-            IAM_AFK_PNPM_STORE_DIR: SANDBOX_STORE,
             TURBO_CACHE_DIR: SANDBOX_TURBO_CACHE,
             IAM_E2E_LIFECYCLE: "fresh",
             GIT_CONFIG_COUNT: "1",
             GIT_CONFIG_KEY_0: "core.hooksPath",
-            GIT_CONFIG_VALUE_0: "/tmp/iam-sandcastle-hooks",
+            GIT_CONFIG_VALUE_0: ".husky",
             DOCKER_HOST: `unix://${DOCKER_SOCKET}`,
           },
           groups: [opts.dockerGid],
           network: "host",
         }),
-      );
-
-      const tracked: { dir: string; registryFile: string; sandboxId?: string }[] = [];
-      const innerCreate = rawProvider.create.bind(rawProvider);
-      const sandbox = createBindMountSandboxProvider({
-        name: rawProvider.name,
-        env: rawProvider.env,
-        sandboxHomedir: rawProvider.sandboxHomedir,
-        create: async (createOpts) => {
+        (innerCreate) => async (createOpts) => {
           await mkdir(join(opts.cwd, REGISTRY_ROOT), { recursive: true });
           const dir = await mkdtemp(join(opts.cwd, REGISTRY_ROOT, `run-${safeId}-`));
           const relDir = relative(opts.cwd, dir).replaceAll("\\", "/");
@@ -273,10 +265,10 @@ export function createRepoSessionFactory(opts: RepoSessionFactoryOptions): AfkOp
           try {
             await writeFile(join(opts.cwd, registryFile), "", { flag: "wx", mode: 0o600 });
             await mkdir(join(opts.cwd, ARTIFACTS_DIR), { recursive: true });
-            await mkdir(join(createOpts.worktreePath, ARTIFACTS_DIR), { recursive: true });
-            await mkdir(join(createOpts.worktreePath, relDir), { recursive: true });
+            await mkdir(join(worktreeRoot, ARTIFACTS_DIR), { recursive: true });
+            await mkdir(join(worktreeRoot, relDir), { recursive: true });
             const sandboxRoot =
-              createOpts.mounts.find((m) => m.hostPath === createOpts.worktreePath)?.sandboxPath ??
+              createOpts.mounts.find((m) => resolve(m.hostPath) === resolve(createOpts.worktreePath))?.sandboxPath ??
               `${SANDBOX_HOME}/workspace`;
             createInvoked = true;
             const handle = await innerCreate({
@@ -288,24 +280,31 @@ export function createRepoSessionFactory(opts: RepoSessionFactoryOptions): AfkOp
                 { hostPath: join(opts.cwd, ARTIFACTS_DIR), sandboxPath: posix.join(sandboxRoot, ARTIFACTS_DIR) },
               ],
             });
-            tracked.push({ dir, registryFile, sandboxId: handle.sandboxId });
+            created = { dir, relDir, registryFile };
+            sandboxId = handle.sandboxId;
             return handle;
           } catch (error) {
-            if (!createInvoked) await rm(dir, { recursive: true, force: true });
+            if (!createInvoked) {
+              await rm(dir, { recursive: true, force: true });
+              await rm(join(worktreeRoot, relDir), { recursive: true, force: true });
+            }
             throw error;
           }
         },
-      });
+      );
 
       return {
         sandbox,
         hooks: WRITABLE_HOOKS,
         cleanup: async () => {
           const errors: unknown[] = [];
-          for (const entry of [...tracked].reverse()) {
+          if (created) {
             try {
-              await verifyContainerStopped(entry.sandboxId, opts.cwd, opts.inspectContainer);
-              const records = await readManagedResourceRegistry(opts.cwd, repositoryPath(opts.cwd, entry.registryFile));
+              await verifyContainerStopped(sandboxId, opts.cwd, opts.inspectContainer);
+              const records = await readManagedResourceRegistry(
+                opts.cwd,
+                repositoryPath(opts.cwd, created.registryFile),
+              );
               let kept = false;
               for (const record of [...records].reverse()) {
                 const runInfo = await readManagedResourceRun(opts.cwd, record);
@@ -315,7 +314,10 @@ export function createRepoSessionFactory(opts: RepoSessionFactoryOptions): AfkOp
                   console.log(`保留测试环境 ${runInfo.record.project}；清理：${managedCleanupCommand(runInfo)}`);
                 }
               }
-              if (!kept) await rm(entry.dir, { recursive: true, force: true });
+              if (!kept) {
+                await rm(created.dir, { recursive: true, force: true });
+                await rm(join(worktreeRoot, created.relDir), { recursive: true, force: true });
+              }
             } catch (error) {
               errors.push(error);
             }
