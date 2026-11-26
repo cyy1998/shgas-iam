@@ -1,12 +1,17 @@
 import "../scripts/require-linux.mjs";
 import { execFile, spawn } from "node:child_process";
 import { mkdir, readFile, stat } from "node:fs/promises";
-import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs, parseEnv, promisify } from "node:util";
 import { checkAfk, runAfk } from "./afk.ts";
-import { checkCodexAuth, createRepoSessionFactory, dockerRegistryMount, loadCodexAgents } from "./session.ts";
+import {
+  checkCodexAuth,
+  createRepoSessionFactory,
+  dockerRegistryMount,
+  loadCodexAgents,
+  resolveHostPnpmStore,
+} from "./session.ts";
 import { smoke } from "./smoke.mts";
 
 const exec = promisify(execFile);
@@ -110,7 +115,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const hostStore = resolve(cwd, env.SANDCASTLE_PNPM_STORE_DIR?.trim() || join(homedir(), ".pnpm-store"));
+  const hostStore = resolveHostPnpmStore(cwd, env);
   const turboCacheDir = join(cwd, ".sandcastle", "cache", "turbo");
   await mkdir(hostStore, { recursive: true });
   await mkdir(turboCacheDir, { recursive: true });

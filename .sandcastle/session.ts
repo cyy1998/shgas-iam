@@ -161,6 +161,13 @@ export async function loadCodexAgents(
   return { light, standard, deep, reviewStandards, reviewSpec, repair: deep };
 }
 
+export function resolveHostPnpmStore(cwd: string, env: NodeJS.ProcessEnv = process.env): string {
+  const explicit = env.SANDCASTLE_PNPM_STORE_DIR?.trim();
+  if (explicit) return resolve(cwd, explicit);
+  const xdgDataHome = env.XDG_DATA_HOME?.trim() || join(homedir(), ".local", "share");
+  return join(xdgDataHome, "pnpm", "store");
+}
+
 export async function dockerRegistryMount(
   cwd: string,
   env: NodeJS.ProcessEnv = process.env,

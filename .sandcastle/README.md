@@ -37,7 +37,7 @@ pnpm sandcastle
 - **Codex**：显式配置 `captureSessions: false`。默认使用 ChatGPT 文件凭据（`CODEX_AUTH=chatgpt`，需先在宿主 `codex login`，默认读取 `${CODEX_HOME:-$HOME/.codex}/auth.json`，可由 `CODEX_HOME` / `CODEX_AUTH_FILE` 覆盖）。每次沙箱启动单向只读复制到临时目录并挂载，退出即删（token 过期时在宿主重新登录即可）。API 计费使用 `CODEX_AUTH=api-key` 与 `CODEX_API_KEY`。
 - **私有镜像**：设置 `SANDCASTLE_DOCKER_CONFIG_FILE`（相对仓库根解析）即可将可读配置文件只读挂载至可写沙箱的 `/home/agent/.docker/config.json`。
 - **Docker 与只读隔离**：可写阶段使用原生 `docker()` 挂载 `/var/run/docker.sock`、传入 socket GID 至 `groups`、启用 `network: "host"` 并设 `DOCKER_HOST=unix:///var/run/docker.sock`。只读评审阶段由 `createSession({ worktree, readonly: true })` 直接将工作树与 `.git` 在内的全部挂载设为只读，仅挂单向只读认证，不挂 `docker.sock`、`pnpm-store`、Turbo 缓存与 Docker registry。
-- **依赖、Turbo 缓存与提交 Hook**：宿主 pnpm store 默认 `$HOME/.pnpm-store`（可用 `SANDCASTLE_PNPM_STORE_DIR` 覆盖），挂载至 `/home/agent/.pnpm-store`，可写沙箱在 `onSandboxReady` 执行单行 `HUSKY=0 pnpm install --frozen-lockfile --prefer-offline --store-dir /home/agent/.pnpm-store`；`.sandcastle/cache/turbo` 挂载至 `/home/agent/.turbo-cache`（设 `TURBO_CACHE_DIR`）跨次复用缓存；经 `GIT_CONFIG_VALUE_0=.husky` 直接启用仓库 `.husky/pre-commit`，不修改宿主 `.git/config`。
+- **依赖、Turbo 缓存与提交 Hook**：宿主 pnpm store 默认共用 `${XDG_DATA_HOME:-$HOME/.local/share}/pnpm/store`（可用 `SANDCASTLE_PNPM_STORE_DIR` 覆盖），挂载至 `/home/agent/.pnpm-store`，可写沙箱在 `onSandboxReady` 执行单行 `HUSKY=0 pnpm install --frozen-lockfile --prefer-offline --store-dir /home/agent/.pnpm-store`；`.sandcastle/cache/turbo` 挂载至 `/home/agent/.turbo-cache`（设 `TURBO_CACHE_DIR`）跨次复用缓存；经 `GIT_CONFIG_VALUE_0=.husky` 直接启用仓库 `.husky/pre-commit`，不修改宿主 `.git/config`。
 
 ### 暂停处理与恢复
 

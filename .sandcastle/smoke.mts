@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
-import { homedir, tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { type AgentProvider, run } from "@ai-hero/sandcastle";
 import { runCommand } from "./git.ts";
-import { createRepoSessionFactory } from "./session.ts";
+import { createRepoSessionFactory, resolveHostPnpmStore } from "./session.ts";
 
 const COMPLETE = "<promise>COMPLETE</promise>";
 const DOCKER_SOCKET = "/var/run/docker.sock";
@@ -27,7 +27,7 @@ export async function smoke(cwd: string): Promise<void> {
   const socketInfo = await stat(DOCKER_SOCKET);
   if (!socketInfo.isSocket()) throw new Error(`Expected Docker socket at ${DOCKER_SOCKET}.`);
 
-  const hostStore = resolve(cwd, process.env.SANDCASTLE_PNPM_STORE_DIR?.trim() || join(homedir(), ".pnpm-store"));
+  const hostStore = resolveHostPnpmStore(cwd, process.env);
   await mkdir(hostStore, { recursive: true });
 
   const root = await mkdtemp(join(tmpdir(), "sandcastle-smoke-"));

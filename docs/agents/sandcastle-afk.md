@@ -10,7 +10,7 @@
 - [`.sandcastle/afk.ts`](../../.sandcastle/afk.ts)：流程编排核心，负责任务图调度、并行实施、按需 Merger、双轴只读评审、集中修复验证与有序交付。
 - [`.sandcastle/github.ts`](../../.sandcastle/github.ts)：GitHub 接口层，封装有界懒加载 GraphQL、Spec/Ticket 准入判定、`linkedBranches` 分支解析、暂停标注、幂等 PR 复用与标签移除。
 - [`.sandcastle/git.ts`](../../.sandcastle/git.ts)：Git 与宿主安全辅助层，封装命令执行、凭据预检、远端 URL 校验、worktree 生命周期、已集成票推导与合并提交核验。
-- [`.sandcastle/session.ts`](../../.sandcastle/session.ts)：本仓装配层，从 `.codex/agents/*.toml` 加载 6 个 Codex 角色槽位（显式 `captureSessions: false`），提供单向只读 `auth.json` / `CODEX_API_KEY` 认证、自洽的 `createSession({ worktree, readonly, runId })` 只读/可写 Docker 会话（可写阶段挂 `docker.sock`、离线 `~/.pnpm-store`、`.sandcastle/cache/turbo`、可选私有 registry，经 `GIT_CONFIG_VALUE_0=.husky` 复用 `.husky/pre-commit` 并用单行 `onSandboxReady` 安装依赖）与基于 `docker inspect <sandboxId>` 的测试资源回收。
+- [`.sandcastle/session.ts`](../../.sandcastle/session.ts)：本仓装配层，从 `.codex/agents/*.toml` 加载 6 个 Codex 角色槽位（显式 `captureSessions: false`），提供单向只读 `auth.json` / `CODEX_API_KEY` 认证、自洽的 `createSession({ worktree, readonly, runId })` 只读/可写 Docker 会话（可写阶段挂 `docker.sock`、宿主共享离线 pnpm store、`.sandcastle/cache/turbo`、可选私有 registry，经 `GIT_CONFIG_VALUE_0=.husky` 复用 `.husky/pre-commit` 并用单行 `onSandboxReady` 安装依赖）与基于 `docker inspect <sandboxId>` 的测试资源回收。
 - [`.sandcastle/run.mts`](../../.sandcastle/run.mts) 与 [`.sandcastle/smoke.mts`](../../.sandcastle/smoke.mts)：CLI 入口与真实 Docker 冒烟脚本；根命令 `pnpm sandcastle` 通过 `flock -n .sandcastle/runner.lock` 保证单实例互斥。
 - [`.sandcastle/prompts/`](../../.sandcastle/prompts/)：5 阶段 Prompt 模板（`implement`、`merge`、`review-standards`、`review-spec`、`repair-and-verify`）。
 
