@@ -1,121 +1,87 @@
 # Sandcastle AFK 工作流
 
-本页定义 Sandcastle AFK 的交接门禁、分支工作区、评审与验证契约及 PR 交付流程，只在准备交接 AFK、运行 AFK 或排障回流时读取。
-宿主环境搭建、启动参数、GitHub Projects 看板配置与执行器资源恢复见[AFK 运维与启动手册](../../.sandcastle/README.md#启动与诊断)。
+本页定义 Sandcastle AFK 的交接门禁、极简核心库边界、分支工作区、评审与验证契约及有序幂等 PR 交付流程，只在准备交接 AFK、运行 AFK 或排障回流时读取。
+宿主环境搭建、启动参数与执行器资源恢复见[AFK 运维与启动手册](../../.sandcastle/README.md#启动与诊断)，架构取舍见 [ADR-0059](../adr/0059-converge-sandcastle-afk-on-minimal-extractable-core.md)。
 
 维护者运行 `pnpm sandcastle` 或明确要求启动该路径，即授权本次运行处理全仓 `ready-for-agent` backlog、
-推送 Spec 集成分支到远端、创建 Pull Request、评论交接、移除已交付 PR 的 `ready-for-agent` 标签并同步 GitHub Projects 看板；
-不包含合入调用分支、关闭 issues 或部署。配置执行器本身不等于启动它。
+推送 Spec 集成分支到远端、创建或复用 Pull Request、在失败时为 Spec 添加 `needs-attention` 标签与原因评论，并在交付完成后移除关联议题的 `ready-for-agent` 标签；
+不包含合入目标分支、关闭 issues 或部署。配置或检查执行器本身不等于启动它。
+
+## 核心库与本仓装配边界
+
+AFK 编排按“库而不是框架 + 约定优于配置”拆分：
+
+- **极简可拆分核心库**（[`scripts/sandcastle/core/`](../../scripts/sandcastle/core/index.ts)）：无模块级可变全局状态，导出 `runAfk`、`checkAfk`、`readonlySandbox` 与只读任务图查询 `readSpecGraph`；仅依赖 `node:*`、自身模块与 `@ai-hero/sandcastle`（由 `pnpm check:architecture` 的 `sandcastle-core-dependency-boundary` 规则长期守卫）。
+- **本仓极薄装配入口**（[`.sandcastle/run.mts`](../../.sandcastle/run.mts)）：注入 `cyy1998/shgas-iam`、6 个 Codex `AgentSlot`（读自 `.codex/agents/*.toml`）、原生 `docker()` 沙箱工厂（含 `stageCodexAuth`、`withTestResources` 与 `.sandcastle/hooks/`）及仓库专属 [`.sandcastle/prompts/`](../../.sandcastle/prompts/)；启动命令由外层 `flock -n .sandcastle/runner.lock` 保证单实例互斥。
 
 ## 设计与执行交接
 
-在 T3 Code 完成分析设计、准备为 Spec 与 tickets 标记 `ready-for-agent` 并交接给 Sandcastle AFK 前，按顺序完成以下门禁与 Git 准备：
+在 T3 Code 完成分析设计、准备为 Spec 与 tickets 标记 `ready-for-agent` 并交接给 Sandcastle AFK 前，按顺序完成以下门禁与分支准备：
 
 1. **`ready-for-agent` 轻量门禁** 标记 `ready-for-agent` 前，由当前主会话启动一个**同引擎的新鲜只读 subagent**
    （Antigravity 用原生 `research`，Codex 用原生 `code_researcher`）独立核查四项：
-   - 每张 ticket 的验收条件客观可测，且已明确测试 seam 与所需验证层级（Unit / Integration / E2E / Gateway）；
+   - 每张 ticket 的验收条件客观可测，且已明确测试 seam、所需验证层级（Unit / Integration / E2E / Gateway）与设计期实施档位标签（`agent:light` / `agent:deep`，缺省为 standard，严禁同时打两个档位标签）；
    - GitHub 原生父子关系（`--parent`）与阻塞边（`--blocked-by`）完整、无环且覆盖全部前置依赖；
    - 阻塞实现的 `ADR`、`GLOSSARY.md` 与设计决策均已提交到候选集成分支；
-   - Spec 正文与本地 Git 状态满足下方 AFK 分支契约。
-2. **AFK 候选集成分支契约**（声明关键字见[仓库配置](../../.sandcastle/config.ts)）：
-   - **唯一分支声明**：存在设计产物分支时，在 Spec 正文仅声明一行 `集成分支：feat/<feature-slug>`（runner 据此确定唯一归属）；
-   - **祖先关系成立**：确保候选集成分支包含当前调用分支（满足 `git merge-base --is-ancestor main feat/<feature-slug>`）；若期间
-     `main` 前进，交接前先将最新 `main` 合入候选集成分支；
-   - **切回调用分支、对齐远端且工作区干净**：启动 `pnpm sandcastle` 前，将主仓库工作区切回目标调用分支（如 `main`）、保持工作区干净且与远端
-     `github/<branch>` 对齐（无未推送本地提交、未落后远端）；设计阶段若使用独立 worktree，必须先移除该外部 worktree（保留分支，避免被 runner 拒绝接管）。
-3. **AFK 异常回流（`Needs Attention`）** Sandcastle 因设计歧义或难解失败暂停时，切回 T3 Code 处理：
-   - 读取对应 Spec/ticket 的交接评论与集成分支现场；
+   - Spec 正文与分支占用状态满足下方分支契约。
+2. **AFK 候选集成分支契约**：
+   - **唯一分支声明**：存在设计产物分支时，在 Spec 正文仅声明一行 `Integration branch: <branch>` 或 `集成分支：<branch>`（未声明时默认 `sandcastle/spec-<N>`）；同一集成分支被多个带 `ready-for-agent` 的 open Spec 声明时会暂停涉及的 Spec。
+   - **不要求本地 checkout 对齐或工作区干净**：runner 启动时直接 `git fetch <remote> <baseBranch>`，不读取也不校验本地当前所在分支或工作树状态；维护者可停留在任意分支继续交互开发。
+   - **避免外部 worktree 占用集成分支**：若设计阶段曾在独立 worktree 中检出该候选集成分支，交接前先移除该外部 worktree（保留本地分支 ref），避免 runner 拒绝接管已被外部检出的分支。
+3. **AFK 异常回流（`needs-attention`）** Sandcastle 因分支冲突、票失败、验证未通过或交付异常暂停时，会给 Spec 添加 `needs-attention` 标签并评论具体阶段与原因，同时保留本地工作树与分支。切回 T3 Code 处理：
+   - 读取对应 Spec 的暂停评论、集成分支 `git log --first-parent` 合并交接与本地工作树现场；
    - 复杂问题交给 `deep_researcher` 定位根因（见[代码调查与双引擎编排](code-investigation.md)）；
-   - 补齐 Spec 或修复阻塞点并重新满足上述分支契约后继续运行 AFK，或经用户确认在 T3 单会话完成收口并走[完成与 PR 交付](workflow.md#完成与-pr-交付)。
+   - 修复阻塞点并移除 Spec 的 `needs-attention` 后重新运行 `pnpm sandcastle` 续跑，或经用户确认在 T3 单会话完成收口并走[完成与 PR 交付](workflow.md#完成与-pr-交付)。
 
 ## 分支与工作区
 
-AFK 在启动时固定调用分支（如 `main`）并保持本地调用分支**全程只读**。启动和恢复均先 fetch 并校验本地调用分支与远端零偏差。
-每个 Spec 使用独立的集成分支，优先复用正文唯一声明的分支，默认使用 `sandcastle/spec-<N>`。每张 ticket 使用独立分支，默认 `sandcastle/issue-<N>`。
-同一集成分支被多个 open Spec 声明时暂停涉及的 Spec，其他 Spec 可继续。可在仓库配置中修改 `workflow.branchPrefix`。原生 `createWorktree()` 管理 `.sandcastle/worktrees/` 下的工作树，例如
-`sandcastle-spec-<N>` 和 `sandcastle-issue-<N>`。遇到外部 checkout、锁定或归属不明的路径时停止并保留现场。
-票级实施从当前 Spec 集成内容开始，交接前整合最新集成分支，随后由宿主串行合入。
-容器内的模型会话始终禁止写调用分支、push、创建 PR 或部署。
+AFK 启动时通过 `git fetch <remote> <baseBranch>`（默认 `origin` / `main`，可由 `SANDCASTLE_GIT_REMOTE`、`SANDCASTLE_BASE_BRANCH` 覆盖）获取最新远端基线作为新 Spec 分支起点，并保持本地目标分支与当前 checkout **全程不读取、不修改**。双轴评审与已集成票扫描的基线始终由 `git merge-base <specBranch> <remote>/<baseBranch>` 动态推导；运行期间远端 `main` 前进不会导致交付失败、恢复卡死或评审全量重跑，潜在合入冲突交由 GitHub PR 处理。
 
-## 双轴评审与集中修复
+每个 Spec 使用独立集成分支（正文声明的 `Integration branch:` / `集成分支：` 优先，默认 `sandcastle/spec-<N>`），并在 `.sandcastle/worktrees/` 下维护单一持久 Spec worktree，依次承载串行合并、并行双轴只读评审与集中修复。每张 ticket 使用固定票分支 `sandcastle/ticket-<N>`，其独立工作树由 SDK 原生 `run({ branchStrategy: { type: "branch", branch, baseBranch } })` 管理。遇外部 checkout、锁定或归属不明的路径时停止并保留现场。
 
-正式双轴评审在整个 Spec 的全部必要 tickets 已完成实施并普通合入集成分支后执行。部分集成、空子票列表、
-issue 的 closed 状态或单票成功声明均不能代替完整集成证据。宿主核对各票的 Git trailer 与祖先关系，固定本次
-review base 与集成 candidate SHA；评审期间工作区和候选保持不变。
-
-1. **并行只读评审**。本仓启用双轴评审。宿主通过 `Promise.all` 直接启动独立的 Standards 和 Spec 会话，以同一固定 base/candidate 提供上下文。
-   两轴遵循 [`code-review` skill](../../.agents/skills/code-review/SKILL.md) 对应轴的要求。宿主确认两轴均完成、各有非空报告且固定候选未变后，
-   按 review base 和 candidate SHA 保存报告，再进入集中修复。恢复时两者均匹配即可复用报告。
-2. **集中修复、最终验证与 `$pr` 描述起草**。由一个实施者会话阅读两轴报告，按票级集成索引、GitHub Spec 与 tickets 核对必要上下文，集中处理全部 findings、提交修复，并按[验证节奏](#验证节奏)执行最终验证。
-   集中修复后按失效范围重跑验证。Planner 标记高风险或恢复已有部分或全部票级集成的 Spec 时，本仓使用 `repairerDeep`。配置省略该角色时使用 `repairer`。
-   全部修复提交与必需验证通过且工作区干净后，该会话读取 [`.agents/skills/pr/SKILL.md`](../../.agents/skills/pr/SKILL.md) 与 [`GLOSSARY.md`](../../GLOSSARY.md)，基于最终 diff 和真实证据生成 `<pr-body>` 草稿
-   （包含 `## Summary`、`## Evidence`、`## Merge Danger`）。
-3. **交接记录**。修复者逐项说明 findings 处置、实际命令结果与未执行项，必需检查全部通过、最终工作树干净时，给出非空 `<pr-body>`，并以完成标记收尾。
-   宿主从已完成会话的 `stdout` 提取草稿，章节由 `$pr` skill 指引。只有整个草稿标签缺失、已有会话 ID 且 Provider 支持续接时，才通过只读会话补发一次，
-   跳过依赖和 Hook 安装及可写资源准备。期间候选须保持不变。
-   宿主核对 Git 祖先关系后将两轴报告、修复交接及草稿按最终候选保存到本地状态目录。
+安全边界由宿主预检与只读包装保证：预检在启动任何沙箱前拒绝 `.sandcastle/.env` 中出现 `GH_TOKEN` / `GITHUB_TOKEN`（含空值）与 `.git/config` 中的内嵌凭据；只读评审使用核心 `readonlySandbox()`（基于 SDK 公开 `createBindMountSandboxProvider` 将挂载统一设为 `readonly: true`）且不挂载 `docker.sock` 与可写 hooks。容器内模型会话始终禁止写目标分支、push、创建 PR、修改 GitHub 议题或部署。
 
 ## 批量实施
 
-仓库配置为各阶段绑定原生 `AgentProvider`，本仓使用 Docker 中的 Codex CLI。宿主驱动原生任务图。
+本仓为 6 个核心角色槽位绑定原生 Codex `AgentProvider`（`implementLight`、`implementStandard`、`implementDeep`、`reviewStandards`、`reviewSpec`、`repair`，其中 `repair` 固定复用 `implementer_deep`）。宿主直接驱动确定性任务图，**不使用 LLM Planner、Explorer、GitHub Projects 看板或 assignee 认领**。
 
-1. **Planner**。宿主分页读取全仓 open `type:spec` 候选，通过分页 GraphQL 聚合各 Spec 的原生子票、父子关系与 blocking 关系，
-   校验父子类型、准入（父 Spec 与待派发子票均须带 `ready-for-agent`）和认领，
-   将可信任务图、`ready` / `plannable` 切片与阻塞原因传给 Planner。缺失/冲突类型、关系矛盾、循环依赖或未满足前置条件阻止受影响切片，独立切片仍可推进。
-   Planner 每次只选一个 Spec，为本轮可执行及前置集成后解锁的全部计划切片指定实施者（`implementer_light` / `implementer_standard` / `implementer_deep`）并评估是否需要共享只读代码探索（`explore.needed`）。
-   宿主用原生 `Output.object()` 校验计划，支持会话续接的 Provider 最多自动修正两次输出格式。恢复部分集成时，规划以当前 Spec HEAD 为基线。
-   前置票集成后按已校验的计划继续派发。幂等读取遇临时连接错误时有限重试。
-   调用分支与远端对齐后，Spec 外部 blocker 以 GitHub `CLOSED` 为解阻依据；Spec 内前置票以 Git 集成为依据。
-2. **可选 Explorer（共享代码探索）**。配置启用探索且 `explore.needed` 为 `true` 时，在首批实施前运行只读 `code_researcher` 会话。
-   宿主校验工作树干净且 `HEAD` 未变，将笔记保存到 `.sandcastle/state/spec-<N>-exploration-<base>.md` 并随上下文传给实施者。
-   重启时复用同一 Spec 与基线的笔记；普通探索失败时告警并继续。
-3. **Implementer**。每票在独立分支、worktree 和全新会话中读取 `AGENTS.md`、ticket、父 Spec 与相关评论，并利用已提供的共享探索笔记定位代码与验证入口。
-   宿主核对任务图的准入、归属和依赖状态，在派发实施前以当前 GitHub 身份认领。认领失败时保留票分支与工作树，暂停该票。
-   实施者按 `tdd` 实施、运行完整受影响范围的聚焦验证并提交。报告完成前将最新集成分支 tip 合入本票分支，引入新提交时重跑失效检查并确认工作区干净。
-   必需检查失败或未执行时保留票分支与工作树。正式双轴评审和全仓门禁留到 Spec 最终验收。
-4. **Spec 集成与最终验收**。宿主核对候选保留实施基线与续做起点，将非空验证交接及候选 SHA 写入 ticket 评论，然后串行执行 `git merge --no-ff`。
-   双亲合并提交的消息只含合并主题和 `Sandcastle-Ticket: #<N>` trailer。
-   遇真实合并冲突时先 `git merge --abort` 并在本票 worktree 启动一次按需冲突解决会话（遵循 `resolving-merge-conflicts`，重跑受影响验证并补充交接）。
-   Spec 内依赖以票已集成为解锁依据，ticket 保持 open。单票失败后继续独立切片；所有必要票集成后，按上一节执行集中双轴评审、单实施者修复、最终验证与 `$pr` 正文起草。
+1. **任务图与候选选择**。宿主经单次 `first:100` GraphQL 查询（`readSpecGraph`，检测 `pageInfo.hasNextPage` 溢出即显式报错，并经 `retryGhRead` 对瞬断退避重试）读取 open `type:spec`、子票、评论与阻塞边，先校验集成分支声明并暂停冲突或非法的 `ready-for-agent` Spec，再按编号从小到大选择首个存在就绪票或已完成全部集成的候选 Spec（跳过带 `needs-attention` 的 Spec）。
+2. **前沿计算与档位路由**。`specFrontier` 仅判定 `OPEN ∧ type:ticket ∧ ready-for-agent ∧ !needs-attention ∧ 原生父 Spec 匹配 ∧ 无局部环 ∧ 阻塞已满足`（Spec 内前置看 Git 合并提交 trailer，Spec 外前置直接信任 GitHub `CLOSED`）。运行期间给 Spec 新增子票不会暂停整个 Spec。每张票的实施档位直接由设计期标签确定：`agent:light` → `implementLight`、`agent:deep` → `implementDeep`、无档位标签 → `implementStandard`；同时存在 `agent:light` 与 `agent:deep` 时显式报错并暂停 Spec。
+3. **宿主注入上下文与并行实施**。所有阶段使用原生 `promptFile` + `promptArgs`，由宿主直接将父 Spec、ticket、评论、阻塞状态、基线 SHA 与角色指令注入 Prompt（本仓在 `.sandcastle/prompts/<phase>.md` 覆写默认模板），沙箱无需联网调用 GitHub API。宿主按 `maxParallel` 并行派发 `ready` tickets；派发每张新票前读取一次 Spec 标签作为软停止开关（移除 `ready-for-agent` 或加上 `needs-attention` 后停止继续派发，保留已完成的进度）。实施者按 `tdd` 实施、运行完整受影响范围的聚焦验证并提交，保持工作树干净并在最终输出中给出验证交接与完成标记 `<promise>COMPLETE</promise>`。
+4. **信任边界断言与串行合并**。每次票会话结束后，宿主在串行队列中仅核对两项信任边界断言：（1）票分支 candidate 包含派发基线；（2）Spec 分支 tip 与远端基线跟踪 ref 未被 Agent 移动。校验通过后执行 `git merge --no-ff`，合并提交正文记录票级验证交接并以 `Sandcastle-Ticket: #<N>` trailer 结尾（不再写票级 GitHub 交接评论）。遇真实合并冲突时先 `git merge --abort`，在票分支触发一次 `resolve-conflict` 会话（遵循 `resolving-merge-conflicts`，重跑受影响验证并补充交接），确认包含冲突基线后再合并。单票失败不阻断其他在途独立切片，全部在途任务收尾后若有失败票或未完成前沿则暂停 Spec 并保留现场。
 
-GitHub Issues 保存需求与任务图，评论记录供人工查阅的交接与审计信息。未完成成果留在原分支与工作树，等候续做。
+## 双轴评审与集中修复
+
+当 Spec 全部必要 tickets 已完成集成、Spec 工作树干净且前沿完整后，宿主按 `git merge-base <specBranch> <remote>/<baseBranch>` 计算本次 `reviewBase` 并锁定 `candidateSha`，进入集中评审与修复：
+
+1. **并行只读双轴评审与 SHA 缓存**。宿主先查 `.sandcastle/state/review-cache.json` 是否已缓存该 `candidateSha` 的双轴报告；未命中时，在持久 Spec worktree 上以 `branchStrategy: { type: "head" }` 和 `readonlySandbox()` 通过 `Promise.all` 并发运行 `review-standards` 与 `review-spec`（遵循 [`code-review` skill](../../.agents/skills/code-review/SKILL.md) 对应轴要求）。两轴均完成、各有非空报告且 Spec 工作树 `HEAD` 与远端跟踪 ref 未变化后，按 `candidateSha` 写入单文件缓存；后续修复或验证抖动重启时若候选未变即可直接复用报告。
+2. **单次集中修复、最终验证与 `$pr` 正文起草**。宿主固定使用 `repair`（`implementer_deep`）角色在持久 Spec worktree 启动单次 `repair-and-verify` 会话，注入双轴评审报告、父 Spec 与全部 tickets，修复者通过 `git log --first-parent` 读取合并提交正文中的票级验证交接，集中处理全部 findings、提交修复并按[验证节奏](#验证节奏)完成最终验证。全部必需检查通过且工作树干净后，按 [`.agents/skills/pr/SKILL.md`](../../.agents/skills/pr/SKILL.md) 与 [`GLOSSARY.md`](../../GLOSSARY.md) 在 `<pr-body>...</pr-body>` 中输出 PR 正文草稿，并以 `<promise>COMPLETE</promise>` 结束。
+3. **宿主校验与回退正文**。宿主核对最终工作树干净、最终候选 `finalCandidateSha` 包含评审候选 `candidateSha` 且远端跟踪 ref 未被移动。若会话输出中缺少 `<pr-body>` 草稿，宿主直接拼装包含摘要、`Closes #<number>`、Integrated Tickets 表与分支/SHA 元数据的确定性回退正文，不再补发续接会话。
 
 ## Spec 交付与清理
 
-恢复从 Git 与本地状态开始。宿主在启动基线到 Spec HEAD 的 first-parent 历史中查找有效的双亲合并提交和 `Sandcastle-Ticket: #<N>` trailer，
-并校验残留票分支 tip 是该合并第二父提交的祖先。这样可区分已集成票和只留下分支（含零提交）的未完成票。
-归属明确的未合入工作树原位复用，已认领时须为当前 GitHub 执行者本人。遇到归属不明或未完成的 Git 操作时保留现场。
+恢复只依赖 Git、GitHub 与单文件评审缓存，不维护额外的本地交付状态机：
 
-`.sandcastle/state/spec-<N>.json` 记录最终验证结果与已确认的 PR，并以精确的最终 HEAD SHA 核对记录。
-推送或建 PR 中断后，匹配 HEAD 且验证基线和评审候选祖先关系仍有效时，宿主复用验证结果继续交付。
-发现同分支、同目标且 head SHA 匹配的 Open PR 时，可直接续办交付收尾。GitHub 评论用于查阅交接，恢复从 Git、缓存与 PR 核验取得状态。
+- 已集成票集合始终从 `<mergeBase>..<specBranch>` 的 `--first-parent --merges` 双亲合并提交与 `Sandcastle-Ticket: #<N>` trailer 推导；
+- 评审报告按 `candidateSha` 缓存在 `.sandcastle/state/review-cache.json`；
+- 已创建的 PR 通过 GitHub Open PR 查询（匹配 `headBranch`、`baseBranch` 与 `headRefOid`）发现。
 
-宿主按以下顺序执行交付。
+修复与验证通过后，宿主按以下**固定顺序**执行交付（顺序本身即崩溃恢复协议）：
 
-1. **非强制推送 Spec 集成分支**。核对远端分支。若远端已有同名分支且非 `finalCandidate` 祖先，报错保留现场。推送后核验远端 SHA 精确等于 `finalCandidate` 并绑定 upstream。
-2. **幂等创建并核验 PR**。若 `<specBranch> -> <invocationBranch>` 已存在 `headRefOid === finalCandidate` 的 Open PR 则复用，
-   否则以 `$pr` 正文为主干、确定性追加逐行 `Closes #<number>`、Integrated Tickets 表及折叠的评审/验证详情，创建 Ready for Review PR（`--draft` 时为 Draft），随后按 PR 编号读取一次，核验 `state === "OPEN"`、分支与 `headRefOid`。
-3. **写交付评论、移出队列并更新看板**。向父 Spec 与全部子票写入含 PR 链接与候选验证摘要的交付评论，核验移除全部 `ready-for-agent` 标签，并在启用看板时同步 `PR Open`。交付期间 issues 保持 open，由维护者在 GitHub 合并 PR 后触发自动关票。
-4. **清理临时工作树与 ticket 分支**。再次核对远端 SHA 等于 `finalCandidate`，再回收路径与候选均核验通过的托管工作树。
-   通过带预期 tip 的 `git update-ref -d` 删除已集成的本地票分支，保留本地 Spec 分支 ref 供人工验收。
+1. **非强制推送 Spec 集成分支**。执行非强制 `git push`（拒绝改写非祖先远端分支），并通过 `git ls-remote` 核验远端 SHA 精确等于 `finalCandidateSha`。
+2. **幂等复用或创建 PR**。若 `<specBranch> -> <baseBranch>` 已存在 `headRefOid === finalCandidateSha` 的 Open PR 则直接复用；否则以 `<pr-body>` 草稿（或宿主回退正文）为主干、确定性追加逐行 `Closes #<number>` 与 Integrated Tickets 表，创建 Ready for Review PR（`--draft` / `SANDCASTLE_PR_DRAFT` 时为 Draft），再读取一次 PR 核验 `OPEN` 状态、分支与 `headRefOid`。
+3. **移除已集成子票的 `ready-for-agent`**。逐张移除已集成 tickets 的 `ready-for-agent` 标签；issues 保持 open，待维护者在 GitHub 合并 PR 时自动关票。
+4. **清理临时工作树与本地票分支**。非强制移除各票及 Spec 的托管工作树（`removeWorktreeSafe`），以带预期 tip 的 CAS 方式（`git update-ref -d`）删除已集成的本地票分支，**保留本地 Spec 分支 ref** 供维护者本地验收。
+5. **最后移除父 Spec 的 `ready-for-agent`**。前四步全部成功后才将父 Spec 移出队列。
 
-任一步骤失败均停止后续收尾并保留现场。下次启动会从本地待交付状态发现已移出队列的 Spec。核验匹配的 Open PR 后，宿主幂等补完后续步骤。
-若调用分支已前进，先同步调用分支，再核验集成分支和验证基线。出现候选或 PR 不匹配时，保留工作树、状态和 PR，按输出的 Git 核验错误检查。
+若在第 5 步之前任意环节中断，父 Spec 仍保留 `ready-for-agent` 留在队列中；下次启动时若检测到所有票已集成且存在 `headRefOid === specTip` 的匹配 Open PR，直接走幂等快路径补完第 3–5 步。任意步骤抛错时，宿主保留现场、给 Spec 添加 `needs-attention` 标签并评论失败原因。
 
 ## 验证节奏
 
 通用的聚焦验证、提交 Hook、修复后的结果复用和基线失败处理按[工作流补充](workflow.md#验证节奏)执行。
 
-- **票级实施与冲突解决** 票级实施（以及遇合并冲突时的按需冲突解决）运行完整受影响范围的行为测试、typecheck 和适用文档检查，以及 `git diff --check`。
-- **Spec 最终验证** 最终集中修复者以固定 review base 为合入目标，按[验证节奏](workflow.md#验证节奏)为整个 Spec 的最终候选选择基础门禁。
-  按父 Spec 与全部 tickets 的风险、验收和已确认测试决策补齐所需 Integration、E2E、Gateway 等检查，重复覆盖按范围去重。
-  各票分支结果不替代最终组合验证。
-- **Container Smoke 门禁** 集中修复提交后，在候选工作树执行 `pnpm verify:container-smoke --base <review-base-sha>`。
-  该命令对比固定 review base 与当前 HEAD，按[命令入口](../engineering/commands.md#container-smoke)的打包路径与生产镜像闭包 `package.json` 语义规则判定命中时，串行追加一次 `pnpm test:e2e:container-smoke`。
-  无命中时记录跳过，Git 比较失败时门禁失败。同一最终候选已通过 `pnpm verify:release` 时复用其中的冒烟结果。
-  启动分支提供最终验证 prompt，执行器在候选工作树读取本页和运行门禁，因此本次 Spec 引入的门禁也在本次生效。
-- **E2E Runtime 门禁** 编排器 Integration 由独立入口 `pnpm --filter @iam/e2e-system test:integration` 运行。集中修复提交后，在候选工作树执行
-  `pnpm verify:e2e-runtime --base <review-base-sha>`，按[命令入口](../engineering/commands.md#full-system-e2e)的路径规则串行调用独立入口。
-  同一最终候选已通过 `pnpm verify:release` 时可复用对应结果。此要求以候选工作树中的本页为准。
-- 后续修复重跑失效检查，仍有效的通过证据可复用。普通交接记录实际命令、结果、对应候选与未执行项；必需检查失败或
-  未执行、findings 尚未解决时保持未完成。本轮不通过反复新开会话重试，也不以清理成功或进程正常退出代替验收。
+- **票级实施与冲突解决** 票级实施（以及遇合并冲突时的按需冲突解决）运行完整受影响范围的行为测试、typecheck、适用文档检查与 `git diff --check`。
+- **Spec 最终验证** 最终集中修复者以动态计算的固定 `reviewBase`（`merge-base`）为合入目标，按[验证节奏](workflow.md#验证节奏)为整个 Spec 的最终候选选择基础门禁：纯文档差异运行 `pnpm verify:docs --base <review-base-sha>`，其余改动运行 `pnpm verify` 并按父 Spec 与全部 tickets 的风险、验收和已确认测试决策补齐所需 Integration、E2E、Gateway 检查（重复覆盖按范围去重；各票分支结果不替代最终组合验证）。
+- **Container Smoke 门禁** 集中修复提交后，在候选工作树执行 `pnpm verify:container-smoke --base <review-base-sha>`。按[命令入口](../engineering/commands.md#container-smoke)的路径与生产镜像闭包规则判定命中时，串行追加一次 `pnpm test:e2e:container-smoke`；同一最终候选已通过 `pnpm verify:release` 时复用其中结果。
+- **E2E Runtime 门禁** 集中修复提交后，在候选工作树执行 `pnpm verify:e2e-runtime --base <review-base-sha>`，按[命令入口](../engineering/commands.md#full-system-e2e)的路径规则按需运行编排器 Integration；同一最终候选已通过 `pnpm verify:release` 时复用对应结果。
+- 后续修复重跑失效检查，仍有效的通过证据可复用。交接记录实际命令、结果、对应候选与未执行项；必需检查失败或未执行、findings 尚未解决时保持未完成，不输出 `<promise>COMPLETE</promise>`。

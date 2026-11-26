@@ -141,14 +141,14 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 <details>
 <summary>展开Agent 工作流</summary>
 
-| Document                                             | Type         | Status  | Last verified | Next review | Notes                                                                                                                                           |
-| ---------------------------------------------------- | ------------ | ------- | ------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| [代码调查与双引擎编排](agents/code-investigation.md) | agent-config | Current | 2026-11-26    | 2026-12-26  | T3 双引擎角色与评审编排、只读调查调用策略、升级条件、返回契约与外置记忆。                                                                       |
-| [领域文档规则](agents/domain.md)                     | agent-config | Current | 2026-11-25    | 2026-12-25  | 工程 skills 的领域入口、术语一致性与 ADR 冲突上报规则。                                                                                         |
-| [GitHub 议题跟踪](agents/issue-tracker.md)           | agent-config | Current | 2026-11-25    | 2026-12-25  | GitHub spec、ticket 类型、原生任务图、T3 绑定、PR 自动关票与交接。                                                                              |
-| [Sandcastle AFK 工作流](agents/sandcastle-afk.md)    | agent-config | Current | 2026-11-26    | 2026-12-26  | 原生任务图与工作树、宿主并行双轴评审、集中验证、Git trailer 与 SHA 缓存恢复。配置与诊断见 [AFK 运维手册](../.sandcastle/README.md#启动与诊断)。 |
-| [Triage Labels](agents/triage-labels.md)             | agent-config | Current | 2026-11-25    | 2026-12-25  | 默认 canonical triage labels 与 Spec/ticket 互斥类型字典。                                                                                      |
-| [工作流补充](agents/workflow.md)                     | agent-config | Current | 2026-11-25    | 2026-12-25  | 三轨开发流、授权与分支、分级验证节奏与 Fast Track `$pr` PR 交付。                                                                               |
+| Document                                             | Type         | Status  | Last verified | Next review | Notes                                                                                                                                                                       |
+| ---------------------------------------------------- | ------------ | ------- | ------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [代码调查与双引擎编排](agents/code-investigation.md) | agent-config | Current | 2026-11-26    | 2026-12-26  | T3 双引擎角色与评审编排、只读调查调用策略、升级条件、返回契约与外置记忆。                                                                                                   |
+| [领域文档规则](agents/domain.md)                     | agent-config | Current | 2026-11-25    | 2026-12-25  | 工程 skills 的领域入口、术语一致性与 ADR 冲突上报规则。                                                                                                                     |
+| [GitHub 议题跟踪](agents/issue-tracker.md)           | agent-config | Current | 2026-11-26    | 2026-12-26  | GitHub spec、ticket 类型、原生任务图、单次 GraphQL 与 `needs-attention` 暂停、T3 绑定、PR 自动关票与交接。                                                                  |
+| [Sandcastle AFK 工作流](agents/sandcastle-afk.md)    | agent-config | Current | 2026-11-26    | 2026-12-26  | 极简核心库与本仓装配、`origin/main` + `merge-base`、标签档位路由、只读双轴评审与 SHA 缓存、有序幂等交付。配置与诊断见 [AFK 运维手册](../.sandcastle/README.md#启动与诊断)。 |
+| [Triage Labels](agents/triage-labels.md)             | agent-config | Current | 2026-11-26    | 2026-12-26  | 默认 canonical triage labels、Spec/ticket 互斥类型与 AFK `agent:light`/`agent:deep`/`needs-attention` 标签字典。                                                            |
+| [工作流补充](agents/workflow.md)                     | agent-config | Current | 2026-11-25    | 2026-12-25  | 三轨开发流、授权与分支、分级验证节奏与 Fast Track `$pr` PR 交付。                                                                                                           |
 
 </details>
 
@@ -159,10 +159,10 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 
 #### 定位代码与理解系统
 
-| Document                                           | Type         | Status  | Last verified | Next review | Notes                                                  |
-| -------------------------------------------------- | ------------ | ------- | ------------- | ----------- | ------------------------------------------------------ |
-| [仓库地图](engineering/repository-map.md)          | architecture | Current | 2026-11-26    | 2026-12-26  | 代码、基础设施、AFK 通用引擎与仓库配置、生成目录定位。 |
-| [系统架构视图](engineering/system-architecture.md) | architecture | Current | 2026-11-25    | 2026-12-25  | 拓扑、信任边界、数据权威与恢复分工。                   |
+| Document                                           | Type         | Status  | Last verified | Next review | Notes                                                    |
+| -------------------------------------------------- | ------------ | ------- | ------------- | ----------- | -------------------------------------------------------- |
+| [仓库地图](engineering/repository-map.md)          | architecture | Current | 2026-11-26    | 2026-12-26  | 代码、基础设施、AFK 极简核心库与本仓装配、生成目录定位。 |
+| [系统架构视图](engineering/system-architecture.md) | architecture | Current | 2026-11-25    | 2026-12-25  | 拓扑、信任边界、数据权威与恢复分工。                     |
 
 #### 修改应用或共享契约
 
