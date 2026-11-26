@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -48,10 +48,9 @@ export async function createGatewayProcessFixture(input: {
   const port = address.port;
   await new Promise<void>((resolve, reject) => reservation.close((error) => (error ? reject(error) : resolve())));
   const origin = `http://127.0.0.1:${port}`;
-  const trigger = path.join(temporaryDirectory, "shutdown");
   const child = spawnOwnedProcessTree({
     executable: process.execPath,
-    args: ["run", "--no-env-file", "--preload", "./test-integration/runtime/shutdown.fixture.ts", "src/main.ts"],
+    args: ["run", "--no-env-file", "src/main.ts"],
     cwd: packageRoot,
     env: createProcessSmokeEnvironment({
       source: process.env,
@@ -65,7 +64,6 @@ export async function createGatewayProcessFixture(input: {
         IAM_GATEWAY_OPERATION_TIMEOUT_MS: String(input.operationTimeoutMs ?? 15_000),
         IAM_GATEWAY_APISIX_REQUEST_TIMEOUT_MS: String(input.requestTimeoutMs ?? 10_000),
         IAM_GATEWAY_SHUTDOWN_TIMEOUT_MS: String((input.operationTimeoutMs ?? 15_000) + 5000),
-        IAM_GATEWAY_TEST_SHUTDOWN_PATH: trigger,
         NO_PROXY: "127.0.0.1,localhost",
         no_proxy: "127.0.0.1,localhost",
       },
@@ -94,6 +92,7 @@ export async function createGatewayProcessFixture(input: {
     for (const [event, notification] of events) if (tail.includes(`"event":"${event}"`)) notification.resolve();
   };
   child.stdout.on("data", onOutput);
+  let ready = false;
   let shutdownSent = false;
   let closing: Promise<void> | undefined;
   const fixture = {
@@ -114,10 +113,10 @@ export async function createGatewayProcessFixture(input: {
       if (!notification) throw new Error("Unknown lifecycle event");
       return bounded(notification.promise, event);
     },
-    async shutdown() {
+    shutdown() {
       if (!shutdownSent) {
+        if (!child.kill("SIGTERM")) throw new Error(`Could not signal Gateway\n${capture.snapshot()}`);
         shutdownSent = true;
-        await writeFile(trigger, "shutdown", "utf8");
       }
     },
     waitForExit() {
@@ -127,8 +126,8 @@ export async function createGatewayProcessFixture(input: {
       closing ??= (async () => {
         const failures: unknown[] = [];
         try {
-          if (child.exitCode === null && child.signalCode === null) {
-            await fixture.shutdown();
+          if (ready && !ended) {
+            fixture.shutdown();
             await fixture.waitForExit();
           }
         } catch (error) {
@@ -162,6 +161,7 @@ export async function createGatewayProcessFixture(input: {
       await delay(50, undefined, { signal: deadline });
     }
     await fixture.waitForEvent("gateway_started");
+    ready = true;
     return fixture;
   } catch (error) {
     try {
