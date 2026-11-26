@@ -43,6 +43,8 @@ test("both formats keep diagnostics while removing credentials from untrusted re
             entries: [
               { text: "provider failed Basic basic-secret", count: 2 },
               { text: "GET /sso/wechat-qr/mobile/confirm/qr-session-secret 502", count: 1 },
+              { text: "POST /api/iam/auth/wechat-qr/qr-proxy-handle/complete 502", count: 1 },
+              { text: "POST /auth/wechat-qr/qr-app-handle/complete 502", count: 1 },
               {
                 text: "private signing key -----BEGIN PRIVATE KEY-----\nkey-material\n-----END PRIVATE KEY-----",
                 count: 1,
@@ -73,6 +75,8 @@ test("both formats keep diagnostics while removing credentials from untrusted re
       "escaped-secret",
       "basic-secret",
       "qr-session-secret",
+      "qr-proxy-handle",
+      "qr-app-handle",
       "key-material",
       "relative-secret",
     ]) {
@@ -89,12 +93,14 @@ test("both formats keep diagnostics while removing credentials from untrusted re
       "req-one",
       "provider failed",
       "/oidc/callback",
+      "/api/iam/auth/wechat-qr/:id/complete",
+      "/auth/wechat-qr/:id/complete",
     ]) {
       expect(rendered).toContain(detail);
     }
   }
   expect(JSON.parse(json)).toMatchObject({
-    failures: [{ logs: { api: { entries: [{ count: 2 }, {}, {}, {}], omitted: 4 } } }],
+    failures: [{ logs: { api: { entries: [{ count: 2 }, {}, {}, {}, {}, {}], omitted: 4 } } }],
   });
   expect(markdown).toContain("provider failed");
 });

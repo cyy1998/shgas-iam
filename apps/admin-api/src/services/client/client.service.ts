@@ -74,7 +74,7 @@ export function createClientService(deps: AdminClientServiceDeps) {
       const existing = await tx.clientRepository.getAnyClientByCode(clientDto.clientCode);
       if (existing !== null) throw new ClientCodeExistsError("客户端编码已存在");
 
-      return await tx.bindTarget(clientDto.clientCode, async () => {
+      return await tx.bindTarget(clientDto.clientCode, async (registerGenericCacheInvalidation) => {
         const client = await tx.clientRepository.createClient(clientDto);
         if (client === null) throw new Error("Client insert returned no row");
         const created = toGenericClientRuntimeDto(client);
@@ -89,9 +89,7 @@ export function createClientService(deps: AdminClientServiceDeps) {
             auditContext,
           ),
         );
-        tx.afterCommit.required("admin.client.cache.invalidate", async () => {
-          await deps.clientCache.invalidateClient(created);
-        });
+        registerGenericCacheInvalidation(() => deps.clientCache.invalidateClient(created));
         return { changed: true, result: toClientAdminDetailDto(client) };
       });
     }, adminAuditTransactionOptions(auditContext));
@@ -106,7 +104,7 @@ export function createClientService(deps: AdminClientServiceDeps) {
       (tx) => tx.clientRepository.lockClientByCode(clientCode),
       () => new ClientNotFoundError("客户端不存在"),
       async (tx, existing) =>
-        tx.bindTarget(existing.clientCode, async () => {
+        tx.bindTarget(existing.clientCode, async (registerGenericCacheInvalidation) => {
           const changed = data.clientSecret !== existing.clientSecret;
           const client = changed ? await tx.clientRepository.updateClientByCode(existing.clientCode, data) : existing;
           if (client === null) throw new Error("Locked Client update returned no row");
@@ -125,9 +123,9 @@ export function createClientService(deps: AdminClientServiceDeps) {
               auditContext,
             ),
           );
-          tx.afterCommit.required("admin.client.cache.invalidate", async () => {
-            await deps.clientCache.invalidateUpdatedClient(parsedExisting, parsedUpdated);
-          });
+          registerGenericCacheInvalidation(() =>
+            deps.clientCache.invalidateUpdatedClient(parsedExisting, parsedUpdated),
+          );
           return { changed, result: null };
         }),
       adminAuditTransactionOptions(auditContext),

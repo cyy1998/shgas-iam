@@ -15,7 +15,6 @@
       "!!.sandcastle/worktrees",
       "!!.scratch",
       "!!apps/admin-api/static",
-      "!!apps/api/static",
       "!!apps/sso/public/cap",
       "!!openspec",
       "!!packages/db/src/migrations",

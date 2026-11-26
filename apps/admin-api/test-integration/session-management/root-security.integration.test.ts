@@ -3,7 +3,6 @@ import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
 import { createRootSecurityComposition } from "@admin-api/composition/root-security";
-import { createAdminClientCache } from "@admin-api/composition/runtime/client-cache";
 import { createClientSsoSnapshotManagement } from "@admin-api/composition/services/client-sso-snapshots";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import { createAdminApiUseCases } from "@admin-api/composition/use-cases";
@@ -29,6 +28,7 @@ import { createFakePasswordHasher, createFakeRandom } from "@admin-api/test/fake
 import { createErrorHandler } from "@iam/api-core/middlewares";
 import { createTRPCContext } from "@iam/api-core/trpc";
 import { createClientSnapshots } from "@iam/client-snapshot/composition";
+import { createGenericClientCache, createGenericClientCacheInvalidation } from "@iam/client-snapshot/generic-cache";
 import {
   ApiErrorCode,
   ClientDelegationStatus,
@@ -43,6 +43,7 @@ import {
   UserStatus,
   UserType,
 } from "@iam/contracts";
+import type { DbClient } from "@iam/db";
 import { createClientSnapshotRepository } from "@iam/db/client-snapshot";
 import {
   auditLogs,
@@ -57,6 +58,7 @@ import {
   users,
 } from "@iam/db/schema";
 import { createSubjectAccessTransitionRepository } from "@iam/documents/user/subject-access-transition";
+import { GenericClientRuntimeDtoSchema, toGenericClientRuntimeDto } from "@iam/domain/client";
 import { createLoginRestriction } from "@iam/login-restriction";
 import { createRedisLoginRestrictionStore } from "@iam/login-restriction/redis";
 import type { CapturedSession } from "@iam/session-kernel";
@@ -253,6 +255,7 @@ async function fixture() {
       useCases,
       barrier,
       redis: barrierScope.redis,
+      redisObserver: barrierScope.observer,
       clientCode: barrierScope.clientCode,
       scope: {
         ...scope,
@@ -898,7 +901,7 @@ test("Role-blocked Client deletion preserves real sessions and cached Snapshot o
     });
     const original = await f.create(f.account.subjectIdentifier, code);
     const { management, snapshots } = createClientSsoSnapshotManagement({
-      clientCache: createAdminClientCache({ redis: f.redis }),
+      clientCache: createGenericClientCacheInvalidation({ redis: f.redis }),
       db: pg.db,
       redis: f.redis,
       logger: f.logger,
@@ -948,75 +951,153 @@ test("Role-blocked Client deletion preserves real sessions and cached Snapshot o
   });
 });
 
-test("Internal API credential updates preserve SSO configuration, credentials and existing session instances", async () => {
-  const f = await fixture();
-  await runWithOwnedTestResources(async (lifecycle) => {
-    lifecycle.registerCleanup(() => f.scope.close());
-    const code = f.clientCode("internal-credential");
-    await pg.db.insert(clients).values({
-      clientCode: code,
-      clientName: "Independent credentials",
-      clientSecret: "original-internal-secret",
-      extAttributes: {},
-    });
-    const clientCache = createAdminClientCache({ redis: f.redis });
-    const { management, snapshots } = createClientSsoSnapshotManagement({
-      clientCache,
-      db: pg.db,
-      redis: f.redis,
-      logger: f.logger,
-      sessionTermination: f.lifecycleRevocation,
-    });
-    await management.service.selectProtocol(code, {
-      protocol: ClientSsoProtocol.Oidc,
-      clientType: OidcClientType.Confidential,
-      redirectUris: ["https://client.example/callback"],
-      postLogoutRedirectUris: [],
-      allowedScopes: [OidcScope.OpenId],
-    });
-    await management.service.setEnabled(code, true);
-    const [before] = await pg.db.select().from(clients).where(eq(clients.clientCode, code));
-    if (!before) throw new Error("Client fixture missing");
-    const original = await f.create(f.account.subjectIdentifier, code);
-    const credentialBefore = await snapshots.credential.acquire(code);
-    expect(credentialBefore.kind).toBe("present");
-    const service = createClientService({
-      clientRepository: createClientRepository(pg.db),
-      clientCache,
-      clientRuntimeInvalidation: snapshots,
-      clientMutationLogger: f.logger,
-      management: management.service,
-      uow: createUnitOfWork({
+test.each(["confirmed", "unknown"] as const)(
+  "Internal API Secret rotation with %s COMMIT clears both keys",
+  async (commit) => {
+    const f = await fixture();
+    await runWithOwnedTestResources(async (lifecycle) => {
+      lifecycle.registerCleanup(() => f.scope.close());
+      const code = f.clientCode("internal-credential");
+      await pg.db.insert(clients).values({
+        clientCode: code,
+        clientName: "Independent credentials",
+        clientSecret: "original-internal-secret",
+        extAttributes: {},
+      });
+      const clientCache = createGenericClientCacheInvalidation({ redis: f.redis });
+      const { management, snapshots } = createClientSsoSnapshotManagement({
+        clientCache,
         db: pg.db,
+        redis: f.redis,
         logger: f.logger,
-        createTxPorts: (tx) => ({
-          clientRepository: createClientRepository(tx),
-          auditService: createAdminAuditService({ auditRepository: createAuditRepository(tx) }),
+        sessionTermination: f.lifecycleRevocation,
+      });
+      await management.service.selectProtocol(code, {
+        protocol: ClientSsoProtocol.Oidc,
+        clientType: OidcClientType.Confidential,
+        redirectUris: ["https://client.example/callback"],
+        postLogoutRedirectUris: [],
+        allowedScopes: [OidcScope.OpenId],
+      });
+      await management.service.setEnabled(code, true);
+      const [before] = await pg.db.select().from(clients).where(eq(clients.clientCode, code));
+      if (!before) throw new Error("Client fixture missing");
+      const original = await f.create(f.account.subjectIdentifier, code);
+      const credentialBefore = await snapshots.credential.acquire(code);
+      expect(credentialBefore.kind).toBe("present");
+      const genericCache = createGenericClientCache({
+        redis: f.redisObserver,
+        schema: GenericClientRuntimeDtoSchema,
+        source: {
+          async getClientByCode(clientCode) {
+            const row = await createClientRepository(pg.db).getAnyClientByCode(clientCode);
+            return row ? toGenericClientRuntimeDto(row) : null;
+          },
+          async getClientBySecret(secret) {
+            const [row] = await pg.db.select().from(clients).where(eq(clients.clientSecret, secret));
+            return row ? toGenericClientRuntimeDto(row) : null;
+          },
+        },
+      });
+      const beforeRotation = await genericCache.getClientByCode(code);
+      expect(beforeRotation).toMatchObject({ clientSecret: "original-internal-secret" });
+      await f.redis.set("cache:client:secret:rotated-internal-secret", "stale-new-alias");
+      const commitFailure = new Error("COMMIT acknowledgement lost");
+      const service = createClientService({
+        clientRepository: createClientRepository(pg.db),
+        clientCache,
+        clientRuntimeInvalidation: snapshots,
+        clientMutationLogger: f.logger,
+        management: management.service,
+        uow: createUnitOfWork({
+          db:
+            commit === "confirmed"
+              ? pg.db
+              : {
+                  async transaction<T>(work: (tx: DbClient) => Promise<T>): Promise<T> {
+                    await pg.db.transaction(work);
+                    throw commitFailure;
+                  },
+                },
+          logger: f.logger,
+          createTxPorts: (tx) => ({
+            clientRepository: createClientRepository(tx),
+            auditService: createAdminAuditService({ auditRepository: createAuditRepository(tx) }),
+          }),
         }),
-      }),
+      });
+
+      const [result] = await Promise.allSettled([
+        service.updateClientById({ id: before.id, clientSecret: "rotated-internal-secret" }),
+      ]);
+      expect(result).toEqual(
+        commit === "confirmed"
+          ? { status: "fulfilled", value: { changed: true, result: null } }
+          : { status: "rejected", reason: commitFailure },
+      );
+      const invalidated = await f.redisObserver.mget(
+        `cache:client:code:${code}`,
+        "cache:client:secret:original-internal-secret",
+        "cache:client:secret:rotated-internal-secret",
+      );
+      const oldSecret = await genericCache.getClientBySecret("original-internal-secret");
+      const newSecret = await genericCache.getClientBySecret("rotated-internal-secret");
+      expect(invalidated).toEqual([null, null, null]);
+      expect(oldSecret).toBeNull();
+      expect(newSecret).toMatchObject({ clientCode: code });
+      const after = await pg.db.select().from(clients).where(eq(clients.clientCode, code));
+      expect(after).toEqual([{ ...before, clientSecret: "rotated-internal-secret", updateTime: expect.any(Date) }]);
+      const credentialAfter = await snapshots.credential.acquire(code);
+      expect(credentialAfter).toEqual(credentialBefore);
+      const rootAfter = await f.operations.run((operation) =>
+        f.kernel.forOperation(operation).resolveUserSession(original.bearer),
+      );
+      const childAfter = await f.operations.run((operation) =>
+        f.kernel.forOperation(operation).resolveClientSessionForUse({
+          userSessionId: original.root.userSessionId,
+          clientSessionId: original.child.clientSessionId,
+          clientId: code,
+        }),
+      );
+      expect(rootAfter).toMatchObject({ status: "resolved", value: { userSession: original.root } });
+      expect(childAfter).toMatchObject({ status: "resolved", value: { clientSession: original.child } });
     });
+  },
+);
 
-    const result = await service.updateClientById({ id: before.id, clientSecret: "rotated-internal-secret" });
+test.each(["disable", "delete"] as const)(
+  "a committed Client %s invalidates both generic Redis keys",
+  async (operation) => {
+    const f = await fixture();
+    await runWithOwnedTestResources(async (lifecycle) => {
+      lifecycle.registerCleanup(() => f.scope.close());
+      const code = f.clientCode(operation);
+      const secret = `internal-${code}`;
+      await pg.db
+        .insert(clients)
+        .values({ clientCode: code, clientName: code, clientSecret: secret, extAttributes: {} });
+      const keys = [`cache:client:code:${code}`, `cache:client:secret:${secret}`] as const;
+      await f.redis.mset(keys[0], "old-code", keys[1], "old-secret");
+      const { management } = createClientSsoSnapshotManagement({
+        clientCache: createGenericClientCacheInvalidation({ redis: f.redis }),
+        db: pg.db,
+        redis: f.redis,
+        logger: f.logger,
+        sessionTermination: f.lifecycleRevocation,
+      });
 
-    expect(result).toEqual({ changed: true, result: null });
-    const after = await pg.db.select().from(clients).where(eq(clients.clientCode, code));
-    expect(after).toEqual([{ ...before, clientSecret: "rotated-internal-secret", updateTime: expect.any(Date) }]);
-    const credentialAfter = await snapshots.credential.acquire(code);
-    expect(credentialAfter).toEqual(credentialBefore);
-    const rootAfter = await f.operations.run((operation) =>
-      f.kernel.forOperation(operation).resolveUserSession(original.bearer),
-    );
-    const childAfter = await f.operations.run((operation) =>
-      f.kernel.forOperation(operation).resolveClientSessionForUse({
-        userSessionId: original.root.userSessionId,
-        clientSessionId: original.child.clientSessionId,
-        clientId: code,
-      }),
-    );
-    expect(rootAfter).toMatchObject({ status: "resolved", value: { userSession: original.root } });
-    expect(childAfter).toMatchObject({ status: "resolved", value: { clientSession: original.child } });
-  });
-});
+      const result = await (operation === "disable"
+        ? management.service.save(code, { status: ClientStatus.Disable })
+        : management.service.deleteClient(code));
+      const values = await f.redisObserver.mget(...keys);
+      const [current] = await pg.db.select().from(clients).where(eq(clients.clientCode, code));
+
+      expect(result.changed).toBe(true);
+      expect(values).toEqual([null, null]);
+      expect(current).toMatchObject(operation === "disable" ? { status: ClientStatus.Disable } : { isDelete: true });
+    });
+  },
+);
 
 test.each(["pause", "resume", "end", "setPrimary", "clearPrimary", "transfer"] as const)(
   "Employment %s preserves existing UserSession and ClientSession instances and deadlines",
@@ -1157,7 +1238,7 @@ test("Client ordinary edits preserve real sessions; formal deletion and explicit
     const original = await f.create(f.account.subjectIdentifier, code);
     const other = await f.create();
     const { management } = createClientSsoSnapshotManagement({
-      clientCache: createAdminClientCache({ redis: f.redis }),
+      clientCache: createGenericClientCacheInvalidation({ redis: f.redis }),
       db: pg.db,
       redis: f.redis,
       logger: f.logger,
@@ -1345,7 +1426,7 @@ test("Client deletion audit rollback and unknown COMMIT preserve their true Post
     });
     const original = await f.create(f.account.subjectIdentifier, code);
     const { snapshots } = createClientSsoSnapshotManagement({
-      clientCache: createAdminClientCache({ redis: f.redis }),
+      clientCache: createGenericClientCacheInvalidation({ redis: f.redis }),
       db: pg.db,
       redis: f.redis,
       logger: f.logger,
@@ -1413,7 +1494,7 @@ test("Client deletion audit rollback and unknown COMMIT preserve their true Post
       },
     });
     const uncertain = createClientSsoSnapshotManagement({
-      clientCache: createAdminClientCache({ redis: f.redis }),
+      clientCache: createGenericClientCacheInvalidation({ redis: f.redis }),
       db: uncertainDb,
       redis: f.redis,
       logger: f.logger,

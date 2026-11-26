@@ -1,7 +1,17 @@
 export const defaultContainerSmokeBuildConcurrency = 2;
 export const maxContainerSmokeBuildConcurrency = 4;
 
-const preferredBuildOrder = ["apisix", "admin", "api", "sso", "admin-api", "worker", "gateway-api"];
+const preferredBuildOrder = [
+  "apisix",
+  "admin",
+  "auth-api",
+  "sso",
+  "sso-api",
+  "integration-api",
+  "admin-api",
+  "worker",
+  "gateway-api",
+];
 
 export function parseContainerSmokeBuildConcurrency(
   value: string | undefined,

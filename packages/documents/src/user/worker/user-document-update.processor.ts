@@ -3,6 +3,7 @@ import {
   MAX_USER_DOCUMENT_REBUILD_BATCH_SIZE,
   type RebuildUserDocumentJobPayload,
   RebuildUserDocumentJobPayloadSchema,
+  type UserDocumentOutboxJobPayload,
   UserDocumentRebuildReason,
 } from "@iam/contracts";
 import type { DbTransaction, db as database } from "@iam/db";
@@ -16,7 +17,6 @@ import {
   type PreparedDocumentPublication,
 } from "../../update";
 import type { PublishedUserDocument } from "../document";
-import type { UserDocumentJobProducer } from "../invalidation/user-document-job.producer";
 import {
   expandUserDocumentSource,
   type UserDocumentOutboxSource,
@@ -31,13 +31,18 @@ import type { SubjectAccessRepairPort, UserDocumentRebuildLoggerPort } from "./u
 // Bound target parameters independently of the document builder's batch size.
 const SQL_TARGET_BATCH_SIZE = 1_000;
 
+export interface UserDocumentJobProducerPort {
+  enqueueOutboxEntries(inputs: UserDocumentOutboxJobPayload[]): Promise<{ enqueued: number; jobIds: string[] }>;
+  enqueueRebuildJobs(inputs: RebuildUserDocumentJobPayload[]): Promise<{ enqueued: number; jobIds: string[] }>;
+}
+
 export interface UserDocumentUpdateInput<
   TDocument extends PublishedUserDocument,
   TFacts extends { subjectIdentifier: string; sourceVersion: string },
 > {
   db: typeof database;
   projection: UserDocumentProjectionBundle<TDocument, TFacts>;
-  jobProducer: UserDocumentJobProducer;
+  jobProducer: UserDocumentJobProducerPort;
   subjectFactsPublisher: { publish(record: TFacts): Promise<{ status: "published" | "retained-newer" }> };
   subjectAccessRepair: SubjectAccessRepairPort;
   logger: UserDocumentRebuildLoggerPort;

@@ -3,12 +3,12 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const smokeProductionApps = {
-  backend: ["apps/api", "apps/admin-api", "apps/worker", "apps/gateway"],
+  backend: ["apps/auth-api", "apps/sso-api", "apps/integration-api", "apps/admin-api", "apps/worker", "apps/gateway"],
   frontend: ["apps/admin", "apps/sso"],
 };
 
 const e2eRuntimeApps = {
-  backend: ["apps/api", "apps/admin-api", "apps/worker", "apps/gateway", "packages/db", "packages/runtime"],
+  backend: [...smokeProductionApps.backend, "packages/db", "packages/runtime"],
   frontend: ["apps/admin", "apps/sso"],
 };
 
@@ -52,6 +52,7 @@ const unconditionalContainerSmokeMatchers = [
   (path) => path === ".husky/install.mjs",
   (path) => path.startsWith("patches/"),
   (path) => path.startsWith("e2e/system/docker/"),
+  (path) => path === "docker/gateway/iam.dev.example.yaml",
   (path) => path === "e2e/system/container-smoke.spec.ts",
   (path) => path === "e2e/system/playwright.container-smoke.config.ts",
   (path) => path === "e2e/system/src/container-smoke.ts",
@@ -61,6 +62,7 @@ const unconditionalContainerSmokeMatchers = [
 
 const unconditionalE2eRuntimeMatchers = [
   (path) => path.startsWith("e2e/system/"),
+  (path) => path === "docker/gateway/iam.dev.example.yaml",
   (path) => path.startsWith("packages/runtime/"),
   (path) => path.startsWith("scripts/test-resources/"),
   (path) => path === "scripts/run-verification-gate.mjs" || path === "scripts/verification-gate-selection.mjs",

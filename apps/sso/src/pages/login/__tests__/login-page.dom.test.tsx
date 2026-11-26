@@ -79,8 +79,8 @@ describe("LoginPage", () => {
       });
       server.use(
         http.get("*/oidc/login-guard", () => HttpResponse.json({ decision: "login", wechatQr: true })),
-        http.post("*/oidc/wechat-qr", ({ request }) => {
-          qrStarted(new URL(request.url).searchParams.get("oidcReturn"));
+        http.post("*/api/iam/auth/wechat-qr", ({ request }) => {
+          qrStarted(Object.fromEntries(new URL(request.url).searchParams));
           return new HttpResponse(null, { status: 503 });
         }),
       );
@@ -110,7 +110,7 @@ describe("LoginPage", () => {
         });
       }
       fireEvent.click(qrSwitch);
-      await waitFor(() => expect(qrStarted).toHaveBeenCalledExactlyOnceWith(oidcReturn));
+      await waitFor(() => expect(qrStarted).toHaveBeenCalledExactlyOnceWith({ protocol: "oidc", oidcReturn }));
       const accountSwitch = screen.getByRole("button", { name: "账号登录" });
       await waitFor(() => expect(accountSwitch).toBeEnabled());
       fireEvent.click(accountSwitch);

@@ -155,7 +155,7 @@ function configureScalarUI(app: AnyRouter, tierApps: TierApps, config: AppConfig
       sources: tierApps.map(({ tier, basePath }, i) => ({
         title: tier.title,
         slug: tier.name,
-        url: `${basePath}${docEndpoint}`,
+        url: `${basePath.replace(/\/$/u, "")}${docEndpoint}`,
         default: i === 0,
       })),
       authentication: {

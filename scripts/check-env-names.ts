@@ -28,7 +28,9 @@ type Violation = {
 const repoRoot = join(import.meta.dirname, "..");
 
 const appEnvSchemaChecks: AppEnvSchemaCheck[] = [
-  { file: "apps/api/src/env.ts", prefix: "IAM_API_" },
+  { file: "apps/auth-api/src/env.ts", prefix: "IAM_AUTH_API_" },
+  { file: "apps/sso-api/src/env.ts", prefix: "IAM_SSO_API_" },
+  { file: "apps/integration-api/src/env.ts", prefix: "IAM_INTEGRATION_API_" },
   { file: "apps/admin-api/src/env.ts", prefix: "IAM_ADMIN_API_" },
   { file: "apps/worker/src/env.ts", prefix: "IAM_WORKER_" },
   { file: "apps/ops/src/env.ts", prefix: "IAM_OPS_" },
@@ -36,7 +38,9 @@ const appEnvSchemaChecks: AppEnvSchemaCheck[] = [
 ];
 
 const envExampleChecks: EnvExampleCheck[] = [
-  { file: "apps/api/.env.example", allowedPrefixes: ["IAM_API_"], allowedKeys: ["NODE_ENV"] },
+  { file: "apps/auth-api/.env.example", allowedPrefixes: ["IAM_AUTH_API_"], allowedKeys: ["NODE_ENV"] },
+  { file: "apps/sso-api/.env.example", allowedPrefixes: ["IAM_SSO_API_"], allowedKeys: ["NODE_ENV"] },
+  { file: "apps/integration-api/.env.example", allowedPrefixes: ["IAM_INTEGRATION_API_"], allowedKeys: ["NODE_ENV"] },
   { file: "apps/admin-api/.env.example", allowedPrefixes: ["IAM_ADMIN_API_"], allowedKeys: ["NODE_ENV"] },
   { file: "apps/worker/.env.example", allowedPrefixes: ["IAM_WORKER_"], allowedKeys: ["NODE_ENV"] },
   { file: "apps/ops/.env.example", allowedPrefixes: ["IAM_OPS_"], allowedKeys: ["NODE_ENV"] },
@@ -116,7 +120,7 @@ function checkEnvExample(check: EnvExampleCheck): void {
   const allowedKeys = new Set(check.allowedKeys ?? []);
 
   text.split("\n").forEach((line, index) => {
-    const match = line.match(/^([A-Z][A-Z0-9_]*)=/);
+    const match = line.match(/^\s*(?:#\s*)?(?:export\s+)?([A-Z][A-Z0-9_]*)\s*=/);
     if (!match) return;
 
     const key = match[1];

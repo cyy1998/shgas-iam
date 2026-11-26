@@ -19,7 +19,7 @@ test("an internal OIDC request completes with WeCom confirmation on a separate p
   const startedAt = new Date();
   const apiLogs = await Promise.all(
     ["stdout", "stderr"].map(async (stream) => {
-      const path = join(runtime.logDirectory, `api.${stream}.log`);
+      const path = join(runtime.logDirectory, `auth-api.${stream}.log`);
       return { path, offset: (await stat(path)).size };
     }),
   );
@@ -63,10 +63,15 @@ test("an internal OIDC request completes with WeCom confirmation on a separate p
     expect(qrUrl.hostname).not.toBe(login.hostname);
     expect(qrUrl.search).toBe("");
 
-    const completePath = `/oidc/wechat-qr/${qrUrl.pathname.split("/").at(-1)}/complete`;
+    const completePath = `/api/iam/auth/wechat-qr/${qrUrl.pathname.split("/").at(-1)}/complete`;
     const completed = page.waitForResponse((response) => {
       const url = new URL(response.url());
-      return url.origin === desktopOrigin && url.pathname === completePath && url.search === login.search;
+      return (
+        url.origin === desktopOrigin &&
+        url.pathname === completePath &&
+        url.searchParams.get("protocol") === "oidc" &&
+        url.searchParams.get("oidcReturn") === login.searchParams.get("oidcReturn")
+      );
     });
     const resumed = page.waitForResponse((response) => {
       const url = new URL(response.url());
@@ -100,13 +105,13 @@ test("an internal OIDC request completes with WeCom confirmation on a separate p
     });
     const { code } = receiveOidcAuthorizationCallback(page.url(), { redirectUri, state });
     const oauthQuery = new URL(callback.url()).searchParams;
-    const secretValues = [
-      qrUrl.pathname.split("/").at(-1),
-      confirmUrl.pathname.split("/").at(-1),
-      oauthQuery.get("code"),
-      oauthQuery.get("state"),
-      login.searchParams.get("oidcReturn"),
-    ];
+    const secretValues = {
+      requestId: qrUrl.pathname.split("/").at(-1),
+      mobileFlow: confirmUrl.pathname.split("/").at(-1),
+      oauthCode: oauthQuery.get("code"),
+      oauthState: oauthQuery.get("state"),
+      oidcContinuation: login.searchParams.get("oidcReturn"),
+    };
     await expectRedactedQrLogs(runtime, startedAt, apiLogs, secretValues);
     expect(new URL(page.url()).searchParams.get("iss")).toBe(issuer);
 
@@ -115,7 +120,7 @@ test("an internal OIDC request completes with WeCom confirmation on a separate p
     const browserBinding = (await page.context().cookies(`${issuer}/resume`)).find(
       ({ name }) => name === "oidc_interaction_binding",
     );
-    expect(browserBinding).toMatchObject({ domain: login.hostname, path: "/oidc", httpOnly: true, sameSite: "Lax" });
+    expect(browserBinding).toMatchObject({ domain: login.hostname, path: "/", httpOnly: true, sameSite: "Lax" });
     expect(
       (await page.context().cookies([mobileOrigin, redirectUri])).some(({ name }) => name === "global_session"),
     ).toBe(false);
@@ -152,10 +157,10 @@ async function expectRedactedQrLogs(
   runtime: HybridRunContext,
   startTime: Date,
   apiLogs: Array<{ path: string; offset: number }>,
-  secretValues: Array<string | null | undefined>,
+  secretValues: Record<string, string | null | undefined>,
 ) {
-  async function readLogs(service: "api" | "apisix") {
-    if (service === "api") {
+  async function readLogs(service: "auth-api" | "apisix") {
+    if (service === "auth-api") {
       const logs = await Promise.all(
         apiLogs.map(async ({ path, offset }) => (await readFile(path)).subarray(offset).toString("utf8")),
       );
@@ -183,21 +188,21 @@ async function expectRedactedQrLogs(
     return stdout + stderr;
   }
 
-  for (const service of ["api", "apisix"] as const) {
+  for (const service of ["auth-api", "apisix"] as const) {
     await expect
       .poll(
         async () => {
           const logs = await readLogs(service);
           expect(logs.includes("/sso/wechat-qr/mobile/callback?"), `${service} logged the callback query`).toBe(false);
-          for (const value of secretValues) {
-            if (!value) throw new Error("The WeCom browser journey omitted a sensitive value under test");
-            expect(logs.includes(value), `${service} logged a WeCom request secret`).toBe(false);
+          for (const [name, value] of Object.entries(secretValues)) {
+            if (!value) throw new Error(`The WeCom browser journey omitted ${name}`);
+            expect(logs.includes(value), `${service} logged the WeCom ${name}`).toBe(false);
           }
           return [
+            "/api/iam/auth/wechat-qr/:requestId/complete",
             "/sso/wechat-qr/mobile/callback",
             "/sso/wechat-qr/mobile/confirm/:flowId",
-            "/oidc/wechat-qr/:requestId/complete",
-          ].every((pattern) => logs.includes(pattern));
+          ].every((pattern) => logs.includes(service === "auth-api" ? pattern.replace(/^\/api\/iam/u, "") : pattern));
         },
         { message: `${service} logs should contain the WeCom route patterns` },
       )

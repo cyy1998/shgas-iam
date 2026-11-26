@@ -12,7 +12,9 @@ flowchart LR
 
   subgraph iam["IAM 运行时"]
     web["Admin / SSO 静态资源"]
-    api["API · Bun / Hono"]
+    auth["Auth API · Bun / Hono"]
+    sso["SSO API · Bun / Hono"]
+    integration["Integration API · Bun / Hono"]
     admin["Admin API · Bun / Hono"]
     worker["Worker · Bun"]
     ops["Ops · 一次性 Bun CLI"]
@@ -26,41 +28,50 @@ flowchart LR
   end
 
   gateway --> web
-  gateway --> api
+  gateway --> auth
+  gateway --> sso
+  gateway --> integration
   gateway --> admin
   gateway --> business["接入业务 upstream"]
-  gateway -. "部分业务路由的 forward-auth" .-> api
+  gateway -. "用户会话 forward-auth" .-> sso
+  gateway -. "应用密钥 forward-auth" .-> integration
   gateway --> etcd
   publisher["配置调用方：YAML / 请求变量"] --> gatewayApi
   gatewayApi -. "当前 Client 凭据只读认证" .-> pg
   gatewayApi -. "APISIX Admin API" .-> gateway
-  api --> pg
+  auth --> pg
+  sso --> pg
+  integration --> pg
   admin --> pg
   worker --> pg
-  api --> redis
+  auth --> redis
+  sso --> redis
+  integration --> redis
   admin --> redis
   worker --> redis
   ops --> pg
   ops --> redis
-  api --> integrations["短信 / 企业微信"]
+  auth --> sms["短信网关"]
+  auth --> wecom["企业微信"]
+  integration --> sms
 ```
 
 箭头表示逻辑依赖，不表示每次操作都会访问所有依赖。图中的分组也不表示物理共机、数据库读写分离或生产网络隔离。
-共享 packages 在消费方进程内执行，不是独立网络服务。
+三个公共后端在各自进程内使用共享 packages 访问 PostgreSQL 和 Redis，彼此之间没有同步 HTTP 调用。
 
 ### 请求入口与后台任务
 
 路由和 rewrite 由调用方保管的环境 manifest（`tmp/gateway-config/apisix/manifests/prod/iam.yaml`）声明；准备方式见[网关手册](../releases/apisix-gateway-release.md#服务与首次配置)：
 
-| 入口                                                                             | 处理方              |
-| -------------------------------------------------------------------------------- | ------------------- |
-| `/portal`、`/iam-admin`                                                          | SSO、Admin 静态前端 |
-| `/api/iam/public/*`、`/api/iam/open/*`、`/api/iam/internal/*`、`/api/iam/auth/*` | API                 |
-| `/sso/*`、`/oidc` 及其子路径                                                     | API                 |
-| `/api/iam/admin/*`、`/api/iam/rpc/*`                                             | Admin API           |
+| 入口                                                                                                | 处理方              |
+| --------------------------------------------------------------------------------------------------- | ------------------- |
+| `/portal`、`/iam-admin`                                                                             | SSO、Admin 静态前端 |
+| `/api/iam/auth/*`，以及固定的 `/sso/thirdparty/*`、`/sso/third-party/wx`、`/sso/wechat-qr/mobile/*` | Auth API            |
+| `/sso/*` 的在线协议、`/oidc` 及子路径、`/api/iam/sso/authz`、`/api/iam/sso/user-info`               | SSO API             |
+| `/api/iam/internal/*`、`/api/iam/delegations` 及子路径                                              | Integration API     |
+| `/api/iam/admin/*`、`/api/iam/rpc/*`                                                                | Admin API           |
 
-Gateway 去除 `/api/iam` 前缀后转发。IAM 自身路由不统一使用 forward-auth；接入业务是否使用它，以各自 manifest 为准。
-经过 Gateway 不代表完成认证或授权。
+Gateway 转发规范 API 路径时去除 `/api/iam`。三个旧端点由 APISIX 按精确路径兼容重写。接入业务的 forward-auth 由各自 manifest 声明。[兼容别名与直连升级](../releases/apisix-gateway-release.md#拆分后的-iam-路由示例)
 
 Worker 承担队列消费与周期恢复，Ops 承担一次性人工维护，唤醒后的持久工作仍由匹配版本 consumer 收敛。
 两者的装配和关闭责任见[后端架构](backend-architecture.md#worker-运行与维护)。
@@ -77,7 +88,7 @@ Gateway 配置 API 通过固定 APISIX Admin API 发布配置，首次发布可�
 - **配置调用方与 Gateway**：每请求用 scope 对应的当前 Client 凭据认证；调用方不能指定管理地址、Admin Key 或服务器路径。
   该匹配不提供域名配额、插件权限或完整多租户隔离，见[Gateway 接入](../guides/gateway.md)。
 - **IAM 与第三方**：IAM 管理协议状态，第三方管理自己的本地会话；IAM 撤销不等于第三方退出。
-  短信、企业微信等外部调用由 API 注入 adapter，网络作用不能随数据库事务回滚。
+  Auth API 装配短信与企业微信 adapter，Integration API 按需装配欢迎短信。外部发送无法随数据库事务回滚。
 
 ## 数据权威来源与恢复责任
 
@@ -88,7 +99,7 @@ Gateway 配置 API 通过固定 APISIX Admin API 发布配置，首次发布可�
 | Organization Search                  | PostgreSQL Outbox、Rebuild State、文档与墓碑                     | 独立读模型与 Worker 恢复两阶段工作                       |
 | UserSession、ClientSession、登录限制 | Redis 实时状态                                                   | Session Kernel / Login Restriction；丢失后不能从审计重建 |
 | Subject Access                       | Redis 请求时屏障，恢复依据为 PostgreSQL 账号和 transition intent | 生命周期协调器与 Worker 对照当前 Facts 收敛              |
-| Client Snapshot                      | PostgreSQL Client 配置                                           | Snapshot 模块维护缓存，Ops 执行修复与独立核验            |
+| Client Snapshot 与通用 Client 缓存   | PostgreSQL Client 配置与凭据                                     | `@iam/client-snapshot` 维护缓存，Ops 执行修复与独立核验  |
 | 重建队列                             | PostgreSQL 保存待处理事实                                        | 队列负责唤醒，repair 补偿丢失的唤醒                      |
 | 审计与运行日志                       | PostgreSQL 审计记录、Loki 应用日志                               | 各应用写入，Alloy 采集日志                               |
 | Gateway 配置                         | 调用方保管源 YAML，APISIX/etcd 保存实际配置                      | Gateway 进程内补偿；未知或崩溃后人工恢复                 |

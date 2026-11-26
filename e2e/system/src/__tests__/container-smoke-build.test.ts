@@ -22,22 +22,35 @@ describe("container-smoke-build", () => {
     expect(
       orderContainerSmokeBuildServices([
         "gateway-api",
+        "integration-api",
+        "sso-api",
         "sso",
         "custom",
         "apisix",
         "worker",
-        "api",
+        "auth-api",
         "admin",
         "admin-api",
       ]),
-    ).toEqual(["apisix", "admin", "api", "sso", "admin-api", "worker", "gateway-api", "custom"]);
+    ).toEqual([
+      "apisix",
+      "admin",
+      "auth-api",
+      "sso",
+      "sso-api",
+      "integration-api",
+      "admin-api",
+      "worker",
+      "gateway-api",
+      "custom",
+    ]);
   });
 
   test("caps in-flight builds to the requested concurrency and reports outcomes in scheduled order", async () => {
     let active = 0;
     let peak = 0;
     const outcomes = await buildContainerSmokeImages({
-      services: ["worker", "api", "admin", "apisix"],
+      services: ["worker", "auth-api", "admin", "apisix"],
       concurrency: 2,
       signal: new AbortController().signal,
       async buildOne(service) {
@@ -49,7 +62,7 @@ describe("container-smoke-build", () => {
       },
     });
     expect(peak).toBe(2);
-    expect(outcomes.map((item) => item.service)).toEqual(["apisix", "admin", "api", "worker"]);
+    expect(outcomes.map((item) => item.service)).toEqual(["apisix", "admin", "auth-api", "worker"]);
     expect(outcomes.every((item) => item.logPath === `logs/build-${item.service}.log`)).toBe(true);
   });
 
@@ -59,7 +72,7 @@ describe("container-smoke-build", () => {
     let failure: unknown;
     try {
       await buildContainerSmokeImages({
-        services: ["apisix", "admin", "api", "worker"],
+        services: ["apisix", "admin", "auth-api", "worker"],
         concurrency: 2,
         signal: new AbortController().signal,
         async buildOne(service, signal) {

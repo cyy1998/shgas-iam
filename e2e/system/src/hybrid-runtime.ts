@@ -6,7 +6,7 @@ import { runWithCleanup } from "./bounded-operation.ts";
 import { prepareE2EDatabaseTemplate } from "./database-template.ts";
 import { startFrontendServers } from "./frontend/frontend-servers.ts";
 import { createE2EGatewayApiKey } from "./gateway-credential.ts";
-import { publishGateway } from "./gateway-sync.ts";
+import { iamGatewayManifest, publishGateway } from "./gateway-sync.ts";
 import { createHostBackends } from "./host-backends.ts";
 import { probeHttpRoute, probeOidcDiscovery, probeSsoConfiguration } from "./http-probes.ts";
 import { apisixAdminKey, type HybridLifecycle } from "./hybrid-compose.ts";
@@ -112,7 +112,9 @@ async function runHybridRuntime<T>(
         internalOrigin,
         wecomMobileOrigin,
         upstreams: {
-          API: backends.origins.api,
+          AUTH_API: backends.origins["auth-api"],
+          SSO_API: backends.origins["sso-api"],
+          INTEGRATION_API: backends.origins["integration-api"],
           ADMIN_API: backends.origins["admin-api"],
           SSO_FRONTEND: frontends.origins.sso,
           ADMIN_FRONTEND: frontends.origins.admin,
@@ -224,7 +226,7 @@ async function publishHybridRoutes(options: PublishHybridRoutesOptions) {
   }
   const assets = new URL("../test-assets/", import.meta.url);
   const [yaml, cert, privateKey] = await Promise.all([
-    readFile(new URL("iam.yaml", assets), "utf8"),
+    readFile(iamGatewayManifest, "utf8"),
     readFile(new URL("wecom-mobile-cert.pem", assets), "utf8"),
     readFile(new URL("wecom-mobile-key.pem", assets), "utf8"),
   ]);

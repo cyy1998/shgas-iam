@@ -1,0 +1,109 @@
+import { createRoute, z } from "@hono/zod-openapi";
+import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
+import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
+import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
+import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
+import { StandardErrorResponseSchema } from "@iam/api-core/core/openapi/schemas/error-response-schema";
+import { HttpStatusCodes } from "@iam/contracts/http";
+import {
+  DelegationCreateSchema,
+  DelegationDetailSchema,
+  DelegationSearchSchema,
+  DelegationUpdateSchema,
+} from "@iam/delegation/wire";
+
+const createInput = DelegationCreateSchema.omit({ delegatorUsername: true }).required({ clientId: true });
+const searchInput = DelegationSearchSchema.extend({ direction: z.enum(["outgoing", "incoming"]).default("outgoing") });
+const tags = ["Personal Delegation"];
+const description =
+  "Requires Client: iam and an IAM root session (UserSession). Use the global_session cookie or the raw root session token in Authorization. The IAM portal Client must be enabled for Custom SSO.";
+const personalDelegationErrors = {
+  ...commonErrorResponses,
+  [HttpStatusCodes.SERVICE_UNAVAILABLE]: jsonContent(StandardErrorResponseSchema, "IAM 应用维护中或访问状态暂不可用"),
+};
+const headers = z.object({
+  Client: z
+    .string()
+    .optional()
+    .openapi({
+      example: "iam",
+      param: { required: true, description: "Must be iam." },
+    }),
+});
+const security: Record<string, string[]>[] = [{ IamRootSessionAuthorization: [] }, { IamRootSessionCookie: [] }];
+export const create = createRoute({
+  method: "post",
+  path: "/delegations",
+  tags,
+  description,
+  security,
+  request: { headers, body: jsonContentRequired(createInput, "创建本人委托") },
+  responses: {
+    ...personalDelegationErrors,
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(z.object({ changed: z.boolean(), result: DelegationDetailSchema })),
+      "本人委托",
+    ),
+  },
+});
+export const search = createRoute({
+  method: "post",
+  path: "/delegations/search",
+  tags,
+  description,
+  security,
+  request: {
+    headers,
+    body: jsonContentRequired(searchInput, "查询本人发起或收到的委托"),
+  },
+  responses: {
+    ...personalDelegationErrors,
+    [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(DelegationDetailSchema)), "本人委托列表"),
+  },
+});
+export const update = createRoute({
+  method: "patch",
+  path: "/delegations/{id}",
+  tags,
+  description,
+  security,
+  request: {
+    headers,
+    params: z.object({ id: z.coerce.number().int().positive() }),
+    body: jsonContentRequired(DelegationUpdateSchema, "修改本人委托期间、说明或状态"),
+  },
+  responses: {
+    ...personalDelegationErrors,
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(z.object({ changed: z.boolean(), result: DelegationDetailSchema })),
+      "本人委托修改结果",
+    ),
+  },
+});
+const choiceQuery = z.object({ search: z.string().max(128).optional() }).strict();
+function choiceRoute<const Path extends string, Schema extends z.ZodType>(path: Path, schema: Schema) {
+  return createRoute({
+    method: "get",
+    path,
+    tags,
+    description,
+    security,
+    request: { headers, query: choiceQuery },
+    responses: {
+      ...personalDelegationErrors,
+      [HttpStatusCodes.OK]: jsonContent(createSuccessResponseSchema(z.array(schema)), "启用的可选对象安全摘要"),
+    },
+  });
+}
+export const userChoices = choiceRoute(
+  "/delegations/choices/users",
+  z.object({ id: z.number(), username: z.string(), name: z.string() }),
+);
+export const clientChoices = choiceRoute(
+  "/delegations/choices/clients",
+  z.object({ id: z.number(), clientCode: z.string(), clientName: z.string() }),
+);
+export const organizationChoices = choiceRoute(
+  "/delegations/choices/organizations",
+  z.object({ id: z.number(), orgCode: z.string(), orgName: z.string() }),
+);

@@ -36,6 +36,7 @@ type StaticModuleOwnershipRule = Readonly<{
     | "subject-access-owner"
     | "worker-ownership"
     | "ops-ownership"
+    | "public-api-dependency-boundary"
     | "organization-responsibility-parent-lifecycle-owner";
   sourceScopes: readonly string[];
   targets: readonly StaticModulePattern[];
@@ -46,12 +47,16 @@ type StaticModuleOwnershipRule = Readonly<{
 
 type ArchitectureWorkspaceView = "source" | "docker" | "canonical";
 
+const publicApiApps = ["auth-api", "sso-api", "integration-api"] as const;
+const publicApiSourceRoots = publicApiApps.map((app) => `apps/${app}/src`);
+const layeredBackendApps = [...publicApiApps, "admin-api"];
+
 const architectureWorkspaces: readonly (readonly [
   name: string,
   root: string,
   views: readonly ArchitectureWorkspaceView[],
 ])[] = [
-  ["@iam/api", "apps/api", ["source", "canonical"]],
+  ...publicApiApps.map((app) => [`@iam/${app}`, `apps/${app}`, ["source", "docker", "canonical"]] as const),
   ["@iam/admin-api", "apps/admin-api", ["source", "canonical"]],
   ["@iam/gateway-apisix", "apps/gateway", ["source", "canonical"]],
   ["@iam/worker", "apps/worker", ["source", "canonical"]],
@@ -64,12 +69,14 @@ const architectureWorkspaces: readonly (readonly [
   ["@iam/client-subject-projection", "packages/client-subject-projection", ["source", "docker", "canonical"]],
   ["@iam/assignment-resolution", "packages/assignment-resolution", ["source", "docker", "canonical"]],
   ["@iam/documents", "packages/documents", ["source", "docker", "canonical"]],
+  ["@iam/jobs", "packages/jobs", ["source", "docker", "canonical"]],
   ["@iam/delegation", "packages/delegation", ["source", "docker", "canonical"]],
   ["@iam/filter-engine", "packages/filter-engine", ["source", "docker"]],
   ["@iam/admin", "apps/admin", ["canonical"]],
   ["@iam/api-core", "packages/api-core", ["source", "docker", "canonical"]],
   ["@iam/unit-of-work", "packages/unit-of-work", ["source", "docker", "canonical"]],
   ["@iam/client-snapshot", "packages/client-snapshot", ["source", "docker", "canonical"]],
+  ["@iam/sms", "packages/sms", ["source", "docker", "canonical"]],
   ["@iam/runtime", "packages/runtime", ["source", "docker", "canonical"]],
   ["@iam/contracts", "packages/contracts", ["canonical"]],
   ["@iam/test-support", "packages/test-support", ["canonical"]],
@@ -108,6 +115,7 @@ const excludedSourceDirectories = new Set([
 ]);
 
 const workspaceBuildDependencySections = ["dependencies", "devDependencies", "optionalDependencies"] as const;
+const productionDependencySections = ["dependencies", "optionalDependencies", "peerDependencies"] as const;
 
 interface WorkspacePackageManifest {
   name?: string;
@@ -120,7 +128,30 @@ interface WorkspacePackageManifest {
 interface WorkspaceDependencyNode {
   packageRoot: string;
   dependencies: Record<string, string>;
+  productionDependencies: readonly (readonly [name: string, version: string])[];
 }
+
+const loginIntegrationPackages = ["bcrypt", "bcrypt-ts", "@cap.js/server", "pngjs"];
+const publicApiForbiddenPackages = {
+  "auth-api": ["@iam/delegation", "@iam/sso-api", "@iam/integration-api"],
+  "sso-api": [
+    "@iam/sms",
+    "@iam/delegation",
+    "@iam/auth-api",
+    "@iam/integration-api",
+    "@iam/jobs",
+    "bullmq",
+    ...loginIntegrationPackages,
+  ],
+  "integration-api": ["@iam/oidc", "@iam/custom-sso", "@iam/auth-api", "@iam/sso-api", ...loginIntegrationPackages],
+} satisfies Record<(typeof publicApiApps)[number], readonly string[]>;
+const publicApiDependencyRuleId = "public-api-dependency-boundary";
+const oidcSourceRoot = "packages/oidc/src";
+const oidcContinuationEntry = `${oidcSourceRoot}/wechat-qr`;
+const oidcContinuationModules = [
+  oidcContinuationEntry,
+  ...["continuation", "errors", "state", "wire"].map((module) => `${oidcSourceRoot}/${module}`),
+];
 
 const clientSubjectProjectionExternalOwnerTargets: readonly StaticModulePattern[] = [
   { kind: "prefix", module: "packages/runtime/src" },
@@ -139,6 +170,50 @@ const clientSubjectProjectionExternalOwnerTargets: readonly StaticModulePattern[
 ];
 
 const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
+  ...publicApiApps.map(
+    (app): StaticModuleOwnershipRule => ({
+      ruleId: publicApiDependencyRuleId,
+      sourceScopes: [`apps/${app}/src`],
+      targets: publicApiForbiddenPackages[app].flatMap((module): StaticModulePattern[] => {
+        const sourceRoot = canonicalStaticSourceRoots.get(module);
+        return sourceRoot
+          ? [
+              { kind: "package", module },
+              { kind: "prefix", module: sourceRoot },
+            ]
+          : [{ kind: "package", module }];
+      }),
+      message: (moduleSpecifier, declaration) =>
+        `${app} must not ${dependencyOperation(declaration)} "${moduleSpecifier}"; this dependency belongs to another runtime.`,
+    }),
+  ),
+  {
+    ruleId: publicApiDependencyRuleId,
+    sourceScopes: ["apps/sso-api/src"],
+    targets: [
+      { kind: "exact", module: "packages/documents/src/user/producer" },
+      { kind: "exact", module: "packages/documents/src/organization/producer" },
+      { kind: "prefix", module: "packages/documents/src/user/invalidation" },
+      { kind: "prefix", module: "packages/documents/src/organization/invalidation" },
+    ],
+    message: (moduleSpecifier) => `SSO API must not depend on queue producers "${moduleSpecifier}".`,
+  },
+  {
+    ruleId: publicApiDependencyRuleId,
+    sourceScopes: ["apps/auth-api/src"],
+    targets: [{ kind: "prefix", module: oidcSourceRoot }],
+    allowedTargets: [{ kind: "exact", module: oidcContinuationEntry }],
+    message: (moduleSpecifier) =>
+      `Auth API may consume OIDC only through @iam/oidc/wechat-qr, received "${moduleSpecifier}".`,
+  },
+  {
+    ruleId: publicApiDependencyRuleId,
+    sourceScopes: oidcContinuationModules.map((module) => `${module}.ts`),
+    targets: [{ kind: "prefix", module: oidcSourceRoot }],
+    allowedTargets: oidcContinuationModules.map((module) => ({ kind: "exact", module })),
+    message: (moduleSpecifier) =>
+      `The OIDC continuation surface must remain independent of the full OIDC runtime, received "${moduleSpecifier}".`,
+  },
   {
     ruleId: "http-owner",
     sourceScopes: ["packages", "apps/worker/src", "apps/ops/src"],
@@ -202,13 +277,13 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
       { kind: "prefix", module: "packages/assignment-resolution/src/organization-responsibility/parent-lifecycle" },
     ],
     allowedSources: [
-      "apps/api/src/composition",
+      "apps/integration-api/src/composition",
       "apps/admin-api/src/composition",
       "apps/admin-api/src/services/organization-responsibility/organization-responsibility.repository.ts",
       "apps/admin-api/src/services/organization-responsibility/organization-responsibility-parent-lifecycle.participant.ts",
     ],
     message: (moduleSpecifier, declaration) =>
-      `Only API/Admin composition and Admin Responsibility lifecycle owners may ${dependencyOperation(declaration)} ` +
+      `Only Integration API/Admin API composition and Admin Responsibility lifecycle owners may ${dependencyOperation(declaration)} ` +
       `the parent lifecycle capability "${moduleSpecifier}"; consume an injected business port.`,
   },
   {
@@ -280,12 +355,12 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
   },
   {
     ruleId: "session-runtime-owner",
-    sourceScopes: ["apps/api/src/routes/sso", "apps/api/src/use-cases/sso"],
+    sourceScopes: ["apps/sso-api/src/routes/sso", "apps/sso-api/src/use-cases/sso"],
     targets: [
       { kind: "prefix", module: "@iam/session-kernel" },
       { kind: "prefix", module: "packages/custom-sso/src/internal" },
-      { kind: "exact", module: "apps/api/src/lib/infra/redis" },
-      { kind: "prefix", module: "apps/api/src/lib/integrations" },
+      { kind: "exact", module: "apps/sso-api/src/lib/infra/redis" },
+      { kind: "prefix", module: "apps/sso-api/src/lib/integrations" },
     ],
     message: (moduleSpecifier) =>
       `Custom SSO routes and use cases must not import session runtime module "${moduleSpecifier}"; ` +
@@ -319,7 +394,7 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
     ruleId: "worker-ownership",
     sourceScopes: ["apps/worker/src"],
     targets: [
-      { kind: "prefix", module: "apps/api/src" },
+      ...publicApiSourceRoots.map((module): StaticModulePattern => ({ kind: "prefix", module })),
       { kind: "prefix", module: "apps/ops/src" },
     ],
     message: (moduleSpecifier, declaration) =>
@@ -338,13 +413,15 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
 
 export function analyzeRepositoryArchitecture(repoRoot: string): readonly ArchitectureViolation[] {
   const sources = loadSourceSnapshot(repoRoot);
+  const workspaceDependencies = collectWorkspaceDependencyGraph(repoRoot);
   return [
     ...collectConsumerOwnedPortViolations(sources),
     ...collectDependencyDirectionViolations(sources),
     ...collectRoleResolutionOwnerViolations(sources),
     ...collectUserDocumentOwnerViolations(sources),
     ...collectStaticModuleOwnershipViolations(sources),
-    ...collectDockerBuildClosureViolations(repoRoot),
+    ...collectPublicApiProductionDependencyViolations(workspaceDependencies),
+    ...collectDockerBuildClosureViolations(repoRoot, workspaceDependencies),
   ].sort(compareViolations);
 }
 
@@ -519,7 +596,7 @@ function collectUserDocumentOwnerViolations(sources: readonly IndexedSourceFile[
             file: source.file,
             line: lineOf(source.sourceFile, declaration),
             message:
-              `Only API and Admin API composition owners may ${dependencyOperation(declaration)} ` +
+              `Only Auth API, Integration API and Admin API composition owners may ${dependencyOperation(declaration)} ` +
               `User Document producer entry "${moduleSpecifier}".`,
           },
         ];
@@ -546,7 +623,7 @@ function collectUserDocumentOwnerViolations(sources: readonly IndexedSourceFile[
             file: source.file,
             line: lineOf(source.sourceFile, declaration),
             message:
-              `Only API composition may ${dependencyOperation(declaration)} ` +
+              `Only Auth API composition may ${dependencyOperation(declaration)} ` +
               `User Document query repository entry "${moduleSpecifier}".`,
           },
         ];
@@ -559,7 +636,7 @@ function collectUserDocumentOwnerViolations(sources: readonly IndexedSourceFile[
 function collectDependencyDirectionViolations(sources: readonly IndexedSourceFile[]): ArchitectureViolation[] {
   return sources
     .filter((source) =>
-      ["apps/api/src/", "apps/admin-api/src/", "apps/gateway/src/"].some((root) => source.file.startsWith(root)),
+      [...layeredBackendApps, "gateway"].some((app) => isPathAtOrBelow(source.file, `apps/${app}/src`)),
     )
     .flatMap(collectSourceDependencyDirectionViolations);
 }
@@ -717,8 +794,45 @@ function collectSourceDependencyDirectionViolations(source: IndexedSourceFile): 
   });
 }
 
-function collectDockerBuildClosureViolations(repoRoot: string): ArchitectureViolation[] {
-  const workspaceDependencies = collectWorkspaceDependencyGraph(repoRoot);
+function collectPublicApiProductionDependencyViolations(
+  graph: ReadonlyMap<string, WorkspaceDependencyNode>,
+): ArchitectureViolation[] {
+  return publicApiApps.flatMap((app) => {
+    const appName = `@iam/${app}`;
+    const forbidden = new Set(publicApiForbiddenPackages[app]);
+    const visited = new Set([appName]);
+    const pending = [{ name: appName, path: [appName] }];
+    const violations: ArchitectureViolation[] = [];
+
+    const reported = new Set<string>();
+    for (const { name, path } of pending) {
+      for (const [dependency, version] of graph.get(name)?.productionDependencies ?? []) {
+        const target = /^(?:npm|workspace):((?:@[^/]+\/)?[^@/:]+)@/u.exec(version)?.[1] ?? dependency;
+        const forbiddenName = forbidden.has(dependency) ? dependency : target;
+        if (forbidden.has(forbiddenName)) {
+          if (!reported.has(forbiddenName)) {
+            reported.add(forbiddenName);
+            violations.push({
+              ruleId: publicApiDependencyRuleId,
+              file: `apps/${app}/package.json`,
+              line: 1,
+              message: `Forbidden production dependency: ${[...path, forbiddenName].join(" -> ")}.`,
+            });
+          }
+        } else if (!visited.has(target) && graph.has(target)) {
+          visited.add(target);
+          pending.push({ name: target, path: [...path, target] });
+        }
+      }
+    }
+    return violations;
+  });
+}
+
+function collectDockerBuildClosureViolations(
+  repoRoot: string,
+  workspaceDependencies: ReadonlyMap<string, WorkspaceDependencyNode>,
+): ArchitectureViolation[] {
   return collectDockerApps(repoRoot).flatMap((app) => {
     const packageFile = join(repoRoot, "apps", app, "package.json");
     const dockerFile = join(repoRoot, "apps", app, "Dockerfile");
@@ -755,6 +869,9 @@ function collectDockerBuildClosureViolations(repoRoot: string): ArchitectureViol
           },
         ];
       });
+    if (packageManifest.name && architectureWorkspaceRoots.has(packageManifest.name)) {
+      consumedWorkspaces.add(packageManifest.name);
+    }
     const protectedWorkspaceViolations = [...architectureWorkspaceRoots]
       .filter(([packageName]) => consumedWorkspaces.has(packageName))
       .flatMap(([packageName, packageRoot]): ArchitectureViolation[] =>
@@ -821,6 +938,9 @@ function collectWorkspaceDependencyGraph(repoRoot: string) {
       graph.set(packageManifest.name, {
         packageRoot: workspaceRoot,
         dependencies: collectWorkspaceBuildDependencies(packageManifest),
+        productionDependencies: productionDependencySections.flatMap((section) =>
+          Object.entries(packageManifest[section] ?? {}),
+        ),
       });
     }
   }
@@ -894,7 +1014,11 @@ function valueDependencyOperation(declaration: StaticDependencyDeclaration) {
 }
 
 function isCompositionOwner(file: string) {
-  return /^apps\/(?:api|admin-api)\/src\/composition(?:\/|$)/u.test(file);
+  return isAppComposition(file, layeredBackendApps);
+}
+
+function isAppComposition(file: string, apps: readonly string[]) {
+  return apps.some((app) => isPathAtOrBelow(file, `apps/${app}/src/composition`));
 }
 
 function isRoleAssignmentSchemaOwner(file: string) {
@@ -907,7 +1031,7 @@ function isRoleAssignmentSchemaOwner(file: string) {
 
 function isRoleAssignmentResolverValueOwner(file: string) {
   return (
-    /^apps\/(?:api|admin-api|worker)\/src\/composition(?:\/|$)/u.test(file) ||
+    isAppComposition(file, ["integration-api", "admin-api", "worker"]) ||
     file === "packages/documents/src/user/invalidation/user-document-source.ts" ||
     file === "packages/documents/src/user/worker/user-document-projection.ts"
   );
@@ -915,32 +1039,41 @@ function isRoleAssignmentResolverValueOwner(file: string) {
 
 function isUserDocumentProducerOwner(file: string) {
   return (
-    file.startsWith("packages/documents/src/user/") || /^apps\/(?:api|admin-api)\/src\/composition(?:\/|$)/u.test(file)
+    file.startsWith("packages/documents/src/user/") ||
+    isAppComposition(file, ["auth-api", "integration-api", "admin-api"])
   );
 }
 
 function isUserDocumentWorkerOwner(file: string) {
-  return file.startsWith("packages/documents/src/user/") || /^apps\/worker\/src\/composition(?:\/|$)/u.test(file);
+  return (
+    file.startsWith("packages/documents/src/user/") ||
+    file === "packages/jobs/src/documents/user/worker-module.ts" ||
+    /^apps\/worker\/src\/composition(?:\/|$)/u.test(file)
+  );
 }
 
 function isUserDocumentQueryRepositoryOwner(file: string) {
-  return /^apps\/api\/src\/composition(?:\/|$)/u.test(file);
+  return isAppComposition(file, ["auth-api"]);
 }
 
 function isRepositoryImplementation(file: string) {
-  return /^apps\/(?:api|admin-api)\/src\/services\//u.test(file) && file.endsWith(".repository.ts");
+  return (
+    layeredBackendApps.some((app) => file.startsWith(`apps/${app}/src/services/`)) && file.endsWith(".repository.ts")
+  );
 }
 
 function isAppAssemblyOwner(file: string) {
-  return /^apps\/(?:api|admin-api)\/src\/app\.ts$/u.test(file);
+  return layeredBackendApps.some((app) => file === `apps/${app}/src/app.ts`);
 }
 
 function isRedisInfrastructureOwner(file: string) {
-  return /^apps\/(?:api|admin-api)\/src\/lib\/infra\//u.test(file);
+  return layeredBackendApps.some((app) => file.startsWith(`apps/${app}/src/lib/infra/`));
 }
 
 function isLoggerInfrastructureOwner(file: string) {
-  return /^apps\/(?:api|admin-api)\/src\/lib\/logger(?:\.ts|\/)/u.test(file);
+  return layeredBackendApps.some(
+    (app) => file === `apps/${app}/src/lib/logger.ts` || isPathAtOrBelow(file, `apps/${app}/src/lib/logger`),
+  );
 }
 
 function isAppRedisSingleton(sourceFile: string, moduleSpecifier: string) {
@@ -971,9 +1104,10 @@ function isApplicationUseCaseModule(moduleSpecifier: string) {
 }
 
 function resolveAppLocalModule(sourceFile: string, moduleSpecifier: string) {
-  const sourceMatch = /^apps\/(api|admin-api)\/src\/(.+)$/u.exec(sourceFile);
+  const sourceMatch = /^apps\/([^/]+)\/src\/(.+)$/u.exec(sourceFile);
   if (!sourceMatch?.[1] || !sourceMatch[2]) return undefined;
   const [, app, appRelativeFile] = sourceMatch;
+  if (!layeredBackendApps.some((name) => name === app)) return undefined;
   const aliasedModule = resolveAliasedAppModule(moduleSpecifier);
   if (aliasedModule && aliasedModule.app === app) return aliasedModule.path;
   if (!moduleSpecifier.startsWith(".")) return undefined;
@@ -988,29 +1122,20 @@ function isAppLocalRepositoryModule(moduleSpecifier: string) {
 
 function resolveAliasedAppModule(moduleSpecifier: string) {
   const normalizedModule = normalizeStaticModulePath(moduleSpecifier);
-  const aliases = [
-    { prefix: "@api", app: "api" },
-    { prefix: "@admin-api", app: "admin-api" },
-    { prefix: "~api/src", app: "api" },
-    { prefix: "~admin-api/src", app: "admin-api" },
-  ] as const;
-  for (const alias of aliases) {
-    if (normalizedModule === alias.prefix) return { app: alias.app, path: "" };
-    if (normalizedModule.startsWith(`${alias.prefix}/`)) {
-      return {
-        app: alias.app,
-        path: normalizedModule.slice(alias.prefix.length + 1),
-      };
+  for (const app of layeredBackendApps) {
+    for (const prefix of [`@${app}`, `~${app}/src`]) {
+      if (normalizedModule === prefix) return { app, path: "" };
+      if (normalizedModule.startsWith(`${prefix}/`)) {
+        return { app, path: normalizedModule.slice(prefix.length + 1) };
+      }
     }
   }
   return undefined;
 }
 
 function normalizeStaticModulePath(modulePath: string) {
-  const withoutTypeScriptExtension = modulePath.replace(/\.(?:ts|tsx)$/u, "");
-  return withoutTypeScriptExtension.endsWith("/index")
-    ? withoutTypeScriptExtension.slice(0, -"/index".length)
-    : withoutTypeScriptExtension;
+  const withoutExtension = modulePath.replace(/\.[jt]sx?$/u, "");
+  return withoutExtension.endsWith("/index") ? withoutExtension.slice(0, -"/index".length) : withoutExtension;
 }
 
 function normalizeStaticModuleEdges(sourceFile: string, moduleSpecifier: string) {

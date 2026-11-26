@@ -8,10 +8,10 @@ import {
 } from "@iam/documents/organization/query";
 import {
   createOrganizationDocumentVerifier,
-  createOrganizationDocumentWorkerModule,
   ORGANIZATION_DOCUMENT_QUEUE_NAME,
 } from "@iam/documents/organization/worker";
 import { createJobQueue, DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
+import { createOrganizationDocumentWorkerModule } from "@iam/jobs/documents/organization";
 import { createLogger, LoggerSourceApp } from "@iam/runtime/logger";
 import { redisUrlString } from "@iam/runtime/redis/config";
 import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";

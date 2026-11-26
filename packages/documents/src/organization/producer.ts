@@ -1,4 +1,3 @@
-export { createOrganizationDocumentJobProducer } from "./jobs";
 export type {
   CreateOrganizationDocumentInvalidationInput,
   OrganizationDocumentChangedField,
@@ -6,5 +5,4 @@ export type {
   OrganizationDocumentSourceChange,
 } from "./producer/source-changes";
 export { createOrganizationDocumentInvalidation } from "./producer/source-changes";
-export { createOrganizationDocumentWriteResources } from "./producer/write-resources";
 export * from "./work.types";

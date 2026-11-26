@@ -19,8 +19,9 @@ function buildSubjectLoginSuccessAudit(
   return {
     action: AuditActions["auth.login.local"],
     outcome: "success",
-    actorType: "user",
-    actorUserId: null,
+    // The protocol records delivery using its stable subject reference.
+    actorType: "system",
+    actorSystemKey: "protocol:custom-sso",
     targetType: "subject",
     targetId: null,
     targetCode: subjectIdentifier,

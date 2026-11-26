@@ -10,7 +10,9 @@ pnpm dev
 pnpm build
 pnpm --filter @iam/admin dev
 pnpm --filter @iam/sso dev
-pnpm --filter @iam/api typecheck
+pnpm --filter @iam/auth-api typecheck
+pnpm --filter @iam/sso-api typecheck
+pnpm --filter @iam/integration-api typecheck
 ```
 
 Admin 和 SSO 各自按 app 的 `.env.example` 准备 `.env.local`。默认入口为
@@ -110,7 +112,7 @@ pnpm --filter @iam/e2e-system test:integration
 pnpm verify:e2e-runtime --base <target-commit-sha>
 ```
 
-路径门禁比较固定基线与候选 HEAD。差异命中 `e2e/system/**`、`packages/runtime/**`、`scripts/test-resources/**`、门禁脚本、`pnpm-lock.yaml`、`pnpm-workspace.yaml`、`.npmrc`、`turbo.json`、`**/vite.config.*`，或命中 Hybrid E2E 运行时闭包内（及根）`package.json` 的运行时/构建敏感字段（前端闭包另含 `devDependencies`、`scripts.build` 与 `scripts.dev`，后端闭包另含 `scripts.db:migrate`，根清单另含 `test:e2e*` 与 `verify:e2e-runtime`）时，门禁运行一次编排器 Integration；仅修改应用生产 `Dockerfile`、测试脚本、`iamTest` 或非闭包 `package.json` 时跳过。无匹配时打印跳过信息，基线非法或 Git 比较失败时以非零状态退出。
+路径门禁比较固定基线与候选 HEAD。差异命中 `e2e/system/**`、`packages/runtime/**`、`scripts/test-resources/**`、门禁脚本、`pnpm-lock.yaml`、`pnpm-workspace.yaml`、`.npmrc`、`turbo.json`、`**/vite.config.*`，或命中 Hybrid E2E 运行时闭包（含 Auth API、SSO API 和 Integration API）内（及根）`package.json` 的运行时/构建敏感字段（前端闭包另含 `devDependencies`、`scripts.build` 与 `scripts.dev`，后端闭包另含 `scripts.db:migrate`，根清单另含 `test:e2e*` 与 `verify:e2e-runtime`）时，门禁运行一次编排器 Integration；仅修改应用生产 `Dockerfile`、测试脚本、`iamTest` 或非闭包 `package.json` 时跳过。无匹配时打印跳过信息，基线非法或 Git 比较失败时以非零状态退出。
 
 完整系统入口为 `pnpm test:e2e`。需要 Chromium 时按环境选择 `pnpm e2e:install`（含系统依赖）或
 `pnpm e2e:install:browsers`。就绪、文件复位和报告目录见[完整系统测试](testing.md#full-system-e2e)。
@@ -145,9 +147,9 @@ pnpm test:e2e:container-smoke
 pnpm verify:container-smoke --base <target-commit-sha>
 ```
 
-第一条命令需 Docker、Compose 和本机 Chromium，可独立验证六个生产 Dockerfile、Nginx、`pnpm deploy` 依赖闭包和真实 APISIX 浏览器链路。镜像构建默认使用 2 路有界并发，可通过 `IAM_CONTAINER_SMOKE_BUILD_CONCURRENCY`（1–4）调整；各镜像完整构建日志保存在运行目录的 `build-<service>.log`。诊断目录和资源记录路径由命令输出。异常终止后可通过上方的 `test:resources:cleanup --record` 命令清理这一个 project。
+第一条命令需 Docker、Compose 和本机 Chromium，可独立验证八个生产 Dockerfile、Nginx、`pnpm deploy` 依赖闭包和真实 APISIX 浏览器链路。镜像构建默认使用 2 路有界并发，可通过 `IAM_CONTAINER_SMOKE_BUILD_CONCURRENCY`（1–4）调整；各镜像完整构建日志保存在运行目录的 `build-<service>.log`。诊断目录和资源记录路径由命令输出。异常终止后可通过上方的 `test:resources:cleanup --record` 命令清理这一个 project。
 
-第二条命令对比固定合入基线与候选 HEAD。差异命中任意目录的 `Dockerfile`、`nginx.conf`、`pnpm-lock.yaml`，或命中 `pnpm-workspace.yaml`、`.npmrc`、`.husky/install.mjs`、`patches/`、`e2e/system/docker/`、Container Smoke 编排/spec、门禁脚本，或命中 6 个冒烟生产镜像依赖闭包内（及根）`package.json` 的打包敏感字段变更时执行一次冒烟；仅修改测试脚本、`iamTest`、非生产闭包 `package.json` 或纯后端包的 `devDependencies` 时跳过。手动交付和 AFK 最终验证使用该入口，`pnpm verify:release` 每次运行冒烟。日常 `pnpm test:e2e` 只运行 Hybrid 业务 spec。[容器冒烟契约](testing.md#container-smoke)
+第二条命令对比固定合入基线与候选 HEAD。差异命中任意目录的 `Dockerfile`、`nginx.conf`、`pnpm-lock.yaml`，或命中 `pnpm-workspace.yaml`、`.npmrc`、`.husky/install.mjs`、`patches/`、`e2e/system/docker/`、Container Smoke 编排/spec、门禁脚本，或命中八个冒烟生产镜像（含三个公共后端）依赖闭包内（及根）`package.json` 的打包敏感字段变更时执行一次冒烟；仅修改测试脚本、`iamTest`、非生产闭包 `package.json` 或纯后端包的 `devDependencies` 时跳过。手动交付和 AFK 最终验证使用该入口，`pnpm verify:release` 每次运行冒烟。日常 `pnpm test:e2e` 只运行 Hybrid 业务 spec。[容器冒烟契约](testing.md#container-smoke)
 
 ### 聚合验证
 
@@ -205,19 +207,19 @@ Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit�
 
 ## OIDC 协议套件
 
-正式 fixture 位于 [oidc-suite.fixture.ts](../../apps/api/test-integration/oidc/oidc-suite.fixture.ts)，
-独立 RP 位于 [oidc-rp.integration.test.ts](../../apps/api/test-integration/oidc/oidc-rp.integration.test.ts)。
+正式 fixture 位于 [oidc-suite.fixture.ts](../../apps/sso-api/test-integration/oidc/oidc-suite.fixture.ts)，
+独立 RP 位于 [oidc-rp.integration.test.ts](../../apps/sso-api/test-integration/oidc/oidc-rp.integration.test.ts)。
 它们不是普通浏览器旅程，也不由基础 verify 自动运行。
 
 ### 固定套件与运行配置
 
 复现使用 OpenID conformance-suite release-v5.2.4，固定提交
 `ab35a8df4864da35b49eff11483e204e01aa7961`。在对应源码目录应用
-[S256 补丁](../../apps/api/test-integration/oidc/patches/conformance-suite-s256.patch)，以 Java 21.0.4、Maven 3.9.11 构建。
+[S256 补丁](../../apps/sso-api/test-integration/oidc/patches/conformance-suite-s256.patch)，以 Java 21.0.4、Maven 3.9.11 构建。
 补丁作为 API OIDC Integration 的测试资产，与 fixture、runner 一同维护：
 
 ```bash
-git apply --unidiff-zero <iam-checkout>/apps/api/test-integration/oidc/patches/conformance-suite-s256.patch
+git apply --unidiff-zero <iam-checkout>/apps/sso-api/test-integration/oidc/patches/conformance-suite-s256.patch
 mvn -B -Dmaven.test.skip -Dpmd.skip clean package
 ```
 
@@ -228,8 +230,8 @@ mvn -B -Dmaven.test.skip -Dpmd.skip clean package
 独立 fixture 自动创建并销毁本次 PostgreSQL/Redis，与根资源入口复用同一 owner、运行记录和恢复能力。
 调用方准备固定套件及其 MongoDB 6.0.13、Java 原生 HTTPS 与合成 PKCS12、loopback 端口和
 fintechlabs.devmode=true。Node/tsx/Playwright 使用仓库锁定依赖。
-API 候选由 fixture 启动，TLS 代理不改协议参数，NODE_EXTRA_CA_CERTS 只传给任务 Node 子进程，
-不修改机器 trust store。
+fixture 启动 SSO API 候选，经 loopback TLS 代理转发协议请求。测试代理仅为本次生成的合成用户准备根会话。
+`NODE_EXTRA_CA_CERTS` 只传给任务 Node 子进程。
 
 config.json 示例（填写本次真实路径与候选 SHA）：
 
@@ -248,8 +250,8 @@ issuerMode 默认 dual；需要指定主机时使用 fixture 的 hostnames 配�
 outputDirectory 使用独立任务目录，不放在会被 API Browser 清理的默认产物根。
 
 ```bash
-pnpm --filter @iam/api exec bun run test-integration/oidc/oidc-suite.fixture.ts <config.json>
-pnpm test:integration --workspace @iam/api
+pnpm --filter @iam/sso-api exec bun run test-integration/oidc/oidc-suite.fixture.ts <config.json>
+pnpm test:integration --workspace @iam/sso-api
 ```
 
 需要调试保留时，在独立 fixture 命令的配置路径后增加 `--keep`；结束时按打印的准确记录清理，内部 marker 不作为公开运行模式。

@@ -10,6 +10,7 @@ export type CustomSsoAuditInput = Partial<AuditRequestContext> & {
   outcome: AuditOutcome;
   actorType: AuditActorType;
   actorUserId?: number | null;
+  actorSystemKey?: string | null;
   targetType: string;
   targetId?: number | null;
   targetCode?: string | null;

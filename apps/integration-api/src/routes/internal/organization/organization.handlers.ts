@@ -1,0 +1,94 @@
+import * as resp from "@iam/api-core/http";
+import { OrganizationType } from "@iam/contracts";
+import { HttpStatusCodes } from "@iam/contracts/http";
+import {
+  type OrganizationDocumentQueryService,
+  OrganizationDocumentUnavailableError,
+} from "@iam/documents/organization";
+import { runWithinInternalHandlerBudget } from "@integration-api/routes/internal/_handler-budget";
+import type { AuditLogWriterPort } from "@integration-api/services/audit/audit.context";
+import {
+  getApiAuditRequestContext,
+  getInternalAuditActor,
+  withApiRequestContext,
+} from "@integration-api/services/audit/audit.context";
+import { buildInternalPurveyorRegisterAudit } from "@integration-api/services/audit/events/internal.audit";
+import { OrganizationCreateDtoSchema } from "@integration-api/services/organization/organization.schema";
+import type { OrganizationService } from "@integration-api/services/organization/organization.service";
+import type { OrganizationRouteHandler } from "./organization.type";
+
+export const INTERNAL_ORGANIZATION_HANDLER_TIMEOUT_MS = 5_000;
+
+export interface CreateOrganizationHandlersDeps {
+  auditLogWriter: AuditLogWriterPort;
+  organizationDocument: Pick<OrganizationDocumentQueryService, "search" | "getByCode">;
+  organizationService: Pick<
+    OrganizationService,
+    "findOrganizationByCode" | "getOrganizationByCode" | "setOrganization" | "updateOrganization"
+  >;
+}
+
+export function createOrganizationHandlers(deps: CreateOrganizationHandlersDeps) {
+  const organizationsSearchDsl: OrganizationRouteHandler<"organizationsSearchDsl"> = async (c) => {
+    const input = c.req.valid("json");
+    const data = await runWithinInternalHandlerBudget(
+      () => deps.organizationDocument.search(input),
+      INTERNAL_ORGANIZATION_HANDLER_TIMEOUT_MS,
+      () => new OrganizationDocumentUnavailableError(),
+    );
+    return c.json(resp.ok(data), HttpStatusCodes.OK);
+  };
+  const organizationGetByCode: OrganizationRouteHandler<"organizationGetByCode"> = async (c) => {
+    const { orgCode } = c.req.valid("param");
+    const data = await runWithinInternalHandlerBudget(
+      () => deps.organizationDocument.getByCode(orgCode),
+      INTERNAL_ORGANIZATION_HANDLER_TIMEOUT_MS,
+      () => new OrganizationDocumentUnavailableError(),
+    );
+    return c.json(resp.ok(data), HttpStatusCodes.OK);
+  };
+
+  const organizationUpdate: OrganizationRouteHandler<"organizationUpdate"> = async (c) => {
+    const { orgCode } = c.req.valid("param");
+    const data = c.req.valid("json");
+    const result = await deps.organizationService.updateOrganization(orgCode, data);
+    return c.json(resp.ok(result), HttpStatusCodes.OK);
+  };
+
+  const purveyorRegister: OrganizationRouteHandler<"purveyorRegister"> = async (c) => {
+    const { orgCode, orgName, parentOrg } = c.req.valid("json");
+    const existingOrg = await deps.organizationService.findOrganizationByCode(orgCode);
+    if (existingOrg !== null) {
+      return c.json(resp.ok(true), HttpStatusCodes.OK);
+    }
+    const organizationCreateDto = OrganizationCreateDtoSchema.parse({
+      orgCode,
+      orgName,
+      orgType: OrganizationType.External,
+      isVirtual: true,
+      parentCode: parentOrg,
+    });
+    await deps.organizationService.setOrganization(organizationCreateDto);
+    await deps.auditLogWriter.recordAuditLog(
+      withApiRequestContext(
+        getApiAuditRequestContext(c),
+        buildInternalPurveyorRegisterAudit(getInternalAuditActor(c), {
+          orgCode,
+          orgName,
+          parentOrg,
+          orgType: OrganizationType.External,
+        }),
+      ),
+    );
+    return c.json(resp.ok(true), HttpStatusCodes.OK);
+  };
+
+  return {
+    organizationsSearchDsl,
+    organizationGetByCode,
+    organizationUpdate,
+    purveyorRegister,
+  };
+}
+
+export type OrganizationHandlers = ReturnType<typeof createOrganizationHandlers>;

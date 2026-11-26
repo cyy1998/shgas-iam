@@ -5,8 +5,8 @@ import {
   createOrganizationDocumentQueryRepository,
   createOrganizationDocumentQueryService,
 } from "@iam/documents/organization/query";
-import { createOrganizationDocumentWorkerModule } from "@iam/documents/organization/worker";
 import { DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
+import { createOrganizationDocumentWorkerModule } from "@iam/jobs/documents/organization";
 import { createLogger, LoggerSourceApp } from "@iam/runtime/logger";
 import {
   PROCESS_SMOKE_TEST_TIMEOUT_MS,

@@ -6,7 +6,6 @@ import {
   createOrganizationDocumentQueryService,
 } from "@iam/documents/organization/query";
 import {
-  createOrganizationDocumentWorkerModule,
   type ORGANIZATION_OUTBOX_JOB_NAME,
   type ORGANIZATION_REBUILD_JOB_NAME,
   type OrganizationOutboxJobPayload,
@@ -15,6 +14,7 @@ import {
   OrganizationRebuildJobPayloadSchema,
 } from "@iam/documents/organization/worker";
 import { createJobQueue, DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
+import { createOrganizationDocumentWorkerModule } from "@iam/jobs/documents/organization";
 import { redisUrlString } from "@iam/runtime/redis/config";
 import {
   runProcessCommandSmoke,

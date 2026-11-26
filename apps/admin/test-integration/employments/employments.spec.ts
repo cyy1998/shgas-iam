@@ -184,7 +184,7 @@ test("Employment transfers between granted roots using the global Position catal
 
 test("Employment description edits stay in the detail and survive a scoped log-tab visit", async ({ page }) => {
   await mockScopedManagementApi(page);
-  await page.route("**/public/user-info", (route) =>
+  await page.route("**/api/iam/sso/user-info", (route) =>
     fulfillJson(route, { code: 200, message: "OK", data: currentAdminUser }),
   );
   await page.route("**/rpc/admin.authorization.capabilitySummary**", (route) =>

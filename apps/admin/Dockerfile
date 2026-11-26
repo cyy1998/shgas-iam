@@ -54,7 +54,7 @@ RUN --mount=type=cache,id=iam-pnpm-v12,target=/pnpm/store \
     pnpm install --frozen-lockfile --ignore-scripts
 
 FROM deps AS builder
-ARG IAM_ADMIN_WEB_API_PREFIX
+ARG IAM_ADMIN_WEB_API_PREFIX=/api/iam
 ARG IAM_ADMIN_WEB_SSO_AUTHORIZE_URL
 ARG IAM_ADMIN_WEB_SSO_LOGOUT_URL
 ARG IAM_ADMIN_WEB_CLIENT_CODE

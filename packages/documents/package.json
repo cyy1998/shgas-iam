@@ -19,8 +19,7 @@
     "./organization/producer": "./src/organization/producer.ts",
     "./organization/query": "./src/organization/query.ts",
     "./organization/worker": "./src/organization/worker.ts",
-    "./organization/maintenance": "./src/organization/maintenance.ts",
-    "./testing": "./src/testing.ts"
+    "./organization/maintenance": "./src/organization/maintenance.ts"
   },
   "scripts": {
     "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
@@ -40,10 +39,8 @@
     "@iam/db": "workspace:*",
     "@iam/domain": "workspace:*",
     "@iam/filter-engine": "workspace:*",
-    "@iam/jobs": "workspace:*",
     "@iam/runtime": "workspace:*",
     "@iam/subject-access": "workspace:*",
-    "bullmq": "^6.7.7",
     "drizzle-orm": "1.0.0-rc.2",
     "zod": "^4.6.7"
   },

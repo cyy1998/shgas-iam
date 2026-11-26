@@ -1,7 +1,6 @@
 export { createEmploymentRepository } from "./employment/employment.repository";
 export { createEmploymentVerifier } from "./employment/employment-verifier";
 export * from "./maintenance/repair";
-export { createUserDocumentWriteResources } from "./producer/write-resources";
 export {
   createCurrentUserDocumentPostgresReadiness,
   createCurrentUserDocumentReadiness,

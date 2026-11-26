@@ -35,13 +35,12 @@ import {
   users,
 } from "@iam/db/schema";
 import { StoredUserDocumentSchema } from "@iam/documents/user/document";
-import { createUserDocumentJobProducer } from "@iam/documents/user/producer";
 import {
   createSubjectFactsReader,
   createSubjectFactsRedisCache,
   DocumentFactsCacheRecordSchema,
 } from "@iam/documents/user/subject-facts";
-import { createUserDocumentWorkerModule } from "@iam/documents/user/worker";
+import { createUserDocumentJobProducer, createUserDocumentWorkerModule } from "@iam/jobs/documents/user";
 import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import { mapUnitOfWork } from "@iam/unit-of-work";
 import { eq } from "drizzle-orm";

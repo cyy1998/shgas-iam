@@ -28,46 +28,49 @@ APISIX 和可观测性配置属于仓库级运行和运维资产，不是 worksp
 
 ## 运行时 Apps
 
-| 路径             | Runtime 与职责                                       | 主要入口                                                                                                                                                                                                                                     |
-| ---------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/api`       | Bun + Hono public IAM backend（`@iam/api`）          | `src/routes/`：public/open/internal/sso/auth 协议入口；`src/use-cases/`：跨领域 workflow；`src/services/`：domain-aligned application services；`src/composition/`：production wiring；`src/env.ts`：环境校验                                |
-| `apps/admin-api` | Bun + Hono admin backend（`@iam/admin-api`）         | `src/routes/admin/`：Admin REST；`src/routes/trpc/`：tRPC entry routes；`src/use-cases/`：跨领域 workflow；`src/services/`：domain-aligned application services；`src/composition/`：production wiring；`src/trpc/`：tRPC router composition |
-| `apps/worker`    | Bun background job runtime（`@iam/worker`）          | `src/composition/`：runtime wiring；`src/modules/`：worker modules；`src/http/`：health 与 Bull Board；`src/maintenance/`：私有周期 repair 子进程；`src/env.ts`：环境校验                                                                    |
-| `apps/ops`       | Bun 一次性人工维护 CLI（`@iam/ops`）                 | `src/index.ts`：统一命令分派与帮助；`src/commands/`：六组维护入口；`src/composition/`：窄资源装配；`src/env.ts`：独立按需配置。                                                                                                              |
-| `apps/gateway`   | Bun + Hono Gateway 配置 API（`@iam/gateway-apisix`） | `src/main.ts` / `runtime.ts`：独立进程与关闭；`src/http/`：请求与 envelope；`src/composition/`：只读认证与 APISIX 接线；`src/services/gateway/`：认证、规划、发布与补偿；`src/repositories/`：Client 窄读取。                                |
-| `apps/admin`     | Vite + React 管理端                                  | `src/pages/`：页面；`src/components/`：可复用 UI；`src/lib/api-client.ts`：tRPC client；`src/services/`：page-side API wrappers                                                                                                              |
-| `apps/sso`       | Vite + React SSO portal                              | `src/pages/`：页面；`src/assets/`：静态资源；`src/services/`：API wrappers；`src/lib/`、`src/utils/`：browser helpers                                                                                                                        |
+| 路径                   | Runtime 与职责                                         | 主要入口                                                                                                                                                                                                                                     |
+| ---------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/auth-api`        | Bun + Hono，身份认证、风控、扫码与账号自助             | `src/routes/`：登录、账号与第三方回调；`src/composition/`：认证资源与扫码续接；`src/env.ts`：环境校验                                                                                                                                        |
+| `apps/sso-api`         | Bun + Hono，Custom SSO、OIDC 与网关用户鉴权            | `src/composition/custom-sso.ts` 和 `src/composition/oidc.ts` 分别装配协议；`src/routes/`：协议与投影入口                                                                                                                                     |
+| `apps/integration-api` | Bun + Hono，内部应用认证、目录查询、应用委托与集成写入 | `src/routes/internal/`、`src/routes/delegations/`：M2M 与个人入口；`src/composition/`：查询池及写入资源                                                                                                                                      |
+| `apps/admin-api`       | Bun + Hono admin backend（`@iam/admin-api`）           | `src/routes/admin/`：Admin REST；`src/routes/trpc/`：tRPC entry routes；`src/use-cases/`：跨领域 workflow；`src/services/`：domain-aligned application services；`src/composition/`：production wiring；`src/trpc/`：tRPC router composition |
+| `apps/worker`          | Bun background job runtime（`@iam/worker`）            | `src/composition/`：runtime wiring；`src/modules/`：worker modules；`src/http/`：health 与 Bull Board；`src/maintenance/`：私有周期 repair 子进程；`src/env.ts`：环境校验                                                                    |
+| `apps/ops`             | Bun 一次性人工维护 CLI（`@iam/ops`）                   | `src/index.ts`：统一命令分派与帮助；`src/commands/`：六组维护入口；`src/composition/`：窄资源装配；`src/env.ts`：独立按需配置。                                                                                                              |
+| `apps/gateway`         | Bun + Hono Gateway 配置 API（`@iam/gateway-apisix`）   | `src/main.ts` / `runtime.ts`：独立进程与关闭；`src/http/`：请求与 envelope；`src/composition/`：只读认证与 APISIX 接线；`src/services/gateway/`：认证、规划、发布与补偿；`src/repositories/`：Client 窄读取。                                |
+| `apps/admin`           | Vite + React 管理端                                    | `src/pages/`：页面；`src/components/`：可复用 UI；`src/lib/api-client.ts`：tRPC client；`src/services/`：page-side API wrappers                                                                                                              |
+| `apps/sso`             | Vite + React SSO portal                                | `src/pages/`：页面；`src/assets/`：静态资源；`src/services/`：API wrappers；`src/lib/`、`src/utils/`：browser helpers                                                                                                                        |
 
 ### 后端分层速查
 
 依赖方向、分层职责和装配写法见[后端架构与实现约定](backend-architecture.md#运行时分层与装配)。
-API 的 runtime、repositories、tx、services、use-cases、routes 与 middlewares 位于[装配入口](../../apps/api/src/composition/)。
+三个公共后端分别在自己的 composition 中创建运行资源并接线路由。[Auth API](../../apps/auth-api/src/composition/) · [SSO API](../../apps/sso-api/src/composition/) · [Integration API](../../apps/integration-api/src/composition/)
 Use case 由 root 的 `useCases` 交给路由。Admin API 的入口与审计实现见 [Admin API README](../../apps/admin-api/README.md)。
 页面与请求边界见[前端架构](frontend-architecture.md)。
 
 ## 共享 Packages
 
-| 路径                                     | 定位用途                                                                                                                  |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `packages/runtime/src`                   | 后端共享日志、观测上下文、Redis 配置与连接、环境解析、bcrypt、通用错误、维护生命周期和进程所有权（含 Windows Job 附件）。 |
-| `packages/test-support/src`              | 测试专用外部资源地址、连接、清理与进程 smoke harness。                                                                    |
-| `packages/api-core/src`                  | Hono、OpenAPI 和 tRPC 装配，HTTP 请求上下文、响应、错误映射、分页与 adapter。                                             |
-| `packages/unit-of-work/src`              | 事务边界、提交后任务与回滚确认。                                                                                          |
-| `packages/client-snapshot/src`           | Client 普通配置、敏感凭据认证、统一缓存失效与维护。                                                                       |
-| `packages/login-restriction/src`         | 登录失败历史、临时限制、管理查询与解除，及 Redis 原子状态。                                                               |
-| `packages/subject-access/src`            | 账号实时访问屏障、单次操作许可、代际、生命周期与恢复。                                                                    |
-| `packages/session-kernel/src`            | 协议中性的 UserSession / ClientSession 生命周期、Redis 原子状态与管理观察。                                               |
-| `packages/custom-sso/src`                | Custom SSO 授权、Code / Token、续接与交付；`/wire` 提供浏览器可加载契约。                                                 |
-| `packages/oidc/src`                      | OIDC 授权、Code / Token、续接、退出、UserInfo 与密钥；由 API HTTP adapter 消费。                                          |
-| `packages/client-subject-projection/src` | 中性主体裁剪、Catalog 与责任任职投影。                                                                                    |
-| `packages/delegation/src`                | Client 委托；`/wire` 提供浏览器契约。                                                                                     |
-| `packages/contracts/src`                 | 跨端或跨 app/package 的稳定枚举、常量、schemas、类型与协议 helper。`http/` 提供静态 HTTP 状态码和短语。                   |
-| `packages/domain/src`                    | 后端 DTO、mapper、纯业务规则、audit helper 与业务错误。                                                                   |
-| `packages/db/src`                        | Drizzle schema、relations、migrations、client 与 query helpers；领域为 `core`、`log`，列 helper 在 `schema/_shard/`。     |
-| `packages/jobs/src`                      | BullMQ connection、queue、worker、producer 资源与有界唤醒、job ID 和默认选项。                                            |
-| `packages/assignment-resolution/src`     | Effective Role 与 Organization Responsibility 的正反向解析，以及组织责任的父生命周期检查。                                |
-| `packages/documents/src`                 | User Document、Organization Document 与包内共享更新核心，提供失效、构建、发布、查询与维护。                               |
-| `packages/filter-engine/src`             | 共享 Filter 校验与 JSONB 查询编译。                                                                                       |
+| 路径                                     | 定位用途                                                                                                              |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `packages/sms/src`                       | 短信网关协议签名与 HTTP 发送。验证码、冷却状态和业务文案由调用方持有。                                                |
+| `packages/runtime/src`                   | 后端共享日志、观测上下文、Redis 配置与连接、环境解析、通用错误、维护生命周期和进程所有权（含 Windows Job 附件）。     |
+| `packages/test-support/src`              | 测试专用外部资源地址、连接、清理与进程 smoke harness。                                                                |
+| `packages/api-core/src`                  | Hono、OpenAPI 和 tRPC 装配，HTTP 请求上下文、响应、错误映射、分页与 adapter。                                         |
+| `packages/unit-of-work/src`              | 事务边界、提交后任务与回滚确认。                                                                                      |
+| `packages/client-snapshot/src`           | Client 普通配置、敏感凭据认证、统一缓存失效与维护。                                                                   |
+| `packages/login-restriction/src`         | 登录失败历史、临时限制、管理查询与解除，及 Redis 原子状态。                                                           |
+| `packages/subject-access/src`            | 账号实时访问屏障、单次操作许可、代际、生命周期与恢复。                                                                |
+| `packages/session-kernel/src`            | 协议中性的 UserSession / ClientSession 生命周期、Redis 原子状态与管理观察。                                           |
+| `packages/custom-sso/src`                | Custom SSO 授权、Code / Token、续接与交付；`/wire` 提供浏览器可加载契约。                                             |
+| `packages/oidc/src`                      | OIDC 授权、Code / Token、续接、退出、UserInfo 与密钥；在线操作由 SSO API 装配，Auth API 使用独立续接入口。            |
+| `packages/client-subject-projection/src` | 中性主体裁剪、Catalog 与责任任职投影。                                                                                |
+| `packages/delegation/src`                | Client 委托；`/wire` 提供浏览器契约。                                                                                 |
+| `packages/contracts/src`                 | 跨端或跨 app/package 的稳定枚举、常量、schemas、类型与协议 helper。`http/` 提供静态 HTTP 状态码和短语。               |
+| `packages/domain/src`                    | 后端 DTO、mapper、纯业务规则、audit helper 与业务错误。                                                               |
+| `packages/db/src`                        | Drizzle schema、relations、migrations、client 与 query helpers；领域为 `core`、`log`，列 helper 在 `schema/_shard/`。 |
+| `packages/jobs/src`                      | BullMQ connection、queue、worker、producer 资源与有界唤醒、job ID、默认选项及 Document 队列接线。                     |
+| `packages/assignment-resolution/src`     | Effective Role 与 Organization Responsibility 的正反向解析，以及组织责任的父生命周期检查。                            |
+| `packages/documents/src`                 | User Document、Organization Document 与包内共享更新核心，提供失效、构建、发布、查询与维护。                           |
+| `packages/filter-engine/src`             | 共享 Filter 校验与 JSONB 查询编译。                                                                                   |
 
 使用或新增共享代码前，按[共享契约与数据库](contracts-and-database.md)核对运行环境、公开出口、DTO 与事务边界；
 跨模块规则见[后端架构](backend-architecture.md)。模块机制见
@@ -116,5 +119,5 @@ Use case 由 root 的 `useCases` 交给路由。Admin API 的入口与审计实�
 - dependency/cache output：`**/node_modules/`、`**/.turbo/`、`**/.cache/`、`**/.eslintcache`、`**/*.tsbuildinfo`；
 - build/test output：`**/dist/`、`**/out/`、`**/coverage/`、`**/test-results/`；
 
-`apps/api/static/` 与 `apps/admin-api/static/` 包含 vendored API documentation assets。它们不是普通业务源码；
+`apps/admin-api/static/` 包含 vendored API documentation assets。它们不是普通业务源码；
 除非任务明确针对这些 assets，否则不要修改。

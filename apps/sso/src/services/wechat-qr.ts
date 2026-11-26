@@ -8,6 +8,7 @@ import {
   WechatQrStartResponseSchema,
   type WechatQrStatus,
 } from "@iam/contracts";
+import { API_PREFIX } from "@sso/constants/config";
 import { createPasswordLoginCredential } from "@sso/lib/login-credential";
 import { imageCaptchaProofOptions } from "@sso/services/image-captcha";
 import { readRetryAfter, ServiceError } from "@sso/utils/request";
@@ -17,16 +18,18 @@ export type WechatQrContinuation =
   | { client: string; redirectUrl: string; state?: string; ssoReturn: string };
 
 function endpoint(continuation: WechatQrContinuation, suffix = "") {
+  const path = `${API_PREFIX}/auth/wechat-qr${suffix}`;
   if ("oidcReturn" in continuation) {
-    return `/oidc/wechat-qr${suffix}?${new URLSearchParams({ oidcReturn: continuation.oidcReturn })}`;
+    return `${path}?${new URLSearchParams({ protocol: "oidc", oidcReturn: continuation.oidcReturn })}`;
   }
   const query = new URLSearchParams({
+    protocol: "custom_sso",
     client: continuation.client,
     redirectUrl: continuation.redirectUrl,
     ssoReturn: continuation.ssoReturn,
   });
   if (continuation.state !== undefined) query.set("state", continuation.state);
-  return `/sso/wechat-qr${suffix}?${query}`;
+  return `${path}?${query}`;
 }
 
 export async function startWechatQr(continuation: WechatQrContinuation, signal: AbortSignal) {

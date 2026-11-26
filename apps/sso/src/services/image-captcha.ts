@@ -6,7 +6,7 @@ export function imageCaptchaProofOptions(proof?: string): RequestInit {
 }
 
 function imageCaptchaRequest<T>(path: "challenge" | "answer", body: object, signal?: AbortSignal) {
-  return request<T>(`/open/image-captcha/${path}`, {
+  return request<T>(`/auth/captcha/image/${path}`, {
     method: "POST",
     mode: "same-origin",
     skipAuthRedirect: true,

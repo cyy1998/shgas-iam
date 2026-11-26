@@ -1,0 +1,178 @@
+import { HumanVerificationAction } from "@auth-api/enums/humanVerification.action";
+import { VerificationCodeUsage } from "@auth-api/enums/verificationCode.usage";
+import { exposeImageCaptchaTicket } from "@auth-api/middlewares/image-captcha-response";
+import type { AuditLogWriterPort } from "@auth-api/services/audit/audit.context";
+import { getApiAuditRequestContext, withApiRequestContext } from "@auth-api/services/audit/audit.context";
+import { buildSmsCodeSendAudit, buildSmsCodeVerifyAudit } from "@auth-api/services/audit/events/auth.audit";
+import type { CapService } from "@auth-api/services/human-verification/cap.service";
+import { InvalidHumanVerificationSiteError } from "@auth-api/services/human-verification/human-verification.error";
+import type { HumanRiskServicePort } from "@auth-api/services/human-verification/human-verification.port";
+import { createHumanVerificationContext } from "@auth-api/services/human-verification/human-verification.type";
+import type { MobileService } from "@auth-api/services/mobile/mobile.service";
+import type { UserService } from "@auth-api/services/user/user.service";
+import type { RequestPasswordResetCodeUseCase } from "@auth-api/use-cases/account-recovery/request-password-reset-code/request-password-reset-code.use-case";
+import type { ResetPasswordUseCase } from "@auth-api/use-cases/account-recovery/reset-password/reset-password.use-case";
+import type { VerifyPasswordResetCodeUseCase } from "@auth-api/use-cases/account-recovery/verify-password-reset-code/verify-password-reset-code.use-case";
+import * as resp from "@iam/api-core/http";
+import { IMAGE_CAPTCHA_PROOF_HEADER, type PublicClientStatusDto, PublicClientStatusDtoSchema } from "@iam/contracts";
+import { OK } from "@iam/contracts/http";
+import { maskMobile } from "./open.presenter";
+import type { OpenRouteHandler } from "./open.type";
+import { requirePhoneNumber } from "./open.validation";
+
+export interface CreateOpenHandlersDeps {
+  accountRecovery: {
+    requestPasswordResetCode: RequestPasswordResetCodeUseCase;
+    resetPassword: ResetPasswordUseCase;
+    verifyPasswordResetCode: VerifyPasswordResetCodeUseCase;
+  };
+  auditLogWriter: AuditLogWriterPort;
+  clientService: { getClientByCode: (code: string) => Promise<PublicClientStatusDto | null> };
+  humanVerification: Pick<CapService, "ensureActionAllowed" | "isValidSiteKey" | "createChallenge" | "redeemChallenge">;
+  humanRiskService: Pick<HumanRiskServicePort, "recordOpenUserInfoLookup">;
+  mobileService: Pick<MobileService, "sendCode" | "checkVerificationCode">;
+  userService: Pick<UserService, "getUserMobileByUsername">;
+}
+
+export function createOpenHandlers(deps: CreateOpenHandlersDeps) {
+  const clientStatus: OpenRouteHandler<"clientStatus"> = async (c) => {
+    const { clientCode } = c.req.valid("query");
+    const client = await deps.clientService.getClientByCode(clientCode);
+    const data = client === null ? null : PublicClientStatusDtoSchema.parse(client);
+    return c.json(resp.ok(data), OK);
+  };
+
+  const maskedMobile: OpenRouteHandler<"maskedMobile"> = async (c) => {
+    const { username } = c.req.valid("param");
+    const { capToken } = c.req.valid("query");
+    const requestContext = getApiAuditRequestContext(c);
+    const context = createHumanVerificationContext(requestContext, username);
+    const proof = c.req.header(IMAGE_CAPTCHA_PROOF_HEADER);
+    if (proof) {
+      context.imageCaptchaProof = proof;
+      c.header("Cache-Control", "no-store");
+    }
+    await deps.humanVerification
+      .ensureActionAllowed(HumanVerificationAction.OpenUserInfoLookup, capToken, context)
+      .catch((error: unknown) => exposeImageCaptchaTicket(c, error));
+    await deps.humanRiskService.recordOpenUserInfoLookup(username, context);
+    const mobile = await deps.userService.getUserMobileByUsername(username);
+    return c.json(
+      resp.ok({
+        mobile: maskMobile(mobile),
+      }),
+      OK,
+    );
+  };
+
+  const codeSend: OpenRouteHandler<"codeSend"> = async (c) => {
+    const { phoneNumber, username, usage, capToken } = c.req.valid("json");
+    const requestContext = getApiAuditRequestContext(c);
+    const context = createHumanVerificationContext(requestContext, phoneNumber ?? username);
+    const proof = c.req.header(IMAGE_CAPTCHA_PROOF_HEADER);
+    if (proof) context.imageCaptchaProof = proof;
+    context.sms = { usage, username, phoneNumber };
+    await deps.humanVerification
+      .ensureActionAllowed(HumanVerificationAction.SendSmsCode, capToken, context)
+      .catch((error: unknown) => exposeImageCaptchaTicket(c, error));
+    if (usage === VerificationCodeUsage.ResetPassword) {
+      const data = await deps.accountRecovery.requestPasswordResetCode.execute(
+        { username, phoneNumber },
+        {
+          requestContext,
+        },
+      );
+      return c.json(resp.ok(data), OK);
+    }
+    const targetPhoneNumber = requirePhoneNumber(phoneNumber);
+    const data = await deps.mobileService.sendCode(targetPhoneNumber, usage);
+    await deps.auditLogWriter.recordAuditLog(
+      withApiRequestContext(
+        requestContext,
+        buildSmsCodeSendAudit({
+          phoneNumber: targetPhoneNumber,
+          usage,
+          username,
+        }),
+      ),
+    );
+    return c.json(resp.ok(data), OK);
+  };
+
+  const codeVerify: OpenRouteHandler<"codeVerify"> = async (c) => {
+    const { phoneNumber, username, usage, code } = c.req.valid("json");
+    const requestContext = getApiAuditRequestContext(c);
+    if (usage === VerificationCodeUsage.ResetPassword) {
+      const data = await deps.accountRecovery.verifyPasswordResetCode.execute(
+        {
+          code,
+          phoneNumber,
+          username,
+        },
+        { requestContext },
+      );
+      return c.json(resp.ok({ result: data }), OK);
+    }
+    const targetPhoneNumber = requirePhoneNumber(phoneNumber);
+    const data = await deps.mobileService.checkVerificationCode(usage, targetPhoneNumber, code);
+    await deps.auditLogWriter.recordAuditLog(
+      withApiRequestContext(
+        requestContext,
+        buildSmsCodeVerifyAudit({
+          phoneNumber: targetPhoneNumber,
+          usage,
+          username,
+          verified: data,
+        }),
+      ),
+    );
+    return c.json(resp.ok({ result: data }), OK);
+  };
+
+  const passwordReset: OpenRouteHandler<"passwordReset"> = async (c) => {
+    const { username, phoneNumber, code, newPassword } = c.req.valid("json");
+    const requestContext = getApiAuditRequestContext(c);
+    const data = await deps.accountRecovery.resetPassword.execute(
+      {
+        code,
+        newPassword,
+        phoneNumber,
+        username,
+      },
+      {
+        requestContext,
+      },
+    );
+    return c.json(resp.ok(data), OK);
+  };
+
+  const capChallenge: OpenRouteHandler<"capChallenge"> = async (c) => {
+    const { siteKey } = c.req.valid("param");
+    if (!deps.humanVerification.isValidSiteKey(siteKey)) {
+      throw new InvalidHumanVerificationSiteError("无效人机校验站点");
+    }
+    return c.json(await deps.humanVerification.createChallenge(), OK);
+  };
+
+  const capRedeem: OpenRouteHandler<"capRedeem"> = async (c) => {
+    const { siteKey } = c.req.valid("param");
+    if (!deps.humanVerification.isValidSiteKey(siteKey)) {
+      throw new InvalidHumanVerificationSiteError("无效人机校验站点");
+    }
+    const action = c.req.header("X-Cap-Action");
+    const result = await deps.humanVerification.redeemChallenge(c.req.valid("json"), action);
+    return c.json(result, OK);
+  };
+
+  return {
+    capChallenge,
+    capRedeem,
+    clientStatus,
+    codeSend,
+    codeVerify,
+    passwordReset,
+    maskedMobile,
+  };
+}
+
+export type OpenHandlers = ReturnType<typeof createOpenHandlers>;

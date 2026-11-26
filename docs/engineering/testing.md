@@ -84,7 +84,7 @@ expect(failure).toBeInstanceOf(ExpectedError);
 
 #### 观察范围
 
-永久规则只根据生产源码路径、规范的静态 import/re-export（含类型或值、裸 side-effect import）、供 `consumer-owned-port` 使用的生产 `*.port.ts` 中直接 `Pick<T, ...>` 的未解析基类型名，以及 workspace 依赖闭包和 Dockerfile 字面量 `COPY` 建立。Specifier 按已支持的 alias、相对路径、扩展名和包子路径做词法归一化，裸 side-effect import 按值依赖处理，第三方依赖按包名或其子路径匹配。符号来源、类型解析、动态加载、控制流和数据流超出守卫范围。[规则与例外](../../scripts/architecture-guard.ts)
+永久规则只根据生产源码路径、规范的静态 import/re-export（含类型或值、裸 side-effect import）、供 `consumer-owned-port` 使用的生产 `*.port.ts` 中直接 `Pick<T, ...>` 的未解析基类型名，以及 workspace 依赖闭包和 Dockerfile 字面量 `COPY` 建立。Specifier 按已支持的 alias、相对路径、扩展名和包子路径做词法归一化，裸 side-effect import 按值依赖处理，第三方依赖按包名或其子路径匹配。公共后端的包边界沿生产 workspace 清单检查传递依赖，包含 dependencies、optionalDependencies 和 peerDependencies。符号来源、第三方内部依赖、类型解析、动态加载、控制流和数据流超出守卫范围。[规则与例外](../../scripts/architecture-guard.ts)
 
 #### 永久规则准入与验证
 
@@ -100,7 +100,7 @@ expect(failure).toBeInstanceOf(ExpectedError);
 
 Unit 由 Turbo 跨 workspace 编排，通过 `transit` 传播依赖源码变化，允许有界并发，仅在输入、环境、时间和随机性均可复现时缓存。Integration 与 E2E 由各自的根入口编排，执行结果不缓存。[任务图与缓存配置](../../turbo.json)
 
-根 Integration runner 根据 workspace 的 `iamTest.integration` 选择执行器和资源，以 `workspace:executor` 为单位直接运行包级脚本。筛选单个文件仍沿用所属执行器的完整资源声明。包级 runner 核验本次 run ID、记录的运行状态、该任务的资源 URL 和选中的文件。参数无效、无匹配或缺少资源时退出失败。[声明示例](../../apps/api/package.json) · [收集与筛选](../../scripts/test-resources/integration-selection.mjs) · [运行及定向命令](commands.md#测试与验证通道)
+根 Integration runner 根据 workspace 的 `iamTest.integration` 选择执行器和资源，以 `workspace:executor` 为单位直接运行包级脚本。筛选单个文件仍沿用所属执行器的完整资源声明。包级 runner 核验本次 run ID、记录的运行状态、该任务的资源 URL 和选中的文件。参数无效、无匹配或缺少资源时退出失败。[声明示例](../../apps/sso-api/package.json) · [收集与筛选](../../scripts/test-resources/integration-selection.mjs) · [运行及定向命令](commands.md#测试与验证通道)
 
 `e2e/system` 的编排器 Integration 用独立入口收集，由各用例管理自己的测试环境。测试进程退出后，独立入口按本次登记回收未清理的项目。根 Integration 入口会拒绝对此 workspace 的筛选。[独立入口与路径门禁](commands.md#full-system-e2e)
 
@@ -128,7 +128,7 @@ Timeout 用于限制悬挂。进程测试等待实际 readiness，同时观察�
 
 ## Full-system E2E
 
-九个业务 spec 通过真实 APISIX 双入口观察业务结果。Docker 运行 PostgreSQL、Redis、etcd 和 APISIX，API、Admin API、Worker、Gateway API、Admin 和 SSO 在当前执行环境监听回环地址。浏览器通过两个 hostname 分别访问网关，以验证 Cookie 作用域和入口隔离。根命令直连 Playwright 包装入口，剥离 `--` 前的运行时开关，透传文件筛选、`-g`、`-x`、`--last-failed` 和 `--ui` 等参数。[E2E 命令](commands.md#full-system-e2e) · [运行时编排](../../e2e/system/src/hybrid-runtime.ts)
+九个业务 spec 通过真实 APISIX 双入口观察业务结果。Docker 运行 PostgreSQL、Redis、etcd 和 APISIX，Auth API、SSO API、Integration API、Admin API、Worker、Gateway API、Admin 和 SSO 在当前执行环境监听回环地址。浏览器通过两个 hostname 分别访问网关，以验证 Cookie 作用域和入口隔离。根命令直连 Playwright 包装入口，剥离 `--` 前的运行时开关，透传文件筛选、`-g`、`-x`、`--last-failed` 和 `--ui` 等参数。[E2E 命令](commands.md#full-system-e2e) · [运行时编排](../../e2e/system/src/hybrid-runtime.ts)
 
 ### 初始化与就绪
 
@@ -148,7 +148,7 @@ Playwright 临时产物保存到 `e2e/system/test-results/<run-id>/playwright/`�
 
 ## Container Smoke
 
-`pnpm test:e2e:container-smoke` 在独占 Compose project 中按有界并发（默认 `2`，可通过 `IAM_CONTAINER_SMOKE_BUILD_CONCURRENCY` 调整，每镜像独立写入 `build-<service>.log` 并首错取消）构建六个生产镜像和 APISIX，等候全部容器健康。候选工作树在专用库执行迁移，经正式 Ops 初始化命令建立合成基线并验证 Worker 发布，随后通过真实 Gateway API 发布路由。Linux/AFK 下对 Compose bridge 服务的迁移、初始化与网关管理连接优先复用 `managedServiceEndpoint()` 直连容器 IP；单条 Chromium 用例仍经 APISIX 双域名验证 Worker 发布的 User Document、`/portal/login` 登录、Admin 与 SSO 的 Nginx SPA 和静态资源，以及 API 和 Admin API 的真实响应。
+`pnpm test:e2e:container-smoke` 在独占 Compose project 中按有界并发（默认 `2`，可通过 `IAM_CONTAINER_SMOKE_BUILD_CONCURRENCY` 调整，每镜像独立写入 `build-<service>.log` 并首错取消）构建八个生产镜像和 APISIX，等候全部容器健康。候选工作树在专用库执行迁移，经正式 Ops 初始化命令建立合成基线并验证 Worker 发布，随后通过真实 Gateway API 发布路由。Linux/AFK 下对 Compose bridge 服务的迁移、初始化与网关管理连接优先复用 `managedServiceEndpoint()` 直连容器 IP；单条 Chromium 用例仍经 APISIX 双域名验证 Worker 发布的 User Document、`/portal/login` 登录、Admin 与 SSO 的 Nginx SPA 和静态资源，以及三个公共后端和 Admin API 的真实响应。
 
 命令按本次登记回收容器、网络、数据卷和本地构建镜像。失败或可捕获中断时先采集有限的容器状态和日志，清理本身出错时也尝试采集。诊断、浏览器失败产物与资源记录留在命令输出的运行目录。强制结束或清理失败时，按准确记录恢复。[命令与门禁](commands.md#container-smoke)
 

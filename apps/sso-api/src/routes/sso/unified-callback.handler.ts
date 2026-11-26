@@ -1,0 +1,62 @@
+import { getAuditRequestContext } from "@iam/api-core/http/audit-request-context";
+import { mapCustomSsoRetryableError } from "@iam/api-core/http/custom-sso-retryable";
+import { customSsoLocalSessionCookieName } from "@iam/api-core/http/custom-sso-transport";
+import { createSubjectAccessHttpAdapter } from "@iam/api-core/http/subject-access";
+import { HttpStatusCodes } from "@iam/contracts/http";
+import type { UnifiedCustomSsoOperations } from "@iam/custom-sso";
+import { CustomSsoManagedFailure } from "@iam/custom-sso";
+import type { createSubjectAccessOperations } from "@iam/subject-access";
+import { serialize } from "hono/utils/cookie";
+import type { SsoRouteHandler } from "./sso.type";
+
+const subjectAccessHttp = createSubjectAccessHttpAdapter();
+
+export function createUnifiedCallbackHandler(deps: {
+  custom: {
+    forOperation: (
+      operation: Parameters<UnifiedCustomSsoOperations["forOperation"]>[0],
+    ) => Pick<ReturnType<UnifiedCustomSsoOperations["forOperation"]>, "completeCallback">;
+  };
+  operations: ReturnType<typeof createSubjectAccessOperations>;
+  retryAfterSeconds: number;
+}): SsoRouteHandler<"callback"> {
+  return async (c) => {
+    const { code, client, redirectUrl } = c.req.valid("query");
+    const cookieName = customSsoLocalSessionCookieName(client);
+    return await subjectAccessHttp.run(
+      c,
+      { clearCookiesOnInvalidSession: ["global_session", cookieName] },
+      async () => {
+        try {
+          const response = await deps.operations.run((operation) =>
+            deps.custom
+              .forOperation(operation)
+              .completeCallback(
+                { code, clientCode: client, redirectUrl, requestContext: getAuditRequestContext(c, "sso-api") },
+                (result) => {
+                  const url = new URL(result.redirectUrl);
+                  url.searchParams.set("token", result.token);
+                  if (result.state !== undefined) url.searchParams.set("state", result.state);
+                  const headers = new Headers();
+                  const cookie = { httpOnly: true, sameSite: "Lax" as const, maxAge: result.ttl, path: "/" };
+                  headers.append("Set-Cookie", serialize(cookieName, result.token, cookie));
+                  headers.set("Location", url.href);
+                  return new Response(null, { status: HttpStatusCodes.MOVED_TEMPORARILY, headers });
+                },
+              ),
+          );
+          if (!(response instanceof Response))
+            throw new Error("Managed Custom SSO delivery did not produce a response");
+          return response;
+        } catch (error) {
+          if (error instanceof CustomSsoManagedFailure) {
+            c.header("X-IAM-Code-Consumption", error.consumption);
+            c.header("X-IAM-Token-Compensation", error.tokenCompensation);
+            throw mapCustomSsoRetryableError(error.failure, { retryAfterSeconds: deps.retryAfterSeconds });
+          }
+          throw mapCustomSsoRetryableError(error, { retryAfterSeconds: deps.retryAfterSeconds });
+        }
+      },
+    );
+  };
+}

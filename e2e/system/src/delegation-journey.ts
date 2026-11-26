@@ -78,7 +78,7 @@ export async function expectClientDelegationJourney(input: DelegationJourneyInpu
       expect(await showAllDelegations(receiverPage, "incoming")).toContainEqual(
         expect.objectContaining({ id, description }),
       );
-      const forbiddenUpdate = await receiverContext.request.patch(`${input.origin}/api/iam/public/delegations/${id}`, {
+      const forbiddenUpdate = await receiverContext.request.patch(`${input.origin}/api/iam/delegations/${id}`, {
         headers: { Client: "iam" },
         data: { status: ClientDelegationStatus.Disable },
       });
@@ -89,7 +89,7 @@ export async function expectClientDelegationJourney(input: DelegationJourneyInpu
     await test.step("SSO pause and Internal resume are reflected in the owner and administrator views", async () => {
       const row = ownerPage.getByRole("row").filter({ hasText: description });
       const pausedResponse = ownerPage.waitForResponse(
-        (response) => response.url().endsWith(`/public/delegations/${id}`) && response.request().method() === "PATCH",
+        (response) => response.url().endsWith(`/delegations/${id}`) && response.request().method() === "PATCH",
       );
       await row.getByRole("button", { name: "暂停", exact: true }).click();
       expect((await pausedResponse).status()).toBe(200);
@@ -123,7 +123,7 @@ export async function expectClientDelegationJourney(input: DelegationJourneyInpu
       const row = ownerPage.getByRole("row").filter({ hasText: description });
       await row.getByRole("button", { name: "结束", exact: true }).click();
       const endedResponse = ownerPage.waitForResponse(
-        (response) => response.url().endsWith(`/public/delegations/${id}`) && response.request().method() === "PATCH",
+        (response) => response.url().endsWith(`/delegations/${id}`) && response.request().method() === "PATCH",
       );
       await ownerPage.getByRole("button", { name: "确认结束", exact: true }).click();
       expect((await endedResponse).status()).toBe(200);
@@ -227,7 +227,7 @@ async function showAllDelegations(page: Page, direction: "outgoing" | "incoming"
   await page.getByRole("tab", { name: "委托设置", exact: true }).click();
   await page.getByRole("combobox", { name: "委托状态筛选", exact: true }).click();
   await page.locator(".ant-select-dropdown:visible").getByTitle("全部", { exact: true }).click();
-  const response = await page.context().request.post(new URL("/api/iam/public/delegations/search", page.url()).href, {
+  const response = await page.context().request.post(new URL("/api/iam/delegations/search", page.url()).href, {
     headers: { Client: "iam" },
     data: { direction },
   });
@@ -260,7 +260,7 @@ async function editPeriod(page: Page, id: number, description: string, start: nu
   await dialog.getByLabel("结束时间", { exact: true }).fill(localDateTime(end));
   await dialog.getByLabel("结束时间", { exact: true }).press("Enter");
   const saved = page.waitForResponse(
-    (response) => response.url().endsWith(`/public/delegations/${id}`) && response.request().method() === "PATCH",
+    (response) => response.url().endsWith(`/delegations/${id}`) && response.request().method() === "PATCH",
   );
   await dialog.getByRole("button", { name: "保存委托", exact: true }).click();
   expect((await saved).status()).toBe(200);

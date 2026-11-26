@@ -384,7 +384,10 @@ test("Snapshot verification reports remaining inventory through a read-only ACL"
   const repaired = await runClientSnapshotMaintenance(["repair", ...scope], {
     IAM_OPS_REDIS_URL: resolveOpsRedisTestUrl(process.env),
   });
-  expect(repaired).toMatchObject({ exitCode: 0, report: { mode: "repair", status: "completed" } });
+  expect(repaired).toMatchObject({
+    exitCode: 0,
+    report: { mode: "repair", status: "completed", scope: "all-client-runtime-caches" },
+  });
   const verified = await runClientSnapshotMaintenance(["verify", ...scope], environment);
   expect(verified).toMatchObject({ exitCode: 0, report: { mode: "verify", status: "completed", matching: 0 } });
 }, 30_000);
@@ -424,7 +427,13 @@ test("Snapshot repair shares control across ordinary and sensitive readers witho
   const sessions = await fixtures(`iam193:${randomUUID()}`).kernel.seedUnified();
   const sessionBefore = await observation(sessions);
   enabled = false;
-  await createClientSnapshotMaintenance(harness.writer).repairClient(clientCode);
+  const repaired = await runClientSnapshotMaintenance(["repair", "--client-code", clientCode], {
+    IAM_OPS_REDIS_URL: resolveOpsRedisTestUrl(process.env),
+  });
+  expect(repaired).toMatchObject({
+    exitCode: 0,
+    report: { status: "completed", reason: "scope-complete", scope: "client-protocol-snapshot" },
+  });
   const afterClient = await snapshots.client.acquire(clientCode);
   const afterSecret = await snapshots.credential.acquire(clientCode);
   const otherAfter = await observation(otherKeys);

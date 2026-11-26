@@ -194,7 +194,9 @@ export async function mockAdminApi(
     userSearchResult?: unknown;
   } = {},
 ) {
-  await page.route("**/public/user-info", (route) => fulfillJson(route, ok(options.currentUser ?? currentAdminUser)));
+  await page.route("**/api/iam/sso/user-info", (route) =>
+    fulfillJson(route, ok(options.currentUser ?? currentAdminUser)),
+  );
   await page.route("**/rpc/admin.user.search**", (route) =>
     fulfillTrpc(route, options.userSearchResult ?? adminUserSearchResult),
   );

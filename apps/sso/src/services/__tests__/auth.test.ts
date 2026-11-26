@@ -1,4 +1,4 @@
-import { login, logout, mobileLogin } from "@sso/services/auth";
+import { login, mobileLogin } from "@sso/services/auth";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const request = vi.hoisted(() => vi.fn());
@@ -48,11 +48,5 @@ describe("auth service", () => {
         code: "123456",
       }),
     });
-  });
-
-  it("posts logout request", () => {
-    logout();
-
-    expect(request).toHaveBeenCalledWith("/auth/logout", { method: "POST" });
   });
 });

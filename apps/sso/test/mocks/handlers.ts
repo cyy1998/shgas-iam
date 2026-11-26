@@ -9,10 +9,10 @@ function ok<T>(data: T) {
 export const handlers = [
   http.get("*/sso/login-guard", () => ok({ decision: LoginPageGuardDecision.Login })),
   http.get("*/sso/.well-known/authentication-configuration", () => ok(authenticationConfig)),
-  http.get("*/public/user-info", () => ok(currentUserInfo)),
-  http.post("*/public/delegations/search", () => ok([])),
-  http.post("*/open/code/send", () => ok(null)),
-  http.get("*/open/client/status", () =>
+  http.get("*/api/iam/sso/user-info", () => ok(currentUserInfo)),
+  http.post("*/api/iam/delegations/search", () => ok([])),
+  http.post("*/api/iam/auth/sms/send", () => ok(null)),
+  http.get("*/api/iam/auth/client/status", () =>
     ok({
       clientCode: "iam-admin",
       clientName: "IAM 管理后台",
@@ -20,5 +20,5 @@ export const handlers = [
       url: null,
     }),
   ),
-  http.get("*/open/users/:username/masked-mobile", () => ok(resetPasswordMaskedMobile)),
+  http.get("*/api/iam/auth/recovery/users/:username/masked-mobile", () => ok(resetPasswordMaskedMobile)),
 ];

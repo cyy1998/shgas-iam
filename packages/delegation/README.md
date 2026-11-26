@@ -9,4 +9,4 @@ API 在同一观察时点和数据库快照解析，结果独立于 Document 与
 [服务实现](src/delegation.service.ts) · [公开接口](src/index.ts)
 
 Internal 委托写入由 API 使用独立的详情或 boolean 响应。
-[Internal 路由契约](../../apps/api/src/routes/internal/delegation/delegation.routes.ts)
+[Internal 路由契约](../../apps/integration-api/src/routes/internal/delegation/delegation.routes.ts)

@@ -14,11 +14,8 @@ import {
   createSubjectFactsRedisPublisher,
   DocumentFactsCacheRecordSchema,
 } from "@iam/documents/user";
-import {
-  createCurrentUserDocumentReadiness,
-  createSubjectAccessAuthorityRepository,
-  createUserDocumentWorkerModule,
-} from "@iam/documents/user/worker";
+import { createCurrentUserDocumentReadiness, createSubjectAccessAuthorityRepository } from "@iam/documents/user/worker";
+import { createUserDocumentWorkerModule } from "@iam/jobs/documents/user";
 import { createLogger, LoggerSourceApp } from "@iam/runtime/logger";
 import { runMaintenanceCommandWithLifecycle } from "@iam/runtime/maintenance";
 import { redisUrlString } from "@iam/runtime/redis/config";

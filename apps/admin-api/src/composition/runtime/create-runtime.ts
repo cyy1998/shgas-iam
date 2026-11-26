@@ -2,8 +2,8 @@ import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import env from "@admin-api/env";
 import redis from "@admin-api/lib/infra/redis";
 import { logger } from "@admin-api/lib/logger";
-import { hashSecret } from "@iam/runtime/security/bcrypt";
-import { createAdminClientCache } from "./client-cache";
+import { createGenericClientCacheInvalidation } from "@iam/client-snapshot/generic-cache";
+import { hash as hashSecret } from "bcrypt-ts";
 import type { AdminApiRuntimePorts } from "./types";
 
 export interface CreateAdminApiRuntimeOptions {
@@ -58,7 +58,7 @@ export function createAdminApiRuntime(options: CreateAdminApiRuntimeOptions = {}
       sessionKernel: runtimeEnv.sessionKernel,
     },
     integrations: {
-      clientCache: createAdminClientCache({ redis: runtimeRedis }),
+      clientCache: createGenericClientCacheInvalidation({ redis: runtimeRedis }),
     },
   };
 }

@@ -92,7 +92,7 @@ test("a failed capability read keeps management requests blocked during and afte
 
 test("an unauthenticated entry sends its path, query and hash to SSO", async ({ page, baseURL }) => {
   await mockAdminApi(page);
-  await page.route("**/public/user-info", (route) => route.fulfill({ status: 401 }));
+  await page.route("**/api/iam/sso/user-info", (route) => route.fulfill({ status: 401 }));
   await page.route("**/sso/authorize?**", (route) => route.fulfill({ body: "SSO" }));
 
   await page.goto("/iam-admin/users?tab=enabled#details");

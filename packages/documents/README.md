@@ -10,7 +10,7 @@ API/Admin API composition 注入 producer，查询 composition 注入 repository
 3. **快照构建与原子发布** 领取版本与处理 token 后，构建器在同一只读源快照中构建并校验覆盖。发布按数量和文档字节分组，锁定并重验版本和 owner，原子提交文档或墓碑、processed 与后续义务。
 4. repair 跳过活跃事务，重领更换 token，旧 owner 即使同版本也不能完成。确定回滚的目标局部错误可有界重试或拆分，连接、配置或提交未知时停止扩散重试。已确认提交的对象仍进入后处理。
 
-`@iam/jobs` 管理分批、预算、身份、确认和连接关闭。HTTP producer 与维护命令使用专用快速失败连接，常驻 Worker 保留长期重连。
+`@iam/jobs/documents/user` 和 `@iam/jobs/documents/organization` 装配对应的 BullMQ producer 和 Worker。分批、预算、身份、确认和连接关闭由 `@iam/jobs` 管理。HTTP producer 与维护命令使用专用快速失败连接，常驻 Worker 保留长期重连。
 [共享重建编排](src/update/batch-rebuild.ts) · [周期修复与监控](../../docs/releases/data-maintenance.md#周期任务与监控)
 
 ## User Document 失效

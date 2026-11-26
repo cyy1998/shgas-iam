@@ -6,8 +6,7 @@ import { createCreateEmploymentUseCase } from "@admin-api/use-cases/employment/c
 import { OrganizationLevel, OrganizationType } from "@iam/contracts";
 import { organizationClosures, organizations, positions, users } from "@iam/db/schema";
 import { createInternalUserDocumentQueryRepository, createInternalUserDocumentQueryService } from "@iam/documents/user";
-import { createUserDocumentJobProducer } from "@iam/documents/user/producer";
-import { createUserDocumentWorkerModule } from "@iam/documents/user/worker";
+import { createUserDocumentJobProducer, createUserDocumentWorkerModule } from "@iam/jobs/documents/user";
 import { mapUnitOfWork } from "@iam/unit-of-work";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 

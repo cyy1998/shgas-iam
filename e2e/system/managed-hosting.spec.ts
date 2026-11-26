@@ -9,7 +9,6 @@ import {
   type UserDocumentJobPayload,
 } from "@iam/contracts";
 import {
-  createOrganizationDocumentWriteResources,
   ORGANIZATION_REBUILD_JOB_NAME,
   OrganizationRebuildJobPayloadSchema,
 } from "@iam/documents/organization/producer";
@@ -20,6 +19,7 @@ import {
 } from "@iam/documents/organization/query";
 import { createSubjectFactsRedisCache, DocumentFactsCacheRecordSchema } from "@iam/documents/user/subject-facts";
 import { createJobQueue } from "@iam/jobs";
+import { createOrganizationDocumentWriteResources } from "@iam/jobs/documents/organization";
 import type { APIRequestContext } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import { sql } from "drizzle-orm";

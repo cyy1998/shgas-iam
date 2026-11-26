@@ -343,7 +343,7 @@ export async function mockHrManualApi(context: BrowserContext, origin: string) {
   await context.route("**/*", async (route) => {
     const url = new URL(route.request().url());
     if (url.origin !== origin) return route.abort();
-    if (url.pathname.endsWith("/public/user-info")) {
+    if (url.pathname === "/api/iam/sso/user-info") {
       return fulfillJson(route, { code: 200, message: "OK", data: currentHrAdminUser });
     }
     if (url.pathname.includes("/rpc/")) {

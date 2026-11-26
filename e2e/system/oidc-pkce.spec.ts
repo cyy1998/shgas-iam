@@ -84,7 +84,7 @@ test("public RP observes reversible Maintenance and permanent logout through rea
   );
   expect(interactionCookie).toMatchObject({
     httpOnly: true,
-    path: "/oidc",
+    path: "/",
     sameSite: "Lax",
     secure: false,
   });

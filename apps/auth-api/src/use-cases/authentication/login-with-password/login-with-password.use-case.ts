@@ -1,0 +1,99 @@
+import { HumanVerificationAction } from "@auth-api/enums/humanVerification.action";
+import {
+  buildPasswordLoginFailureAudit,
+  buildPasswordLoginSuccessAudit,
+} from "@auth-api/services/audit/events/auth.audit";
+import { isHumanVerificationRequiredError } from "@auth-api/services/human-verification/human-verification.error";
+import { createHumanVerificationContext } from "@auth-api/services/human-verification/human-verification.type";
+import { toSessionOrigin } from "@auth-api/services/session/session-origin";
+import { UserNotFoundError } from "@iam/domain/user";
+import { LoginFailedError } from "../login.error";
+import { runLoginProtectionOperation } from "../login-protection.helper";
+import type { AuthenticationLoginFailureStatus, AuthenticationLoginRestrictionStatus } from "../login-restriction.type";
+import { formatLoginFailureMessage, formatTemporaryLoginRestrictionMessage } from "../login-restriction-message";
+import type { LoginWithPasswordDeps } from "./login-with-password.port";
+import type { LoginWithPasswordInput, LoginWithPasswordOptions } from "./login-with-password.type";
+
+export function createLoginWithPasswordUseCase(deps: LoginWithPasswordDeps) {
+  async function execute(input: LoginWithPasswordInput, options: LoginWithPasswordOptions = {}) {
+    const requestContext = options.requestContext;
+    const context = createHumanVerificationContext(requestContext, input.username);
+    if (input.imageCaptchaProof) context.imageCaptchaProof = input.imageCaptchaProof;
+    await deps.humanVerification.ensureActionAllowed(HumanVerificationAction.PasswordLogin, input.capToken, context);
+
+    let activeUser = null;
+    try {
+      activeUser = await deps.users.getActiveUserByUsername(input.username);
+      if (activeUser === null) {
+        throw new UserNotFoundError("用户不存在");
+      }
+    } catch (error) {
+      if (!isHumanVerificationRequiredError(error)) {
+        await deps.humanRisk.recordLoginFailure(HumanVerificationAction.PasswordLogin, context);
+        await deps.auditLogWriter.recordAuditLog({
+          ...requestContext,
+          ...buildPasswordLoginFailureAudit(input.username, "user_lookup_failed"),
+        });
+      }
+      throw error;
+    }
+    const runLoginProtection = <T>(operation: () => Promise<T>) =>
+      runLoginProtectionOperation({
+        operation,
+        auditUnavailable: async () => {
+          await deps.auditLogWriter.recordAuditLog({
+            ...requestContext,
+            ...buildPasswordLoginFailureAudit(input.username, "login_protection_unavailable", activeUser),
+          });
+        },
+      });
+    const restriction: AuthenticationLoginRestrictionStatus | null = await runLoginProtection(() =>
+      deps.loginRestriction.getRestriction(activeUser.id),
+    );
+    if (restriction !== null) {
+      await deps.auditLogWriter.recordAuditLog({
+        ...requestContext,
+        ...buildPasswordLoginFailureAudit(input.username, "too_many_login_failures", activeUser),
+      });
+      throw new LoginFailedError(formatTemporaryLoginRestrictionMessage(restriction));
+    }
+    const isMatch = await deps.users.checkPassword(activeUser.username, input.password);
+    if (!isMatch && input.password !== deps.config.magicCode) {
+      await deps.humanRisk.recordLoginFailure(HumanVerificationAction.PasswordLogin, context);
+      const failureResult: AuthenticationLoginFailureStatus = await runLoginProtection(() =>
+        deps.loginRestriction.recordFailure({
+          userId: activeUser.id,
+          triggerMethod: "password",
+        }),
+      );
+      await deps.auditLogWriter.recordAuditLog({
+        ...requestContext,
+        ...buildPasswordLoginFailureAudit(input.username, "invalid_password", activeUser),
+      });
+      throw new LoginFailedError(formatLoginFailureMessage("密码错误", failureResult));
+    }
+
+    const loginProfile = await deps.users.getLoginProfileById(activeUser.id);
+    await runLoginProtection(() => deps.loginRestriction.clearLoginState(activeUser.id));
+    const { token, remainingSeconds } = await deps.principalSessions.createPrincipalSession(
+      activeUser.subjectIdentifier,
+      {
+        amr: ["pwd"],
+        origin: toSessionOrigin(requestContext),
+      },
+    );
+    await deps.auditLogWriter.recordAuditLog({
+      ...requestContext,
+      ...buildPasswordLoginSuccessAudit({ ...loginProfile, id: activeUser.id }),
+    });
+    return {
+      token,
+      ...(remainingSeconds === undefined ? {} : { remainingSeconds }),
+      isMobileSet: loginProfile.mobile !== null,
+    };
+  }
+
+  return { execute };
+}
+
+export type LoginWithPasswordUseCase = ReturnType<typeof createLoginWithPasswordUseCase>;

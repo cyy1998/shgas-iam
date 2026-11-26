@@ -8,19 +8,19 @@
 
 适用于当前 SM2/SM4 加密凭证配置或密钥配对更新。
 
-| 位置         | 必须核对                                                                                                                   |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| API          | `IAM_API_LOGIN_CREDENTIAL_ACTIVE_KID` 存在于 `IAM_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON`，值为配对 SM2 私钥               |
-| SSO 构建     | `IAM_SSO_WEB_LOGIN_CREDENTIAL_KID` 与 API active kid 一致，`IAM_SSO_WEB_LOGIN_CREDENTIAL_PUBLIC_KEY` 为配对公钥            |
-| 时间与防重放 | `IAM_API_LOGIN_CREDENTIAL_MAX_SKEW_MS` 为毫秒，`IAM_API_LOGIN_CREDENTIAL_NONCE_TTL_SECONDS` 为秒；逐副本核对配置和时钟     |
-| Cap          | 核对 SSO 的 `IAM_SSO_WEB_CAP_ENDPOINT`、`IAM_SSO_WEB_CAP_SITE_KEY`、`IAM_SSO_WEB_CAP_WASM_URL`、`IAM_SSO_WEB_CAP_PAKO_URL` |
+| 位置         | 必须核对                                                                                                                         |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| Auth API     | `IAM_AUTH_API_LOGIN_CREDENTIAL_ACTIVE_KID` 存在于 `IAM_AUTH_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON`，值为配对 SM2 私钥           |
+| SSO 构建     | `IAM_SSO_WEB_LOGIN_CREDENTIAL_KID` 与 Auth API active kid 一致，`IAM_SSO_WEB_LOGIN_CREDENTIAL_PUBLIC_KEY` 为配对公钥             |
+| 时间与防重放 | `IAM_AUTH_API_LOGIN_CREDENTIAL_MAX_SKEW_MS` 为毫秒，`IAM_AUTH_API_LOGIN_CREDENTIAL_NONCE_TTL_SECONDS` 为秒；逐副本核对配置和时钟 |
+| Cap          | 核对 SSO 的 `IAM_SSO_WEB_CAP_ENDPOINT`、`IAM_SSO_WEB_CAP_SITE_KEY`、`IAM_SSO_WEB_CAP_WASM_URL`、`IAM_SSO_WEB_CAP_PAKO_URL`       |
 
 当前默认偏移 300000 ms、nonce TTL 360 s 尚未覆盖完整接受期，env 没有交叉校验。
 需要完整防重放保证时，先解决并验证[时间窗口缺口](#凭证时间窗口与防重放限制)；
 只调大 TTL 或即时重复请求被拒绝都不足以证明缺口已解决。
 
-1. **准备与停流** 准备兼容的 API/SSO 构建与回退配置，关闭密码登录公共入口、直连和自动重试，排空在途认证。
-2. **更新 API** 向全部 API 副本注入私钥映射、active kid 及时间配置，确认配置校验通过；active kid 缺少私钥必须启动失败。
+1. **准备与停流** 准备兼容的 Auth API 与 SSO 前端构建与回退配置，关闭密码登录公共入口、直连和自动重试，排空在途认证。
+2. **更新 Auth API** 向全部 Auth API 副本注入私钥映射、active kid 及时间配置，确认配置校验通过；active kid 缺少私钥必须启动失败。
 3. **更新 SSO 前端** 部署以匹配公钥/kid 构建的 SSO，更新 CDN 缓存并确认实际浏览器页面使用新 bundle。
 4. **受控验证与放流** 仅开放受控账号和入口检查下表；通过后关闭临时入口，确认配置一致，再恢复公共密码登录。
 
@@ -31,7 +31,7 @@
 | 无效凭证       | 未知 kid、解密/完整性失败、过期、已占用 nonce 和旧明文请求按认证契约拒绝                                 |
 | 时间边界       | 隔离环境覆盖未来时间戳、nonce 到期后重放及接受期末端，确认完整接受期内的防重放要求                       |
 
-失败时保持受影响登录关闭，修正 key/kid、时间问题或恢复配对 API/SSO 构建，刷新缓存后重验。
+失败时保持受影响登录关闭，修正 key/kid、时间问题或恢复配对 Auth API 与 SSO 前端构建，刷新缓存后重验。
 Redis 异常先恢复依赖；`login-credential-nonce:<digest>` 不能批量清空，仅可清理明确的演练测试 key。回退不恢复明文入口。
 
 ### 凭证时间窗口与防重放限制
@@ -41,57 +41,57 @@ Redis 异常先恢复依赖；`login-credential-nonce:<digest>` 不能批量清�
 默认偏移 300000 毫秒、nonce TTL 360 秒尚有缺口，env 未做交叉校验；修复由
 [讨论 #261](https://github.com/cyy1998/shgas-iam/issues/261)跟踪。
 
-稳定时钟且忽略在途延迟时，固定 TTL 须严格大于两倍偏移；实际还须考虑 API 副本时钟差、回拨与时间校验至 nonce 写入的延迟。
+稳定时钟且忽略在途延迟时，固定 TTL 须严格大于两倍偏移；实际还须考虑 Auth API 副本时钟差、回拨与时间校验至 nonce 写入的延迟。
 仅调大 TTL、通过环境校验或拒绝即时重放，尚不足以确认缺口已解决。
 本限制不改变现有凭证拒绝与登录失败计数规则。
 
 ## 图片验证码
 
-启用 `IAM_API_CAP_ENABLED` 时，图片验证码默认可用。将 `IAM_API_IMAGE_CAPTCHA_ENABLED` 设为 `false` 并按
-[常规更新](deployment.md#常规更新)重建 API 实例，可以单独关闭图片方式。部署使用独立的高熵 `IAM_API_CAP_SECRET`，所有 API 副本使用同一值。
+启用 `IAM_AUTH_API_CAP_ENABLED` 时，图片验证码默认可用。将 `IAM_AUTH_API_IMAGE_CAPTCHA_ENABLED` 设为 `false` 并按
+[常规更新](deployment.md#常规更新)重建 Auth API 实例，可以单独关闭图片方式。部署使用独立的高熵 `IAM_AUTH_API_CAP_SECRET`，所有 Auth API 副本使用同一值。
 
 - **功能验证** SSO 使用同源 API 前缀，例如 `/api/iam`。经实际网关进入 SSO，在测试浏览器中阻止 Cap 求解，确认页面自动显示图片，答错后可重试，
-  换图后上一张失效，答对后原操作只重试一次。短时间重复取图或提交时检查 API 的 `429` 与 `Retry-After`。
-  部署配置限制图片来源时，需允许验证码区域显示 API 返回的 PNG data URL。
+  换图后上一张失效，答对后原操作只重试一次。短时间重复取图或提交时检查 Auth API 的 `429` 与 `Retry-After`。
+  部署配置限制图片来源时，需允许验证码区域显示 Auth API 返回的 PNG data URL。
 
 - **限流阈值** 取图和换图共用额度，同一操作和目标每分钟 10 次，同一来源 IP 每分钟 120 次。提交答案按同一操作和目标每秒 1 次、同一来源 IP 每分钟
   180 次限流。来源 IP 取自[可信代理配置](apisix-gateway-release.md)。原操作的领图票据有效期为 5 分钟，答对后的凭证有效期为 1 分钟。
 
 ## 企业微信扫码登录配置
 
-1. **企业微信后台与 API 配置** 在本企业的企业微信自建应用中配置网页授权可信域名。确认手机能通过公网 HTTPS 访问回调，API 能通过 HTTPS 访问
-   `qyapi.weixin.qq.com`，并使用同一套企业标识、应用 Secret 和 AgentId。沿用 `IAM_API_WECHAT_CORP_ID` 和
-   `IAM_API_WECHAT_CORP_SECRET`，在所有 API 副本同时设置 `IAM_API_WECHAT_QR_AGENT_ID` 和
-   `IAM_API_WECHAT_QR_CALLBACK_URL`。内网和公网入口使用不同 hostname。回调使用 `IAM_API_SSO_EXTERNAL_ORIGIN` 的 hostname，路径固定为
+1. **企业微信后台与 Auth API 配置** 在本企业的企业微信自建应用中配置网页授权可信域名。确认手机能通过公网 HTTPS 访问回调，Auth API 能通过 HTTPS 访问
+   `qyapi.weixin.qq.com`，并使用同一套企业标识、应用 Secret 和 AgentId。沿用 `IAM_AUTH_API_WECHAT_CORP_ID` 和
+   `IAM_AUTH_API_WECHAT_CORP_SECRET`，在所有 Auth API 副本同时设置 `IAM_AUTH_API_WECHAT_QR_AGENT_ID` 和
+   `IAM_AUTH_API_WECHAT_QR_CALLBACK_URL`。内网和公网入口使用不同 hostname。回调使用 `IAM_AUTH_API_SSO_EXTERNAL_ORIGIN` 的 hostname。SSO API 设置 `IAM_SSO_API_WECHAT_QR_ENABLED=true`，使内网登录守卫提示浏览器出码。回调路径固定为
    `/sso/wechat-qr/mobile/callback`，例如 `https://iam.example.com/sso/wechat-qr/mobile/callback`。
 2. 在前置 NGINX 终止公网 TLS。仅向上述域名的 HTTPS 入口开放 `/sso/wechat-qr/mobile/*`，在公网 HTTP 入口阻止该路径
-   转发，并禁止公网绕过前置 NGINX 直连 APISIX 或 API。前置 NGINX 到 APISIX 可以走内部 HTTP。
+   转发，并禁止公网绕过前置 NGINX 直连 APISIX 或 Auth API。前置 NGINX 到 APISIX 可以走内部 HTTP。
    按[网关发布](apisix-gateway-release.md)配置高优先级的扫码路由。手机路径只匹配公网域名，Gateway 覆盖
-   `X-IAM-Entry-Network: external`，API 校验该入口头。电脑路径 `/sso/wechat-qr`、`/oidc/wechat-qr` 及其子路径
+   `X-IAM-Entry-Network: external`，Auth API 校验该入口头。电脑使用 `/api/iam/auth/wechat-qr` 及其子路径
    只走内网 authority，Gateway 覆盖 `X-IAM-Entry-Network: internal`。内网登录守卫与其他通用路由也沿用各自的可信入口头。
 3. **日志与追踪脱敏** 网关和日志采集只记录脱敏路径或路由名。扫码路由不记录 query、Cookie、表单、完整请求行或 Referer。
    为扫码路由将 OpenTelemetry sampler 设置为 `always_off`。检查访问日志、错误日志及 tracing 的实际输出，
    回调里的授权码和 state、发起浏览器续接参数都不能进入采集。
    SSE 转发保留流式响应与 `X-Accel-Buffering: no`，代理读超时应长于心跳间隔。
-4. **部署与核验** 应用前置 NGINX 的入口规则并验证生效后，按[常规更新](deployment.md#常规更新)执行迁移，部署 API、Admin API、Admin 和 SSO，
+4. **部署与核验** 应用前置 NGINX 的入口规则并验证生效后，按[常规更新](deployment.md#常规更新)执行迁移，部署 Auth API、SSO API、Admin API、Admin 和 SSO，
    并发布对应的 APISIX 路由。已有 `wxId` 原样保留并归属于当前配置的企业，
    外部企微身份按授权应用的企业 ID 保存。开放新版扫码前，确保所有处理用户删除的 Admin API 副本都已更新，因为软删除会在同一事务内释放外部绑定。
-   回退扫码 API 时保留支持释放外部绑定的 Admin API。用不同 hostname 的原电脑和手机验证公网登录守卫不提供出码，
+   回退 Auth API 时保留支持释放外部绑定的 Admin API。用不同 hostname 的原电脑和手机验证公网登录守卫不提供出码，
    手机没有 `global_session`，电脑能实时读到确认或取消。断开 SSE 后重连，核对已发生的结果仍可见，旧码在换码后不可用。
    验证公网 HTTP 回调在前置 NGINX 被拦截、伪造入口头无法跨用内外网路径，再放开流量。
 
-关闭功能时清空两个 `IAM_API_WECHAT_QR_*` 配置并重建所有 API 副本。遇到状态丢失、超时或换码，用户从电脑重新出码。
+关闭功能时将 `IAM_SSO_API_WECHAT_QR_ENABLED` 设为 `false` 并重建 SSO API，清空两个 Auth API 的扫码配置并重建 Auth API。遇到状态丢失、超时或换码，用户从电脑重新出码。
 Redis 需要从备份恢复时，关闭扫码入口并等待在途请求到期后再开放。既有第三方企业微信回调使用原企业配置。
 
 ## OIDC 双入口配置
 
-用于发布或调整内外网 OIDC 入口。API、Gateway、SSO 与接入应用的 origin/issuer 必须匹配：
+用于发布或调整内外网 OIDC 入口。SSO API、Gateway、SSO 前端与接入应用的 origin/issuer 必须匹配：
 
-- **API 配置** API 设置 `IAM_API_SSO_INTERNAL_ORIGIN`、`IAM_API_SSO_EXTERNAL_ORIGIN` 和 `IAM_API_OIDC_CURRENT_JWK_JSON`。
+- **SSO API 配置** 源码运行时设置 `IAM_SSO_API_SSO_INTERNAL_ORIGIN`、`IAM_SSO_API_SSO_EXTERNAL_ORIGIN` 和 `IAM_SSO_API_OIDC_CURRENT_JWK_JSON`。
   origin 只允许 HTTP(S) origin，不含用户信息、非根路径、query 或 fragment；规范化后加 `/oidc` 得到 issuer。
-  两个 origin 相同即同一 issuer，不同 issuer 共用签名 key。
+  两个 origin 相同即同一 issuer，不同 issuer 共用签名 key。生产 Compose 从 `IAM_SSO_INTERNAL_ORIGIN`、`IAM_SSO_EXTERNAL_ORIGIN` 给两个服务注入各自前缀的 origin。启用企微扫码时 Auth API 与 SSO API 使用相同的内外网 origin 和 OIDC namespace。
 - Gateway 保留 `/oidc` 路径并按可信 host 覆盖 `X-IAM-Entry-Network`；dev 核对含端口的 authority，prod 核对 host。
-  API 不应被外部直连绕过。`IAM_API_OIDC_TRUST_PROXY` 只控制客户端 IP：true 时取 `X-Forwarded-For` 首项，false 或无头取连接地址。
+  外部请求通过 Gateway 到达 SSO API。`IAM_SSO_API_OIDC_TRUST_PROXY` 只控制客户端 IP：true 时取 `X-Forwarded-For` 首项，false 或无头取连接地址。
 - **Client 登记** Client 选择 OIDC，登记 redirect/post-logout URI、scope 与 Public/Confidential 类型；Public 使用 PKCE S256，Confidential 使用 Basic 与 PKCE。
   Secret 通过[授权读取](../features/application-integration.md#查看和轮换凭据)取得，不使用普通详情响应。
 
@@ -106,15 +106,15 @@ Redis 需要从备份恢复时，关闭扫码入口并等待在途请求到期�
 ## OIDC 签名密钥轮换
 
 当前启动时载入 current 与可选 previous，二者都要求完整 RS256 RSA private JWK，kid 唯一非空；仅 current 签名，无热更新。
-本流程停止旧 signer 并协调更新全部 API 副本，共用进程的其他入口也纳入维护窗口。
+本流程停止旧 signer 并协调更新全部 SSO API 副本，共用进程的其他入口也纳入维护窗口。
 
 **先判断能否轮换：** 设 current 为 A、已有 previous 为 P、新 key 为 B。P 仍需用于接入应用验签或 IAM 退出 hint 时不能开始，
 两槽无法容纳 P/A/B。普通 Token 到期不表示退出 hint 已退役；规则见[密钥兼容边界](#签名密钥兼容边界)。
 
 1. **停流与排空** 准备唯一新 kid 的 B、对应公开 JWK 与回退配置，确认所有 API 副本及自动扩容模板。
-   关闭 OIDC 授权、兑换、续接、退出及直连/重试入口，停止旧 API signer，排空在途请求。
+   关闭 OIDC 授权、兑换、续接、退出及直连/重试入口，停止旧 SSO API signer，排空在途请求。
    保留最后可能由 A 签名的时点上界，用于计算旧 Token 接受期。
-2. 仅在 P 已可退役时，将 A 设为 `IAM_API_OIDC_PREVIOUS_JWK_JSON`、B 设为 current，启动全部目标副本。
+2. 仅在 P 已可退役时，将 A 设为 `IAM_SSO_API_OIDC_PREVIOUS_JWK_JSON`、B 设为 current，启动全部目标副本。
 3. 从受控管理路径逐副本检查配置、readiness、Discovery 和 JWKS，再检查两个实际 Gateway 入口。
    对照从密钥管理端取得的预期公开 JWK，比较完整 `kty/kid/alg/use/n/e` 集合；不得含私钥字段。
    受控直连副本按目标 issuer 发送入口头，Gateway 检查按真实 host，不覆盖入口头。不要仅反复访问负载均衡地址。
@@ -153,13 +153,13 @@ IAM 允许过期 ID Token 作退出 hint，未用 exp 限制其使用期限。�
 | ----------------------------------------- | ---------------------------------------------------------------------- |
 | 查询、撤销指定用户/根/应用关系            | 使用[会话管理](../guides/admin.md#会话与登录限制)，不做 namespace 全清 |
 | 清空当前 namespace 中全部会话或协议 owner | 按下节 inventory、clear、verify；不能按 Client 筛选                    |
-| Client 提交后 Snapshot 传播失败           | 执行[定向修复](#client-snapshot-修复)，不重放数据库写入                |
+| Client 提交后缓存传播失败                 | 按[缓存修复范围](#client-snapshot-修复)选择恢复步骤                    |
 | Redis 备份恢复后的 Snapshot 修复          | 停流执行[全量修复与独立核验](#client-snapshot-修复)                    |
 
 ## 会话清理
 
 本操作使所选范围的会话或协议凭据失效。先确认 Redis 实例、DB、namespace 与 owner，使用与 runtime 完全一致的 namespace 字节，
-包括末尾冒号。命令不解析 value：匹配前缀内的全部版本、坏记录、孤立索引和未过期记录均删除。
+包括末尾冒号。Auth API、SSO API、Integration API 和 Admin API 的 Session Kernel 指向同一 Redis DB 与 namespace；Auth API 的扫码续接和 SSO API 的在线协议也须对齐各自的协议 namespace。命令不解析 value：匹配前缀内的全部版本、坏记录、孤立索引和未过期记录均删除。
 
 | Owner        | 清理范围                                                           |
 | ------------ | ------------------------------------------------------------------ |
@@ -172,7 +172,7 @@ IAM 允许过期 ID Token 作退出 hint，未用 exp 限制其使用期限。�
 使用 Ops 的显式 `IAM_OPS_REDIS_*`；脚本默认读取 `apps/ops/.env`，已有进程环境优先。
 清点和核验只需 SCAN，清理还需 UNLINK；连接按部署授权 AUTH/SELECT/CLIENT/QUIT。
 
-1. 关闭受影响登录、协议和 Admin 会话入口及直连/重试，停止相关 reader/writer、后台及 one-shot 工作并排空。
+1. 关闭受影响登录、在线协议、个人委托和 Admin 会话入口及直连/重试，停止相关 reader/writer、后台及 one-shot 工作并排空。
    Client Maintenance 或等待 TTL 不能替代停流；`--writers-stopped --drained` 只是操作者声明。
 2. 按同一范围依次运行下列独立进程；示例为全部 owner，单 owner 时将三个命令统一改为目标 owner：
 
@@ -192,26 +192,29 @@ IAM 清理不保证第三方本地会话或离线 ID Token 立即失效。
 
 ## Client Snapshot 修复
 
-**定向修复**用于 Client 已提交但缓存传播失败，可在当前 runtime 下执行：
+**定向修复**仅用于已确认故障限于协议 Snapshot 的情况，可在当前 runtime 下执行：
 
 ```bash
 pnpm --filter @iam/ops iam-ops client-snapshot repair -- --client-code alpha
 ```
 
-成功后通过正式入口确认当前 Client 状态/配置和凭据生效。repair 同时失效普通与敏感 payload，不重放 mutation、轮换 Secret 或撤销会话。
-失败先恢复 Redis 等依赖，再重跑同一目标；传播失败前后业务写入是否已提交按[写入结果契约](../engineering/backend-architecture.md#admin-写入结果与失败恢复)判断。
+退出 0 且 `scope=client-protocol-snapshot` 表示该 Client 的协议配置和协议凭据缓存已失效。通过正式协议入口核对当前配置与凭据。
+定向操作失败时先恢复 Redis 等依赖，再重跑同一目标。业务写入是否已提交按[写入结果契约](../engineering/backend-architecture.md#admin-写入结果与失败恢复)判断。
 
-**全量恢复**用于 Redis restore 后：关闭使用 Snapshot 的协议和管理入口，冻结 Client mutation 及所有 acquisition，排空在途请求和任务后执行：
+**全量恢复**适用于通用 Client 缓存失效失败、无法确定传播失败范围或 Redis 备份恢复。Internal API Secret 轮换后，旧 Secret 仍可能保存在无 TTL 的键中，
+应立即关闭受影响的入口。恢复前关闭使用 Snapshot 或通用 Client 缓存的认证、协议、集成和管理入口及直连，冻结 Client 写入，
+停止相关 reader/writer 和维护任务，排空在途请求后执行：
 
 ```bash
 pnpm --filter @iam/ops iam-ops client-snapshot repair -- --all --writers-stopped --drained
 pnpm --filter @iam/ops iam-ops client-snapshot verify -- --all --writers-stopped --drained
 ```
 
-repair 只处理 `client-snapshot:v1:{<clientCode>}` 下的 control、payload:client、payload:credential 三族，未知键族保留。
-verify 须独立完整扫描、退出 0 且 matching=0，且发生在 reader 回源前。
-随后受限开放，检查当前配置、Secret 认证及 Admin 配置写入后的双 reader 失效，并验证受影响协议；通过后恢复公共入口。
-失败或未知时重新关闭并排空，修复后重做适用核验。定向 deadline 默认十秒，全量默认五分钟，均可收紧。
+repair 处理 `client-snapshot:v1:{<clientCode>}` 下的 control、payload:client、payload:credential，以及
+`cache:client:code:*`、`cache:client:secret:*` 和 `cache:client:invalidation-generation`。未知键族保留。
+repair 须退出 0 并报告 `scope=all-client-runtime-caches`。在 reader 回源前独立运行 verify，须完整扫描、退出 0 且 `matching=0`。
+随后受限开放，检查当前配置、Internal API Secret 认证和旧 Secret 被拒绝，并检查 Admin 配置写入后的缓存失效和受影响协议。通过后恢复公共入口。
+失败或未知时重新关闭并排空，修复后重做适用核验。缓存修复独立于数据库写入。定向 deadline 默认十秒，全量默认五分钟，均可收紧。
 
 ## 恢复边界
 

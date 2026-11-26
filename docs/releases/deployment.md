@@ -10,7 +10,7 @@
 从 [生产环境模板](../../docker/.env.prod.example) 准备每台主机私有的 `docker/.env`，选择固定版本的镜像与匹配配置。
 Compose 解析时会校验所选文件的全部必填变量，即使只启动一个服务也要补齐；`config --quiet` 可检查配置而不输出展开后的秘密。
 
-Redis 客户端连接统一使用 `IAM_<APP>_REDIS_URL`；应用 Compose 将共享 `IAM_REDIS_URL` 传给 API、Admin API 和 Worker，
+Redis 客户端连接统一使用 `IAM_<APP>_REDIS_URL`；应用 Compose 将共享 `IAM_REDIS_URL` 传给三个公共后端、Admin API 和 Worker，
 一次性 Ops 使用独立的 `IAM_OPS_REDIS_URL`。格式为 `redis://[username:password@]host[:port][/db]`，省略端口和 DB 时分别为
 `6379`、`0`。只支持 `redis://`，不接受 query、fragment 或缺失的主机；用户名、密码中的特殊字符必须百分号编码。
 解析规则由[共享 Redis 配置](../../packages/runtime/src/redis/config.ts)维护，常驻连接的重试策略由
@@ -21,16 +21,16 @@ Redis 客户端连接统一使用 `IAM_<APP>_REDIS_URL`；应用 Compose 将共�
 `REDIS_PASSWORD` 设置访问密码，客户端 URL 中解码后的密码须与该服务端配置匹配。然后按下方常规更新流程重建受影响应用；
 源码运行使用各 app 的配置，固定旧版本维护制品使用其匹配版本配置。
 
-| 编排                                                                            | 服务与部署要求                                                                                             |
-| ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| [compose.prod.data.yaml](../../docker/compose.prod.data.yaml)                   | PostgreSQL primary、两个 replica、Redis；replica 默认使用与 primary 相同的宿主端口，分主机部署或明确改端口 |
-| [compose.prod.apps.yaml](../../docker/compose.prod.apps.yaml)                   | API、Admin API、SSO、Admin、两个独立 Worker 和 Gateway API；dashboard 使用 `ops` profile                   |
-| [compose.prod.gateway.yaml](../../docker/compose.prod.gateway.yaml)             | APISIX、etcd 和初始化服务                                                                                  |
-| [compose.prod.observability.yaml](../../docker/compose.prod.observability.yaml) | Loki、Grafana、各主机的 Alloy，见[日志栈部署](observability-system-logs.md)                                |
-| [compose.prod.ops.yaml](../../docker/compose.prod.ops.yaml)                     | 独立一次性 Ops CLI；使用 `docker/.env.ops`，不启动应用、Worker 或数据服务                                  |
+| 编排                                                                            | 服务与部署要求                                                                                                          |
+| ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| [compose.prod.data.yaml](../../docker/compose.prod.data.yaml)                   | PostgreSQL primary、两个 replica、Redis；replica 默认使用与 primary 相同的宿主端口，分主机部署或明确改端口              |
+| [compose.prod.apps.yaml](../../docker/compose.prod.apps.yaml)                   | Auth API、SSO API、Integration API、Admin API、SSO、Admin、两个独立 Worker 和 Gateway API；dashboard 使用 `ops` profile |
+| [compose.prod.gateway.yaml](../../docker/compose.prod.gateway.yaml)             | APISIX、etcd 和初始化服务                                                                                               |
+| [compose.prod.observability.yaml](../../docker/compose.prod.observability.yaml) | Loki、Grafana、各主机的 Alloy，见[日志栈部署](observability-system-logs.md)                                             |
+| [compose.prod.ops.yaml](../../docker/compose.prod.ops.yaml)                     | 独立一次性 Ops CLI；使用 `docker/.env.ops`，不启动应用、Worker 或数据服务                                               |
 
 核对数据库、Redis、APISIX 管理地址、DNS/TLS 和端口访问范围；跨主机使用实际可达地址。
-API/SSO 的登录公私钥和 kid 必须配对，内外网 origin、Gateway host 与 OIDC Client 配置一致。
+Auth API 与 SSO 前端的登录公私钥和 kid 必须配对。SSO API 的内外网 origin、Gateway host 与 OIDC Client 配置须一致。
 Gateway 需要独立数据库只读账号及 APISIX Admin 凭据；首次发布还需准备 Enable、未删除的 `iam` Client 和 Internal Secret，
 详细配置见[网关管理](apisix-gateway-release.md)。不能依赖尚未发布的 IAM 路由来访问 Gateway 配置 API。
 
@@ -44,7 +44,7 @@ Gateway 需要独立数据库只读账号及 APISIX Admin 凭据；首次发布�
 | Admin（6 项） | `UMI_APP_ADMIN_` | `IAM_ADMIN_WEB_` | `API_PREFIX`、`CLIENT_CODE`、`GRAFANA_URL`、`SSO_AUTHORIZE_URL`、`SSO_LOGOUT_URL`、`SYSTEM_LOG_ENV`                                                                  |
 | SSO（9 项）   | `UMI_APP_SSO_`   | `IAM_SSO_WEB_`   | `API_PREFIX`、`CLIENT_CODE`、`CAP_ENDPOINT`、`CAP_SITE_KEY`、`CAP_WASM_URL`、`CAP_PAKO_URL`、`LOGIN_CREDENTIAL_KID`、`LOGIN_CREDENTIAL_PUBLIC_KEY`、`WELL_KNOWN_URL` |
 
-新版本只读取新名称。构建时将公开值写入静态文件，配置变化需要重建对应镜像。API 登录凭证私钥等服务端配置保存在后端。
+新版本只读取新名称。构建时将公开值写入静态文件，配置变化需要重建对应镜像。私钥由所属后端通过启动配置载入。
 
 ## 一次性 Ops 维护环境
 
@@ -92,14 +92,14 @@ backfill、部分 repair 只登记或唤醒工作，仍须匹配版本的 consum
    pnpm --filter @iam/db db:migrate
    ```
 
-   `DATABASE_URL` 是迁移工具输入，不能用应用的 `IAM_API_DATABASE_URL` 代替。
+   `DATABASE_URL` 是迁移工具专用输入。
    Compose 不自动执行迁移；失败先核对原因和实际 schema，不用 `db:push` 或删除 migration journal 绕过。
 
 3. **启动应用与后台服务** 启动应用，公共流量暂不开放：
 
    ```bash
    docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml config --quiet
-   docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml up -d api admin-api worker-user-document worker-organization-document sso admin gateway-api
+   docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml up -d auth-api sso-api integration-api admin-api worker-user-document worker-organization-document sso admin gateway-api
    ```
 
    按[新空环境首次初始化](initial-installation.md)使用一次性 Ops 命令准备管理员与 Client 配置。
@@ -114,30 +114,38 @@ backfill、部分 repair 只登记或唤醒工作，仍须匹配版本的 consum
 
 1. **备份与准备** 准备目标镜像和已知兼容的回退镜像、配置；涉及持久数据变更时先取得可恢复备份。
 2. **切流与排空** 通过实际网关/部署控制关闭受影响流量和任务，排空在途工作。Compose 的 `stop` 不是流量控制替代品。
-3. **拉取镜像与迁移** 更新 `docker/.env` 中相应 `*_IMAGE` 和配置。以下以 API 与 Admin API 为例：
+3. **拉取镜像与迁移** 更新 `docker/.env` 中相应 `*_IMAGE` 和配置。以下以 Auth API 与 Admin API 为例：
 
    ```bash
    docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml config --quiet
-   docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml pull api admin-api
-   docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml stop api admin-api
+   docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml pull auth-api admin-api
+   docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml stop auth-api admin-api
    ```
 
-   从源码构建时，将 `pull` 替换为同一 Compose 的 `build api admin-api`，构建上下文为仓库根目录。
+   从源码构建时，将 `pull` 替换为同一 Compose 的 `build auth-api admin-api`，构建上下文为仓库根目录。
    有兼容的待执行迁移时，在相关旧 writer 已停止后运行 `db:migrate`；需要协调切换的迁移先转专门指引。
 
 4. **重建服务容器** 用目标镜像重建所选服务：
 
    ```bash
-   docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml up -d --no-deps --force-recreate api admin-api
-   docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml ps api admin-api
+   docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml up -d --no-deps --force-recreate auth-api admin-api
+   docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml ps auth-api admin-api
    ```
 
 5. **核验并恢复放流** 按[完成检查](#完成检查与回退)核验受影响范围，再恢复流量与任务。检查或开放失败时停止继续开放，关闭不确定入口并按回退/修复流程处理。
 
+### 切换三个公共后端
+
+1. 按生产模板配置三个镜像和各服务环境变量。迁移 SM2、企微和风控配置到 Auth API，OIDC 签名配置到 SSO API，内部查询与欢迎短信配置到 Integration API。保留现有 PostgreSQL、Redis DB、Session Kernel 与协议 namespace，核对 Auth API 和 SSO API 的内外网 origin 与企微扫码开关。使用当前规范路径构建 Admin 和 SSO 前端，包括 `IAM_SSO_WEB_CAP_ENDPOINT=/api/iam/auth/captcha/cap/iam-sso/`。
+2. 新旧版本并行前，冻结 Client 写入（含配置、启停和 Secret 轮换）。关闭 Admin Client 写入入口和直连，暂停相关维护任务，排空在途写入及提交后失效。旧 Admin API 直接删除缓存键，旧公共后端的回填也不检查失效代际。切换期间保留公共读取流量，直至切换并排空旧公共后端。
+3. 启动三个服务并确认 `/ready`，准备对应的前端制品和环境 manifest。同一宿主并行运行新旧服务时，若旧后端占用宿主端口 `30000`，给 `IAM_AUTH_API_PUBLISHED_PORT` 指定空闲端口，保持 Auth API 容器端口为 `30000`，并按实际网络更新 upstream。切换 Gateway upstream 和前端前，更新业务网关中仍直连旧后端的 `forward-auth.uri`。已有经 APISIX 的三条兼容别名继续保留。[网关切换与兼容路径](apisix-gateway-release.md#拆分后的-iam-路由示例)
+4. 经受控入口验证登录续接、会话鉴权、M2M 鉴权、三个兼容别名及受影响的直接调用。切换所有入口后排空并停止旧公共后端，升级全部 Admin API 副本和使用该缓存的维护制品。开放 Client 写入前，通过受限入口验证新 Admin API 提交后旧缓存失效，确认旧 Internal API Secret 被拒绝且当前凭据可用。
+5. 核验失败时暂停扩大流量并保持 Client 写入冻结。缓存异常按[全量修复与独立核验](authentication-and-session.md#client-snapshot-修复)处理。回退时先冻结并排空 Client 写入，协调恢复 Admin API、公共后端、前端及路由，排空退出版本后验证目标版本的写入及失效，再恢复 Client 写入。
+
 ### 开放应用准入策略
 
-按常规更新流程先执行正式迁移，再重建 API、Admin API、SSO 和 Admin。迁移为存量应用保留默认关闭的策略。
-开放管理端启停前，确认内外网入口的全部授权 API 副本均已升级，并经受限入口核对两种协议的准入结果。
+按常规更新流程先执行正式迁移，再重建 Auth API、SSO API、Admin API、SSO 和 Admin。迁移为存量应用保留默认关闭的策略。
+开放管理端启停前，确认内外网入口的全部 SSO API 副本均已升级，并经受限入口核对两种协议的准入结果。
 
 回退到不支持准入的版本前，先核对已开启策略的应用。旧版授权进程会跳过准入检查，需继续维持准入的应用应保持停流，
 直至恢复支持准入的版本。传播异常按 [Client Snapshot 修复](authentication-and-session.md#client-snapshot-修复)处理。
@@ -251,11 +259,11 @@ Wire v5 的责任目标新增可选的 `customAttributes`。启用新版 API 和
 
 ## 完成检查与回退
 
-| 检查       | 通过条件                                                                                                                               |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| 服务与依赖 | 目标副本使用预期镜像/配置，持续运行；API 的 `/ready` 通过真实 PostgreSQL/Redis 检查，Worker 按其配置的 health/readiness 检查依赖与模块 |
-| 受影响功能 | 经正式业务入口验证本次改动：前端可加载、请求到达正确后端、需要的登录/授权成功且无效身份被拒绝                                          |
-| 专项变更   | 网关回读、密钥兼容、数据核验或日志采集满足对应专题标准；未触及的专题不重复执行                                                         |
+| 检查       | 通过条件                                                                                                                                       |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 服务与依赖 | 目标副本使用预期镜像/配置，持续运行；三个公共后端的 `/ready` 通过真实 PostgreSQL/Redis 检查，Worker 按其配置的 health/readiness 检查依赖与模块 |
+| 受影响功能 | 经正式业务入口验证本次改动：前端可加载、请求到达正确后端、需要的登录/授权成功且无效身份被拒绝                                                  |
+| 专项变更   | 网关回读、密钥兼容、数据核验或日志采集满足对应专题标准；未触及的专题不重复执行                                                                 |
 
 Gateway `/health` 只证明 HTTP 就绪，不能替代数据库认证、APISIX 连通性或业务路由检查。
 仅容器启动成功不算发布完成；失败可结合[日志与排障](observability-system-logs.md)定位。
@@ -276,7 +284,7 @@ docker compose --env-file docker/.env -f docker/compose.dev.yaml up -d
 开发构建代理使用 `DOCKER_BUILD_HTTP_PROXY`、`DOCKER_BUILD_HTTPS_PROXY`、`DOCKER_BUILD_NO_PROXY`；生产 build 使用 `HTTP_PROXY`、`HTTPS_PROXY`、`NO_PROXY`。
 容器访问宿主回环代理时使用 `host.docker.internal`；管理入口应按实际网络加入 `NO_PROXY`。
 
-源码运行使用 `pnpm --filter @iam/api serve`、`pnpm --filter @iam/admin-api serve`、`pnpm --filter @iam/worker serve`。
+源码运行使用 `pnpm --filter <workspace> serve`，按需启动 `@iam/auth-api`、`@iam/sso-api`、`@iam/integration-api`、`@iam/admin-api` 与 `@iam/worker`。
 前端分别执行 `pnpm --filter @iam/admin build` 与 `pnpm --filter @iam/sso build`，产物在各 app 的 `dist`，base 为 `/iam-admin` 和 `/portal`。
 路由及 rewrite 以[系统入口表](../engineering/system-architecture.md#请求入口与后台任务)和环境 manifest 为准。
 

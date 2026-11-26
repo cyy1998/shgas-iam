@@ -1,5 +1,5 @@
 // Browser Integration uses a mocked backend; this is not a full-system journey.
-import { ApiErrorCode, IMAGE_CAPTCHA_PROOF_HEADER, LoginPageGuardDecision } from "@iam/contracts";
+import { ApiErrorCode, ClientStatus, IMAGE_CAPTCHA_PROOF_HEADER, LoginPageGuardDecision } from "@iam/contracts";
 import { expect, test } from "@playwright/test";
 import { currentUserInfo } from "../../test/mocks/fixtures";
 import { mockImageCaptchaFallback, mockSsoApi, requireImageCaptcha } from "../fixtures";
@@ -42,19 +42,21 @@ test("a denied Custom SSO continuation shows the IAM application name and stops 
   await page.route("**/sso/.well-known/authentication-configuration", (route) =>
     route.fulfill({ json: { data: { authorizationEndpoint: "/sso/authorize", logoutEndpoint: "/sso/logout" } } }),
   );
-  await page.route("**/open/client/status?**", (route) =>
-    route.fulfill({
-      json: {
-        code: 200,
-        message: "OK",
-        data: {
-          clientCode: new URL(route.request().url()).searchParams.get("clientCode"),
-          clientName: "费用报销",
-          status: 1,
-          url: null,
+  await page.route(
+    (url) => url.pathname === "/api/iam/auth/client/status" && url.searchParams.get("clientCode") === "expense",
+    (route) =>
+      route.fulfill({
+        json: {
+          code: 200,
+          message: "OK",
+          data: {
+            clientCode: "expense",
+            clientName: "费用报销",
+            status: 1,
+            url: null,
+          },
         },
-      },
-    }),
+      }),
   );
   const authorizationRequests: string[] = [];
   await page.route("**/sso/authorize?**", async (route) => {
@@ -73,6 +75,28 @@ test("a denied Custom SSO continuation shows the IAM application name and stops 
   await expect(page.getByText("ignored")).toHaveCount(0);
   await expect(page.getByPlaceholder("请输入您的工号")).toHaveCount(0);
   expect(authorizationRequests).toHaveLength(1);
+});
+
+test("denied applications with dot and literal percent Client Codes load their own metadata", async ({ page }) => {
+  const names = new Map([
+    [".", "单点应用"],
+    ["..", "双点应用"],
+    ["%2E", "百分号应用"],
+  ]);
+  await page.route(
+    (url) => url.pathname === "/api/iam/auth/client/status",
+    (route) => {
+      const clientCode = new URL(route.request().url()).searchParams.get("clientCode") ?? "";
+      const clientName = names.get(clientCode);
+      const data = clientName ? { clientCode, clientName, status: ClientStatus.Enable, url: null } : null;
+      return route.fulfill({ json: { code: 200, message: "OK", data } });
+    },
+  );
+
+  for (const [clientCode, clientName] of names) {
+    await page.goto(`/portal/application-access-denied?${new URLSearchParams({ client: clientCode })}`);
+    await expect(page.getByRole("heading", { name: clientName, exact: true })).toBeVisible();
+  }
 });
 
 test("a temporarily unavailable Custom SSO authorization keeps the user out of the denial page", async ({ page }) => {
@@ -111,8 +135,14 @@ test("login page opens and shows mocked password login failure", async ({ page }
 test("shows an inline image below the password and retries login only after a verified answer", async ({ page }) => {
   await mockSsoApi(page);
   await mockImageCaptchaFallback(page);
+  const capAttempts: Array<{ method: string; action?: string }> = [];
+  await page.route("**/api/iam/auth/captcha/cap/iam-sso/challenge", (route) => {
+    const request = route.request();
+    capAttempts.push({ method: request.method(), action: request.headers()["x-cap-action"] });
+    return route.fulfill({ status: 503, json: {} });
+  });
   const attempts: Array<{ credential: string; proof: string | undefined }> = [];
-  await page.route("**/auth/login/password", async (route) => {
+  await page.route("**/api/iam/auth/login/password", async (route) => {
     const request = route.request();
     const proof = request.headers()[IMAGE_CAPTCHA_PROOF_HEADER.toLowerCase()];
     attempts.push({ credential: request.postDataJSON().credential, proof });
@@ -134,6 +164,7 @@ test("shows an inline image below the password and retries login only after a ve
   const form = page.locator("form").filter({ has: password });
   const captcha = form.getByRole("group", { name: "图片验证码" });
   await expect(captcha.getByAltText("图片验证码")).toBeVisible({ timeout: 15_000 });
+  expect(capAttempts).toEqual([{ method: "POST", action: "passwordLogin" }]);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(loginButton).toBeDisabled();
   const passwordBox = await password.boundingBox();
@@ -278,7 +309,7 @@ test("completes first-party authorization and restores callback query and hash",
   await mockSsoApi(page);
   let userInfoRequests = 0;
   let authorizeRequest: URL | undefined;
-  await page.route("**/public/user-info", async (route) => {
+  await page.route("**/api/iam/sso/user-info", async (route) => {
     userInfoRequests += 1;
     await route.fulfill({
       contentType: "application/json",

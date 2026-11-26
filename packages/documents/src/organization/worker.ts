@@ -1,7 +1,5 @@
 export * from "./work.types";
 export { createOrganizationDocumentSourceReader } from "./worker/builder";
-export type { CreateOrganizationDocumentWorkerModuleInput, OrganizationDocumentWorkerModule } from "./worker/module";
-export { createOrganizationDocumentWorkerModule } from "./worker/module";
 export type {
   CreateOrganizationDocumentProcessorInput,
   OrganizationDocumentProcessor,

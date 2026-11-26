@@ -17,16 +17,18 @@
 
 `{IAM_ORIGIN}` 表示实际访问入口，例如 `https://iam.example.com`。
 先请求 `GET {IAM_ORIGIN}/sso/.well-known/authentication-configuration`，从响应 envelope 的 data 取得
-authorizationEndpoint、logoutEndpoint、thirdPartyOAEndpoint；内外入口各从自己的 origin 发现。
+authorizationEndpoint、logoutEndpoint、thirdPartyOAEndpoint。内外入口各从自己的 origin 发现。协议流量由 SSO API 处理，OA 与企业微信固定回调由 Auth API 处理。
 
-| 端点              | 方法与用途                                        |
-| ----------------- | ------------------------------------------------- |
-| /sso/authorize    | GET，发起授权。                                   |
-| /sso/callback     | GET，IAM 托管回调。                               |
-| /sso/token        | POST，业务后端用 Code 换取协议 Token 与主体投影。 |
-| /public/user-info | GET，按当前 Client 披露配置读取主体。             |
-| /auth/authz       | GET，反向代理鉴权与最小用户 Header。              |
-| /sso/logout       | GET，退出 IAM 根及其关联在线访问。                |
+| 端点                     | 方法与用途                                        |
+| ------------------------ | ------------------------------------------------- |
+| /sso/authorize           | GET，发起授权。                                   |
+| /sso/callback            | GET，IAM 托管回调。                               |
+| /sso/token               | POST，业务后端用 Code 换取协议 Token 与主体投影。 |
+| `/api/iam/sso/user-info` | GET，按当前 Client 披露配置读取主体。             |
+| `/api/iam/sso/authz`     | GET，反向代理鉴权与最小用户 Header。              |
+| /sso/logout              | GET，退出 IAM 根及其关联在线访问。                |
+
+APISIX 将 `/api/iam/public/user-info` 和 `/api/iam/auth/authz` 分别作为上述两个规范端点的兼容别名。
 
 管理员为目标业务 Client 配置：
 
@@ -151,7 +153,7 @@ URL 交付 token 和原 state。
 business 和 managed Token 均可用于默认公共用户接口：
 
 ```http
-GET {IAM_ORIGIN}/public/user-info
+GET {IAM_ORIGIN}/api/iam/sso/user-info
 Client: {transportClientCode}
 Authorization: {sid}
 ```
@@ -166,7 +168,7 @@ Authorization 直接使用 sid，不加 Bearer 前缀。服务端优先读取该
 网关请求：
 
 ```http
-GET {IAM_ORIGIN}/auth/authz
+GET {IAM_ORIGIN}/api/iam/sso/authz
 Client: {transportClientCode}
 Authorization: {sid}
 X-Forwarded-Uri: /business/path

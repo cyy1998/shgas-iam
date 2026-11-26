@@ -46,7 +46,7 @@ it.each(
 )("$page restores remaining time for $code", async ({ page, code, status }) => {
   let attempts = 0;
   server.use(
-    http.post("*/open/code/send", () => {
+    http.post("*/api/iam/auth/sms/send", () => {
       attempts += 1;
       return HttpResponse.json(
         { code, message: "发送失败，请稍后重试", data: null },
@@ -69,7 +69,7 @@ it.each([
   [ApiErrorCode.SmsCooldown, 429, "25"],
 ] as const)("login shows remaining time after %s and restores it after remount", async (code, status, delay) => {
   server.use(
-    http.post("*/open/code/send", () =>
+    http.post("*/api/iam/auth/sms/send", () =>
       HttpResponse.json({ code, message: "请稍后重试", data: null }, { status, headers: { "Retry-After": delay } }),
     ),
   );
@@ -88,7 +88,7 @@ it.each([
 ] as const)("does not invent a phone countdown for %s", async (code, status) => {
   const showError = vi.spyOn(message, "error");
   server.use(
-    http.post("*/open/code/send", () =>
+    http.post("*/api/iam/auth/sms/send", () =>
       HttpResponse.json({ code, message: "暂时不可用", data: null }, { status, headers: { "Retry-After": "30" } }),
     ),
   );

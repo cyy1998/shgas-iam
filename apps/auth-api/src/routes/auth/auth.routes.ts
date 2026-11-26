@@ -1,0 +1,66 @@
+import { createRoute, z } from "@hono/zod-openapi";
+import { commonErrorResponses } from "@iam/api-core/core/openapi/helpers/common-error-responses";
+import jsonContent from "@iam/api-core/core/openapi/helpers/json-content";
+import jsonContentRequired from "@iam/api-core/core/openapi/helpers/json-content-required";
+import createSuccessResponseSchema from "@iam/api-core/core/openapi/schemas/create-success-schema";
+import { HttpStatusCodes } from "@iam/contracts/http";
+
+const routePrefix = "";
+const tags = ["Auth"];
+
+export const loginPassword = createRoute({
+  method: "post",
+  path: `${routePrefix}/login/password`,
+  tags,
+  request: {
+    body: jsonContentRequired(
+      z.object({
+        credential: z.string().openapi({
+          example: "iam-login-v1.eyJ2IjoxLCJhbGciOiJT...",
+        }),
+        capToken: z.string().optional(),
+      }),
+      "用户名密码登录参数",
+    ),
+  },
+  responses: {
+    ...commonErrorResponses,
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(
+        z.object({
+          token: z.string().openapi({ example: "ed5776f0-5d5d-44a7-b44b-9505f5799a12" }),
+          isMobileSet: z.boolean(),
+        }),
+      ),
+      "登录成功",
+    ),
+  },
+});
+
+export const loginMobile = createRoute({
+  method: "post",
+  path: `${routePrefix}/login/mobile`,
+  tags,
+  request: {
+    body: jsonContentRequired(
+      z.object({
+        phoneNumber: z.string().openapi({ example: "17721462865" }),
+        code: z.string().openapi({ example: "1234" }),
+        capToken: z.string().optional(),
+      }),
+      "手机登录参数",
+    ),
+  },
+  responses: {
+    ...commonErrorResponses,
+    [HttpStatusCodes.OK]: jsonContent(
+      createSuccessResponseSchema(
+        z.object({
+          token: z.string().openapi({ example: "ed5776f0-5d5d-44a7-b44b-9505f5799a12" }),
+          isMobileSet: z.boolean(),
+        }),
+      ),
+      "登录成功",
+    ),
+  },
+});

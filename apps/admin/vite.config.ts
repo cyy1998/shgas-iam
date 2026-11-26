@@ -13,7 +13,7 @@ const browserEnvKeys = [
 
 const proxy: Record<string, ProxyOptions> = {};
 for (const [port, paths] of [
-  [30000, ["public", "open", "internal", "sso", "auth"]],
+  [30002, ["sso"]],
   [30001, ["admin", "rpc"]],
 ] as const) {
   for (const path of paths) {

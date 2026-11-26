@@ -9,7 +9,7 @@ import { closeMaintenancePostgresInvocation, createMaintenancePostgresResources 
 import { users } from "@iam/db/schema";
 import { createSubjectFactsRedisCache, DocumentFactsCacheRecordSchema } from "@iam/documents/user";
 import { createUserDocumentInvalidation } from "@iam/documents/user/producer";
-import { createUserDocumentWorkerModule } from "@iam/documents/user/worker";
+import { createUserDocumentWorkerModule } from "@iam/jobs/documents/user";
 import { createLogger, LoggerSourceApp } from "@iam/runtime/logger";
 import { createSubjectAccessBarrier } from "@iam/subject-access";
 import { createRedisSubjectAccessStore, createSubjectAccessBootstrap } from "@iam/subject-access/redis";
