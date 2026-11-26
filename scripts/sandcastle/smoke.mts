@@ -53,8 +53,9 @@ if (printf '' >> .git) 2>/dev/null || git config --local smoke.writable true; th
   exit 1
 fi
 test "$(curl --silent --show-error --fail --max-time 10 http://127.0.0.1:${address.port})" = '${project}'
-docker inspect --format '{{.HostConfig.NetworkMode}}' "$(hostname)" | grep -x host >/dev/null
-printf '%s\n' "$(hostname)" > test-results/integration/sandbox-id
+sandbox_id=$(docker ps -q --no-trunc --filter "volume=$PWD/$(dirname "$IAM_TEST_RESOURCE_REGISTRY")")
+test "$(docker inspect --format '{{.HostConfig.NetworkMode}}' "$sandbox_id")" = host
+printf '%s\n' "$sandbox_id" > test-results/integration/sandbox-id
 node --input-type=module <<'JS'
 import { writeFile } from 'node:fs/promises';
 import { createManagedResourceRun } from './scripts/test-resources/managed-resources.mjs';
@@ -83,7 +84,7 @@ printf '%s\n' '${complete}'`,
     assert(completed(result), "The container probe did not complete.");
     assert.equal(await git("show", "smoke:sandcastle-smoke.md"), "# Sandcastle smoke");
     const sandboxId = (await readFile(join(root, "test-results/integration/sandbox-id"), "utf8")).trim();
-    assert(sandboxId);
+    assert.match(sandboxId, /^[a-f0-9]{64}$/);
     assert.equal(await command("docker", ["ps", "-aq", "--no-trunc", "--filter", `id=${sandboxId}`], root), "");
     assert.equal(
       await command("docker", ["network", "ls", "-q", "--filter", `label=com.docker.compose.project=${project}`], root),
