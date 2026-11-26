@@ -1,103 +1,22 @@
-import { lstat, readdir, realpath } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { createWorktree, type Worktree } from "@ai-hero/sandcastle";
 import { command, hasCode } from "./command.ts";
-import { validateRepository } from "./config.ts";
+import type { BoundaryAssertionInput, IntegratedTicket, MergeTicketResult, SpecWorktree } from "./types.ts";
 
-function repoFromUrl(remoteUrl: string): string {
-  const url = /^[\w+.-]+:\/\//.test(remoteUrl) ? URL.parse(remoteUrl) : null;
-  const scpPath = /^(?:[^@/:]+@)?(?:\[[^\]]+\]|[^/:]+):(.+)$/.exec(remoteUrl)?.[1];
-  const path = url?.pathname ?? scpPath ?? remoteUrl;
-  const segments = path.replace(/\/+$/, "").split("/").slice(-2);
-  try {
-    const [owner, name] = segments.map(decodeURIComponent);
-    if (owner && name && !owner.includes("/") && !name.includes("/")) {
-      return validateRepository(`${owner}/${name.replace(/\.git$/, "")}`);
-    }
-  } catch {
-    // Do not include the original remote URL, which may embed credentials.
-  }
-  throw new Error("The remote URL does not identify owner/repo. Set repo explicitly.");
-}
+const shaPattern = /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/;
+const unfinishedGitMarkers = [
+  "MERGE_HEAD",
+  "CHERRY_PICK_HEAD",
+  "REVERT_HEAD",
+  "rebase-merge",
+  "rebase-apply",
+  "sequencer",
+] as const;
 
-function assertNoEmbeddedCredentials(remoteUrls: readonly string[]) {
-  for (const remoteUrl of remoteUrls) {
-    const url = /^[\w+.-]+:\/\//.test(remoteUrl) ? URL.parse(remoteUrl) : null;
-    if (!url) continue;
-    const isHttp = url.protocol === "http:" || url.protocol === "https:";
-    if (url.password || (isHttp && url.username)) {
-      throw new Error("Git remote URL must not embed credentials in .git/config because sandboxes can read it.");
-    }
-  }
-}
-
-export async function resolveRepository(
-  cwd: string,
-  branch: string,
-  options: { repo?: string; remote?: string } = {},
-): Promise<{ repo: string; remote: string }> {
-  const git = (...args: string[]) => command("git", args, cwd);
-  const configuredUrls = await git("config", "--get-regexp", "^remote\\..*\\.url$").catch((error) => {
-    if (!hasCode(error, 1)) throw error;
-    return "";
-  });
-  assertNoEmbeddedCredentials(
-    configuredUrls
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => line.slice(line.indexOf(" ") + 1)),
-  );
-  const remotes = (await git("remote")).split("\n").filter(Boolean);
-  const tracked = await git("config", "--get", `branch.${branch}.remote`).catch((error) => {
-    if (!hasCode(error, 1)) throw error;
-    return "";
-  });
-  const remote =
-    options.remote ??
-    (remotes.includes(tracked) ? tracked : undefined) ??
-    (remotes.includes("origin") ? "origin" : undefined) ??
-    (remotes.length === 1 ? remotes[0] : undefined);
-  if (!remote || !remotes.includes(remote)) throw new Error("Select a configured Git remote for this repository.");
-  const repo =
-    options.repo !== undefined
-      ? validateRepository(options.repo)
-      : repoFromUrl(await git("remote", "get-url", "--", remote));
-  return { repo, remote };
-}
-
-export function specBranchName(
-  number: number,
-  body: string,
-  prefix = "sandcastle",
-  keywords: readonly string[] = [],
-): string {
-  const headings = new Set(["integration-branch", ...keywords.map((keyword) => keyword.toLowerCase())]);
-  const declared = new Set<string>();
-  for (const [, heading, branch] of body.matchAll(/^([^:\r\n：]+)[:：][ \t]*`?([^\s`]+)`?[ \t]*$/gm)) {
-    if (heading && branch && headings.has(heading.trim().toLowerCase())) declared.add(branch);
-  }
-  if (declared.size > 1) throw new Error(`Spec #${number} declares conflicting integration branches.`);
-  return declared.values().next().value ?? `${prefix}/spec-${number}`;
-}
-
-export function ticketBranchName(number: number, prefix = "sandcastle"): string {
-  return `${prefix}/issue-${number}`;
-}
-
-export type IntegrationEvidence = { candidate: string; mergeSha: string };
-export type IntegrationResult =
-  | ({ status: "merged" } & IntegrationEvidence)
-  | { status: "conflict" | "no-change"; integrationSha: string };
-
-type Checkout = Pick<Worktree, "worktreePath" | "branch">;
-
-function serialQueue() {
-  let pending: Promise<unknown> = Promise.resolve();
-  return <T>(operation: () => Promise<T>): Promise<T> => {
-    const result = pending.then(operation);
-    pending = result.catch(() => {});
-    return result;
-  };
+function assertSha(value: string, label = "Git SHA"): string {
+  if (!shaPattern.test(value)) throw new Error(`Expected a full ${label}, got: ${value}`);
+  return value;
 }
 
 async function inspectPath(path: string) {
@@ -107,281 +26,349 @@ async function inspectPath(path: string) {
   });
 }
 
-export function createGitWorkspace(cwd: string) {
-  const git = (...args: string[]) => command("git", args, cwd);
-  const serial = serialQueue();
-  const at = (checkout: Checkout, ...args: string[]) => command("git", args, checkout.worktreePath);
-  async function ancestor(older: string, newer: string) {
-    try {
-      await git("merge-base", "--is-ancestor", older, newer);
-      return true;
-    } catch (error) {
-      if (!hasCode(error, 1)) throw error;
-      return false;
-    }
-  }
-  async function branchTips(branches: Iterable<string>) {
-    const prefix = "refs/heads/";
-    const refs = new Set([...branches].map((branch) => prefix + branch));
-    const tips = new Map<string, string>();
-    if (!refs.size) return tips;
-    const output = await git("for-each-ref", "--format=%(refname) %(objectname)", ...refs);
-    for (const line of output.split("\n")) {
-      const [ref, sha] = line.split(" ");
-      if (ref && sha && refs.has(ref)) tips.set(ref.slice(prefix.length), sha);
-    }
-    return tips;
-  }
-  async function branchTip(branch: string) {
-    return (await branchTips([branch])).get(branch);
-  }
-  async function observe(checkout: Checkout, allowDirty = false) {
-    if ((await at(checkout, "symbolic-ref", "HEAD")) !== `refs/heads/${checkout.branch}`) {
-      throw new Error(`Unexpected branch at ${checkout.worktreePath}.`);
-    }
-    const directory = await at(checkout, "rev-parse", "--absolute-git-dir");
-    for (const entry of [
-      "MERGE_HEAD",
-      "CHERRY_PICK_HEAD",
-      "REVERT_HEAD",
-      "rebase-merge",
-      "rebase-apply",
-      "sequencer",
-    ]) {
-      if (await inspectPath(join(directory, entry)))
-        throw new Error(`Unfinished Git operation at ${checkout.worktreePath}.`);
-    }
-    if (!allowDirty && (await at(checkout, "status", "--porcelain", "--untracked-files=all"))) {
-      throw new Error(`Uncommitted changes at ${checkout.worktreePath}.`);
-    }
-    return at(checkout, "rev-parse", "HEAD");
-  }
-  async function assertBranch(branch: string) {
-    await git("check-ref-format", `refs/heads/${branch}`);
-    if (!branch || branch.startsWith("-")) throw new Error("Invalid local branch name.");
-  }
+async function resolveCommit(cwd: string, ref: string): Promise<string> {
+  return command("git", ["rev-parse", "--verify", "--end-of-options", `${ref}^{commit}`], cwd);
+}
 
-  async function managedWorktrees() {
-    const root = await realpath(cwd);
-    const managed = join(root, ".sandcastle", "worktrees");
-    for (const directory of [dirname(managed), managed]) {
-      if ((await inspectPath(directory))?.isSymbolicLink()) {
-        throw new Error(`Unexpected worktree directory link: ${directory}.`);
-      }
+async function observeCleanCheckout(worktreePath: string): Promise<string> {
+  const gitDir = await command("git", ["rev-parse", "--absolute-git-dir"], worktreePath);
+  for (const marker of unfinishedGitMarkers) {
+    if (await inspectPath(join(gitDir, marker))) {
+      throw new Error(`Refusing operation on dirty worktree with unfinished Git state (${marker}): ${worktreePath}.`);
     }
-    return { root, managed };
   }
-
-  async function listWorktrees() {
-    return (await git("worktree", "list", "--porcelain", "-z"))
-      .split("\0\0")
-      .filter(Boolean)
-      .map((entry) => {
-        const [path, ...fields] = entry.split("\0");
-        return {
-          path: path?.slice("worktree ".length) ?? "",
-          ref: fields.find((field) => field.startsWith("branch "))?.slice("branch ".length),
-          unavailable: fields.some((field) => /^(?:locked|prunable)(?: |$)/.test(field)),
-          prunable: fields.some((field) => /^prunable(?: |$)/.test(field)),
-        };
-      });
+  const status = await command("git", ["status", "--porcelain", "--untracked-files=all"], worktreePath);
+  if (status) {
+    throw new Error(`Refusing operation on dirty worktree with uncommitted changes: ${worktreePath}.`);
   }
+  return command("git", ["rev-parse", "HEAD"], worktreePath);
+}
 
-  function managedCheckout(entries: Awaited<ReturnType<typeof listWorktrees>>, managed: string, branch: string) {
-    const matches = entries.filter(({ ref }) => ref === `refs/heads/${branch}`);
-    const checkout = matches[0];
-    if (checkout && (matches.length !== 1 || dirname(checkout.path) !== managed || checkout.unavailable)) {
-      throw new Error(
-        `Branch ${branch} is checked out outside an available managed worktree. Preserve its registration.`,
-      );
-    }
-    return checkout;
-  }
+async function listWorktrees(cwd: string) {
+  const output = await command("git", ["worktree", "list", "--porcelain", "-z"], cwd);
+  return output
+    .split("\0\0")
+    .filter(Boolean)
+    .map((entry) => {
+      const [pathField, ...fields] = entry.split("\0");
+      return {
+        path: pathField?.slice("worktree ".length) ?? "",
+        ref: fields.find((field) => field.startsWith("branch "))?.slice("branch ".length),
+        unavailable: fields.some((field) => /^(?:locked|prunable)(?: |$)/.test(field)),
+      };
+    });
+}
 
-  return {
-    observe,
-    ancestor,
-    branchTip,
-    branchTips,
-    assertBranch,
-    async synchronizeInvocation(branch: string, remote: string): Promise<string> {
-      await assertBranch(branch);
-      const invocation = { branch, worktreePath: cwd };
-      const local = await observe(invocation);
-      await git("fetch", "--no-tags", "--", remote, `refs/heads/${branch}`);
-      const fetched = await git("rev-parse", "--verify", "FETCH_HEAD^{commit}");
-      if ((await observe(invocation)) !== local || local !== fetched) {
-        throw new Error(
-          `Invocation branch ${branch} must match the fetched ${remote} branch. Synchronize it before running.`,
-        );
-      }
-      return local;
-    },
-    open(branch: string, base: string, options: { allowDirty?: boolean } = {}): Promise<Worktree> {
-      return serial(async () => {
-        await assertBranch(branch);
-        const { root, managed } = await managedWorktrees();
-        const expected = join(managed, branch.replaceAll("/", "-"));
-        const entries = await listWorktrees();
-        const registration = managedCheckout(entries, managed, branch);
-        const path = registration?.path;
-        if (entries.some((entry) => entry.path === expected && entry !== registration)) {
-          throw new Error(`Worktree path ${expected} is registered to a different checkout.`);
-        }
-        // The SDK prunes unregistered directories using line-delimited Git output.
-        if (await inspectPath(managed)) {
-          const registeredPaths = new Set(entries.map((entry) => entry.path));
-          const stale = entries.find((entry) => dirname(entry.path) === managed && entry.prunable);
-          if (stale) throw new Error(`Stale worktree registration requires inspection: ${stale.path}.`);
-          for (const entry of await readdir(managed, { withFileTypes: true })) {
-            const child = join(managed, entry.name);
-            if (
-              entry.isSymbolicLink() ||
-              ((entry.isDirectory() || child === expected) &&
-                (!registeredPaths.has(child) || child.includes("\n") || child !== child.trimEnd()))
-            ) {
-              throw new Error(
-                `Unrecognized worktree path ${child}. Preserve it before creating or reusing a worktree.`,
-              );
-            }
-          }
-        }
-        const previous = path
-          ? await observe({ worktreePath: path, branch }, options.allowDirty)
-          : await branchTip(branch);
-        const baseSha = await git("rev-parse", "--verify", "--end-of-options", `${base}^{commit}`);
-        const worktree = await createWorktree({
-          cwd: root,
-          branchStrategy: { type: "branch", branch, baseBranch: baseSha },
-        });
-        if (worktree.worktreePath !== (path ?? expected)) throw new Error(`Unexpected worktree path for ${branch}.`);
-        const sha = await observe(worktree, options.allowDirty);
-        if (previous ? !(await ancestor(previous, sha)) : sha !== baseSha) {
-          throw new Error(`Unexpected worktree HEAD for ${branch}. Preserve the checkout for inspection.`);
-        }
-        return worktree;
-      });
-    },
-    async close(worktree: Worktree, candidate: string): Promise<void> {
-      await serial(async () => {
-        if ((await observe(worktree)) !== candidate) throw new Error(`Worktree ${worktree.branch} has moved.`);
-        const result = await worktree.close();
-        if (result.preservedWorktreePath || (await inspectPath(worktree.worktreePath))) {
-          throw new Error(`Worktree ${worktree.branch} could not be removed. Preserve its branch and checkout.`);
-        }
-      });
-    },
-    closeTicket(branch: string, candidate: string) {
-      return serial(async () => {
-        await assertBranch(branch);
-        const tip = await branchTip(branch);
-        if (!tip) return;
-        if (!(await ancestor(tip, candidate))) throw new Error(`Ticket branch ${branch} has unmerged changes.`);
-        const { managed } = await managedWorktrees();
-        const registration = managedCheckout(await listWorktrees(), managed, branch);
-        if (registration) {
-          const path = registration.path;
-          if ((await inspectPath(path))?.isSymbolicLink() || (await observe({ branch, worktreePath: path })) !== tip) {
-            throw new Error(`Ticket worktree ${branch} changed before cleanup.`);
-          }
-          await git("worktree", "remove", "--", path);
-          if (await inspectPath(path)) throw new Error(`Ticket worktree ${branch} could not be removed.`);
-        } else {
-          const path = join(managed, branch.replaceAll("/", "-"));
-          if (await inspectPath(path)) throw new Error(`Unexpected unregistered worktree at ${path}.`);
-        }
-        await git("update-ref", "-d", `refs/heads/${branch}`, tip);
-      });
-    },
-    integrate(spec: Checkout, ticket: Checkout, number: number, candidate: string): Promise<IntegrationResult> {
-      return serial(async () => {
-        if (!Number.isSafeInteger(number) || number <= 0) throw new Error("Invalid ticket number.");
-        const before = await observe(spec);
-        if ((await observe(ticket)) !== candidate) throw new Error(`Candidate for ticket #${number} has moved.`);
-        if (await ancestor(candidate, before)) return { status: "no-change", integrationSha: before };
-        try {
-          await at(
-            spec,
-            "merge",
-            "--no-ff",
-            "--no-edit",
-            "--no-log",
-            "--commit",
-            "--no-autostash",
-            "-m",
-            `Integrate ticket #${number}`,
-            "-m",
-            `Sandcastle-Ticket: #${number}`,
-            candidate,
-          );
-        } catch (error) {
-          const directory = await at(spec, "rev-parse", "--absolute-git-dir");
-          if (
-            !(await inspectPath(join(directory, "MERGE_HEAD"))) ||
-            (await at(spec, "rev-parse", "MERGE_HEAD")) !== candidate ||
-            !(await at(spec, "ls-files", "--unmerged"))
-          )
-            throw error;
-          await at(spec, "merge", "--abort");
-          if ((await observe(spec)) !== before)
-            throw new Error("Spec changed during conflict rollback.", { cause: error });
-          return { status: "conflict", integrationSha: before };
-        }
-        const mergeSha = await observe(spec);
-        const parents = await at(spec, "show", "-s", "--format=%P", mergeSha);
-        const trailer = await at(
-          spec,
-          "show",
-          "-s",
-          "--format=%(trailers:key=Sandcastle-Ticket,valueonly,unfold)",
-          mergeSha,
-        );
-        if (parents !== `${before} ${candidate}` || trailer !== `#${number}`) {
-          throw new Error(`Git did not record a valid merge for ticket #${number}.`);
-        }
-        return { status: "merged", mergeSha, candidate };
-      });
-    },
-    async inspectTickets(spec: Checkout | string, invocationBase: string, tickets: ReadonlyMap<number, string>) {
-      const head = typeof spec === "string" ? spec : await observe(spec);
-      const base = await git("rev-parse", "--verify", "--end-of-options", `${invocationBase}^{commit}`);
-      if (!(await ancestor(base, head))) throw new Error("Spec does not include the invocation base.");
-      const history = await git(
-        "log",
-        "--first-parent",
-        "--merges",
-        "-z",
-        "--format=%H%n%P%n%(trailers:key=Sandcastle-Ticket,valueonly,unfold)",
-        `${base}..${head}`,
-      );
-      const integrated = new Map<number, IntegrationEvidence>();
-      const branchHeads = await branchTips(tickets.values());
-      const tips = new Map<number, string>();
-      for (const [number, branch] of tickets) {
-        const tip = branchHeads.get(branch);
-        if (tip) tips.set(number, tip);
-      }
-      for (const entry of history.split("\0")) {
-        const [mergeSha, parents, trailer, ...extra] = entry.trimEnd().split("\n");
-        const [first, candidate, ...otherParents] = parents?.split(" ") ?? [];
-        const number = Number(/^#([1-9]\d*)$/.exec(trailer ?? "")?.[1]);
-        if (
-          extra.length ||
-          otherParents.length ||
-          !first ||
-          !candidate ||
-          !mergeSha ||
-          !tickets.has(number) ||
-          integrated.has(number)
-        )
-          continue;
-        const tip = tips.get(number);
-        if (tip && !(await ancestor(tip, candidate))) continue;
-        // A zero-change merge cannot be created by the integration path.
-        if (await ancestor(candidate, first)) continue;
-        integrated.set(number, { mergeSha, candidate });
-      }
-      return { integrated, tips, resumable: new Set([...tips.keys()].filter((number) => !integrated.has(number))) };
-    },
+export function createSerialQueue() {
+  let pending: Promise<unknown> = Promise.resolve();
+  return <T>(operation: () => Promise<T>): Promise<T> => {
+    const result = pending.then(operation);
+    pending = result.catch(() => {});
+    return result;
   };
+}
+
+export function specBranchName(specNumber: number, body: string): string {
+  const declared = new Set<string>();
+  for (const [, heading, branch] of body.matchAll(/^([^:\r\n：]+)[:：][ \t]*`?([^\s`]+)`?[ \t]*$/gm)) {
+    const normalized = heading?.trim().toLowerCase();
+    if (branch && (normalized === "integration branch" || normalized === "集成分支")) {
+      declared.add(branch);
+    }
+  }
+  if (declared.size > 1) {
+    throw new Error(`Spec #${specNumber} declares conflicting integration branches.`);
+  }
+  return declared.values().next().value ?? `sandcastle/spec-${specNumber}`;
+}
+
+export function ticketBranchName(ticketNumber: number): string {
+  if (!Number.isSafeInteger(ticketNumber) || ticketNumber <= 0) {
+    throw new Error(`Invalid ticket number: ${ticketNumber}`);
+  }
+  return `sandcastle/ticket-${ticketNumber}`;
+}
+
+export async function assertValidBranchName(cwd: string, branch: string): Promise<void> {
+  if (!branch || branch.startsWith("-")) throw new Error(`Invalid Git branch name: ${branch}`);
+  await command("git", ["check-ref-format", `refs/heads/${branch}`], cwd);
+}
+
+export async function isAncestor(cwd: string, older: string, newer: string): Promise<boolean> {
+  const olderSha = await resolveCommit(cwd, older);
+  const newerSha = await resolveCommit(cwd, newer);
+  try {
+    await command("git", ["merge-base", "--is-ancestor", olderSha, newerSha], cwd);
+    return true;
+  } catch (error) {
+    if (!hasCode(error, 1)) throw error;
+    return false;
+  }
+}
+
+export async function branchTip(cwd: string, branch: string): Promise<string | undefined> {
+  await assertValidBranchName(cwd, branch);
+  const ref = `refs/heads/${branch}`;
+  const output = await command("git", ["for-each-ref", "--format=%(objectname)", ref], cwd);
+  return output || undefined;
+}
+
+export async function fetchBase(
+  cwd: string,
+  remote = "origin",
+  baseBranch = "main",
+): Promise<{ remoteRef: string; sha: string }> {
+  await assertValidBranchName(cwd, baseBranch);
+  if (!remote || remote.startsWith("-")) throw new Error(`Invalid Git remote name: ${remote}`);
+  const remoteRef = `refs/remotes/${remote}/${baseBranch}`;
+  await command("git", ["fetch", "--no-tags", "--", remote, `+refs/heads/${baseBranch}:${remoteRef}`], cwd);
+  const sha = await resolveCommit(cwd, remoteRef);
+  return { remoteRef, sha };
+}
+
+export async function mergeBase(cwd: string, specBranch: string, baseRef: string): Promise<string> {
+  const specSha = await resolveCommit(cwd, specBranch);
+  const baseSha = await resolveCommit(cwd, baseRef);
+  return command("git", ["merge-base", specSha, baseSha], cwd);
+}
+
+function extractHandoff(commitBody: string, ticketNumber: number): string {
+  const normalized = commitBody.replaceAll("\r\n", "\n").trim();
+  const firstBreak = normalized.indexOf("\n\n");
+  if (firstBreak === -1) return "";
+  const rest = normalized.slice(firstBreak + 2).trim();
+  const trailerLine = `Sandcastle-Ticket: #${ticketNumber}`;
+  if (rest === trailerLine) return "";
+  if (rest.endsWith(`\n\n${trailerLine}`)) return rest.slice(0, -(trailerLine.length + 2)).trim();
+  if (rest.endsWith(`\n${trailerLine}`)) return rest.slice(0, -(trailerLine.length + 1)).trim();
+  return rest;
+}
+
+export async function readIntegratedTickets(
+  cwd: string,
+  specBranch: string,
+  mergeBaseSha: string,
+): Promise<Map<number, IntegratedTicket>> {
+  const base = assertSha(mergeBaseSha, "merge-base SHA");
+  const head = await resolveCommit(cwd, specBranch);
+  if (!(await isAncestor(cwd, base, head))) {
+    throw new Error(`Spec branch ${specBranch} does not contain merge-base ${base}.`);
+  }
+  const history = await command(
+    "git",
+    [
+      "log",
+      "--first-parent",
+      "--merges",
+      "-z",
+      "--format=%H%x1f%P%x1f%(trailers:key=Sandcastle-Ticket,valueonly,unfold)%x1f%B",
+      `${base}..${head}`,
+    ],
+    cwd,
+  );
+  const integrated = new Map<number, IntegratedTicket>();
+  for (const rawEntry of history.split("\0")) {
+    if (!rawEntry) continue;
+    const sep1 = rawEntry.indexOf("\x1f");
+    const sep2 = sep1 === -1 ? -1 : rawEntry.indexOf("\x1f", sep1 + 1);
+    const sep3 = sep2 === -1 ? -1 : rawEntry.indexOf("\x1f", sep2 + 1);
+    if (sep1 === -1 || sep2 === -1 || sep3 === -1) continue;
+    const mergeSha = rawEntry.slice(0, sep1).trim();
+    const parents = rawEntry.slice(sep1 + 1, sep2).trim();
+    const trailer = rawEntry.slice(sep2 + 1, sep3).trim();
+    const body = rawEntry.slice(sep3 + 1);
+    const parentList = parents.split(" ").filter(Boolean);
+    if (parentList.length !== 2) continue;
+    const [firstParent, candidateSha] = parentList;
+    if (!firstParent || !candidateSha || !shaPattern.test(mergeSha)) continue;
+    const match = /^#([1-9]\d*)$/.exec(trailer);
+    if (!match) continue;
+    const number = Number(match[1]);
+    if (integrated.has(number)) continue;
+    if (await isAncestor(cwd, candidateSha, firstParent)) continue;
+    integrated.set(number, {
+      number,
+      mergeSha,
+      candidateSha,
+      handoff: extractHandoff(body, number),
+    });
+  }
+  return integrated;
+}
+
+export async function mergeTicket(
+  cwd: string,
+  specWorktreePath: string,
+  ticketNumber: number,
+  ticketBranch: string,
+  handoff: string,
+): Promise<MergeTicketResult> {
+  if (!Number.isSafeInteger(ticketNumber) || ticketNumber <= 0) {
+    throw new Error(`Invalid ticket number: ${ticketNumber}`);
+  }
+  await assertValidBranchName(cwd, ticketBranch);
+  const specTip = await observeCleanCheckout(specWorktreePath);
+  const candidateSha = await resolveCommit(cwd, `refs/heads/${ticketBranch}`);
+  if (await isAncestor(cwd, candidateSha, specTip)) {
+    return { merged: false, conflict: false, specTip };
+  }
+
+  const trimmedHandoff = handoff.trim();
+  const commitMessage = [
+    `Integrate ticket #${ticketNumber}`,
+    trimmedHandoff || undefined,
+    `Sandcastle-Ticket: #${ticketNumber}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  const tempDir = await mkdtemp(join(tmpdir(), "sandcastle-merge-msg-"));
+  const messagePath = join(tempDir, "message.txt");
+  try {
+    await writeFile(messagePath, `${commitMessage}\n`, { mode: 0o600, flag: "wx" });
+    try {
+      await command(
+        "git",
+        ["merge", "--no-ff", "--no-edit", "--no-log", "--commit", "--no-autostash", "-F", messagePath, candidateSha],
+        specWorktreePath,
+      );
+    } catch (error) {
+      const gitDir = await command("git", ["rev-parse", "--absolute-git-dir"], specWorktreePath);
+      const hasMergeHead = Boolean(await inspectPath(join(gitDir, "MERGE_HEAD")));
+      const unmerged = hasMergeHead
+        ? await command("git", ["ls-files", "--unmerged"], specWorktreePath).catch(() => "")
+        : "";
+      if (!hasMergeHead || !unmerged) throw error;
+      await command("git", ["merge", "--abort"], specWorktreePath);
+      const afterAbort = await observeCleanCheckout(specWorktreePath);
+      if (afterAbort !== specTip) {
+        throw new Error(`Spec worktree HEAD changed during merge abort for ticket #${ticketNumber}.`, { cause: error });
+      }
+      return { merged: false, conflict: true, specTip };
+    }
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+
+  const mergeSha = await observeCleanCheckout(specWorktreePath);
+  const parents = await command("git", ["show", "-s", "--format=%P", mergeSha], specWorktreePath);
+  const trailer = await command(
+    "git",
+    ["show", "-s", "--format=%(trailers:key=Sandcastle-Ticket,valueonly,unfold)", mergeSha],
+    specWorktreePath,
+  );
+  if (parents !== `${specTip} ${candidateSha}` || trailer !== `#${ticketNumber}`) {
+    throw new Error(`Git did not record a valid merge commit for ticket #${ticketNumber}.`);
+  }
+  return { merged: true, mergeSha, candidateSha };
+}
+
+export async function assertBoundary(cwd: string, input: BoundaryAssertionInput): Promise<void> {
+  const { ticketBranch, baselineSha, specBranch, expectedSpecTip, remoteRef, expectedRemoteSha } = input;
+  if ((ticketBranch === undefined) !== (baselineSha === undefined)) {
+    throw new Error("assertBoundary requires both ticketBranch and baselineSha when validating a ticket candidate.");
+  }
+
+  if (ticketBranch !== undefined && baselineSha !== undefined) {
+    await assertValidBranchName(cwd, ticketBranch);
+    assertSha(baselineSha, "baseline SHA");
+    const candidateSha = await branchTip(cwd, ticketBranch);
+    if (!candidateSha) {
+      throw new Error(`Trust boundary violation: ticket branch ${ticketBranch} is missing.`);
+    }
+    if (!(await isAncestor(cwd, baselineSha, candidateSha))) {
+      throw new Error(
+        `Trust boundary violation: ticket branch ${ticketBranch} (${candidateSha}) does not contain baseline ${baselineSha}.`,
+      );
+    }
+  }
+
+  const actualSpecTip = await branchTip(cwd, specBranch);
+  if (actualSpecTip !== assertSha(expectedSpecTip, "expected Spec tip SHA")) {
+    throw new Error(
+      `Trust boundary violation: Spec branch ${specBranch} moved (expected ${expectedSpecTip}, got ${actualSpecTip ?? "missing"}).`,
+    );
+  }
+
+  const actualRemoteSha = await resolveCommit(cwd, remoteRef).catch(() => undefined);
+  if (actualRemoteSha !== assertSha(expectedRemoteSha, "expected remote SHA")) {
+    throw new Error(
+      `Trust boundary violation: remote ref ${remoteRef} moved (expected ${expectedRemoteSha}, got ${actualRemoteSha ?? "missing"}).`,
+    );
+  }
+}
+
+export async function ensureSpecWorktree(cwd: string, specBranch: string, baseSha: string): Promise<SpecWorktree> {
+  await assertValidBranchName(cwd, specBranch);
+  const resolvedBase = await resolveCommit(cwd, baseSha);
+  const root = await realpath(cwd);
+  const managedDir = join(root, ".sandcastle", "worktrees");
+  for (const dirPath of [dirname(managedDir), managedDir]) {
+    if ((await inspectPath(dirPath))?.isSymbolicLink()) {
+      throw new Error(`Unexpected symbolic link in managed worktree path: ${dirPath}.`);
+    }
+  }
+
+  const entries = await listWorktrees(root);
+  const matches = entries.filter((entry) => entry.ref === `refs/heads/${specBranch}`);
+  const existing = matches[0];
+  if (existing) {
+    if (matches.length !== 1 || dirname(existing.path) !== managedDir || existing.unavailable) {
+      throw new Error(`Branch ${specBranch} is checked out outside an available managed worktree (${existing.path}).`);
+    }
+    const head = await observeCleanCheckout(existing.path);
+    return { worktreePath: existing.path, branch: specBranch, head };
+  }
+
+  const worktreePath = join(managedDir, specBranch.replaceAll("/", "-"));
+  if (entries.some((entry) => entry.path === worktreePath)) {
+    throw new Error(`Worktree path ${worktreePath} is already registered to a different branch.`);
+  }
+  await mkdir(managedDir, { recursive: true });
+  const existingTip = await branchTip(root, specBranch);
+  if (existingTip) {
+    await command("git", ["worktree", "add", "--", worktreePath, specBranch], root);
+  } else {
+    await command("git", ["worktree", "add", "-b", specBranch, "--", worktreePath, resolvedBase], root);
+  }
+  const head = await observeCleanCheckout(worktreePath);
+  return { worktreePath, branch: specBranch, head };
+}
+
+export async function removeWorktreeSafe(cwd: string, worktreePath: string): Promise<void> {
+  const info = await inspectPath(worktreePath);
+  if (!info) return;
+  if (info.isSymbolicLink()) {
+    throw new Error(`Refusing to remove symbolic link as worktree: ${worktreePath}.`);
+  }
+  await observeCleanCheckout(worktreePath);
+  await command("git", ["worktree", "remove", "--", worktreePath], cwd);
+  if (await inspectPath(worktreePath)) {
+    throw new Error(`Worktree ${worktreePath} still exists after removal.`);
+  }
+}
+
+export async function deleteBranchCas(cwd: string, branch: string, expectedTip: string): Promise<void> {
+  await assertValidBranchName(cwd, branch);
+  const tip = assertSha(expectedTip, "expected branch tip SHA");
+  await command("git", ["update-ref", "-d", `refs/heads/${branch}`, tip], cwd);
+}
+
+export async function pushBranchNonForce(
+  cwd: string,
+  remote: string,
+  branch: string,
+  expectedHead: string,
+): Promise<void> {
+  await assertValidBranchName(cwd, branch);
+  if (!remote || remote.startsWith("-")) throw new Error(`Invalid Git remote name: ${remote}`);
+  const head = assertSha(expectedHead, "expected head SHA");
+  const ref = `refs/heads/${branch}`;
+  await command("git", ["push", "--no-follow-tags", "--", remote, `${head}:${ref}`], cwd);
+  const remoteOutput = await command("git", ["ls-remote", "--heads", "--", remote, ref], cwd);
+  const lines = remoteOutput.split("\n").filter(Boolean);
+  const matched = lines.length === 1 && lines[0] === `${head}\t${ref}`;
+  if (!matched) {
+    throw new Error(`Could not verify remote branch ${remote}/${branch} matches ${head}.`);
+  }
 }

@@ -2,227 +2,318 @@ import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createWorktree } from "@ai-hero/sandcastle";
 import { command } from "../command.ts";
-import { createGitWorkspace, specBranchName } from "../git.ts";
-import { createSpecState, pendingDeliveries } from "../state.ts";
-import { commit, withGitTrace } from "./git-fixture.ts";
+import {
+  assertBoundary,
+  branchTip,
+  deleteBranchCas,
+  ensureSpecWorktree,
+  fetchBase,
+  mergeBase,
+  mergeTicket,
+  pushBranchNonForce,
+  readIntegratedTickets,
+  removeWorktreeSafe,
+  specBranchName,
+  ticketBranchName,
+} from "../git.ts";
+import { commit } from "./git-fixture.ts";
 
-async function withRepository(run: (cwd: string, base: string) => Promise<void>) {
-  const directory = await mkdtemp(join(tmpdir(), "sandcastle-git-"));
-  const cwd = join(directory, "repo");
+async function withRepoAndRemote(
+  run: (ctx: { dir: string; cwd: string; remotePath: string; baseSha: string }) => Promise<void>,
+) {
+  const dir = await mkdtemp(join(tmpdir(), "sandcastle-git-"));
+  const cwd = join(dir, "repo");
+  const remotePath = join(dir, "remote.git");
   const git = (...args: string[]) => command("git", args, cwd);
   try {
-    await command("git", ["init", "-b", "main", cwd], directory);
+    await command("git", ["init", "--bare", "-b", "main", remotePath], dir);
+    await command("git", ["init", "-b", "main", cwd], dir);
     await git("config", "user.name", "Sandcastle Test");
     await git("config", "user.email", "test@example.test");
-    await commit(cwd, "shared.txt", "base");
+    await git("remote", "add", "origin", remotePath);
+    const baseSha = await commit(cwd, "shared.txt", "base\n");
     await writeFile(join(cwd, ".git", "info", "exclude"), "\n.sandcastle/\n");
-    await run(cwd, await git("rev-parse", "HEAD"));
+    await git("push", "-u", "origin", "main");
+    await run({ dir, cwd, remotePath, baseSha });
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await rm(dir, { recursive: true, force: true });
   }
 }
 
-test("resolves English and configured literal branch declarations", () => {
-  expect(specBranchName(40, "Integration-Branch: `feat/design`")).toBe("feat/design");
-  expect(specBranchName(40, "Integration branch: `feat/design`")).toBe("sandcastle/spec-40");
-  expect(specBranchName(40, "Candidate (custom): feat/design")).toBe("sandcastle/spec-40");
-  expect(specBranchName(40, "Candidate (custom): feat/design", "flow", ["Candidate (custom)"])).toBe("feat/design");
-  expect(() =>
-    specBranchName(40, "Candidate (custom): feat/design\nIntegration-Branch: feat/other", "flow", [
-      "Candidate (custom)",
-    ]),
-  ).toThrow("conflicting integration branches");
+async function expectReject(operation: () => Promise<unknown>): Promise<Error> {
+  let caught: unknown;
+  try {
+    await operation();
+  } catch (error) {
+    caught = error;
+  }
+  expect(caught).toBeInstanceOf(Error);
+  return caught as Error;
+}
+
+test("resolves Integration branch / 集成分支 declarations and sandcastle/ticket-<N> naming", () => {
+  expect(specBranchName(433, "Integration branch: `feat/core-v2`")).toBe("feat/core-v2");
+  expect(specBranchName(433, "集成分支：feat/sandcastle-native-convergence")).toBe(
+    "feat/sandcastle-native-convergence",
+  );
+  expect(specBranchName(433, "集成分支: `feat/cn-ascii-colon`")).toBe("feat/cn-ascii-colon");
+  expect(specBranchName(433, "No branch heading here")).toBe("sandcastle/spec-433");
+  expect(() => specBranchName(433, "Integration branch: feat/a\n集成分支：feat/b")).toThrow(
+    "conflicting integration branches",
+  );
+  expect(ticketBranchName(434)).toBe("sandcastle/ticket-434");
 });
 
-test("the synchronized invocation is verified against a freshly fetched bare remote", async () => {
-  await withRepository(async (cwd, base) => {
+test("fetchBase fetches origin/main without touching a dirty non-main checkout, and mergeBase survives remote main advancing", async () => {
+  await withRepoAndRemote(async ({ dir, cwd, remotePath, baseSha }) => {
     const git = (...args: string[]) => command("git", args, cwd);
-    await git("init", "--bare", "../remote.git");
-    await git("remote", "add", "origin", "../remote.git");
-    await git("push", "origin", "main");
-    const workspace = createGitWorkspace(cwd);
-    expect(await workspace.synchronizeInvocation("main", "origin")).toBe(base);
-    const ahead = await commit(cwd, "local.txt", "unpushed");
-    const error = await workspace.synchronizeInvocation("main", "origin").catch((reason: unknown) => reason);
-    expect(error).toBeInstanceOf(Error);
-    const unchanged = await git("rev-parse", "HEAD");
-    expect(unchanged).toBe(ahead);
+
+    // Put local checkout on a different branch with dirty tracked + untracked files.
+    await git("checkout", "-b", "interactive/wip");
+    const localHead = await commit(cwd, "wip.txt", "local work\n");
+    await writeFile(join(cwd, "shared.txt"), "dirty local edit\n");
+    await writeFile(join(cwd, "untracked.txt"), "keep me\n");
+
+    // Fetch origin/main; local checkout must remain completely untouched.
+    const initial = await fetchBase(cwd);
+    expect(initial).toEqual({ remoteRef: "refs/remotes/origin/main", sha: baseSha });
+    expect(await git("symbolic-ref", "--short", "HEAD")).toBe("interactive/wip");
+    expect(await git("rev-parse", "HEAD")).toBe(localHead);
+    expect(await readFile(join(cwd, "shared.txt"), "utf8")).toBe("dirty local edit\n");
+    expect(await readFile(join(cwd, "untracked.txt"), "utf8")).toBe("keep me\n");
+
+    // Start Spec worktree from origin/main and integrate a ticket.
+    const specBranch = "feat/demo-spec";
+    const specWt = await ensureSpecWorktree(cwd, specBranch, initial.sha);
+    const ticketBranch = ticketBranchName(101);
+    const ticketWt = join(dir, "ticket-101");
+    await git("worktree", "add", "-b", ticketBranch, ticketWt, initial.sha);
+    const ticketSha = await commit(ticketWt, "feature.txt", "ticket 101 work\n");
+    const merged = await mergeTicket(cwd, specWt.worktreePath, 101, ticketBranch, "bun test: 4 passed");
+    expect(merged.merged).toBe(true);
+    if (!merged.merged) throw new Error("expected merge");
+
+    // Advance remote main via a separate clone while AFK is running.
+    const otherClone = join(dir, "other-clone");
+    await command("git", ["clone", "-b", "main", remotePath, otherClone], dir);
+    await command("git", ["config", "user.name", "Other Dev"], otherClone);
+    await command("git", ["config", "user.email", "other@example.test"], otherClone);
+    const advancedMainSha = await commit(otherClone, "unrelated.txt", "main moved forward\n");
+    await command("git", ["push", "origin", "main"], otherClone);
+
+    // Fetch again; merge-base must still equal the original divergence point (baseSha), not advancedMainSha.
+    const updated = await fetchBase(cwd);
+    expect(updated.sha).toBe(advancedMainSha);
+    const derivedBase = await mergeBase(cwd, specBranch, updated.remoteRef);
+    expect(derivedBase).toBe(baseSha);
+
+    // Non-force push of specBranch still succeeds even though remote main moved.
+    await pushBranchNonForce(cwd, "origin", specBranch, merged.mergeSha);
+    const remoteSpecLine = await git("ls-remote", "--heads", "origin", `refs/heads/${specBranch}`);
+    expect(remoteSpecLine.startsWith(`${merged.mergeSha}\t`)).toBe(true);
+
+    // Clean up temporary external ticket worktree created by this test.
+    await git("worktree", "remove", ticketWt);
+    expect(ticketSha).toBe(merged.candidateSha);
   });
 });
 
-test("restart recovers serial merges by trailer and preserves an unfinished zero-commit ticket", async () => {
-  await withRepository(async (cwd, base) => {
-    const git = createGitWorkspace(cwd);
-    const spec = await git.open(specBranchName(40, "Integration-Branch: `feat/migration`"), base);
-    const branches = new Map([
-      [41, "sandcastle/issue-41"],
-      [42, "sandcastle/issue-42"],
-      [43, "sandcastle/issue-43"],
-    ]);
-    const [first, second, unfinished] = await Promise.all(
-      [...branches.values()].map((branch) => git.open(branch, base)),
-    );
-    if (!first || !second || !unfinished) throw new Error("Expected three worktrees");
-    const firstTip = await commit(first.worktreePath, "41.txt", "ticket 41");
-    const secondTip = await commit(second.worktreePath, "42.txt", "ticket 42");
-    const merges = await Promise.all([
-      git.integrate(spec, first, 41, firstTip),
-      git.integrate(spec, second, 42, secondTip),
-    ]);
-    expect(merges.map((result) => result.status)).toEqual(["merged", "merged"]);
-    await commit(spec.worktreePath, "unverified.txt", "Plain commit\n\nSandcastle-Ticket: #43");
-    await writeFile(join(unfinished.worktreePath, "unfinished.txt"), "carry over");
-    const restart = createGitWorkspace(cwd);
-    const recovered = await restart.inspectTickets(spec, base, branches);
-    expect([...recovered.integrated.keys()].sort()).toEqual([41, 42]);
-    expect([...recovered.resumable]).toEqual([43]);
-    const resumed = await restart.open(unfinished.branch, base, { allowDirty: true });
-    expect(resumed.worktreePath).toBe(unfinished.worktreePath);
-    const preserved = await readFile(join(resumed.worktreePath, "unfinished.txt"), "utf8");
-    expect(preserved).toBe("carry over");
-    const noChange = await restart.integrate(spec, await restart.open("sandcastle/issue-44", base), 44, base);
-    expect(noChange.status).toBe("no-change");
-    const messages = await command(
+test("mergeTicket embeds trailer and handoff, readIntegratedTickets recovers only two-parent merges, and conflicts abort cleanly", async () => {
+  await withRepoAndRemote(async ({ dir, cwd, baseSha }) => {
+    const git = (...args: string[]) => command("git", args, cwd);
+    const specBranch = "feat/handoff-test";
+    const specWt = await ensureSpecWorktree(cwd, specBranch, baseSha);
+
+    // Reuse existing Spec worktree cleanly.
+    const reused = await ensureSpecWorktree(cwd, specBranch, baseSha);
+    expect(reused.worktreePath).toBe(specWt.worktreePath);
+
+    // Ticket 11 merges cleanly with multiline handoff.
+    const t11 = ticketBranchName(11);
+    const t11Path = join(dir, "t11");
+    await git("worktree", "add", "-b", t11, t11Path, baseSha);
+    const t11Sha = await commit(t11Path, "a.txt", "ticket 11\n");
+    const handoff11 = "Verification:\n- `bun test`: 12 passed\n- `pnpm check:architecture`: ok";
+    const m11 = await mergeTicket(cwd, specWt.worktreePath, 11, t11, handoff11);
+    expect(m11).toEqual({ merged: true, mergeSha: expect.any(String), candidateSha: t11Sha });
+
+    // Already-integrated candidate reports no-change.
+    const noChange = await mergeTicket(cwd, specWt.worktreePath, 11, t11, handoff11);
+    expect(noChange).toEqual({ merged: false, conflict: false, specTip: m11.merged ? m11.mergeSha : "" });
+
+    // Forged non-merge commit with Sandcastle-Ticket trailer must NOT be counted as integrated.
+    await commit(specWt.worktreePath, "forged.txt", "Plain commit\n\nSandcastle-Ticket: #12");
+
+    // Ticket 13 conflicts with a file edited on spec branch.
+    const specTipBeforeConflict = await commit(specWt.worktreePath, "shared.txt", "spec side\n");
+    const t13 = ticketBranchName(13);
+    const t13Path = join(dir, "t13");
+    await git("worktree", "add", "-b", t13, t13Path, baseSha);
+    await commit(t13Path, "shared.txt", "ticket 13 side\n");
+
+    const conflict = await mergeTicket(cwd, specWt.worktreePath, 13, t13, "handoff 13");
+    expect(conflict).toEqual({ merged: false, conflict: true, specTip: specTipBeforeConflict });
+    const statusAfterAbort = await command("git", ["status", "--porcelain"], specWt.worktreePath);
+    const headAfterAbort = await command("git", ["rev-parse", "HEAD"], specWt.worktreePath);
+    expect(statusAfterAbort).toBe("");
+    expect(headAfterAbort).toBe(specTipBeforeConflict);
+
+    // Recover integrated tickets from merge-base..specBranch.
+    const recovered = await readIntegratedTickets(cwd, specBranch, baseSha);
+    expect([...recovered.keys()]).toEqual([11]);
+    const info11 = recovered.get(11);
+    expect(info11).toBeDefined();
+    expect(info11?.candidateSha).toBe(t11Sha);
+    expect(info11?.handoff).toContain("`bun test`: 12 passed");
+    expect(info11?.handoff).toContain("`pnpm check:architecture`: ok");
+
+    // Also verify git log --first-parent carries the handoff body.
+    const logBody = await command(
       "git",
-      ["log", "--first-parent", "--merges", "--format=%B", `${base}..HEAD`],
-      spec.worktreePath,
+      ["log", "--first-parent", "--merges", "-n", "1", "--format=%B", `${baseSha}..${specBranch}`],
+      cwd,
     );
-    expect(messages.match(/^Sandcastle-Ticket: #\d+$/gm)).toEqual(["Sandcastle-Ticket: #42", "Sandcastle-Ticket: #41"]);
-    await commit(first.worktreePath, "advanced.txt", "unmerged continuation");
-    const advanced = await restart.inspectTickets(spec, base, branches);
-    expect(advanced.integrated.has(41)).toBe(false);
-    expect(advanced.resumable.has(41)).toBe(true);
+    expect(logBody).toContain("Sandcastle-Ticket: #11");
+    expect(logBody).toContain("`bun test`: 12 passed");
+
+    await git("worktree", "remove", t11Path);
+    await git("worktree", "remove", t13Path);
   });
 });
 
-test("opening worktrees rejects external registrations and preserves unregistered contents", async () => {
-  await withRepository(async (cwd, base) => {
-    const workspace = createGitWorkspace(cwd);
-    const spec = await workspace.open("sandcastle/spec-40", base);
-    const external = join(cwd, ".sandcastle", "worktrees-sibling", "ticket");
-    await mkdir(join(external, ".."), { recursive: true });
-    await command("git", ["worktree", "add", "-b", "sandcastle/issue-41", external, base], cwd);
-    const existing = await workspace.open("sandcastle/issue-41", base).catch((reason: unknown) => reason);
-    expect(existing).toBeInstanceOf(Error);
-    const blockedCleanup = await workspace.closeTicket("sandcastle/issue-41", base).catch((reason: unknown) => reason);
-    expect(blockedCleanup).toBeInstanceOf(Error);
-    expect(await workspace.branchTip("sandcastle/issue-41")).toBe(base);
+test("assertBoundary enforces candidate-contains-baseline and untouched spec/remote refs", async () => {
+  await withRepoAndRemote(async ({ dir, cwd, baseSha }) => {
+    const git = (...args: string[]) => command("git", args, cwd);
+    const specBranch = "feat/boundary-spec";
+    const specWt = await ensureSpecWorktree(cwd, specBranch, baseSha);
+    const remoteRef = "refs/remotes/origin/main";
 
-    const orphan = join(cwd, ".sandcastle", "worktrees", "unknown");
-    await mkdir(orphan);
-    await writeFile(join(orphan, "keep.txt"), "preserve me");
-    const failure = await workspace.open("sandcastle/issue-42", base).catch((reason: unknown) => reason);
-    const kept = await readFile(join(orphan, "keep.txt"), "utf8");
-    expect(failure).toBeInstanceOf(Error);
-    expect(kept).toBe("preserve me");
+    const t21 = ticketBranchName(21);
+    const t21Path = join(dir, "t21");
+    await git("worktree", "add", "-b", t21, t21Path, baseSha);
+    await commit(t21Path, "ok.txt", "valid work\n");
 
-    await workspace.close(spec, base);
-    const tip = await command("git", ["rev-parse", `refs/heads/${spec.branch}`], cwd);
-    expect(tip).toBe(base);
-  });
-});
-
-test("worktree open adds one host listing and cleanup removes a ticket directly", async () => {
-  await withRepository(async (cwd, base) => {
-    const branch = "sandcastle/issue-41";
-    const workspace = createGitWorkspace(cwd);
-    const trace = join(cwd, ".git", "worktree.trace");
-    const countWorktree = (commands: string[][], action: string) =>
-      commands.filter((argv) => argv.includes("worktree") && argv.includes(action)).length;
-
-    await workspace.open("sandcastle/spec-40", base);
-    await withGitTrace(trace, async ({ readCommands, reset }) => {
-      const baselineTree = await createWorktree({
-        cwd,
-        branchStrategy: { type: "branch", branch: "sandcastle/issue-40", baseBranch: base },
-      });
-      const sdkLists = countWorktree(await readCommands(), "list");
-      await baselineTree.close();
-      await reset();
-
-      const ticket = await workspace.open(branch, base);
-      const openingLists = countWorktree(await readCommands(), "list");
-      expect(openingLists - sdkLists).toBeLessThanOrEqual(1);
-
-      const candidate = await commit(ticket.worktreePath, ".gitignore", "node_modules/\n");
-      const dependencies = join(ticket.worktreePath, "node_modules");
-      await mkdir(dependencies);
-      await writeFile(join(dependencies, "fixture"), "generated dependency");
-      await reset();
-
-      await workspace.closeTicket(branch, candidate);
-      const cleanup = await readCommands();
-      expect(countWorktree(cleanup, "list")).toBeLessThanOrEqual(1);
-      expect(countWorktree(cleanup, "remove")).toBe(1);
+    // Valid boundary passes.
+    await assertBoundary(cwd, {
+      ticketBranch: t21,
+      baselineSha: baseSha,
+      specBranch,
+      expectedSpecTip: baseSha,
+      remoteRef,
+      expectedRemoteSha: baseSha,
     });
 
-    const tip = await workspace.branchTip(branch);
-    expect(tip).toBeUndefined();
+    // Spec-only boundary check (without ticketBranch/baselineSha) also passes.
+    await assertBoundary(cwd, {
+      specBranch,
+      expectedSpecTip: baseSha,
+      remoteRef,
+      expectedRemoteSha: baseSha,
+    });
+
+    // Fail 1: specBranch tip moved.
+    const movedSpecTip = await commit(specWt.worktreePath, "spec-drift.txt", "agent touched spec\n");
+    const specErr = await expectReject(() =>
+      assertBoundary(cwd, {
+        ticketBranch: t21,
+        baselineSha: baseSha,
+        specBranch,
+        expectedSpecTip: baseSha,
+        remoteRef,
+        expectedRemoteSha: baseSha,
+      }),
+    );
+    expect(specErr.message).toContain(specBranch);
+
+    // Fail 2: candidate does not contain baseline (ticket based on baseSha, baseline is movedSpecTip).
+    const baseErr = await expectReject(() =>
+      assertBoundary(cwd, {
+        ticketBranch: t21,
+        baselineSha: movedSpecTip,
+        specBranch,
+        expectedSpecTip: movedSpecTip,
+        remoteRef,
+        expectedRemoteSha: baseSha,
+      }),
+    );
+    expect(baseErr.message).toContain(t21);
+
+    // Fail 3: remote tracking ref moved.
+    await git("update-ref", remoteRef, movedSpecTip);
+    const remoteErr = await expectReject(() =>
+      assertBoundary(cwd, {
+        ticketBranch: t21,
+        baselineSha: baseSha,
+        specBranch,
+        expectedSpecTip: movedSpecTip,
+        remoteRef,
+        expectedRemoteSha: baseSha,
+      }),
+    );
+    expect(remoteErr.message).toContain(remoteRef);
+
+    await git("worktree", "remove", t21Path);
   });
 });
 
-test("a real conflict is aborted and leaves the candidate available for resolution", async () => {
-  await withRepository(async (cwd, base) => {
-    const git = createGitWorkspace(cwd);
-    const spec = await git.open("sandcastle/spec-40", base);
-    const ticket = await git.open("sandcastle/issue-41", base);
-    const kept = await commit(spec.worktreePath, "shared.txt", "spec choice");
-    const candidate = await commit(ticket.worktreePath, "shared.txt", "ticket choice");
-    const result = await git.integrate(spec, ticket, 41, candidate);
-    expect(result).toEqual({ status: "conflict", integrationSha: kept });
-    const status = await command("git", ["status", "--porcelain"], spec.worktreePath);
-    const head = await command("git", ["rev-parse", "HEAD"], ticket.worktreePath);
-    expect(status).toBe("");
-    expect(head).toBe(candidate);
-    const recovery = await git.inspectTickets(spec, base, new Map([[41, ticket.branch]]));
-    expect(recovery.integrated.size).toBe(0);
+test("removeWorktreeSafe refuses dirty worktrees, preserves local spec ref, deleteBranchCas enforces CAS, and pushBranchNonForce rejects non-ff", async () => {
+  await withRepoAndRemote(async ({ dir, cwd, remotePath, baseSha }) => {
+    const git = (...args: string[]) => command("git", args, cwd);
+    const specBranch = "feat/cleanup-spec";
+    const specWt = await ensureSpecWorktree(cwd, specBranch, baseSha);
+    const specHead = await commit(specWt.worktreePath, "spec.txt", "spec work\n");
+
+    // Dirty worktree must NOT be deleted.
+    const dirtyFile = join(specWt.worktreePath, "dirty.txt");
+    await writeFile(dirtyFile, "uncommitted data\n");
+    const dirtyErr = await expectReject(() => removeWorktreeSafe(cwd, specWt.worktreePath));
+    expect(dirtyErr.message.toLowerCase()).toContain("dirty");
+    expect(await readFile(dirtyFile, "utf8")).toBe("uncommitted data\n");
+
+    // Clean worktree removes cleanly while preserving the local spec branch ref.
+    await rm(dirtyFile);
+    await removeWorktreeSafe(cwd, specWt.worktreePath);
+    expect(await branchTip(cwd, specBranch)).toBe(specHead);
+
+    // deleteBranchCas fails on stale expectedTip and succeeds on exact tip.
+    const ticketBranch = ticketBranchName(31);
+    await git("branch", ticketBranch, specHead);
+    const casErr = await expectReject(() => deleteBranchCas(cwd, ticketBranch, baseSha));
+    expect(casErr).toBeInstanceOf(Error);
+    expect(await branchTip(cwd, ticketBranch)).toBe(specHead);
+    await deleteBranchCas(cwd, ticketBranch, specHead);
+    expect(await branchTip(cwd, ticketBranch)).toBeUndefined();
+
+    // pushBranchNonForce succeeds initially, then rejects non-fast-forward remote divergence.
+    await pushBranchNonForce(cwd, "origin", specBranch, specHead);
+    const otherClone = join(dir, "other");
+    await command("git", ["clone", "-b", specBranch, remotePath, otherClone], dir);
+    await command("git", ["config", "user.name", "Other"], otherClone);
+    await command("git", ["config", "user.email", "other@example.test"], otherClone);
+    await commit(otherClone, "remote-only.txt", "diverged remote\n");
+    await command("git", ["push", "origin", specBranch], otherClone);
+
+    // Recreate local spec commit diverging from remote.
+    const divergedWt = await ensureSpecWorktree(cwd, specBranch, baseSha);
+    const divergedHead = await commit(divergedWt.worktreePath, "local-only.txt", "diverged local\n");
+    const pushErr = await expectReject(() => pushBranchNonForce(cwd, "origin", specBranch, divergedHead));
+    expect(pushErr).toBeInstanceOf(Error);
+    await removeWorktreeSafe(cwd, divergedWt.worktreePath);
   });
 });
 
-test("exploration and finalization only resume from their exact Git identities", async () => {
-  await withRepository(async (cwd, base) => {
-    const evidence = {
-      reviewBase: base,
-      reviewCandidate: base,
-      reviewReport: "passed review",
-      repairSummary: "passed checks",
-      prBody: "Ready",
-    };
-    const state = createSpecState(cwd, 40);
-    const path = await state.saveExploration(base, "module notes");
-    await state.saveDelivery(base, evidence);
-    const restart = createSpecState(cwd, 40);
-    const notes = await restart.readExploration(base);
-    const recovered = await restart.readDelivery(base);
-    const changed = await commit(cwd, "changed.txt", "create a new HEAD");
-    const drift = await restart.readDelivery(changed);
-    const otherBaseline = await restart.readExploration(changed);
-    const otherSpec = await createSpecState(cwd, 41).readDelivery(base);
-    expect(notes).toBe(path);
-    expect(recovered).toEqual(evidence);
-    expect(drift).toBeUndefined();
-    expect(otherBaseline).toBeUndefined();
-    expect(otherSpec).toBeUndefined();
-  });
-});
+test("ensureSpecWorktree rejects a branch already checked out outside managed worktrees", async () => {
+  await withRepoAndRemote(async ({ dir, cwd, baseSha }) => {
+    const git = (...args: string[]) => command("git", args, cwd);
+    const external = join(dir, "external-checkout");
+    await mkdir(external, { recursive: true });
+    await rm(external, { recursive: true, force: true });
+    await git("worktree", "add", "-b", "feat/external", external, baseSha);
 
-test("review checkpoints bind the report to both Git identities and leave delivery pending only after verification", async () => {
-  await withRepository(async (cwd, base) => {
-    const candidate = await commit(cwd, "reviewed.txt", "reviewed content");
-    const review = { reviewBase: base, reviewCandidate: candidate, reviewReport: "Standards and Spec passed" };
-    await createSpecState(cwd, 40).saveReview(review);
+    const err = await expectReject(() => ensureSpecWorktree(cwd, "feat/external", baseSha));
+    expect(err.message).toContain("feat/external");
 
-    const restart = createSpecState(cwd, 40);
-    const next = await commit(cwd, "changed.txt", "advanced HEAD");
-    expect(await restart.readReview(base, candidate)).toBe(review.reviewReport);
-    expect(await restart.readReview(base, next)).toBeUndefined();
-    expect(await restart.readReview(candidate, candidate)).toBeUndefined();
-    expect(await restart.readDelivery(candidate)).toBeUndefined();
-    expect(await pendingDeliveries(cwd)).toEqual([]);
-
-    await restart.saveDelivery(next, { ...review, repairSummary: "Verification passed", prBody: "Ready" });
-    expect(await pendingDeliveries(cwd)).toEqual([40]);
+    await git("worktree", "remove", external);
   });
 });
