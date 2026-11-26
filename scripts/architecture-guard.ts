@@ -1,4 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { isBuiltin } from "node:module";
 import { join, posix, relative, sep } from "node:path";
 import ts from "typescript";
 
@@ -85,9 +86,11 @@ const architectureWorkspaces: readonly (readonly [
   ["@iam/sso", "apps/sso", ["canonical"]],
 ];
 
-const protectedSourceRoots = architectureWorkspaces
-  .filter(([, , views]) => views.includes("source"))
-  .map(([, root]) => `${root}/src`);
+const sandcastleCore = "scripts/sandcastle/core";
+const protectedSourceRoots = [
+  ...architectureWorkspaces.filter(([, , views]) => views.includes("source")).map(([, root]) => `${root}/src`),
+  sandcastleCore,
+];
 
 const architectureWorkspaceRoots = new Map(
   architectureWorkspaces.filter(([, , views]) => views.includes("docker")).map(([name, root]) => [name, root]),
@@ -420,6 +423,7 @@ export function analyzeRepositoryArchitecture(repoRoot: string): readonly Archit
     ...collectRoleResolutionOwnerViolations(sources),
     ...collectUserDocumentOwnerViolations(sources),
     ...collectStaticModuleOwnershipViolations(sources),
+    ...collectSandcastleCoreViolations(sources),
     ...collectPublicApiProductionDependencyViolations(workspaceDependencies),
     ...collectDockerBuildClosureViolations(repoRoot, workspaceDependencies),
   ].sort(compareViolations);
@@ -468,7 +472,7 @@ function collectProductionTypeScriptFiles(root: string): string[] {
 }
 
 function isProductionTypeScriptFile(file: string) {
-  return /\.(?:ts|tsx)$/u.test(file) && !/\.(?:spec|test)\.(?:ts|tsx)$/u.test(file);
+  return /\.(?:ts|tsx|mts)$/u.test(file) && !/\.(?:spec|test)\.(?:ts|tsx|mts)$/u.test(file);
 }
 
 function indexSourceFile(file: string, sourceFile: ts.SourceFile): IndexedSourceFile {
@@ -676,6 +680,32 @@ function collectStaticModuleOwnershipViolations(sources: readonly IndexedSourceF
         }),
       ),
   );
+}
+
+function collectSandcastleCoreViolations(sources: readonly IndexedSourceFile[]): ArchitectureViolation[] {
+  return sources
+    .filter(({ file }) => isPathAtOrBelow(file, sandcastleCore))
+    .flatMap((source) =>
+      [...source.imports, ...source.reExports].flatMap((declaration): ArchitectureViolation[] => {
+        if (!declaration.moduleSpecifier || !ts.isStringLiteral(declaration.moduleSpecifier)) return [];
+        const specifier = declaration.moduleSpecifier.text;
+        if (isBuiltin(specifier) || isPathAtOrBelow(specifier, "@ai-hero/sandcastle")) return [];
+        if (
+          /^\.\.?\//.test(specifier) &&
+          isPathAtOrBelow(posix.join(posix.dirname(source.file), specifier), sandcastleCore)
+        ) {
+          return [];
+        }
+        return [
+          {
+            ruleId: "sandcastle-core-dependency-boundary",
+            file: source.file,
+            line: lineOf(source.sourceFile, declaration),
+            message: `Sandcastle core must not ${dependencyOperation(declaration)} "${specifier}". Use core modules, Node builtins, or the Sandcastle SDK.`,
+          },
+        ];
+      }),
+    );
 }
 
 function collectSourceDependencyDirectionViolations(source: IndexedSourceFile): ArchitectureViolation[] {
