@@ -78,9 +78,17 @@ function protectSandbox(sandbox: ReturnType<typeof docker>, readOnly: boolean, o
   return {
     ...sandbox,
     async create(options: BindMountCreateOptions): Promise<BindMountSandboxHandle> {
-      const handle: BindMountSandboxHandle = await create(
-        readOnly ? { ...options, mounts: options.mounts.map((mount) => ({ ...mount, readonly: true })) } : options,
-      );
+      // The native SDK merges the worktree's .sandcastle/.env after we build the provider.
+      const env = { ...options.env };
+      delete env.GH_TOKEN;
+      delete env.GITHUB_TOKEN;
+      if (readOnly) {
+        for (const key of Object.keys(env)) {
+          if (key.startsWith("GIT_CONFIG_")) delete env[key];
+        }
+      }
+      const mounts = readOnly ? options.mounts.map((mount) => ({ ...mount, readonly: true })) : options.mounts;
+      const handle: BindMountSandboxHandle = await create({ ...options, env, mounts });
       const id = handle.sandboxId ?? "unknown";
       openSandboxes.add(id);
       return {
@@ -134,7 +142,12 @@ export function createExecutor(
         lifecycleInputs = await lifecycle.beforeExecutor(context);
       }
       const shared = readOnly ? sandbox.mounts?.map((mount) => ({ ...mount, readonly: true })) : sandbox.mounts;
-      const inputs = [{ mounts: shared, env: sandbox.env }, ...auth, lifecycleInputs];
+      const inputs = [
+        { mounts: shared, env: sandbox.env },
+        readOnly ? undefined : sandbox.writable,
+        ...auth,
+        lifecycleInputs,
+      ];
       const mounts = inputs.flatMap((entry) => entry?.mounts ?? []);
       const env = Object.assign({}, ...inputs.map((entry) => entry?.env));
       const groups = useDocker ? [await dockerSocket()] : undefined;

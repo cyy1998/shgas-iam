@@ -85,7 +85,7 @@ expect(failure).toBeInstanceOf(ExpectedError);
 
 - **常驻单测**。根 `pnpm test:unit`（含在 `pnpm verify` 内）先执行 `pnpm test:unit:sandcastle`，再用 Turbo 执行各 workspace 的 Unit。独立入口收集 [core](../../scripts/sandcastle/core/__tests__/) 与 [adapters](../../scripts/sandcastle/adapters/__tests__/) 的 Bun 单测。高层编排用例驱动临时 Git 仓库和本地 bare remote，以执行器和 GitHub CLI 为外部替身，覆盖任务图、并行实施与串行集成、评审与交付、以及中断恢复。
 - **静态边界**。`pnpm check:architecture` 执行 [Sandcastle 核心依赖规则](#sandcastle-核心依赖边界)。`pnpm typecheck:root` 通过 [Sandcastle tsconfig](../../scripts/sandcastle/tsconfig.json) 收集核心、适配器、CLI 和仓库配置。
-- **真实 Docker 冒烟**。`pnpm sandcastle:smoke` 启动一个原生 Docker 沙箱，用本地探测 Provider 验证工作树、Git 元数据保护、锁定安装、容器内真实提交 Hook 与宿主 Git 配置不变，以及 socket、host network 和单执行器资源回收。准备、诊断与恢复见[运维手册](../../.sandcastle/README.md#启动与诊断)。
+- **真实 Docker 冒烟**。`pnpm sandcastle:smoke` 使用本地探测 Provider 串行验证只读和可写沙箱。验证覆盖只读环境隔离、工作树、Git 元数据保护、锁定安装、容器内真实提交 Hook 与宿主 Git 配置，以及 socket、host network 和单执行器资源回收。准备、诊断与恢复见[运维手册](../../.sandcastle/README.md#启动与诊断)。
 
 ### 架构守卫
 

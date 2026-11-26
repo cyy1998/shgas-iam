@@ -19,13 +19,13 @@ If no Spec is suitable, return null for spec and an empty issues array. Leave re
 comments and blockers. Return concise Markdown with relevant files and symbols, call chains, confirmed test
 seams and unresolved decisions. Leave files, Git state and issues untouched.`,
   implement: `Read the actual parent Spec, ticket, blockers and comments using the explicit GitHub repository.
-Confirm branch, worktree, baseline and ownership before modifying files. Claim the ticket with
-gh issue edit <ticket> --repo <repository> --add-assignee '@me'. Preserve any identified recovery work.
+The host has claimed the ticket. Confirm branch, worktree and baseline before modifying files.
+Preserve any identified recovery work.
 ${skill("tdd", "write one failing behavior test at the agreed seam, then make it pass before expanding coverage.")}
 Implement this ticket, run the complete affected checks, and make focused commits referencing the ticket.
 Keep commit hooks on. Merge the latest Spec integration tip into this ticket branch and rerun checks invalidated
 by the merge. Hand off actual commands, results, unverified items, clean candidate SHA and next action.
-Leave the Spec and invocation branches, issue states and remote branches untouched.`,
+Leave the Spec and invocation branches, GitHub issues and remote branches untouched.`,
   "resolve-conflict": `The host aborted a real merge conflict. Merge the supplied integration SHA into this
 ticket branch and preserve both changes' intent. ${skill("resolving-merge-conflicts", "inspect both sides and their requirements before resolving each conflict, then complete the ordinary merge.")}
 Rerun affected checks, report candidate SHA and evidence, and leave a clean ticket checkout. Leave the Spec

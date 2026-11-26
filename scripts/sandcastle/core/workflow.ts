@@ -228,6 +228,8 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
         const worktree = await git.open(branch, baseline, { allowDirty: resuming });
         const startedAt = await git.observe(worktree, resuming);
         await project(ticket.number, "Implementing");
+        signal?.throwIfAborted();
+        await gh(["issue", "edit", String(ticket.number), "--repo", repo, "--add-assignee", "@me"]);
         const response = await phase("implement", "implement", role, worktree, {
           specNumber: spec.number,
           ticketNumber: ticket.number,
