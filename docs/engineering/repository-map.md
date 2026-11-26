@@ -52,7 +52,7 @@ Use case 由 root 的 `useCases` 交给路由。Admin API 的入口与审计实�
 | 路径                                     | 定位用途                                                                                                              |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `packages/sms/src`                       | 短信网关协议签名与 HTTP 发送。验证码、冷却状态和业务文案由调用方持有。                                                |
-| `packages/runtime/src`                   | 后端共享日志、观测上下文、Redis 配置与连接、环境解析、通用错误、维护生命周期和进程所有权（含 Windows Job 附件）。     |
+| `packages/runtime/src`                   | 后端共享日志、观测上下文、Redis 配置与连接、环境解析、通用错误、维护生命周期和 Linux 进程树所有权。                   |
 | `packages/test-support/src`              | 测试专用外部资源地址、连接、清理与进程 smoke harness。                                                                |
 | `packages/api-core/src`                  | Hono、OpenAPI 和 tRPC 装配，HTTP 请求上下文、响应、错误映射、分页与 adapter。                                         |
 | `packages/unit-of-work/src`              | 事务边界、提交后任务与回滚确认。                                                                                      |

@@ -13,7 +13,7 @@
 | 跨服务业务旅程                     | 需要同时验证真实前后端、网关、协议或后台处理时，经临时完整系统入口运行 E2E。正式协议套件另有[独立入口](commands.md#oidc-协议套件)。 |
 | 目标环境恢复、放流                 | 按[对应运维手册](../releases/README.md)核验现场的配置、数据和入口。                                                                 |
 
-跨模块变更要明确观察时点、哪些作用已经生效，以及谁负责恢复。共享能力的故障与恢复由所属模块集中验证，消费方验证正式接线和自己的差异。静态规则只能证明已检查的依赖关系，授权和事务原子性需用行为证据。同样，Windows 进程内触发信号监听器只验证接到信号后的处理，POSIX 信号投递须在对应环境验证。
+跨模块变更要明确观察时点、哪些作用已经生效，以及谁负责恢复。共享能力的故障与恢复由所属模块集中验证，消费方验证正式接线和自己的差异。静态规则只能证明已检查的依赖关系，授权和事务原子性需用行为证据。进程停止由集成测试发送真实 POSIX 信号验证。
 
 ## 测试分类
 
@@ -113,7 +113,7 @@ Unit 由 Turbo 跨 workspace 编排，通过 `transit` 传播依赖源码变化�
 | 包级 Integration 用例 | Bun 与 Vitest 限制并发并启用首错停止。Playwright 零重试、失败上限为 1。带资源或 resource provider 的集合固定单 worker，无资源集合默认使用 `min(4, max(2, floor(cpus / 2)))` 个 worker。Admin 和 SSO 的 mock API 用例可在同一文件内并行。达到失败上限时停止调度，已启动的用例仍需收尾。[包级 runner](../../scripts/run-package-integration.mjs) |
 | Full-system E2E       | 一次 Playwright 运行默认使用一个 worker、零重试，跑完全部选中用例。新文件开始前自动复位，按需用 `-x` 首错停止。[Playwright 配置](../../e2e/system/playwright.config.ts)                                                                                                                                                                        |
 
-Timeout 用于限制悬挂。进程测试等待实际 readiness，同时观察启动错误与退出。成功、失败、超时或可捕获中断后均须尝试停止并等待所属进程树，再释放端口、连接及目录。清理有独立预算，失败时报告原因并保留原始错误。Windows 使用 Job，Linux 按继承的进程归属标记回收后代。[进程生命周期](../../packages/runtime/src/process/owned-process-tree.mjs)
+Timeout 用于限制悬挂。进程测试等待实际 readiness，同时观察启动错误与退出。成功、失败、超时或可捕获中断后均须尝试停止并等待所属进程树，再释放端口、连接及目录。清理有独立预算，失败时报告原因并保留原始错误。Linux 通过 `/proc` 中继承的进程归属标记回收后代。需要管道 stdin 的直接子进程由测试夹具单独创建进程组后按组回收。[进程生命周期](../../packages/runtime/src/process/owned-process-tree.mjs) · [进程 smoke harness](../../packages/test-support/src/process-smoke-harness.ts)
 
 ### 专用资源与隔离
 
@@ -136,7 +136,7 @@ Timeout 用于限制悬挂。进程测试等待实际 readiness，同时观察�
 
 E2E PostgreSQL 使用带 `1g` 上限的 `tmpfs`，关闭 `fsync`、`synchronous_commit` 和 `full_page_writes`。常驻 PostgreSQL 容器停止后会丢失数据，下一次启动重建模板。首次从使用 PostgreSQL 命名卷的常驻环境升级时，运行时按原 Compose 记录清理旧 project，再创建新环境。
 
-Windows 和 macOS 的 Docker Desktop 本机运行使用 bridge，APISIX 默认通过 `host.docker.internal` 访问宿主上游。原生 Linux 和 AFK 使用 host network 及动态监听端口，APISIX 通过 `127.0.0.1` 访问业务进程。两种拓扑均无宿主机路径 bind mount。网关路由发布后，从 APISIX 容器内探测上游，再检查真实双入口和企微 HTTPS 路由。
+Hybrid E2E 的 APISIX 使用 host network，通过 `127.0.0.1` 上的动态端口访问业务进程。中间件配置由 Compose 提供，无需宿主机路径 bind mount。网关路由发布后，从 APISIX 容器内探测上游，再检查真实双入口和企微 HTTPS 路由。
 
 首次进入每个 spec 时，fixture 调用本轮鉴权控制端点，等待后端停止、PostgreSQL 克隆模板、Redis 复位和后端重新就绪，再读取最新运行上下文。同文件内的用例共用该基线。Worker 停启由控制端点负责，测试直接读取本轮目录中的短信投递文件。[运行时 fixture](../../e2e/system/src/gateway-test.ts) · [网关测试资源](../../e2e/system/test-assets/)
 

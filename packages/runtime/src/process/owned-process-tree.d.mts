@@ -2,11 +2,11 @@ import type { ChildProcess } from "node:child_process";
 import type { Readable } from "node:stream";
 
 export type OwnedProcessTree = ChildProcess & {
-  readonly processTreeOwner: "windows-job" | "posix-process-group";
+  readonly processTreeOwner: "posix-process-group";
   readonly stdout: Readable;
   readonly stderr: Readable;
   /** Linux owner 有界停止并等待全部继承本次 ancestry 的执行者，包括 detached / reparented 后代。 */
-  readonly closeOwnedProcessTree?: (options: { timeoutMs: number; forceAfterMs?: number }) => Promise<void>;
+  readonly closeOwnedProcessTree: (options: { timeoutMs: number; forceAfterMs?: number }) => Promise<void>;
 };
 export function ownedProcessScopeEnvironment(
   scope: { id: string; activeFile: string },
@@ -18,8 +18,6 @@ export function spawnOwnedProcessTree(options: {
   args: readonly string[];
   cwd: string;
   env: NodeJS.ProcessEnv;
-  /** Packaged Windows Job helpers for callers that are standalone executables. */
-  windowsJob?: { supervisorPath: string; launcherExecutable: string };
 }): OwnedProcessTree;
 export function waitForOwnedProcessTree(
   child: OwnedProcessTree,
@@ -28,7 +26,6 @@ export function waitForOwnedProcessTree(
     timeoutMs?: number;
     cleanupTimeoutMs?: number;
     forceAfterMs?: number;
-    requestGracefulStop?: () => void | Promise<void>;
     onExecutionFailure?: () => void;
   },
 ): Promise<{

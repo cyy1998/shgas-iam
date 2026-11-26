@@ -253,7 +253,7 @@ dev/prod Compose 的 `worker-user-document` 与 `worker-organization-document` �
 只有对应 consumer 已启用才会运行，dashboard-only 不启动任务；两类模块同时启用时仍各自控制开关。
 Worker 启动后运行首轮，之后串行运行；普通失败留待下一轮，清理失败则停止自动轮次并记录错误，须排查并重启服务。
 任务启动 Worker 自有的私有 repair 子进程，将本服务配置转换为本轮显式输入，并通过领域维护接口复用人工 repair 的完整流程。
-源码运行使用 Bun；Windows standalone 制品同时包含 Job launcher 与 supervisor。两者均不依赖 cron、Docker CLI 或额外维护镜像。
+Worker 使用 Bun 执行源码。周期修复无需 cron、Docker CLI 或额外维护镜像。
 每类任务在同一实例中不重叠，两个文档模块可以各自运行；多实例仍由数据库领取和版本/token 仲裁。
 用户后处理 `exhausted` 按上方人工重试流程处理，自动轮次不使用 `--force`。
 

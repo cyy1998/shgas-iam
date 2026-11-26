@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import process from "node:process";
 import {
   createBoundedProcessLogCapture,
   createProcessSmokeEnvironment,
@@ -18,37 +19,37 @@ class PidlessFakeChild extends FakeChild {
 }
 
 describe("process smoke harness", () => {
-  it("builds child environments from a portable runtime allowlist and explicit overrides", () => {
+  it("builds child environments from a Linux runtime allowlist and explicit overrides", () => {
     const environment = createProcessSmokeEnvironment({
       source: {
-        Path: "sentinel-runtime-path",
-        PATHEXT: ".EXE;.CMD",
-        SystemRoot: "C:\\sentinel-windows",
-        TEMP: "C:\\shared-temp",
+        PATH: "/runtime/bin",
+        LD_LIBRARY_PATH: "/runtime/lib",
+        IAM_OWNED_PROCESS_MARKERS: '["inherited"]',
+        TEMP: "/shared-temp",
+        TMP: "/shared-temp",
+        TMPDIR: "/shared-temp",
         NODE_ENV: "development",
         REDIS_URL: "redis://sentinel-development-service",
         EXTERNAL_SERVICE_URL: "https://sentinel-development-service",
         IAM_AUTH_API_DATABASE_URL: "postgresql://sentinel-development-service",
       },
-      temporaryDirectory: "C:\\owned-smoke-temp",
+      temporaryDirectory: "/owned-smoke-temp",
       overrides: {
         NODE_ENV: "test",
         IAM_AUTH_API_DATABASE_URL: "postgresql://iam:password@127.0.0.1:1/iam",
         IAM_AUTH_API_REDIS_URL: "redis://127.0.0.1:6379/0",
-        TEMP: "C:\\unowned-override",
+        TMPDIR: "/unowned-override",
       },
     });
 
     expect(environment).toEqual({
-      Path: "sentinel-runtime-path",
-      PATHEXT: ".EXE;.CMD",
-      SystemRoot: "C:\\sentinel-windows",
+      PATH: "/runtime/bin",
+      LD_LIBRARY_PATH: "/runtime/lib",
+      IAM_OWNED_PROCESS_MARKERS: '["inherited"]',
       NODE_ENV: "test",
       IAM_AUTH_API_DATABASE_URL: "postgresql://iam:password@127.0.0.1:1/iam",
       IAM_AUTH_API_REDIS_URL: "redis://127.0.0.1:6379/0",
-      TEMP: "C:\\owned-smoke-temp",
-      TMP: "C:\\owned-smoke-temp",
-      TMPDIR: "C:\\owned-smoke-temp",
+      TMPDIR: "/owned-smoke-temp",
     });
   });
   it("reports an early exit with bounded stderr diagnostics", async () => {
@@ -406,7 +407,6 @@ describe("process smoke harness", () => {
     let treeAlive = true;
 
     await terminateProcessTree(child, {
-      platform: "linux",
       timeoutMs: 50,
       forceAfterMs: 25,
       isProcessTreeAlive: async () => treeAlive,
@@ -426,7 +426,6 @@ describe("process smoke harness", () => {
     child.finish(0);
 
     await terminateProcessTree(child, {
-      platform: "linux",
       timeoutMs: 50,
       forceAfterMs: 2,
       pollIntervalMs: 1,
@@ -448,7 +447,6 @@ describe("process smoke harness", () => {
 
     const failure = await captureFailure(
       terminateProcessTree(child, {
-        platform: "linux",
         timeoutMs: 5,
         forceAfterMs: 1,
         pollIntervalMs: 1,
@@ -459,50 +457,17 @@ describe("process smoke harness", () => {
 
     expect(failure.message).toContain("process group 321 did not exit");
   });
-  it("uses taskkill tree semantics on Windows", async () => {
-    const child = new FakeChild();
-    const pids: number[] = [];
+  it("rejects process tree termination on a non-Linux host even without a child pid", async () => {
+    const platform = process.platform;
+    Object.defineProperty(process, "platform", { value: "freebsd" });
+    let cleanup: Promise<void>;
+    try {
+      cleanup = terminateProcessTree(new PidlessFakeChild(), { timeoutMs: 10 });
+    } finally {
+      Object.defineProperty(process, "platform", { value: platform });
+    }
 
-    await terminateProcessTree(child, {
-      platform: "win32",
-      timeoutMs: 50,
-      async runWindowsTreeKill(pid) {
-        pids.push(pid);
-        child.finish(null, "SIGKILL");
-      },
-    });
-
-    expect(pids).toEqual([321]);
-  });
-  it("accepts a closed Windows Job supervisor as full-tree proof", async () => {
-    const child = new FakeChild("windows-job");
-    const pids: number[] = [];
-    child.finish(0);
-
-    await terminateProcessTree(child, {
-      platform: "win32",
-      timeoutMs: 50,
-      async runWindowsTreeKill(pid) {
-        pids.push(pid);
-      },
-    });
-
-    expect(pids).toEqual([]);
-  });
-  it("fails when the Windows tree owner cannot confirm cleanup", async () => {
-    const child = new FakeChild();
-    child.finish(0);
-
-    const failure = await captureFailure(
-      terminateProcessTree(child, {
-        platform: "win32",
-        timeoutMs: 50,
-        async runWindowsTreeKill() {
-          throw new Error("tree owner no longer addressable");
-        },
-      }),
-    );
-
-    expect(failure.message).toContain("tree owner no longer addressable");
+    const failure = await captureFailure(cleanup);
+    expect(failure.message).toBe("Process smoke tree termination requires Linux or WSL2 (current platform: freebsd)");
   });
 });

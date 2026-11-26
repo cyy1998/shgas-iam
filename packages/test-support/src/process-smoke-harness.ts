@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import type { EventEmitter } from "node:events";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
@@ -8,25 +7,12 @@ import process from "node:process";
 import type { Readable } from "node:stream";
 import { spawnOwnedProcessTree as spawnProcessTree } from "@iam/runtime/process";
 
-const portableRuntimeEnvironmentKeys = new Set([
-  "iam_owned_process_markers",
-  "comspec",
-  "dyld_fallback_library_path",
-  "dyld_library_path",
-  "ld_library_path",
-  "path",
-  "pathext",
-  "systemroot",
-  "windir",
-]);
+const linuxRuntimeEnvironmentKeys = new Set(["iam_owned_process_markers", "ld_library_path", "path"]);
 const defaultReadinessTimeoutMs = 30_000;
 const defaultCleanupTimeoutMs = 5_000;
 const defaultTemporaryDirectoryCleanupTimeoutMs = 5_000;
 const defaultMaxPortAllocationAttempts = 3;
 export const PROCESS_SMOKE_TEST_TIMEOUT_MS = 45_000;
-
-/** Public test-support seam shared by package-local process smoke suites. */
-export type ProcessTreeOwner = "posix-process-group" | "windows-job";
 
 export function createProcessSmokeEnvironment(options: {
   source: NodeJS.ProcessEnv;
@@ -35,22 +21,19 @@ export function createProcessSmokeEnvironment(options: {
 }) {
   const environment: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(options.source)) {
-    if (value !== undefined && portableRuntimeEnvironmentKeys.has(key.toLowerCase())) {
+    if (value !== undefined && linuxRuntimeEnvironmentKeys.has(key.toLowerCase())) {
       environment[key] = value;
     }
   }
   for (const [key, value] of Object.entries(options.overrides)) {
     if (value !== undefined) environment[key] = value;
   }
-  environment.TEMP = options.temporaryDirectory;
-  environment.TMP = options.temporaryDirectory;
   environment.TMPDIR = options.temporaryDirectory;
   return environment;
 }
 
 export interface ProcessSmokeChild extends EventEmitter {
   readonly pid?: number;
-  readonly processTreeOwner?: ProcessTreeOwner;
   readonly closeOwnedProcessTree?: (options: { timeoutMs: number; forceAfterMs?: number }) => Promise<void>;
   readonly stdout: Readable | null;
   readonly stderr: Readable | null;
@@ -424,19 +407,6 @@ function createProcessCloseWaiter(child: ProcessSmokeChild) {
   };
 }
 
-async function runWindowsTreeKill(pid: number) {
-  const taskkill = spawn("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
-    stdio: "ignore",
-    windowsHide: true,
-  });
-  await new Promise<void>((resolve, reject) => {
-    taskkill.once("error", reject);
-    taskkill.once("exit", (code) =>
-      code === 0 ? resolve() : reject(new Error(`taskkill exited with code ${code ?? "null"}`)),
-    );
-  });
-}
-
 export function spawnOwnedProcessTree(options: Parameters<typeof spawnProcessTree>[0]): ProcessSmokeChild {
   return spawnProcessTree(options);
 }
@@ -511,17 +481,17 @@ export async function terminateProcessByPid(pid: number, options: TerminateProce
 export interface TerminateProcessTreeOptions {
   timeoutMs: number;
   forceAfterMs?: number;
-  platform?: NodeJS.Platform;
   pollIntervalMs?: number;
   isProcessTreeAlive?: (pid: number) => boolean | Promise<boolean>;
   killProcess?: (pid: number, signal: NodeJS.Signals) => void;
-  runWindowsTreeKill?: (pid: number) => Promise<void>;
 }
 
 export async function terminateProcessTree(child: ProcessSmokeChild, options: TerminateProcessTreeOptions) {
+  if (process.platform !== "linux") {
+    throw new Error(`Process smoke tree termination requires Linux or WSL2 (current platform: ${process.platform})`);
+  }
   const startedAt = Date.now();
   const remaining = () => Math.max(1, options.timeoutMs - (Date.now() - startedAt));
-  const platform = options.platform ?? process.platform;
   const closeWaiter = createProcessCloseWaiter(child);
   try {
     const pid = child.pid;
@@ -532,33 +502,7 @@ export async function terminateProcessTree(child: ProcessSmokeChild, options: Te
       return;
     }
 
-    if (platform === "win32") {
-      if (child.processTreeOwner === "windows-job" && hasExited(child) && (await closeWaiter.wait(remaining()))) {
-        return;
-      }
-      try {
-        await withDeadline(
-          (options.runWindowsTreeKill ?? runWindowsTreeKill)(pid),
-          remaining(),
-          `taskkill cleanup deadline exceeded after ${options.timeoutMs}ms`,
-        );
-      } catch (error) {
-        if (child.processTreeOwner === "windows-job" && (await closeWaiter.wait(remaining()))) {
-          return;
-        }
-        throw error;
-      }
-      if (!(await closeWaiter.wait(remaining())))
-        throw new Error(`process tree did not exit within ${options.timeoutMs}ms after taskkill`);
-      return;
-    }
-
-    if (
-      platform === process.platform &&
-      child.closeOwnedProcessTree &&
-      !options.isProcessTreeAlive &&
-      !options.killProcess
-    ) {
+    if (child.closeOwnedProcessTree && !options.isProcessTreeAlive && !options.killProcess) {
       await child.closeOwnedProcessTree({ timeoutMs: remaining(), forceAfterMs: options.forceAfterMs });
       if (!(await closeWaiter.wait(remaining())))
         throw new Error("Owned process tree stopped but its stdio did not close");
