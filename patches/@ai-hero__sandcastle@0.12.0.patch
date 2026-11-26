@@ -173,34 +173,10 @@ index 7d097321871cfee95a8ba7e6d12a7fe002190cc5..a62b1563cb89f7adbfc6a6c3cba9e511
          worktreePath,
          exec: (command, opts) => {
 diff --git a/dist/chunk-VOG34SRF.js b/dist/chunk-VOG34SRF.js
-index 93f24d139b795c284915a10c34d82f2fa769eab0..64dac84040152ab70d1a15fbe0075ec36198dad9 100644
+index 93f24d139b795c284915a10c34d82f2fa769eab0..08968bc58df80cee3960075936c876f61f526675 100644
 --- a/dist/chunk-VOG34SRF.js
 +++ b/dist/chunk-VOG34SRF.js
-@@ -25146,7 +25146,7 @@ var sanitizeName = (name) => name.toLowerCase().replace(/[^a-z0-9]/g, "-");
- var execGit = (args2, cwd) => Effect_exports.async((resume2) => {
-   execFile(
-     "git",
--    args2,
-+    process.platform === "win32" ? ["-c", "core.longpaths=true", ...args2] : args2,
-     { cwd, env: { ...process.env, LC_ALL: "C" } },
-     (error3, stdout2, stderr2) => {
-       if (error3) {
-@@ -26923,6 +26923,14 @@ var patchGitMountsForWindows = (gitMounts, worktreeHostPath, sandboxRepoDir, rea
-         sandboxPath: `${sandboxRepoDir}/.git`
-       });
-       replacedGitFile = true;
-+    } else if (normalizedHostPath.endsWith("/.git") && (yield* Effect_exports.tryPromise({
-+      try: () => _statFile(m.hostPath),
-+      catch: () => null
-+    }).pipe(Effect_exports.catchAll(() => Effect_exports.succeed(null)))) === "file") {
-+      // resolveGitMounts can describe the source checkout, while this override
-+      // belongs to a newly created target worktree. Its Windows pointer is not
-+      // a valid Linux mount target; only the target override is needed.
-+      continue;
-     } else {
-       correctedMounts.push(m);
-     }
-@@ -26985,8 +26993,10 @@ var attachListeners = () => {
+@@ -26985,8 +26985,10 @@ var attachListeners = () => {
    if (listenersInstalled) return;
    listenersInstalled = true;
    process.on("exit", handleExit);

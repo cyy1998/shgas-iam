@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import "./require-linux.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";

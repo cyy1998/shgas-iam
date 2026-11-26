@@ -1,21 +1,19 @@
-import { execFile, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
-import { isAbsolute, join } from "node:path";
+import { isAbsolute } from "node:path";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
 
-const commandEnvironmentKey = "IAM_OWNED_PROCESS_COMMAND_BASE64";
 const processMarkersEnvironmentKey = "IAM_OWNED_PROCESS_MARKERS";
 const scopeIdKey = "IAM_OWNED_PROCESS_SCOPE_ID";
 const scopeFileKey = "IAM_OWNED_PROCESS_SCOPE_FILE";
 const scopeIdPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
-const launcherPath = fileURLToPath(new URL("./windows-job-launcher.mjs", import.meta.url));
-const supervisorPath = fileURLToPath(new URL("./windows-job-supervisor.ps1", import.meta.url));
-const powershell = join(process.env.SystemRoot ?? "C:/Windows", "System32/WindowsPowerShell/v1.0/powershell.exe");
-const powershellOptions = ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"];
-const execute = promisify(execFile);
+
+function requireLinux() {
+  if (process.platform !== "linux") {
+    throw new Error(`Owned process trees require Linux or WSL2 (current platform: ${process.platform})`);
+  }
+}
 
 export function ownedProcessScopeEnvironment(scope, env = process.env) {
   if (!scopeIdPattern.test(scope.id) || typeof scope.activeFile !== "string" || !isAbsolute(scope.activeFile)) {
@@ -26,29 +24,9 @@ export function ownedProcessScopeEnvironment(scope, env = process.env) {
 
 /** Join only the previous scope after its launch permit has been revoked. */
 export async function closeOwnedProcessScope(id, options) {
+  requireLinux();
   if (!scopeIdPattern.test(id)) throw new Error("Invalid owned process scope identity");
-  if (process.platform === "win32") {
-    await execute(
-      powershell,
-      [
-        ...powershellOptions,
-        supervisorPath,
-        "-RecoverScope",
-        id,
-        "-GraceMs",
-        String(options.forceAfterMs),
-        "-TimeoutMs",
-        String(options.timeoutMs),
-      ],
-      { windowsHide: true, timeout: options.timeoutMs + 5_000 },
-    );
-  } else if (process.platform === "linux") {
-    await closePosixOwnedProcesses(() => linuxOwnedProcesses(id, scopeIdKey), options, true);
-  } else if (process.platform === "darwin") {
-    await closePosixOwnedProcesses(() => macOwnedProcesses(id), options, true);
-  } else {
-    throw new Error(`Cannot verify owned process scope on ${process.platform}`);
-  }
+  await closeLinuxOwnedProcesses(() => linuxOwnedProcesses(id, scopeIdKey), options, true);
 }
 
 function inheritedMarkers(value) {
@@ -88,23 +66,7 @@ async function linuxOwnedProcesses(marker, key = processMarkersEnvironmentKey) {
   return processes.filter((pid) => pid !== undefined && pid !== process.pid);
 }
 
-async function macOwnedProcesses(id) {
-  // Keep ps output private: same-user environments can contain unrelated credentials.
-  const { stdout } = await execute("/bin/ps", ["-Eww", "-x", "-U", String(process.getuid()), "-o", "pid=,command="], {
-    env: { PATH: "/usr/bin:/bin", LC_ALL: "C" },
-    maxBuffer: 32 * 1024 * 1024,
-    timeout: 1_000,
-  }).catch(() => {
-    throw new Error("Could not inspect the owned macOS process scope");
-  });
-  const marker = `${scopeIdKey}=${id}`;
-  return stdout.split("\n").flatMap((line) => {
-    const pid = Number(/^\s*(\d+)\s/u.exec(line)?.[1]);
-    return Number.isInteger(pid) && pid > 0 && pid !== process.pid && line.split(" ").includes(marker) ? [pid] : [];
-  });
-}
-
-async function closePosixOwnedProcesses(findProcesses, options, confirmEmpty = false) {
+async function closeLinuxOwnedProcesses(findProcesses, options, confirmEmpty = false) {
   const started = performance.now();
   const forceAfterMs =
     options.forceAfterMs === undefined
@@ -132,83 +94,46 @@ async function closePosixOwnedProcesses(findProcesses, options, confirmEmpty = f
   }
 }
 
-/**
- * Node/Bun 共用的进程树所有权；Windows Job 在主进程正常退出后也关闭其遗留执行者。
- * Linux 使用继承的 IAM_OWNED_PROCESS_MARKERS 精确停止 detached 后代；显式子进程 env 保留该内部 ancestry。
- */
+/** Owns Linux descendants, including those that leave the original process group. */
 export function spawnOwnedProcessTree(options) {
-  const windows = process.platform === "win32";
-  const linux = process.platform === "linux";
+  requireLinux();
   const scopeId = options.env[scopeIdKey] ?? process.env[scopeIdKey];
   const scopeFile = options.env[scopeFileKey] ?? process.env[scopeFileKey];
   const scopedEnv =
     scopeId === undefined
       ? options.env
       : ownedProcessScopeEnvironment({ id: scopeId, activeFile: scopeFile }, options.env);
-  const marker = linux ? randomUUID() : undefined;
-  const ancestry = linux
-    ? [
-        ...new Set([
-          ...inheritedMarkers(process.env[processMarkersEnvironmentKey]),
-          ...inheritedMarkers(options.env[processMarkersEnvironmentKey]),
-        ]),
-        marker,
-      ]
-    : undefined;
-  const command = windows
-    ? Buffer.from(JSON.stringify({ executable: options.executable, args: options.args, cwd: options.cwd })).toString(
-        "base64",
-      )
-    : undefined;
-  const gated = !windows && scopeId !== undefined;
+  const marker = randomUUID();
+  const ancestry = [
+    ...new Set([
+      ...inheritedMarkers(process.env[processMarkersEnvironmentKey]),
+      ...inheritedMarkers(options.env[processMarkersEnvironmentKey]),
+    ]),
+    marker,
+  ];
+  const gated = scopeId !== undefined;
   const child = spawn(
-    windows ? powershell : gated ? "/bin/sh" : options.executable,
-    windows
+    gated ? "/bin/sh" : options.executable,
+    gated
       ? [
-          ...powershellOptions,
-          options.windowsJob?.supervisorPath ?? supervisorPath,
-          "-NodeExecutable",
-          options.windowsJob?.launcherExecutable ?? process.execPath,
-          "-LauncherPath",
-          options.windowsJob?.launcherExecutable ?? launcherPath,
-          "-RuntimeKind",
-          options.windowsJob ? "executable" : process.versions.bun === undefined ? "node" : "bun",
+          "-c",
+          'test -f "$1" || exit 125; shift; exec "$@"',
+          "iam-owned-scope",
+          scopeFile,
+          options.executable,
+          ...options.args,
         ]
-      : gated
-        ? [
-            "-c",
-            'test -f "$1" || exit 125; shift; exec "$@"',
-            "iam-owned-scope",
-            scopeFile,
-            options.executable,
-            ...options.args,
-          ]
-        : options.args,
+      : options.args,
     {
       cwd: options.cwd,
-      env: windows
-        ? { ...scopedEnv, [commandEnvironmentKey]: command }
-        : linux
-          ? { ...scopedEnv, [processMarkersEnvironmentKey]: JSON.stringify(ancestry) }
-          : scopedEnv,
-      detached: !windows,
-      windowsHide: true,
+      env: { ...scopedEnv, [processMarkersEnvironmentKey]: JSON.stringify(ancestry) },
+      detached: true,
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
-  Object.defineProperty(child, "processTreeOwner", {
-    configurable: false,
-    enumerable: false,
-    value: windows ? "windows-job" : "posix-process-group",
-    writable: false,
+  Object.defineProperty(child, "closeOwnedProcessTree", {
+    value: (cleanupOptions) => closeLinuxOwnedProcesses(() => linuxOwnedProcesses(marker), cleanupOptions),
   });
-  if (linux)
-    Object.defineProperty(child, "closeOwnedProcessTree", {
-      configurable: false,
-      enumerable: false,
-      value: (cleanupOptions) => closePosixOwnedProcesses(() => linuxOwnedProcesses(marker), cleanupOptions),
-      writable: false,
-    });
   return child;
 }
 
@@ -222,79 +147,12 @@ function bounded(operation, timeoutMs, message) {
   ]).finally(() => clearTimeout(timer));
 }
 
-async function stopProcessTree(child, closed, timeoutMs, forceAfterMs, requestGracefulStop) {
+async function stopProcessTree(child, closed, timeoutMs, forceAfterMs) {
   if (!child.pid) return;
   const deadline = performance.now() + timeoutMs;
   const remaining = () => Math.max(0, deadline - performance.now());
-  const waitForClose = () => bounded(closed, remaining(), "Process tree did not close before its cleanup deadline");
-  if (child.closeOwnedProcessTree) {
-    await child.closeOwnedProcessTree({ timeoutMs: remaining(), forceAfterMs });
-  } else if (process.platform === "win32") {
-    let gracefulFailure;
-    if (requestGracefulStop && child.exitCode === null && child.signalCode === null) {
-      const grace = Math.min(forceAfterMs ?? 500, timeoutMs * 0.8);
-      const graceDeadline = performance.now() + grace;
-      try {
-        await bounded(Promise.resolve().then(requestGracefulStop), grace, "Windows shutdown request timed out");
-      } catch (error) {
-        gracefulFailure = error;
-      }
-      if (!gracefulFailure) await waitForGracefulClose(closed, Math.max(0, graceDeadline - performance.now()));
-    }
-    // The Job supervisor closes descendants on normal exit. While it is still running,
-    // taskkill stops the supervisor and its Job; never rely on the caller's PATH.
-    if (child.exitCode === null && child.signalCode === null) {
-      const killer = spawn(
-        join(process.env.SystemRoot ?? "C:/Windows", "System32/taskkill.exe"),
-        ["/PID", String(child.pid), "/T", "/F"],
-        { windowsHide: true, stdio: "ignore" },
-      );
-      try {
-        const code = await bounded(
-          new Promise((resolve, reject) => {
-            killer.once("error", reject);
-            killer.once("close", resolve);
-          }),
-          remaining(),
-          "Process tree termination exceeded its deadline",
-        );
-        if (code !== 0 && child.exitCode === null && child.signalCode === null)
-          throw new Error(`taskkill failed with ${code}`);
-      } catch (error) {
-        killer.kill();
-        throw error;
-      }
-    }
-    await waitForClose();
-    if (gracefulFailure) throw gracefulFailure;
-    return;
-  } else {
-    const killGroup = (signal) => {
-      try {
-        process.kill(-child.pid, signal);
-      } catch (error) {
-        if (error.code !== "ESRCH") throw error;
-      }
-    };
-    killGroup("SIGTERM");
-    await waitForGracefulClose(closed, Math.min(remaining(), forceAfterMs ?? 500));
-    killGroup("SIGKILL");
-  }
-  await waitForClose();
-}
-
-async function waitForGracefulClose(closed, timeoutMs) {
-  let timer;
-  try {
-    await Promise.race([
-      closed,
-      new Promise((resolve) => {
-        timer = setTimeout(resolve, timeoutMs);
-      }),
-    ]);
-  } finally {
-    clearTimeout(timer);
-  }
+  await child.closeOwnedProcessTree({ timeoutMs: remaining(), forceAfterMs });
+  await bounded(closed, remaining(), "Process tree did not close before its cleanup deadline");
 }
 
 /** Owns leader exit, interruption and tree shutdown; callers retain output and failure presentation. */
@@ -306,13 +164,10 @@ export async function waitForOwnedProcessTree(child, options = {}) {
   closed.catch(() => {});
   // Linux descendants can retain the leader's pipes after reparenting. Stop them
   // after leader exit and before waiting for close, which depends on those pipes.
-  const exited =
-    process.platform === "linux"
-      ? new Promise((resolve, reject) => {
-          child.once("error", reject);
-          child.once("exit", (code, signal) => resolve({ exitCode: code, signal }));
-        })
-      : closed;
+  const exited = new Promise((resolve, reject) => {
+    child.once("error", reject);
+    child.once("exit", (code, signal) => resolve({ exitCode: code, signal }));
+  });
   const completed = exited.then(
     (outcome) => ({ outcome }),
     (error) => ({ executionFailure: { kind: "start", error } }),
@@ -341,13 +196,7 @@ export async function waitForOwnedProcessTree(child, options = {}) {
     if (didFail) options.onExecutionFailure?.();
   } finally {
     try {
-      await stopProcessTree(
-        child,
-        closed,
-        options.cleanupTimeoutMs ?? 5000,
-        options.forceAfterMs,
-        options.requestGracefulStop,
-      );
+      await stopProcessTree(child, closed, options.cleanupTimeoutMs ?? 5000, options.forceAfterMs);
     } catch (error) {
       report.cleanupFailure = error;
     } finally {

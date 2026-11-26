@@ -108,7 +108,8 @@ test(
         },
         async stop(child) {
           await terminateProcessTree(child, { timeoutMs: 4_000 });
-          if (process.platform !== "win32") expect(child.exitCode).toBe(0);
+          expect(child.exitCode).toBe(0);
+          expect(child.signalCode).toBeNull();
         },
       });
       expect(result).toEqual({
@@ -125,7 +126,7 @@ test(
       expect(remaining).toHaveLength(0);
       const logs = capture?.snapshot();
       expect(logs).toContain('"sourceApp":"integration-api"');
-      if (process.platform !== "win32") expect(logs).toContain('"event":"integration.api.stopped"');
+      expect(logs).toContain('"event":"integration.api.stopped"');
     } finally {
       capture?.dispose();
       await pg.close();

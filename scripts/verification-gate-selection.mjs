@@ -57,6 +57,7 @@ const unconditionalContainerSmokeMatchers = [
   (path) => path === "e2e/system/playwright.container-smoke.config.ts",
   (path) => path === "e2e/system/src/container-smoke.ts",
   (path) => path === "e2e/system/src/container-smoke-build.ts",
+  (path) => path === "e2e/system/src/middleware-compose.ts",
   (path) => path === "scripts/run-verification-gate.mjs" || path === "scripts/verification-gate-selection.mjs",
 ];
 

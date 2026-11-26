@@ -33,7 +33,6 @@
 - 在聊天 UI 中，面向用户的回复默认使用自然、地道的中文。代码标识符、命令、文件路径、API 名称和引用的源文本保持原语言。
 - 本仓库授权在 T3 Code 下由 Antigravity 与 Codex 使用原生子代理及 `delegate_task` 并行调查或拆分任务；主代理负责整合与串行验证。
   只读调查、跨引擎委派与双轴评审的角色、模型、档位及返回契约见[代码调查与双引擎编排](docs/agents/code-investigation.md)。
-- Windows 环境默认使用 PowerShell 7（`pwsh`）执行命令；向原生命令传递字面量 `@...` 时加引号（如 `'@me'`），读取文本文件显式指定 `-Encoding utf8`。
 
 ## Bun 测试硬约束
 

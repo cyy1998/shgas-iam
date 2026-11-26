@@ -13,18 +13,7 @@ export async function runManagedIamJourney(signal?: AbortSignal) {
   const output = resolve(workspace, "test-results", `managed-iam-${randomUUID()}`);
   await mkdir(output, { recursive: true });
   const environment: NodeJS.ProcessEnv = {};
-  for (const name of [
-    "PATH",
-    "SystemRoot",
-    "ComSpec",
-    "TEMP",
-    "TMP",
-    "HOME",
-    "USERPROFILE",
-    "APPDATA",
-    "LOCALAPPDATA",
-    "PLAYWRIGHT_BROWSERS_PATH",
-  ]) {
+  for (const name of ["PATH", "HOME", "TMPDIR", "PLAYWRIGHT_BROWSERS_PATH"]) {
     if (process.env[name] !== undefined) environment[name] = process.env[name];
   }
   Object.assign(environment, {

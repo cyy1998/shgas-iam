@@ -8,11 +8,13 @@ import { startFrontendServers } from "./frontend/frontend-servers.ts";
 import { createE2EGatewayApiKey } from "./gateway-credential.ts";
 import { iamGatewayManifest, publishGateway } from "./gateway-sync.ts";
 import { createHostBackends } from "./host-backends.ts";
+import { createStageMemoryProfile, type StageMemoryProfile } from "./host-memory.ts";
 import { probeHttpRoute, probeOidcDiscovery, probeSsoConfiguration } from "./http-probes.ts";
-import { apisixAdminKey, type HybridLifecycle } from "./hybrid-compose.ts";
+import { type HybridLifecycle, hybridUpstreamHost, selectHybridLifecycle } from "./hybrid-compose.ts";
 import type { HybridRunContext } from "./hybrid-context.ts";
 import { createHybridControl } from "./hybrid-control.ts";
 import { type HybridMiddleware, withHybridMiddleware } from "./hybrid-middleware.ts";
+import { apisixAdminKey } from "./middleware-compose.ts";
 import { createE2EScenarioInternalApiKey } from "./seed.ts";
 import { wecomMobileCallbackPath } from "./wecom-provider.ts";
 
@@ -34,6 +36,9 @@ export async function withHybridRuntime<T>(
   options: HybridRuntimeOptions,
   use: (contextPath: string, signal: AbortSignal, hostEnvironment: NodeJS.ProcessEnv) => Promise<T>,
 ) {
+  const lifecycle = selectHybridLifecycle(options);
+  const runId = randomUUID();
+  const artifactDirectory = resolve(options.artifactRoot, runId);
   const interruption = new AbortController();
   const signal = AbortSignal.any([interruption.signal, ...(options.signal ? [options.signal] : [])]);
   const interrupt = () => interruption.abort(new Error("E2E runtime received SIGINT"));
@@ -45,11 +50,25 @@ export async function withHybridRuntime<T>(
   const timer = setTimeout(() => deadline.abort(new Error(`E2E startup timed out after ${timeoutMs}ms`)), timeoutMs);
   try {
     const startup = AbortSignal.any([signal, deadline.signal]);
-    return await withHybridMiddleware({ ...options, signal: startup }, (middleware) =>
-      runHybridRuntime(options, middleware, startup, signal, (contextPath, activeSignal, hostEnvironment) => {
-        clearTimeout(timer);
-        return use(contextPath, activeSignal, hostEnvironment);
-      }),
+    startup.throwIfAborted();
+    await mkdir(artifactDirectory, { recursive: true, mode: 0o700 });
+    const memory = createStageMemoryProfile();
+    memory.enter("infrastructure");
+    return await runWithCleanup(
+      () =>
+        withHybridMiddleware({ ...options, lifecycle, signal: startup }, (middleware) =>
+          runHybridRuntime(
+            { ...options, runId, artifactDirectory, memory },
+            middleware,
+            startup,
+            signal,
+            (contextPath, activeSignal, hostEnvironment) => {
+              clearTimeout(timer);
+              return use(contextPath, activeSignal, hostEnvironment);
+            },
+          ),
+        ),
+      () => memory.finish(artifactDirectory),
     );
   } finally {
     clearTimeout(timer);
@@ -59,16 +78,14 @@ export async function withHybridRuntime<T>(
 }
 
 async function runHybridRuntime<T>(
-  options: HybridRuntimeOptions,
+  options: HybridRuntimeOptions & { runId: string; artifactDirectory: string; memory: StageMemoryProfile },
   middleware: HybridMiddleware,
   startup: AbortSignal,
   signal: AbortSignal,
   use: (contextPath: string, signal: AbortSignal, hostEnvironment: NodeJS.ProcessEnv) => Promise<T>,
 ) {
   startup.throwIfAborted();
-  const { repositoryRoot } = options;
-  const runId = randomUUID();
-  const artifactDirectory = resolve(options.artifactRoot, runId);
+  const { artifactDirectory, memory, repositoryRoot, runId } = options;
   const logDirectory = join(artifactDirectory, "logs");
   await mkdir(logDirectory, { recursive: true, mode: 0o700 });
   const contextPath = join(artifactDirectory, "runtime-context.json");
@@ -77,6 +94,7 @@ async function runHybridRuntime<T>(
   const internalOrigin = `http://internal.iam.localhost:${middleware.ports.http}`;
   const wecomMobileOrigin = `https://external.iam.localhost:${middleware.ports.https}`;
 
+  memory.enter("migration");
   const baseline = await prepareE2EDatabaseTemplate({
     repositoryRoot,
     artifactDirectory,
@@ -85,8 +103,10 @@ async function runHybridRuntime<T>(
     internalOrigin,
     adminPassword,
     signal: startup,
+    onSeedStart: () => memory.enter("seed"),
   });
   const references = await baseline.reset(startup);
+  memory.enter("build");
   const frontends = await startFrontendServers({
     repoRoot: repositoryRoot,
     hostEnvironment: middleware.hostEnvironment,
@@ -95,6 +115,7 @@ async function runHybridRuntime<T>(
     signal: startup,
   });
   return await runWithCleanup(async () => {
+    memory.enter("application-startup");
     const ids = { origin, internalOrigin, wecomMobileOrigin, logDirectory, smsDeliveryPath };
     const backends = await createHostBackends({
       ...ids,
@@ -103,8 +124,13 @@ async function runHybridRuntime<T>(
       seedRunId: references.runId,
       adminClientCode: references.adminClientCode,
     });
+    const stopBackends = () => {
+      memory.enter("cleanup");
+      return backends.stop();
+    };
     return await runWithCleanup(async () => {
       await backends.start(startup);
+      memory.enter("gateway-readiness");
       await publishHybridRoutes({
         middleware,
         seedRunId: references.runId,
@@ -183,6 +209,7 @@ async function runHybridRuntime<T>(
           startup.throwIfAborted();
           await writeAtomicJsonFile(contextPath, context, 0o600);
           startup.throwIfAborted();
+          memory.enter("browser");
           const result = await use(contextPath, signal, middleware.hostEnvironment);
           signal.throwIfAborted();
           return result;
@@ -196,7 +223,7 @@ async function runHybridRuntime<T>(
           );
         },
       );
-    }, backends.stop);
+    }, stopBackends);
   }, frontends.stop);
 }
 
@@ -221,7 +248,7 @@ async function publishHybridRoutes(options: PublishHybridRoutesOptions) {
   for (const [name, origin] of Object.entries(options.upstreams)) {
     const port = new URL(origin).port;
     await middleware.probeUpstream({ service: name.toLowerCase().replaceAll("_", "-"), port: Number(port) }, signal);
-    variables[`DEV_IAM_${name}_UPSTREAM_HOST`] = middleware.upstreamHost;
+    variables[`DEV_IAM_${name}_UPSTREAM_HOST`] = hybridUpstreamHost;
     variables[`DEV_IAM_${name}_UPSTREAM_PORT`] = port;
   }
   const assets = new URL("../test-assets/", import.meta.url);

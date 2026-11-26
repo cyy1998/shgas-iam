@@ -5,10 +5,11 @@ import { join } from "node:path";
 import type { BindMountSandboxHandle } from "@ai-hero/sandcastle";
 import { shellQuote } from "./codex-provider.mts";
 import { command } from "./commands.ts";
+import { resolveSocketGroupId } from "./resources.ts";
 import { dockerSandbox } from "./sandbox.mts";
 
 const hostNetworkRequirements =
-  "需要 Linux Docker Engine，或 Docker Desktop 4.34+ 已启用 host networking 且关闭 Enhanced Container Isolation；" +
+  "需要 Linux Docker Engine，或 WSL2 下 Docker Desktop 4.34+ 已启用 host networking 且关闭 Enhanced Container Isolation；" +
   "仅支持 Linux containers，不自动切换 DinD、代理或其他网络。";
 
 type SmokeOptions = { cwd: string; image: string; signal: AbortSignal };
@@ -33,7 +34,6 @@ export async function smokeDocker({ cwd, image, signal }: SmokeOptions): Promise
     sandboxName: `iam-afk-sandbox-${runId}-${index}`,
   }));
   const candidate = await command("git", ["rev-parse", "HEAD"], cwd);
-  const probeName = `iam-afk-socket-${runId}`;
   const checks: Record<string, unknown> = {};
   const failures: unknown[] = [];
   let aborted: Promise<unknown[]> | undefined;
@@ -46,7 +46,6 @@ export async function smokeDocker({ cwd, image, signal }: SmokeOptions): Promise
           runId,
           candidate,
           stage,
-          probeName,
           sandboxes: sandboxes.map(({ handle: _handle, ...resource }) => resource),
           checks,
           failures: failures.map(describeFailure),
@@ -110,24 +109,7 @@ export async function smokeDocker({ cwd, image, signal }: SmokeOptions): Promise
     });
     const address = server.address();
     if (!address || typeof address === "string") throw new Error("Host loopback server 没有动态端口。");
-    // Only the daemon resolves this source; Windows clients never stat the socket path.
-    const socketGroupId = Number(
-      await hostDocker(
-        "run",
-        "--rm",
-        "--name",
-        probeName,
-        "--mount",
-        "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock,readonly",
-        "--entrypoint",
-        "stat",
-        image,
-        "-c",
-        "%g",
-        "/var/run/docker.sock",
-      ),
-    );
-    if (!Number.isSafeInteger(socketGroupId) || socketGroupId < 0) throw new Error("无法读取 daemon socket GID。");
+    const socketGroupId = await resolveSocketGroupId();
     checks.socketGroupId = socketGroupId;
     for (const [index, resource] of sandboxes.entries()) {
       signal.throwIfAborted();
@@ -257,12 +239,6 @@ export async function smokeDocker({ cwd, image, signal }: SmokeOptions): Promise
       } catch (error) {
         failures.push(error);
       }
-    }
-    try {
-      const probe = await hostDocker("ps", "--all", "--filter", `name=^${probeName}$`, "--format", "{{.ID}}");
-      if (probe) await hostDocker("rm", "--force", probe);
-    } catch (error) {
-      failures.push(error);
     }
     checks.cleaned = failures.length === beforeCleanup;
     await persist(failures.length ? "failed" : "passed");

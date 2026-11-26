@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { setTimeout } from "node:timers/promises";
@@ -16,23 +16,21 @@ const require = createRequire(import.meta.url);
 const playwright = join(dirname(require.resolve("@playwright/test/package.json")), "cli.js");
 const integrationArtifacts = join(repositoryRoot, "test-results/integration");
 
-test.skipIf(process.platform === "win32")(
-  "takes over a crashed resident runtime only after its detached services have stopped",
-  async () => {
-    await mkdir(integrationArtifacts, { recursive: true });
-    const directory = await mkdtemp(join(integrationArtifacts, "hybrid-crash-"));
-    const ready = join(directory, "context-path");
-    const launchScript = join(directory, "runtime.ts");
-    const options = {
-      repositoryRoot,
-      artifactRoot: directory,
-      lifecycle: "resident",
-      residentDirectory: directory,
-      devFrontend: true,
-    } as const;
-    await writeFile(
-      launchScript,
-      `
+test("takes over a crashed resident runtime only after its detached services have stopped", async () => {
+  await mkdir(integrationArtifacts, { recursive: true });
+  const directory = await mkdtemp(join(integrationArtifacts, "hybrid-crash-"));
+  const ready = join(directory, "context-path");
+  const launchScript = join(directory, "runtime.ts");
+  const options = {
+    repositoryRoot,
+    artifactRoot: directory,
+    lifecycle: "resident",
+    residentDirectory: directory,
+    devFrontend: true,
+  } as const;
+  await writeFile(
+    launchScript,
+    `
       import { writeFile } from "node:fs/promises";
       import { withHybridRuntime } from "../../../e2e/system/src/hybrid-runtime.ts";
       await withHybridRuntime(${JSON.stringify(options)}, async (contextPath) => {
@@ -40,42 +38,59 @@ test.skipIf(process.platform === "win32")(
         await Bun.sleep(120000);
       });
     `,
-    );
-    // An owned launcher here would stop detached descendants on leader exit, masking the crash.
-    const child = spawn(process.execPath, ["--no-env-file", launchScript], { cwd: workspaceRoot, stdio: "inherit" });
-    const exited = new Promise<string | null>((resolve, reject) => {
-      child.once("error", reject);
-      child.once("exit", (_code, signal) => resolve(signal));
+  );
+  // An owned launcher here would stop detached descendants on leader exit, masking the crash.
+  const child = spawn(process.execPath, ["--no-env-file", launchScript], { cwd: workspaceRoot, stdio: "inherit" });
+  const exited = new Promise<string | null>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("exit", (_code, signal) => resolve(signal));
+  });
+  try {
+    const path = await Promise.race([
+      waitForContextPath(ready, AbortSignal.timeout(120_000)),
+      exited.then(() => {
+        throw new Error("Hybrid runtime crashed before readiness");
+      }),
+    ]);
+    const old = await readHybridRunContext(path);
+    child.kill("SIGKILL");
+    const signal = await exited;
+    expect(signal).toBe("SIGKILL");
+    const nextRun = await withHybridRuntime({ ...options, devFrontend: false }, async (nextPath) => {
+      const next = await readHybridRunContext(nextPath);
+      expect(next.project).toBe(old.project);
+      expect(next.references.adminSubjectIdentifier).toBe(old.references.adminSubjectIdentifier);
+      await expectHostServicesStopped(old);
+      const healthy = await fetch(`${next.backendOrigins.worker}/healthz`);
+      expect(healthy.status).toBe(200);
+      await healthy.body?.cancel();
+      return dirname(nextPath);
     });
-    try {
-      const path = await Promise.race([
-        waitForContextPath(ready, AbortSignal.timeout(120_000)),
-        exited.then(() => {
-          throw new Error("Hybrid runtime crashed before readiness");
-        }),
-      ]);
-      const old = await readHybridRunContext(path);
-      child.kill("SIGKILL");
-      const signal = await exited;
-      expect(signal).toBe("SIGKILL");
-      await withHybridRuntime({ ...options, devFrontend: false }, async (nextPath) => {
-        const next = await readHybridRunContext(nextPath);
-        expect(next.project).toBe(old.project);
-        expect(next.references.adminSubjectIdentifier).toBe(old.references.adminSubjectIdentifier);
-        await expectHostServicesStopped(old);
-        const healthy = await fetch(next.backendOrigins.worker + "/healthz");
-        expect(healthy.status).toBe(200);
-        await healthy.body?.cancel();
-      });
-    } finally {
-      if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
-      await exited;
-      await cleanupHybridResident(options);
-      await rm(directory, { recursive: true, force: true });
+    const profile = JSON.parse(await readFile(join(nextRun, "host-memory.json"), "utf8"));
+    expect(profile).toMatchObject({ version: 1, platform: "linux", source: "os.freemem", intervalMs: 250 });
+    expect(profile.stages.map(({ stage }: { stage: string }) => stage)).toEqual([
+      "infrastructure",
+      "migration",
+      "seed",
+      "build",
+      "application-startup",
+      "gateway-readiness",
+      "browser",
+      "cleanup",
+    ]);
+    for (const stage of profile.stages) {
+      expect(Date.parse(stage.endedAt)).toBeGreaterThanOrEqual(Date.parse(stage.startedAt));
+      expect(stage.durationMs).toBeGreaterThanOrEqual(0);
+      expect(stage.samples).toBeGreaterThanOrEqual(2);
+      expect(stage.minFreePhysicalBytes).toBeGreaterThanOrEqual(0);
     }
-  },
-  240_000,
-);
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
+    await exited;
+    await cleanupHybridResident(options);
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 240_000);
 
 test("real Playwright file switches restore PG and Redis and the Worker can stop independently", async () => {
   const root = join(workspaceRoot, "test-results");
@@ -189,17 +204,15 @@ test("real Playwright file switches restore PG and Redis and the Worker can stop
   }
 }, 260_000);
 
-test.skipIf(process.platform === "win32")(
-  "SIGTERM stops backends and Vite and releases the resident lock",
-  async () => {
-    await mkdir(integrationArtifacts, { recursive: true });
-    const directory = await mkdtemp(join(integrationArtifacts, "hybrid-signal-"));
-    const readyFile = join(directory, "context-path");
-    const childOwns = new AbortController();
-    const launchScript = join(directory, "runtime.ts");
-    await writeFile(
-      launchScript,
-      `import { writeFile } from "node:fs/promises";
+test("SIGTERM stops backends and Vite and releases the resident lock", async () => {
+  await mkdir(integrationArtifacts, { recursive: true });
+  const directory = await mkdtemp(join(integrationArtifacts, "hybrid-signal-"));
+  const readyFile = join(directory, "context-path");
+  const childOwns = new AbortController();
+  const launchScript = join(directory, "runtime.ts");
+  await writeFile(
+    launchScript,
+    `import { writeFile } from "node:fs/promises";
      import { setTimeout } from "node:timers/promises";
      import { withHybridRuntime } from "../../../e2e/system/src/hybrid-runtime.ts";
      try {
@@ -217,45 +230,56 @@ test.skipIf(process.platform === "win32")(
        console.error(error);
        process.exitCode = 1;
      }`,
+  );
+  const child = spawnOwnedProcessTree({
+    executable: process.execPath,
+    args: ["--no-env-file", launchScript],
+    cwd: workspaceRoot,
+    env: process.env,
+  });
+  const finished = waitForOwnedProcessTree(child, { signal: childOwns.signal, timeoutMs: 180_000 });
+  child.stdout.resume();
+  let diagnostics = "";
+  child.stderr.on("data", (chunk) => {
+    diagnostics = (diagnostics + chunk.toString()).slice(-8_192);
+  });
+  try {
+    const path = await Promise.race([
+      waitForContextPath(readyFile, AbortSignal.timeout(120_000)),
+      finished.then(() => {
+        throw new Error(`Hybrid runtime exited before readiness\n${diagnostics}`);
+      }),
+    ]);
+    const context = await readHybridRunContext(path);
+    child.kill("SIGTERM");
+    const outcome = await finished;
+    expect(outcome.outcome).toEqual({ exitCode: 1, signal: null });
+    expect(outcome.cleanupFailure).toBeUndefined();
+    const artifactDirectory = dirname(path);
+    const profile: { stages: { stage: string; startedAt: string; endedAt: string }[] } = JSON.parse(
+      await readFile(join(artifactDirectory, "host-memory.json"), "utf8"),
     );
-    const child = spawnOwnedProcessTree({
-      executable: process.execPath,
-      args: ["--no-env-file", launchScript],
-      cwd: workspaceRoot,
-      env: process.env,
-    });
-    const finished = waitForOwnedProcessTree(child, { signal: childOwns.signal, timeoutMs: 180_000 });
-    child.stdout.resume();
-    let diagnostics = "";
-    child.stderr.on("data", (chunk) => {
-      diagnostics = (diagnostics + chunk.toString()).slice(-8_192);
-    });
-    try {
-      const path = await Promise.race([
-        waitForContextPath(readyFile, AbortSignal.timeout(120_000)),
-        finished.then(() => {
-          throw new Error(`Hybrid runtime exited before readiness\n${diagnostics}`);
-        }),
-      ]);
-      const context = await readHybridRunContext(path);
-      child.kill("SIGTERM");
-      const outcome = await finished;
-      expect(outcome.outcome).toEqual({ exitCode: 1, signal: null });
-      expect(outcome.cleanupFailure).toBeUndefined();
-      expect(context.frontendOrigins.admin).not.toBe(context.frontendOrigins.sso);
-      await expectHostServicesStopped(context);
-      const gateway = await fetch(context.origin.replace("external.iam.localhost", "127.0.0.1"));
-      expect(gateway.status).toBe(404);
-      await gateway.body?.cancel();
-    } finally {
-      childOwns.abort();
-      await finished;
-      await cleanupHybridResident({ repositoryRoot, residentDirectory: directory });
-      await rm(directory, { recursive: true, force: true });
+    expect(profile.stages.at(-1)).toMatchObject({ stage: "cleanup", endedAt: expect.any(String) });
+    const seed = profile.stages.find(({ stage }) => stage === "seed");
+    if (!seed) throw new Error("Cold runtime profile omitted the seed stage");
+    for (const log of ["template-seed.log", "template-worker.log"]) {
+      const { mtimeMs } = await stat(join(artifactDirectory, log));
+      const lastWrite = Math.floor(mtimeMs);
+      expect(lastWrite).toBeGreaterThanOrEqual(Date.parse(seed.startedAt));
+      expect(lastWrite).toBeLessThanOrEqual(Date.parse(seed.endedAt));
     }
-  },
-  200_000,
-);
+    expect(context.frontendOrigins.admin).not.toBe(context.frontendOrigins.sso);
+    await expectHostServicesStopped(context);
+    const gateway = await fetch(context.origin.replace("external.iam.localhost", "127.0.0.1"));
+    expect(gateway.status).toBe(404);
+    await gateway.body?.cancel();
+  } finally {
+    childOwns.abort();
+    await finished;
+    await cleanupHybridResident({ repositoryRoot, residentDirectory: directory });
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 200_000);
 
 async function waitForContextPath(file: string, signal: AbortSignal) {
   while (true) {

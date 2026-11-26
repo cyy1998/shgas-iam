@@ -1,7 +1,5 @@
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { UserStatus } from "@iam/contracts";
@@ -26,7 +24,6 @@ import { startDocumentRepairSchedule } from "@worker/composition/document-repair
 import { parseWorkerEnv } from "@worker/env";
 import { useWorkerPostgresTestHarness } from "../support/postgres-test-harness";
 import { createWorkerRedisTestHarness, resetWorkerRedisTestDatabase } from "../support/redis-test-harness";
-import { prepareWorkerStandalone } from "../support/standalone-build";
 
 const workerRoot = fileURLToPath(new URL("../../", import.meta.url));
 const logger = createLogger({
@@ -36,65 +33,58 @@ const logger = createLogger({
   logFormat: "json",
 });
 
-for (const standalone of [false, true])
-  test.skipIf(standalone && process.platform !== "win32")(
-    `the production Worker repairs a lost Outbox wake, publishes Document and Facts, and restores Subject Access (${standalone ? "standalone" : "source"})`,
-    async () => {
-      await withFixture(async (fixture) => {
-        if (standalone) await fixture.buildStandalone();
-        const barrier = createSubjectAccessBarrier({
-          clock: { nowDate: () => new Date() },
-          random: { uuid: randomUUID },
-          store: createRedisSubjectAccessStore({ redis: fixture.redis.writer }),
-        });
-        const transition = await barrier.beginBlocking(fixture.subject);
-        await barrier.prepareRepair(transition, "enabled");
-        const bootstrap = createSubjectAccessBootstrap({
-          redis: fixture.redis.observer,
-          random: { uuid: randomUUID },
-        });
-        const result = await runProcessSmoke({
-          label: "scheduled User Document repair production entry",
-          start: () => fixture.startEntry(),
-          childReadinessEvidence: "worker started",
-          readinessTimeoutMs: 15_000,
-          cleanupTimeoutMs: 5_000,
-          probe: async () => {
-            const document = await fixture.published();
-            if (document?.document_name !== "Scheduled user" || document.post_publication_status !== "processed")
-              return;
-            const [access] = await bootstrap.inspectMany([fixture.subject]);
-            return access?.status === "valid" &&
-              access.record.state === "enabled" &&
-              access.record.transitionId === transition.transitionId
-              ? document
-              : undefined;
-          },
-        });
-        const storedFacts = await createSubjectFactsRedisCache(fixture.redis.observer).read(fixture.subject);
-        const facts = storedFacts === null ? null : DocumentFactsCacheRecordSchema.parse(JSON.parse(storedFacts));
+test("the production Worker repairs a lost Outbox wake, publishes Document and Facts, and restores Subject Access", async () => {
+  await withFixture(async (fixture) => {
+    const barrier = createSubjectAccessBarrier({
+      clock: { nowDate: () => new Date() },
+      random: { uuid: randomUUID },
+      store: createRedisSubjectAccessStore({ redis: fixture.redis.writer }),
+    });
+    const transition = await barrier.beginBlocking(fixture.subject);
+    await barrier.prepareRepair(transition, "enabled");
+    const bootstrap = createSubjectAccessBootstrap({
+      redis: fixture.redis.observer,
+      random: { uuid: randomUUID },
+    });
+    const result = await runProcessSmoke({
+      label: "scheduled User Document repair production entry",
+      start: () => fixture.startEntry(),
+      childReadinessEvidence: "worker started",
+      readinessTimeoutMs: 15_000,
+      cleanupTimeoutMs: 5_000,
+      probe: async () => {
+        const document = await fixture.published();
+        if (document?.document_name !== "Scheduled user" || document.post_publication_status !== "processed") return;
         const [access] = await bootstrap.inspectMany([fixture.subject]);
-        const [outbox] = await fixture.pg.sql`SELECT status FROM user_document_outbox`;
-        expect(result.document_name).toBe("Scheduled user");
-        expect(outbox?.status).toBe("processed");
-        expect(facts).toMatchObject({
-          kind: "document",
-          subjectIdentifier: fixture.subject,
-          sourceVersion: result.source_version,
-          facts: { profile: { name: "Scheduled user" } },
-        });
-        expect(access).toMatchObject({
-          status: "valid",
-          record: {
-            state: "enabled",
-            subjectIdentifier: fixture.subject,
-            transitionId: transition.transitionId,
-          },
-        });
-      }, "disabled");
-    },
-    standalone ? 70_000 : 30_000,
-  );
+        return access?.status === "valid" &&
+          access.record.state === "enabled" &&
+          access.record.transitionId === transition.transitionId
+          ? document
+          : undefined;
+      },
+    });
+    const storedFacts = await createSubjectFactsRedisCache(fixture.redis.observer).read(fixture.subject);
+    const facts = storedFacts === null ? null : DocumentFactsCacheRecordSchema.parse(JSON.parse(storedFacts));
+    const [access] = await bootstrap.inspectMany([fixture.subject]);
+    const [outbox] = await fixture.pg.sql`SELECT status FROM user_document_outbox`;
+    expect(result.document_name).toBe("Scheduled user");
+    expect(outbox?.status).toBe("processed");
+    expect(facts).toMatchObject({
+      kind: "document",
+      subjectIdentifier: fixture.subject,
+      sourceVersion: result.source_version,
+      facts: { profile: { name: "Scheduled user" } },
+    });
+    expect(access).toMatchObject({
+      status: "valid",
+      record: {
+        state: "enabled",
+        subjectIdentifier: fixture.subject,
+        transitionId: transition.transitionId,
+      },
+    });
+  }, "disabled");
+}, 30_000);
 
 for (const selection of [
   { name: "disabled", enabled: "false", modules: "user-document", dashboard: "false" },
@@ -234,38 +224,29 @@ test("the production Worker's shutdown listener waits for its blocked repair dat
           WHERE application_name=${peer.applicationName} AND wait_event_type='Lock'`;
         return rows.length === 1;
       });
-      const completion = runProcessCommandSmoke({
-        label: "production Worker shutdown listener",
-        completionTimeoutMs: 15000,
-        cleanupTimeoutMs: 5000,
-        start: () => fixture.startInterruptibleEntry({ IAM_WORKER_USER_DOCUMENT_REPAIR_DEADLINE_MS: "60000" }),
-      });
-      void completion.catch(() => {});
       let owner: string | undefined;
-      try {
-        await waitUntil(async () => {
+      const { result, shutdownMs } = await stopWorkerDuringRepair(
+        fixture.startEntry({ IAM_WORKER_USER_DOCUMENT_REPAIR_DEADLINE_MS: "60000" }),
+        async () => {
           const [row] = await fixture.pg.sql<
             { application_name: string }[]
           >`SELECT application_name FROM pg_stat_activity
             WHERE datname=current_database() AND application_name LIKE 'iam-user-%' AND wait_event_type='Lock'`;
           owner = row?.application_name;
           return owner !== undefined;
-        });
-        const started = performance.now();
-        await fixture.requestInterrupt();
-        const result = await completion;
-        const sessions = await fixture.pg.sql`SELECT pid FROM pg_stat_activity
-          WHERE application_name=${owner!} OR application_name=${`${owner!}-cancel`}`;
-        const peers = await fixture.pg.sql`SELECT state,wait_event_type FROM pg_stat_activity
+        },
+      );
+      if (!owner) throw new Error("Did not observe the blocked repair PostgreSQL owner");
+      const sessions = await fixture.pg.sql`SELECT pid FROM pg_stat_activity
+          WHERE application_name=${owner} OR application_name=${`${owner}-cancel`}`;
+      const peers = await fixture.pg.sql`SELECT state,wait_event_type FROM pg_stat_activity
           WHERE application_name=${peer.applicationName}`;
-        expect(performance.now() - started).toBeLessThan(6000);
-        expect(result.output).toContain("worker shutting down");
-        expect([...sessions]).toEqual([]);
-        expect([...peers]).toMatchObject([{ state: "active", wait_event_type: "Lock" }]);
-      } finally {
-        await fixture.requestInterrupt();
-        await completion;
-      }
+      expect(shutdownMs).toBeLessThan(6000);
+      expect(result.output).toContain('"signal":"SIGTERM"');
+      expect(result.output).toContain("worker shutting down");
+      expect(result.output).toContain('"event":"user_document.repair.stopped"');
+      expect([...sessions]).toEqual([]);
+      expect([...peers]).toMatchObject([{ state: "active", wait_event_type: "Lock" }]);
       await peer.close("fixture-cleanup");
       const peerFailure = await peerOutcome;
       expect(peerFailure).toHaveProperty("cause");
@@ -306,38 +287,28 @@ test("the production Worker exits unsuccessfully when shutdown cannot cancel its
       await fixture.pg.sql`REVOKE EXECUTE ON FUNCTION pg_catalog.pg_cancel_backend(integer) FROM PUBLIC`;
       await fixture.pg.sql.begin(async (tx) => {
         await tx`LOCK TABLE user_document_outbox IN ACCESS EXCLUSIVE MODE`;
-        const completion = runProcessCommandSmoke({
-          label: "production Worker required shutdown failure",
-          completionTimeoutMs: 15000,
-          cleanupTimeoutMs: 5000,
-          expectedExitCode: 1,
-          start: () =>
-            fixture.startInterruptibleEntry({
-              IAM_WORKER_DATABASE_URL: target.toString(),
-              IAM_WORKER_USER_DOCUMENT_REPAIR_DEADLINE_MS: "60000",
-            }),
-        });
-        void completion.catch(() => {});
-        try {
-          await waitUntil(async () => {
+        const { result } = await stopWorkerDuringRepair(
+          fixture.startEntry({
+            IAM_WORKER_DATABASE_URL: target.toString(),
+            IAM_WORKER_USER_DOCUMENT_REPAIR_DEADLINE_MS: "60000",
+          }),
+          async () => {
             const [row] = await fixture.pg.sql<
               { application_name: string }[]
             >`SELECT application_name FROM pg_stat_activity
               WHERE usename=${role} AND application_name LIKE 'iam-user-%' AND wait_event_type='Lock'`;
             owner = row?.application_name;
             return owner !== undefined;
-          });
-          await fixture.requestInterrupt();
-          const outcome = await completion;
-          expect(outcome.exitCode).toBe(1);
-          expect(outcome.output).toContain("worker shutting down");
-          const unconfirmed = await fixture.pg.sql`SELECT state,wait_event_type FROM pg_stat_activity
-            WHERE application_name=${owner!}`;
-          expect([...unconfirmed]).toMatchObject([{ state: "active", wait_event_type: "Lock" }]);
-        } finally {
-          await fixture.requestInterrupt();
-          await completion;
-        }
+          },
+          1,
+        );
+        expect(result.exitCode).toBe(1);
+        expect(result.output).toContain('"signal":"SIGTERM"');
+        expect(result.output).toContain("worker shutting down");
+        if (!owner) throw new Error("Did not observe the blocked repair PostgreSQL owner");
+        const unconfirmed = await fixture.pg.sql`SELECT state,wait_event_type FROM pg_stat_activity
+            WHERE application_name=${owner}`;
+        expect([...unconfirmed]).toMatchObject([{ state: "active", wait_event_type: "Lock" }]);
       });
     });
   });
@@ -405,8 +376,6 @@ async function createFixture(
     [{ subjectIdentifier: subject, state: initialAccessState }],
     new Date(),
   );
-  let standaloneExecutable: string | undefined;
-  const interruptFile = join(temporaryDirectory, "interrupt-worker");
   function environment(overrides: NodeJS.ProcessEnv = {}) {
     return {
       ...redis.commandEnvironment(temporaryDirectory),
@@ -428,32 +397,13 @@ async function createFixture(
     redis,
     subject,
     stopExecutors,
-    async buildStandalone() {
-      standaloneExecutable = await prepareWorkerStandalone({ repositoryRoot: resolve(workerRoot, "../..") });
-    },
     startEntry(overrides: NodeJS.ProcessEnv = {}) {
       return spawnOwnedProcessTree({
-        executable: standaloneExecutable ?? process.execPath,
-        args: standaloneExecutable ? [] : ["--no-env-file", "run", "src/index.ts"],
+        executable: process.execPath,
+        args: ["--no-env-file", "run", "src/index.ts"],
         cwd: workerRoot,
         env: environment(overrides),
       });
-    },
-    startInterruptibleEntry(overrides: NodeJS.ProcessEnv = {}) {
-      return spawnOwnedProcessTree({
-        executable: process.execPath,
-        args: [
-          "--no-env-file",
-          "--preload=./test-integration/support/interrupt-worker.fixture.ts",
-          "run",
-          "src/index.ts",
-        ],
-        cwd: workerRoot,
-        env: environment({ ...overrides, IAM_WORKER_TEST_INTERRUPT_FILE: interruptFile }),
-      });
-    },
-    requestInterrupt() {
-      return writeFile(interruptFile, "stop", "utf8");
     },
     parsedEnv(overrides: NodeJS.ProcessEnv = {}) {
       const previous = process.env.DATABASE_URL;
@@ -473,9 +423,49 @@ async function createFixture(
   };
 }
 
-async function waitUntil(predicate: () => Promise<boolean>) {
-  const deadline = performance.now() + 10_000;
-  while (performance.now() < deadline) {
+async function stopWorkerDuringRepair(
+  child: ReturnType<typeof spawnOwnedProcessTree>,
+  repairIsBlocked: () => Promise<boolean>,
+  expectedExitCode = 0,
+) {
+  const logs = createBoundedProcessLogCapture(child, { maxBytes: 32_768 });
+  const completion = runProcessCommandSmoke({
+    label: "production Worker shutdown during repair",
+    completionTimeoutMs: 15_000,
+    cleanupTimeoutMs: 5_000,
+    expectedExitCode,
+    start: () => child,
+  });
+  const observer = new AbortController();
+  const blocked = waitUntil(
+    async () => logs.snapshot().includes("worker started") && (await repairIsBlocked()),
+    AbortSignal.any([observer.signal, AbortSignal.timeout(10_000)]),
+  );
+  try {
+    await Promise.race([
+      blocked,
+      completion.then(() => {
+        throw new Error("Worker finished before readiness and the PostgreSQL lock wait");
+      }),
+    ]);
+    const started = performance.now();
+    if (!child.kill("SIGTERM")) throw new Error(`Could not signal Worker\n${logs.snapshot()}`);
+    const result = await completion;
+    return { result, shutdownMs: performance.now() - started };
+  } catch (error) {
+    observer.abort();
+    const [, command] = await Promise.allSettled([blocked, completion]);
+    if (command.status === "rejected" && command.reason !== error) {
+      throw new AggregateError([error, command.reason], "Worker interruption and command both failed");
+    }
+    throw error;
+  } finally {
+    logs.dispose();
+  }
+}
+
+async function waitUntil(predicate: () => Promise<boolean>, signal = AbortSignal.timeout(10_000)) {
+  while (!signal.aborted) {
     if (await predicate()) return;
     await new Promise((resolve) => setTimeout(resolve, 20));
   }

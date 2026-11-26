@@ -67,7 +67,8 @@ Pull Requests 和 Git 为依据。看板同步失败会输出告警，AFK 继续
 宿主配置和 credential helper 不参与。每个执行器重验来源，创建私有副本，只读挂载到 `/home/agent/.docker/config.json`。
 调用者保管并保持源文件可读，runner 只回收自己的副本。来源路径及认证内容不写入日志、记录或错误。
 
-需要 Linux Docker Engine，或 Docker Desktop 4.34+ 开启 host networking 并关闭 Enhanced Container Isolation。
+宿主使用原生 Linux 或 WSL2。需要 Linux Docker Engine，或在 WSL2 下使用 Docker Desktop 4.34+ 并开启 host networking、关闭 Enhanced Container Isolation。
+Runner 读取宿主 `/var/run/docker.sock` 的 GID，为执行器添加访问共享 daemon 所需的附加组。
 共享 daemon 和 host network 提供宿主 Docker 管理与网络访问能力，project 名用于资源归属。
 运行前以实际执行用户检查 socket、Docker 工具和宿主 loopback，条件不满足时退出。
 测试走正式根入口，每条命令独立创建环境、使用动态端口并清理。根 Integration 在单条命令内并发运行所选任务，

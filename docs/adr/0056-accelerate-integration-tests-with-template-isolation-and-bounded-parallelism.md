@@ -32,9 +32,10 @@ status: accepted
 - **指纹缓存静态托管（不污染生产 `dist`）**。`@iam/admin` 与 `@iam/sso` 的全部集成 `.spec.ts` 均基于 Playwright `page.route` mock 后端 API，无 PG/Redis 依赖。复用 [ADR-0055](0055-adopt-hybrid-host-runtime-for-full-system-e2e.md#前端托管与独立缓存) 的确定性指纹构建模式：Playwright `webServer` 默认将构建产物输出至受 `.gitignore` 与 `.dockerignore` 保护的独立缓存目录（如 `.cache/integration-frontend/{admin,sso}`，严禁写入 `apps/*/dist` 或污染 Turbo 生产构建缓存），指纹命中且产物完好时跳过 `vite build`，直接以极简静态 SPA 服务托管（`@iam/sso` 构建输入纳入其固定测试公钥环境变量）；保留 `IAM_PW_DEV_SERVER=1` 调试开关按需切回 Vite dev server。
 - **放开无资源 Playwright 并发上限**。`run-package-integration.mjs` 解除对无外部资源 Playwright 集合 `--browser-workers` 的 `1|2` 硬限制，改为有界自适应默认值 `min(4, max(2, floor(cpus / 2)))`（支持环境变量覆盖），同时为 `@iam/admin` 与 `@iam/sso` 启用，并在确认无跨用例共享状态后开启 `fullyParallel: true`。
 
-## Windows 进程树包装器 `.dll` 哈希缓存
+## Windows 进程树包装器 `.dll` 哈希缓存（已由 [ADR-0058](0058-standardize-development-and-runtime-tooling-on-linux.md) 退役）
 
-- [windows-job-supervisor.ps1](../../packages/runtime/src/process/windows-job-supervisor.ps1) 同时服务于测试 runner 与 `apps/worker` 生产调度（含 Windows standalone 模式）。为消除每次 `spawnOwnedProcessTree` 现场调用 `csc.exe` 带来的约 500ms 编译惩罚，脚本内部按 `IamOwnedProcess.JobApi` C# 源码哈希将程序集编译输出到系统临时/缓存目录（`IamOwnedProcess.JobApi.<sha256>.dll`，采用临时文件 + 原子重命名防并发竞态），后续调用直接 `Add-Type -Path` 加载；缓存损坏、缺失或权限异常时无缝回退至内存编译。
+- [ADR-0058](0058-standardize-development-and-runtime-tooling-on-linux.md) 将开发、测试与编排运行面收敛为纯 Linux 后，本节的 `windows-job-supervisor.ps1` 与 `.dll` 哈希缓存机制以及下方 `@iam/worker` Windows standalone 编译验证条款一并退役。以下保留原决策背景供历史追溯：
+- 原 `packages/runtime/src/process/windows-job-supervisor.ps1` 同时服务于测试 runner 与 `apps/worker` 生产调度（含 Windows standalone 模式）。为消除每次 `spawnOwnedProcessTree` 现场调用 `csc.exe` 带来的约 500ms 编译惩罚，脚本内部按 `IamOwnedProcess.JobApi` C# 源码哈希将程序集编译输出到系统临时/缓存目录（`IamOwnedProcess.JobApi.<sha256>.dll`，采用临时文件 + 原子重命名防并发竞态），后续调用直接 `Add-Type -Path` 加载；缓存损坏、缺失或权限异常时无缝回退至内存编译。
 - 我们拒绝引入独立预编译原生 `.exe` 替代 `powershell.exe`，以免在仓库引入额外的跨平台原生构建工具链或二进制签入审计负担；由此接受保留约 100ms 的 PowerShell 进程冷启动开销。
 
 ## `@iam/e2e-system` 剥离与路径触发门禁

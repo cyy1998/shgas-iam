@@ -6,8 +6,8 @@ import {
   readManagedResourceRun,
 } from "../../../../scripts/test-resources/managed-resources.mjs";
 import { runOwnedCommand } from "../../../../scripts/test-resources/owned-command.mjs";
-import { apisixAdminKey, apisixErrorLog } from "../../src/hybrid-compose.ts";
 import { cleanupHybridResident, withHybridMiddleware } from "../../src/hybrid-middleware.ts";
+import { apisixAdminKey, apisixErrorLog } from "../../src/middleware-compose.ts";
 
 const repositoryRoot = resolve(import.meta.dir, "../../../..");
 
@@ -44,13 +44,14 @@ async function ownedVolumes(project: string) {
   return result.split("\n").filter(Boolean).sort();
 }
 
-test("fresh host middleware exposes APISIX over DooD and removes its exact project", async () => {
+test("fresh host middleware exposes APISIX over DooD and removes its exact project after failure", async () => {
   const upstream = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response("upstream") });
   const port = upstream.port;
+  const scenarioFailure = new Error("Synthetic E2E scenario failure");
   let project = "";
   try {
     if (port === undefined) throw new Error("Test upstream did not bind a port");
-    await withHybridMiddleware({ repositoryRoot, lifecycle: "fresh" }, async (stack) => {
+    const failure = await withHybridMiddleware({ repositoryRoot, lifecycle: "fresh" }, async (stack) => {
       project = stack.project;
       const containers = await ownedContainers(project);
       expect(containers).toHaveLength(4);
@@ -92,11 +93,21 @@ test("fresh host middleware exposes APISIX over DooD and removes its exact proje
       expect(logs).not.toContain("synthetic-query");
       const privateErrors = await dockerRead(["exec", gateway, "tail", "-n", "50", apisixErrorLog]);
       expect(privateErrors).toMatch(/\[error\].*while connecting to upstream.*\/failure-evidence/u);
-    });
+      throw scenarioFailure;
+    }).catch((error: unknown) => error);
+    expect(failure).toBe(scenarioFailure);
     const remaining = await ownedContainers(project);
     expect(remaining).toEqual([]);
     const volumes = await ownedVolumes(project);
     expect(volumes).toEqual([]);
+    const networks = await dockerRead([
+      "network",
+      "ls",
+      "--quiet",
+      "--filter",
+      `label=com.docker.compose.project=${project}`,
+    ]);
+    expect(networks).toBe("");
   } finally {
     await upstream.stop(true);
   }

@@ -15,13 +15,13 @@ test("lets a cooperative host process finish its shutdown on SIGTERM", async () 
       cwd: directory,
       args: [
         "-e",
-        `const server = Bun.serve({
-          hostname: "127.0.0.1", port: ${port}, fetch: () => new Response("ready"),
-        });
-        process.once("SIGTERM", async () => {
+        `process.once("SIGTERM", async () => {
           await Bun.sleep(400);
           await Bun.write(${JSON.stringify(marker)}, "finished");
           await server.stop(true);
+        });
+        const server = Bun.serve({
+          hostname: "127.0.0.1", port: ${port}, fetch: () => new Response("ready"),
         });`,
       ],
       env: process.env,
@@ -53,7 +53,7 @@ test("waits for readiness, logs both streams and force-stops an uncooperative pr
         "-e",
         `const descendant = Bun.spawn([process.execPath, "-e",
           'process.on("SIGTERM", () => {}); Bun.serve({ hostname: "127.0.0.1", port: ${childPort}, fetch: () => new Response("child") })'
-        ], { detached: process.platform === "linux" });
+        ], { detached: true });
         while (true) {
           try { await (await fetch("http://127.0.0.1:${childPort}")).text(); break; }
           catch { await Bun.sleep(25); }

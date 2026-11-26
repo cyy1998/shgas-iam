@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
-import type { ProcessSmokeChild, ProcessTreeOwner } from "@iam/test-support/process-smoke-harness";
+import type { ProcessSmokeChild } from "@iam/test-support/process-smoke-harness";
 
 export class FakeChild extends EventEmitter implements ProcessSmokeChild {
   readonly pid: number | undefined = 321;
@@ -9,10 +9,6 @@ export class FakeChild extends EventEmitter implements ProcessSmokeChild {
   exitCode: number | null = null;
   signalCode: NodeJS.Signals | null = null;
   private closed = false;
-
-  constructor(readonly processTreeOwner?: ProcessTreeOwner) {
-    super();
-  }
 
   kill(signal: NodeJS.Signals = "SIGTERM") {
     this.finish(null, signal);

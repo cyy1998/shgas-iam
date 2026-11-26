@@ -59,7 +59,7 @@ test("reclaims an already-started Vite server and its child when the second app 
     for (const app of ["admin", "sso"]) {
       const directory = join(repoRoot, "apps", app);
       await mkdir(directory, { recursive: true });
-      await symlink(installed, join(directory, "node_modules"), "junction");
+      await symlink(installed, join(directory, "node_modules"));
       await writeFile(join(directory, "index.html"), "<title>Vite startup fixture</title>");
     }
     await writeFile(

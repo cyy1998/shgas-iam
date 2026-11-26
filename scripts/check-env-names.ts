@@ -191,7 +191,7 @@ function listFiles(dir: string, predicate: (file: string) => boolean): string[] 
     if (entry === "node_modules" || entry === "dist") continue;
 
     const absolutePath = join(absoluteDir, entry);
-    const relativePath = relative(repoRoot, absolutePath).replaceAll("\\", "/");
+    const relativePath = relative(repoRoot, absolutePath);
     const stat = statSync(absolutePath);
 
     if (stat.isDirectory()) {

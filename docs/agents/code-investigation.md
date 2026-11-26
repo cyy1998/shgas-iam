@@ -91,7 +91,7 @@ protocol entry
 ```
 
 与问题相关时，同时确认 transaction boundary、`UnitOfWork`/`afterCommit`、error path、retry、同步/异步副作用和测试证据。
-先用 `rg` / `rg --files`（本机未安装 `rg` 时改用 `git grep` 或 PowerShell `Select-String`）、package manifest、public export、entry point 与 composition root 缩小范围，避免无目标全库遍历、
+先用 `rg` / `rg --files`（本机未安装 `rg` 时改用 `git grep` / `git ls-files`）、package manifest、public export、entry point 与 composition root 缩小范围，避免无目标全库遍历、
 重复完整读取文件或把原始命令日志带回主线程。
 
 ## 返回契约与外置记忆

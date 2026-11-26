@@ -39,41 +39,65 @@ APISIX 在已配置的入口上按 Host 覆盖 `X-IAM-Entry-Network`，移动回
 
 ## 发布配置
 
-一次只向一个目标环境发布一个 scope。发布窗口内暂停其他 Gateway 实例和外部工具对同一集群的写入，准备已知良好的恢复配置。以下 PowerShell 7 命令在**同一终端**按步骤执行。通过安全环境提供 `IAM_GATEWAY_URL`、`IAM_GATEWAY_CLIENT_SECRET` 及本次所需的私有 `variables.json`（无变量时内容为 `{}`）。
+一次只向一个目标环境发布一个 scope。发布窗口内暂停其他 Gateway 实例和外部工具对同一集群的写入，准备已知良好的恢复配置。以下步骤在**同一个 Linux Bash 终端**运行，需要 curl 7.76 或更新版本及 jq。通过安全环境提供 `IAM_GATEWAY_URL`、`IAM_GATEWAY_CLIENT_SECRET` 及本次所需的私有 `variables.json`（无变量时内容为 `{}`）。
 
-**1. 试运行一次。** 以下以 `prod:iam` 为例。核对服务地址、scope 及 YAML 文件属于同一目标。`prune` 默认为 `$false`。本次确需清理旧资源时，在执行前将 `prune` 设为 `$true`。试运行会校验配置、读取 APISIX 并显示差异计划。
+**1. 试运行一次。** 以下以 `prod:iam` 为例。核对服务地址、scope 及 YAML 文件属于同一目标。`prune` 默认为 `false`。本次确需清理旧资源时，在执行前将 `prune` 设为 `true`。试运行会校验配置、读取 APISIX 并显示差异计划。命令经文件描述符传递 API Key 和请求体，显示差异计划或 Gateway 错误码。
 
-```powershell
-$ErrorActionPreference = 'Stop'
-$endpoint = $env:IAM_GATEWAY_URL.TrimEnd('/')
-$post = @{
-  Method = 'Post'
-  Headers = @{ apikey = $env:IAM_GATEWAY_CLIENT_SECRET }
-  ContentType = 'application/json; charset=utf-8'
+```bash
+set +x
+gateway_apply() {
+  local response
+  if response=$(curl --disable --silent --show-error --fail-with-body \
+    --header @<(printf 'apikey: %s\n' "$gateway_api_key") \
+    --header 'Content-Type: application/json; charset=utf-8' \
+    --data-binary @- --url "$gateway_endpoint/apply"); then
+    printf '%s\n' "$response"
+  else
+    jq -r '.code | strings | select(test("^GATEWAY_[A-Z_]+$"))' <<<"$response" >&2 2>/dev/null
+    return 1
+  fi
 }
-$applyRequest = @{
-  scope = 'prod:iam'
-  yaml = Get-Content -LiteralPath 'tmp/gateway-config/apisix/manifests/prod/iam.yaml' -Raw -Encoding utf8
-  variables = Get-Content -LiteralPath 'variables.json' -Raw -Encoding utf8 | ConvertFrom-Json -AsHashtable
-  dryRun = $true
-  prune = $false
+
+preview_gateway() {
+  unset preview_request
+  : "${IAM_GATEWAY_URL:?请设置 IAM_GATEWAY_URL}" "${IAM_GATEWAY_CLIENT_SECRET:?请设置 IAM_GATEWAY_CLIENT_SECRET}"
+  gateway_endpoint=${IAM_GATEWAY_URL%/}
+  gateway_api_key=$IAM_GATEWAY_CLIENT_SECRET
+  local prune=false request preview
+  request=$(jq -ne --argjson prune "$prune" \
+    --rawfile yaml 'tmp/gateway-config/apisix/manifests/prod/iam.yaml' \
+    --slurpfile variables 'variables.json' '
+      if ($variables | length) == 1 and ($variables[0] | type) == "object"
+      then {scope: "prod:iam", $yaml, variables: $variables[0], dryRun: true, $prune}
+      else error("variables.json 必须含单个 JSON 对象") end
+    ') || return
+  preview=$(gateway_apply <<<"$request") || return
+  jq -es --argjson prune "$prune" '
+    (if length == 1 then .[0].data else null end)
+    | if .outcome == "preview" and .dryRun == true and .prune == $prune and (.plan | type) == "object"
+    then .plan else error("未确认本次发布选项") end
+  ' <<<"$preview" || return
+  preview_request=$request
 }
-$preview = Invoke-RestMethod @post -Uri "$endpoint/apply" -Body ($applyRequest | ConvertTo-Json -Depth 20)
-if ($preview.data.outcome -ne 'preview' -or $preview.data.dryRun -ne $true -or $preview.data.prune -ne $applyRequest.prune) {
-  throw '未确认本次发布选项'
-}
-$preview.data.plan | ConvertTo-Json -Depth 10
+preview_gateway
 ```
 
-**2. 人工确认计划。** 核对 `creates`、`updates`、`deletes` 和 `ignored`。`prune` 为 `$false` 时保留 `deletes` 中的候选。`prune` 为 `$true` 时，逐项确认列出的候选都应删除。出现非预期对象或错误即停止。需要修改配置或 `prune` 时，按修改后的请求重新试运行并确认。
+**2. 人工确认计划。** 核对 `creates`、`updates`、`deletes` 和 `ignored`。`prune` 为 `false` 时保留 `deletes` 中的候选。`prune` 为 `true` 时，逐项确认列出的候选都应删除。出现非预期对象或错误即停止。需要修改配置或 `prune` 时，按修改后的请求重新试运行并确认。
 
-**3. 正式发布。** 沿用刚核对的 `$applyRequest`，只将 `dryRun` 改为 `$false`。正式发布重新读取 APISIX 并计算计划，在写入前检查待删 Consumer 的子凭据。成功后经受控 Admin API 回读本次触及的对象及其引用，再完成[数据面检查](#数据面检查)。
+**3. 正式发布。** 沿用刚核对的目标、凭据和请求，只将 `dryRun` 改为 `false`。正式发布重新读取 APISIX 并计算计划，在写入前检查待删 Consumer 的子凭据。收到非预期响应或请求失败时，按[失败与恢复](#失败与恢复)处理。成功后经受控 Admin API 回读本次触及的对象及其引用，再完成[数据面检查](#数据面检查)。
 
-```powershell
-$applyRequest.dryRun = $false
-$result = Invoke-RestMethod @post -Uri "$endpoint/apply" -Body ($applyRequest | ConvertTo-Json -Depth 20)
-if ($result.data.outcome -notin @('applied', 'no_change')) { throw '发布结果待核实' }
-$result.data.outcome
+```bash
+(
+  set +x
+  set -eu
+  request=$(jq -e '.dryRun = false' <<<"${preview_request:?请先试运行并核对计划}")
+  result=$(gateway_apply <<<"$request")
+  jq -ers '
+    (if length == 1 then .[0].data.outcome else null end)
+    | if . == "applied" or . == "no_change" then .
+    else error("发布结果待核实") end
+  ' <<<"$result"
+)
 ```
 
 ## 数据面检查
