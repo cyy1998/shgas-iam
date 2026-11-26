@@ -7,7 +7,6 @@ import { ownApiTestExecutor, resetApiRedisTestDatabase } from "./fixture-lifecyc
 export function fixtureBunExecutable() {
   return execSync('bun -e "console.log(process.execPath)"', {
     encoding: "utf8",
-    windowsHide: true,
     timeout: 10000,
     maxBuffer: 4096,
   }).trim();
@@ -20,8 +19,7 @@ export async function startBrowserFixture(script: string, args: string[] = []) {
   const child = spawn(executable, ["--no-env-file", script, ...args], {
     cwd: process.cwd(),
     env: process.env,
-    detached: process.platform !== "win32",
-    windowsHide: true,
+    detached: true,
     stdio: "pipe",
   });
   const exit = new Promise<number | null>((resolve, reject) => {
