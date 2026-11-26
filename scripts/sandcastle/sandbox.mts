@@ -1,8 +1,11 @@
+import { mkdir, stat } from "node:fs/promises";
+import { dirname, posix, resolve, sep } from "node:path";
 import type { AgentProvider } from "@ai-hero/sandcastle";
 import type { DockerOptions } from "@ai-hero/sandcastle/sandboxes/docker";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 import { shellQuote } from "./codex-provider.mts";
 
+const sandboxHomedir = "/home/agent";
 export const turboCacheDirectory = "/tmp/iam-sandcastle-turbo/cache";
 
 const cacheProbe = `
@@ -39,6 +42,70 @@ export const workspacePreparation = `${cachePreflight} && sh scripts/sandcastle/
 export type DockerDaemonAccess = { socketGroupId: number };
 type DockerSandboxOptions = DockerOptions & { daemonAccess?: DockerDaemonAccess };
 
+function normalizeSandboxPath(path: string, sandboxWorkspace: string): string {
+  const expanded =
+    path === "~"
+      ? sandboxHomedir
+      : path.startsWith("~/")
+        ? `${sandboxHomedir}${path.slice(1)}`
+        : path.startsWith("/")
+          ? path
+          : `${sandboxWorkspace}/${path}`;
+  return posix.normalize(expanded).replace(/\/+$/u, "") || "/";
+}
+
+function resolveWorktreeMountpoint(
+  worktreeRoot: string,
+  sandboxWorkspace: string,
+  sandboxPath: string,
+): string | undefined {
+  const normalized = normalizeSandboxPath(sandboxPath, sandboxWorkspace);
+  if (!normalized.startsWith(`${sandboxWorkspace}/`)) return undefined;
+  const relativeTarget = normalized.slice(sandboxWorkspace.length + 1);
+  if (!relativeTarget) return undefined;
+  const hostTarget = resolve(worktreeRoot, relativeTarget);
+  if (hostTarget !== worktreeRoot && !hostTarget.startsWith(`${worktreeRoot}${sep}`)) {
+    throw new Error(`Sandbox 挂载路径超出 worktree 范围：${sandboxPath}`);
+  }
+  return hostTarget;
+}
+
+/**
+ * Pre-create host mountpoint directories inside the worktree as the current user so the Linux
+ * Docker daemon never materializes root-owned directories that block `git worktree remove`.
+ */
+export async function prepareWorkspaceMountpoints(options: {
+  worktreePath: string;
+  mounts?: readonly { hostPath: string; sandboxPath: string }[];
+  anonymousVolumes?: readonly string[];
+  namedVolumes?: readonly { target: string }[];
+}): Promise<void> {
+  const worktreeRoot = resolve(options.worktreePath);
+  const mounts = options.mounts ?? [];
+  const workspaceMount = mounts.find((mount) => resolve(mount.hostPath) === worktreeRoot);
+  const sandboxWorkspace = normalizeSandboxPath(
+    workspaceMount?.sandboxPath ?? "/home/agent/workspace",
+    "/home/agent/workspace",
+  );
+  const directories = new Set<string>();
+  for (const mount of mounts) {
+    const hostTarget = resolveWorktreeMountpoint(worktreeRoot, sandboxWorkspace, mount.sandboxPath);
+    if (!hostTarget) continue;
+    const hostStat = await stat(mount.hostPath).catch(() => undefined);
+    directories.add(hostStat?.isFile() ? dirname(hostTarget) : hostTarget);
+  }
+  for (const target of [
+    ...(options.anonymousVolumes ?? []),
+    ...(options.namedVolumes ?? []).map((volume) => volume.target),
+  ]) {
+    const hostTarget = resolveWorktreeMountpoint(worktreeRoot, sandboxWorkspace, target);
+    if (hostTarget) directories.add(hostTarget);
+  }
+  for (const directory of directories) {
+    await mkdir(directory, { recursive: true });
+  }
+}
+
 /** All execution stages use the same container-local cache. */
 export function dockerSandbox(options: DockerSandboxOptions) {
   const { daemonAccess, ...dockerOptions } = options;
@@ -46,7 +113,7 @@ export function dockerSandbox(options: DockerSandboxOptions) {
     throw new Error("Docker socket group 必须为非负整数 GID。");
   if (daemonAccess && options.network !== "host")
     throw new Error("共享宿主 Docker 的 sandbox 必须显式使用 host networking。");
-  return docker({
+  const provider = docker({
     ...dockerOptions,
     ...(daemonAccess
       ? { daemonSocket: "/var/run/docker.sock", groups: [...(options.groups ?? []), daemonAccess.socketGroupId] }
@@ -57,6 +124,18 @@ export function dockerSandbox(options: DockerSandboxOptions) {
       ...(daemonAccess ? { DOCKER_HOST: "unix:///var/run/docker.sock" } : {}),
     },
   });
+  return {
+    ...provider,
+    create: async (createOptions: Parameters<typeof provider.create>[0]) => {
+      await prepareWorkspaceMountpoints({
+        worktreePath: createOptions.worktreePath,
+        mounts: [...createOptions.mounts, ...(dockerOptions.mounts ?? [])],
+        anonymousVolumes: dockerOptions.anonymousVolumes,
+        namedVolumes: dockerOptions.namedVolumes,
+      });
+      return provider.create(createOptions);
+    },
+  };
 }
 
 /** The SDK checks agent command exit codes; its ready hooks do not. */
