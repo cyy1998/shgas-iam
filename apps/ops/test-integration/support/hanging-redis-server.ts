@@ -1,3 +1,4 @@
+import { once } from "node:events";
 import type { Socket } from "node:net";
 import { createServer } from "node:net";
 
@@ -18,6 +19,12 @@ export async function createHangingRedisServer() {
   let closed = false;
   return {
     port: address.port,
+    get connectionCount() {
+      return sockets.size;
+    },
+    async waitForConnection(signal: AbortSignal) {
+      if (sockets.size === 0) await once(server, "connection", { signal });
+    },
     async close() {
       if (closed) return;
       closed = true;

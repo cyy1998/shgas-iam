@@ -6,12 +6,13 @@ import {
   type OrganizationOutboxJobPayload,
   type OrganizationRebuildJobPayload,
 } from "@iam/documents/organization/worker";
-import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
-import { createOpsPostgresTestHarness } from "../support/postgres-test-harness";
+import { spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
+import { runOpsCommandSmoke } from "../support/ops-command-smoke";
+import { createOpsPostgresTestHarness, waitForOpsPostgresLock } from "../support/postgres-test-harness";
 
 const opsRoot = fileURLToPath(new URL("../../", import.meta.url));
 let harness: Awaited<ReturnType<typeof createOpsPostgresTestHarness>>;
-let commands: ReturnType<typeof runProcessCommandSmoke>[];
+let commands: ReturnType<typeof runOpsCommandSmoke>[];
 beforeAll(async () => {
   harness = await createOpsPostgresTestHarness();
 });
@@ -91,14 +92,20 @@ test("the actual verification signal listener stops its blocked read and closes 
   const before = await inventory();
   const result = await harness.sql.begin(async (tx) => {
     await tx`LOCK TABLE organization IN ACCESS EXCLUSIVE MODE`;
-    return await runVerify(143, [], ["--preload=./test-integration/support/interrupt-command.fixture.ts"]);
+    let blockedOwner: string | undefined;
+    const interrupted = await runVerify(143, [], async (signal) => {
+      blockedOwner = await waitForOpsPostgresLock(harness, "org", signal);
+    });
+    if (!blockedOwner) throw new Error("Did not observe the blocked PostgreSQL owner");
+    expect(interrupted.output).toContain(`"applicationName":"${blockedOwner}"`);
+    const sessions = await sessionsAfter(interrupted.output);
+    expect(Array.from(sessions)).toEqual([]);
+    return interrupted;
   });
   const after = await inventory();
-  const sessions = await sessionsAfter(result.output);
   expect(result.output).toContain('"reason":"SIGTERM"');
   expect(result.output).not.toContain("Organization document full verification completed");
   expect(after).toEqual(before);
-  expect(Array.from(sessions)).toEqual([]);
 }, 20_000);
 
 async function inventory() {
@@ -139,32 +146,39 @@ async function publishAll() {
   for (const payload of rebuilds) await processor.processRebuild(payload);
 }
 
-async function runVerify(expectedExitCode: number, args: string[] = [], bunArgs: string[] = []) {
+async function runVerify(
+  expectedExitCode: number,
+  args: string[] = [],
+  interruptWhen?: (signal: AbortSignal) => Promise<void>,
+) {
   const url = new URL(harness.databaseUrl);
   url.searchParams.set("options", "-cdefault_transaction_read_only=on");
-  const pending = runProcessCommandSmoke({
-    label: "Organization Search PostgreSQL verification",
-    start: () =>
-      spawnOwnedProcessTree({
-        executable: process.execPath,
-        args: ["--no-env-file", ...bunArgs, "run", "src/index.ts", "organization-document", "verify", ...args],
-        cwd: opsRoot,
-        env: {
-          ...process.env,
-          NODE_ENV: "test",
-          IAM_OPS_DATABASE_URL: url.toString(),
-          IAM_OPS_LOG_LEVEL: "info",
-          IAM_OPS_LOG_FORMAT: "json",
-          IAM_OPS_REDIS_URL: "invalid-unused-redis-url",
-          FORCE_COLOR: "0",
-          NO_COLOR: "1",
-        },
-      }),
-    completionTimeoutMs: 15_000,
-    cleanupTimeoutMs: 5000,
-    expectedExitCode,
-    maxOutputBytes: 64 * 1024,
-  });
+  const pending = runOpsCommandSmoke(
+    {
+      label: "Organization Search PostgreSQL verification",
+      start: () =>
+        spawnOwnedProcessTree({
+          executable: process.execPath,
+          args: ["--no-env-file", "run", "src/index.ts", "organization-document", "verify", ...args],
+          cwd: opsRoot,
+          env: {
+            ...process.env,
+            NODE_ENV: "test",
+            IAM_OPS_DATABASE_URL: url.toString(),
+            IAM_OPS_LOG_LEVEL: "info",
+            IAM_OPS_LOG_FORMAT: "json",
+            IAM_OPS_REDIS_URL: "invalid-unused-redis-url",
+            FORCE_COLOR: "0",
+            NO_COLOR: "1",
+          },
+        }),
+      completionTimeoutMs: 15_000,
+      cleanupTimeoutMs: 5000,
+      expectedExitCode,
+      maxOutputBytes: 64 * 1024,
+    },
+    interruptWhen,
+  );
   commands.push(pending);
   void pending.catch(() => {});
   return await pending;

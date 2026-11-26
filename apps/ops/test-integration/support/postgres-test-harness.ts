@@ -32,3 +32,19 @@ export async function reserveOpsPostgresConnection(
   stopExecutors.push(close);
   return { sql, close };
 }
+
+export async function waitForOpsPostgresLock(
+  harness: OpsPostgresTestHarness,
+  scope: "user" | "org",
+  signal = AbortSignal.timeout(5_000),
+) {
+  while (!signal.aborted) {
+    const [owner] = await harness.sql<{ application_name: string }[]>`
+      SELECT application_name FROM pg_stat_activity
+      WHERE datname = current_database() AND usename = current_user
+        AND application_name LIKE ${`iam-${scope}-%`} AND wait_event_type = 'Lock'`;
+    if (owner) return owner.application_name;
+    await Bun.sleep(10);
+  }
+  throw new Error(`Did not observe the Ops ${scope} PostgreSQL lock wait`, { cause: signal.reason });
+}

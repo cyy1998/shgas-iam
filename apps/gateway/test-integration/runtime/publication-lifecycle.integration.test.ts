@@ -66,7 +66,7 @@ test("normal shutdown stops new apply and waits for the original real publicatio
     const gate = proxy.interceptOnce({ method: "PUT", path: "/apisix/admin/upstreams/tender.api.test" });
     const publication = gateway.apply(body("drained"));
     await gate.entered;
-    await gateway.shutdown();
+    gateway.shutdown();
     await gateway.waitForEvent("gateway_stopping");
     let newApply: Awaited<ReturnType<typeof gateway.apply>> | undefined;
     let connectionFailure: unknown;
@@ -90,6 +90,7 @@ test("normal shutdown stops new apply and waits for the original real publicatio
     expect(result).toMatchObject({ status: 200, body: { data: { outcome: "applied", written: true } } });
     const exited = await gateway.waitForExit();
     expect(exited).toEqual({ code: 0, signal: null });
+    await gateway.waitForEvent("gateway_stopped");
     const actual = await remote.read();
     expect(actual.routes[0]).toMatchObject({ uri: "/drained/*" });
     const sessions = await database.sql<
@@ -143,7 +144,7 @@ test("an undeliverable unknown result remains blocked until manual repair and a 
       await remote.delete("upstreams", "tender.api.test");
       const repaired = await remote.read();
       expect(repaired.upstreams).toHaveLength(0);
-      await gateway.shutdown();
+      gateway.shutdown();
       const stopped = await gateway.waitForExit();
       expect(stopped).toEqual({ code: 0, signal: null });
       const writesBeforeRestart = proxy.journal.filter((entry) => entry.method !== "GET").length;

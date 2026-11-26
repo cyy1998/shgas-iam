@@ -69,23 +69,6 @@ test("fails closed when production mounts an unclassified Admin REST endpoint", 
   ).toThrow("Admin REST endpoint GET /unclassified must have exactly one classified operation");
 });
 
-test("fails closed for an unclassified Admin REST endpoint using a Windows module path", () => {
-  const { routes } = createProductionMountedSurfaces();
-  const unclassifiedRoute = createRouter().get("/unclassified", (c) => c.text("no"));
-
-  expect(() =>
-    createAdminRestOperationSurface(
-      {
-        ...routes,
-        ".\\src\\routes\\admin\\unclassified\\index.ts": {
-          default: unclassifiedRoute as never,
-        },
-      },
-      adminTier,
-    ),
-  ).toThrow("Admin REST endpoint GET /unclassified must have exactly one classified operation");
-});
-
 test("uses the production tier routeDir when guarding Admin REST endpoints", () => {
   const { routes } = createProductionMountedSurfaces();
   const unclassifiedRoute = createRouter().get("/unclassified", (c) => c.text("no"));

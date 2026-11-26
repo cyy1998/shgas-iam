@@ -16,13 +16,10 @@ import {
 import { createJobQueue, DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
 import { createOrganizationDocumentWorkerModule } from "@iam/jobs/documents/organization";
 import { redisUrlString } from "@iam/runtime/redis/config";
-import {
-  runProcessCommandSmoke,
-  spawnOwnedProcessTree,
-  terminateProcessTree,
-} from "@iam/test-support/process-smoke-harness";
+import { spawnOwnedProcessTree, terminateProcessTree } from "@iam/test-support/process-smoke-harness";
 import { createUnitOfWork } from "@iam/unit-of-work";
 import { createHangingRedisServer } from "../support/hanging-redis-server";
+import { runOpsCommandSmoke } from "../support/ops-command-smoke";
 import { createOpsPostgresTestHarness, reserveOpsPostgresConnection } from "../support/postgres-test-harness";
 import {
   overrideOpsRedisTestUrl,
@@ -155,21 +152,24 @@ async function command(
   args: string[] = [],
   expectedExitCode = 0,
   overrides: NodeJS.ProcessEnv = {},
-  runtimeArgs: string[] = [],
+  interruptWhen?: (signal: AbortSignal) => Promise<void>,
 ) {
-  const pending = runProcessCommandSmoke({
-    label: `Organization document ${mode}`,
-    completionTimeoutMs: 15_000,
-    cleanupTimeoutMs: 5_000,
-    expectedExitCode,
-    start: () =>
-      spawnOwnedProcessTree({
-        executable: process.execPath,
-        args: ["--no-env-file", "run", ...runtimeArgs, "src/index.ts", "organization-document", mode, ...args],
-        cwd: opsRoot,
-        env: environment(overrides),
-      }),
-  });
+  const pending = runOpsCommandSmoke(
+    {
+      label: `Organization document ${mode}`,
+      completionTimeoutMs: 15_000,
+      cleanupTimeoutMs: 5_000,
+      expectedExitCode,
+      start: () =>
+        spawnOwnedProcessTree({
+          executable: process.execPath,
+          args: ["--no-env-file", "run", "src/index.ts", "organization-document", mode, ...args],
+          cwd: opsRoot,
+          env: environment(overrides),
+        }),
+    },
+    interruptWhen,
+  );
   stopExecutors.push(async () => {
     await pending;
   });
@@ -310,8 +310,9 @@ test("repair handles interruption through the real CLI signal listener and close
     [],
     143,
     { IAM_OPS_REDIS_URL: overrideOpsRedisTestUrl({ port: server.port }) },
-    ["--preload=./test-integration/support/interrupt-command.fixture.ts"],
+    server.waitForConnection,
   );
+  await until(async () => (server.connectionCount === 0 ? true : undefined), 5000);
   expect(result.output).toContain('"signal":"SIGTERM"');
   expect(result.output).not.toContain("Organization document repair wakeups finished;");
 });

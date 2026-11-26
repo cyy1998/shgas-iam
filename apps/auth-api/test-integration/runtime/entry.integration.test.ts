@@ -63,7 +63,7 @@ test(
           return child;
         },
         async stop(child) {
-          if (process.platform === "win32" || child.exitCode !== null || child.signalCode !== null) {
+          if (child.exitCode !== null || child.signalCode !== null) {
             await terminateProcessTree(child, { timeoutMs: 5_000 });
             return;
           }
@@ -96,7 +96,7 @@ test(
       });
       const logs = capture?.snapshot() ?? "";
       expect(logs).toContain('"sourceApp":"auth-api"');
-      if (process.platform !== "win32") expect(logs).toContain('"event":"auth.api.stopped"');
+      expect(logs).toContain('"event":"auth.api.stopped"');
     } finally {
       capture?.dispose();
     }
