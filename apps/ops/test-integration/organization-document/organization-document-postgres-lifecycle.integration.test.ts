@@ -1,14 +1,16 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
-import { mkdtemp, rm, rmdir, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { OrganizationStatus, OrganizationType } from "@iam/contracts";
 import { createJobQueue } from "@iam/jobs";
 import { redisUrlString } from "@iam/runtime/redis/config";
 import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
-import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
-import { createOpsPostgresTestHarness, reserveOpsPostgresConnection } from "../support/postgres-test-harness";
+import { spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
+import { runOpsCommandSmoke } from "../support/ops-command-smoke";
+import {
+  createOpsPostgresTestHarness,
+  reserveOpsPostgresConnection,
+  waitForOpsPostgresLock,
+} from "../support/postgres-test-harness";
 import { resetOpsRedisTestDatabase, resolveOpsRedisTestUrl } from "../support/redis-test-harness";
 
 const opsRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -79,40 +81,35 @@ for (const mode of ["backfill", "repair"] as const)
       const blocker = reserved.sql;
       await runWithOwnedTestResources(async (lifecycle) => {
         lifecycle.registerCleanup(reserved.close);
-        let interruptFile: string | undefined;
-        if (control === "SIGTERM") {
-          const directory = await mkdtemp(join(tmpdir(), "iam-worker-interrupt-"));
-          interruptFile = join(directory, "requested");
-          const marker = interruptFile;
-          lifecycle.registerCleanup(async () => {
-            await rm(marker, { force: true });
-            await rmdir(directory);
-          });
-        }
         await blocker.unsafe("BEGIN");
         await blocker.unsafe(
           mode === "backfill"
             ? "LOCK TABLE organization IN ACCESS EXCLUSIVE MODE"
             : "LOCK TABLE organization_document_outbox IN ACCESS EXCLUSIVE MODE",
         );
+        let blockedOwner: string | undefined;
         const pending = command(
           mode,
           control === "deadline" ? 1 : 143,
           control === "deadline" ? ["--deadline-ms", "500"] : [],
-          control === "SIGTERM" ? ["--preload=./test-integration/support/interrupt-command.fixture.ts"] : [],
-          interruptFile,
+          control === "SIGTERM"
+            ? async (signal) => {
+                blockedOwner = await waitForOpsPostgresLock(harness, "org", signal);
+              }
+            : undefined,
         );
-        const blocked = await Promise.race([
-          waitForLocks(1),
-          pending.then(() => {
-            throw new Error("Command completed without an observed PostgreSQL lock wait");
-          }),
-        ]);
-        if (interruptFile) await writeFile(interruptFile, "", { flag: "wx" });
+        if (control === "deadline") {
+          blockedOwner = await Promise.race([
+            waitForOpsPostgresLock(harness, "org"),
+            pending.then(() => {
+              throw new Error("Command completed without an observed PostgreSQL lock wait");
+            }),
+          ]);
+        }
         const result = await pending;
         expect(result.output).toContain(`"signal":"${control}"`);
         const applicationName = await closedOwner(result.output);
-        expect(blocked[0]?.application_name).toBe(applicationName);
+        expect(blockedOwner).toBe(applicationName);
       });
       const after = await stocks();
       const jobsAfter = (await queue.getJobs()).map((job) => job.id).sort();
@@ -149,20 +146,6 @@ async function closedOwner(output: string) {
   return applicationName;
 }
 
-async function waitForLocks(count: number) {
-  const sql = harness.sql;
-  const deadline = Date.now() + 5000;
-  while (Date.now() < deadline) {
-    const rows = await sql<
-      { pid: number; application_name: string }[]
-    >`SELECT pid,application_name FROM pg_stat_activity WHERE datname=current_database() AND usename=current_user AND wait_event_type='Lock'`;
-    const owned = rows.filter((row) => row.application_name.startsWith("iam-org-"));
-    if (owned.length === count) return owned;
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  throw new Error("Did not observe the expected actual command PostgreSQL lock waits");
-}
-
 async function stocks() {
   const [row] = await harness.sql`SELECT
     (SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM organization t) AS source,
@@ -175,30 +158,31 @@ async function command(
   mode: "backfill" | "repair",
   expectedExitCode: number,
   args: string[] = [],
-  bunArgs: string[] = [],
-  interruptFile?: string,
+  interruptWhen?: (signal: AbortSignal) => Promise<void>,
 ) {
-  const pending = runProcessCommandSmoke({
-    label: `Organization ${mode} PG lifecycle`,
-    expectedExitCode,
-    completionTimeoutMs: 5000,
-    cleanupTimeoutMs: 5000,
-    start: () =>
-      spawnOwnedProcessTree({
-        executable: process.execPath,
-        args: ["--no-env-file", ...bunArgs, "run", "src/index.ts", "organization-document", mode, ...args],
-        cwd: opsRoot,
-        env: {
-          ...process.env,
-          NODE_ENV: "test",
-          IAM_OPS_DATABASE_URL: harness.databaseUrl,
-          IAM_OPS_REDIS_URL: resolveOpsRedisTestUrl(process.env),
-          IAM_OPS_LOG_FORMAT: "json",
-          IAM_OPS_LOG_LEVEL: "info",
-          IAM_OPS_TEST_INTERRUPT_FILE: interruptFile,
-        },
-      }),
-  });
+  const pending = runOpsCommandSmoke(
+    {
+      label: `Organization ${mode} PG lifecycle`,
+      expectedExitCode,
+      completionTimeoutMs: 5000,
+      cleanupTimeoutMs: 5000,
+      start: () =>
+        spawnOwnedProcessTree({
+          executable: process.execPath,
+          args: ["--no-env-file", "run", "src/index.ts", "organization-document", mode, ...args],
+          cwd: opsRoot,
+          env: {
+            ...process.env,
+            NODE_ENV: "test",
+            IAM_OPS_DATABASE_URL: harness.databaseUrl,
+            IAM_OPS_REDIS_URL: resolveOpsRedisTestUrl(process.env),
+            IAM_OPS_LOG_FORMAT: "json",
+            IAM_OPS_LOG_LEVEL: "info",
+          },
+        }),
+    },
+    interruptWhen,
+  );
   stopExecutors.push(async () => {
     await pending;
   });

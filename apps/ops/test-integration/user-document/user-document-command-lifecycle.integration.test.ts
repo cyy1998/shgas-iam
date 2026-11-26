@@ -2,8 +2,9 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import { UserStatus } from "@iam/contracts";
 import { createCurrentUserDocumentProjectionBundle } from "@iam/documents/user/worker";
-import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
-import { createOpsPostgresTestHarness } from "../support/postgres-test-harness";
+import { spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
+import { runOpsCommandSmoke } from "../support/ops-command-smoke";
+import { createOpsPostgresTestHarness, waitForOpsPostgresLock } from "../support/postgres-test-harness";
 import { resolveOpsRedisTestUrl } from "../support/redis-test-harness";
 
 const opsRoot = fileURLToPath(new URL("../../", import.meta.url));
@@ -55,7 +56,7 @@ for (const operation of ["backfill", "repair"] as const) {
     const result = await harness.sql.begin(async (tx) => {
       if (operation === "backfill") await tx`LOCK TABLE "user" IN ACCESS EXCLUSIVE MODE`;
       else await tx`LOCK TABLE user_document_outbox IN ACCESS EXCLUSIVE MODE`;
-      return await runVerify(1, ["--deadline-ms", "100"], [], operation);
+      return await runVerify(1, ["--deadline-ms", "100"], operation);
     });
     const after = await inventory();
     expect(result.output).toContain('"reason":"deadline"');
@@ -70,18 +71,23 @@ for (const operation of ["verify-postgres", "backfill", "repair"] as const) {
     const result = await harness.sql.begin(async (tx) => {
       if (operation === "repair") await tx`LOCK TABLE user_document_outbox IN ACCESS EXCLUSIVE MODE`;
       else await tx`LOCK TABLE "user" IN ACCESS EXCLUSIVE MODE`;
-      return await runVerify(143, [], ["--preload=./test-integration/support/interrupt-command.fixture.ts"], operation);
+      let blockedOwner: string | undefined;
+      const interrupted = await runVerify(143, [], operation, async (signal) => {
+        blockedOwner = await waitForOpsPostgresLock(harness, "user", signal);
+      });
+      const applicationName = interrupted.output.match(/"applicationName":"([^"]+)"/u)?.[1];
+      if (!blockedOwner) throw new Error("Did not observe the blocked PostgreSQL owner");
+      expect(applicationName).toBe(blockedOwner);
+      const sessions = await harness.sql`SELECT pid FROM pg_stat_activity
+        WHERE application_name=${blockedOwner} OR application_name=${`${blockedOwner}-cancel`}`;
+      expect([...sessions]).toEqual([]);
+      return interrupted;
     });
     const after = await inventory();
     expect(result.output).toContain('"reason":"SIGTERM"');
     expect(result.output).not.toContain('"publication":"not-verified"');
     expect(result.output).not.toContain("gate completed");
     expect(after).toEqual(before);
-    const applicationName = result.output.match(/"applicationName":"([^"]+)"/u)?.[1];
-    if (!applicationName) throw new Error("Command omitted its PostgreSQL owner");
-    const sessions = await harness.sql`SELECT pid FROM pg_stat_activity
-      WHERE application_name=${applicationName} OR application_name=${`${applicationName}-cancel`}`;
-    expect([...sessions]).toEqual([]);
   }, 20_000);
 }
 
@@ -97,40 +103,34 @@ async function inventory() {
 async function runVerify(
   expectedExitCode: number,
   args: string[],
-  bunArgs: string[] = [],
   operation = "verify-postgres",
+  interruptWhen?: (signal: AbortSignal) => Promise<void>,
 ) {
   const readiness = operation.startsWith("verify-");
   const redisUrl = resolveOpsRedisTestUrl(process.env);
-  return await runProcessCommandSmoke({
-    label: "User Document verification lifecycle",
-    expectedExitCode,
-    completionTimeoutMs: 10_000,
-    cleanupTimeoutMs: 5_000,
-    start: () =>
-      spawnOwnedProcessTree({
-        executable: process.execPath,
-        args: [
-          "--no-env-file",
-          ...bunArgs,
-          "run",
-          "src/index.ts",
-          "user-document",
-          operation,
-
-          ...args,
-        ],
-        cwd: opsRoot,
-        env: {
-          ...process.env,
-          NODE_ENV: "test",
-          IAM_OPS_DATABASE_URL: harness.databaseUrl,
-          IAM_OPS_REDIS_URL: readiness ? "redis://127.0.0.1:1/0" : redisUrl,
-          IAM_OPS_LOG_LEVEL: "info",
-          IAM_OPS_LOG_FORMAT: "json",
-          FORCE_COLOR: "0",
-          NO_COLOR: "1",
-        },
-      }),
-  });
+  return await runOpsCommandSmoke(
+    {
+      label: "User Document verification lifecycle",
+      expectedExitCode,
+      completionTimeoutMs: 10_000,
+      cleanupTimeoutMs: 5_000,
+      start: () =>
+        spawnOwnedProcessTree({
+          executable: process.execPath,
+          args: ["--no-env-file", "run", "src/index.ts", "user-document", operation, ...args],
+          cwd: opsRoot,
+          env: {
+            ...process.env,
+            NODE_ENV: "test",
+            IAM_OPS_DATABASE_URL: harness.databaseUrl,
+            IAM_OPS_REDIS_URL: readiness ? "redis://127.0.0.1:1/0" : redisUrl,
+            IAM_OPS_LOG_LEVEL: "info",
+            IAM_OPS_LOG_FORMAT: "json",
+            FORCE_COLOR: "0",
+            NO_COLOR: "1",
+          },
+        }),
+    },
+    interruptWhen,
+  );
 }
