@@ -9,7 +9,6 @@ test("loads the shared implementer, reviewer and researcher TOML roles", async (
   const roles = await loadAgentRoles(cwd);
   expect(Object.keys(roles).sort()).toEqual([
     "code_researcher",
-    "deep_researcher",
     "implementer_deep",
     "implementer_light",
     "implementer_standard",
@@ -43,7 +42,7 @@ test.each([
   );
 });
 
-test.each(["code_researcher", "deep_researcher", "spec_reviewer", "standards_reviewer"] as const)(
+test.each(["code_researcher", "spec_reviewer", "standards_reviewer"] as const)(
   "rejects write access for the read-only %s role",
   (name) => {
     const source = stringify({ ...role, name, sandbox_mode: "workspace-write" });

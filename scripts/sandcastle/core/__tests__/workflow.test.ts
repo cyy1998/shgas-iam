@@ -68,7 +68,9 @@ async function createFixture(root: string, numbers: number[]) {
   const comments = new Map<number, string[]>();
   const assignees = new Map<number, string[]>();
   const closed = new Set<number>();
-  const specs = new Map([[40, { branch: specBranch, numbers }]]);
+  const specs = new Map<number, { branch: string; numbers: number[]; heading?: string }>([
+    [40, { branch: specBranch, numbers }],
+  ]);
   const blockers = new Map<number, { number: number; state: string; repository_url?: string }[]>();
   const projects: number[] = [];
   const calls: RunOptions[] = [];
@@ -84,12 +86,13 @@ async function createFixture(root: string, numbers: number[]) {
     return ref.split(/\s+/)[0] || undefined;
   };
   function issue(number: number, state = closed.has(number) ? "closed" : "open", repository_url = repositoryUrl) {
+    const spec = specs.get(number);
     return {
       number,
       state,
       repository_url,
       title: `Issue ${number}`,
-      body: specs.has(number) ? `Integration branch: ${specs.get(number)?.branch}` : "",
+      body: spec ? `${spec.heading ?? "Integration branch"}: ${spec.branch}` : "",
       labels: [
         { name: specs.has(number) ? "type:spec" : "type:ticket" },
         ...(labels.has(number) ? [{ name: "ready-for-agent" }] : []),
@@ -361,6 +364,18 @@ test("completed repair publishes the draft from standard agent stdout", async ()
   });
 });
 
+test("a high-risk plan uses the regular repairer when no override is configured", async () => {
+  await withWorkflow(async (fixture) => {
+    delete fixture.config.roles.repairerDeep;
+    fixture.agent = async (options) => {
+      if (options.name === "plan") return response("", { ...plan([41]), repairDeep: true });
+    };
+    const result = await fixture.execute();
+    expect(result.delivered).toEqual([40]);
+    expect(fixture.calls.find(({ name }) => name === "repair-and-verify")?.agent).toBe(repairer.provider);
+  });
+});
+
 test("plans once, explores, dispatches independently ready tickets and reviews the same final merge in parallel", async () => {
   await withWorkflow(
     async (fixture) => {
@@ -368,6 +383,8 @@ test("plans once, explores, dispatches independently ready tickets and reviews t
       const reviews = Promise.withResolvers<void>();
       const started = new Set<number>();
       const reviewed: string[] = [];
+      fixture.specs.set(40, { branch: specBranch, numbers: [41, 42, 43], heading: "Candidate branch" });
+      await fixture.git("config", "merge.log", "true");
       fixture.blockers.set(41, [
         { number: 400, state: "closed", repository_url: "https://api.github.com/repos/external/core" },
       ]);
@@ -377,6 +394,7 @@ test("plans once, explores, dispatches independently ready tickets and reviews t
         "review-standards": { replace: "Apply the local project standards." },
       };
       fixture.config.workflow = {
+        branchDeclarationKeywords: ["Candidate branch"],
         project: {
           url: "https://github.com/orgs/fixture/projects/1",
           fieldName: "Delivery state",
@@ -404,7 +422,6 @@ test("plans once, explores, dispatches independently ready tickets and reviews t
               ? expect.stringContaining("Apply the local project standards.")
               : undefined,
           );
-          expect(options.prompt).toContain("Report by implement");
           reviewed.push(await command("git", ["rev-parse", "HEAD"], requiredCwd(options)));
           if (reviewed.length === 2) reviews.resolve();
           await reviews.promise;
@@ -418,14 +435,24 @@ test("plans once, explores, dispatches independently ready tickets and reviews t
       expect(fixture.calls.filter(({ name }) => name === "plan")).toHaveLength(1);
       expect(fixture.calls[0]?.prompt).toStartWith("Planner role");
       expect(fixture.calls[0]?.prompt).toContain("Select the lightest adequate role.");
+      for (const { prompt } of fixture.calls) {
+        expect(prompt).not.toContain("AGENTS.md");
+        expect(prompt).not.toContain(".agents/skills/");
+      }
       const remote = await fixture.remoteHead();
       if (!remote) throw new Error("Expected a published branch");
       expect(reviewed).toEqual([remote, remote]);
-      const merges = await fixture.git("log", "--first-parent", "--merges", "--format=%B", `main..${specBranch}`);
-      expect(merges.match(/^Sandcastle-Ticket: #\d+$/gm)?.toSorted()).toEqual([
-        "Sandcastle-Ticket: #41",
-        "Sandcastle-Ticket: #42",
-        "Sandcastle-Ticket: #43",
+      const merges = await fixture.git("log", "--first-parent", "--merges", "-z", "--format=%B", `main..${specBranch}`);
+      expect(
+        merges
+          .split("\0")
+          .filter(Boolean)
+          .map((message) => message.trim())
+          .toSorted(),
+      ).toEqual([
+        "Integrate ticket #41\n\nSandcastle-Ticket: #41",
+        "Integrate ticket #42\n\nSandcastle-Ticket: #42",
+        "Integrate ticket #43\n\nSandcastle-Ticket: #43",
       ]);
       const local = await fixture.git("rev-parse", specBranch);
       expect(local).toBe(remote);
@@ -608,6 +635,9 @@ test("planning the remaining tickets resumes at the partial integration tip", as
       expect(first.failed).toEqual([42]);
       const tip = await fixture.git("rev-parse", specBranch);
       expect(tip).not.toBe(fixture.base);
+      const message = await fixture.git("show", "-s", "--format=%B", tip);
+      expect(message).toBe("Integrate ticket #41\n\nSandcastle-Ticket: #41");
+      fixture.comments.clear();
 
       fixture.specs.set(50, { branch: "feat/fresh", numbers: [51] });
       fixture.labels.add(50);
@@ -1086,6 +1116,7 @@ test("a completion marker without a verification handoff cannot integrate a tick
     expect(result.failed).toEqual([41]);
     expect(result.incompleteSpecs).toEqual([40]);
     expect(fixture.created).toBe(0);
+    expect(fixture.comments.get(41)).toBeUndefined();
   });
 });
 

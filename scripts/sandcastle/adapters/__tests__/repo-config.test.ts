@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import { claudeCode } from "@ai-hero/sandcastle";
 import { loadRepoSandcastleConfig } from "../../../../.sandcastle/config.ts";
 import { dockerRegistryAuth } from "../../core/auth.ts";
+import { checkExecutors } from "../../core/executor.ts";
+import { specBranchName } from "../../core/git.ts";
 import { loadAgentRoles } from "../codex-roles.ts";
 
 const cwd = fileURLToPath(new URL("../../../..", import.meta.url));
@@ -65,6 +67,14 @@ test("assembles the IAM sandbox and native providers with API key and Projects c
       expect(command).toContain(`model_reasoning_effort="${role.effort}"`);
       expect(binding.provider.env).toEqual({ CODEX_API_KEY: "fixture-api-key" });
     }
+    expect(config.roles.implementers.implementer_standard?.provider).toBe(config.roles.repairer.provider);
+    expect(config.roles.implementers.implementer_deep?.provider).toBe(config.roles.repairerDeep.provider);
+    const { branchPrefix, branchDeclarationKeywords } = config.workflow;
+    for (const heading of ["集成分支", "功能分支", "复用功能/集成分支"]) {
+      expect(specBranchName(40, `${heading}：feat/design`, branchPrefix, branchDeclarationKeywords)).toBe(
+        "feat/design",
+      );
+    }
     expect(
       config.roles.planner.provider.buildInteractiveArgs?.({ prompt: "", dangerouslySkipPermissions: true }),
     ).toContain("fixture-planner");
@@ -76,6 +86,8 @@ test("assembles the IAM sandbox and native providers with API key and Projects c
     });
     expect(config.promptExtras?.plan).toContain("implementer_deep");
     expect(config.promptExtras?.implement).toContain("Bun");
+    expect(config.promptExtras?.implement).toContain("AGENTS.md");
+    expect(config.promptExtras?.implement).toContain(".agents/skills/tdd/SKILL.md");
     expect(config.promptExtras?.["repair-and-verify"]).toContain("pnpm verify:container-smoke");
     expect(config.promptExtras?.["repair-and-verify"]).toContain("pnpm verify:e2e-runtime");
     expect(config.promptExtras?.["repair-and-verify"]).toContain("GLOSSARY.md");
@@ -160,6 +172,42 @@ test("custom registry domains and file-based Codex auth are selected from host c
     expect(adapter.appliesTo(claudeCode("other-provider"))).toBe(false);
     expect(provider.env).toEqual({});
     await adapter.check({ cwd, provider });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("preflight checks the shared Codex login once and rechecks it on the next invocation", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "sandcastle-preflight-"));
+  const source = join(directory, "auth.json");
+  try {
+    await writeFile(source, '{"tokens":"fixture"}');
+    const config = await loadRepoSandcastleConfig({
+      cwd,
+      env: { CODEX_AUTH_FILE: source, SANDCASTLE_PNPM_STORE_DIR: join(directory, "store") },
+    });
+    const adapter = config.authAdapters?.[0];
+    if (!adapter) throw new Error("Expected a Codex file adapter");
+    let checks = 0;
+    const preflightConfig = {
+      ...config,
+      sandbox: { ...config.sandbox, dockerAccess: false },
+      authAdapters: [
+        {
+          ...adapter,
+          async check(context: Parameters<typeof adapter.check>[0]) {
+            checks++;
+            await adapter.check(context);
+          },
+        },
+      ],
+    };
+    await checkExecutors(cwd, preflightConfig);
+    expect(checks).toBe(1);
+    await rm(source);
+    const error = await checkExecutors(cwd, preflightConfig).catch((reason: unknown) => reason);
+    expect(String(error)).toContain("requires a readable auth.json");
+    expect(checks).toBe(2);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

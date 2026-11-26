@@ -101,7 +101,8 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
     }
 
     const prefix = config.workflow.branchPrefix;
-    const branchFor = ({ number, body }: { number: number; body: string }) => specBranchName(number, body, prefix);
+    const branchFor = ({ number, body }: { number: number; body: string }) =>
+      specBranchName(number, body, prefix, config.workflow.branchDeclarationKeywords);
     function assertBranchOwner(number: number, branch: string, declarations: ReadonlyMap<number, string>) {
       const conflict = [...declarations].find(([owner, claimed]) => owner !== number && claimed === branch);
       if (conflict)
@@ -325,7 +326,7 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
             `Spec #${spec.number} verification handoff for ticket #${ticket.number}.\n\nTicket candidate: \`${head}\`\n\n${report}`,
           );
           await assertCurrentOwnership(spec);
-          return git.integrate(workspace, worktree, ticket.number, head, report);
+          return git.integrate(workspace, worktree, ticket.number, head);
         }
         let merge = await integrate(candidate, handoff);
         if (merge.status === "conflict") {
@@ -347,7 +348,7 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
           merge = await integrate(resolved, `${handoff}\n\nConflict resolution:\n${resolvedHandoff}`);
         }
         if (merge.status !== "merged") throw new Error(`Candidate integration returned ${merge.status}.`);
-        return merge;
+        return { mergeSha: merge.mergeSha, candidate: merge.candidate };
       }
 
       // Capture rejections at dispatch so a sibling failure cannot go unobserved during a merge.
@@ -410,10 +411,6 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
         reviewCandidate: candidate,
         tickets: [...spec.progress.integrated].map(([number, evidence]) => ({ number, ...evidence })),
       };
-      if (context.tickets.some(({ handoff }) => !handoff))
-        throw new Error(
-          "Integrated ticket verification handoff is missing. Verify the retained merge before continuing.",
-        );
       let reviewReport = config.workflow.review
         ? await state.readReview(invocationBase, candidate)
         : "Review stage disabled by repository configuration.";
