@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { command } from "../command.ts";
 import { createGitWorkspace, specBranchName } from "../git.ts";
-import { createSpecState } from "../state.ts";
+import { createSpecState, pendingDeliveries } from "../state.ts";
 import { commit } from "./git-fixture.ts";
 
 async function withRepository(run: (cwd: string, base: string) => Promise<void>) {
@@ -158,5 +158,24 @@ test("exploration and finalization only resume from their exact Git identities",
     expect(drift).toBeUndefined();
     expect(otherBaseline).toBeUndefined();
     expect(otherSpec).toBeUndefined();
+  });
+});
+
+test("review checkpoints bind the report to both Git identities and leave delivery pending only after verification", async () => {
+  await withRepository(async (cwd, base) => {
+    const candidate = await commit(cwd, "reviewed.txt", "reviewed content");
+    const review = { reviewBase: base, reviewCandidate: candidate, reviewReport: "Standards and Spec passed" };
+    await createSpecState(cwd, 40).saveReview(review);
+
+    const restart = createSpecState(cwd, 40);
+    const next = await commit(cwd, "changed.txt", "advanced HEAD");
+    expect(await restart.readReview(base, candidate)).toBe(review.reviewReport);
+    expect(await restart.readReview(base, next)).toBeUndefined();
+    expect(await restart.readReview(candidate, candidate)).toBeUndefined();
+    expect(await restart.readDelivery(candidate)).toBeUndefined();
+    expect(await pendingDeliveries(cwd)).toEqual([]);
+
+    await restart.saveDelivery(next, { ...review, repairSummary: "Verification passed", prBody: "Ready" });
+    expect(await pendingDeliveries(cwd)).toEqual([40]);
   });
 });

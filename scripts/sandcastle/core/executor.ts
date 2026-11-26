@@ -2,14 +2,12 @@ import { randomUUID } from "node:crypto";
 import { mkdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import {
-  type AgentStreamEvent,
   type BindMountCreateOptions,
   type BindMountSandboxHandle,
   Output,
   type RunOptions,
   type RunResult,
   run,
-  StructuredOutputError,
 } from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 import { dockerRegistryAuth } from "./auth.ts";
@@ -25,6 +23,16 @@ import { complete } from "./prompts/index.ts";
 
 type AgentResult = RunResult & { output?: unknown };
 export type RunAgent = (options: RunOptions) => Promise<AgentResult>;
+
+type ExecutionInput = {
+  phase: ExecutionPhase;
+  role: Role;
+  worktreePath: string;
+  specNumber?: number;
+  ticketNumber?: number;
+  name?: string;
+  readOnly?: boolean;
+};
 
 export function completed(result: RunResult): boolean {
   return result.completionSignal === complete && hasCompletion(result.stdout);
@@ -101,21 +109,14 @@ export function createExecutor(
   runAgent: RunAgent = run,
 ) {
   return async function execute<T>(
-    input: {
-      phase: ExecutionPhase;
-      role: Role;
-      worktreePath: string;
-      specNumber?: number;
-      ticketNumber?: number;
-      name?: string;
-    },
+    input: ExecutionInput,
     operation: (options: RunOptions, runAgent: RunAgent) => Promise<T>,
   ): Promise<T> {
     signal?.throwIfAborted();
-    const { name, ...stage } = input;
+    const { name, readOnly: forceReadOnly, ...stage } = input;
     const context: ExecutorContext = { ...stage, cwd, id: randomUUID() };
     const { sandbox, lifecycle } = config;
-    const readOnly = input.phase === "plan" || input.phase === "explore" || input.phase === "review";
+    const readOnly = forceReadOnly || input.phase === "plan" || input.phase === "explore" || input.phase === "review";
     const useDocker = !readOnly && sandbox.dockerAccess;
     const auth: PreparedAuth[] = [];
     let lifecycleInputs: SandboxInputs | undefined;
@@ -290,69 +291,44 @@ export async function runPlanning(runAgent: RunAgent, options: RunOptions, role:
 }
 
 export async function runRepair(
-  runAgent: RunAgent,
-  options: RunOptions,
-  role: Role,
+  execute: ReturnType<typeof createExecutor>,
+  input: ExecutionInput & { phase: "repair-and-verify" },
   prompt: string,
   observe: () => Promise<string>,
 ) {
-  const turns = options.maxIterations ?? 1;
-  const resume = canResume(role);
-  if (turns > 1 && !resume) throw new Error("Multi-turn repair requires a session-capable provider.");
-  const output = Output.string({ tag: "pr-body", maxRetries: 0 });
-  let session: string | undefined;
-  for (let turn = 1; turn <= turns; turn++) {
-    let text = "";
-    let terminal = "";
-    let result: AgentResult | undefined;
-    const logging =
-      options.logging?.type === "file"
-        ? {
-            ...options.logging,
-            onAgentStreamEvent: (event: AgentStreamEvent) => {
-              // StructuredOutputError omits stdout; collect the same terminal result the SDK uses.
-              if (event.type === "text") text += event.message;
-              if (event.type === "raw") {
-                for (const parsed of options.agent.parseStreamLine(event.line)) {
-                  if (parsed.type === "result") terminal = parsed.result;
-                }
-              }
-            },
-          }
-        : options.logging;
-    try {
-      result = await runAgent({ ...options, prompt, logging, output, maxIterations: 1, resumeSession: session });
-    } catch (error) {
-      if (!(error instanceof StructuredOutputError) || error.tag !== output.tag || error.rawMatched !== undefined)
-        throw error;
-      const stdout = terminal || text;
-      if (hasCompletion(stdout)) {
-        if (!resume || !error.sessionId || stdout.includes("<pr-body>") || stdout.includes("</pr-body>")) throw error;
-        const verifiedHead = await observe();
-        const supplemental = await runAgent({
-          ...options,
-          maxIterations: 1,
-          resumeSession: error.sessionId,
-          output,
-          prompt:
-            "Your completed verification is recorded. Re-emit only the missing <pr-body>...</pr-body> draft. Leave files and GitHub unchanged.",
-        });
-        if ((await observe()) !== verifiedHead) throw new Error("PR draft follow-up modified the verified candidate.");
-        return { repairSummary: stdout, prBody: nonemptyBody(supplemental) };
-      }
-      if (turn === turns || !error.sessionId)
-        throw new Error("Repair did not complete verification.", { cause: error });
-      session = error.sessionId;
-      continue;
+  const resume = canResume(input.role);
+  const result = await execute(input, async (options, runAgent) => {
+    const turns = options.maxIterations ?? 1;
+    if (turns > 1 && !resume) throw new Error("Multi-turn repair requires a session-capable provider.");
+    let session: string | undefined;
+    for (let turn = 1; turn <= turns; turn++) {
+      const result = await runAgent({ ...options, prompt, maxIterations: 1, resumeSession: session });
+      if (completed(result)) return result;
+      if (turn < turns) session = nextSession(result, "Repair");
     }
-    if (completed(result)) return { repairSummary: result.stdout, prBody: nonemptyBody(result) };
-    if (turn < turns) session = nextSession(result, "Repair");
+    throw new Error("Repair did not complete verification.");
+  });
+  const repairSummary = result.stdout;
+  let prBody = extractPrBody(repairSummary);
+  const resumeSession = result.iterations.at(-1)?.sessionId;
+  if (!prBody && !/<\/?pr-body>/.test(repairSummary) && resume && resumeSession) {
+    const verifiedHead = await observe();
+    const supplemental = await execute({ ...input, readOnly: true }, (options, runAgent) =>
+      runAgent({
+        ...options,
+        maxIterations: 1,
+        resumeSession,
+        prompt:
+          "Your completed verification is recorded. Re-emit only the missing <pr-body>...</pr-body> draft. Leave files and GitHub unchanged.",
+      }),
+    );
+    if ((await observe()) !== verifiedHead) throw new Error("PR draft follow-up modified the verified candidate.");
+    prBody = extractPrBody(supplemental.stdout);
   }
-  throw new Error("Repair did not complete verification.");
+  if (!prBody) throw new Error("Repair returned no nonempty PR draft.");
+  return { repairSummary, prBody };
 }
 
-function nonemptyBody(result: AgentResult) {
-  const body = result.output;
-  if (typeof body !== "string" || !body.trim()) throw new Error("Repair returned an empty PR draft.");
-  return body.trim();
+function extractPrBody(stdout: string) {
+  return [...stdout.matchAll(/<pr-body>([\s\S]*?)<\/pr-body>/g)].at(-1)?.[1]?.trim();
 }

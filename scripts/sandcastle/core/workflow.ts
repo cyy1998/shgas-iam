@@ -154,6 +154,68 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
       });
     }
 
+    async function planAt(candidates: Spec[], baseline: string, workspace?: Worktree) {
+      const checkout = workspace ?? invocation;
+      const role = config.roles.planner;
+      const plan = await execute({ phase: "plan", role, worktreePath: checkout.worktreePath }, (options, run) =>
+        runPlanning(
+          run,
+          options,
+          role,
+          prompt("plan", role, {
+            branch: checkout.branch,
+            baseline,
+            specs: candidates.map((entry) => ({ ...entry.graph, frontier: frontier(entry) })),
+            implementers: Object.entries(config.roles.implementers).map(([name, role]) => ({
+              name,
+              description: role.description,
+            })),
+          }),
+        ),
+      );
+      if ((await git.observe(invocation)) !== invocationBase)
+        throw new Error("Planning changed the invocation checkout.");
+      if (workspace && (await git.observe(workspace)) !== baseline)
+        throw new Error("Planning changed the Spec checkout.");
+      if (plan.spec === null) return;
+      const spec = candidates.find((entry) => entry.number === plan.spec);
+      if (!spec) throw new Error(`Planner selected unavailable Spec #${plan.spec}.`);
+      const permitted = new Set(frontier(spec).plannable.map(({ number }) => number));
+      if (
+        plan.issues.length !== permitted.size ||
+        plan.issues.some(
+          ({ number, implementer }) => !permitted.has(number) || !Object.hasOwn(config.roles.implementers, implementer),
+        )
+      ) {
+        throw new Error(
+          `Planner must assign every plannable ticket of Spec #${spec.number} to a configured implementer.`,
+        );
+      }
+      return { spec, workspace, plan };
+    }
+
+    async function planBacklog(runnable: Spec[]) {
+      // A partially integrated Spec has its own planning baseline. Resume it before planning fresh work.
+      for (const entry of runnable) {
+        if (!entry.progress.integrated.size) continue;
+        let workspace: Worktree;
+        try {
+          await assertCurrentOwnership(entry);
+          workspace = await git.open(entry.branch, entry.head);
+          if ((await git.observe(workspace)) !== entry.head) throw new Error("Spec branch moved before planning.");
+        } catch (error) {
+          signal?.throwIfAborted();
+          report(`Spec #${entry.number} paused before planning: ${describe(error)}`);
+          result.incompleteSpecs.push(entry.number);
+          continue;
+        }
+        const planned = await planAt([entry], entry.head, workspace);
+        if (planned) return planned;
+      }
+      const fresh = runnable.filter((entry) => !entry.progress.integrated.size);
+      if (fresh.length) return planAt(fresh, invocationBase);
+    }
+
     async function refreshGraph(spec: Spec) {
       const graph = await tracker.loadSpecGraph(await tracker.readIssue(spec.number));
       if (
@@ -337,6 +399,7 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
       workspace: Worktree,
       candidate: string,
       repairDeep: boolean,
+      state: ReturnType<typeof createSpecState>,
     ): Promise<DeliveryEvidence> {
       const context = {
         specNumber: spec.number,
@@ -349,8 +412,11 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
         throw new Error(
           "Integrated ticket verification handoff is missing. Verify the retained merge before continuing.",
         );
-      let reviewReport = "Review stage disabled by repository configuration.";
-      if (config.workflow.review) {
+      let reviewReport = config.workflow.review
+        ? await state.readReview(invocationBase, candidate)
+        : "Review stage disabled by repository configuration.";
+      const needsReview = reviewReport === undefined;
+      if (reviewReport === undefined) {
         await project(spec.number, "Reviewing");
         const axes = [
           phase("review", "review-standards", config.roles.reviewers.standards, workspace, context),
@@ -365,25 +431,13 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
         }
       }
       if ((await git.observe(workspace)) !== candidate) throw new Error("The fixed review candidate changed.");
+      if (needsReview) await state.saveReview({ reviewBase: invocationBase, reviewCandidate: candidate, reviewReport });
       const role = repairDeep ? config.roles.repairerDeep : config.roles.repairer;
-      const handoff = await execute(
-        {
-          phase: "repair-and-verify",
-          role,
-          worktreePath: workspace.worktreePath,
-          specNumber: spec.number,
-        },
-        (options, run) =>
-          runRepair(
-            run,
-            options,
-            role,
-            prompt("repair-and-verify", role, {
-              ...context,
-              reviewReport,
-            }),
-            () => git.observe(workspace),
-          ),
+      const handoff = await runRepair(
+        execute,
+        { phase: "repair-and-verify", role, worktreePath: workspace.worktreePath, specNumber: spec.number },
+        prompt("repair-and-verify", role, { ...context, reviewReport }),
+        () => git.observe(workspace),
       );
       return { reviewBase: invocationBase, reviewCandidate: candidate, reviewReport, ...handoff };
     }
@@ -419,6 +473,7 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
       let repairDeep = spec !== undefined;
       let assignments: TicketAssignment[] = [];
       let focus: string | undefined;
+      let plannedWorkspace: Worktree | undefined;
       if (!spec) {
         const runnable = specs.filter((entry) => !entry.recoveringDelivery && frontier(entry).ready.length);
         if (!runnable.length) {
@@ -427,41 +482,14 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
           result.exhausted = true;
           break;
         }
-        const role = config.roles.planner;
-        const plan = await execute({ phase: "plan", role, worktreePath: cwd }, (options, run) =>
-          runPlanning(
-            run,
-            options,
-            role,
-            prompt("plan", role, {
-              specs: runnable.map((entry) => ({ ...entry.graph, frontier: frontier(entry) })),
-              implementers: Object.entries(config.roles.implementers).map(([name, role]) => ({
-                name,
-                description: role.description,
-              })),
-            }),
-          ),
-        );
-        if ((await git.observe(invocation)) !== invocationBase)
-          throw new Error("Planning changed the invocation checkout.");
-        if (plan.spec === null) {
+        const planned = await planBacklog(runnable);
+        if (!planned) {
           result.exhausted = true;
           break;
         }
-        spec = runnable.find((entry) => entry.number === plan.spec);
-        if (!spec) throw new Error(`Planner selected unavailable Spec #${plan.spec}.`);
-        const permitted = new Set(frontier(spec).plannable.map(({ number }) => number));
-        if (
-          plan.issues.length !== permitted.size ||
-          plan.issues.some(
-            ({ number, implementer }) =>
-              !permitted.has(number) || !Object.hasOwn(config.roles.implementers, implementer),
-          )
-        ) {
-          throw new Error(
-            `Planner must assign every plannable ticket of Spec #${spec.number} to a configured implementer.`,
-          );
-        }
+        const { plan } = planned;
+        spec = planned.spec;
+        plannedWorkspace = planned.workspace;
         assignments = plan.issues;
         // Recovery has merge evidence without the original role selection. Use the deeper verifier for that case.
         repairDeep = Boolean(plan.repairDeep || spec.progress.integrated.size);
@@ -474,7 +502,7 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
       try {
         await refreshGraph(spec);
         await assertCurrentOwnership(spec);
-        const workspace = await git.open(branch, head);
+        const workspace = plannedWorkspace ?? (await git.open(branch, head));
         if ((await git.observe(workspace)) !== head) throw new Error("Spec branch moved after planning.");
         const state = createSpecState(cwd, number);
         if (assignments.length) {
@@ -505,7 +533,7 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
             !(await git.ancestor(evidence.reviewCandidate, candidate)))
         ) {
           milestone = "finish final verification";
-          evidence = await finalize(spec, workspace, candidate, repairDeep);
+          evidence = await finalize(spec, workspace, candidate, repairDeep, state);
           await refreshGraph(spec);
           if (!frontier(spec).complete)
             throw new Error("Spec admission or dependency scope changed during verification.");
