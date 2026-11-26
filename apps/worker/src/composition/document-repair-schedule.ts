@@ -1,6 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { closeMaintenancePostgresInvocation } from "@iam/db/maintenance";
@@ -103,8 +101,6 @@ async function runRepairCommand(
 ): Promise<DocumentRepairRunResult> {
   signal.throwIfAborted();
   const config = (document === "user" ? env.userDocument : env.organizationDocument).repair;
-  const sourceRuntime = existsSync(workerEntry);
-  const artifactRoot = dirname(process.execPath);
   const invocation: DocumentRepairInvocation = {
     document,
     postgresInvocationId: randomUUID(),
@@ -126,18 +122,8 @@ async function runRepairCommand(
   };
   const child = spawnOwnedProcessTree({
     executable: process.execPath,
-    args: sourceRuntime
-      ? ["--no-env-file", "run", workerEntry, "--internal-document-repair"]
-      : ["--internal-document-repair"],
-    cwd: sourceRuntime ? workerRoot : artifactRoot,
-    ...(!sourceRuntime && process.platform === "win32"
-      ? {
-          windowsJob: {
-            supervisorPath: join(artifactRoot, "windows-job-supervisor.ps1"),
-            launcherExecutable: join(artifactRoot, "windows-job-launcher.exe"),
-          },
-        }
-      : {}),
+    args: ["--no-env-file", "run", workerEntry, "--internal-document-repair"],
+    cwd: workerRoot,
     env: { ...process.env, IAM_WORKER_DOCUMENT_REPAIR_INPUT: JSON.stringify(invocation) },
   });
   child.stdout.pipe(process.stdout, { end: false });

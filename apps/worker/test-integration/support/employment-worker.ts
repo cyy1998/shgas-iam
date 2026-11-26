@@ -30,7 +30,6 @@ export async function startEmploymentWorker(input: {
         args: [
           "--no-env-file",
           "--preload=./test-integration/support/control-worker-clock.fixture.ts",
-          "--preload=./test-integration/support/interrupt-worker.fixture.ts",
           "run",
           "src/index.ts",
         ],
@@ -48,7 +47,6 @@ export async function startEmploymentWorker(input: {
           IAM_WORKER_DATABASE_URL: databaseUrl.toString(),
           IAM_WORKER_TEST_CLOCK_FILE: join(temporaryDirectory, "clock"),
           IAM_WORKER_TEST_INITIAL_TIME: input.initialTime,
-          IAM_WORKER_TEST_INTERRUPT_FILE: join(temporaryDirectory, "interrupt"),
         },
       });
     },
@@ -60,10 +58,15 @@ export async function startEmploymentWorker(input: {
         throw new FatalReadinessError("Worker did not report healthy dependencies");
       return true;
     },
-    async stop(child, { temporaryDirectory }, output) {
-      if (child.exitCode === null) {
-        await writeFile(join(temporaryDirectory, "interrupt"), "stop");
-        await waitFor("graceful Worker shutdown", async () => child.exitCode ?? undefined, output, 7_000);
+    async stop(child, _context, output) {
+      if (child.exitCode === null && child.signalCode === null) {
+        if (!child.kill("SIGTERM")) throw new Error(`Could not signal Worker\n${output()}`);
+        await waitFor(
+          "graceful Worker shutdown",
+          async () => (child.exitCode !== null || child.signalCode !== null ? true : undefined),
+          output,
+          7_000,
+        );
       }
       if (child.exitCode !== 0) throw new Error(`Worker failed to shut down cleanly\n${output()}`);
     },

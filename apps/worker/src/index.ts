@@ -6,6 +6,9 @@ async function main() {
   const { createWorkerComposition } = await import("@worker/composition");
   const composition = await createWorkerComposition({ env, logger });
 
+  process.once("SIGINT", () => void composition.shutdown("SIGINT"));
+  process.once("SIGTERM", () => void composition.shutdown("SIGTERM"));
+
   logger.info(
     {
       enabledModules: composition.enabledModules.map((module) => module.key),
@@ -15,9 +18,6 @@ async function main() {
     },
     "worker started",
   );
-
-  process.once("SIGINT", () => void composition.shutdown("SIGINT"));
-  process.once("SIGTERM", () => void composition.shutdown("SIGTERM"));
 }
 
 if (process.argv[2] === "--internal-document-repair") {
