@@ -2,7 +2,7 @@ import { command } from "./command.ts";
 import { type ProjectConfig, type ProjectStage, projectStages, validateRepository } from "./config.ts";
 import type { RunGh } from "./github.ts";
 
-export type ReportProjectStage = (issue: number, stage: ProjectStage) => Promise<void>;
+export type ReportProjectStage = (issue: number, stage: ProjectStage, strict?: boolean) => Promise<void>;
 
 type Project = {
   id: string;
@@ -111,7 +111,7 @@ export async function connectGitHubProject(
     return item.id;
   }
 
-  return async (issue, stage) => {
+  return async (issue, stage, strict) => {
     const option = stageOptions.get(stage);
     if (!option || reported.get(issue) === stage) return;
     try {
@@ -132,6 +132,7 @@ export async function connectGitHubProject(
     } catch (error) {
       items.delete(issue);
       reported.delete(issue);
+      if (strict) throw error;
       console.warn(
         `Could not update GitHub Projects for #${issue} to ${stage}. ${error instanceof Error ? error.message : String(error)}`,
       );
