@@ -623,6 +623,13 @@ export async function checkAfk(opts: Pick<AfkOptions, "repo" | "cwd" | "remote" 
   return { repo: opts.repo, remote, baseBranch, readySpecs };
 }
 
+export function findBlockingOpenTickets(spec: SpecIssue, done: ReadonlyMap<number, string>): TicketIssue[] {
+  return spec.subIssues.filter(
+    (t) =>
+      t.state === "OPEN" && t.labels.includes("type:ticket") && !t.labels.includes("type:spec") && !done.has(t.number),
+  );
+}
+
 export async function runAfk(options: AfkOptions): Promise<AfkResult> {
   const cwd = resolve(options.cwd ?? process.cwd());
   const remote = options.remote ?? "origin";
@@ -757,14 +764,21 @@ export async function runAfk(options: AfkOptions): Promise<AfkResult> {
         if (inFlight.size === 0) {
           if (softStopped || failed.length > 0) break;
           spec = await readSpec(options.repo, specNumber, cwd);
-          const remaining = spec.subIssues.filter((t) => isReadyTicket(t) && !done.has(t.number));
-          if (remaining.length === 0) break;
+          const openPending = findBlockingOpenTickets(spec, done);
+          if (openPending.length === 0) {
+            if (done.size === 0) throw new Error(`Spec #${specNumber} 没有任何可实施或已集成子票，禁止空交付。`);
+            break;
+          }
           const internalIds = new Set(spec.subIssues.map((t) => t.number));
-          const anyUnblocked = remaining.some((t) =>
-            t.blockedBy.every((b) => (internalIds.has(b.number) ? done.has(b.number) : b.state === "CLOSED")),
+          const anyDispatchable = openPending.some(
+            (t) =>
+              isReadyTicket(t) &&
+              t.blockedBy.every((b) => (internalIds.has(b.number) ? done.has(b.number) : b.state === "CLOSED")),
           );
-          if (!anyUnblocked) {
-            throw new Error(`存在未解决阻塞或环依赖：${remaining.map((t) => `#${t.number}`).join(", ")}`);
+          if (!anyDispatchable) {
+            throw new Error(
+              `Spec #${specNumber} 仍有未准入、暂停或受阻的 open 子票：${openPending.map((t) => `#${t.number}`).join(", ")}`,
+            );
           }
           continue;
         }

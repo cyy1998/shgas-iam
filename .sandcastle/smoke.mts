@@ -70,15 +70,18 @@ export async function smoke(cwd: string): Promise<void> {
       dockerGid: socketInfo.gid,
     });
 
-    // 1. Read-only review session: worktree RO, auth RO, no docker.sock, no pnpm-store, no turbo cache.
+    // 1. Read-only review session on a linked worktree (matches real review execution):
+    // worktree RO, auth RO, no docker.sock, no pnpm-store, no turbo cache.
+    const roWorktreeDir = join(root, ".sandcastle", "worktrees", "smoke-ro");
+    await git("worktree", "add", "-b", "smoke-ro", roWorktreeDir, "smoke-base");
     const ro = await createSession({ phase: "review-standards", readonly: true, runId: "smoke-ro" });
     activeCleanup = ro.cleanup;
     try {
       const roResult = await run({
-        cwd: root,
+        cwd: roWorktreeDir,
         agent: probeAgent(`set -eu
 if touch smoke-readonly-probe 2>/dev/null; then exit 1; fi
-if (printf '' >> .git/HEAD) 2>/dev/null || git config --local smoke.ro true 2>/dev/null; then exit 1; fi
+if (printf '' >> .git) 2>/dev/null || git config --local smoke.ro true 2>/dev/null; then exit 1; fi
 if (printf 'tampered' > "$CODEX_HOME/auth.json") 2>/dev/null; then exit 1; fi
 if env | grep -Eq '^(GH_TOKEN|GITHUB_TOKEN)='; then exit 1; fi
 test ! -e /var/run/docker.sock
@@ -99,6 +102,7 @@ printf '%s\n' '${COMPLETE}'`),
       await ro.cleanup?.();
       activeCleanup = undefined;
     }
+    await git("worktree", "remove", roWorktreeDir);
     assert.equal(await readFile(authPath, "utf8"), authContent);
 
     // 2. Writable session on host-owned worktree (head mode): pnpm offline, turbo cache, hooks, Docker cleanup.

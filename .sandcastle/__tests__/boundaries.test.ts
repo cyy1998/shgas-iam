@@ -6,6 +6,7 @@ import { createBindMountSandboxProvider, type MountConfig } from "@ai-hero/sandc
 import {
   branchExists,
   ensureClosesLines,
+  findBlockingOpenTickets,
   hasStandaloneCompletion,
   listReadySpecNumbers,
   parseGitHubRepoUrl,
@@ -136,6 +137,31 @@ describe("GitHub GraphQL filtering, pagination overflow, and linkedBranches", ()
       readSpec("cyy1998/shgas-iam", 450, process.cwd(), async () => makePayload(["feat/a"], true)),
     );
     expect(overflowErr?.message).toContain("分页溢出");
+
+    const partialSpec = {
+      ...defaultSpec,
+      subIssues: [
+        {
+          number: 451,
+          title: "A",
+          body: "",
+          state: "OPEN" as const,
+          labels: ["type:ticket", "ready-for-agent"],
+          comments: [],
+          blockedBy: [],
+        },
+        {
+          number: 452,
+          title: "B",
+          body: "",
+          state: "OPEN" as const,
+          labels: ["type:ticket", "needs-attention"],
+          comments: [],
+          blockedBy: [],
+        },
+      ],
+    };
+    expect(findBlockingOpenTickets(partialSpec, new Map([[451, "deadbeef"]])).map((t) => t.number)).toEqual([452]);
   });
 });
 

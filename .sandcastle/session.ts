@@ -199,7 +199,9 @@ export async function verifyContainerStopped(
     if (/No such (?:object|container)/i.test(msg)) return;
     throw new Error(`无法确认沙箱容器 ${sandboxId} 已停止，保留测试资源 registry：${msg}`);
   }
-  if (running === "true") throw new Error(`沙箱容器 ${sandboxId} 仍在运行，保留测试资源 registry。`);
+  if (running !== "false") {
+    throw new Error(`沙箱容器 ${sandboxId} 未确认停止（State.Running=${running || "empty"}），保留测试资源 registry。`);
+  }
 }
 
 export type RepoSessionFactoryOptions = {

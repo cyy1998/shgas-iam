@@ -35,7 +35,7 @@ pnpm sandcastle
 
 ### 认证与宿主资源
 
-- **GitHub**。任务图读取、标签更新、暂停评论与 PR 交付均在宿主执行。父 Spec、tickets、评论与阻塞关系由宿主经 `promptArgs` 直接注入沙箱，容器内 Agent 无需请求 GitHub API。需要衔接设计期 ADR 分支时，在创建 Spec 后执行 `gh issue develop <spec> --name feat/<slug> --checkout` 将分支原生关联到 Spec 的 Development 栏。
+- **GitHub**。任务图读取、标签更新、暂停评论与 PR 交付均在宿主执行。父 Spec、tickets、评论与阻塞关系由宿主经 `promptArgs` 直接注入沙箱，容器内 Agent 无需请求 GitHub API。需要衔接设计期 ADR 分支时，在创建 Spec 后执行 `gh issue develop <spec> --name feat/<slug>` 将分支原生关联到 Spec 的 Development 栏（交接前确保外部工作树未占用该分支）。
 - **Codex**。默认使用 ChatGPT 文件凭据（`CODEX_AUTH=chatgpt`），先在宿主执行 `codex login`。文件默认取 `${CODEX_HOME:-$HOME/.codex}/auth.json`，可通过 `CODEX_HOME` 或 `CODEX_AUTH_FILE` 覆盖。每次沙箱启动将该文件**单向只读复制**到临时目录并挂载至容器，退出即删，不回写宿主文件（token 过期时在宿主重新登录即可）。API 计费使用 `CODEX_AUTH=api-key` 与 `CODEX_API_KEY`。
 - **私有镜像**。需要可写沙箱内拉取私有镜像时，设置 `SANDCASTLE_DOCKER_CONFIG_FILE`（相对路径从仓库根解析），该可读文件会只读挂载至 `/home/agent/.docker/config.json`。
 - **Docker**。本仓使用零补丁 `@ai-hero/sandcastle@0.14.0` 原生 `docker()`。可写阶段绑定 `/var/run/docker.sock`、将宿主 socket GID 传入原生 `groups`、启用 `network: "host"` 并设置 `DOCKER_HOST=unix:///var/run/docker.sock`。只读评审阶段由 `readonlySandbox()` 将工作树与 `.git` 置为只读，仅挂单向只读认证，不挂 `docker.sock`、`pnpm-store`、Turbo 缓存与 Docker registry。

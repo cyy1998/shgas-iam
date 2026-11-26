@@ -12,5 +12,5 @@
     "skipLibCheck": true
   },
   "include": ["./**/*.ts", "./**/*.mts"],
-  "exclude": ["./cache/**", "./logs/**", "./resources/**", "./state/**", "./worktrees/**"]
+  "exclude": ["./cache/**", "./logs/**", "./resources/**", "./worktrees/**"]
 }

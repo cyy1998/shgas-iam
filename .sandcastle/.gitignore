@@ -1,10 +1,7 @@
 .env
 cache/
 logs/
-locks/
 worktrees/
 resources/
-# External flock file for single-instance runs and legacy lock file.
+# External flock file for single-instance runs.
 runner.lock
-run.lock
-state/

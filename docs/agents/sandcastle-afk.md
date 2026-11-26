@@ -25,7 +25,7 @@ AFK 编排统一收拢在 `.sandcastle/`，保持“纯编排逻辑 + 本仓装�
    - 阻塞实现的 `ADR`、`GLOSSARY.md` 与设计决策均已提交到候选集成分支；
    - 候选集成分支满足下方 `linkedBranches` 与 worktree 契约。
 2. **AFK 候选集成分支契约**：
-   - **原生 `linkedBranches` 关联**：若设计阶段需要携带 ADR / 设计产物分支，在创建 Spec 后通过 `gh issue develop <spec> --name feat/<slug> --checkout` 将分支原生关联到 Spec 的 Development 栏（AFK 通过 GraphQL `linkedBranches` 读取，不解析正文；未关联时自动默认 `sandcastle/spec-<N>`；关联多个分支或与基线分支同名时报错暂停）。
+   - **原生 `linkedBranches` 关联**：若设计阶段需要携带 ADR / 设计产物分支，在创建 Spec 后通过 `gh issue develop <spec> --name feat/<slug>` 将分支原生关联到 Spec 的 Development 栏（若曾在本地切出提交设计产物，交接前先切回其他分支或移除外部 worktree；AFK 通过 GraphQL `linkedBranches` 读取，不解析正文；未关联时自动默认 `sandcastle/spec-<N>`；关联多个分支或与基线分支同名时报错暂停）。
    - **不要求本地 checkout 对齐或工作区干净**：runner 启动时直接 `git fetch <remote> <baseBranch>`，不读取也不校验本地当前所在分支或工作树状态；维护者可停留在任意分支继续交互开发。
    - **避免外部 worktree 占用集成分支**：若设计阶段曾在独立 worktree 中检出该候选集成分支，交接前先移除该外部 worktree（保留本地分支 ref），避免 runner 拒绝接管已被外部检出的分支。
 3. **AFK 异常回流（`needs-attention`）** Sandcastle 因分支冲突、票失败、验证未通过或交付异常暂停时，会给 Spec 添加 `needs-attention` 标签并评论具体阶段与原因，同时保留本地工作树与分支。切回 T3 Code 处理：

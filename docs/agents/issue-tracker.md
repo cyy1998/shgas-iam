@@ -82,7 +82,7 @@ AFK 不要求使用 assignee 认领（assignee 仅用于人工开发与 wayfindi
 
 ## Sandcastle AFK 交接
 
-AFK 使用上述类型、原生任务图与 `agent:light` / `agent:deep` / `needs-attention` 标签，不依赖 assignee 认领与 GitHub Projects 看板，也不另建 tracker schema。失败暂停时由 runner 为 Spec 添加 `needs-attention` 标签并评论原因。若设计产物落在候选集成分支，建完 Spec 后通过 `gh issue develop <spec> --name feat/<slug> --checkout` 将分支原生关联到 Spec 的 Development 栏（`linkedBranches`，未关联时默认 `sandcastle/spec-<N>`）；标为 `ready-for-agent` 前的轻量门禁、分支契约及有序幂等 PR 交付恢复见
+AFK 使用上述类型、原生任务图与 `agent:light` / `agent:deep` / `needs-attention` 标签，不依赖 assignee 认领与 GitHub Projects 看板，也不另建 tracker schema。失败暂停时由 runner 为 Spec 添加 `needs-attention` 标签并评论原因。若设计产物落在候选集成分支，建完 Spec 后通过 `gh issue develop <spec> --name feat/<slug>` 将分支原生关联到 Spec 的 Development 栏（`linkedBranches`，未关联时默认 `sandcastle/spec-<N>`，交接前确保本地未在外部分支工作树检出该分支）；标为 `ready-for-agent` 前的轻量门禁、分支契约及有序幂等 PR 交付恢复见
 [Sandcastle AFK 工作流](sandcastle-afk.md#设计与执行交接)。
 
 ## 当 skill 要求“fetch the relevant ticket”
