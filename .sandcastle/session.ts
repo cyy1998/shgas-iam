@@ -105,7 +105,6 @@ export async function stageCodexAuth(
   const { mode, apiKey, authFile } = resolveCodexAuth(cwd, env);
   if (mode === "api-key") {
     if (!apiKey) throw new Error("CODEX_AUTH=api-key 时需要 CODEX_API_KEY。");
-    // AgentProvider.env already provides CODEX_API_KEY; keep sandbox env empty to avoid SDK overlap.
     return { env: {}, mounts: [], close: async () => {} };
   }
   const contents = await readFile(authFile, "utf8");
@@ -179,13 +178,16 @@ export async function dockerRegistryMount(
 }
 
 export async function verifyContainerStopped(
-  sandboxId: string,
+  sandboxId: string | undefined,
   cwd: string,
   inspectFn?: (sandboxId: string) => Promise<{ exists: boolean; running: boolean }>,
 ): Promise<void> {
+  if (!sandboxId) throw new Error("缺少沙箱容器标识，无法确认容器已停止，保留测试资源 registry。");
   if (inspectFn) {
     const state = await inspectFn(sandboxId);
-    if (state.exists && state.running) throw new Error(`沙箱容器 ${sandboxId} 仍在运行，保留测试资源 registry。`);
+    if (state.exists && state.running) {
+      throw new Error(`沙箱容器 ${sandboxId} 仍在运行，保留测试资源 registry。`);
+    }
     return;
   }
   let running: string;
@@ -265,6 +267,7 @@ export function createRepoSessionFactory(opts: RepoSessionFactoryOptions): AfkOp
           const dir = await mkdtemp(join(opts.cwd, REGISTRY_ROOT, `run-${safeId}-`));
           const relDir = relative(opts.cwd, dir).replaceAll("\\", "/");
           const registryFile = `${relDir}/registry.jsonl`;
+          let createInvoked = false;
           try {
             await writeFile(join(opts.cwd, registryFile), "", { flag: "wx", mode: 0o600 });
             await mkdir(join(opts.cwd, ARTIFACTS_DIR), { recursive: true });
@@ -273,6 +276,7 @@ export function createRepoSessionFactory(opts: RepoSessionFactoryOptions): AfkOp
             const sandboxRoot =
               createOpts.mounts.find((m) => m.hostPath === createOpts.worktreePath)?.sandboxPath ??
               `${SANDBOX_HOME}/workspace`;
+            createInvoked = true;
             const handle = await innerCreate({
               ...createOpts,
               env: { ...createOpts.env, IAM_TEST_RESOURCE_REGISTRY: registryFile },
@@ -285,7 +289,7 @@ export function createRepoSessionFactory(opts: RepoSessionFactoryOptions): AfkOp
             tracked.push({ dir, registryFile, sandboxId: handle.sandboxId });
             return handle;
           } catch (error) {
-            await rm(dir, { recursive: true, force: true });
+            if (!createInvoked) await rm(dir, { recursive: true, force: true });
             throw error;
           }
         },
@@ -298,7 +302,7 @@ export function createRepoSessionFactory(opts: RepoSessionFactoryOptions): AfkOp
           const errors: unknown[] = [];
           for (const entry of [...tracked].reverse()) {
             try {
-              if (entry.sandboxId) await verifyContainerStopped(entry.sandboxId, opts.cwd, opts.inspectContainer);
+              await verifyContainerStopped(entry.sandboxId, opts.cwd, opts.inspectContainer);
               const records = await readManagedResourceRegistry(opts.cwd, repositoryPath(opts.cwd, entry.registryFile));
               let kept = false;
               for (const record of [...records].reverse()) {

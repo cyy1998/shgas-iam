@@ -4,8 +4,8 @@
 
 - 按 `AGENTS.md` 路由阅读命中的工程文档，并核对 `docs/agents/workflow.md`、`docs/agents/sandcastle-afk.md`、`GLOSSARY.md` 与 `.agents/skills/resolving-merge-conflicts/SKILL.md`。
 - 宿主在 Spec 集成分支直接执行 `git merge --no-ff {{TICKET_BRANCH}}` 时遇到真实冲突并已干净中止合并。当前工作树正位于 Spec 集成分支（`HEAD` 为 `{{SPEC_TIP}}`），请在当前分支执行：
-  `git merge --no-ff {{TICKET_BRANCH}}`
-- 结合下方宿主注入的父 Spec、当前 ticket 与 `git log --first-parent` 历史理解双方意图，完整保留双方变更语义，完成合并提交并在提交正文末尾保留 `Sandcastle-Ticket: #{{TICKET_NUMBER}}` trailer。
+  `git merge --no-ff --no-commit {{TICKET_BRANCH}}`
+- 结合下方宿主注入的父 Spec、当前 ticket 与 `git log --first-parent` 历史理解双方意图，完整保留双方变更语义，在完成所有冲突修复与受影响范围验证后，再一次性 `git commit` 完成合并提交（确保 `HEAD` 本身即为双亲合并提交，并在提交正文末尾保留 `Sandcastle-Ticket: #{{TICKET_NUMBER}}` trailer）。
 - 不要在沙箱内调用 GitHub API。
 - Bun 真实 I/O 测试先用普通 `await` 完成（失败路径先捕获 rejection），再做同步断言；禁止使用 `.resolves`、`.rejects` 或 async `toThrow`。真实资源测试从根入口 `pnpm test:integration` 或 `pnpm test:e2e` 运行。
 - 保留提交 Hook（禁止 `--no-verify`），核对 Hook 修复后重跑完整受影响范围的行为测试、typecheck、适用文档检查与 `git diff --check`。

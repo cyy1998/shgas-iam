@@ -119,7 +119,8 @@ async function checkDotEnvFile(dir: string): Promise<void> {
   });
   if (raw === undefined) return;
   const parsed = parseEnv(raw);
-  if (Object.hasOwn(parsed, "GH_TOKEN") || Object.hasOwn(parsed, "GITHUB_TOKEN")) {
+  const lineHit = raw.split(/\r?\n/).some((line) => /^\s*(?:export\s+)?(?:GH_TOKEN|GITHUB_TOKEN)\s*=/.test(line));
+  if (lineHit || Object.hasOwn(parsed, "GH_TOKEN") || Object.hasOwn(parsed, "GITHUB_TOKEN")) {
     throw new Error(`拒绝启动：${envPath} 不得声明 GH_TOKEN 或 GITHUB_TOKEN（含空值）。`);
   }
 }
@@ -129,7 +130,7 @@ export async function preflightCredentials(cwd: string, extraDirs: string[] = []
   for (const dir of dirs) await checkDotEnvFile(dir);
 
   const gitConfig = await readFile(join(cwd, ".git", "config"), "utf8").catch((err: unknown) => {
-    if (err instanceof Error && "code" in err && err.code === "ENOENT") return "";
+    if (err instanceof Error && "code" in err && (err.code === "ENOENT" || err.code === "ENOTDIR")) return "";
     throw err;
   });
   if (/(?:https?:\/\/[^/\s@]+@)|(?:extraheader\s*=.*authorization)/i.test(gitConfig)) {
@@ -158,16 +159,21 @@ export async function verifyGitRemote(
   repo: string,
   execFn: ExecFn = runCommand,
 ): Promise<void> {
-  const pushOut = await execFn("git", ["remote", "get-url", "--push", "--all", remote], cwd);
-  const urls = pushOut
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  if (urls.length === 0) throw new Error(`远端 ${remote} 未配置 push URL。`);
   const expected = repo.toLowerCase();
-  for (const url of urls) {
-    if (parseGitHubRepoUrl(url) !== expected) {
-      throw new Error(`远端 ${remote} 的 push URL（${url}）与目标仓库 github.com/${repo} 不一致。`);
+  for (const [label, args] of [
+    ["push", ["remote", "get-url", "--push", "--all", remote]],
+    ["fetch", ["remote", "get-url", "--all", remote]],
+  ] as const) {
+    const out = await execFn("git", [...args], cwd);
+    const urls = out
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (urls.length === 0) throw new Error(`远端 ${remote} 未配置 ${label} URL。`);
+    for (const url of urls) {
+      if (parseGitHubRepoUrl(url) !== expected) {
+        throw new Error(`远端 ${remote} 的 ${label} URL（${url}）与目标仓库 github.com/${repo} 不一致。`);
+      }
     }
   }
 }
@@ -190,7 +196,9 @@ async function ghGraphql<T>(
   }
   const raw = await execFn("gh", args, cwd);
   const parsed = JSON.parse(raw) as { data?: T; errors?: { message: string }[] };
-  if (parsed.errors?.length) throw new Error(`GitHub GraphQL 错误：${parsed.errors.map((e) => e.message).join("; ")}`);
+  if (parsed.errors?.length) {
+    throw new Error(`GitHub GraphQL 错误：${parsed.errors.map((e) => e.message).join("; ")}`);
+  }
   if (!parsed.data) throw new Error("GitHub GraphQL 返回空数据。");
   return parsed.data;
 }
@@ -235,6 +243,16 @@ function assertNoOverflow(page: { pageInfo: { hasNextPage: boolean } }, scope: s
   if (page.pageInfo.hasNextPage) throw new Error(`GitHub 分页溢出（${scope}），请缩小范围后再运行。`);
 }
 
+function isSpecReady(state: string, labels: string[]): boolean {
+  return (
+    state === "OPEN" &&
+    labels.includes("type:spec") &&
+    !labels.includes("type:ticket") &&
+    labels.includes("ready-for-agent") &&
+    !labels.includes("needs-attention")
+  );
+}
+
 export async function listReadySpecNumbers(repo: string, cwd: string, execFn: ExecFn = runCommand): Promise<number[]> {
   const { owner, name } = splitRepo(repo);
   const data = await ghGraphql<{
@@ -245,7 +263,10 @@ export async function listReadySpecNumbers(repo: string, cwd: string, execFn: Ex
   return issues.nodes
     .filter((issue) => {
       assertNoOverflow(issue.labels, `spec #${issue.number} labels`);
-      return !issue.labels.nodes.some((l) => l.name === "needs-attention");
+      return isSpecReady(
+        "OPEN",
+        issue.labels.nodes.map((l) => l.name),
+      );
     })
     .map((issue) => issue.number)
     .sort((a, b) => a - b);
@@ -323,7 +344,9 @@ export function resolveSpecBranch(spec: SpecIssue, baseBranch: string): string {
     throw new Error(`Spec #${spec.number} 关联了多个分支（${spec.linkedBranches.join(", ")}），无法唯一确定集成分支。`);
   }
   const branch = spec.linkedBranches[0] ?? `sandcastle/spec-${spec.number}`;
-  if (branch === baseBranch) throw new Error(`Spec #${spec.number} 的集成分支不得与基线分支 ${baseBranch} 同名。`);
+  if (branch === "main" || branch === baseBranch) {
+    throw new Error(`Spec #${spec.number} 的集成分支不得为 main 或基线分支 ${baseBranch}。`);
+  }
   return branch;
 }
 
@@ -333,10 +356,12 @@ async function isSpecAuthorized(repo: string, number: number, cwd: string): Prom
     repository: { issue: { state: string; labels: Page<{ name: string }> } | null };
   }>(SPEC_LABELS_QUERY, { owner, name, number }, cwd);
   const issue = data.repository.issue;
-  if (issue?.state !== "OPEN") return false;
+  if (!issue) return false;
   assertNoOverflow(issue.labels, `spec #${number} labels`);
-  const names = new Set(issue.labels.nodes.map((l) => l.name));
-  return names.has("ready-for-agent") && !names.has("needs-attention");
+  return isSpecReady(
+    issue.state,
+    issue.labels.nodes.map((l) => l.name),
+  );
 }
 
 export async function branchExists(cwd: string, branch: string, execFn: ExecFn = runCommand): Promise<boolean> {
@@ -445,24 +470,29 @@ function extractTag(text: string, tag: string): string | undefined {
   return match?.[1]?.trim() || undefined;
 }
 
-function ensureClosesLines(body: string, numbers: number[]): string {
-  const existing = new Set([...body.matchAll(/\bCloses\s+#(\d+)\b/gi)].map((m) => Number(m[1])));
+export function ensureClosesLines(body: string, numbers: number[]): string {
+  const existing = new Set([...body.matchAll(/^\s*Closes\s+#(\d+)\s*$/gim)].map((m) => Number(m[1])));
   const missing = [...new Set(numbers)].filter((n) => !existing.has(n));
   if (missing.length === 0) return body;
   return `${body.trimEnd()}\n\n${missing.map((n) => `Closes #${n}`).join("\n")}\n`;
 }
 
+export function hasStandaloneCompletion(stdout: string): boolean {
+  return stdout.split(/\r?\n/).some((line) => line.trim() === COMPLETE);
+}
+
 async function pauseSpec(repo: string, specNumber: number, reason: string, cwd: string): Promise<void> {
-  await runCommand(
-    "gh",
-    ["issue", "edit", String(specNumber), "--repo", repo, "--add-label", "needs-attention"],
-    cwd,
-  ).catch(() => {});
-  await runCommand(
-    "gh",
-    ["issue", "comment", String(specNumber), "--repo", repo, "--body", `Sandcastle AFK 已暂停：${reason}`],
-    cwd,
-  ).catch(() => {});
+  for (const [label, args] of [
+    ["添加 needs-attention", ["issue", "edit", String(specNumber), "--repo", repo, "--add-label", "needs-attention"]],
+    [
+      "写入暂停评论",
+      ["issue", "comment", String(specNumber), "--repo", repo, "--body", `Sandcastle AFK 已暂停：${reason}`],
+    ],
+  ] as const) {
+    await runCommand("gh", [...args], cwd).catch((err: unknown) => {
+      console.error(`Spec #${specNumber} ${label}失败：${err instanceof Error ? err.message : String(err)}`);
+    });
+  }
 }
 
 async function runPhase(opts: {
@@ -494,11 +524,39 @@ async function runPhase(opts: {
       name: opts.runId,
       logging: { type: "file", path: join(logsDir, `${opts.runId}.log`) },
     });
-    if (result.completionSignal !== COMPLETE) throw new Error(`${opts.runId} 未输出完成标记 ${COMPLETE}。`);
+    if (result.completionSignal !== COMPLETE || !hasStandaloneCompletion(result.stdout)) {
+      throw new Error(`${opts.runId} 未输出独立行完成标记 ${COMPLETE}。`);
+    }
     return result.stdout;
   } finally {
     await session.cleanup?.();
   }
+}
+
+async function verifyMergeCommit(
+  specWorktree: string,
+  specTipBefore: string,
+  ticketTip: string,
+  ticketNumber: number,
+): Promise<string> {
+  const headSha = await runCommand("git", ["rev-parse", "HEAD"], specWorktree);
+  if (headSha === specTipBefore) throw new Error(`合并 #${ticketNumber} 未产生新提交。`);
+  const parents = (await runCommand("git", ["rev-list", "--parents", "-n", "1", headSha], specWorktree))
+    .split(/\s+/)
+    .slice(1);
+  if (parents.length < 2 || parents[0] !== specTipBefore || !parents.includes(ticketTip)) {
+    throw new Error(`#${ticketNumber} 合并后 HEAD（${headSha.slice(0, 8)}）不是预期的双亲合并提交。`);
+  }
+  const msg = await runCommand("git", ["log", "-1", "--pretty=%B", headSha], specWorktree);
+  if (!new RegExp(`^Sandcastle-Ticket:\\s*#${ticketNumber}\\s*$`, "m").test(msg)) {
+    await runCommand(
+      "git",
+      ["commit", "--amend", "--no-verify", "-m", `${msg.trimEnd()}\n\n${TRAILER_PREFIX}${ticketNumber}`],
+      specWorktree,
+    );
+    return runCommand("git", ["rev-parse", "HEAD"], specWorktree);
+  }
+  return headSha;
 }
 
 async function mergeTicketIntoSpec(opts: {
@@ -509,15 +567,26 @@ async function mergeTicketIntoSpec(opts: {
   ticket: TicketIssue;
   ticketBranch: string;
   ticketTip: string;
-}): Promise<void> {
+}): Promise<string> {
   const { afk, cwd, spec, specWorktree, ticket, ticketBranch, ticketTip } = opts;
   const specTipBefore = await runCommand("git", ["rev-parse", "HEAD"], specWorktree);
   const mergeMsg = `Merge #${ticket.number}: ${ticket.title}\n\n${TRAILER_PREFIX}${ticket.number}`;
   try {
-    await runCommand("git", ["merge", "--no-ff", "-m", mergeMsg, ticketBranch], specWorktree);
-    return;
-  } catch {
-    await runCommand("git", ["merge", "--abort"], specWorktree).catch(() => {});
+    await runCommand("git", ["merge", "--no-ff", "-m", mergeMsg, ticketTip], specWorktree);
+    return await verifyMergeCommit(specWorktree, specTipBefore, ticketTip, ticket.number);
+  } catch (mergeError) {
+    const hasMergeHead = await runCommand("git", ["rev-parse", "--verify", "--quiet", "MERGE_HEAD"], specWorktree)
+      .then(() => true)
+      .catch(() => false);
+    const conflicted = hasMergeHead
+      ? await runCommand("git", ["diff", "--name-only", "--diff-filter=U"], specWorktree).catch(() => "")
+      : "";
+    if (!hasMergeHead || conflicted.length === 0) {
+      if (hasMergeHead) await runCommand("git", ["merge", "--abort"], specWorktree).catch(() => {});
+      throw mergeError;
+    }
+    await runCommand("git", ["merge", "--abort"], specWorktree);
+    await assertClean(specWorktree, `中止合并后 Spec 工作树（#${ticket.number}）`);
   }
 
   await runPhase({
@@ -540,22 +609,7 @@ async function mergeTicketIntoSpec(opts: {
   });
 
   await assertClean(specWorktree, `Merger 工作树（#${ticket.number}）`);
-  await runCommand("git", ["merge-base", "--is-ancestor", specTipBefore, "HEAD"], specWorktree);
-  await runCommand("git", ["merge-base", "--is-ancestor", ticketTip, "HEAD"], specWorktree);
-  const mergeSha = await runCommand(
-    "git",
-    ["rev-list", "--first-parent", "--merges", "-n", "1", `${specTipBefore}..HEAD`],
-    specWorktree,
-  );
-  if (!mergeSha) throw new Error(`Merger 未在 Spec 分支产生有效合并提交（#${ticket.number}）。`);
-  const headMsg = await runCommand("git", ["log", "-1", "--pretty=%B"], specWorktree);
-  if (!headMsg.includes(`${TRAILER_PREFIX}${ticket.number}`)) {
-    await runCommand(
-      "git",
-      ["commit", "--amend", "--no-verify", "-m", `${headMsg.trimEnd()}\n\n${TRAILER_PREFIX}${ticket.number}`],
-      specWorktree,
-    );
-  }
+  return verifyMergeCommit(specWorktree, specTipBefore, ticketTip, ticket.number);
 }
 
 export async function checkAfk(opts: Pick<AfkOptions, "repo" | "cwd" | "remote" | "baseBranch">) {
@@ -574,7 +628,9 @@ export async function runAfk(options: AfkOptions): Promise<AfkResult> {
   const remote = options.remote ?? "origin";
   const baseBranch = options.baseBranch ?? "main";
   const maxSpecs = options.maxSpecs ?? 1;
-  const maxParallel = Math.max(1, options.maxParallel ?? 4);
+  const maxParallel = options.maxParallel ?? 4;
+  if (!Number.isSafeInteger(maxSpecs) || maxSpecs < 1) throw new Error(`无效的 maxSpecs：${maxSpecs}`);
+  if (!Number.isSafeInteger(maxParallel) || maxParallel < 1) throw new Error(`无效的 maxParallel：${maxParallel}`);
   const result: AfkResult = { delivered: [], paused: [], stopped: [] };
 
   await preflightCredentials(cwd);
@@ -589,11 +645,7 @@ export async function runAfk(options: AfkOptions): Promise<AfkResult> {
   for (const specNumber of candidates) {
     try {
       let spec = await readSpec(options.repo, specNumber, cwd);
-      if (
-        spec.state !== "OPEN" ||
-        !spec.labels.includes("ready-for-agent") ||
-        spec.labels.includes("needs-attention")
-      ) {
+      if (!isSpecReady(spec.state, spec.labels)) {
         result.stopped.push(specNumber);
         continue;
       }
@@ -621,20 +673,30 @@ export async function runAfk(options: AfkOptions): Promise<AfkResult> {
         branch: string;
         worktree: string;
         baseSha: string;
-        promise: Promise<{ ticket: TicketIssue; branch: string; worktree: string; baseSha: string; error?: unknown }>;
+        promise: Promise<{
+          ticket: TicketIssue;
+          branch: string;
+          worktree: string;
+          baseSha: string;
+          error?: unknown;
+        }>;
       };
       const inFlight = new Map<number, InFlight>();
       const failed: string[] = [];
       let softStopped = false;
 
+      const isReadyTicket = (t: TicketIssue) =>
+        t.state === "OPEN" &&
+        t.labels.includes("type:ticket") &&
+        !t.labels.includes("type:spec") &&
+        t.labels.includes("ready-for-agent") &&
+        !t.labels.includes("needs-attention");
+
       while (true) {
         if (!softStopped && failed.length === 0) {
           const internalIds = new Set(spec.subIssues.map((t) => t.number));
           const ready = spec.subIssues
-            .filter(
-              (t) =>
-                t.state === "OPEN" && t.labels.includes("ready-for-agent") && !t.labels.includes("needs-attention"),
-            )
+            .filter(isReadyTicket)
             .filter((t) => !done.has(t.number) && !inFlight.has(t.number))
             .filter((t) =>
               t.blockedBy.every((b) => (internalIds.has(b.number) ? done.has(b.number) : b.state === "CLOSED")),
@@ -643,60 +705,59 @@ export async function runAfk(options: AfkOptions): Promise<AfkResult> {
 
           for (const ticket of ready) {
             if (inFlight.size >= maxParallel) break;
-            if (!(await isSpecAuthorized(options.repo, specNumber, cwd))) {
-              softStopped = true;
-              break;
-            }
-            const slot = selectSlot(ticket, options.agents);
-            const branch = `sandcastle/ticket-${ticket.number}`;
-            const specTip = await runCommand("git", ["rev-parse", "HEAD"], specWorktree);
-            const worktree = await ensureWorktree(
-              cwd,
-              join(cwd, ".sandcastle", "worktrees", `ticket-${ticket.number}`),
-              branch,
-              specTip,
-            );
-            const baseSha = await runCommand("git", ["rev-parse", "HEAD"], worktree);
-            for (const blocker of ticket.blockedBy) {
-              const blockerSha = done.get(blocker.number);
-              if (blockerSha) {
-                try {
-                  await runCommand("git", ["merge-base", "--is-ancestor", blockerSha, baseSha], worktree);
-                } catch {
-                  throw new Error(
-                    `复用票分支 ${branch} 缺少已集成前置 #${blocker.number}（${blockerSha.slice(0, 8)}），请清理旧票分支后重试。`,
-                  );
+            try {
+              if (!(await isSpecAuthorized(options.repo, specNumber, cwd))) {
+                softStopped = true;
+                break;
+              }
+              const slot = selectSlot(ticket, options.agents);
+              const branch = `sandcastle/ticket-${ticket.number}`;
+              const specTip = await runCommand("git", ["rev-parse", "HEAD"], specWorktree);
+              const worktree = await ensureWorktree(
+                cwd,
+                join(cwd, ".sandcastle", "worktrees", `ticket-${ticket.number}`),
+                branch,
+                specTip,
+              );
+              const baseSha = await runCommand("git", ["rev-parse", "HEAD"], worktree);
+              for (const blocker of ticket.blockedBy) {
+                const blockerSha = done.get(blocker.number);
+                if (blockerSha) {
+                  try {
+                    await runCommand("git", ["merge-base", "--is-ancestor", blockerSha, baseSha], worktree);
+                  } catch {
+                    throw new Error(
+                      `复用票分支 ${branch} 缺少已集成前置 #${blocker.number}（${blockerSha.slice(0, 8)}），请清理旧票分支后重试。`,
+                    );
+                  }
                 }
               }
+              const promise = runPhase({
+                afk: options,
+                cwd,
+                worktree,
+                phase: "implement",
+                readonly: false,
+                runId: `spec-${specNumber}-ticket-${ticket.number}-${Date.now()}`,
+                slot,
+                promptFile: join(options.promptsDir, "implement.md"),
+                promptArgs: { BASE_SHA: baseSha, SPEC: formatIssue(spec), TICKET: formatIssue(ticket) },
+              }).then(
+                () => ({ ticket, branch, worktree, baseSha }),
+                (error: unknown) => ({ ticket, branch, worktree, baseSha, error }),
+              );
+              inFlight.set(ticket.number, { ticket, branch, worktree, baseSha, promise });
+            } catch (prepError) {
+              failed.push(`#${ticket.number}: ${prepError instanceof Error ? prepError.message : String(prepError)}`);
+              break;
             }
-            const promise = runPhase({
-              afk: options,
-              cwd,
-              worktree,
-              phase: "implement",
-              readonly: false,
-              runId: `spec-${specNumber}-ticket-${ticket.number}-${Date.now()}`,
-              slot,
-              promptFile: join(options.promptsDir, "implement.md"),
-              promptArgs: { BASE_SHA: baseSha, SPEC: formatIssue(spec), TICKET: formatIssue(ticket) },
-            }).then(
-              () => ({ ticket, branch, worktree, baseSha }),
-              (error: unknown) => ({ ticket, branch, worktree, baseSha, error }),
-            );
-            inFlight.set(ticket.number, { ticket, branch, worktree, baseSha, promise });
           }
         }
 
         if (inFlight.size === 0) {
           if (softStopped || failed.length > 0) break;
           spec = await readSpec(options.repo, specNumber, cwd);
-          const remaining = spec.subIssues.filter(
-            (t) =>
-              t.state === "OPEN" &&
-              t.labels.includes("ready-for-agent") &&
-              !t.labels.includes("needs-attention") &&
-              !done.has(t.number),
-          );
+          const remaining = spec.subIssues.filter((t) => isReadyTicket(t) && !done.has(t.number));
           if (remaining.length === 0) break;
           const internalIds = new Set(spec.subIssues.map((t) => t.number));
           const anyUnblocked = remaining.some((t) =>
@@ -721,7 +782,7 @@ export async function runAfk(options: AfkOptions): Promise<AfkResult> {
           await assertClean(finished.worktree, `Ticket #${finished.ticket.number}`);
           const ticketTip = await runCommand("git", ["rev-parse", "HEAD"], finished.worktree);
           await runCommand("git", ["merge-base", "--is-ancestor", finished.baseSha, ticketTip], finished.worktree);
-          await mergeTicketIntoSpec({
+          const mergeSha = await mergeTicketIntoSpec({
             afk: options,
             cwd,
             spec,
@@ -730,7 +791,7 @@ export async function runAfk(options: AfkOptions): Promise<AfkResult> {
             ticketBranch: finished.branch,
             ticketTip,
           });
-          done.set(finished.ticket.number, await runCommand("git", ["rev-parse", "HEAD"], specWorktree));
+          done.set(finished.ticket.number, mergeSha);
           await removeWorktreeIfClean(cwd, finished.worktree);
           await deleteBranchCas(cwd, finished.branch, ticketTip);
         } catch (error) {
@@ -744,14 +805,14 @@ export async function runAfk(options: AfkOptions): Promise<AfkResult> {
         continue;
       }
 
-      // Dual-axis read-only review + single writable repair-and-verify.
+      // Dual-axis read-only review (always drain both) + single writable repair-and-verify.
       await assertClean(specWorktree, `Spec #${specNumber}`);
       const reviewBase = await runCommand("git", ["merge-base", specBranch, `${remote}/${baseBranch}`], cwd);
       const candidateSha = await runCommand("git", ["rev-parse", "HEAD"], specWorktree);
       const integratedList = spec.subIssues.filter((t) => done.has(t.number)).sort((a, b) => a.number - b.number);
       const ticketsSummary = integratedList.map(formatIssue).join("\n\n---\n\n") || "(none)";
 
-      const [standardsReport, specReport] = await Promise.all([
+      const reviewSettled = await Promise.allSettled([
         runPhase({
           afk: options,
           cwd,
@@ -785,6 +846,12 @@ export async function runAfk(options: AfkOptions): Promise<AfkResult> {
           },
         }),
       ]);
+      const reviewErrors = reviewSettled
+        .filter((r): r is PromiseRejectedResult => r.status === "rejected")
+        .map((r) => (r.reason instanceof Error ? r.reason.message : String(r.reason)));
+      if (reviewErrors.length > 0) throw new Error(`双轴只读评审失败：${reviewErrors.join("；")}`);
+      const standardsReport = (reviewSettled[0] as PromiseFulfilledResult<string>).value;
+      const specReport = (reviewSettled[1] as PromiseFulfilledResult<string>).value;
       if ((await runCommand("git", ["rev-parse", "HEAD"], specWorktree)) !== candidateSha) {
         throw new Error("只读双轴评审期间 Spec 分支 HEAD 发生异常变动。");
       }
@@ -815,10 +882,10 @@ export async function runAfk(options: AfkOptions): Promise<AfkResult> {
         continue;
       }
 
-      // Ordered idempotent PR delivery.
-      await runCommand("git", ["push", "-u", remote, specBranch], cwd);
-      const remoteRef = await runCommand("git", ["ls-remote", "--heads", remote, specBranch], cwd);
-      if (!remoteRef.startsWith(`${finalSha}\t`)) {
+      // Ordered idempotent PR delivery with locked push refspec and same-repo PR matching.
+      await runCommand("git", ["push", "-u", remote, `${finalSha}:refs/heads/${specBranch}`], cwd);
+      const remoteRef = await runCommand("git", ["ls-remote", "--heads", remote, `refs/heads/${specBranch}`], cwd);
+      if (remoteRef.trim() !== `${finalSha}\trefs/heads/${specBranch}`) {
         throw new Error(`远端分支 ${specBranch} SHA 与最终候选 ${finalSha} 不一致。`);
       }
 
@@ -827,38 +894,56 @@ export async function runAfk(options: AfkOptions): Promise<AfkResult> {
       const fallbackBody = `## Summary\n\n完成 Spec #${specNumber}（${spec.title}）。\n\n## Evidence\n\n- Branch: \`${specBranch}\` @ \`${finalSha}\`\n- Base: \`${reviewBase}\`\n- Tickets: ${ticketNums.map((n) => `#${n}`).join(", ") || "(none)"}`;
       const prBody = ensureClosesLines(extractTag(repairOut, "pr-body") ?? fallbackBody, closeNums);
 
-      const openPrs = JSON.parse(
-        await runCommand(
-          "gh",
-          [
-            "pr",
-            "list",
-            "--repo",
-            options.repo,
-            "--state",
-            "open",
-            "--head",
-            specBranch,
-            "--base",
-            baseBranch,
-            "--json",
-            "number,url,body",
-          ],
-          cwd,
-        ),
-      ) as { number: number; url: string; body: string }[];
-
-      let prUrl: string;
-      if (openPrs[0]) {
-        const updated = ensureClosesLines(openPrs[0].body, closeNums);
-        if (updated !== openPrs[0].body) {
+      type OpenPr = {
+        number: number;
+        url: string;
+        body: string;
+        isCrossRepository: boolean;
+        headRefName: string;
+        baseRefName: string;
+        headRefOid: string;
+      };
+      const openPrs = (
+        JSON.parse(
           await runCommand(
             "gh",
-            ["pr", "edit", String(openPrs[0].number), "--repo", options.repo, "--body", updated],
+            [
+              "pr",
+              "list",
+              "--repo",
+              options.repo,
+              "--state",
+              "open",
+              "--head",
+              specBranch,
+              "--base",
+              baseBranch,
+              "--json",
+              "number,url,body,isCrossRepository,headRefName,baseRefName,headRefOid",
+            ],
+            cwd,
+          ),
+        ) as OpenPr[]
+      ).filter(
+        (pr) =>
+          !pr.isCrossRepository &&
+          pr.headRefName === specBranch &&
+          pr.baseRefName === baseBranch &&
+          pr.headRefOid === finalSha,
+      );
+
+      let prUrl: string;
+      const existingPr = openPrs[0];
+      if (existingPr) {
+        const updated = ensureClosesLines(existingPr.body, closeNums);
+        if (updated !== existingPr.body) {
+          await runCommand(
+            "gh",
+            ["pr", "edit", String(existingPr.number), "--repo", options.repo, "--body", updated],
             cwd,
           );
         }
-        prUrl = openPrs[0].url;
+        prUrl = existingPr.url;
       } else {
         const createArgs = [
           "pr",

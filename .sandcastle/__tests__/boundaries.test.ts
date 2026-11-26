@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { createBindMountSandboxProvider, type MountConfig } from "@ai-hero/sandcastle";
 import {
   branchExists,
+  ensureClosesLines,
+  hasStandaloneCompletion,
   listReadySpecNumbers,
   parseGitHubRepoUrl,
   preflightCredentials,
@@ -13,6 +15,7 @@ import {
   runCommand,
   verifyGitRemote,
 } from "../afk.ts";
+import { parsePositiveInt } from "../run.mts";
 import { createRepoSessionFactory, stageCodexAuth, verifyContainerStopped } from "../session.ts";
 
 const tempDirs: string[] = [];
@@ -49,13 +52,25 @@ describe("GitHub GraphQL filtering, pagination overflow, and linkedBranches", ()
             issues: {
               pageInfo: { hasNextPage: false },
               nodes: [
-                { number: 440, labels: { pageInfo: { hasNextPage: false }, nodes: [{ name: "ready-for-agent" }] } },
-                { number: 433, labels: { pageInfo: { hasNextPage: false }, nodes: [{ name: "ready-for-agent" }] } },
+                {
+                  number: 440,
+                  labels: {
+                    pageInfo: { hasNextPage: false },
+                    nodes: [{ name: "type:spec" }, { name: "ready-for-agent" }],
+                  },
+                },
+                {
+                  number: 433,
+                  labels: {
+                    pageInfo: { hasNextPage: false },
+                    nodes: [{ name: "type:spec" }, { name: "ready-for-agent" }],
+                  },
+                },
                 {
                   number: 430,
                   labels: {
                     pageInfo: { hasNextPage: false },
-                    nodes: [{ name: "ready-for-agent" }, { name: "needs-attention" }],
+                    nodes: [{ name: "type:spec" }, { name: "ready-for-agent" }, { name: "needs-attention" }],
                   },
                 },
               ],
@@ -76,7 +91,7 @@ describe("GitHub GraphQL filtering, pagination overflow, and linkedBranches", ()
     expect(overflowErr?.message).toContain("分页溢出");
   });
 
-  test("resolves Spec branch from native linkedBranches and rejects ambiguous or base-branch links", async () => {
+  test("resolves Spec branch from linkedBranches and rejects main, baseBranch, multiple, or overflow", async () => {
     const makePayload = (linkedBranches: string[], hasNextPage = false) =>
       JSON.stringify({
         data: {
@@ -86,7 +101,10 @@ describe("GitHub GraphQL filtering, pagination overflow, and linkedBranches", ()
               title: "Demo",
               body: "Spec body",
               state: "OPEN",
-              labels: { pageInfo: { hasNextPage: false }, nodes: [{ name: "type:spec" }, { name: "ready-for-agent" }] },
+              labels: {
+                pageInfo: { hasNextPage: false },
+                nodes: [{ name: "type:spec" }, { name: "ready-for-agent" }],
+              },
               comments: { pageInfo: { hasNextPage: false }, nodes: [] },
               linkedBranches: {
                 pageInfo: { hasNextPage },
@@ -106,13 +124,13 @@ describe("GitHub GraphQL filtering, pagination overflow, and linkedBranches", ()
     );
     expect(resolveSpecBranch(linkedSpec, "main")).toBe("feat/user-sync");
 
+    const mainSpec = await readSpec("cyy1998/shgas-iam", 450, process.cwd(), async () => makePayload(["main"]));
+    expect(() => resolveSpecBranch(mainSpec, "release/v1")).toThrow("不得为 main");
+
     const multiSpec = await readSpec("cyy1998/shgas-iam", 450, process.cwd(), async () =>
       makePayload(["feat/a", "feat/b"]),
     );
     expect(() => resolveSpecBranch(multiSpec, "main")).toThrow("关联了多个分支");
-
-    const baseSpec = await readSpec("cyy1998/shgas-iam", 450, process.cwd(), async () => makePayload(["main"]));
-    expect(() => resolveSpecBranch(baseSpec, "main")).toThrow("不得与基线分支 main 同名");
 
     const overflowErr = await captureError(() =>
       readSpec("cyy1998/shgas-iam", 450, process.cwd(), async () => makePayload(["feat/a"], true)),
@@ -121,8 +139,8 @@ describe("GitHub GraphQL filtering, pagination overflow, and linkedBranches", ()
   });
 });
 
-describe("Credential preflight, remote URL validation, and exact Git ref lookup", () => {
-  test("rejects GH_TOKEN/GITHUB_TOKEN in root or worktree .sandcastle/.env and embedded .git/config creds", async () => {
+describe("Credential preflight, remote URLs, exact Git refs, completion signal, and CLI args", () => {
+  test("rejects GH_TOKEN/GITHUB_TOKEN in root or worktree .sandcastle/.env and .git/config auth", async () => {
     const root = await makeTempDir("afk-creds-root-");
     const wt = await makeTempDir("afk-creds-wt-");
     await mkdir(join(root, ".git"), { recursive: true });
@@ -131,7 +149,7 @@ describe("Credential preflight, remote URL validation, and exact Git ref lookup"
     await preflightCredentials(root, [wt]);
 
     await mkdir(join(wt, ".sandcastle"), { recursive: true });
-    await writeFile(join(wt, ".sandcastle", ".env"), "GH_TOKEN=\n");
+    await writeFile(join(wt, ".sandcastle", ".env"), 'NOTE="line1\nGH_TOKEN=\nline2"\n');
     const wtErr = await captureError(() => preflightCredentials(root, [wt]));
     expect(wtErr?.message).toContain("GH_TOKEN");
 
@@ -141,7 +159,7 @@ describe("Credential preflight, remote URL validation, and exact Git ref lookup"
     expect(gitErr?.message).toContain("Authorization");
   });
 
-  test("validates every --push --all remote URL against github.com/<repo>", async () => {
+  test("validates both push and fetch remote URLs against github.com/<repo>", async () => {
     expect(parseGitHubRepoUrl("git@github.com:cyy1998/shgas-iam.git")).toBe("cyy1998/shgas-iam");
     expect(parseGitHubRepoUrl("https://github.com/cyy1998/shgas-iam")).toBe("cyy1998/shgas-iam");
     expect(parseGitHubRepoUrl("https://evil.example.com/cyy1998/shgas-iam.git")).toBeUndefined();
@@ -153,34 +171,42 @@ describe("Credential preflight, remote URL validation, and exact Git ref lookup"
       async () => "git@github.com:cyy1998/shgas-iam.git\nhttps://github.com/cyy1998/shgas-iam.git",
     );
 
-    const badErr = await captureError(() =>
-      verifyGitRemote(
-        process.cwd(),
-        "origin",
-        "cyy1998/shgas-iam",
-        async () => "git@github.com:cyy1998/shgas-iam.git\nhttps://evil.example.com/cyy1998/shgas-iam.git",
+    const badFetchErr = await captureError(() =>
+      verifyGitRemote(process.cwd(), "origin", "cyy1998/shgas-iam", async (_f, args) =>
+        args.includes("--push")
+          ? "git@github.com:cyy1998/shgas-iam.git"
+          : "https://evil.example.com/cyy1998/shgas-iam.git",
       ),
     );
-    expect(badErr?.message).toContain("不一致");
+    expect(badFetchErr?.message).toContain("fetch URL");
   });
 
-  test("branchExists uses exact ref match and does not prefix-match nested branches", async () => {
+  test("branchExists uses exact ref match without hook interference, and completion/Closes/CLI helpers are strict", async () => {
     const repo = await makeTempDir("afk-git-ref-");
     await runCommand("git", ["init", "-q"], repo);
     await runCommand("git", ["config", "user.name", "Test"], repo);
     await runCommand("git", ["config", "user.email", "test@example.invalid"], repo);
     await writeFile(join(repo, "README.md"), "ok\n");
     await runCommand("git", ["add", "README.md"], repo);
-    await runCommand("git", ["commit", "-q", "-m", "init"], repo);
+    await runCommand("git", ["-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "init"], repo);
     await runCommand("git", ["branch", "feat/foo/bar"], repo);
 
     expect(await branchExists(repo, "feat/foo/bar")).toBe(true);
     expect(await branchExists(repo, "feat/foo")).toBe(false);
+
+    expect(hasStandaloneCompletion("done\n<promise>COMPLETE</promise>\n")).toBe(true);
+    expect(hasStandaloneCompletion("failed: did not emit <promise>COMPLETE</promise>")).toBe(false);
+    expect(ensureClosesLines("Summary\n\nCloses #433\n", [433, 434])).toContain("Closes #434");
+
+    expect(parsePositiveInt("--parallel", "4")).toBe(4);
+    expect(() => parsePositiveInt("--parallel", "abc")).toThrow("正整数");
+    expect(() => parsePositiveInt("--iterations", "-1")).toThrow("正整数");
+    expect(() => parsePositiveInt("--spec", "")).toThrow("正整数");
   });
 });
 
 describe("Session isolation, one-way auth staging, and container-stopped resource cleanup", () => {
-  test("stages auth.json as one-way readonly copy and excludes docker.sock/caches from readonly sessions", async () => {
+  test("stages auth.json readonly and excludes docker.sock, caches, and registry from readonly sessions", async () => {
     const root = await makeTempDir("afk-session-");
     const authFile = join(root, "auth.json");
     const original = '{"token":"secret"}\n';
@@ -235,13 +261,14 @@ describe("Session isolation, one-way auth staging, and container-stopped resourc
         (m) =>
           m.sandboxPath.includes("docker.sock") ||
           m.sandboxPath.includes("pnpm-store") ||
-          m.sandboxPath.includes("turbo-cache"),
+          m.sandboxPath.includes("turbo-cache") ||
+          m.sandboxPath.includes(".docker/config.json"),
       ),
     ).toBe(false);
     await ro.cleanup?.();
   });
 
-  test("preserves test-resource registry when sandbox container is still running and cleans it once stopped", async () => {
+  test("preserves test-resource registry while container is running and cleans it once stopped", async () => {
     const root = await makeTempDir("afk-cleanup-");
     const wt = await makeTempDir("afk-cleanup-wt-");
     const authFile = join(root, "auth.json");

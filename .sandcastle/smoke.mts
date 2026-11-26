@@ -113,6 +113,7 @@ printf '%s\n' '${COMPLETE}'`),
 test -x node_modules/.bin/lint-staged
 test "$TURBO_CACHE_DIR" = /home/agent/.turbo-cache
 test -d /home/agent/.turbo-cache
+printf '%s\n' '${project}' > "$TURBO_CACHE_DIR/smoke-probe"
 test "$(git config --get core.hooksPath)" = /tmp/iam-sandcastle-hooks
 test -x /tmp/iam-sandcastle-hooks/pre-commit
 if env | grep -Eq '^(GH_TOKEN|GITHUB_TOKEN)='; then exit 1; fi
@@ -149,6 +150,7 @@ printf '%s\n' '${COMPLETE}'`),
     }
 
     assert.equal(await git("show", "smoke:sandcastle-smoke.md"), "# Sandcastle smoke");
+    assert.equal((await readFile(join(turboCacheDir, "smoke-probe"), "utf8")).trim(), project);
     assert.equal(
       await runCommand(
         "docker",

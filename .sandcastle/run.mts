@@ -14,6 +14,14 @@ const cwd = fileURLToPath(new URL("..", import.meta.url));
 const REPO = "cyy1998/shgas-iam";
 const DOCKER_SOCKET = "/var/run/docker.sock";
 
+export function parsePositiveInt(name: string, raw: string): number {
+  const trimmed = raw.trim();
+  if (!/^[1-9]\d*$/.test(trimmed)) throw new Error(`参数 ${name} 必须为正整数，收到：${JSON.stringify(raw)}`);
+  const value = Number(trimmed);
+  if (!Number.isSafeInteger(value) || value < 1) throw new Error(`参数 ${name} 超出安全整数范围：${raw}`);
+  return value;
+}
+
 async function loadDotEnv(): Promise<void> {
   const raw = await readFile(join(cwd, ".sandcastle", ".env"), "utf8").catch((err: unknown) => {
     if (err instanceof Error && "code" in err && err.code === "ENOENT") return "";
@@ -50,6 +58,9 @@ async function main(): Promise<void> {
 
   await loadDotEnv();
   const { env } = process;
+  const specNumber = values.spec !== undefined ? parsePositiveInt("--spec", values.spec) : undefined;
+  const maxSpecs = parsePositiveInt("--iterations", values.iterations ?? (env.SANDCASTLE_ITERATIONS?.trim() || "1"));
+  const maxParallel = parsePositiveInt("--parallel", values.parallel ?? (env.SANDCASTLE_PARALLEL?.trim() || "4"));
   const imageName = env.SANDCASTLE_IMAGE?.trim() || "iam-sandcastle:local";
   const remote = env.SANDCASTLE_GIT_REMOTE?.trim() || undefined;
   const baseBranch = env.SANDCASTLE_BASE_BRANCH?.trim() || undefined;
@@ -95,9 +106,9 @@ async function main(): Promise<void> {
     cwd,
     remote,
     baseBranch,
-    specNumber: values.spec ? Number(values.spec) : undefined,
-    maxSpecs: Number(values.iterations ?? (env.SANDCASTLE_ITERATIONS?.trim() || "1")),
-    maxParallel: Number(values.parallel ?? (env.SANDCASTLE_PARALLEL?.trim() || "4")),
+    specNumber,
+    maxSpecs,
+    maxParallel,
     draft: values.draft ?? /^(?:1|true)$/i.test(env.SANDCASTLE_PR_DRAFT?.trim() ?? ""),
     agents,
     createSession: createRepoSessionFactory({
