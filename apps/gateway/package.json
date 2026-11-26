@@ -3,6 +3,13 @@
   "type": "module",
   "version": "0.0.1",
   "private": true,
+  "iamWorkspace": {
+    "kind": "backend",
+    "gates": [
+      "container-smoke",
+      "e2e-runtime"
+    ]
+  },
   "scripts": {
     "dev": "bun --watch src/main.ts",
     "start": "bun src/main.ts",

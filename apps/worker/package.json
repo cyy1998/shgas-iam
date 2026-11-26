@@ -3,6 +3,13 @@
   "type": "module",
   "version": "0.0.1",
   "private": true,
+  "iamWorkspace": {
+    "kind": "backend",
+    "gates": [
+      "container-smoke",
+      "e2e-runtime"
+    ]
+  },
   "exports": {
     ".": "./src/index.ts"
   },
