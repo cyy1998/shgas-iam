@@ -122,12 +122,25 @@ Redis 需要从备份恢复时，关闭扫码入口并等待在途请求到期�
    逐接入应用刷新 JWKS，或等待其明确的缓存期限后实际验证 B；同时验证仍有效的 A Token 和 A 退出 hint。
 5. 全部通过后恢复入口。以后移除 A 是另一次停流配置更新，必须同时满足普通 Token 与退出 hint 的退役条件。
 
-只读端点检查示例（`IAM_OIDC_CHECK_ORIGIN` 是操作者提供的不含 `/oidc` 的实际 Gateway origin）：
+在 Linux 上用 Bash、curl 和 jq 检查只读端点。`IAM_OIDC_CHECK_ORIGIN` 是操作者提供的不含 `/oidc` 的实际 Gateway origin。将返回的 Discovery 与目标 issuer 核对，并逐项比对 JWKS 公钥。若 JWKS 含预期公开字段以外的键字段，命令会报错并省略 JWKS 输出。
 
-```powershell
-$oidcOrigin = $env:IAM_OIDC_CHECK_ORIGIN.TrimEnd('/')
-Invoke-RestMethod -Uri "$oidcOrigin/oidc/.well-known/openid-configuration" -TimeoutSec 10 -ErrorAction Stop
-Invoke-RestMethod -Uri "$oidcOrigin/oidc/jwks" -TimeoutSec 10 -ErrorAction Stop
+```bash
+(
+  set -euo pipefail
+  : "${IAM_OIDC_CHECK_ORIGIN:?请设置 IAM_OIDC_CHECK_ORIGIN}"
+  oidc_origin=${IAM_OIDC_CHECK_ORIGIN%/}
+  curl --disable --fail --silent --show-error --max-time 10 \
+    --url "$oidc_origin/oidc/.well-known/openid-configuration" | jq -es '
+    if length == 1 and (.[0] | type) == "object"
+    then .[0] else error("Discovery 响应不可读") end
+  '
+  curl --disable --fail --silent --show-error --max-time 10 --url "$oidc_origin/oidc/jwks" | jq -es '
+    (if length == 1 then .[0] else null end)
+    | if (.keys | type) == "array" and (.keys | length) > 0 and
+       all(.keys[]; type == "object" and keys == ["alg", "e", "kid", "kty", "n", "use"])
+    then {keys} else error("JWKS 缺少预期公钥或含非公开字段") end
+  '
+)
 ```
 
 失败时保持维护，核对本轮已实际签名的 key 集合。B 已签发 Token/hint 后，不能直接回退到丢弃 B 的配置。
