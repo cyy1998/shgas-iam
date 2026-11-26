@@ -519,7 +519,6 @@ export async function controlledWorkflowJourney(options: {
       const stdout = await new Promise<string>((resolve, reject) => {
         const child = spawn(process.execPath, [join(control, "model.cjs"), JSON.stringify({ ...args, control })], {
           cwd: input.cwd,
-          windowsHide: true,
           stdio: ["pipe", "pipe", "pipe"],
         });
         let stdout = "";

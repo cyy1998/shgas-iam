@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import "./require-linux.mjs";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import process from "node:process";

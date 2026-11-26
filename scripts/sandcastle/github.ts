@@ -81,7 +81,7 @@ export function parsePullRequest(value: unknown): PullRequestInfo {
 }
 
 export function matchesGitHubRepoUrl(url: string): boolean {
-  const normalized = url.trim().replace(/\\/g, "/").replace(/\/+$/, "");
+  const normalized = url.trim().replace(/\/+$/, "");
   return new RegExp(`(?:^|[:/])${githubRepo}(?:\\.git)?$`, "i").test(normalized);
 }
 

@@ -316,7 +316,7 @@ function dateToUtc(value: string): number {
 }
 
 function toRepoPath(file: string): string {
-  return relative(repoRoot, file).replace(/\\/g, "/");
+  return relative(repoRoot, file);
 }
 
 function read(file: string): string {

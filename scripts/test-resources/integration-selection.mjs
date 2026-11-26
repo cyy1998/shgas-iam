@@ -100,15 +100,13 @@ export function selectIntegrationTasks(root, options) {
       continue;
     const candidates = globSync("test-integration/**/*.{integration.test.ts,integration.test.tsx,spec.ts}", {
       cwd: join(root, owner.directory),
-    })
-      .map((file) => file.replaceAll("\\", "/"))
-      .sort();
+    }).sort();
     if (
       options.files.length > 0 &&
       !options.files.some((file) => {
         const ownerRoot = join(root, owner.directory);
         const paths = isAbsolute(file) ? [file] : [resolve(root, file), resolve(ownerRoot, file)];
-        return paths.some((path) => candidates.includes(relative(ownerRoot, path).replaceAll("\\", "/")));
+        return paths.some((path) => candidates.includes(relative(ownerRoot, path)));
       })
     )
       continue;
@@ -137,7 +135,7 @@ export function selectIntegrationTasks(root, options) {
         const ownerRoot = join(root, task.directory);
         const paths = isAbsolute(file) ? [file] : [resolve(root, file), resolve(ownerRoot, file)];
         for (const path of paths) {
-          const local = relative(ownerRoot, path).replaceAll("\\", "/");
+          const local = relative(ownerRoot, path);
           if (!task.files.includes(local)) continue;
           matched = true;
           const key = `${task.name}:${task.executor}`;

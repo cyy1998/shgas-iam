@@ -11,8 +11,7 @@ export async function command(
   env?: NodeJS.ProcessEnv,
 ): Promise<string> {
   try {
-    const commandArgs = file === "git" && process.platform === "win32" ? ["-c", "core.longpaths=true", ...args] : args;
-    const result = await exec(file, commandArgs, { cwd, env, timeout, maxBuffer: 8 * 1024 * 1024, windowsHide: true });
+    const result = await exec(file, args, { cwd, env, timeout, maxBuffer: 8 * 1024 * 1024 });
     return result.stdout.trim();
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
