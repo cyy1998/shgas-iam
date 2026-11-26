@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Worktree } from "@ai-hero/sandcastle";
-import { command } from "./command.ts";
+import { command, retryGhRead } from "./command.ts";
 import type { createGitWorkspace, IntegrationEvidence } from "./git.ts";
 import type { createGitHubIssueTracker, RunGh, SpecGraph } from "./github.ts";
 import type { ReportProjectStage } from "./projects.ts";
@@ -93,6 +93,7 @@ export function createDelivery(options: {
   signal?: AbortSignal;
 }) {
   const { cwd, repo, remote, invocation, invocationBase, actor, git, gh, tracker, project, signal } = options;
+  const read = (args: string[]) => retryGhRead(() => gh(args));
   function verifyPr(pr: PullRequest, branch: string, head: string) {
     if (
       !Number.isSafeInteger(pr.number) ||
@@ -110,7 +111,7 @@ export function createDelivery(options: {
   }
   async function openPr(branch: string, head: string): Promise<PullRequest | undefined> {
     const matches: PullRequest[] = JSON.parse(
-      await gh([
+      await read([
         "pr",
         "list",
         "--repo",
@@ -130,16 +131,41 @@ export function createDelivery(options: {
     if (matches.length > 1) throw new Error(`Multiple open PRs for ${branch} target ${invocation.branch}.`);
     if (matches[0]) return verifyPr(matches[0], branch, head);
   }
-  async function remoteTip(branch: string) {
-    const lines = await command("git", ["ls-remote", "--heads", "--", remote, `refs/heads/${branch}`], cwd);
-    const [sha, ref] = lines.split("\t");
-    if (lines && (ref !== `refs/heads/${branch}` || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(sha ?? ""))) {
-      throw new Error(`Could not verify remote branch ${branch}.`);
+  async function remoteTips(...branches: string[]) {
+    const expected = new Set(branches.map((branch) => `refs/heads/${branch}`));
+    const output = await command("git", ["ls-remote", "--heads", "--", remote, ...expected], cwd);
+    const tips = new Map<string, string>();
+    for (const line of output.split("\n").filter(Boolean)) {
+      const [sha, ref, ...rest] = line.split("\t");
+      if (
+        !sha ||
+        !ref ||
+        !expected.has(ref) ||
+        tips.has(ref) ||
+        rest.length ||
+        !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(sha)
+      ) {
+        throw new Error(`Could not verify remote branches ${branches.join(", ")}.`);
+      }
+      tips.set(ref, sha);
     }
-    return sha || undefined;
+    return branches.map((branch) => tips.get(`refs/heads/${branch}`));
+  }
+  function createdPrNumber(output: string) {
+    const url = URL.parse(output);
+    const number = Number(url?.pathname.split("/").at(-1));
+    if (
+      url?.origin !== "https://github.com" ||
+      !Number.isSafeInteger(number) ||
+      number < 1 ||
+      url.pathname.toLowerCase() !== `/${repo.toLowerCase()}/pull/${number}`
+    ) {
+      throw new Error("GitHub did not return the created PR URL. Keep the verified candidate for recovery.");
+    }
+    return number;
   }
   async function recordComment(number: number, body: string) {
-    const comments = await gh([
+    const comments = await read([
       "api",
       `repos/${repo}/issues/${number}/comments?per_page=100`,
       "--paginate",
@@ -170,28 +196,39 @@ export function createDelivery(options: {
     }) {
       const { graph, workspace, head, integrated, ticketBranches, evidence } = input;
       const { branch } = workspace;
-      async function assertCandidate() {
+      async function assertCheckouts() {
         signal?.throwIfAborted();
         if ((await git.observe(invocation)) !== invocationBase || (await git.observe(workspace)) !== head) {
           throw new Error("Invocation or Spec candidate changed. Preserve the worktrees.");
         }
-        const progress = await git.inspectTickets(head, invocationBase, ticketBranches);
-        if (
-          graph.tickets.some(
-            ({ number }) =>
-              progress.integrated.get(number)?.mergeSha !== integrated.get(number)?.mergeSha ||
-              !progress.integrated.has(number),
-          )
-        ) {
-          throw new Error("Ticket integration evidence changed. Preserve the worktrees.");
-        }
       }
 
-      await assertCandidate();
-      if ((await remoteTip(invocation.branch)) !== invocationBase) {
+      await assertCheckouts();
+      const progress = await git.inspectTickets(head, invocationBase, ticketBranches);
+      if (
+        graph.tickets.some(({ number }) => {
+          const verified = progress.integrated.get(number);
+          const original = integrated.get(number);
+          return !verified || verified.mergeSha !== original?.mergeSha || verified.candidate !== original.candidate;
+        })
+      ) {
+        throw new Error("Ticket integration evidence changed. Preserve the worktrees.");
+      }
+      async function assertTicketTips() {
+        const tips = await git.branchTips(ticketBranches.values());
+        for (const [number, ticketBranch] of ticketBranches) {
+          const tip = tips.get(ticketBranch);
+          if (!tip || tip === progress.tips.get(number)) continue;
+          const verified = progress.integrated.get(number);
+          if (!verified || !(await git.ancestor(tip, verified.candidate))) {
+            throw new Error(`Ticket branch ${ticketBranch} has unmerged changes. Preserve the worktrees.`);
+          }
+        }
+      }
+      const [remoteBase, remoteHead] = await remoteTips(invocation.branch, branch);
+      if (remoteBase !== invocationBase) {
         throw new Error(`Remote invocation branch ${invocation.branch} moved. Synchronize it before continuing.`);
       }
-      const remoteHead = await remoteTip(branch);
       let pr = input.existingPr;
       if (pr && remoteHead !== head) throw new Error(`Remote branch ${branch} does not match open PR #${pr.number}.`);
       if (!pr && remoteHead !== head) {
@@ -203,16 +240,19 @@ export function createDelivery(options: {
           workspace.worktreePath,
         );
       }
-      if ((await remoteTip(branch)) !== head) throw new Error(`Remote branch ${branch} changed during delivery.`);
       await command("git", ["fetch", "--no-tags", "--", remote, `refs/heads/${branch}`], cwd);
+      const fetched = await command("git", ["rev-parse", "--verify", "FETCH_HEAD^{commit}"], cwd);
+      if (fetched !== head) throw new Error(`Remote branch ${branch} changed during delivery.`);
       await command("git", ["branch", "--set-upstream-to", `${remote}/${branch}`, branch], workspace.worktreePath);
 
-      await assertCandidate();
+      await assertCheckouts();
+      await assertTicketTips();
       pr ??= await openPr(branch, head);
-      if (!pr) {
+      let prNumber = pr?.number;
+      if (prNumber === undefined) {
         if (!evidence) throw new Error("Final verification evidence is missing.");
         const body = buildBody(graph, integrated, invocation.branch, branch, head, evidence);
-        await withBody(body, (path) =>
+        const output = await withBody(body, (path) =>
           gh([
             "pr",
             "create",
@@ -229,14 +269,14 @@ export function createDelivery(options: {
             ...(options.draft ? ["--draft"] : []),
           ]),
         );
-        pr = await openPr(branch, head);
+        prNumber = createdPrNumber(output);
       }
-      if (!pr) throw new Error("The newly created PR is not visible. Keep the verified candidate for recovery.");
       pr = verifyPr(
-        JSON.parse(await gh(["pr", "view", String(pr.number), "--repo", repo, "--json", fields])),
+        JSON.parse(await read(["pr", "view", String(prNumber), "--repo", repo, "--json", fields])),
         branch,
         head,
       );
+      if (pr.number !== prNumber) throw new Error(`GitHub returned a different PR for #${prNumber}.`);
       // Record the confirmed PR before removing the first label, even when a prior cache was unavailable.
       await createSpecState(cwd, graph.spec.number).saveOpenPr(head, pr.number);
 
@@ -252,15 +292,19 @@ export function createDelivery(options: {
         await recordComment(number, summary);
         if (issue.labels.includes("ready-for-agent")) {
           await gh(["issue", "edit", String(number), "--repo", repo, "--remove-label", "ready-for-agent"]);
-          if ((await tracker.readIssue(number)).labels.includes("ready-for-agent")) {
+          const updated = await tracker.readIssue(number);
+          if (updated.state !== "OPEN") throw new Error(`Issue #${number} closed during delivery.`);
+          if (updated.labels.includes("ready-for-agent")) {
             throw new Error(`Could not confirm removal of the ready label for #${number}.`);
           }
         }
         await project(number, "PR Open", true);
       }
 
-      await assertCandidate();
-      if ((await remoteTip(branch)) !== head) throw new Error(`Remote branch ${branch} changed before cleanup.`);
+      const [beforeCleanup] = await remoteTips(branch);
+      if (beforeCleanup !== head) throw new Error(`Remote branch ${branch} changed before cleanup.`);
+      await assertCheckouts();
+      await assertTicketTips();
       for (const [number, value] of integrated) {
         signal?.throwIfAborted();
         const ticketBranch = ticketBranches.get(number);

@@ -104,6 +104,29 @@ async function createFixture(root: string, numbers: number[]) {
       assignees: (assignees.get(number) ?? []).map((login) => ({ login })),
     };
   }
+  function connection<T>(nodes: T[]) {
+    return { nodes, pageInfo: { hasNextPage: false, endCursor: null } };
+  }
+  function issueReference(snapshot: ReturnType<typeof issue>) {
+    return {
+      number: snapshot.number,
+      state: snapshot.state.toUpperCase(),
+      repository: { nameWithOwner: snapshot.repository_url.replace("https://api.github.com/repos/", "") },
+    };
+  }
+  function graphIssue(number: number) {
+    const snapshot = issue(number);
+    return {
+      ...issueReference(snapshot),
+      title: snapshot.title,
+      body: snapshot.body,
+      labels: connection(snapshot.labels),
+      assignees: connection(snapshot.assignees),
+      blockedBy: connection(
+        (blockers.get(number) ?? []).map((b) => issueReference(issue(b.number, b.state, b.repository_url))),
+      ),
+    };
+  }
   const gh = async (args: string[]) => {
     await beforeGitHub(args);
     const [operation, action] = args;
@@ -111,6 +134,19 @@ async function createFixture(root: string, numbers: number[]) {
       if (action === "user") return JSON.stringify({ login: actor });
       if (action === "graphql") {
         const number = Number(args.find((arg) => arg.startsWith("number="))?.slice(7));
+        if (args.some((arg) => arg.startsWith("query=") && arg.includes("query SpecGraph("))) {
+          const parent = graphIssue(number);
+          return JSON.stringify({
+            data: {
+              repository: {
+                issue: {
+                  ...parent,
+                  subIssues: connection((specs.get(number)?.numbers ?? []).map((n) => ({ ...graphIssue(n), parent }))),
+                },
+              },
+            },
+          });
+        }
         if (args.includes("fieldName=Delivery state")) {
           return JSON.stringify({
             data: {
@@ -144,17 +180,6 @@ async function createFixture(root: string, numbers: number[]) {
           .join("\n");
       }
       const number = Number(path?.split("/")[4]);
-      if (path?.endsWith("/dependencies/blocked_by")) {
-        return (blockers.get(number) ?? [])
-          .map((b) => JSON.stringify(issue(b.number, b.state, b.repository_url)))
-          .join("\n");
-      }
-      if (path?.endsWith("/sub_issues"))
-        return (specs.get(number)?.numbers ?? []).map((n) => JSON.stringify(issue(n))).join("\n");
-      if (path?.endsWith("/parent")) {
-        const parent = [...specs].find(([, { numbers }]) => numbers.includes(number))?.[0] ?? 40;
-        return JSON.stringify(issue(parent));
-      }
       if (path?.endsWith("/comments")) {
         return (comments.get(number) ?? []).map((body) => JSON.stringify({ body, user: { login: actor } })).join("\n");
       }
@@ -471,13 +496,85 @@ test("a zero-commit failure pauses delivery and restart resumes the same dirty c
   });
 });
 
+test("publishing verifies one candidate, reads the created PR by identity and skips blocker lookups during handoff", async () => {
+  await withWorkflow(async (fixture) => {
+    const trace = join(fixture.cwd, ".git", "delivery.trace");
+    const traceVariable = "GIT_TRACE2_EVENT";
+    const originalTrace = process.env[traceVariable];
+    const afterCreate: string[][] = [];
+    let repaired = false;
+    let tracing = false;
+    fixture.agent = async ({ name }) => {
+      if (name === "repair-and-verify") repaired = true;
+      return undefined;
+    };
+    fixture.beforeGitHub = async (args) => {
+      if (repaired && !tracing && args[1] === `repos/${repo}/issues/40`) {
+        tracing = true;
+        process.env[traceVariable] = trace;
+      }
+      if (fixture.created) afterCreate.push(args);
+    };
+    let result: Awaited<ReturnType<typeof fixture.execute>>;
+    try {
+      result = await fixture.execute();
+    } finally {
+      if (originalTrace === undefined) delete process.env[traceVariable];
+      else process.env[traceVariable] = originalTrace;
+    }
+    expect(result.delivered).toEqual([40]);
+    expect(afterCreate.filter(([section]) => section === "pr").map((args) => args.slice(0, 3))).toEqual([
+      ["pr", "view", "99"],
+    ]);
+    expect(afterCreate.some(([, endpoint]) => endpoint?.includes("/dependencies/"))).toBe(false);
+    expect(fixture.labels.size).toBe(0);
+
+    const traceContents = await readFile(trace, "utf8");
+    const commands: string[][] = traceContents
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line))
+      .filter(({ event }) => event === "start")
+      .map(({ argv }) => argv);
+    expect(commands.filter((argv) => argv.includes("--first-parent") && argv.includes("--merges"))).toHaveLength(1);
+    // Count both delivery checks and the test double's lookup of the remote SHA for the created PR.
+    expect(commands.filter((argv) => argv.includes("ls-remote"))).toHaveLength(3);
+    const upstream = await fixture.git("rev-parse", "--symbolic-full-name", `${specBranch}@{upstream}`);
+    expect(upstream).toBe(`refs/remotes/origin/${specBranch}`);
+  });
+});
+
+test("a ticket advancing during handoff pauses cleanup before removing any worktree", async () => {
+  await withWorkflow(
+    async (fixture) => {
+      fixture.beforeGitHub = async ([section, action, number]) => {
+        if (section === "issue" && action === "edit" && number === "42") {
+          await commit(fixture.checkout(ticketBranch(41)), "late.txt", "work after verification");
+        }
+      };
+      const result = await fixture.execute();
+      expect(result.incompleteSpecs).toEqual([40]);
+      const trees = await fixture.git("worktree", "list", "--porcelain");
+      expect(trees).toContain(fixture.checkout(ticketBranch(41)));
+      expect(trees).toContain(fixture.checkout(ticketBranch(42)));
+      expect(trees).toContain(fixture.checkout(specBranch));
+    },
+    [41, 42],
+  );
+});
+
 test("an interrupted PR creation resumes from the exact verified SHA", async () => {
   await withWorkflow(async (fixture) => {
+    let attempts = 0;
     fixture.beforeGitHub = async ([section, action]) => {
-      if (section === "pr" && action === "create") throw new Error("network unavailable");
+      if (section === "pr" && action === "create") {
+        attempts++;
+        throw new Error("Post https://api.github.com/graphql: EOF");
+      }
     };
     const first = await fixture.execute();
     expect(first.incompleteSpecs).toEqual([40]);
+    expect(attempts).toBe(1);
     const pushed = await fixture.remoteHead();
     expect(pushed).toBe(await fixture.git("rev-parse", specBranch));
     expect(fixture.created).toBe(0);

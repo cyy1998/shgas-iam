@@ -1,4 +1,4 @@
-import { command } from "./command.ts";
+import { command, retryGhRead } from "./command.ts";
 import { validateRepository } from "./config.ts";
 
 export type RunGh = (args: string[]) => Promise<string>;
@@ -26,22 +26,78 @@ type GitHubIssue = {
   pull_request?: unknown;
 };
 
-function reference(issue: GitHubIssue): IssueReference {
-  const repo = /^https:\/\/api\.github\.com\/repos\/(.+)$/.exec(issue.repository_url)?.[1];
-  if (
-    !repo ||
-    !Number.isSafeInteger(issue.number) ||
-    issue.number < 1 ||
-    (issue.state !== "open" && issue.state !== "closed") ||
-    issue.pull_request
-  ) {
+type Page<T> = { nodes: T[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } };
+type GraphReference = { number: number; state: IssueState; repository: { nameWithOwner: string } };
+type GraphIssue = GraphReference & {
+  title: string;
+  body: string;
+  labels: Page<{ name: string }>;
+  assignees: Page<{ login: string }>;
+  blockedBy: Page<GraphReference>;
+};
+type GraphTicket = GraphIssue & { parent: GraphReference | null };
+type GraphSpec = GraphIssue & { subIssues: Page<GraphTicket> };
+
+const referenceFragment = `
+  fragment IssueReference on Issue { number state repository { nameWithOwner } }
+`;
+const pageInfo = "pageInfo { hasNextPage endCursor }";
+const issueConnections = {
+  labels: "name",
+  assignees: "login",
+  blockedBy: "...IssueReference",
+};
+type IssueConnection = keyof typeof issueConnections;
+const connectionFields = Object.keys(issueConnections) as IssueConnection[];
+
+function connectionSelection(field: IssueConnection, after = "") {
+  return `${field}(first: 100${after}) { nodes { ${issueConnections[field]} } ${pageInfo} }`;
+}
+
+const specGraphQuery = `
+  query SpecGraph($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+    repository(owner: $owner, name: $name) {
+      issue(number: $number) {
+        ...IssueDetails
+        subIssues(first: 25, after: $cursor) {
+          nodes { ...IssueDetails parent { ...IssueReference } }
+          ${pageInfo}
+        }
+      }
+    }
+  }
+  fragment IssueDetails on Issue {
+    ...IssueReference
+    title
+    body
+    ${connectionFields.map((field) => connectionSelection(field)).join("\n")}
+  }
+  ${referenceFragment}
+`;
+
+function reference(repo: string | undefined, number: number, state: IssueState): IssueReference {
+  if (!repo || !Number.isSafeInteger(number) || number < 1 || (state !== "OPEN" && state !== "CLOSED")) {
     throw new Error("GitHub returned an invalid native issue relationship.");
   }
-  return {
-    repo: validateRepository(repo).toLowerCase(),
-    number: issue.number,
-    state: issue.state === "open" ? "OPEN" : "CLOSED",
-  };
+  return { repo: validateRepository(repo).toLowerCase(), number, state };
+}
+
+function graphReference(issue: GraphReference | null): IssueReference {
+  if (!issue?.repository) throw new Error("GitHub returned an invalid native issue relationship.");
+  return reference(issue.repository.nameWithOwner, issue.number, issue.state);
+}
+
+function nextCursor(page: Page<unknown>, seen: Set<string>): string | undefined {
+  if (!Array.isArray(page?.nodes) || typeof page.pageInfo?.hasNextPage !== "boolean") {
+    throw new Error("GitHub returned an invalid graph connection.");
+  }
+  if (!page.pageInfo.hasNextPage) return;
+  const cursor = page.pageInfo.endCursor;
+  if (typeof cursor !== "string" || !cursor || seen.has(cursor)) {
+    throw new Error("GitHub returned an invalid or repeated graph cursor.");
+  }
+  seen.add(cursor);
+  return cursor;
 }
 
 function hasType(issue: TrackedIssue, type: "spec" | "ticket") {
@@ -58,17 +114,32 @@ export function createGitHubIssueTracker(
 ) {
   const repo = validateRepository(options.repo).toLowerCase();
   const issuesPath = `repos/${repo}/issues`;
-  const get = async (path: string): Promise<GitHubIssue> => JSON.parse(await runGh(["api", path]));
+  const [owner, name] = repo.split("/");
+  const read = (args: string[]) => retryGhRead(() => runGh(args));
+
+  async function graphql<T>(query: string, args: string[]): Promise<T> {
+    const result: { data?: { repository?: T }; errors?: unknown[] } = JSON.parse(
+      await read(["api", "graphql", "-f", `query=${query}`, "-f", `owner=${owner}`, "-f", `name=${name}`, ...args]),
+    );
+    if (result.errors?.length || !result.data?.repository) {
+      throw new Error("GitHub returned an incomplete GraphQL issue graph.");
+    }
+    return result.data.repository;
+  }
   async function pages(path: string): Promise<GitHubIssue[]> {
     // gh applies the jq filter to each page. Each issue is a single JSON line, including multiline bodies.
-    const output = await runGh(["api", path, "--paginate", "--jq", ".[] | @json"]);
+    const output = await read(["api", path, "--paginate", "--jq", ".[] | @json"]);
     return output
       .split("\n")
       .filter(Boolean)
       .map((line) => JSON.parse(line));
   }
   function details(issue: GitHubIssue): Omit<TrackedIssue, "blockers"> {
-    const ref = reference(issue);
+    const repository = /^https:\/\/api\.github\.com\/repos\/(.+)$/.exec(issue.repository_url)?.[1];
+    if (issue.pull_request || (issue.state !== "open" && issue.state !== "closed")) {
+      throw new Error("GitHub returned an invalid native issue relationship.");
+    }
+    const ref = reference(repository, issue.number, issue.state === "open" ? "OPEN" : "CLOSED");
     if (
       ref.repo !== repo ||
       typeof issue.title !== "string" ||
@@ -88,35 +159,101 @@ export function createGitHubIssueTracker(
       assignees: issue.assignees.map(({ login }) => login),
     };
   }
-  async function hydrate(issue: GitHubIssue): Promise<TrackedIssue> {
-    const snapshot = details(issue);
-    const blockers = await pages(`${issuesPath}/${snapshot.number}/dependencies/blocked_by?per_page=100`);
-    return { ...snapshot, blockers: blockers.map(reference) };
-  }
   async function readIssue(number: number) {
-    const issue = await get(`${issuesPath}/${number}`);
+    const issue: GitHubIssue = JSON.parse(await read(["api", `${issuesPath}/${number}`]));
     if (issue.number !== number) throw new Error(`GitHub returned a different issue for #${number}.`);
-    return hydrate(issue);
+    return details(issue);
   }
-  async function loadSpecGraph(spec: TrackedIssue): Promise<SpecGraph> {
-    if (spec.repo !== repo) throw new Error("The Spec belongs to a different repository.");
-    const children = (await pages(`${issuesPath}/${spec.number}/sub_issues?per_page=100`)).map(reference);
-    const numbers = new Set<number>();
-    for (const child of children) {
-      if (child.repo !== repo || child.number === spec.number || numbers.has(child.number)) {
-        throw new Error(`Spec #${spec.number} has an invalid or duplicate child relationship.`);
+
+  async function loadSpecGraph(number: number): Promise<SpecGraph> {
+    type Continuation = {
+      expected: IssueReference;
+      field: IssueConnection;
+      cursor: string;
+      append: (issue: GraphIssue) => void;
+    };
+    const pending: Continuation[] = [];
+    function track(issue: GraphIssue): TrackedIssue {
+      const ref = graphReference(issue);
+      if (typeof issue.title !== "string" || typeof issue.body !== "string") {
+        throw new Error("GitHub returned invalid issue details.");
       }
-      numbers.add(child.number);
+      function collect<K extends IssueConnection, T>(field: K, parse: (page: GraphIssue[K]) => T[]): T[] {
+        const values: T[] = [];
+        const seen = new Set<string>();
+        function append(current: GraphIssue) {
+          const page = current[field];
+          const cursor = nextCursor(page, seen);
+          values.push(...parse(page));
+          if (cursor) pending.push({ expected: ref, field, cursor, append });
+        }
+        append(issue);
+        return values;
+      }
+      function text(value: string) {
+        if (typeof value !== "string") throw new Error("GitHub returned invalid issue details.");
+        return value;
+      }
+      return {
+        ...ref,
+        title: issue.title,
+        body: issue.body,
+        labels: collect("labels", (page) => page.nodes.map(({ name }) => text(name))),
+        assignees: collect("assignees", (page) => page.nodes.map(({ login }) => text(login))),
+        blockers: collect("blockedBy", (page) => page.nodes.map(graphReference)),
+      };
     }
-    const tickets = await Promise.all(
-      children.map(async (child) => {
-        const [ticket, parent] = await Promise.all([
-          readIssue(child.number),
-          get(`${issuesPath}/${child.number}/parent`),
-        ]);
-        return { ...ticket, parent: reference(parent) };
-      }),
-    );
+
+    const tickets: TicketIssue[] = [];
+    const numbers = new Set<number>();
+    const seen = new Set<string>();
+    let spec: TrackedIssue | undefined;
+    let cursor: string | undefined;
+    do {
+      const { issue } = await graphql<{ issue: GraphSpec | null }>(specGraphQuery, [
+        "-F",
+        `number=${number}`,
+        ...(cursor ? ["-f", `cursor=${cursor}`] : []),
+      ]);
+      const ref = graphReference(issue);
+      if (!issue || ref.repo !== repo || ref.number !== number) {
+        throw new Error(`GitHub returned a different issue for #${number}.`);
+      }
+      spec ??= track(issue);
+      cursor = nextCursor(issue.subIssues, seen);
+      for (const child of issue.subIssues.nodes) {
+        const ticket = track(child);
+        if (ticket.repo !== repo || ticket.number === number || numbers.has(ticket.number)) {
+          throw new Error(`Spec #${number} has an invalid or duplicate child relationship.`);
+        }
+        numbers.add(ticket.number);
+        tickets.push({ ...ticket, parent: graphReference(child.parent) });
+      }
+    } while (cursor);
+
+    // Nested connections have independent cursors. Batch their continuation pages in the same request.
+    while (pending.length) {
+      const batch = pending.splice(0, 25);
+      const variables = batch.map((_, index) => `$cursor${index}: String!`).join(", ");
+      const selections = batch.map(
+        ({ expected, field }, index) =>
+          `page${index}: issue(number: ${expected.number}) { ...IssueReference ${connectionSelection(field, `, after: $cursor${index}`)} }`,
+      );
+      const pages = await graphql<Record<string, GraphIssue>>(
+        `query SpecGraphConnections($owner: String!, $name: String!, ${variables}) {
+          repository(owner: $owner, name: $name) { ${selections.join("\n")} }
+        } ${referenceFragment}`,
+        batch.flatMap(({ cursor }, index) => ["-f", `cursor${index}=${cursor}`]),
+      );
+      for (const [index, { expected, append }] of batch.entries()) {
+        const issue = pages[`page${index}`];
+        const actual = graphReference(issue ?? null);
+        if (!issue || actual.number !== expected.number || actual.repo !== expected.repo) {
+          throw new Error(`GitHub returned a different issue for #${expected.number}.`);
+        }
+        append(issue);
+      }
+    }
     return { spec, tickets };
   }
   return {

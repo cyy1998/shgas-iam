@@ -101,6 +101,9 @@ test("opening worktrees rejects external registrations and preserves unregistere
     await command("git", ["worktree", "add", "-b", "sandcastle/issue-41", external, base], cwd);
     const existing = await workspace.open("sandcastle/issue-41", base).catch((reason: unknown) => reason);
     expect(existing).toBeInstanceOf(Error);
+    const blockedCleanup = await workspace.closeTicket("sandcastle/issue-41", base).catch((reason: unknown) => reason);
+    expect(blockedCleanup).toBeInstanceOf(Error);
+    expect(await workspace.branchTip("sandcastle/issue-41")).toBe(base);
 
     const orphan = join(cwd, ".sandcastle", "worktrees", "unknown");
     await mkdir(orphan);
@@ -113,6 +116,48 @@ test("opening worktrees rejects external registrations and preserves unregistere
     await workspace.close(spec, base);
     const tip = await command("git", ["rev-parse", `refs/heads/${spec.branch}`], cwd);
     expect(tip).toBe(base);
+  });
+});
+
+test("worktree open adds one host listing and cleanup removes a ticket directly", async () => {
+  await withRepository(async (cwd, base) => {
+    const branch = "sandcastle/issue-41";
+    const workspace = createGitWorkspace(cwd);
+    await workspace.open("sandcastle/spec-40", base);
+    const trace = join(cwd, ".git", "worktree.trace");
+    const traceVariable = "GIT_TRACE2_EVENT";
+    const originalTrace = process.env[traceVariable];
+    process.env[traceVariable] = trace;
+    let opening: string;
+    let cleanup: string;
+    try {
+      const ticket = await workspace.open(branch, base);
+      const candidate = await commit(ticket.worktreePath, ".gitignore", "node_modules/\n");
+      const dependencies = join(ticket.worktreePath, "node_modules");
+      await mkdir(dependencies);
+      await writeFile(join(dependencies, "fixture"), "generated dependency");
+      opening = await readFile(trace, "utf8");
+      await writeFile(trace, "");
+      await workspace.closeTicket(branch, candidate);
+      cleanup = await readFile(trace, "utf8");
+    } finally {
+      if (originalTrace === undefined) delete process.env[traceVariable];
+      else process.env[traceVariable] = originalTrace;
+    }
+
+    function worktreeCommands(events: string, action: string) {
+      return events
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line))
+        .filter(({ event, argv }) => event === "start" && argv.includes("worktree") && argv.includes(action));
+    }
+    // The native SDK lists once while pruning and once while creating an explicit branch.
+    expect(worktreeCommands(opening, "list")).toHaveLength(3);
+    expect(worktreeCommands(cleanup, "list")).toHaveLength(1);
+    expect(worktreeCommands(cleanup, "remove")).toHaveLength(1);
+    const tip = await workspace.branchTip(branch);
+    expect(tip).toBeUndefined();
   });
 });
 

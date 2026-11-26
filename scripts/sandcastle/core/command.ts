@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { setTimeout as delay } from "node:timers/promises";
 import { promisify } from "node:util";
 
 const exec = promisify(execFile);
@@ -16,4 +17,32 @@ export async function command(
 
 export function hasCode(error: unknown, code: string | number): boolean {
   return error instanceof Error && "code" in error && error.code === code;
+}
+
+function isTransientGhFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const stderr = "stderr" in error && typeof error.stderr === "string" ? error.stderr.trim() : "";
+  const message = stderr || error.message;
+  if (/\bHTTP(?:\/\d(?:\.\d)?)? 4\d\d\b|validation failed|permission denied|not authorized/i.test(message)) {
+    return false;
+  }
+  return (
+    hasCode(error, "ECONNRESET") ||
+    /\bHTTP(?:\/\d(?:\.\d)?)? 50[234]\b|\b502 Bad Gateway\b|\b503 Service Unavailable\b|\b504 Gateway Timeout\b/i.test(
+      message,
+    ) ||
+    /connection reset(?: by peer)?\b/i.test(message) ||
+    /(?:^|:\s+)(?:unexpected )?EOF\s*$/m.test(message)
+  );
+}
+
+export async function retryGhRead<T>(read: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await read();
+    } catch (error) {
+      if (attempt === 2 || !isTransientGhFailure(error)) throw error;
+      await delay(100 * 2 ** attempt);
+    }
+  }
 }

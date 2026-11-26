@@ -96,10 +96,20 @@ export function createGitWorkspace(cwd: string) {
       return false;
     }
   }
+  async function branchTips(branches: Iterable<string>) {
+    const prefix = "refs/heads/";
+    const refs = new Set([...branches].map((branch) => prefix + branch));
+    const tips = new Map<string, string>();
+    if (!refs.size) return tips;
+    const output = await git("for-each-ref", "--format=%(refname) %(objectname)", ...refs);
+    for (const line of output.split("\n")) {
+      const [ref, sha] = line.split(" ");
+      if (ref && sha && refs.has(ref)) tips.set(ref.slice(prefix.length), sha);
+    }
+    return tips;
+  }
   async function branchTip(branch: string) {
-    const ref = `refs/heads/${branch}`;
-    const lines = (await git("for-each-ref", "--format=%(refname) %(objectname)", ref)).split("\n");
-    return lines.find((line) => line.startsWith(`${ref} `))?.slice(ref.length + 1);
+    return (await branchTips([branch])).get(branch);
   }
   async function observe(checkout: Checkout, allowDirty = false) {
     if ((await at(checkout, "symbolic-ref", "HEAD")) !== `refs/heads/${checkout.branch}`) {
@@ -127,10 +137,48 @@ export function createGitWorkspace(cwd: string) {
     if (!branch || branch.startsWith("-")) throw new Error("Invalid local branch name.");
   }
 
+  async function managedWorktrees() {
+    const root = await realpath(cwd);
+    const managed = join(root, ".sandcastle", "worktrees");
+    for (const directory of [dirname(managed), managed]) {
+      if ((await inspectPath(directory))?.isSymbolicLink()) {
+        throw new Error(`Unexpected worktree directory link: ${directory}.`);
+      }
+    }
+    return { root, managed };
+  }
+
+  async function listWorktrees() {
+    return (await git("worktree", "list", "--porcelain", "-z"))
+      .split("\0\0")
+      .filter(Boolean)
+      .map((entry) => {
+        const [path, ...fields] = entry.split("\0");
+        return {
+          path: path?.slice("worktree ".length) ?? "",
+          ref: fields.find((field) => field.startsWith("branch "))?.slice("branch ".length),
+          unavailable: fields.some((field) => /^(?:locked|prunable)(?: |$)/.test(field)),
+          prunable: fields.some((field) => /^prunable(?: |$)/.test(field)),
+        };
+      });
+  }
+
+  function managedCheckout(entries: Awaited<ReturnType<typeof listWorktrees>>, managed: string, branch: string) {
+    const matches = entries.filter(({ ref }) => ref === `refs/heads/${branch}`);
+    const checkout = matches[0];
+    if (checkout && (matches.length !== 1 || dirname(checkout.path) !== managed || checkout.unavailable)) {
+      throw new Error(
+        `Branch ${branch} is checked out outside an available managed worktree. Preserve its registration.`,
+      );
+    }
+    return checkout;
+  }
+
   return {
     observe,
     ancestor,
     branchTip,
+    branchTips,
     assertBranch,
     async synchronizeInvocation(branch: string, remote: string): Promise<string> {
       await assertBranch(branch);
@@ -148,48 +196,26 @@ export function createGitWorkspace(cwd: string) {
     open(branch: string, base: string, options: { allowDirty?: boolean } = {}): Promise<Worktree> {
       return serial(async () => {
         await assertBranch(branch);
-        const root = await realpath(cwd);
-        const managed = join(root, ".sandcastle", "worktrees");
+        const { root, managed } = await managedWorktrees();
         const expected = join(managed, branch.replaceAll("/", "-"));
-        const entries = (await git("worktree", "list", "--porcelain", "-z"))
-          .split("\0\0")
-          .filter(Boolean)
-          .map((entry) => entry.split("\0"));
-        const registered = entries.filter((entry) => entry.includes(`branch refs/heads/${branch}`));
-        const registration = registered[0];
-        const path = registration?.[0]?.slice("worktree ".length);
-        const isUnavailable = (entry: string[]) => entry.some((line) => /^(?:locked|prunable)(?: |$)/.test(line));
-        if (
-          registration &&
-          (registered.length !== 1 || !path || dirname(path) !== managed || isUnavailable(registration))
-        ) {
-          throw new Error(
-            `Branch ${branch} is checked out outside an available managed worktree. Preserve its registration.`,
-          );
-        }
-        if (entries.some((entry) => entry[0] === `worktree ${expected}` && entry !== registration)) {
+        const entries = await listWorktrees();
+        const registration = managedCheckout(entries, managed, branch);
+        const path = registration?.path;
+        if (entries.some((entry) => entry.path === expected && entry !== registration)) {
           throw new Error(`Worktree path ${expected} is registered to a different checkout.`);
         }
-        // The SDK prunes unregistered directories. Leave unknown contents for the operator to inspect.
-        for (const directory of [dirname(managed), managed]) {
-          if ((await inspectPath(directory))?.isSymbolicLink())
-            throw new Error(`Unexpected worktree directory link: ${directory}.`);
-        }
+        // The SDK prunes unregistered directories using line-delimited Git output.
         if (await inspectPath(managed)) {
-          const sdkPaths = new Set(
-            (await git("worktree", "list", "--porcelain"))
-              .split("\n")
-              .filter((line) => line.startsWith("worktree "))
-              .map((line) => line.slice(9).trim()),
-          );
-          const stale = entries.find(
-            (entry) =>
-              dirname(entry[0]?.slice(9) ?? "") === managed && entry.some((line) => /^prunable(?: |$)/.test(line)),
-          );
-          if (stale) throw new Error(`Stale worktree registration requires inspection: ${stale[0]}.`);
+          const registeredPaths = new Set(entries.map((entry) => entry.path));
+          const stale = entries.find((entry) => dirname(entry.path) === managed && entry.prunable);
+          if (stale) throw new Error(`Stale worktree registration requires inspection: ${stale.path}.`);
           for (const entry of await readdir(managed, { withFileTypes: true })) {
             const child = join(managed, entry.name);
-            if (entry.isSymbolicLink() || ((entry.isDirectory() || child === expected) && !sdkPaths.has(child))) {
+            if (
+              entry.isSymbolicLink() ||
+              ((entry.isDirectory() || child === expected) &&
+                (!registeredPaths.has(child) || child.includes("\n") || child !== child.trimEnd()))
+            ) {
               throw new Error(
                 `Unrecognized worktree path ${child}. Preserve it before creating or reusing a worktree.`,
               );
@@ -221,22 +247,27 @@ export function createGitWorkspace(cwd: string) {
         }
       });
     },
-    async closeTicket(branch: string, candidate: string) {
-      const tip = await branchTip(branch);
-      if (!tip) return;
-      if (!(await ancestor(tip, candidate))) throw new Error(`Ticket branch ${branch} has unmerged changes.`);
-      const registered = (await git("worktree", "list", "--porcelain", "-z"))
-        .split("\0\0")
-        .filter((entry) => entry.split("\0").includes(`branch refs/heads/${branch}`));
-      if (registered.length) {
-        const worktree = await this.open(branch, tip);
-        if ((await observe(worktree)) !== tip) throw new Error(`Ticket branch ${branch} moved before cleanup.`);
-        await this.close(worktree, tip);
-      } else {
-        const path = join(await realpath(cwd), ".sandcastle", "worktrees", branch.replaceAll("/", "-"));
-        if (await inspectPath(path)) throw new Error(`Unexpected unregistered worktree at ${path}.`);
-      }
-      await git("update-ref", "-d", `refs/heads/${branch}`, tip);
+    closeTicket(branch: string, candidate: string) {
+      return serial(async () => {
+        await assertBranch(branch);
+        const tip = await branchTip(branch);
+        if (!tip) return;
+        if (!(await ancestor(tip, candidate))) throw new Error(`Ticket branch ${branch} has unmerged changes.`);
+        const { managed } = await managedWorktrees();
+        const registration = managedCheckout(await listWorktrees(), managed, branch);
+        if (registration) {
+          const path = registration.path;
+          if ((await inspectPath(path))?.isSymbolicLink() || (await observe({ branch, worktreePath: path })) !== tip) {
+            throw new Error(`Ticket worktree ${branch} changed before cleanup.`);
+          }
+          await git("worktree", "remove", "--", path);
+          if (await inspectPath(path)) throw new Error(`Ticket worktree ${branch} could not be removed.`);
+        } else {
+          const path = join(managed, branch.replaceAll("/", "-"));
+          if (await inspectPath(path)) throw new Error(`Unexpected unregistered worktree at ${path}.`);
+        }
+        await git("update-ref", "-d", `refs/heads/${branch}`, tip);
+      });
     },
     integrate(
       spec: Checkout,
@@ -306,9 +337,10 @@ export function createGitWorkspace(cwd: string) {
         `${base}..${head}`,
       );
       const integrated = new Map<number, IntegrationEvidence>();
+      const branchHeads = await branchTips(tickets.values());
       const tips = new Map<number, string>();
       for (const [number, branch] of tickets) {
-        const tip = await branchTip(branch);
+        const tip = branchHeads.get(branch);
         if (tip) tips.set(number, tip);
       }
       for (const entry of history.split("\0")) {
@@ -337,7 +369,7 @@ export function createGitWorkspace(cwd: string) {
             : undefined;
         integrated.set(number, { mergeSha, candidate, handoff });
       }
-      return { integrated, resumable: new Set([...tips.keys()].filter((number) => !integrated.has(number))) };
+      return { integrated, tips, resumable: new Set([...tips.keys()].filter((number) => !integrated.has(number))) };
     },
   };
 }

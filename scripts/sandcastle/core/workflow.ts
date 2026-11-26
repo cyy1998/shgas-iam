@@ -1,6 +1,6 @@
 import { readFile, realpath } from "node:fs/promises";
 import type { Worktree } from "@ai-hero/sandcastle";
-import { command } from "./command.ts";
+import { command, retryGhRead } from "./command.ts";
 import {
   defineSandcastleConfig,
   type ExecutionPhase,
@@ -45,7 +45,7 @@ async function prepare(options: WorkflowOptions, dependencies: WorkflowDependenc
   const invocationBase = await git.synchronizeInvocation(branch, remote);
   const gh: RunGh =
     dependencies.gh ?? ((args) => command("gh", args, cwd, { ...process.env, GH_PROMPT_DISABLED: "1" }));
-  const actor: unknown = JSON.parse(await gh(["api", "user"])).login;
+  const actor: unknown = JSON.parse(await retryGhRead(() => gh(["api", "user"]))).login;
   if (typeof actor !== "string" || !actor) throw new Error("GitHub did not identify the authenticated user.");
   await checkExecutors(cwd, config);
   const project: ReportProjectStage =
@@ -155,7 +155,7 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
     }
 
     async function refreshGraph(spec: Spec) {
-      const graph = await tracker.loadSpecGraph(await tracker.readIssue(spec.number));
+      const graph = await tracker.loadSpecGraph(spec.number);
       if (
         branchFor(graph.spec) !== spec.branch ||
         graph.tickets.length !== spec.branches.size ||
@@ -405,9 +405,8 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
       for (const number of new Set([...ready, ...(await pendingDeliveries(cwd))])) {
         if (result.attemptedSpecs.includes(number) || result.incompleteSpecs.includes(number)) continue;
         try {
-          const issue = await tracker.readIssue(number);
-          assertBranchOwner(number, branchFor(issue), declarations);
-          const graph = await tracker.loadSpecGraph(issue);
+          const graph = await tracker.loadSpecGraph(number);
+          assertBranchOwner(number, branchFor(graph.spec), declarations);
           specs.push(await describeGraph(graph, !ready.has(number)));
         } catch (error) {
           signal?.throwIfAborted();
