@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { command } from "../command.ts";
 import { createGitWorkspace, specBranchName } from "../git.ts";
 import { createSpecState } from "../state.ts";
+import { commit } from "./git-fixture.ts";
 
 async function withRepository(run: (cwd: string, base: string) => Promise<void>) {
   const directory = await mkdtemp(join(tmpdir(), "sandcastle-git-"));
@@ -22,12 +23,13 @@ async function withRepository(run: (cwd: string, base: string) => Promise<void>)
   }
 }
 
-async function commit(cwd: string, file: string, value: string) {
-  await writeFile(join(cwd, file), value);
-  await command("git", ["add", "--", file], cwd);
-  await command("git", ["-c", "core.hooksPath=/dev/null", "commit", "-m", value], cwd);
-  return command("git", ["rev-parse", "HEAD"], cwd);
-}
+test("resolves Chinese and English branch declarations and rejects conflicting declarations", () => {
+  expect(specBranchName(40, "Integration-Branch: `feat/design`")).toBe("feat/design");
+  expect(specBranchName(40, "集成分支：feat/design")).toBe("feat/design");
+  expect(() => specBranchName(40, "集成分支：feat/design\nIntegration-Branch: feat/other")).toThrow(
+    "conflicting integration branches",
+  );
+});
 
 test("the synchronized invocation is verified against a freshly fetched bare remote", async () => {
   await withRepository(async (cwd, base) => {

@@ -48,7 +48,7 @@ export function specBranchName(number: number, body: string, prefix = "sandcastl
   const declared = new Set(
     [
       ...body.matchAll(
-        /^\s*(?:集成分支|功能分支|复用功能\/集成分支|integration branch)\s*[:：]\s*`?([^\s`]+)`?\s*$/gim,
+        /^\s*(?:集成分支|功能分支|复用功能\/集成分支|integration[ -]branch)\s*[:：]\s*`?([^\s`]+)`?\s*$/gim,
       ),
     ].map((entry) => entry[1]),
   );
@@ -60,7 +60,7 @@ export function ticketBranchName(number: number, prefix = "sandcastle"): string 
   return `${prefix}/issue-${number}`;
 }
 
-export type IntegrationEvidence = { candidate: string; mergeSha: string };
+export type IntegrationEvidence = { candidate: string; mergeSha: string; handoff?: string };
 export type IntegrationResult =
   | ({ status: "merged" } & IntegrationEvidence)
   | { status: "conflict" | "no-change"; integrationSha: string };
@@ -238,7 +238,13 @@ export function createGitWorkspace(cwd: string) {
       }
       await git("update-ref", "-d", `refs/heads/${branch}`, tip);
     },
-    integrate(spec: Checkout, ticket: Checkout, number: number, candidate: string): Promise<IntegrationResult> {
+    integrate(
+      spec: Checkout,
+      ticket: Checkout,
+      number: number,
+      candidate: string,
+      handoff?: string,
+    ): Promise<IntegrationResult> {
       return serial(async () => {
         if (!Number.isSafeInteger(number) || number <= 0) throw new Error("Invalid ticket number.");
         const before = await observe(spec);
@@ -253,7 +259,10 @@ export function createGitWorkspace(cwd: string) {
             "--commit",
             "--no-autostash",
             "-m",
-            `Integrate ticket #${number}\n\nSandcastle-Ticket: #${number}`,
+            `Integrate ticket #${number}`,
+            ...(handoff ? ["-m", `Verification handoff\n\n${handoff.replace(/^/gm, "    ")}`] : []),
+            "-m",
+            `Sandcastle-Ticket: #${number}`,
             candidate,
           );
         } catch (error) {
@@ -281,7 +290,7 @@ export function createGitWorkspace(cwd: string) {
         if (parents !== `${before} ${candidate}` || trailer !== `#${number}`) {
           throw new Error(`Git did not record a valid merge for ticket #${number}.`);
         }
-        return { status: "merged", mergeSha, candidate };
+        return { status: "merged", mergeSha, candidate, handoff };
       });
     },
     async inspectTickets(spec: Checkout | string, invocationBase: string, tickets: ReadonlyMap<number, string>) {
@@ -320,7 +329,13 @@ export function createGitWorkspace(cwd: string) {
         if (tip && !(await ancestor(tip, candidate))) continue;
         // A zero-change merge cannot be created by the integration path.
         if (await ancestor(candidate, first)) continue;
-        integrated.set(number, { mergeSha, candidate });
+        const message = await git("show", "-s", "--format=%B", mergeSha);
+        const [, heading, ...paragraphs] = message.split("\n\n");
+        const handoff =
+          heading === "Verification handoff"
+            ? paragraphs.slice(0, -1).join("\n\n").replace(/^ {4}/gm, "").trim() || undefined
+            : undefined;
+        integrated.set(number, { mergeSha, candidate, handoff });
       }
       return { integrated, resumable: new Set([...tips.keys()].filter((number) => !integrated.has(number))) };
     },

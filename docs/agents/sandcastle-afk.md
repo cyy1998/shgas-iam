@@ -32,7 +32,7 @@
 
 AFK 在启动时固定调用分支（如 `main`）并保持本地调用分支**全程只读**。启动和恢复均先 fetch 并校验本地调用分支与远端零偏差。
 每个 Spec 使用独立的集成分支，优先复用正文唯一声明的分支，默认使用 `sandcastle/spec-<N>`。每张 ticket 使用独立分支，默认 `sandcastle/issue-<N>`。
-可在仓库配置中修改 `workflow.branchPrefix`。原生 `createWorktree()` 管理 `.sandcastle/worktrees/` 下的工作树，例如
+同一集成分支被多个 open Spec 声明时暂停涉及的 Spec，其他 Spec 可继续。可在仓库配置中修改 `workflow.branchPrefix`。原生 `createWorktree()` 管理 `.sandcastle/worktrees/` 下的工作树，例如
 `sandcastle-spec-<N>` 和 `sandcastle-issue-<N>`。遇到外部 checkout、锁定或归属不明的路径时停止并保留现场。
 票级实施从当前 Spec 集成内容开始，交接前整合最新集成分支，随后由宿主串行合入。
 容器内的模型会话始终禁止写调用分支、push、创建 PR 或部署。
@@ -67,9 +67,9 @@ review base 与集成 candidate SHA；评审期间工作区和候选保持不变
    重启时复用同一 Spec 与基线的笔记；普通探索失败时告警并继续。
 3. **Implementer**。每票在独立分支、worktree 和全新会话中读取 `AGENTS.md`、ticket、父 Spec 与相关评论，并利用已提供的共享探索笔记定位代码与验证入口。
    认领后按 `tdd` 实施、运行完整受影响范围的聚焦验证并提交。报告完成前将最新集成分支 tip 合入本票分支，引入新提交时重跑失效检查并确认工作区干净。
-   不逐票运行正式双轴评审、独立验收会话或固定全仓静态检查；必需检查失败或未执行时保持未完成并保留分支与工作树。
-4. **Spec 集成与最终验收**。宿主串行执行 `git merge --no-ff`，生成含 `Sandcastle-Ticket: #<N>` trailer 的双亲合并提交。
-   仅遇真实合并冲突时先 `git merge --abort` 并在本票 worktree 启动一次按需冲突解决会话（遵循 `resolving-merge-conflicts` 并重跑受影响验证）。
+   宿主在延后派发前重新读取任务图，核对准入、认领和依赖状态。必需检查失败或未执行时保留票分支与工作树。正式双轴评审和全仓门禁留到 Spec 最终验收。
+4. **Spec 集成与最终验收**。宿主核对候选保留实施基线与续做起点，并将非空验证交接及候选 SHA 写入 ticket 评论、随合并提交保留交接。宿主串行执行 `git merge --no-ff`，生成含 `Sandcastle-Ticket: #<N>` trailer 的双亲合并提交。
+   遇真实合并冲突时先 `git merge --abort` 并在本票 worktree 启动一次按需冲突解决会话（遵循 `resolving-merge-conflicts`，重跑受影响验证并补充交接）。
    Spec 内依赖以票已集成为解锁依据，ticket 保持 open。单票失败后继续独立切片；所有必要票集成后，按上一节执行集中双轴评审、单实施者修复、最终验证与 `$pr` 正文起草。
 
 GitHub Issues 保存需求与任务图，评论记录供人工查阅的交接与审计信息。未完成成果留在原分支与工作树，等候续做。

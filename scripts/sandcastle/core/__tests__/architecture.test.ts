@@ -20,7 +20,7 @@ test("Sandcastle core imports only its own modules, platform builtins and the SD
     );
     await writeFile(
       join(cwd, "scripts/sandcastle/core/nested/allowed.mts"),
-      'export { config } from "../config.ts";\n',
+      'export { config } from "../config.ts";\nvoid import("../config.ts");\n',
     );
     expect(analyzeRepositoryArchitecture(cwd)).toEqual([]);
 
@@ -31,6 +31,7 @@ test("Sandcastle core imports only its own modules, platform builtins and the SD
       "@iam/contracts",
       "../../legacy.ts",
       "../../../sandcastle/core-other/module.ts",
+      "../../../test-resources/managed-resources.mjs",
     ];
     await writeFile(
       join(cwd, file),
@@ -40,6 +41,7 @@ test("Sandcastle core imports only its own modules, platform builtins and the SD
         `import type { Contract } from "${specifiers[2]}";`,
         `import "${specifiers[3]}";`,
         `import "${specifiers[4]}";`,
+        `void import(\`${specifiers[5]}\`);`,
       ].join("\n"),
     );
     const diagnostics = analyzeRepositoryArchitecture(cwd);

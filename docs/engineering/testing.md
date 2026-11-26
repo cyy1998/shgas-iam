@@ -91,7 +91,7 @@ expect(failure).toBeInstanceOf(ExpectedError);
 
 #### 观察范围
 
-永久规则只根据生产源码路径、规范的静态 import/re-export（含类型或值、裸 side-effect import）、供 `consumer-owned-port` 使用的生产 `*.port.ts` 中直接 `Pick<T, ...>` 的未解析基类型名，以及 workspace 依赖闭包和 Dockerfile 字面量 `COPY` 建立。Specifier 按已支持的 alias、相对路径、扩展名和包子路径做词法归一化，裸 side-effect import 按值依赖处理，第三方依赖按包名或其子路径匹配。公共后端的包边界沿生产 workspace 清单检查传递依赖，包含 dependencies、optionalDependencies 和 peerDependencies。符号来源、第三方内部依赖、类型解析、动态加载、控制流和数据流超出守卫范围。[规则与例外](../../scripts/architecture-guard.ts)
+永久规则只根据生产源码路径、规范的静态 import/re-export（含类型或值、裸 side-effect import）、供 `consumer-owned-port` 使用的生产 `*.port.ts` 中直接 `Pick<T, ...>` 的未解析基类型名，Sandcastle 核心的字面量动态导入，以及 workspace 依赖闭包和 Dockerfile 字面量 `COPY` 建立。Specifier 按已支持的 alias、相对路径、扩展名和包子路径做词法归一化，裸 side-effect import 按值依赖处理，第三方依赖按包名或其子路径匹配。公共后端的包边界沿生产 workspace 清单检查传递依赖，包含 dependencies、optionalDependencies 和 peerDependencies。符号来源、第三方内部依赖、类型解析、计算所得的加载路径、控制流和数据流超出守卫范围。[规则与例外](../../scripts/architecture-guard.ts)
 
 #### 永久规则准入与验证
 
@@ -99,7 +99,7 @@ expect(failure).toBeInstanceOf(ExpectedError);
 
 #### Sandcastle 核心依赖边界
 
-`sandcastle-core-dependency-boundary` 检查 `scripts/sandcastle/core/` 生产源码的静态导入与重导出，只允许核心目录内的相对路径、Node 内置模块和 `@ai-hero/sandcastle` 及其子路径。本仓配置和适配器依赖核心，仓库私有工具通过配置和生命周期契约接入。允许与违规的 fixture 由 Sandcastle 常驻集合验证。
+`sandcastle-core-dependency-boundary` 检查 `scripts/sandcastle/core/` 生产源码的静态导入、重导出及字符串字面量 `import()`，只允许核心目录内的相对路径、Node 内置模块和 `@ai-hero/sandcastle` 及其子路径。本仓配置和适配器依赖核心，仓库私有工具通过配置和生命周期契约接入。允许与违规的 fixture 由 Sandcastle 常驻集合验证。
 
 #### Docker 依赖闭包
 

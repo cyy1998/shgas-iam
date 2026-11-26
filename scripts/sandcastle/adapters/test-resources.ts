@@ -17,9 +17,9 @@ export function createTestResourceLifecycle(
   runCommand?: ManagedComposeCommandOptions["runCommand"],
 ): Required<Pick<LifecycleConfig, "beforeExecutor" | "afterExecutor">> {
   return {
-    async beforeExecutor({ cwd, worktreePath }) {
+    async beforeExecutor({ cwd, worktreePath, id }) {
       await mkdir(join(cwd, registryRoot), { recursive: true });
-      const directory = await mkdtemp(join(cwd, registryRoot, "executor-"));
+      const directory = await mkdtemp(join(cwd, registryRoot, `executor-${id}-`));
       const registryDirectory = relative(cwd, directory);
       const registryFile = `${registryDirectory}/registry.jsonl`;
       try {

@@ -3,6 +3,8 @@ import { mkdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import {
   type AgentStreamEvent,
+  type BindMountCreateOptions,
+  type BindMountSandboxHandle,
   Output,
   type RunOptions,
   type RunResult,
@@ -18,7 +20,6 @@ import type {
   ResolvedSandcastleConfig,
   Role,
   SandboxInputs,
-  SandboxMount,
 } from "./config.ts";
 import { complete } from "./prompts/index.ts";
 
@@ -27,6 +28,12 @@ export type RunAgent = (options: RunOptions) => Promise<AgentResult>;
 
 export function completed(result: RunResult): boolean {
   return result.completionSignal === complete && hasCompletion(result.stdout);
+}
+
+export function completionReport(result: RunResult): string | undefined {
+  if (!completed(result)) return;
+  const report = result.stdout.trimEnd().slice(0, -complete.length).trim();
+  return report || undefined;
 }
 
 function hasCompletion(text: string): boolean {
@@ -63,19 +70,27 @@ async function dockerSocket() {
   return info.gid;
 }
 
-function readOnlySandbox(sandbox: ReturnType<typeof docker>) {
-  // Docker uses the bind-mount provider creation contract; 0.14 omits create from its returned type.
+function protectSandbox(sandbox: ReturnType<typeof docker>, readOnly: boolean, openSandboxes: Set<string>) {
+  // Docker 0.14 omits create from its return type. The SDK swallows errors from handle.close().
   if (!("create" in sandbox) || typeof sandbox.create !== "function")
-    throw new Error("Read-only execution requires the native bind-mount sandbox.");
+    throw new Error("Expected the native bind-mount sandbox.");
   const create = sandbox.create.bind(sandbox);
   return {
     ...sandbox,
-    create: (options: {
-      worktreePath: string;
-      hostRepoPath: string;
-      env: Record<string, string>;
-      mounts: SandboxMount[];
-    }) => create({ ...options, mounts: options.mounts.map((mount) => ({ ...mount, readonly: true })) }),
+    async create(options: BindMountCreateOptions): Promise<BindMountSandboxHandle> {
+      const handle: BindMountSandboxHandle = await create(
+        readOnly ? { ...options, mounts: options.mounts.map((mount) => ({ ...mount, readonly: true })) } : options,
+      );
+      const id = handle.sandboxId ?? "unknown";
+      openSandboxes.add(id);
+      return {
+        ...handle,
+        async close() {
+          await handle.close();
+          openSandboxes.delete(id);
+        },
+      };
+    },
   };
 }
 
@@ -104,8 +119,8 @@ export function createExecutor(
     const useDocker = !readOnly && sandbox.dockerAccess;
     const auth: PreparedAuth[] = [];
     let lifecycleInputs: SandboxInputs | undefined;
-    let beforeCalled = false;
-    let executionStarted = false;
+    let executionFinished = false;
+    const openSandboxes = new Set<string>();
     const errors: unknown[] = [];
     let value: T | undefined;
     try {
@@ -115,11 +130,11 @@ export function createExecutor(
         }
       }
       if (!readOnly && sandbox.dockerAuth) auth.push(await dockerRegistryAuth(sandbox.dockerAuth).prepare(cwd));
-      if (lifecycle?.beforeExecutor) {
-        beforeCalled = true;
+      if (!readOnly && lifecycle?.beforeExecutor) {
         lifecycleInputs = await lifecycle.beforeExecutor(context);
       }
-      const inputs = [sandbox, ...auth, lifecycleInputs];
+      const shared = readOnly ? sandbox.mounts?.map((mount) => ({ ...mount, readonly: true })) : sandbox.mounts;
+      const inputs = [{ mounts: shared, env: sandbox.env }, ...auth, lifecycleInputs];
       const mounts = inputs.flatMap((entry) => entry?.mounts ?? []);
       const env = Object.assign({}, ...inputs.map((entry) => entry?.env));
       const groups = useDocker ? [await dockerSocket()] : undefined;
@@ -150,12 +165,11 @@ export function createExecutor(
         : undefined;
       const logs = join(cwd, ".sandcastle", "logs");
       await mkdir(logs, { recursive: true, mode: 0o700 });
-      executionStarted = true;
       value = await operation(
         {
           cwd: input.worktreePath,
           agent: input.role.provider,
-          sandbox: readOnly ? readOnlySandbox(provider) : provider,
+          sandbox: protectSandbox(provider, readOnly, openSandboxes),
           branchStrategy: { type: "head" },
           name: name ?? input.phase,
           hooks,
@@ -166,10 +180,14 @@ export function createExecutor(
         },
         runAgent,
       );
+      executionFinished = true;
     } catch (error) {
       errors.push(error);
     } finally {
-      if (beforeCalled || executionStarted) {
+      if (openSandboxes.size) {
+        errors.push(new Error(`Sandbox shutdown unconfirmed for ${context.id}: ${[...openSandboxes].join(", ")}.`));
+      }
+      if (!readOnly && executionFinished && openSandboxes.size === 0 && !signal?.aborted) {
         await lifecycle?.afterExecutor?.(context, lifecycleInputs).catch((error) => errors.push(error));
       }
       for (const credential of auth.reverse()) await credential.close().catch((error) => errors.push(error));

@@ -15,6 +15,7 @@ type IndexedSourceFile = Readonly<{
   sourceFile: ts.SourceFile;
   imports: readonly ts.ImportDeclaration[];
   reExports: readonly ts.ExportDeclaration[];
+  dynamicImports: readonly ts.CallExpression[];
   typeReferences: readonly ts.TypeReferenceNode[];
 }>;
 
@@ -478,6 +479,7 @@ function isProductionTypeScriptFile(file: string) {
 function indexSourceFile(file: string, sourceFile: ts.SourceFile): IndexedSourceFile {
   const imports: ts.ImportDeclaration[] = [];
   const reExports: ts.ExportDeclaration[] = [];
+  const dynamicImports: ts.CallExpression[] = [];
   const typeReferences: ts.TypeReferenceNode[] = [];
 
   visit(sourceFile);
@@ -486,6 +488,7 @@ function indexSourceFile(file: string, sourceFile: ts.SourceFile): IndexedSource
     sourceFile,
     imports,
     reExports,
+    dynamicImports,
     typeReferences,
   };
 
@@ -493,6 +496,7 @@ function indexSourceFile(file: string, sourceFile: ts.SourceFile): IndexedSource
     if (ts.isImportDeclaration(node)) imports.push(node);
     if (ts.isExportDeclaration(node) && node.moduleSpecifier) reExports.push(node);
     if (ts.isTypeReferenceNode(node)) typeReferences.push(node);
+    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) dynamicImports.push(node);
     ts.forEachChild(node, visit);
   }
 }
@@ -686,25 +690,29 @@ function collectSandcastleCoreViolations(sources: readonly IndexedSourceFile[]):
   return sources
     .filter(({ file }) => isPathAtOrBelow(file, sandcastleCore))
     .flatMap((source) =>
-      [...source.imports, ...source.reExports].flatMap((declaration): ArchitectureViolation[] => {
-        if (!declaration.moduleSpecifier || !ts.isStringLiteral(declaration.moduleSpecifier)) return [];
-        const specifier = declaration.moduleSpecifier.text;
-        if (isBuiltin(specifier) || isPathAtOrBelow(specifier, "@ai-hero/sandcastle")) return [];
-        if (
-          /^\.\.?\//.test(specifier) &&
-          isPathAtOrBelow(posix.join(posix.dirname(source.file), specifier), sandcastleCore)
-        ) {
-          return [];
-        }
-        return [
-          {
-            ruleId: "sandcastle-core-dependency-boundary",
-            file: source.file,
-            line: lineOf(source.sourceFile, declaration),
-            message: `Sandcastle core must not ${dependencyOperation(declaration)} "${specifier}". Use core modules, Node builtins, or the Sandcastle SDK.`,
-          },
-        ];
-      }),
+      [...source.imports, ...source.reExports, ...source.dynamicImports].flatMap(
+        (declaration): ArchitectureViolation[] => {
+          const dynamic = ts.isCallExpression(declaration);
+          const module = dynamic ? declaration.arguments[0] : declaration.moduleSpecifier;
+          if (!module || !ts.isStringLiteralLike(module)) return [];
+          const specifier = module.text;
+          if (isBuiltin(specifier) || isPathAtOrBelow(specifier, "@ai-hero/sandcastle")) return [];
+          if (
+            /^\.\.?\//.test(specifier) &&
+            isPathAtOrBelow(posix.join(posix.dirname(source.file), specifier), sandcastleCore)
+          ) {
+            return [];
+          }
+          return [
+            {
+              ruleId: "sandcastle-core-dependency-boundary",
+              file: source.file,
+              line: lineOf(source.sourceFile, declaration),
+              message: `Sandcastle core must not ${dynamic ? "import" : dependencyOperation(declaration)} "${specifier}". Use core modules, Node builtins, or the Sandcastle SDK.`,
+            },
+          ];
+        },
+      ),
     );
 }
 

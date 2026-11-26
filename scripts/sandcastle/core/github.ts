@@ -67,7 +67,7 @@ export function createGitHubIssueTracker(
       .filter(Boolean)
       .map((line) => JSON.parse(line));
   }
-  async function hydrate(issue: GitHubIssue): Promise<TrackedIssue> {
+  function details(issue: GitHubIssue): Omit<TrackedIssue, "blockers"> {
     const ref = reference(issue);
     if (
       ref.repo !== repo ||
@@ -80,15 +80,18 @@ export function createGitHubIssueTracker(
     ) {
       throw new Error("GitHub returned invalid issue details.");
     }
-    const blockers = await pages(`${issuesPath}/${ref.number}/dependencies/blocked_by?per_page=100`);
     return {
       ...ref,
       title: issue.title,
       body: issue.body ?? "",
       labels: issue.labels.map(({ name }) => name),
       assignees: issue.assignees.map(({ login }) => login),
-      blockers: blockers.map(reference),
     };
+  }
+  async function hydrate(issue: GitHubIssue): Promise<TrackedIssue> {
+    const snapshot = details(issue);
+    const blockers = await pages(`${issuesPath}/${snapshot.number}/dependencies/blocked_by?per_page=100`);
+    return { ...snapshot, blockers: blockers.map(reference) };
   }
   async function readIssue(number: number) {
     const issue = await get(`${issuesPath}/${number}`);
@@ -119,10 +122,9 @@ export function createGitHubIssueTracker(
   return {
     readIssue,
     loadSpecGraph,
-    async loadBacklog(): Promise<SpecGraph[]> {
+    async listOpenSpecs() {
       const candidates = await pages(`${issuesPath}?state=open&labels=type%3Aspec&per_page=100`);
-      const specs = await Promise.all(candidates.filter((issue) => !issue.pull_request).map(hydrate));
-      return Promise.all(specs.filter((spec) => hasType(spec, "spec") && admitted(spec)).map(loadSpecGraph));
+      return candidates.filter((issue) => !issue.pull_request).map(details);
     },
   };
 }
@@ -191,6 +193,7 @@ export function specFrontier(
   for (const ticket of tickets) {
     const reasons = [...specReasons];
     if (!hasType(ticket, "ticket")) reasons.push("Ticket type is missing or conflicts with Spec.");
+    if (ticket.state !== "OPEN" && integrated.has(ticket.number)) reasons.push("Integrated ticket is closed.");
     if (!belongsToSpec(ticket)) {
       reasons.push("Ticket native parent does not match the Spec.");
     }

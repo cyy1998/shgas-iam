@@ -39,7 +39,9 @@ export type LifecycleConfig = {
   prepareCommand?: string;
   prepareTimeoutMs?: number;
   hooksCommand?: string;
+  /** Prepare resources for a writable executor. */
   beforeExecutor?: (context: ExecutorContext) => Promise<SandboxInputs | undefined>;
+  /** Clean up after a writable executor completes and its sandboxes close. */
   afterExecutor?: (context: ExecutorContext, inputs: SandboxInputs | undefined) => Promise<void>;
 };
 
@@ -48,6 +50,7 @@ export type AuthContext = {
   readonly provider: AgentProvider;
 };
 
+// Mounts here must be private to this execution so providers can refresh credentials and manage sessions.
 export type PreparedAuth = SandboxInputs & { close: () => Promise<void> };
 
 export type AuthAdapter = {

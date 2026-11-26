@@ -41,10 +41,12 @@ test("the native paginated graph trusts CLOSED only for external prerequisites",
       return (edges.get(number) ?? []).map((blocker) => JSON.stringify(blocker)).join("\n");
     }
     if (path.endsWith("/parent")) return JSON.stringify(issue(40, "spec"));
+    if (number === 40) return JSON.stringify(issue(40, "spec"));
     return JSON.stringify(issue(number, "ticket", number === 42 ? "closed" : "open"));
   });
-  const [graph] = await tracker.loadBacklog();
-  if (!graph) throw new Error("Expected a ready Spec");
+  const [spec] = await tracker.listOpenSpecs();
+  if (!spec) throw new Error("Expected an open Spec");
+  const graph = await tracker.loadSpecGraph(await tracker.readIssue(spec.number));
   const initial = specFrontier(graph);
   expect(initial.ready.map(({ number }) => number)).toEqual([41]);
   expect(initial.blocked.find(({ number }) => number === 43)?.reasons.join()).toContain("not integrated");

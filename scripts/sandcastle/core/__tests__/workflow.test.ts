@@ -14,6 +14,7 @@ import { noSandbox } from "@ai-hero/sandcastle/sandboxes/no-sandbox";
 import { command } from "../command.ts";
 import type { SandcastleConfig } from "../config.ts";
 import { runWorkflow } from "../workflow.ts";
+import { commit } from "./git-fixture.ts";
 
 const repo = "fixture/engine";
 const complete = "<promise>COMPLETE</promise>";
@@ -34,13 +35,6 @@ function plan(numbers: number[], explore = false) {
     explore: { needed: explore, focus: "Map the module" },
     issues: numbers.map((number) => ({ number, implementer: "standard", reason: "Confirmed seam" })),
   };
-}
-
-async function commit(cwd: string, file: string, value: string) {
-  await writeFile(join(cwd, file), value);
-  await command("git", ["add", "--", file], cwd);
-  await command("git", ["-c", "core.hooksPath=/dev/null", "commit", "-m", value], cwd);
-  return command("git", ["rev-parse", "HEAD"], cwd);
 }
 
 type Pr = {
@@ -80,6 +74,8 @@ async function createFixture(root: string, numbers: number[]) {
   const labels = new Set([40, ...numbers]);
   const comments = new Map<number, string[]>();
   const assignees = new Map<number, string[]>();
+  const closed = new Set<number>();
+  const specs = new Map([[40, { branch: specBranch, numbers }]]);
   const blockers = new Map<number, { number: number; state: string; repository_url?: string }[]>();
   const projects: number[] = [];
   const calls: RunOptions[] = [];
@@ -94,15 +90,15 @@ async function createFixture(root: string, numbers: number[]) {
     const ref = await git("ls-remote", "--heads", "origin", `refs/heads/${specBranch}`);
     return ref.split(/\s+/)[0] || undefined;
   };
-  function issue(number: number, state = "open", repository_url = repositoryUrl) {
+  function issue(number: number, state = closed.has(number) ? "closed" : "open", repository_url = repositoryUrl) {
     return {
       number,
       state,
       repository_url,
       title: `Issue ${number}`,
-      body: number === 40 ? `Integration branch: ${specBranch}` : "",
+      body: specs.has(number) ? `Integration branch: ${specs.get(number)?.branch}` : "",
       labels: [
-        { name: number === 40 ? "type:spec" : "type:ticket" },
+        { name: specs.has(number) ? "type:spec" : "type:ticket" },
         ...(labels.has(number) ? [{ name: "ready-for-agent" }] : []),
       ],
       assignees: (assignees.get(number) ?? []).map((login) => ({ login })),
@@ -141,15 +137,24 @@ async function createFixture(root: string, numbers: number[]) {
         }
       }
       const path = action?.split("?")[0];
-      if (path === `repos/${repo}/issues`) return labels.has(40) ? JSON.stringify(issue(40)) : "";
+      if (path === `repos/${repo}/issues`) {
+        return [...specs.keys()]
+          .filter((id) => !closed.has(id))
+          .map((id) => JSON.stringify(issue(id)))
+          .join("\n");
+      }
       const number = Number(path?.split("/")[4]);
       if (path?.endsWith("/dependencies/blocked_by")) {
         return (blockers.get(number) ?? [])
           .map((b) => JSON.stringify(issue(b.number, b.state, b.repository_url)))
           .join("\n");
       }
-      if (path?.endsWith("/sub_issues")) return numbers.map((n) => JSON.stringify(issue(n))).join("\n");
-      if (path?.endsWith("/parent")) return JSON.stringify(issue(40));
+      if (path?.endsWith("/sub_issues"))
+        return (specs.get(number)?.numbers ?? []).map((n) => JSON.stringify(issue(n))).join("\n");
+      if (path?.endsWith("/parent")) {
+        const parent = [...specs].find(([, { numbers }]) => numbers.includes(number))?.[0] ?? 40;
+        return JSON.stringify(issue(parent));
+      }
       if (path?.endsWith("/comments")) {
         return (comments.get(number) ?? []).map((body) => JSON.stringify({ body, user: { login: actor } })).join("\n");
       }
@@ -210,6 +215,8 @@ async function createFixture(root: string, numbers: number[]) {
     labels,
     comments,
     assignees,
+    closed,
+    specs,
     blockers,
     projects,
     config,
@@ -340,6 +347,7 @@ test("plans once, explores, dispatches independently ready tickets and reviews t
               ? expect.stringContaining("Apply the local project standards.")
               : undefined,
           );
+          expect(options.prompt).toContain("Report by implement");
           reviewed.push(await command("git", ["rev-parse", "HEAD"], requiredCwd(options)));
           if (reviewed.length === 2) reviews.resolve();
           await reviews.promise;
@@ -376,6 +384,7 @@ test("plans once, explores, dispatches independently ready tickets and reviews t
       expect(fixture.body).toStartWith("Custom release summary");
       expect(fixture.body).toContain("Closes #40\nCloses #41\nCloses #42\nCloses #43");
       expect(fixture.body).toContain("## Integrated Tickets");
+      expect(fixture.comments.get(41)?.[0]).toContain("Report by implement");
       expect(fixture.body).toContain("Report by review-standards");
       expect(fixture.body).toContain("Report by review-spec");
     },
@@ -396,7 +405,7 @@ test("resolves a genuine conflict once after abort and integrates both sibling c
           if (started === 2) gate.resolve();
           await gate.promise;
           await commit(cwd, "shared.txt", cwd.endsWith("-41") ? "first implementation" : "second implementation");
-          return response(complete);
+          return response(`Focused verification passed.\n${complete}`);
         }
         if (options.name === "resolve-conflict") {
           resolutions++;
@@ -411,7 +420,7 @@ test("resolves a genuine conflict once after abort and integrates both sibling c
           await writeFile(join(cwd, "shared.txt"), "combined behavior");
           await command("git", ["add", "shared.txt"], cwd);
           await command("git", ["-c", "core.hooksPath=/dev/null", "commit", "--no-edit"], cwd);
-          return response(complete);
+          return response(`Focused verification passed.\n${complete}`);
         }
       };
       const result = await fixture.execute({ maxParallel: 2 });
@@ -451,7 +460,7 @@ test("a zero-commit failure pauses delivery and restart resumes the same dirty c
       const content = await readFile(join(path, "unfinished.txt"), "utf8");
       expect(content).toBe("preserve this");
       await commit(path, "unfinished.txt", content);
-      return response(complete);
+      return response(`Focused verification passed.\n${complete}`);
     };
     const restarted = await fixture.execute();
     expect(restarted.delivered).toEqual([40]);
@@ -497,7 +506,7 @@ test("an interruption after label removal reuses the matching Open PR and only f
     expect(second.delivered).toEqual([40]);
     expect(fixture.calls).toHaveLength(0);
     expect(fixture.created).toBe(1);
-    expect(fixture.comments.get(41)).toHaveLength(1);
+    expect(fixture.comments.get(41)?.filter((body) => body.startsWith("Spec #40 is ready"))).toHaveLength(1);
     expect(fixture.comments.get(40)?.filter((body) => body.startsWith("Spec #40 is ready"))).toHaveLength(1);
     const trees = await fixture.git("worktree", "list", "--porcelain");
     expect(trees).not.toContain("/worktrees/");
@@ -757,3 +766,170 @@ test.each([
     });
   },
 );
+
+test("read-only sessions leave the write-stage resource lifecycle untouched", async () => {
+  await withWorkflow(async (fixture) => {
+    const allocated: string[] = [];
+    const cleaned: string[] = [];
+    fixture.config.lifecycle = {
+      async beforeExecutor({ phase }) {
+        allocated.push(phase);
+        return { env: { RESOURCE_REGISTRY: phase } };
+      },
+      async afterExecutor(_context, inputs) {
+        cleaned.push(inputs?.env?.RESOURCE_REGISTRY ?? "missing");
+      },
+    };
+    const result = await fixture.execute();
+    expect(result.delivered).toEqual([40]);
+    expect(allocated).toEqual(["implement", "repair-and-verify"]);
+    expect(cleaned).toEqual(allocated);
+  });
+});
+
+test("an executor error leaves its test resource registry available for recovery", async () => {
+  await withWorkflow(async (fixture) => {
+    const registry = join(fixture.cwd, ".sandcastle", "test-resource-registry");
+    fixture.config.lifecycle = {
+      async beforeExecutor() {
+        await writeFile(registry, "owned resource");
+      },
+      async afterExecutor() {
+        await rm(registry);
+      },
+    };
+    fixture.agent = async ({ name }) => {
+      if (name === "implement") throw new Error("sandbox exit unconfirmed");
+    };
+    const result = await fixture.execute();
+    const retained = await readFile(registry, "utf8").catch((error: unknown) => error);
+    expect(result.failed).toEqual([41]);
+    expect(retained).toBe("owned resource");
+  });
+});
+
+test("a completion marker without a verification handoff cannot integrate a ticket", async () => {
+  await withWorkflow(async (fixture) => {
+    fixture.agent = async (options) => {
+      if (options.name !== "implement") return;
+      await commit(requiredCwd(options), "missing-handoff.txt", "implementation without evidence");
+      return response(complete);
+    };
+    const result = await fixture.execute();
+    expect(result.integrated).toEqual([]);
+    expect(result.failed).toEqual([41]);
+    expect(result.incompleteSpecs).toEqual([40]);
+    expect(fixture.created).toBe(0);
+  });
+});
+
+test("a resumed ticket must contain its current dispatch baseline", async () => {
+  await withWorkflow(async (fixture) => {
+    fixture.agent = async (options) => {
+      if (options.name !== "implement") return;
+      await commit(requiredCwd(options), "preserved.txt", "work from the old baseline");
+      return response("Interrupted before validation");
+    };
+    const first = await fixture.execute();
+    expect(first.failed).toEqual([41]);
+
+    await commit(fixture.checkout(specBranch), "design.txt", "updated integration baseline");
+    fixture.agent = undefined;
+    const second = await fixture.execute();
+    expect(second.integrated).toEqual([]);
+    expect(second.failed).toEqual([41]);
+    expect(fixture.created).toBe(0);
+  });
+});
+
+test.each(["withdrawn label", "another assignee"])("a delayed ticket is held after a %s", async (change) => {
+  await withWorkflow(
+    async (fixture) => {
+      fixture.blockers.set(42, [{ number: 41, state: "open" }]);
+      fixture.agent = async (options) => {
+        if (options.name === "implement" && requiredCwd(options).endsWith("-41")) {
+          if (change === "withdrawn label") fixture.labels.delete(42);
+          else fixture.assignees.set(42, ["someone-else"]);
+        }
+      };
+      const result = await fixture.execute({ maxParallel: 1 });
+      expect(result.integrated).toEqual([41]);
+      expect(result.incompleteSpecs).toEqual([40]);
+      expect(fixture.calls.filter(({ name }) => name === "implement")).toHaveLength(1);
+    },
+    [41, 42],
+  );
+});
+
+test("a closed ticket blocks its dependents while an independent ticket integrates", async () => {
+  await withWorkflow(
+    async (fixture) => {
+      fixture.closed.add(42);
+      fixture.blockers.set(43, [{ number: 42, state: "closed" }]);
+      fixture.agent = async ({ name }) => {
+        if (name === "plan") return response("", plan([41]));
+      };
+      const result = await fixture.execute();
+      expect(result.integrated).toEqual([41]);
+      expect(result.incompleteSpecs).toEqual([40]);
+      expect(fixture.created).toBe(0);
+    },
+    [41, 42, 43],
+  );
+});
+
+test("an invalid ticket checkout preserves the ticket and lets an in-flight sibling integrate", async () => {
+  await withWorkflow(
+    async (fixture) => {
+      const bothStarted = Promise.withResolvers<void>();
+      let started = 0;
+      fixture.agent = async (options) => {
+        if (options.name !== "implement") return;
+        const cwd = requiredCwd(options);
+        if (++started === 2) bothStarted.resolve();
+        await bothStarted.promise;
+        if (cwd.endsWith("-41")) {
+          await writeFile(join(cwd, "dirty.txt"), "preserve uncommitted work");
+          return response(`Claimed successful verification.\n${complete}`);
+        }
+      };
+      const result = await fixture.execute({ maxParallel: 2 });
+      const dirty = await readFile(join(fixture.checkout(ticketBranch(41)), "dirty.txt"), "utf8");
+      expect(dirty).toBe("preserve uncommitted work");
+      expect(result.failed).toEqual([41]);
+      expect(result.integrated).toEqual([42]);
+      expect(result.incompleteSpecs).toEqual([40]);
+    },
+    [41, 42],
+  );
+});
+
+test.each([true, false])("an open Spec reserves its declared branch with ready label = %p", async (ready) => {
+  await withWorkflow(async (fixture) => {
+    fixture.specs.set(50, { branch: specBranch, numbers: [51] });
+    if (ready) fixture.labels.add(50);
+    fixture.labels.add(51);
+    const result = await fixture.execute();
+    expect(result.incompleteSpecs).toContain(40);
+    expect(fixture.reports.join("\n")).toContain("#50");
+    expect(fixture.calls).toEqual([]);
+    const refs = await fixture.git("branch", "--list", specBranch);
+    expect(refs).toBe("");
+  });
+});
+
+test("an outdated integration branch leaves the independent Spec runnable", async () => {
+  await withWorkflow(async (fixture) => {
+    const staleBranch = "feat/stale";
+    const oldTip = await fixture.git("commit-tree", "HEAD^{tree}", "-m", "Unrelated baseline");
+    await fixture.git("branch", staleBranch, oldTip);
+    fixture.specs.set(50, { branch: staleBranch, numbers: [51] });
+    fixture.labels.add(50);
+    fixture.labels.add(51);
+    const result = await fixture.execute({ maxSpecs: 2 });
+    expect(result.incompleteSpecs).toEqual([50]);
+    expect(result.delivered).toEqual([40]);
+    expect(fixture.reports.join("\n")).toContain("Spec does not include the invocation base");
+    expect(await fixture.git("rev-parse", staleBranch)).toBe(oldTip);
+  });
+});

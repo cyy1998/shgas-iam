@@ -9,18 +9,12 @@ import {
   type SandcastleConfig,
 } from "./config.ts";
 import { createDelivery } from "./delivery.ts";
-import { checkExecutors, completed, createExecutor, type RunAgent, runPlanning, runRepair } from "./executor.ts";
-import {
-  createGitWorkspace,
-  type IntegrationEvidence,
-  resolveRepository,
-  specBranchName,
-  ticketBranchName,
-} from "./git.ts";
+import { checkExecutors, completionReport, createExecutor, type RunAgent, runPlanning, runRepair } from "./executor.ts";
+import { createGitWorkspace, resolveRepository, specBranchName, ticketBranchName } from "./git.ts";
 import { createGitHubIssueTracker, type RunGh, type SpecGraph, specFrontier } from "./github.ts";
 import { acquireRunLock } from "./lock.ts";
 import { connectGitHubProject, type ReportProjectStage } from "./projects.ts";
-import { complete, phasePrompt } from "./prompts/index.ts";
+import { phasePrompt } from "./prompts/index.ts";
 import { createSpecState, type DeliveryEvidence, pendingDeliveries } from "./state.ts";
 
 export type WorkflowOptions = {
@@ -106,16 +100,41 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
       );
     }
 
+    const prefix = config.workflow.branchPrefix;
+    const branchFor = ({ number, body }: { number: number; body: string }) => specBranchName(number, body, prefix);
+    function assertBranchOwner(number: number, branch: string, declarations: ReadonlyMap<number, string>) {
+      const conflict = [...declarations].find(([owner, claimed]) => owner !== number && claimed === branch);
+      if (conflict)
+        throw new Error(`Spec #${number} and Spec #${conflict[0]} both declare integration branch ${branch}.`);
+    }
+    function branchDeclarations(issues: Awaited<ReturnType<typeof tracker.listOpenSpecs>>) {
+      return new Map(
+        issues.flatMap((issue) => {
+          try {
+            return [[issue.number, branchFor(issue)] as const];
+          } catch {
+            // Invalid declarations block their own Spec when its graph is loaded.
+            return [];
+          }
+        }),
+      );
+    }
+    async function assertCurrentOwnership(spec: Spec) {
+      assertBranchOwner(spec.number, spec.branch, branchDeclarations(await tracker.listOpenSpecs()));
+      if (branchFor(await tracker.readIssue(spec.number)) !== spec.branch)
+        throw new Error(`Spec #${spec.number} integration branch changed.`);
+    }
+
     async function describeGraph(graph: SpecGraph, recoveringDelivery: boolean) {
       const number = graph.spec.number;
-      const branch = specBranchName(number, graph.spec.body, config.workflow.branchPrefix);
+      const branch = branchFor(graph.spec);
+      const ticketPrefix = ticketBranchName(0, prefix).slice(0, -1);
       await git.assertBranch(branch);
-      const branches = new Map(
-        graph.tickets.map((ticket) => [ticket.number, ticketBranchName(ticket.number, config.workflow.branchPrefix)]),
-      );
+      const branches = new Map(graph.tickets.map((ticket) => [ticket.number, ticketBranchName(ticket.number, prefix)]));
       if (
         branch === invocation.branch ||
-        [...branches.values()].some((ticket) => ticket === invocation.branch || ticket === branch)
+        (branch.startsWith(ticketPrefix) && /^[1-9]\d*$/.test(branch.slice(ticketPrefix.length))) ||
+        [...branches.values()].includes(invocation.branch)
       ) {
         throw new Error(`Spec #${number} reuses a protected or ticket branch.`);
       }
@@ -138,9 +157,9 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
     async function refreshGraph(spec: Spec) {
       const graph = await tracker.loadSpecGraph(await tracker.readIssue(spec.number));
       if (
-        specBranchName(spec.number, graph.spec.body, config.workflow.branchPrefix) !== spec.branch ||
+        branchFor(graph.spec) !== spec.branch ||
         graph.tickets.length !== spec.branches.size ||
-        graph.tickets.some(({ number, state }) => !spec.branches.has(number) || state !== "OPEN")
+        graph.tickets.some(({ number }) => !spec.branches.has(number))
       ) {
         throw new Error(
           `Spec #${spec.number} branch or ticket scope changed. Reload the task graph before continuing.`,
@@ -191,8 +210,7 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
         report(`Exploration for Spec #${spec.number} failed: ${describe(error)}`);
       });
       if ((await git.observe(workspace)) !== spec.head) throw new Error("Exploration changed the Spec checkout.");
-      if (!response || !completed(response)) return;
-      const notes = response.stdout.trimEnd().slice(0, -complete.length).trim();
+      const notes = response && completionReport(response);
       if (!notes) return;
       await state.saveExploration(spec.head, notes);
       return notes;
@@ -219,25 +237,64 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
           resuming,
           reason: ticket.reason,
           exploration,
-        }).catch((error: unknown) => {
-          signal?.throwIfAborted();
-          report(`Ticket #${ticket.number} executor failed: ${describe(error)}`);
         });
-        if (!response || !completed(response)) return;
+        const handoff = completionReport(response);
+        if (!handoff) throw new Error("No completed verification handoff.");
         const candidate = await git.observe(worktree);
-        if (!(await git.ancestor(startedAt, candidate)))
-          throw new Error(`Ticket #${ticket.number} rewrote its history.`);
-        return { ticket, worktree, candidate };
+        if (!(await git.ancestor(startedAt, candidate))) throw new Error("The ticket rewrote its history.");
+        if (!(await git.ancestor(baseline, candidate))) throw new Error(`Missing dispatch baseline ${baseline}.`);
+        return { ticket, worktree, candidate, handoff, role };
+      }
+
+      async function integrateTicket({
+        ticket,
+        worktree,
+        candidate,
+        handoff,
+        role,
+      }: Awaited<ReturnType<typeof ticketRun>>) {
+        async function integrate(head: string, report: string) {
+          if (report.includes("\0") || Buffer.byteLength(report) > 60_000)
+            throw new Error("The verification handoff must fit a GitHub comment.");
+          await delivery.recordComment(
+            ticket.number,
+            `Spec #${spec.number} verification handoff for ticket #${ticket.number}.\n\nTicket candidate: \`${head}\`\n\n${report}`,
+          );
+          await assertCurrentOwnership(spec);
+          return git.integrate(workspace, worktree, ticket.number, head, report);
+        }
+        let merge = await integrate(candidate, handoff);
+        if (merge.status === "conflict") {
+          const integrationSha = merge.integrationSha;
+          const response = await phase("resolve-conflict", "resolve-conflict", role, worktree, {
+            specNumber: spec.number,
+            ticketNumber: ticket.number,
+            integrationBranch: spec.branch,
+            integrationSha,
+            candidate,
+          });
+          const resolvedHandoff = completionReport(response);
+          if (!resolvedHandoff) throw new Error("No completed conflict-resolution handoff.");
+          const resolved = await git.observe(worktree);
+          if (!(await git.ancestor(candidate, resolved)) || !(await git.ancestor(integrationSha, resolved)))
+            throw new Error("Conflict resolution does not include both sides.");
+          if ((await git.observe(workspace)) !== integrationSha)
+            throw new Error("Integration tip moved during conflict resolution.");
+          merge = await integrate(resolved, `${handoff}\n\nConflict resolution:\n${resolvedHandoff}`);
+        }
+        if (merge.status !== "merged") throw new Error(`Candidate integration returned ${merge.status}.`);
+        return merge;
       }
 
       // Capture rejections at dispatch so a sibling failure cannot go unobserved during a merge.
-      const pending = new Map<
-        number,
-        Promise<{ number: number; value?: Awaited<ReturnType<typeof ticketRun>>; error?: unknown }>
-      >();
+      type Outcome = { value: Awaited<ReturnType<typeof ticketRun>> } | { error: unknown };
+      const pending = new Map<number, Promise<{ number: number; outcome: Outcome }>>();
       try {
         for (;;) {
           signal?.throwIfAborted();
+          if (pending.size < maxParallel && tickets.some(({ number }) => !attempted.has(number))) {
+            await refreshGraph(spec);
+          }
           const ready = new Set(frontier(spec).ready.map(({ number }) => number));
           const baseline = await git.observe(workspace);
           for (const ticket of tickets) {
@@ -247,55 +304,28 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
             pending.set(
               ticket.number,
               ticketRun(ticket, baseline).then(
-                (value) => ({ number: ticket.number, value }),
-                (error: unknown) => ({ number: ticket.number, error }),
+                (value) => ({ number: ticket.number, outcome: { value } }),
+                (error: unknown) => ({ number: ticket.number, outcome: { error } }),
               ),
             );
           }
           if (!pending.size) break;
-          const outcome = await Promise.race(pending.values());
-          pending.delete(outcome.number);
-          if (outcome.error !== undefined) throw outcome.error;
-          const value = outcome.value;
-          let evidence: IntegrationEvidence | undefined;
-          if (value) {
-            const { ticket, worktree, candidate } = value;
-            let merge = await git.integrate(workspace, worktree, ticket.number, candidate);
-            if (merge.status === "conflict") {
-              const role = config.roles.implementers[ticket.implementer];
-              if (!role) throw new Error(`Missing conflict resolver for #${ticket.number}.`);
-              const integrationSha = merge.integrationSha;
-              const resolution = await phase("resolve-conflict", "resolve-conflict", role, worktree, {
-                specNumber: spec.number,
-                ticketNumber: ticket.number,
-                integrationBranch: spec.branch,
-                integrationSha,
-                candidate,
-              }).catch((error: unknown) => {
-                signal?.throwIfAborted();
-                report(`Conflict resolution for #${ticket.number} failed: ${describe(error)}`);
-              });
-              if (resolution && completed(resolution)) {
-                const resolved = await git.observe(worktree);
-                if (!(await git.ancestor(candidate, resolved)) || !(await git.ancestor(integrationSha, resolved))) {
-                  throw new Error(`Conflict resolution for #${ticket.number} does not include both sides.`);
-                }
-                if ((await git.observe(workspace)) !== integrationSha)
-                  throw new Error("Integration tip moved during conflict resolution.");
-                merge = await git.integrate(workspace, worktree, ticket.number, resolved);
-              }
-            }
-            if (merge.status === "merged") evidence = merge;
+          const { number, outcome } = await Promise.race(pending.values());
+          pending.delete(number);
+          try {
+            if ("error" in outcome) throw outcome.error;
+            spec.progress.integrated.set(number, await integrateTicket(outcome.value));
+            result.integrated.push(number);
+          } catch (error) {
+            signal?.throwIfAborted();
+            result.failed.push(number);
+            report(`Ticket #${number} paused: ${describe(error)}`);
+            if ((await git.observe(workspace)) !== baseline)
+              throw new Error("Spec checkout changed during the failed ticket integration.", { cause: error });
+            await project(number, "Needs Attention");
+            continue;
           }
-          if (evidence) {
-            spec.progress.integrated.set(outcome.number, evidence);
-            result.integrated.push(outcome.number);
-            await project(outcome.number, "Integrated");
-          } else {
-            result.failed.push(outcome.number);
-            report(`Ticket #${outcome.number} did not provide an integrable candidate.`);
-            await project(outcome.number, "Needs Attention");
-          }
+          await project(number, "Integrated");
         }
       } finally {
         await Promise.allSettled(pending.values());
@@ -315,6 +345,10 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
         reviewCandidate: candidate,
         tickets: [...spec.progress.integrated].map(([number, evidence]) => ({ number, ...evidence })),
       };
+      if (context.tickets.some(({ handoff }) => !handoff))
+        throw new Error(
+          "Integrated ticket verification handoff is missing. Verify the retained merge before continuing.",
+        );
       let reviewReport = "Review stage disabled by repository configuration.";
       if (config.workflow.review) {
         await project(spec.number, "Reviewing");
@@ -323,14 +357,8 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
           phase("review", "review-spec", config.roles.reviewers.spec, workspace, context),
         ];
         try {
-          const [standards, specReport] = await Promise.all(axes);
-          if (!standards || !specReport || !completed(standards) || !completed(specReport)) {
-            throw new Error("Both review axes must finish before repair.");
-          }
-          const reports = [standards, specReport].map(({ stdout }) =>
-            stdout.trimEnd().slice(0, -complete.length).trim(),
-          );
-          if (reports.some((text) => !text)) throw new Error("A review axis returned an empty report.");
+          const reports = (await Promise.all(axes)).map(completionReport);
+          if (reports.some((report) => !report)) throw new Error("Both review axes must provide nonempty reports.");
           reviewReport = `## Standards\n\n${reports[0]}\n\n## Spec\n\n${reports[1]}`;
         } finally {
           await Promise.allSettled(axes);
@@ -363,17 +391,30 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
     for (let attempt = 0; attempt < maxSpecs; attempt++) {
       signal?.throwIfAborted();
       if ((await git.observe(invocation)) !== invocationBase) throw new Error("The invocation checkout changed.");
-      const backlog = await tracker.loadBacklog();
-      const readySpecs = new Set(backlog.map(({ spec }) => spec.number));
-      for (const number of await pendingDeliveries(cwd)) {
-        if (readySpecs.has(number) || result.attemptedSpecs.includes(number)) continue;
-        backlog.push(await tracker.loadSpecGraph(await tracker.readIssue(number)));
-      }
-      const specs = await Promise.all(
-        backlog
-          .filter(({ spec }) => !result.attemptedSpecs.includes(spec.number))
-          .map((graph) => describeGraph(graph, !readySpecs.has(graph.spec.number))),
+      const open = await tracker.listOpenSpecs();
+      const ready = new Set(
+        open
+          .filter(
+            ({ labels, state }) =>
+              state === "OPEN" && labels.includes("ready-for-agent") && !labels.includes("type:ticket"),
+          )
+          .map(({ number }) => number),
       );
+      const declarations = branchDeclarations(open);
+      const specs: Spec[] = [];
+      for (const number of new Set([...ready, ...(await pendingDeliveries(cwd))])) {
+        if (result.attemptedSpecs.includes(number) || result.incompleteSpecs.includes(number)) continue;
+        try {
+          const issue = await tracker.readIssue(number);
+          assertBranchOwner(number, branchFor(issue), declarations);
+          const graph = await tracker.loadSpecGraph(issue);
+          specs.push(await describeGraph(graph, !ready.has(number)));
+        } catch (error) {
+          signal?.throwIfAborted();
+          report(`Spec #${number} paused during backlog inspection: ${describe(error)}`);
+          result.incompleteSpecs.push(number);
+        }
+      }
       let spec = specs.find((entry) => frontier(entry).complete);
       let repairDeep = spec !== undefined;
       let assignments: TicketAssignment[] = [];
@@ -432,6 +473,7 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
       let milestone = "prepare the managed worktree";
       try {
         await refreshGraph(spec);
+        await assertCurrentOwnership(spec);
         const workspace = await git.open(branch, head);
         if ((await git.observe(workspace)) !== head) throw new Error("Spec branch moved after planning.");
         const state = createSpecState(cwd, number);
@@ -473,6 +515,7 @@ export async function runWorkflow(options: WorkflowOptions, dependencies: Workfl
           await state.saveDelivery(final, evidence);
         }
         milestone = "finish PR delivery and worktree cleanup";
+        await assertCurrentOwnership(spec);
         const pr = await delivery.deliver({
           graph: spec.graph,
           workspace,
