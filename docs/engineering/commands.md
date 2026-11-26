@@ -115,14 +115,16 @@ pnpm --filter @iam/e2e-system test:integration
 pnpm verify:e2e-runtime --base <target-commit-sha>
 ```
 
-路径门禁比较固定基线与候选 HEAD。门禁按 [`pnpm-workspace.yaml`](../../pnpm-workspace.yaml) 的 `packages` 块列表发现 workspace，
-再按各清单的 `iamWorkspace.gates` 和 `iamWorkspace.kind` 确定前端和后端依赖闭包。E2E 编排器声明的 workspace 依赖也纳入后端闭包。
+路径门禁分别读取固定基线与候选 HEAD 的 [`pnpm-workspace.yaml`](../../pnpm-workspace.yaml) 和清单，
+按 `packages` 列表发现 workspace，再根据 `iamWorkspace.gates` 和 `iamWorkspace.kind` 确定前端和后端依赖闭包。
+声明参与 `e2e-runtime` 的 E2E 编排器及其 workspace 依赖也纳入后端闭包。
 
 差异命中 `e2e/system/**`、`packages/runtime/**`、`scripts/test-resources/**`、`docker/gateway/iam.dev.example.yaml`、
 门禁脚本（含[共享 workspace 图](../../scripts/workspace-graph.mjs)）、
 `pnpm-lock.yaml`、`pnpm-workspace.yaml`、`.npmrc`、`turbo.json` 或 `**/vite.config.*` 时，门禁运行一次编排器 Integration。
 闭包内及根目录的 `package.json` 仅比较运行时和构建敏感字段。前端闭包另含 `devDependencies`、`scripts.build` 与 `scripts.dev`，
 后端闭包另含 `scripts.db:migrate`，根清单另含 `test:e2e*` 与 `verify:e2e-runtime`。同时命中多个闭包的清单按字段并集比较。
+清单在任一侧命中闭包时检查删除，清单的门禁归属变化也会触发。
 普通应用或共享包仅变更测试脚本或 `iamTest` 时跳过。
 无匹配时打印跳过信息，基线非法或 Git 比较失败时以非零状态退出。
 
@@ -161,13 +163,14 @@ pnpm verify:container-smoke --base <target-commit-sha>
 
 第一条命令需 Docker、Compose 和本机 Chromium，可独立验证八个生产 Dockerfile、Nginx、`pnpm deploy` 依赖闭包和真实 APISIX 浏览器链路。镜像构建默认使用 2 路有界并发，可通过 `IAM_CONTAINER_SMOKE_BUILD_CONCURRENCY`（1–4）调整；各镜像完整构建日志保存在运行目录的 `build-<service>.log`。诊断目录和资源记录路径由命令输出。异常终止后可通过上方的 `test:resources:cleanup --record` 命令清理这一个 project。
 
-第二条命令对比固定合入基线与候选 HEAD。门禁按 `iamWorkspace.gates` 发现参与冒烟的 workspace。
-应用目录的 `Dockerfile` 只有在应用参与冒烟且 `iamWorkspace.kind` 为非 CLI 时触发。
+第二条命令对比固定合入基线与候选 HEAD。门禁分别按两侧的 `iamWorkspace.gates` 发现参与冒烟的 workspace。
+应用目录的 `Dockerfile` 变更在任一侧的应用参与冒烟且 `iamWorkspace.kind` 为非 CLI 时触发。
 差异命中任意目录的 `nginx.conf`、`pnpm-lock.yaml`，或命中 `pnpm-workspace.yaml`、`.npmrc`、`.husky/install.mjs`、
 `patches/`、`e2e/system/docker/`、`docker/gateway/iam.dev.example.yaml`、Container Smoke 编排/spec 或门禁脚本（含共享 workspace 图）时也触发。
 
 生产镜像、宿主初始化 CLI（`@iam/ops`）的依赖闭包及根目录内的 `package.json` 按打包敏感字段比较。
 CLI 闭包采用后端打包字段，并检查 `scripts.iam-ops`。同时命中多个闭包时取字段并集。
+清单在任一侧命中闭包时检查删除，清单的门禁归属变化也会触发。
 仅修改普通应用或共享包的测试脚本、`iamTest`，或者只修改纯后端闭包清单的 `devDependencies` 时跳过。
 手动交付和 AFK 最终验证使用该入口，`pnpm verify:release` 每次运行冒烟。日常 `pnpm test:e2e` 只运行 Hybrid 业务 spec。
 [容器冒烟契约](testing.md#container-smoke)

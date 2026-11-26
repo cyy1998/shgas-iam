@@ -4,7 +4,9 @@ import ts from "typescript";
 import {
   collectWorkspaceGraph,
   expandWorkspaceClosure,
+  resolveWorkspaceDependency,
   selectWorkspaces,
+  type WorkspaceDependency,
   type WorkspaceGraph,
   type WorkspaceNode,
 } from "./workspace-graph.mjs";
@@ -75,25 +77,18 @@ const excludedSourceDirectories = new Set([
 ]);
 
 const loginIntegrationPackages = ["bcrypt", "bcrypt-ts", "@cap.js/server", "pngjs"];
-const publicApiForbiddenPackages = new Map<string, readonly string[]>([
-  ["@iam/auth-api", ["@iam/delegation", "@iam/sso-api", "@iam/integration-api"]],
-  [
-    "@iam/sso-api",
-    [
-      "@iam/sms",
-      "@iam/delegation",
-      "@iam/auth-api",
-      "@iam/integration-api",
-      "@iam/jobs",
-      "bullmq",
-      ...loginIntegrationPackages,
-    ],
-  ],
-  [
-    "@iam/integration-api",
-    ["@iam/oidc", "@iam/custom-sso", "@iam/auth-api", "@iam/sso-api", ...loginIntegrationPackages],
-  ],
+const serviceForbiddenPackages = new Map<string, readonly string[]>([
+  ["@iam/auth-api", ["@iam/delegation"]],
+  ["@iam/sso-api", ["@iam/sms", "@iam/delegation", "@iam/jobs", "bullmq", ...loginIntegrationPackages]],
+  ["@iam/integration-api", ["@iam/oidc", "@iam/custom-sso", ...loginIntegrationPackages]],
 ]);
+
+type PublicApiBoundary = {
+  app: WorkspaceNode;
+  peers: ReadonlySet<WorkspaceNode>;
+  forbiddenPackages: ReadonlySet<string>;
+};
+
 const publicApiDependencyRuleId = "public-api-dependency-boundary";
 const oidcSourceRoot = "packages/oidc/src";
 const oidcContinuationEntry = `${oidcSourceRoot}/wechat-qr`;
@@ -397,18 +392,16 @@ const staticModuleOwnershipRules: readonly StaticModuleOwnershipRule[] = [
 ];
 
 function createStaticModuleOwnershipRules(
-  publicApiApps: readonly WorkspaceNode[],
+  publicApiBoundaries: readonly PublicApiBoundary[],
   canonicalStaticSourceRoots: ReadonlyMap<string, string>,
 ): readonly StaticModuleOwnershipRule[] {
-  const publicApiRules = publicApiApps.flatMap(({ directory, name }): StaticModuleOwnershipRule[] => {
-    const forbidden = name && publicApiForbiddenPackages.get(name);
-    if (!forbidden) return [];
-    const app = posix.basename(directory);
-    return [
-      {
-        ruleId: publicApiDependencyRuleId,
-        sourceScopes: [`${directory}/src`],
-        targets: forbidden.flatMap((module): StaticModulePattern[] => {
+  const publicApiRules = publicApiBoundaries.map(({ app, peers, forbiddenPackages }): StaticModuleOwnershipRule => {
+    return {
+      ruleId: publicApiDependencyRuleId,
+      sourceScopes: [`${app.directory}/src`],
+      targets: [
+        ...[...peers].map(({ directory }): StaticModulePattern => ({ kind: "prefix", module: `${directory}/src` })),
+        ...[...forbiddenPackages].flatMap((module): StaticModulePattern[] => {
           const sourceRoot = canonicalStaticSourceRoots.get(module);
           return sourceRoot
             ? [
@@ -417,10 +410,10 @@ function createStaticModuleOwnershipRules(
               ]
             : [{ kind: "package", module }];
         }),
-        message: (moduleSpecifier, declaration) =>
-          `${app} must not ${dependencyOperation(declaration)} "${moduleSpecifier}"; this dependency belongs to another runtime.`,
-      },
-    ];
+      ],
+      message: (moduleSpecifier, declaration) =>
+        `${posix.basename(app.directory)} must not ${dependencyOperation(declaration)} "${moduleSpecifier}"; this dependency belongs to another runtime.`,
+    };
   });
   return [
     ...publicApiRules,
@@ -429,7 +422,9 @@ function createStaticModuleOwnershipRules(
       ruleId: "worker-ownership",
       sourceScopes: ["apps/worker/src"],
       targets: [
-        ...publicApiApps.map(({ directory }): StaticModulePattern => ({ kind: "prefix", module: `${directory}/src` })),
+        ...publicApiBoundaries.map(
+          ({ app }): StaticModulePattern => ({ kind: "prefix", module: `${app.directory}/src` }),
+        ),
         { kind: "prefix", module: "apps/ops/src" },
       ],
       message: (moduleSpecifier, declaration) =>
@@ -446,6 +441,14 @@ export function analyzeRepositoryArchitecture(repoRoot: string): readonly Archit
   }
   const workspaces = [...graph.byManifestPath.values()];
   const publicApiApps = selectWorkspaces(graph, { tier: "public-api" }).filter(isApplicationWorkspace);
+  const publicApiBoundaries = publicApiApps.map((app): PublicApiBoundary => {
+    const peers = new Set(publicApiApps.filter((peer) => peer !== app));
+    const forbiddenPackages = new Set(app.name ? serviceForbiddenPackages.get(app.name) : undefined);
+    for (const peer of peers) {
+      if (peer.name) forbiddenPackages.add(peer.name);
+    }
+    return { app, peers, forbiddenPackages };
+  });
   const layeredBackendSourceRoots = selectWorkspaces(graph, { tier: "layered-backend" })
     .filter(isApplicationWorkspace)
     .map(({ directory }) => `${directory}/src`);
@@ -466,11 +469,11 @@ export function analyzeRepositoryArchitecture(repoRoot: string): readonly Archit
     ...collectDependencyDirectionViolations(sources, layeredBackendSourceRoots),
     ...collectStaticModuleOwnershipViolations(
       sources,
-      createStaticModuleOwnershipRules(publicApiApps, canonicalStaticSourceRoots),
+      createStaticModuleOwnershipRules(publicApiBoundaries, canonicalStaticSourceRoots),
       canonicalStaticSourceRoots,
       layeredBackendSourceRoots,
     ),
-    ...collectPublicApiProductionDependencyViolations(graph, publicApiApps),
+    ...collectPublicApiProductionDependencyViolations(graph, publicApiBoundaries),
     ...collectDockerBuildClosureViolations(repoRoot, graph),
   ].sort(compareViolations);
 }
@@ -775,42 +778,55 @@ function collectSourceDependencyDirectionViolations(
 
 function collectPublicApiProductionDependencyViolations(
   graph: WorkspaceGraph,
-  publicApiApps: readonly WorkspaceNode[],
+  publicApiBoundaries: readonly PublicApiBoundary[],
 ): ArchitectureViolation[] {
-  return publicApiApps.flatMap((app) => {
-    const appName = app.name;
-    if (!appName) return [];
-    const forbiddenPackages = publicApiForbiddenPackages.get(appName);
-    if (!forbiddenPackages) return [];
-    const forbidden = new Set(forbiddenPackages);
-    const visited = new Set([appName]);
+  return publicApiBoundaries.flatMap(({ app, peers, forbiddenPackages }) => {
+    const visited = new Set([app]);
     // Keep the dependency chain for diagnostics, including forbidden packages outside the workspace.
-    const pending = [{ name: appName, path: [appName] }];
+    const pending = [{ workspace: app, path: [app.name ?? app.directory] }];
     const violations: ArchitectureViolation[] = [];
-
     const reported = new Set<string>();
-    for (const { name, path } of pending) {
-      for (const [dependency, version] of graph.byName.get(name)?.productionDependencies ?? []) {
-        const target = /^(?:npm|workspace):((?:@[^/]+\/)?[^@/:]+)@/u.exec(version)?.[1] ?? dependency;
-        const forbiddenName = forbidden.has(dependency) ? dependency : target;
-        if (forbidden.has(forbiddenName)) {
-          if (!reported.has(forbiddenName)) {
-            reported.add(forbiddenName);
-            violations.push({
-              ruleId: publicApiDependencyRuleId,
-              file: app.manifestPath,
-              line: 1,
-              message: `Forbidden production dependency: ${[...path, forbiddenName].join(" -> ")}.`,
-            });
-          }
-        } else if (!visited.has(target) && graph.byName.has(target)) {
-          visited.add(target);
-          pending.push({ name: target, path: [...path, target] });
+    for (const { workspace, path } of pending) {
+      for (const dependency of workspace.productionDependencies) {
+        const target = resolveWorkspaceDependency(graph, workspace, dependency);
+        const forbiddenName = [dependency.name, target.name].find((name) => name && forbiddenPackages.has(name));
+        if (forbiddenName || (target.workspace && peers.has(target.workspace))) {
+          const label = forbiddenName ?? target.workspace?.directory ?? dependency.name;
+          if (reported.has(label)) continue;
+          reported.add(label);
+          violations.push({
+            ruleId: publicApiDependencyRuleId,
+            file: workspace.manifestPath,
+            line: dependencyDeclarationLine(workspace, dependency),
+            message: `Forbidden production dependency: ${[...path, label].join(" -> ")}.`,
+          });
+        } else if (target.workspace && !visited.has(target.workspace)) {
+          visited.add(target.workspace);
+          pending.push({ workspace: target.workspace, path: [...path, target.name ?? target.workspace.directory] });
         }
       }
     }
     return violations;
   });
+}
+
+function findManifestProperty(expression: ts.Expression | undefined, name: string) {
+  if (!expression || !ts.isObjectLiteralExpression(expression)) return undefined;
+  return expression.properties.findLast(
+    (property): property is ts.PropertyAssignment =>
+      ts.isPropertyAssignment(property) && ts.isStringLiteral(property.name) && property.name.text === name,
+  );
+}
+
+function dependencyDeclarationLine(workspace: WorkspaceNode, dependency: WorkspaceDependency) {
+  const source = ts.parseJsonText(workspace.manifestPath, workspace.manifestText);
+  const [statement] = source.statements;
+  if (statement && ts.isExpressionStatement(statement)) {
+    const section = findManifestProperty(statement.expression, dependency.section);
+    const declaration = findManifestProperty(section?.initializer, dependency.name);
+    if (declaration) return lineOf(source, declaration);
+  }
+  throw new Error(`Could not locate ${dependency.section}.${dependency.name} in ${workspace.manifestPath}`);
 }
 
 function collectDockerBuildClosureViolations(repoRoot: string, graph: WorkspaceGraph): ArchitectureViolation[] {

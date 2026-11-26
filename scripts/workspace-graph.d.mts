@@ -14,14 +14,21 @@ export type WorkspaceManifest = {
   readonly [field: string]: unknown;
 };
 
+export type WorkspaceDependency = {
+  readonly section: "dependencies" | "devDependencies" | "optionalDependencies" | "peerDependencies";
+  readonly name: string;
+  readonly specifier: string;
+};
+
 export type WorkspaceNode = {
   readonly name: string | undefined;
   readonly directory: string;
   readonly manifestPath: string;
   readonly manifest: WorkspaceManifest;
+  readonly manifestText: string;
   readonly iamWorkspace: WorkspaceMetadata | undefined;
-  readonly buildDependencies: readonly (readonly [name: string, specifier: string])[];
-  readonly productionDependencies: readonly (readonly [name: string, specifier: string])[];
+  readonly buildDependencies: readonly WorkspaceDependency[];
+  readonly productionDependencies: readonly WorkspaceDependency[];
 };
 
 export type WorkspaceGraph = {
@@ -30,7 +37,20 @@ export type WorkspaceGraph = {
   readonly invalidManifests: ReadonlySet<string>;
 };
 
-export function collectWorkspaceGraph(repoRoot: string): WorkspaceGraph;
+type WorkspaceSnapshot = {
+  readonly paths: ReadonlySet<string>;
+  readonly readFile: (path: string) => string | undefined;
+};
+
+export function collectWorkspaceGraph(repoRoot: string, snapshot?: WorkspaceSnapshot): WorkspaceGraph;
+
+export function parseWorkspaceManifest(content: string | undefined): WorkspaceManifest | undefined;
+
+export function resolveWorkspaceDependency(
+  graph: WorkspaceGraph,
+  from: WorkspaceNode,
+  dependency: WorkspaceDependency,
+): { name: string | undefined; workspace: WorkspaceNode | undefined };
 
 export function selectWorkspaces(
   graph: WorkspaceGraph,

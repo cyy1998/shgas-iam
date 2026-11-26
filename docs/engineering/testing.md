@@ -95,6 +95,7 @@ expect(failure).toBeInstanceOf(ExpectedError);
 清单无法读取或解析时，守卫报告路径并终止检查，修复清单后可重新运行。
 生产源码扫描覆盖 `packages/*` 下的非测试支持包及 `apps/*` 下的非前端应用，排除 `iamWorkspace.kind` 为 `e2e` 的 workspace。
 包名导入映射到非 E2E workspace 的 `src`，公共 API 与分层后端由 `iamWorkspace.architecture.tier` 标识，公共 API 同时属于分层后端。
+公共 API 的相互隔离由该 tier 推导。传递生产依赖违规报告禁用依赖的声明行，并输出从公共 API 到该依赖的完整链。
 
 永久规则只根据生产源码路径、规范的静态 import/re-export（含类型或值、裸 side-effect import）、供 `consumer-owned-port` 使用的生产 `*.port.ts` 中直接 `Pick<T, ...>` 的未解析基类型名，以及 workspace 依赖闭包和 Dockerfile 字面量 `COPY` 建立。Specifier 按已支持的 alias、相对路径、扩展名和包子路径做词法归一化，裸 side-effect import 按值依赖处理，第三方依赖按包名或其子路径匹配。公共后端的包边界沿生产 workspace 清单检查传递依赖，包含 dependencies、optionalDependencies 和 peerDependencies。符号来源、第三方内部依赖、类型解析、计算所得的加载路径、控制流和数据流超出守卫范围。[规则与例外](../../scripts/architecture-guard.ts)
 
