@@ -3,6 +3,16 @@
   "type": "module",
   "version": "1.0.0",
   "private": true,
+  "iamWorkspace": {
+    "kind": "backend",
+    "gates": [
+      "container-smoke",
+      "e2e-runtime"
+    ],
+    "architecture": {
+      "tier": "layered-backend"
+    }
+  },
   "exports": {
     ".": "./src/app.ts",
     "./trpc": "./src/trpc/trpc.router.ts",

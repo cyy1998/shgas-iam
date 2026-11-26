@@ -1,16 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-
-const smokeProductionApps = {
-  backend: ["apps/auth-api", "apps/sso-api", "apps/integration-api", "apps/admin-api", "apps/worker", "apps/gateway"],
-  frontend: ["apps/admin", "apps/sso"],
-};
-
-const e2eRuntimeApps = {
-  backend: [...smokeProductionApps.backend, "packages/db", "packages/runtime"],
-  frontend: ["apps/admin", "apps/sso"],
-};
+import { collectWorkspaceGraph, expandWorkspaceClosure, selectWorkspaces } from "./workspace-graph.mjs";
 
 const rootPackagingFields = [
   "name",
@@ -41,10 +32,13 @@ const backendPackagingFields = [
 
 const frontendPackagingFields = [...backendPackagingFields, "sideEffects", "devDependencies"];
 
-const workspaceDependencySections = ["dependencies", "devDependencies", "optionalDependencies"];
+const gateScripts = new Set([
+  "scripts/run-verification-gate.mjs",
+  "scripts/verification-gate-selection.mjs",
+  "scripts/workspace-graph.mjs",
+]);
 
 const unconditionalContainerSmokeMatchers = [
-  (path) => path === "Dockerfile" || path.endsWith("/Dockerfile"),
   (path) => path === "nginx.conf" || path.endsWith("/nginx.conf"),
   (path) => path === "pnpm-lock.yaml" || path.endsWith("/pnpm-lock.yaml"),
   (path) => path === "pnpm-workspace.yaml",
@@ -58,7 +52,7 @@ const unconditionalContainerSmokeMatchers = [
   (path) => path === "e2e/system/src/container-smoke.ts",
   (path) => path === "e2e/system/src/container-smoke-build.ts",
   (path) => path === "e2e/system/src/middleware-compose.ts",
-  (path) => path === "scripts/run-verification-gate.mjs" || path === "scripts/verification-gate-selection.mjs",
+  (path) => gateScripts.has(path),
 ];
 
 const unconditionalE2eRuntimeMatchers = [
@@ -66,7 +60,7 @@ const unconditionalE2eRuntimeMatchers = [
   (path) => path === "docker/gateway/iam.dev.example.yaml",
   (path) => path.startsWith("packages/runtime/"),
   (path) => path.startsWith("scripts/test-resources/"),
-  (path) => path === "scripts/run-verification-gate.mjs" || path === "scripts/verification-gate-selection.mjs",
+  (path) => gateScripts.has(path),
   (path) => path === "pnpm-lock.yaml",
   (path) => path === "pnpm-workspace.yaml",
   (path) => path === ".npmrc",
@@ -88,85 +82,51 @@ function collectDockerCopyManifests(content) {
   return manifests;
 }
 
-function collectWorkspaceGraph(repoRoot) {
-  const byName = new Map();
-  const byManifestPath = new Map();
-  const invalidManifests = new Set();
-  for (const parent of ["apps", "packages"]) {
-    const parentDir = join(repoRoot, parent);
-    if (!existsSync(parentDir)) continue;
-    for (const entry of readdirSync(parentDir, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-      const manifestPath = `${parent}/${entry.name}/package.json`;
-      const absolute = join(repoRoot, manifestPath);
-      if (!existsSync(absolute)) continue;
-      let manifest;
-      try {
-        manifest = JSON.parse(readFileSync(absolute, "utf8"));
-      } catch {
-        invalidManifests.add(manifestPath);
-        continue;
-      }
-      const dependencies = workspaceDependencySections.flatMap((section) =>
-        Object.entries(manifest[section] ?? {})
-          .filter(([, version]) => typeof version === "string" && version.startsWith("workspace:"))
-          .map(([name]) => name),
-      );
-      const node = { name: manifest.name, manifestPath, dependencies };
-      if (manifest.name) byName.set(manifest.name, node);
-      byManifestPath.set(manifestPath, node);
+function expandSmokeImageClosure(repoRoot, graph, workspaces) {
+  const manifestPaths = new Set();
+  for (const { directory, manifestPath } of workspaces) {
+    manifestPaths.add(manifestPath);
+    if (!directory.startsWith("apps/")) continue;
+    const dockerfilePath = join(repoRoot, directory, "Dockerfile");
+    if (!existsSync(dockerfilePath)) continue;
+    for (const copied of collectDockerCopyManifests(readFileSync(dockerfilePath, "utf8"))) {
+      if (copied !== "package.json") manifestPaths.add(copied);
     }
   }
-  return { byName, byManifestPath, invalidManifests };
+  return expandWorkspaceClosure(graph, manifestPaths);
 }
 
-function expandClosure(repoRoot, workspaceDirectories, graph, options = {}) {
-  const { includeDockerCopies = true } = options;
-  const manifestPaths = new Set();
-  const queue = [];
-  const enqueueManifest = (manifestPath) => {
-    if (manifestPaths.has(manifestPath)) return;
-    manifestPaths.add(manifestPath);
-    const node = graph.byManifestPath.get(manifestPath);
-    if (node) queue.push(node);
-  };
-
-  for (const workspaceDir of workspaceDirectories) {
-    enqueueManifest(`${workspaceDir}/package.json`);
-    if (includeDockerCopies) {
-      const dockerfilePath = join(repoRoot, workspaceDir, "Dockerfile");
-      if (existsSync(dockerfilePath)) {
-        for (const copied of collectDockerCopyManifests(readFileSync(dockerfilePath, "utf8"))) {
-          if (copied !== "package.json") enqueueManifest(copied);
-        }
-      }
-    }
-  }
-
-  while (queue.length > 0) {
-    const node = queue.shift();
-    for (const depName of node.dependencies) {
-      const target = graph.byName.get(depName);
-      if (target) enqueueManifest(target.manifestPath);
-    }
-  }
-  return manifestPaths;
+function workspaceManifestPaths(workspaces) {
+  return workspaces.map(({ manifestPath }) => manifestPath);
 }
 
 export function collectContainerSmokeManifestClosures(repoRoot) {
   const graph = collectWorkspaceGraph(repoRoot);
+  const gate = "container-smoke";
+  const frontend = selectWorkspaces(graph, { gate, kind: "frontend" });
+  const backend = selectWorkspaces(graph, { gate, kind: "backend" });
   return {
-    frontend: expandClosure(repoRoot, smokeProductionApps.frontend, graph),
-    backend: expandClosure(repoRoot, smokeProductionApps.backend, graph),
+    frontend: expandSmokeImageClosure(repoRoot, graph, frontend),
+    backend: expandSmokeImageClosure(repoRoot, graph, backend),
+    cli: expandWorkspaceClosure(graph, workspaceManifestPaths(selectWorkspaces(graph, { gate, kind: "cli" }))),
+    dockerfiles: new Set(
+      selectWorkspaces(graph, { gate })
+        .filter(({ directory, iamWorkspace }) => directory.startsWith("apps/") && iamWorkspace.kind !== "cli")
+        .map(({ directory }) => `${directory}/Dockerfile`),
+    ),
     invalidManifests: graph.invalidManifests,
   };
 }
 
 export function collectE2eRuntimeManifestClosures(repoRoot) {
   const graph = collectWorkspaceGraph(repoRoot);
+  const gate = "e2e-runtime";
+  const frontend = selectWorkspaces(graph, { gate, kind: "frontend" });
+  // The host runner declares its own workspace dependencies, including DB migration and runtime tooling.
+  const backend = [...selectWorkspaces(graph, { gate, kind: "backend" }), ...selectWorkspaces(graph, { kind: "e2e" })];
   return {
-    frontend: expandClosure(repoRoot, e2eRuntimeApps.frontend, graph, { includeDockerCopies: false }),
-    backend: expandClosure(repoRoot, e2eRuntimeApps.backend, graph, { includeDockerCopies: false }),
+    frontend: expandWorkspaceClosure(graph, workspaceManifestPaths(frontend)),
+    backend: expandWorkspaceClosure(graph, workspaceManifestPaths(backend)),
     invalidManifests: graph.invalidManifests,
   };
 }
@@ -197,6 +157,8 @@ function packagingSnapshot(manifest, scope, gate) {
     if (scope === "frontend") {
       if (manifest.scripts.build !== undefined) snapshot["scripts.build"] = manifest.scripts.build;
       if (gate === "e2e-runtime" && manifest.scripts.dev !== undefined) snapshot["scripts.dev"] = manifest.scripts.dev;
+    } else if (scope === "cli" && gate === "container-smoke") {
+      if (manifest.scripts["iam-ops"] !== undefined) snapshot["scripts.iam-ops"] = manifest.scripts["iam-ops"];
     } else if (gate === "e2e-runtime" && scope === "backend") {
       if (manifest.scripts["db:migrate"] !== undefined) {
         snapshot["scripts.db:migrate"] = manifest.scripts["db:migrate"];
@@ -216,8 +178,10 @@ function packagingSnapshot(manifest, scope, gate) {
 }
 
 export function diffManifestPackagingFields(baseManifest, headManifest, scope, gate = "container-smoke") {
-  const left = packagingSnapshot(baseManifest, scope, gate);
-  const right = packagingSnapshot(headManifest, scope, gate);
+  const scopes = Array.isArray(scope) ? scope : [scope];
+  const snapshot = (manifest) => Object.assign({}, ...scopes.map((entry) => packagingSnapshot(manifest, entry, gate)));
+  const left = snapshot(baseManifest);
+  const right = snapshot(headManifest);
   const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
   const changed = [];
   for (const key of [...keys].sort()) {
@@ -267,32 +231,36 @@ function evaluateSemanticGateTrigger(options) {
 
   const reasons = [];
   const manifestChanges = [];
+  const appDockerfileChanges = [];
   for (const change of changes) {
     if (unconditionalMatchers.some((matches) => matches(change.path))) {
       reasons.push(`${change.path} (${change.status})`);
     } else if (isPackageManifest(change.path)) {
       manifestChanges.push(change);
+    } else if (gate === "container-smoke" && change.path.startsWith("apps/") && change.path.endsWith("/Dockerfile")) {
+      appDockerfileChanges.push(change);
     }
   }
-  if (reasons.length > 0 || manifestChanges.length === 0) {
+  if (reasons.length > 0 || (manifestChanges.length === 0 && appDockerfileChanges.length === 0)) {
     return { shouldRun: reasons.length > 0, reasons };
   }
 
   const closures = collectClosures(repoRoot);
+  for (const change of appDockerfileChanges) {
+    if (closures.dockerfiles.has(change.path)) reasons.push(`${change.path} (${change.status})`);
+  }
+  if (reasons.length > 0) return { shouldRun: true, reasons };
+
   for (const change of manifestChanges) {
     if (closures.invalidManifests.has(change.path)) {
       reasons.push(`${change.path} (invalid JSON manifest)`);
       continue;
     }
-    const scope =
+    const scopes =
       change.path === "package.json"
-        ? "root"
-        : closures.frontend.has(change.path)
-          ? "frontend"
-          : closures.backend.has(change.path)
-            ? "backend"
-            : undefined;
-    if (!scope) continue;
+        ? ["root"]
+        : ["frontend", "backend", "cli"].filter((scope) => closures[scope]?.has(change.path));
+    if (scopes.length === 0) continue;
     if (change.status !== "M") {
       reasons.push(`${change.path} (${change.status})`);
       continue;
@@ -312,7 +280,7 @@ function evaluateSemanticGateTrigger(options) {
       reasons.push(`${change.path} (invalid JSON manifest)`);
       continue;
     }
-    const changedFields = diffManifestPackagingFields(baseManifest, headManifest, scope, gate);
+    const changedFields = diffManifestPackagingFields(baseManifest, headManifest, scopes, gate);
     if (changedFields.length > 0) {
       reasons.push(`${change.path} (${changedFields.join(", ")})`);
     }

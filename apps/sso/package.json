@@ -1,6 +1,13 @@
 {
   "name": "@iam/sso",
   "private": true,
+  "iamWorkspace": {
+    "kind": "frontend",
+    "gates": [
+      "container-smoke",
+      "e2e-runtime"
+    ]
+  },
   "author": "cyy",
   "scripts": {
     "build": "vite build",
