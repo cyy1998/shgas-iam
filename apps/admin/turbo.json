@@ -6,6 +6,10 @@
       "env": ["IAM_ADMIN_WEB_*", "!VITE_*"],
       "inputs": ["$TURBO_DEFAULT$", ".env", ".env.*"]
     },
+    "build:test": {
+      "env": ["IAM_ADMIN_WEB_*", "!VITE_*"],
+      "inputs": ["$TURBO_DEFAULT$", ".env", ".env.*"]
+    },
     "dev": {
       "env": ["IAM_ADMIN_WEB_*", "!VITE_*"],
       "passThroughEnv": ["PORT"]

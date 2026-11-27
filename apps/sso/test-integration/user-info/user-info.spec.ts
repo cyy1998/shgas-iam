@@ -152,7 +152,7 @@ test("portal logout uses the current entry and preserves the configured business
   expect(logout.searchParams.get("client")).toBe("iam");
 });
 
-test("anonymous user info entry starts the SSO login flow", async ({ page }) => {
+test("anonymous user info entry starts the SSO login flow", async ({ page, baseURL }) => {
   await mockSsoApi(page);
   await page.route("**/api/iam/sso/user-info", (route) =>
     route.fulfill({
@@ -172,5 +172,5 @@ test("anonymous user info entry starts the SSO login flow", async ({ page }) => 
 
   const loginUrl = new URL(page.url());
   expect(loginUrl.searchParams.get("client")).toBe("iam");
-  expect(loginUrl.searchParams.get("redirectUrl")).toBe("http://127.0.0.1:8000/portal/userInfo");
+  expect(loginUrl.searchParams.get("redirectUrl")).toBe(`${baseURL}/portal/userInfo`);
 });
