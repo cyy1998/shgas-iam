@@ -1,102 +1,33 @@
-import { randomUUID } from "node:crypto";
-import process from "node:process";
-import { redisUrlString } from "@iam/runtime/redis/config";
-import { resetExclusiveRedisTestDatabase, runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
-import type { Redis as RedisType } from "ioredis";
-import Redis from "ioredis";
+import {
+  createExclusiveRedisTestHarness,
+  requireDedicatedRedisTestUrl,
+  resetRedisTestDatabase,
+  seedRedisTestSentinels,
+} from "@iam/test-support/external-test-resources";
 
-const TEST_REDIS_URL_ENV = "IAM_TEST_REDIS_URL";
+export type OpsRedisTestHarness = Awaited<ReturnType<typeof createOpsRedisTestHarness>>;
 
-export interface OpsRedisTestHarness {
-  readonly writer: RedisType;
-  readonly observer: RedisType;
-  readonly seedNonOwnerSentinels: (prefixes: readonly string[]) => Promise<string[]>;
-  readonly commandEnvironment: () => NodeJS.ProcessEnv;
-  readonly close: () => Promise<void>;
-}
-
-export async function createOpsRedisTestHarness(source: NodeJS.ProcessEnv = process.env): Promise<OpsRedisTestHarness> {
-  const redisUrl = resolveOpsRedisTestUrl(source);
-  const writer = createRedisClient(redisUrl);
-  const observer = createRedisClient(redisUrl);
-  let closePromise: Promise<void> | undefined;
-
-  function close() {
-    closePromise ??= runWithOwnedTestResources(async (lifecycle) => {
-      lifecycle.registerCleanup(() => closeRedisClient(writer));
-      lifecycle.registerCleanup(() => closeRedisClient(observer));
-    });
-    return closePromise;
-  }
-
-  try {
-    await Promise.all([connectRedis(writer), connectRedis(observer)]);
-  } catch (error) {
-    return await runWithOwnedTestResources(async (lifecycle) => {
-      lifecycle.registerCleanup(close);
-      throw error;
-    });
-  }
-
+export async function createOpsRedisTestHarness(source: NodeJS.ProcessEnv = process.env) {
+  const harness = createExclusiveRedisTestHarness({ environment: source });
+  const {
+    clients: { writer, observer },
+    close,
+  } = await harness.openScope("ops", ["writer", "observer"]);
   return {
     writer,
     observer,
-    async seedNonOwnerSentinels(prefixes) {
-      // Deliberately opaque resource sentinels, not serialized records of another production owner.
-      const keys: string[] = [];
-      for (const prefix of prefixes) {
-        const key = `${prefix}${randomUUID()}`;
-        keys.push(key);
-        await writer.set(key, "sensitive-fixture", "PX", 120000);
-      }
-      return keys;
-    },
-    commandEnvironment: () => ({ NODE_ENV: "test", IAM_OPS_REDIS_URL: redisUrl }),
+    seedNonOwnerSentinels: (prefixes: readonly string[]) => seedRedisTestSentinels(writer, prefixes),
+    commandEnvironment: (): NodeJS.ProcessEnv => ({ NODE_ENV: "test", IAM_OPS_REDIS_URL: harness.url }),
     close,
   };
 }
 
-export async function resetOpsRedisTestDatabase(stopExecutors: ReadonlyArray<() => Promise<void> | void>) {
-  let control: RedisType | undefined;
-  await runWithOwnedTestResources(async (lifecycle) => {
-    lifecycle.registerCleanup(() => (control ? closeRedisClient(control) : undefined));
-    await resetExclusiveRedisTestDatabase({
-      redis: {
-        async flushdb() {
-          // Create only after all executors stopped, so even a failed control connection
-          // leaves the caller's resources stopped and the original failure observable.
-          control = createRedisClient(resolveOpsRedisTestUrl(process.env));
-          await connectRedis(control);
-          return await control.flushdb();
-        },
-      },
-      stopExecutors,
-    });
-  });
+export function resetOpsRedisTestDatabase(stopExecutors: ReadonlyArray<() => Promise<void> | void>) {
+  return resetRedisTestDatabase(stopExecutors);
 }
 
-export function resolveOpsRedisTestUrl(source: NodeJS.ProcessEnv) {
-  const redisUrl = source[TEST_REDIS_URL_ENV];
-  if (!redisUrl) {
-    throw new Error(
-      `${TEST_REDIS_URL_ENV} must point to a caller-provided dedicated Redis test instance; no fallback is allowed`,
-    );
-  }
-  const test = redisUrlString().safeParse(redisUrl);
-  if (!test.success)
-    throw new Error(`${TEST_REDIS_URL_ENV} must contain a valid Redis URL supported by the Ops runtime`);
-  if (source.IAM_OPS_REDIS_URL !== undefined) {
-    const runtime = redisUrlString().safeParse(source.IAM_OPS_REDIS_URL);
-    if (!runtime.success) throw new Error("IAM_OPS_REDIS_URL must contain a valid Ops runtime Redis URL");
-    if (
-      test.data.host.toLowerCase() === runtime.data.host.toLowerCase() &&
-      test.data.port === runtime.data.port &&
-      test.data.db === runtime.data.db
-    ) {
-      throw new Error(`${TEST_REDIS_URL_ENV} must not identify the Ops runtime Redis resource`);
-    }
-  }
-  return redisUrl;
+export function resolveOpsRedisTestUrl(environment: NodeJS.ProcessEnv) {
+  return requireDedicatedRedisTestUrl({ environment });
 }
 
 export function overrideOpsRedisTestUrl(overrides: { port?: number; username?: string; password?: string }) {
@@ -108,26 +39,4 @@ export function overrideOpsRedisTestUrl(overrides: { port?: number; username?: s
   if (overrides.username !== undefined) url.username = encodeURIComponent(overrides.username);
   if (overrides.password !== undefined) url.password = encodeURIComponent(overrides.password);
   return url.href;
-}
-
-function createRedisClient(redisUrl: string) {
-  return new Redis(redisUrl, {
-    connectTimeout: 2_000,
-    enableOfflineQueue: false,
-    lazyConnect: true,
-    maxRetriesPerRequest: 0,
-  });
-}
-
-async function connectRedis(redis: RedisType) {
-  await redis.connect();
-  await redis.ping();
-}
-
-async function closeRedisClient(redis: RedisType) {
-  try {
-    if (redis.status === "ready") await redis.quit();
-  } finally {
-    redis.disconnect();
-  }
 }

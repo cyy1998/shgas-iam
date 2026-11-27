@@ -1,11 +1,21 @@
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   runCommand,
   spawnOwnedProcessTree,
   withOwnedTemporaryDirectory,
 } from "@iam/test-support/process-smoke-harness";
+
+function isProcessAlive(pid: string) {
+  try {
+    const status = readFileSync(`/proc/${pid}/status`, "utf8");
+    return !/^State:\s*[ZX]/mu.test(status);
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return false;
+    throw error;
+  }
+}
 
 test("reaps a detached descendant that inherited the exited leader's stdio", async () => {
   const { output } = await runCommand({
@@ -21,7 +31,7 @@ test("reaps a detached descendant that inherited the exited leader's stdio", asy
   const pid = /ready (\d+)/u.exec(output)?.[1];
   expect(pid).toBeDefined();
   expect(output).toContain(`stopped ${pid}`);
-  expect(existsSync(`/proc/${pid}`)).toBe(false);
+  expect(isProcessAlive(pid!)).toBe(false);
 });
 
 test("removes the owned directory after a failed command", async () => {

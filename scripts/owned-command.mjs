@@ -65,3 +65,10 @@ export function pnpmCommand(pnpmCli, args) {
     ? { executable: process.execPath, args: [pnpmCli, ...args] }
     : { executable: pnpmCli, args };
 }
+
+export function formatResourceFailure(error) {
+  if (error instanceof AggregateError) return `${error.message}\n${error.errors.map(formatResourceFailure).join("\n")}`;
+  return error instanceof Error
+    ? `${error.message}${error.cause ? `\n${formatResourceFailure(error.cause)}` : ""}`
+    : String(error);
+}

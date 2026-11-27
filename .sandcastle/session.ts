@@ -28,6 +28,7 @@ const WRITABLE_HOOKS: SandboxHooks = {
         command: `HUSKY=0 pnpm install --frozen-lockfile --prefer-offline --store-dir ${SANDBOX_STORE}`,
         timeoutMs: 1_200_000,
       },
+      { command: "bash .sandcastle/start-test-infra.sh", timeoutMs: 120_000 },
     ],
   },
 };
@@ -192,7 +193,10 @@ export function createRepoSessionFactory(opts: RepoSessionFactoryOptions): AfkOp
           mounts,
           env: {
             ...auth.env,
-            IAM_TEST_RESOURCE_PROVIDER: "native",
+            IAM_TEST_POSTGRES_URL: "postgresql://iam_test:iam_test@127.0.0.1:55432/iam_test",
+            IAM_TEST_REDIS_URL: "redis://127.0.0.1:56379/0",
+            IAM_TEST_APISIX_ADMIN_URL: "http://127.0.0.1:59180/apisix/admin",
+            IAM_TEST_APISIX_ADMIN_KEY: "iam-gateway-integration-admin-key",
             TURBO_CACHE_DIR: SANDBOX_TURBO_CACHE,
             GIT_CONFIG_COUNT: "1",
             GIT_CONFIG_KEY_0: "core.hooksPath",

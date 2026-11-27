@@ -8,7 +8,7 @@ import postgres from "postgres";
 const [templateName] = process.argv.slice(2);
 const databaseUrl = process.env[TEST_POSTGRES_URL_ENV];
 if (!databaseUrl || !templateName)
-  throw new Error("Template setup requires a managed PostgreSQL URL and template name");
+  throw new Error("Template setup requires a dedicated PostgreSQL URL and template name");
 if (!/^[a-z][a-z0-9_]{0,62}$/u.test(templateName))
   throw new Error(`Invalid PostgreSQL test template name: ${templateName}`);
 
@@ -44,12 +44,21 @@ try {
     await admin`DROP DATABASE ${admin(templateName)} WITH (FORCE)`;
   }
   await admin`CREATE DATABASE ${admin(templateName)} TEMPLATE template0`;
-  const sql = postgres(templateUrl.href, { max: 1, connect_timeout: 5 });
   try {
-    const migrationsFolder = fileURLToPath(new URL("../../src/migrations/", import.meta.url));
-    await migrate(drizzle({ client: sql }), { migrationsFolder });
-  } finally {
-    await sql.end({ timeout: 5 });
+    const sql = postgres(templateUrl.href, { max: 1, connect_timeout: 5 });
+    try {
+      const migrationsFolder = fileURLToPath(new URL("../../src/migrations/", import.meta.url));
+      await migrate(drizzle({ client: sql }), { migrationsFolder });
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+  } catch (error) {
+    try {
+      await admin`DROP DATABASE ${admin(templateName)} WITH (FORCE)`;
+    } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], "PostgreSQL test template migration and cleanup failed");
+    }
+    throw error;
   }
   await admin`ALTER DATABASE ${admin(templateName)} IS_TEMPLATE true ALLOW_CONNECTIONS false`;
 } finally {

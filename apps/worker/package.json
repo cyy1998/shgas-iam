@@ -22,7 +22,6 @@
     "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
     "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "test": "pnpm test:unit",
-    "test:integration:bun": "node ../../scripts/run-package-integration.mjs bun -- bun test test-integration",
     "test:unit": "bun test --max-concurrency=2 src",
     "typecheck": "pnpm exec tsc --noEmit",
     "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",

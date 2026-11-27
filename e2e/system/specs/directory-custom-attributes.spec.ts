@@ -6,7 +6,7 @@ import type { CustomAttributeValues } from "@iam/contracts/custom-attributes";
 import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import type { APIResponse } from "@playwright/test";
 import { expect } from "@playwright/test";
-import { formatResourceFailure } from "../../../scripts/test-resources/managed-resources.mjs";
+import { formatResourceFailure } from "../../../scripts/owned-command.mjs";
 import { loginToAdmin } from "../src/journeys/admin-client-journey.ts";
 import { createPkceS256Pair, receiveOidcAuthorizationCallback } from "../src/journeys/oidc-rp.ts";
 import { runE2ECommand, startE2EWorker, stopE2EWorker } from "../src/runtime/e2e-context.ts";

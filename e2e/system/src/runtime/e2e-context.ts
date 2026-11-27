@@ -2,12 +2,8 @@ import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import Redis from "ioredis";
-import {
-  type ManagedResourceRun,
-  readManagedResourceRun,
-  runManagedComposeCommand,
-} from "../../../../scripts/test-resources/managed-resources.mjs";
 import type { E2EScenarioReferences } from "../seed/seed.ts";
+import { type E2EComposeRun, readE2EComposeRun, runComposeCommand } from "./compose-runtime.ts";
 
 export interface E2ERunContext {
   version: 3;
@@ -97,7 +93,7 @@ export async function startE2EWorker(context: E2ERunContext) {
   await startWorker(await readE2EResourceRun(context));
 }
 
-async function startWorker(run: ManagedResourceRun) {
+async function startWorker(run: E2EComposeRun) {
   await runE2ECompose(
     run,
     ["up", "--detach", "--no-build", "--no-deps", "--no-recreate", "--wait", "--wait-timeout", "40", "worker"],
@@ -106,7 +102,7 @@ async function startWorker(run: ManagedResourceRun) {
 }
 
 async function readE2EResourceRun(context: E2ERunContext) {
-  const run = await readManagedResourceRun(context.projectDirectory, context.resourceRecordPath);
+  const run = await readE2EComposeRun(context.projectDirectory, context.resourceRecordPath);
   if (run.record.project !== context.project) throw new Error("E2E resource record does not match the runtime context");
   return run;
 }
@@ -149,11 +145,11 @@ ${(stderr || stdout || error.message).slice(-4096)}`,
 }
 
 export async function runE2ECompose(
-  run: ManagedResourceRun,
+  run: E2EComposeRun,
   args: string[],
   options: Pick<E2ECommandOptions, "signal" | "timeoutMs" | "input"> & { includeStderr?: boolean } = {},
 ) {
-  const { output } = await runManagedComposeCommand(run, args, {
+  const { output } = await runComposeCommand(run, args, {
     runCommand: async ({ executable, args = [], cwd, env }) => {
       const { stdout, stderr } = await runE2ECommand(executable, args, { ...options, cwd, env });
       return { exitCode: 0, signal: null, output: options.includeStderr ? stdout + stderr : stdout };

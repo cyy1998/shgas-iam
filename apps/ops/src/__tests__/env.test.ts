@@ -115,7 +115,7 @@ test("Redis test resources remain separate from the normalized runtime database"
       IAM_TEST_REDIS_URL: "redis://test-reader:test-password@LOCALHOST/0",
       IAM_OPS_REDIS_URL: "redis://runtime-writer:runtime-password@localhost:6379/0",
     }),
-  ).toThrow("must not identify the Ops runtime Redis resource");
+  ).toThrow("must not identify the same Redis database as IAM_OPS_REDIS_URL");
   const separateDb = "redis://reader:password@localhost/1";
   expect(
     resolveOpsRedisTestUrl({ IAM_TEST_REDIS_URL: separateDb, IAM_OPS_REDIS_URL: "redis://localhost:6379/0" }),
@@ -125,5 +125,5 @@ test("Redis test resources remain separate from the normalized runtime database"
       IAM_TEST_REDIS_URL: "redis://localhost/1",
       IAM_OPS_REDIS_URL: "redis://private-user:private-password@localhost/invalid-db",
     }),
-  ).toThrow("IAM_OPS_REDIS_URL must contain a valid Ops runtime Redis URL");
+  ).toThrow("IAM_OPS_REDIS_URL must contain a valid Redis database number");
 });

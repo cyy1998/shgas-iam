@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runOwnedCommand } from "../../../../scripts/test-resources/owned-command.mjs";
+import { runOwnedCommand } from "../../../../scripts/owned-command.mjs";
 import { managedIamFailure, readManagedIamInput, redactManagedIamText } from "./managed-iam-input.ts";
 
 export async function runManagedIamJourney(signal?: AbortSignal) {

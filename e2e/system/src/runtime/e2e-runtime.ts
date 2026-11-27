@@ -5,17 +5,7 @@ import { join } from "node:path";
 import { redisUrlString } from "@iam/runtime/redis/config";
 import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import Redis from "ioredis";
-import {
-  cleanupManagedResources,
-  createManagedResourceRun,
-  finishManagedResourceRun,
-  type ManagedResourceRun,
-  managedServiceEndpoint,
-  readManagedResourceRun,
-  runManagedComposeCommand,
-  writeAtomicResourceRecord,
-} from "../../../../scripts/test-resources/managed-resources.mjs";
-import { pnpmCommand, runOwnedCommand } from "../../../../scripts/test-resources/owned-command.mjs";
+import { pnpmCommand, runOwnedCommand } from "../../../../scripts/owned-command.mjs";
 import {
   createE2EGatewayApiKey,
   createE2EScenarioIdentity,
@@ -24,6 +14,16 @@ import {
 } from "../seed/seed.ts";
 import { createProductionE2EScenarioOwner } from "../seed/seed-owner.ts";
 import { wecomMobileCallbackPath } from "../stubs/wecom-provider.ts";
+import {
+  cleanupComposeRun,
+  createE2EComposeRun,
+  type E2EComposeRun,
+  finishE2EComposeRun,
+  readE2EComposeRun,
+  resolveComposeEndpoint,
+  runComposeCommand,
+  writeAtomicResourceRecord,
+} from "./compose-runtime.ts";
 import { type E2ERedisSnapshotEntry, type E2ERunContext, runE2ECompose } from "./e2e-context.ts";
 import { iamGatewayManifest, publishGateway } from "./gateway-sync.ts";
 import { waitForHttpRoute } from "./http-probes.ts";
@@ -37,7 +37,6 @@ export interface E2ERuntimeOptions {
 }
 
 const resourcePrefix = "test-results/e2e";
-const composeFile = "e2e/system/docker-compose.e2e.yml";
 const cacheComposeFile = "e2e/system/docker-compose.e2e.gha-cache.yml";
 const infrastructureServices = ["postgres", "redis", "apisix-etcd", "apisix", "e2e-stubs"];
 const applicationServices = ["auth-api", "sso-api", "integration-api", "admin-api", "gateway-api", "admin", "sso"];
@@ -86,9 +85,8 @@ export async function withE2ERuntime<T>(
     if (!/^[1-4]$/u.test(concurrency)) throw new Error("IAM_E2E_BUILD_CONCURRENCY requires an integer from 1 to 4");
 
     await mkdir(artifacts, { recursive: true, mode: 0o700 });
-    const run = await createManagedResourceRun({
+    const run = await createE2EComposeRun({
       root: repositoryRoot,
-      composeFile,
       artifactDirectory,
       project,
       removeLocalImages: !options.skipBuild,
@@ -114,20 +112,19 @@ export async function withE2ERuntime<T>(
         IAM_E2E_APISIX_BASE_IMAGE: process.env.IAM_E2E_APISIX_BASE_IMAGE ?? "",
         IAM_E2E_BUN_IMAGE: process.env.IAM_E2E_BUN_IMAGE ?? "",
       },
-      registryFile: process.env.IAM_TEST_RESOURCE_REGISTRY,
     });
     console.log(`[e2e] Project ${project}; diagnostics ${artifacts}`);
 
     let passed = false;
     return await runWithOwnedTestResources(async ({ registerCleanup }) => {
       registerCleanup(() =>
-        finishManagedResourceRun(run, { cleanupTimeoutMs: 120_000, diagnostics: !passed || signal.aborted }),
+        finishE2EComposeRun(run, { cleanupTimeoutMs: 120_000, diagnostics: !passed || signal.aborted }),
       );
       await prepareImages(run, options.skipBuild, concurrency, startup);
 
       await startServices(run, infrastructureServices, startup);
       const endpoint = (service: string, containerPort: number) =>
-        managedServiceEndpoint(run, service, containerPort, { signal: startup, timeoutMs: 10_000 });
+        resolveComposeEndpoint(run, service, containerPort, { signal: startup, timeoutMs: 10_000 });
       const [postgres, redis, apisixAdmin, stubs] = await Promise.all([
         endpoint("postgres", 5432),
         endpoint("redis", 6379),
@@ -211,15 +208,15 @@ export async function withE2ERuntime<T>(
 export async function cleanupE2EProject(repositoryRoot: string, project: string) {
   if (!/^iam-e2e-[a-f0-9]{32}$/u.test(project)) throw new Error("An exact iam-e2e-<uuid> project is required");
   const artifactDirectory = `${resourcePrefix}/${project}`;
-  const run = await readManagedResourceRun(repositoryRoot, `${artifactDirectory}/run.json`);
-  if (run.record.project !== project || run.record.composeFile !== composeFile) {
+  const run = await readE2EComposeRun(repositoryRoot, `${artifactDirectory}/run.json`);
+  if (run.record.project !== project) {
     throw new Error(`E2E resource record does not name the requested exact project ${project}`);
   }
-  await cleanupManagedResources(run, { timeoutMs: 120_000 });
+  await cleanupComposeRun(run, { timeoutMs: 120_000 });
 }
 
 async function prepareImages(
-  run: ManagedResourceRun,
+  run: E2EComposeRun,
   skipBuild: boolean | undefined,
   concurrency: string,
   signal: AbortSignal,
@@ -251,7 +248,7 @@ async function prepareImages(
     (!cache && process.env.CI === "true" && Boolean(process.env.ACTIONS_CACHE_URL || process.env.ACTIONS_RESULTS_URL));
   const logPath = join(run.root, run.record.artifactDirectory, "build.log");
   console.log(`[e2e] build ${buildServices.length} images (concurrency ${concurrency}); log ${logPath}`);
-  const result = await runManagedComposeCommand(
+  const result = await runComposeCommand(
     run,
     [...(useGhaCache ? ["--file", join(run.root, cacheComposeFile)] : []), "build", ...buildServices],
     { signal, timeoutMs: 20 * 60_000, fullLogFile: logPath },
@@ -265,9 +262,9 @@ async function prepareImages(
   }
 }
 
-async function startServices(run: ManagedResourceRun, services: string[], signal: AbortSignal) {
+async function startServices(run: E2EComposeRun, services: string[], signal: AbortSignal) {
   console.log(`[e2e] start ${services.join(", ")}`);
-  const result = await runManagedComposeCommand(
+  const result = await runComposeCommand(
     run,
     ["up", "--detach", "--wait", "--wait-timeout", "120", "--no-build", ...services],
     { signal, timeoutMs: 150_000, inheritOutput: true },
@@ -289,7 +286,7 @@ END $$;
 `;
 
 async function seedAndCapture(
-  run: ManagedResourceRun,
+  run: E2EComposeRun,
   options: Pick<
     E2ERunContext,
     "runId" | "origin" | "internalOrigin" | "databaseUrl" | "redisUrl" | "pgSnapshotPath" | "redisSnapshotPath"

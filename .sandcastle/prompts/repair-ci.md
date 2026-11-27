@@ -5,9 +5,9 @@
 - 按 `AGENTS.md` 路由阅读命中的工程文档、`docs/agents/workflow.md`、`docs/agents/sandcastle-afk.md` 与 `GLOSSARY.md`。
 - 先核对 `git rev-parse HEAD` 精确等于 `{{FAILED_SHA}}` 且工作树干净；不要在沙箱内调用 GitHub API，也禁止执行 `git push`、修改 PR 或操作 GitHub 议题。
 - 仔细阅读下方宿主注入的脱敏 CI 失败尾部日志（覆盖 `doc-check`、`fast`、`integration`、`e2e` 或 `ci-gate`），定位真正的根因并最小化修复，禁止通过删减功能、绕过检查或削弱断言来掩盖问题。
-- 沙箱采用无特权方案 X（无 `docker.sock`、默认 `IAM_TEST_RESOURCE_PROVIDER=native`）：
+- 沙箱采用无特权方案 X（无 `docker.sock`、会话就绪时启动专用测试服务）：
   - Bun 真实 I/O 测试先用普通 `await` 完成（失败路径先捕获 rejection），再做同步断言；禁止使用 `.resolves`、`.rejects` 或 async `toThrow`；
-  - 集成测试从根入口 `pnpm test:integration`（`--workspace` / `--file`）使用 native 资源供给运行；
+  - 集成测试从根入口 `pnpm test:integration`（`--workspace` / `--file`）使用沙箱内专用端点运行；
   - 不要在沙箱内运行 `pnpm test:e2e`；若远端失败来自 `e2e` job，请结合失败日志与对应源码、Dockerfile 及 `e2e/system` 规格定位根因，并在本地以 `pnpm check`、相关 Unit/Integration 与必要的 `pnpm build` 验证修复。
 - 完成修复后在最终提交前运行：
   - `pnpm check`；

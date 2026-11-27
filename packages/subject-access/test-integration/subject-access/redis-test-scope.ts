@@ -38,8 +38,10 @@ export async function createSubjectAccessRedisTestScope(
   harness: ReturnType<typeof createExclusiveRedisTestHarness>,
   input: { writerTransitionIds: readonly string[]; observerTransitionIds: readonly string[] },
 ): Promise<SubjectAccessRedisTestScope> {
-  const keyPrefix = `iam:test:subject-access:${randomUUID()}:`;
-  const { first: writerRedis, second: observerRedis } = await harness.openPair();
+  const {
+    clients: { writerRedis, observerRedis },
+    keyPrefix,
+  } = await harness.openScope("subject-access", ["writerRedis", "observerRedis"]);
 
   const writerClient = createSubjectAccessClient({
     keyPrefix,

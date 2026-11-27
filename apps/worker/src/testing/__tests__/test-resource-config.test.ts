@@ -52,7 +52,7 @@ test("Redis test resources cannot identify the runtime database with different c
       IAM_TEST_REDIS_URL: "redis://test-user:test-secret@LOCALHOST/0",
       IAM_WORKER_REDIS_URL: "redis://runtime-user:runtime-secret@localhost:6379",
     }),
-  ).toThrow("must not identify the Worker runtime Redis resource");
+  ).toThrow("must not identify the same Redis database as IAM_WORKER_REDIS_URL");
 });
 
 test("Redis test resources retain a distinct database and its complete credentials", () => {

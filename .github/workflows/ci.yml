@@ -137,8 +137,8 @@ jobs:
       - name: Start APISIX 3.16 + etcd 3.5
         run: |
           set -euo pipefail
-          COMPOSE=(docker compose --project-name ci-gateway-apisix --project-directory . -f apps/gateway/test-integration/support/apisix.compose.yaml)
-          "${COMPOSE[@]}" up -d --build --wait
+          COMPOSE=(docker compose --project-name ci-gateway-apisix --project-directory . -f scripts/test-resources/compose.yaml)
+          "${COMPOSE[@]}" up -d --build --wait apisix
           APISIX_ADDR="$("${COMPOSE[@]}" port apisix 9180 | head -n 1 | tr -d '\r')"
           [ -n "$APISIX_ADDR" ] || { echo "[ci] Failed to discover published APISIX admin port" >&2; exit 1; }
           printf 'IAM_TEST_APISIX_ADMIN_URL=http://%s/apisix/admin\nIAM_TEST_APISIX_ADMIN_KEY=iam-gateway-integration-admin-key\n' "$APISIX_ADDR" >> "$GITHUB_ENV"
@@ -166,7 +166,6 @@ jobs:
           '
       - name: Run full integration suite
         env:
-          IAM_TEST_RESOURCE_PROVIDER: external
           IAM_TEST_POSTGRES_URL: postgresql://iam_test:iam_test@127.0.0.1:5432/iam_test
           IAM_TEST_REDIS_URL: redis://127.0.0.1:6379/0
           IAM_TEST_INTEGRATION_CONCURRENCY: "2"
@@ -198,7 +197,7 @@ jobs:
         if: always()
         run: |
           docker compose --project-name ci-gateway-apisix --project-directory . \
-            -f apps/gateway/test-integration/support/apisix.compose.yaml down --volumes --remove-orphans || true
+            -f scripts/test-resources/compose.yaml down --volumes --remove-orphans || true
           docker rm -f ci-test-redis 2>/dev/null || true
 
   e2e:

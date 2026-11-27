@@ -10,7 +10,7 @@
 - [`.sandcastle/afk.ts`](../../.sandcastle/afk.ts)：流程编排核心，负责任务图调度、并行实施、按需 Merger、双轴只读评审、集中修复、PR 交付、远端 `ci-gate` 等绿、限次自动修红与断线续接。
 - [`.sandcastle/github.ts`](../../.sandcastle/github.ts)：GitHub 接口层，封装有界懒加载 GraphQL、Spec/Ticket 准入判定、`linkedBranches` 分支解析、暂停标注、幂等 PR 复用与状态读取、`check-runs` / `actions/runs` 查询、失败日志脱敏截断及标签移除。
 - [`.sandcastle/git.ts`](../../.sandcastle/git.ts)：Git 与宿主安全辅助层，封装命令执行、凭据预检、远端 URL 校验、worktree 生命周期、已集成票推导与合并提交核验。
-- [`.sandcastle/session.ts`](../../.sandcastle/session.ts)：本仓装配层，从 `.codex/agents/*.toml` 加载 6 个 Codex 角色槽位（显式 `captureSessions: false`），提供单向只读 `auth.json` / `CODEX_API_KEY` 认证与自洽的 `createSession({ worktree, readonly, runId })` 方案 X 无特权单容器 Docker 会话（零 `docker.sock`、零 `--network=host`、无宿主测试容器注册表；可写阶段固定注入 `IAM_TEST_RESOURCE_PROVIDER=native`，挂载宿主离线 pnpm store 与 `.sandcastle/cache/turbo`，经 `GIT_CONFIG_VALUE_0=.husky` 复用 `.husky/pre-commit` 并用单行 `onSandboxReady` 安装依赖）。
+- [`.sandcastle/session.ts`](../../.sandcastle/session.ts)：本仓装配层，从 `.codex/agents/*.toml` 加载 6 个 Codex 角色槽位（显式 `captureSessions: false`），提供单向只读 `auth.json` / `CODEX_API_KEY` 认证与自洽的 `createSession({ worktree, readonly, runId })` 方案 X 无特权单容器 Docker 会话（零 `docker.sock`、零 `--network=host`、无宿主测试容器注册表；可写阶段注入专用测试端点，挂载宿主离线 pnpm store 与 `.sandcastle/cache/turbo`，经 `GIT_CONFIG_VALUE_0=.husky` 复用 `.husky/pre-commit` 并用单行 `onSandboxReady` 安装依赖）。
 - [`.sandcastle/run.mts`](../../.sandcastle/run.mts) 与 [`.sandcastle/smoke.mts`](../../.sandcastle/smoke.mts)：CLI 入口与方案 X 真实 Docker 冒烟脚本；根命令 `pnpm sandcastle` 通过 `flock -n .sandcastle/runner.lock` 保证单实例互斥。
 - [`.sandcastle/prompts/`](../../.sandcastle/prompts/)：6 阶段 Prompt 模板（`implement`、`merge`、`review-standards`、`review-spec`、`repair-and-verify`、`repair-ci`）。
 
@@ -39,10 +39,10 @@ AFK 启动时拉取 `<remote>/<baseBranch>`（默认 `origin` / `main`，可由 
 
 安全边界采用**方案 X 无特权单容器、工具链固定、GitHub 写凭据隔离与不污染本地 `main`**：
 
-- **零 `docker.sock`、零 `--network=host`、零 Docker CLI**：可写与只读沙箱均不挂载宿主机 `/var/run/docker.sock`、不开启 `--network=host`、不传入额外宿主机 group；`.sandcastle/Dockerfile` 在单容器内精准预装 PostgreSQL 18.4、Redis 8.8.0、etcd 3.5.11 与 Apache APISIX 3.16.0 且不启常驻服务，可写阶段固定注入 `IAM_TEST_RESOURCE_PROVIDER=native`，由每条顶层集成命令在独立 `/tmp` 目录按需启停非 root 临时进程并就地销毁；
+- **零 `docker.sock`、零 `--network=host`、零 Docker CLI**：可写与只读沙箱均不挂载宿主机 `/var/run/docker.sock`、不开启 `--network=host`、不传入额外宿主机 group；`.sandcastle/Dockerfile` 在单容器内精准预装 PostgreSQL 18.4、Redis 8.8.0、etcd 3.5.11 与 Apache APISIX 3.16.0 且不启常驻服务，可写阶段由 `onSandboxReady` 启动非 root 测试服务并注入专用端点；
 - 每次启动沙箱前检查仓库根与目标工作树的 `.sandcastle/.env`（拒绝 `GH_TOKEN` / `GITHUB_TOKEN` 含空值）与 `.git/config`（拒绝内嵌凭据或 HTTP Authorization header）；
 - 启动前校验远端 push/fetch URL 全部精确指向 `github.com/<repo>`；
-- 只读双轴评审由 `createSession({ worktree, readonly: true })` 直接将工作树与 `.git` 在内的全部挂载设为只读，仅挂单向只读模型凭据，不挂 `pnpm-store`、Turbo 缓存，也不注入 `IAM_TEST_RESOURCE_PROVIDER`；
+- 只读双轴评审由 `createSession({ worktree, readonly: true })` 直接将工作树与 `.git` 在内的全部挂载设为只读，仅挂单向只读模型凭据，不挂 `pnpm-store`、Turbo 缓存，也不注入专用测试端点；
 - 容器内 Agent 禁止推送远端分支、创建 PR、修改 GitHub 议题或部署。
 
 ## 批量实施与按需 Merger
@@ -87,7 +87,7 @@ AFK 启动时拉取 `<remote>/<baseBranch>`（默认 `origin` / `main`，可由 
 
 通用的聚焦验证、提交 Hook、结果复用与基线失败处理见[工作流补充](workflow.md#验证节奏)。
 
-- **票级并行实施与按需 Merger**：只运行受影响范围的聚焦测试（相关 workspace 的 Unit、typecheck、适用文档检查、受影响包的定向 Integration `pnpm test:integration -- --workspace <pkg>` / `--file <path>` 与 `git diff --check`；容器内自动使用 `IAM_TEST_RESOURCE_PROVIDER=native`）；禁止在并行票阶段运行全仓 `pnpm verify`、全量 Integration 或 `pnpm test:e2e`。
+- **票级并行实施与按需 Merger**：只运行受影响范围的聚焦测试（相关 workspace 的 Unit、typecheck、适用文档检查、受影响包的定向 Integration `pnpm test:integration -- --workspace <pkg>` / `--file <path>` 与 `git diff --check`；容器内使用就绪钩子准备的测试端点）；禁止在并行票阶段运行全仓 `pnpm verify`、全量 Integration 或 `pnpm test:e2e`。
 - **Spec 推前轻量验证（`repair-and-verify`）**：单实例串行的集中修复者在最终干净候选上运行 `pnpm check`（7 步静态与契约检查）、本阶段评审修复涉及的定向 Unit 与定向 Integration，以及 `git diff --check`；不在无特权沙箱内运行 `pnpm test:e2e`。
 - **远端权威验证与自动修红（`ci-gate` / `repair-ci`）**：全量 `fast`、`integration`与生产容器 `e2e`（9 specs）或纯文档 `doc-check` 由推送后的 [GitHub Actions CI](../engineering/commands.md#github-actions-ci) 统一裁判；触发 `repair-ci` 自动修红时，在沙箱内结合脱敏失败日志最小化修复，提交前运行 `pnpm check`、失败范围的定向 Unit/Integration（构建失败时同时运行 `pnpm build`）与 `git diff --check`。
 - 后续修复重跑失效检查，仍有效的通过证据可复用；必需检查未通过或 findings 未解决时不得输出 `<promise>COMPLETE</promise>`。

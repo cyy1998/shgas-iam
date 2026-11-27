@@ -87,7 +87,8 @@ test ! -e /home/agent/.pnpm-store
 test ! -e /home/agent/.turbo-cache
 test ! -e /home/agent/.docker/config.json
 test -z "\${DOCKER_HOST:-}"
-test -z "\${IAM_TEST_RESOURCE_PROVIDER:-}"
+if env | grep -Eq '^IAM_TEST_(POSTGRES_URL|REDIS_URL|APISIX_ADMIN_(URL|KEY))='; then exit 1; fi
+test ! -e /tmp/iam-test-infra
 if [ "$(curl --noproxy '*' --silent --max-time 2 http://127.0.0.1:${address.port} 2>/dev/null || true)" = '${probeToken}' ]; then exit 1; fi
 printf '%s\\n' '${COMPLETE}'`),
         sandbox: ro.sandbox,
@@ -106,7 +107,7 @@ printf '%s\\n' '${COMPLETE}'`),
     assert.equal(await readFile(authPath, "utf8"), authContent);
 
     // 2. Writable Plan X unprivileged session on host-owned worktree (head mode):
-    // zero docker.sock / docker CLI / --network=host, IAM_TEST_RESOURCE_PROVIDER=native,
+    // zero docker.sock / docker CLI / --network=host, dedicated loopback endpoints,
     // offline pnpm install, Turbo cache, .husky/pre-commit, and real native PG+Redis+etcd+APISIX integration.
     const worktreeDir = join(root, ".sandcastle", "worktrees", "smoke");
     await git("worktree", "add", "-b", "smoke", worktreeDir, "smoke-base");
@@ -121,8 +122,10 @@ test ! -e /var/run/docker.sock
 if command -v docker >/dev/null 2>&1; then exit 1; fi
 test -z "\${DOCKER_HOST:-}"
 test -z "\${IAM_E2E_LIFECYCLE:-}"
-test -z "\${IAM_TEST_RESOURCE_REGISTRY:-}"
-test "\${IAM_TEST_RESOURCE_PROVIDER:-}" = native
+test "$IAM_TEST_POSTGRES_URL" = postgresql://iam_test:iam_test@127.0.0.1:55432/iam_test
+test "$IAM_TEST_REDIS_URL" = redis://127.0.0.1:56379/0
+test "$IAM_TEST_APISIX_ADMIN_URL" = http://127.0.0.1:59180/apisix/admin
+test "$IAM_TEST_APISIX_ADMIN_KEY" = iam-gateway-integration-admin-key
 test "$TURBO_CACHE_DIR" = /home/agent/.turbo-cache
 test -d /home/agent/.turbo-cache
 printf '%s\\n' '${probeToken}' > "$TURBO_CACHE_DIR/smoke-probe"
@@ -134,7 +137,7 @@ if [ "$(curl --noproxy '*' --silent --max-time 2 http://127.0.0.1:${address.port
 pnpm test:integration -- \\
   --file apps/admin-api/test-integration/resources/redis-resource-lifecycle.integration.test.ts \\
   --file apps/gateway/test-integration/preview/preview.integration.test.ts
-test -z "$(find /tmp -maxdepth 1 -name 'iam-test-native-*' -print)"
+test "$(redis-cli -p 56379 -n 31 PING)" = PONG
 printf '#    Sandcastle smoke\\n' > sandcastle-smoke.md
 git add sandcastle-smoke.md
 git commit -m 'Probe the repository pre-commit hook'

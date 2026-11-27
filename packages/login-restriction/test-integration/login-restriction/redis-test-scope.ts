@@ -26,8 +26,10 @@ export interface LoginRestrictionRedisTestScope {
 export async function createLoginRestrictionRedisTestScope(
   harness: ReturnType<typeof createExclusiveRedisTestHarness>,
 ): Promise<LoginRestrictionRedisTestScope> {
-  const keyPrefix = `iam:test:login-restriction:${randomUUID()}:`;
-  const { first: writerRedis, second: observerRedis } = await harness.openPair();
+  const {
+    clients: { writerRedis, observerRedis },
+    keyPrefix,
+  } = await harness.openScope("login-restriction", ["writerRedis", "observerRedis"]);
 
   const writer = createLoginRestrictionClient({
     clock: { now: Date.now },

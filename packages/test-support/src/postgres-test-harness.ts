@@ -131,20 +131,55 @@ async function cloneDatabase(baseUrl: string, templateName: string, client?: Tes
     throw error;
   }
 
+  // Discover after fixture setup, then reuse the same plan for this clone.
+  let resetPlan: ReturnType<typeof discoverResetPlan> | undefined;
   return {
     databaseUrl,
     sql,
     async reset() {
-      const tables = await sql<{ name: string }[]>`
-        SELECT format('%I.%I', schemaname, tablename) AS name FROM pg_tables
-        WHERE schemaname = current_schema() AND tablename <> '__drizzle_migrations'
-        ORDER BY tablename
-      `;
-      if (tables.length > 0) {
-        // The catalog query produces quoted, schema-qualified identifiers.
-        await sql.unsafe(`TRUNCATE TABLE ${tables.map(({ name }) => name).join(", ")} RESTART IDENTITY CASCADE`);
-      }
+      resetPlan ??= discoverResetPlan(sql).catch((error) => {
+        resetPlan = undefined;
+        throw error;
+      });
+      const { tables, query } = await resetPlan;
+      if (!query) return;
+      const dirty = await sql.unsafe<{ position: number }[]>(query);
+      if (dirty.length === 0) return;
+      const targets = dirty.map(({ position }) => tables[position]?.name).filter((name) => name !== undefined);
+      await sql.unsafe(`TRUNCATE TABLE ${targets.join(", ")} RESTART IDENTITY CASCADE`);
     },
     close,
   };
+}
+
+async function discoverResetPlan(sql: ReturnType<typeof postgres>) {
+  const tables = await sql<{ name: string; sequences: Array<{ name: string; start: string }> }[]>`
+    SELECT format('%I.%I', ns.nspname, tab.relname) AS name,
+      COALESCE((
+        SELECT json_agg(json_build_object('name', format('%I.%I', sn.nspname, seq.relname), 'start', ps.seqstart::text))
+        FROM pg_depend dep
+        JOIN pg_sequence ps ON ps.seqrelid = dep.objid
+        JOIN pg_class seq ON seq.oid = ps.seqrelid
+        JOIN pg_namespace sn ON sn.oid = seq.relnamespace
+        WHERE dep.refclassid = 'pg_class'::regclass AND dep.refobjid = tab.oid
+          AND dep.classid = 'pg_class'::regclass AND dep.deptype IN ('a', 'i')
+      ), '[]'::json) AS sequences
+    FROM pg_class tab
+    JOIN pg_namespace ns ON ns.oid = tab.relnamespace
+    WHERE ns.nspname = current_schema() AND tab.relkind IN ('r', 'p') AND tab.relname <> '__drizzle_migrations'
+    ORDER BY tab.relname
+  `;
+  // Catalog identifiers are quoted. Sequence state can change even when a table stays empty.
+  const probes = tables.map(({ name, sequences }, index) => {
+    const checks = [
+      `EXISTS (SELECT 1 FROM ${name} LIMIT 1)`,
+      ...sequences.map((sequence) => `(SELECT is_called OR last_value <> ${sequence.start} FROM ${sequence.name})`),
+    ];
+    return `(${index}, ${checks.join(" OR ")})`;
+  });
+  const query =
+    probes.length > 0
+      ? `SELECT position FROM (VALUES ${probes.join(", ")}) AS probes(position, dirty) WHERE dirty`
+      : "";
+  return { tables, query };
 }

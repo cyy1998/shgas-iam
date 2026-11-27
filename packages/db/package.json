@@ -25,9 +25,7 @@
     "db:push": "drizzle-kit push",
     "db:check": "drizzle-kit check",
     "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
-    "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check",
-    "test:integration:bun": "node ../../scripts/run-package-integration.mjs bun -- bun test test-integration",
-    "test:postgres:prepare-template": "bun --no-env-file test-integration/support/prepare-postgres-template.ts"
+    "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check"
   },
   "dependencies": {
     "@iam/contracts": "workspace:*",

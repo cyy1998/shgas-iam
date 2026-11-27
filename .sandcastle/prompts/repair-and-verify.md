@@ -5,7 +5,7 @@
 - 按 `AGENTS.md` 路由阅读命中的工程文档、`docs/agents/workflow.md`、`docs/agents/sandcastle-afk.md`、`GLOSSARY.md` 与 `.agents/skills/pr/SKILL.md`。
 - 先核对 `git rev-parse HEAD` 精确等于 `{{CANDIDATE_SHA}}` 且工作树干净；通过 `git log --first-parent {{BASE_SHA}}..{{CANDIDATE_SHA}}` 查阅各票合并历史。父 Spec、全部 tickets 与双轴评审报告已由宿主注入下方，不要在沙箱内调用 GitHub API。
 - 集中处理下方双轴评审报告中的全部可执行 findings，保留全部已集成票的功能与提交历史，并在交接中逐项说明每个 finding 的处置结果。
-- 沙箱采用无特权方案 X（无 `docker.sock`、默认 `IAM_TEST_RESOURCE_PROVIDER=native`）。Bun 真实 I/O 测试先用普通 `await` 完成（失败路径先捕获 rejection），再做同步断言；禁止使用 `.resolves`、`.rejects` 或 async `toThrow`。受影响范围的集成测试从根入口 `pnpm test:integration` 运行；不要在沙箱内运行 `pnpm test:e2e`。
+- 沙箱采用无特权方案 X（无 `docker.sock`、会话就绪时启动专用测试服务）。Bun 真实 I/O 测试先用普通 `await` 完成（失败路径先捕获 rejection），再做同步断言；禁止使用 `.resolves`、`.rejects` 或 async `toThrow`。受影响范围的集成测试从根入口 `pnpm test:integration` 运行；不要在沙箱内运行 `pnpm test:e2e`。
 - 保留提交 Hook（禁止 `--no-verify`），核对 Hook 修复并提交聚焦修复（引用相关 issue 编号），对失效范围重跑检查。
 - 在最终干净候选上执行推 PR 前轻量门禁（全量 Unit、全量 Integration 与 L3 Full-system E2E 由推送后的远端 GitHub Actions `ci-gate` 统一验证）：
   - 运行 `pnpm check`（覆盖 `format:check`、`lint`、`typecheck`、`@iam/db db:check`、`check:architecture`、`check:docs`、`check:env-names`）；

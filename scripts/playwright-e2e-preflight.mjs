@@ -1,21 +1,26 @@
 #!/usr/bin/env node
 import "./require-linux.mjs";
 import { spawnSync } from "node:child_process";
+import { resolve } from "node:path";
 import process from "node:process";
 
 if (process.env.PLAYWRIGHT_E2E_SKIP_PREFLIGHT === "1") {
   process.exit(0);
 }
 
-const result = spawnSync("pnpm", ["exec", "playwright", "install-deps", "chromium", "--dry-run"], {
-  cwd: process.cwd(),
-  encoding: "utf8",
-  env: {
-    ...process.env,
-    FORCE_COLOR: "0",
-    NO_COLOR: "1",
+const result = spawnSync(
+  process.execPath,
+  [resolve("node_modules/@playwright/test/cli.js"), "install-deps", "chromium", "--dry-run"],
+  {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      FORCE_COLOR: "0",
+      NO_COLOR: "1",
+    },
   },
-});
+);
 
 if (result.status === 0) {
   process.exit(0);

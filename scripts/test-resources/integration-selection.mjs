@@ -58,26 +58,15 @@ export function integrationDeclarations(manifest) {
         throw new Error(`Invalid ${service} resource declaration for ${manifest.name}:${executor}`);
       if (enabled) enabledResources[service] = true;
     }
-    const task = `test:integration:${executor}`;
-    if (!manifest.scripts?.[task]) throw new Error(`Missing declared Integration task ${manifest.name}#${task}`);
-    return {
-      executor,
-      resources: enabledResources,
-      task,
-      environmentNames: Object.keys(enabledResources).map((service) => integrationResourceEnvNames[service]),
-    };
+    return { executor, resources: enabledResources };
   });
 }
 
 export function parseIntegrationArguments(args) {
-  const options = { workspaces: [], files: [], keep: false, timeoutMs: 30 * 60_000, cleanupTimeoutMs: 30_000 };
+  const options = { workspaces: [], files: [], timeoutMs: 30 * 60_000, cleanupTimeoutMs: 30_000 };
   for (let index = 0; index < args.length; index++) {
     const argument = args[index];
     if (argument === "--") continue;
-    if (argument === "--keep-resources") {
-      options.keep = true;
-      continue;
-    }
     const fields = { "--workspace": "workspaces", "--file": "files" };
     if (fields[argument]) {
       const value = args[++index];

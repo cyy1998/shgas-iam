@@ -21,7 +21,6 @@
     "start": "npm run dev",
     "test": "pnpm test:unit",
     "test:coverage": "vitest run --config vitest.unit.config.ts --coverage",
-    "test:integration:playwright": "node ../../scripts/run-package-integration.mjs playwright --preflight ../../scripts/playwright-e2e-preflight.mjs -- playwright test",
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:watch": "vitest --config vitest.unit.config.ts"
   },

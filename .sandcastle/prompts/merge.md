@@ -7,7 +7,7 @@
   `git merge --no-ff --no-commit {{TICKET_BRANCH}}`
 - 结合下方宿主注入的父 Spec、当前 ticket 与 `git log --first-parent` 历史理解双方意图，完整保留双方变更语义，在完成冲突修复与受影响范围的聚焦验证后执行 `git commit` 完成合并提交，并在该合并提交正文末尾保留 `Sandcastle-Ticket: #{{TICKET_NUMBER}}` trailer（若合并提交后确需补充小修提交，确保合并提交本身已带有该 trailer）。
 - 不要在沙箱内调用 GitHub API。
-- Bun 真实 I/O 测试先用普通 `await` 完成（失败路径先捕获 rejection），再做同步断言；禁止使用 `.resolves`、`.rejects` 或 async `toThrow`。受影响范围的集成测试从根入口 `pnpm test:integration` 运行（沙箱采用无特权方案 X，默认注入 `IAM_TEST_RESOURCE_PROVIDER=native`，无 `docker.sock`，不得在沙箱内运行 `pnpm test:e2e`）。
+- Bun 真实 I/O 测试先用普通 `await` 完成（失败路径先捕获 rejection），再做同步断言；禁止使用 `.resolves`、`.rejects` 或 async `toThrow`。受影响范围的集成测试从根入口 `pnpm test:integration` 运行（沙箱采用无特权方案 X，就绪时启动专用测试服务，无 `docker.sock`，不得在沙箱内运行 `pnpm test:e2e`）。
 - 保留提交 Hook（禁止 `--no-verify`），核对 Hook 修复后重跑完整受影响范围的行为测试、typecheck、适用文档检查与 `git diff --check`。
 - 保持当前 Spec 集成分支工作树干净；不得推送远端分支或修改 GitHub 议题。
 

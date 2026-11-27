@@ -26,7 +26,7 @@ status: accepted
   - `workspace-dependencies.mts` 移除 `windowsPnpm` 与 `.cmd`/`.bat` 分支，保留简洁的 Linux `pnpm list` 实现（同时保留 `packageManager` 精确版本核验与 pnpm 原生 workspace 解析）；
   - `scripts/sandcastle/commands.ts` 移除 `win32` 的 `-c core.longpaths=true`；
   - `scripts/sandcastle/resources.ts` 与 `scripts/sandcastle/docker-smoke.mts` 的 `resolveSocketGroupId()` 改为宿主直接 `fs.stat("/var/run/docker.sock").gid` 零容器开销读取（在原生 Linux Docker Engine 与 WSL2 + Docker Desktop 下均与容器内 socket GID 一致）；`.sandcastle/README.md` 与 `hostNetworkRequirements` 继续保留 Linux Docker Engine 或 WSL2 下 Docker Desktop 4.34+ 开启 host networking 的要求；
-  - [managed-resources.mjs](../../scripts/test-resources/managed-resources.mjs) 移除 `win32` 的 20×50ms `rename` 重试与 PowerShell 引号转义，保留 `managedServiceEndpoint()` 的 Compose bridge IP 优先直连策略（失败回退 `127.0.0.1:<port>`，兼容原生 Linux、WSL2 与 AFK）。
+  - 原资源编排移除了 `win32` 的 20×50ms `rename` 重试与 PowerShell 引号转义。现由 [E2E Compose 运行时](../../e2e/system/src/runtime/compose-runtime.ts) 保留 Compose bridge IP 优先直连策略（失败回退 `127.0.0.1:<port>`，兼容原生 Linux、WSL2 与 AFK）。
 
 ## 零散兼容残留、明确保留项与文档同步
 
