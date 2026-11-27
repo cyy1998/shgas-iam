@@ -29,6 +29,8 @@ const localEndpoints = {
   [testApisixAdminKeyEnv]: "iam-gateway-integration-admin-key",
 };
 
+const defaultTestTimeoutMs = process.env.CI ? 15_000 : 10_000;
+
 const taskPriority = [
   "@iam/auth-api:bun",
   "@iam/sso-api:bun",
@@ -138,7 +140,14 @@ async function executeTasks({ root, logDirectory, tasks, taskEnvironments, optio
           cleanupTimeoutMs: options.cleanupTimeoutMs,
           onExecutionFailure: cancelRemaining,
           executable: "bun",
-          args: ["--no-env-file", "test", "--max-concurrency=1", "--bail", ...task.files.map((file) => `./${file}`)],
+          args: [
+            "--no-env-file",
+            "test",
+            "--max-concurrency=1",
+            `--timeout=${defaultTestTimeoutMs}`,
+            "--bail",
+            ...task.files.map((file) => `./${file}`),
+          ],
           fullLogFile: logPath,
         });
         if (result.exitCode !== 0) {
