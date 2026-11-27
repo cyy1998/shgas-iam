@@ -3,16 +3,17 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TEST_POSTGRES_URL_ENV, TEST_REDIS_URL_ENV } from "@iam/test-support/external-test-resources";
 import {
-  createManagedResourceRun,
-  finishManagedResourceRun,
-  managedServiceEndpoint,
   readManagedResourceRun,
   saveManagedResourceRun,
-  startManagedResources,
   writeAtomicResourceRecord,
 } from "../../../../scripts/test-resources/managed-resources.mjs";
 import { runOwnedCommand } from "../../../../scripts/test-resources/owned-command.mjs";
-import { prepareManagedPostgresTemplate } from "../../../../scripts/test-resources/postgres-template.mjs";
+import { formatRedisSlotUrl, parseTestRedisUrl } from "../../../../scripts/test-resources/redis-preflight.mjs";
+import {
+  externalEndpointEnvNames,
+  type PreparedManagedTestResources,
+  prepareManagedTestResources,
+} from "../../../../scripts/test-resources/resource-provider.mjs";
 
 const root = fileURLToPath(new URL("../../../../", import.meta.url));
 
@@ -29,6 +30,20 @@ export async function requireManagedApiResources() {
   for (const name of [TEST_POSTGRES_URL_ENV, TEST_REDIS_URL_ENV, "IAM_TEST_POSTGRES_TEMPLATE"]) {
     if (!environment?.[name] || environment[name] !== process.env[name])
       throw new Error(`${name} must come from this run's managed resource record`);
+  }
+  if (
+    run.record.endpoints?.postgres?.databaseUrl !== environment[TEST_POSTGRES_URL_ENV] ||
+    run.record.endpoints?.postgres?.templateName !== environment.IAM_TEST_POSTGRES_TEMPLATE
+  ) {
+    throw new Error("Managed API PostgreSQL endpoint does not match this run's resource record");
+  }
+  const redisEndpointUrl = run.record.endpoints?.redis?.url;
+  const assignedRedis = parseTestRedisUrl(environment[TEST_REDIS_URL_ENV], TEST_REDIS_URL_ENV);
+  if (
+    typeof redisEndpointUrl !== "string" ||
+    formatRedisSlotUrl(redisEndpointUrl, assignedRedis.db) !== environment[TEST_REDIS_URL_ENV]
+  ) {
+    throw new Error("Managed API Redis endpoint does not match this run's resource record");
   }
 }
 
@@ -54,63 +69,65 @@ export async function runManagedApiFixture(options: {
   process.on("SIGINT", interrupt);
   process.on("SIGTERM", interrupt);
   const failures: unknown[] = [];
-  let run: Awaited<ReturnType<typeof createManagedResourceRun>> | undefined;
+  let prepared: PreparedManagedTestResources | undefined;
   let executeStart: number | undefined;
   try {
-    run = await createManagedResourceRun({
+    prepared = await prepareManagedTestResources(["postgres", "redis"], {
       root,
-      composeFile: "scripts/test-resources/compose.yaml",
+      env: process.env,
       projectPrefix: options.projectPrefix,
-      services: ["postgres", "redis"],
       keep: options.args.includes("--keep"),
       registryFile: process.env.IAM_TEST_RESOURCE_REGISTRY,
-    });
-    await startManagedResources(run, { signal: controller.signal, timeoutMs: 60000 });
-    const { databaseUrl, templateName } = await prepareManagedPostgresTemplate(run, {
-      env: process.env,
       signal: controller.signal,
-      timeoutMs: 60000,
-      cleanupTimeoutMs: 10000,
+      timeoutMs: 60_000,
+      cleanupTimeoutMs: 10_000,
     });
-    const redis = await managedServiceEndpoint(run, "redis", 6379, { signal: controller.signal });
+    const postgres = prepared.endpoints.postgres;
+    const redis = prepared.endpoints.redis;
+    if (!postgres || !redis) {
+      throw new Error(`${options.label} requires managed PostgreSQL and Redis endpoints`);
+    }
     const environment = {
-      [TEST_POSTGRES_URL_ENV]: databaseUrl,
-      [TEST_REDIS_URL_ENV]: `redis://${redis.host}:${redis.port}/0`,
-      IAM_TEST_POSTGRES_TEMPLATE: templateName,
+      [TEST_POSTGRES_URL_ENV]: postgres.databaseUrl,
+      [TEST_REDIS_URL_ENV]: formatRedisSlotUrl(redis.url, 1),
+      IAM_TEST_POSTGRES_TEMPLATE: postgres.templateName,
     };
     controller.signal.throwIfAborted();
-    run.record.endpoints = {
-      postgres: { databaseUrl, templateName },
-      redis,
-    };
-    await writeAtomicResourceRecord(join(root, run.record.testEnvironmentFile), environment);
-    run.record.status = "running";
-    await saveManagedResourceRun(run);
+    await writeAtomicResourceRecord(join(root, prepared.run.record.testEnvironmentFile), environment);
+    prepared.run.record.status = "running";
+    await saveManagedResourceRun(prepared.run);
+
+    const childEnvironment: NodeJS.ProcessEnv = { ...process.env };
+    for (const name of externalEndpointEnvNames) delete childEnvironment[name];
+    delete childEnvironment.IAM_TEST_POSTGRES_TEMPLATE;
+
     executeStart = performance.now();
     const result = await runOwnedCommand({
       executable: process.execPath,
       args: ["--no-env-file", "run", options.entry, ...options.args, "--managed-api-resources"],
       cwd: fileURLToPath(new URL("../../", import.meta.url)),
       env: {
-        ...process.env,
+        ...childEnvironment,
         ...environment,
-        IAM_TEST_RESOURCE_RUN_ID: run.record.runId,
-        IAM_TEST_RESOURCE_RECORD: run.recordPath,
+        IAM_TEST_RESOURCE_RUN_ID: prepared.run.record.runId,
+        IAM_TEST_RESOURCE_RECORD: prepared.run.recordPath,
       },
       signal: controller.signal,
-      cleanupTimeoutMs: 10000,
+      cleanupTimeoutMs: 10_000,
       inheritOutput: true,
-      logFile: join(root, run.record.artifactDirectory, "suite.log"),
+      logFile: join(root, prepared.run.record.artifactDirectory, "suite.log"),
     });
     if (result.exitCode !== 0) throw new Error(`${options.label} exited ${result.exitCode}`);
   } catch (failure) {
     failures.push(failure);
   } finally {
-    if (run) {
-      if (executeStart !== undefined) run.record.durations.executeMs = Math.round(performance.now() - executeStart);
+    if (prepared) {
+      if (executeStart !== undefined) {
+        prepared.run.record.durations.executeMs = Math.round(performance.now() - executeStart);
+      }
       try {
-        await finishManagedResourceRun(run, {
-          cleanupTimeoutMs: 30000,
+        await prepared.cleanup({
+          cleanupTimeoutMs: 30_000,
           diagnostics: failures.length > 0 || controller.signal.aborted,
         });
       } catch (failure) {

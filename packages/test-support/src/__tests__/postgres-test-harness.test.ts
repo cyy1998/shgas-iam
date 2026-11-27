@@ -134,6 +134,37 @@ test("prepareManagedPostgresTemplate guards the PostgreSQL URL before running te
   expect((failure as Error).message).toContain("IAM_AUTH_API_DATABASE_URL");
 });
 
+test("prepareManagedPostgresTemplate rejects missing databaseUrl without Docker fallback", async () => {
+  let failure: unknown;
+  try {
+    await prepareManagedPostgresTemplate({
+      root: process.cwd(),
+      recordPath: "test-results/integration/unused/run.json",
+      record: {
+        schemaVersion: 1,
+        provider: "external",
+        runId: "unused",
+        project: "iam-integration-unused",
+        composeFile: "",
+        artifactDirectory: "test-results/integration/unused",
+        composeEnvironmentFile: "",
+        envFile: "",
+        testEnvironmentFile: "test-results/integration/unused/test-environment.json",
+        services: ["postgres"],
+        removeLocalImages: false,
+        keep: false,
+        status: "ready",
+        createdAt: new Date(0).toISOString(),
+        durations: {},
+      },
+    });
+  } catch (error) {
+    failure = error;
+  }
+  expect(failure).toBeInstanceOf(Error);
+  expect((failure as Error).message).toContain("requires an explicit databaseUrl");
+});
+
 test("createDrizzlePostgresTestHarness validates IAM_TEST_POSTGRES_URL before opening connections", async () => {
   let failure: unknown;
   try {

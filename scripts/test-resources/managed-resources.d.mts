@@ -1,5 +1,7 @@
 import type { OwnedCommandOptions, OwnedCommandResult } from "./owned-command.mjs";
 
+export type ManagedResourceProviderName = "docker" | "native" | "external";
+
 export type ManagedComposeStack = {
   project: string;
   composeFile: string;
@@ -11,12 +13,13 @@ export type ManagedComposeStack = {
 
 export type ManagedResourceEndpoints = {
   postgres?: { databaseUrl: string; templateName: string };
-  redis?: { host: string; port: number };
+  redis?: { url: string; host: string; port: number };
   apisix?: { adminUrl: string; adminKey: string };
 };
 
 export type ManagedResourceRecord = {
   schemaVersion: 1;
+  provider?: ManagedResourceProviderName;
   runId: string;
   project: string;
   composeFile: string;
@@ -42,7 +45,8 @@ export function saveManagedResourceRun(run: ManagedResourceRun): Promise<void>;
 export function writeAtomicResourceRecord(destination: string, record: unknown): Promise<void>;
 export function createManagedResourceRun(options: {
   root: string;
-  composeFile: string;
+  provider?: ManagedResourceProviderName;
+  composeFile?: string;
   project?: string;
   projectPrefix?: string;
   artifactDirectory?: string;

@@ -12,5 +12,5 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true
   },
-  "include": ["./architecture-guard.ts", "./check-docs-index.ts", "./workspace-graph.d.mts"]
+  "include": ["./architecture-guard.ts", "./check-docs-index.ts", "./workspace-graph.d.mts", "./test-resources/*.d.mts"]
 }

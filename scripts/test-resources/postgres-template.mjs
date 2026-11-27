@@ -4,16 +4,15 @@ import {
   requireDedicatedPostgresTestUrl,
   TEST_POSTGRES_URL_ENV,
 } from "../../packages/test-support/src/dedicated-postgres-test-url.mjs";
-import { managedServiceEndpoint } from "./managed-resources.mjs";
 import { pnpmCommand, runOwnedCommand } from "./owned-command.mjs";
 
-async function discoverManagedPostgresUrl(run, options) {
-  const { host, port } = await managedServiceEndpoint(run, "postgres", 5432, options);
-  return `postgres://iam_test:iam_test@${host}:${port}/iam_test`;
-}
+const SYSTEM_DATABASES = new Set(["postgres", "template0", "template1"]);
 
 export async function prepareManagedPostgresTemplate(run, options = {}) {
-  const databaseUrl = options.databaseUrl ?? (await discoverManagedPostgresUrl(run, options));
+  const databaseUrl = options.databaseUrl ?? run?.record?.endpoints?.postgres?.databaseUrl;
+  if (typeof databaseUrl !== "string" || !databaseUrl.trim()) {
+    throw new Error("prepareManagedPostgresTemplate requires an explicit databaseUrl (no Docker fallback is allowed)");
+  }
   const environment = options.env ?? process.env;
   requireDedicatedPostgresTestUrl({
     name: TEST_POSTGRES_URL_ENV,
@@ -21,6 +20,9 @@ export async function prepareManagedPostgresTemplate(run, options = {}) {
     environment,
   });
   const templateName = options.templateName ?? "iam_test_template";
+  if (!/^[a-z][a-z0-9_]{0,62}$/u.test(templateName) || SYSTEM_DATABASES.has(templateName)) {
+    throw new Error(`Invalid PostgreSQL test template name: ${templateName}`);
+  }
   const command = process.versions.bun
     ? { executable: process.execPath, args: ["--no-env-file", "run", "test:postgres:prepare-template", templateName] }
     : process.env.npm_execpath
