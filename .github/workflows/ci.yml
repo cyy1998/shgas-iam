@@ -100,104 +100,26 @@ jobs:
       IAM_GATEWAY_TEST_ETCD_IMAGE: bitnamilegacy/etcd:3.5.11
       IAM_GATEWAY_TEST_APISIX_BASE_IMAGE: apache/apisix:3.16.0-debian
       IAM_GATEWAY_TEST_APISIX_IMAGE: iam-gateway-apisix:ci
-    services:
-      postgres:
-        image: postgres:18.4
-        env:
-          POSTGRES_USER: iam_test
-          POSTGRES_PASSWORD: iam_test
-          POSTGRES_DB: iam_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd="pg_isready -h 127.0.0.1 -U iam_test -d iam_test"
-          --health-interval=5s --health-timeout=5s --health-retries=12
-          --tmpfs /var/lib/postgresql:size=1g
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-workspace
-        with:
-          turbo-cache-scope: integration
-      - name: Start Redis 8.8.0 (32 logical databases)
-        run: |
-          set -euo pipefail
-          docker run -d --name ci-test-redis -p 127.0.0.1:6379:6379 redis:8.8.0 \
-            redis-server --databases 32 --save "" --appendonly no
-          for _ in $(seq 1 30); do
-            if [ "$(docker exec ci-test-redis redis-cli -n 31 PING 2>/dev/null || true)" = "PONG" ]; then
-              echo "[ci] Redis 8.8.0 ready on 127.0.0.1:6379 (SELECT 31 verified)"
-              exit 0
-            fi
-            sleep 1
-          done
-          docker logs ci-test-redis || true
-          echo "[ci] Redis did not become ready with 32 logical databases" >&2
-          exit 1
-      - name: Start APISIX 3.16 + etcd 3.5
-        run: |
-          set -euo pipefail
-          COMPOSE=(docker compose --project-name ci-gateway-apisix --project-directory . -f scripts/test-resources/compose.yaml)
-          "${COMPOSE[@]}" up -d --build --wait apisix
-          APISIX_ADDR="$("${COMPOSE[@]}" port apisix 9180 | head -n 1 | tr -d '\r')"
-          [ -n "$APISIX_ADDR" ] || { echo "[ci] Failed to discover published APISIX admin port" >&2; exit 1; }
-          printf 'IAM_TEST_APISIX_ADMIN_URL=http://%s/apisix/admin\nIAM_TEST_APISIX_ADMIN_KEY=iam-gateway-integration-admin-key\n' "$APISIX_ADDR" >> "$GITHUB_ENV"
-          echo "[ci] APISIX Admin ready at http://${APISIX_ADDR}/apisix/admin"
-      - name: Tune ephemeral PostgreSQL service for integration tests
-        env:
-          IAM_TEST_POSTGRES_URL: postgresql://iam_test:iam_test@127.0.0.1:5432/iam_test
-        run: |
-          bun -e '
-            const sql = new Bun.SQL(process.env.IAM_TEST_POSTGRES_URL);
-            try {
-              for (const stmt of [
-                "ALTER SYSTEM SET fsync = off",
-                "ALTER SYSTEM SET synchronous_commit = off",
-                "ALTER SYSTEM SET full_page_writes = off",
-                "ALTER SYSTEM SET max_wal_size = \x272GB\x27",
-                "ALTER SYSTEM SET checkpoint_timeout = \x2715min\x27",
-                "SELECT pg_reload_conf()",
-              ]) {
-                await sql.unsafe(stmt);
-              }
-            } finally {
-              await sql.close();
-            }
-          '
+      - name: Start integration test infrastructure
+        run: pnpm test:infra:up
       - name: Run full integration suite
         env:
-          IAM_TEST_POSTGRES_URL: postgresql://iam_test:iam_test@127.0.0.1:5432/iam_test
-          IAM_TEST_REDIS_URL: redis://127.0.0.1:6379/0
           IAM_TEST_INTEGRATION_CONCURRENCY: "2"
         run: pnpm test:integration
-      - name: Redact integration task logs
-        if: failure()
-        run: |
-          bun -e '
-            import { existsSync } from "node:fs";
-            import { stripVTControlCharacters } from "node:util";
-            import { redactSensitiveLog } from "./.sandcastle/github.ts";
-            const root = "test-results/integration";
-            if (existsSync(root)) {
-              for await (const path of new Bun.Glob("**/logs/*.log").scan({ cwd: root })) {
-                const raw = await Bun.file(`${root}/${path}`).text();
-                await Bun.write(`test-results/integration-redacted/${path}`, redactSensitiveLog(stripVTControlCharacters(raw)));
-              }
-            }
-          '
-      - name: Upload redacted integration task logs
+      - name: Upload integration task logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: integration-logs-${{ github.run_attempt }}
-          path: test-results/integration-redacted/**/*.log
+          path: test-results/integration/**/logs/*.log
           retention-days: 7
           if-no-files-found: ignore
-      - name: Teardown APISIX and Redis containers
+      - name: Teardown
         if: always()
-        run: |
-          docker compose --project-name ci-gateway-apisix --project-directory . \
-            -f scripts/test-resources/compose.yaml down --volumes --remove-orphans || true
-          docker rm -f ci-test-redis 2>/dev/null || true
+        run: pnpm test:infra:down || true
 
   e2e:
     name: e2e
@@ -224,27 +146,12 @@ jobs:
           IAM_E2E_APISIX_BASE_IMAGE: apache/apisix:3.16.0-debian
           IAM_E2E_BUN_IMAGE: oven/bun:1.4.4-alpine
         run: pnpm test:e2e
-      - name: Redact E2E logs
-        if: failure()
-        run: |
-          bun -e '
-            import { existsSync } from "node:fs";
-            import { stripVTControlCharacters } from "node:util";
-            import { redactSensitiveLog } from "./.sandcastle/github.ts";
-            const root = "test-results/e2e";
-            if (existsSync(root)) {
-              for await (const path of new Bun.Glob("**/*.log").scan({ cwd: root })) {
-                const raw = await Bun.file(`${root}/${path}`).text();
-                await Bun.write(`test-results/e2e-redacted/${path}`, redactSensitiveLog(stripVTControlCharacters(raw)));
-              }
-            }
-          '
-      - name: Upload redacted E2E logs
+      - name: Upload E2E logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: e2e-logs-${{ github.run_attempt }}
-          path: test-results/e2e-redacted/**/*.log
+          path: test-results/e2e/**/*.log
           retention-days: 7
           if-no-files-found: ignore
 

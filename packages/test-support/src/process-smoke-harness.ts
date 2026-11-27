@@ -59,10 +59,6 @@ export function captureProcessOutput(child: OwnedProcessTree, maxLength = 64 * 1
   return () => output;
 }
 
-export async function terminateProcessTree(child: OwnedProcessTree, options = { timeoutMs: 5_000 }) {
-  await child.closeOwnedProcessTree(options);
-}
-
 export function startProcess(child: OwnedProcessTree, options: { timeoutMs?: number; maxOutputBytes?: number } = {}) {
   const output = captureProcessOutput(child, options.maxOutputBytes);
   const abort = new AbortController();

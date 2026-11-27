@@ -91,7 +91,7 @@ expect(failure).toBeInstanceOf(ExpectedError);
 - **类型检查**。`pnpm typecheck:root` 通过 [Sandcastle tsconfig](../../.sandcastle/tsconfig.json) 与 [scripts tsconfig](../../scripts/tsconfig.json) 检查 `.sandcastle/` 及 `scripts/` 全部代码与测试。
 - **方案 X 真实 Docker 冒烟**。`pnpm sandcastle:smoke`（经 `node .sandcastle/run.mts --smoke` 调用 [`.sandcastle/smoke.mts`](../../.sandcastle/smoke.mts)）在临时克隆仓库上用本地探测 Provider 串行验证两类无特权沙箱：
   - linked worktree 自洽只读评审沙箱（工作树与 `.git` 不可写、`auth.json` 单向只读、无 `/var/run/docker.sock` 与 `docker` CLI、无法访问宿主 loopback、无 `pnpm-store` / Turbo 缓存 / Docker registry / GitHub 凭据，且未设 `DOCKER_HOST`，未注入专用测试端点）；
-  - 可写方案 X 实施沙箱（宿主独占 worktree + `head` 模式、零 `/var/run/docker.sock` / `docker` CLI / `--network=host`、`onSandboxReady` 安装依赖并启动专用测试服务、Turbo 跨次缓存落盘宿主、经 `core.hooksPath=.husky` 直接启用 `.husky/pre-commit` 且不改宿主 `.git/config`、容器内实跑原生 PostgreSQL + Redis + etcd + APISIX 集成测试并确认测试命令退出后服务仍可用，且主仓与 worktree 不产生 `.sandcastle/resources/`）。准备、诊断与恢复见[运维手册](../../.sandcastle/README.md#启动与诊断)。
+  - 可写方案 X 实施沙箱（宿主独占 worktree + `head` 模式、零 `/var/run/docker.sock` / `docker` CLI / `--network=host`、`onSandboxReady` 安装依赖并启动专用测试服务、Turbo 跨次缓存落盘宿主、经 `core.hooksPath=.husky` 直接启用 `.husky/pre-commit` 且不改宿主 `.git/config`、容器内实跑原生 PostgreSQL + Redis + etcd + APISIX 集成测试并确认测试命令退出后服务仍可用）。准备、诊断与恢复见[运维手册](../../.sandcastle/README.md#启动与诊断)。
 
 ### 架构守卫
 
@@ -161,7 +161,7 @@ Timeout 用于限制悬挂。进程测试等待实际 readiness，同时观察�
 
 ### 失败诊断与清理
 
-运行目录为 `test-results/e2e/<project>/`，包含资源记录 `run.json`、运行上下文 `runtime-context.json`、种子快照及日志。Playwright 使用 `list` reporter，失败时保留截图、trace 和视频于 `playwright/`。失败或保留现场时，E2E Compose 运行时采集 `containers.log` 与 `services.log`。CI 对运行目录内的 `.log` 文件脱敏后，仅上传 `test-results/e2e-redacted/` 下的日志。
+运行目录为 `test-results/e2e/<project>/`，包含资源记录 `run.json`、运行上下文 `runtime-context.json`、种子快照及日志。Playwright 使用 `list` reporter，失败时保留截图、trace 和视频于 `playwright/`。失败或保留现场时，E2E Compose 运行时采集 `containers.log` 与 `services.log`。CI 失败时上传 `test-results/e2e/**/*.log`，保留 7 天。
 运行结束后按 `run.json` 精确回收本轮容器、网络与数据卷（保留 `iam-e2e-*:local` 本地镜像供后续运行与 `--skip-build` 复用）。指定 `--keep` 时保留容器栈并输出精确清理命令；强制中断后先确认所属进程树退出，再按[恢复命令](commands.md#full-system-e2e)清理准确记录或 project。
 
 ## 验证结果与交付

@@ -376,15 +376,12 @@ describe("Plan X unprivileged session isolation and one-way auth staging", () =>
       GIT_CONFIG_KEY_0: "core.hooksPath",
       GIT_CONFIG_VALUE_0: ".husky",
     });
-    for (const absent of ["DOCKER_HOST", "IAM_E2E_LIFECYCLE", "IAM_TEST_RESOURCE_REGISTRY"])
-      expect(rwCall?.env?.[absent]).toBeUndefined();
+    expect(rwCall?.env?.DOCKER_HOST).toBeUndefined();
 
     const stagedAuthPath = rwCall?.mounts?.[2]?.hostPath;
     expect(stagedAuthPath && existsSync(stagedAuthPath)).toBe(true);
     await rw.cleanup?.();
     expect(stagedAuthPath && existsSync(stagedAuthPath)).toBe(false);
-    expect(existsSync(join(root, ".sandcastle", "resources"))).toBe(false);
-    expect(existsSync(join(wt, ".sandcastle", "resources"))).toBe(false);
   });
 });
 

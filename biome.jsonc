@@ -12,7 +12,6 @@
       "!!.agents/skills",
       "!!.sandcastle/cache",
       "!!.sandcastle/logs",
-      "!!.sandcastle/resources",
       "!!.sandcastle/worktrees",
       "!!.scratch",
       "!!apps/admin-api/static",
@@ -85,12 +84,7 @@
     },
     {
       // This is the Biome counterpart of react-refresh/only-export-components.
-      "includes": [
-        "apps/admin/**/*.tsx",
-        "apps/sso/**/*.tsx",
-        "!**/*.{test,spec}.tsx",
-        "!apps/{admin,sso}/{test,test-integration}/**"
-      ],
+      "includes": ["apps/admin/**/*.tsx", "apps/sso/**/*.tsx", "!**/*.{test,spec}.tsx", "!apps/{admin,sso}/test/**"],
       "linter": {
         "rules": {
           "style": {
@@ -102,7 +96,7 @@
     {
       // The old service preset reported console usage without blocking the command.
       "includes": [
-        "apps/{admin-api,api,worker}/**",
+        "apps/{admin-api,auth-api,gateway,integration-api,sso-api,worker}/**",
         "packages/{api-core,client-snapshot,login-restriction,session-kernel,subject-access}/**"
       ],
       "linter": {

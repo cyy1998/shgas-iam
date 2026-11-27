@@ -10,8 +10,6 @@ export interface OwnedTestResourceLifecycle {
   readonly registerCleanup: (cleanup: () => Promise<void> | void) => void;
 }
 
-export type DedicatedRedisTestConfig = Readonly<RedisConfig>;
-
 /** 仅用于本例独占的 DB；调用方登记全部执行者，控制连接在 reset 后另行关闭。 */
 export async function resetExclusiveRedisTestDatabase(input: {
   readonly redis: Pick<Redis, "flushdb">;
@@ -45,7 +43,7 @@ export function requireExternalTestUrl(input: {
 export function parseDedicatedRedisTestUrl(input: {
   readonly name: string;
   readonly value: string;
-}): DedicatedRedisTestConfig {
+}): Readonly<RedisConfig> {
   const parsed = redisUrlString().safeParse(input.value);
   if (!parsed.success) throw new Error(`${input.name} ${parsed.error.issues[0]?.message}`);
   return parsed.data;

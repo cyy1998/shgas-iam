@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -121,7 +120,6 @@ test -x node_modules/.bin/lint-staged
 test ! -e /var/run/docker.sock
 if command -v docker >/dev/null 2>&1; then exit 1; fi
 test -z "\${DOCKER_HOST:-}"
-test -z "\${IAM_E2E_LIFECYCLE:-}"
 test "$IAM_TEST_POSTGRES_URL" = postgresql://iam_test:iam_test@127.0.0.1:55432/iam_test
 test "$IAM_TEST_REDIS_URL" = redis://127.0.0.1:56379/0
 test "$IAM_TEST_APISIX_ADMIN_URL" = http://127.0.0.1:59180/apisix/admin
@@ -158,8 +156,6 @@ printf '%s\\n' '${COMPLETE}'`),
 
     assert.equal(await git("show", "smoke:sandcastle-smoke.md"), "# Sandcastle smoke");
     assert.equal((await readFile(join(turboCacheDir, "smoke-probe"), "utf8")).trim(), probeToken);
-    assert.equal(existsSync(join(root, ".sandcastle", "resources")), false);
-    assert.equal(existsSync(join(worktreeDir, ".sandcastle", "resources")), false);
     await git("worktree", "remove", worktreeDir);
     assert.equal((await git("worktree", "list", "--porcelain")).match(/^worktree /gm)?.length, 1);
     assert.equal(await readFile(join(root, ".git", "config"), "utf8"), hostConfig);
