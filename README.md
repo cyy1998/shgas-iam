@@ -84,14 +84,14 @@ Gateway 与人工维护命令分别见 [Gateway README](apps/gateway/README.md) 
 
 ## 开发与项目文档
 
-- [构建、测试与开发命令](docs/engineering/commands.md)提供构建、定向测试和验证入口，[测试与验证](docs/engineering/testing.md)说明何时使用各通道。
+- [构建、测试与开发命令](docs/engineering/commands.md)提供 6 个核心根命令（`pnpm check`、`pnpm fix`、`pnpm test:unit`、`pnpm test:integration`、`pnpm test:e2e`、`pnpm verify`）、定向测试与 GitHub Actions `ci-gate` 说明，[测试与验证](docs/engineering/testing.md)说明各层级选择与资源隔离。
 - [文档索引](docs/index.md)登记工程规范、功能规则、接入指南、运维手册和 ADR。[AGENTS.md](AGENTS.md)按任务指向适用规则。
 - [功能与业务规则](docs/features/README.md)和 [GLOSSARY.md](GLOSSARY.md)维护业务行为与领域术语。
 - [使用与接入指南](docs/guides/README.md)面向管理员和接入应用，[运维操作入口](docs/releases/README.md)覆盖部署、维护和恢复。
 
 ## 贡献指南
 
-按[编码风格与命名约定](docs/engineering/coding-style.md)修改代码。涉及文档时，按[文档索引的维护方式](docs/index.md#维护方式)更新对应出处并运行 `pnpm check:docs`。提交信息使用 Conventional Commits。
+按[编码风格与命名约定](docs/engineering/coding-style.md)修改代码，提交前可运行 `pnpm check` 或 `pnpm verify`。涉及文档时，按[文档索引的维护方式](docs/index.md#维护方式)更新对应出处并运行 `pnpm check:docs`。提交信息使用 Conventional Commits。
 
 ## 许可证
 
