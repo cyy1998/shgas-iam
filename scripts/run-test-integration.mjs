@@ -3,7 +3,7 @@ import "./require-linux.mjs";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import process from "node:process";
-import { prepareManagedGatewayApisix } from "../apps/gateway/test-integration/support/apisix-provider.mjs";
+import { testApisixAdminKeyEnv, testApisixAdminUrlEnv } from "./test-resources/apisix-admin.mjs";
 import {
   integrationRedisSlotLimit,
   parseIntegrationArguments,
@@ -14,16 +14,13 @@ import {
   testRedisUrlEnv,
 } from "./test-resources/integration-selection.mjs";
 import {
-  createManagedResourceRun,
-  finishManagedResourceRun,
   formatResourceFailure,
-  managedServiceEndpoint,
   saveManagedResourceRun,
-  startManagedResources,
   writeAtomicResourceRecord,
 } from "./test-resources/managed-resources.mjs";
 import { pnpmCommand, runOwnedCommand } from "./test-resources/owned-command.mjs";
-import { prepareManagedPostgresTemplate } from "./test-resources/postgres-template.mjs";
+import { formatRedisSlotUrl } from "./test-resources/redis-preflight.mjs";
+import { externalEndpointEnvNames, prepareManagedTestResources } from "./test-resources/resource-provider.mjs";
 
 const taskPriority = [
   "@iam/auth-api:bun",
@@ -44,50 +41,30 @@ const priority = (task) => {
   return rank === -1 ? taskPriority.length : rank;
 };
 
-async function prepareTaskEnvironments(run, tasks, environment, commandOptions) {
-  const { root, record } = run;
-  if (record.services.length > 0) await startManagedResources(run, commandOptions);
-
-  const postgres = record.services.includes("postgres")
-    ? await prepareManagedPostgresTemplate(run, { ...commandOptions, env: environment })
-    : undefined;
-
-  const redis = record.services.includes("redis")
-    ? await managedServiceEndpoint(run, "redis", 6379, commandOptions)
-    : undefined;
-  const gatewayApisix = tasks.some(taskRequiresGatewayApisix)
-    ? await prepareManagedGatewayApisix({
-        run,
-        ...commandOptions,
-      })
-    : undefined;
-  const endpoints = {
-    ...(postgres ? { postgres } : {}),
-    ...(redis ? { redis } : {}),
-    ...(gatewayApisix ? { apisix: gatewayApisix } : {}),
-  };
-  if (Object.keys(endpoints).length > 0) record.endpoints = endpoints;
-
+async function publishTaskEnvironments(prepared, tasks, signal) {
+  const { run, endpoints } = prepared;
   let redisSlot = 0;
   const taskEnvironments = Object.fromEntries(
     tasks.map((task) => {
       const variables = {};
       if (task.resources.postgres) {
-        variables[testPostgresUrlEnv] = postgres.databaseUrl;
-        variables.IAM_TEST_POSTGRES_TEMPLATE = postgres.templateName;
+        variables[testPostgresUrlEnv] = endpoints.postgres.databaseUrl;
+        variables.IAM_TEST_POSTGRES_TEMPLATE = endpoints.postgres.templateName;
       }
-      if (task.resources.redis) variables[testRedisUrlEnv] = `redis://${redis.host}:${redis.port}/${++redisSlot}`;
+      if (task.resources.redis) {
+        variables[testRedisUrlEnv] = formatRedisSlotUrl(endpoints.redis.url, ++redisSlot);
+      }
       if (taskRequiresGatewayApisix(task)) {
-        variables.IAM_TEST_APISIX_ADMIN_URL = gatewayApisix.adminUrl;
-        variables.IAM_TEST_APISIX_ADMIN_KEY = gatewayApisix.adminKey;
+        variables[testApisixAdminUrlEnv] = endpoints.apisix.adminUrl;
+        variables[testApisixAdminKeyEnv] = endpoints.apisix.adminKey;
       }
       return [`${task.name}:${task.executor}`, variables];
     }),
   );
 
-  commandOptions.signal.throwIfAborted();
-  await writeAtomicResourceRecord(join(root, record.testEnvironmentFile), { tasks: taskEnvironments });
-  record.status = "running";
+  signal.throwIfAborted();
+  await writeAtomicResourceRecord(join(run.root, run.record.testEnvironmentFile), { tasks: taskEnvironments });
+  run.record.status = "running";
   await saveManagedResourceRun(run);
   return taskEnvironments;
 }
@@ -163,25 +140,6 @@ async function executeTasks({ run, tasks, taskEnvironments, environment, pnpmCli
   return failures;
 }
 
-async function finishIntegrationRun(run, cleanupTimeoutMs, failures, signal) {
-  // All package trees are joined before the root tears down this run's resources.
-  try {
-    const hasManagedStack =
-      (run.record.status !== "created" && run.record.services.length > 0) || Boolean(run.record.apisix);
-    if (!hasManagedStack) {
-      run.record.status = "cleaned";
-      await saveManagedResourceRun(run);
-    } else {
-      await finishManagedResourceRun(run, {
-        cleanupTimeoutMs,
-        diagnostics: failures.length > 0 || signal.aborted,
-      });
-    }
-  } catch (error) {
-    failures.push(error);
-  }
-}
-
 const controller = new AbortController();
 const onInterrupt = () => controller.abort(new Error("Integration interrupted by SIGINT"));
 const onTerminate = () => controller.abort(new Error("Integration interrupted by SIGTERM"));
@@ -190,6 +148,7 @@ process.on("SIGTERM", onTerminate);
 const started = performance.now();
 let timer;
 let run;
+let prepared;
 let options;
 let executionStart;
 const failures = [];
@@ -218,38 +177,53 @@ try {
     () => controller.abort(new Error(`Integration deadline exceeded after ${options.timeoutMs}ms`)),
     options.timeoutMs,
   );
-  const environment = { ...process.env };
-  if (browserWorkers !== undefined) environment.IAM_TEST_BROWSER_WORKERS = String(browserWorkers);
-  delete environment[testPostgresUrlEnv];
-  delete environment[testRedisUrlEnv];
-  delete environment.IAM_TEST_INTEGRATION_SELECTION;
-  delete environment.IAM_TEST_POSTGRES_TEMPLATE;
-  delete environment.IAM_TEST_APISIX_ADMIN_URL;
-  delete environment.IAM_TEST_APISIX_ADMIN_KEY;
-  const services = ["postgres", "redis"].filter((service) => tasks.some((task) => task.resources[service]));
-  run = await createManagedResourceRun({
+  const neededServices = [
+    ...["postgres", "redis"].filter((service) => tasks.some((task) => task.resources[service])),
+    ...(tasks.some(taskRequiresGatewayApisix) ? ["apisix"] : []),
+  ];
+  prepared = await prepareManagedTestResources(neededServices, {
     root,
-    composeFile: "scripts/test-resources/compose.yaml",
-    services,
+    env: process.env,
     keep: options.keep,
     registryFile: process.env.IAM_TEST_RESOURCE_REGISTRY,
-  });
-  environment.IAM_TEST_RESOURCE_RUN_ID = run.record.runId;
-  environment.IAM_TEST_RESOURCE_RECORD = run.recordPath;
-  const taskEnvironments = await prepareTaskEnvironments(run, tasks, environment, {
     signal: controller.signal,
     timeoutMs: options.timeoutMs,
     cleanupTimeoutMs: options.cleanupTimeoutMs,
+    onRunCreated: (createdRun) => {
+      run = createdRun;
+    },
   });
+  const environment = { ...process.env };
+  if (browserWorkers !== undefined) environment.IAM_TEST_BROWSER_WORKERS = String(browserWorkers);
+  for (const name of externalEndpointEnvNames) delete environment[name];
+  delete environment.IAM_TEST_INTEGRATION_SELECTION;
+  delete environment.IAM_TEST_POSTGRES_TEMPLATE;
+  environment.IAM_TEST_RESOURCE_RUN_ID = prepared.run.record.runId;
+  environment.IAM_TEST_RESOURCE_RECORD = prepared.run.recordPath;
+  const taskEnvironments = await publishTaskEnvironments(prepared, tasks, controller.signal);
   executionStart = performance.now();
-  failures.push(...(await executeTasks({ run, tasks, taskEnvironments, environment, pnpmCli, options, controller })));
+  failures.push(
+    ...(await executeTasks({ run: prepared.run, tasks, taskEnvironments, environment, pnpmCli, options, controller })),
+  );
 } catch (error) {
   failures.push(error);
 } finally {
   clearTimeout(timer);
+  if (prepared) {
+    if (executionStart !== undefined) {
+      prepared.run.record.durations.executeMs = Math.round(performance.now() - executionStart);
+    }
+    try {
+      // All package trees are joined before the root tears down this run's resources.
+      await prepared.cleanup({
+        cleanupTimeoutMs: options.cleanupTimeoutMs,
+        diagnostics: failures.length > 0 || controller.signal.aborted,
+      });
+    } catch (error) {
+      failures.push(error);
+    }
+  }
   if (run) {
-    if (executionStart !== undefined) run.record.durations.executeMs = Math.round(performance.now() - executionStart);
-    await finishIntegrationRun(run, options.cleanupTimeoutMs, failures, controller.signal);
     console.log(`[test-resources] timings ${JSON.stringify(run.record.durations)}`);
     console.log(`[integration] Total wall time ${Math.round(performance.now() - started)} ms`);
   }

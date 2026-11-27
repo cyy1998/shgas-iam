@@ -7,6 +7,18 @@ import { runOwnedCommand } from "./owned-command.mjs";
 
 const validStatuses = ["created", "initializing", "ready", "running", "cleaning", "cleaned", "cleanup-failed", "kept"];
 const validStackStatuses = ["created", "initializing", "ready", "cleaning", "cleaned", "cleanup-failed", "kept"];
+const validProviders = ["docker", "native", "external"];
+
+function runProvider(run) {
+  return run.record.provider ?? "docker";
+}
+
+function requireDockerProvider(run, operation) {
+  const provider = runProvider(run);
+  if (provider !== "docker") {
+    throw new Error(`${operation} is forbidden for resource provider "${provider}"`);
+  }
+}
 
 export function repositoryPath(root, path) {
   if (typeof path !== "string" || !path) throw new Error("A repository-relative path is required");
@@ -28,19 +40,25 @@ export async function saveManagedResourceRun(run) {
 
 export async function createManagedResourceRun(options) {
   const root = resolve(options.root);
+  const provider = options.provider ?? "docker";
+  if (typeof provider !== "string" || !validProviders.includes(provider)) {
+    throw new Error(`Invalid managed resource provider: ${String(provider)}`);
+  }
   const runId = randomUUID();
   const project = options.project ?? `${options.projectPrefix ?? "iam-integration"}-${runId.replaceAll("-", "")}`;
   if (!/^[a-z0-9][a-z0-9_-]+$/.test(project)) throw new Error("An exact Compose project name is required");
   const artifactDirectory = repositoryPath(root, options.artifactDirectory ?? `test-results/integration/${runId}`);
   const recordPath = `${artifactDirectory}/run.json`;
+  const isDocker = provider === "docker";
   const record = {
     schemaVersion: 1,
+    provider,
     runId,
     project,
-    composeFile: repositoryPath(root, options.composeFile),
+    composeFile: isDocker ? repositoryPath(root, options.composeFile) : "",
     artifactDirectory,
-    composeEnvironmentFile: `${artifactDirectory}/compose-environment.json`,
-    envFile: `${artifactDirectory}/empty.env`,
+    composeEnvironmentFile: isDocker ? `${artifactDirectory}/compose-environment.json` : "",
+    envFile: isDocker ? `${artifactDirectory}/empty.env` : "",
     testEnvironmentFile: `${artifactDirectory}/test-environment.json`,
     services: [...(options.services ?? [])],
     removeLocalImages: options.removeLocalImages ?? false,
@@ -50,12 +68,14 @@ export async function createManagedResourceRun(options) {
     durations: {},
   };
   await mkdir(join(root, artifactDirectory), { recursive: true });
-  await writeFile(
-    join(root, record.composeEnvironmentFile),
-    `${JSON.stringify(options.composeEnvironment ?? {}, null, 2)}\n`,
-    { mode: 0o600 },
-  );
-  await writeFile(join(root, record.envFile), "", { mode: 0o600 });
+  if (isDocker) {
+    await writeFile(
+      join(root, record.composeEnvironmentFile),
+      `${JSON.stringify(options.composeEnvironment ?? {}, null, 2)}\n`,
+      { mode: 0o600 },
+    );
+    await writeFile(join(root, record.envFile), "", { mode: 0o600 });
+  }
   await writeFile(join(root, record.testEnvironmentFile), "{}\n", { mode: 0o600 });
   const run = { root, recordPath, record };
   await saveManagedResourceRun(run);
@@ -64,7 +84,7 @@ export async function createManagedResourceRun(options) {
     await mkdir(dirname(registry), { recursive: true });
     await appendFile(registry, `${JSON.stringify(recordPath)}\n`, { mode: 0o600 });
   }
-  console.log(`[test-resources] run ${runId}; record ${recordPath}`);
+  console.log(`[test-resources] provider ${provider}; run ${runId}; record ${recordPath}`);
   return run;
 }
 
@@ -89,8 +109,11 @@ function validateComposeStack(root, stack) {
 export async function readManagedResourceRun(root, recordPath) {
   const path = repositoryPath(root, recordPath);
   const record = JSON.parse(await readFile(join(root, path), "utf8"));
+  const provider = record.provider ?? "docker";
   if (
     record.schemaVersion !== 1 ||
+    typeof provider !== "string" ||
+    !validProviders.includes(provider) ||
     typeof record.runId !== "string" ||
     !record.runId ||
     typeof record.project !== "string" ||
@@ -103,8 +126,16 @@ export async function readManagedResourceRun(root, recordPath) {
     Array.isArray(record.durations)
   )
     throw new Error("Invalid managed resource record");
-  for (const field of ["composeFile", "artifactDirectory", "composeEnvironmentFile", "envFile", "testEnvironmentFile"])
-    repositoryPath(root, record[field]);
+  for (const field of ["artifactDirectory", "testEnvironmentFile"]) repositoryPath(root, record[field]);
+  if (provider === "docker") {
+    for (const field of ["composeFile", "composeEnvironmentFile", "envFile"]) repositoryPath(root, record[field]);
+  } else {
+    for (const field of ["composeFile", "composeEnvironmentFile", "envFile"]) {
+      if (record[field] !== undefined && record[field] !== "") {
+        throw new Error(`Non-docker managed resource record must not set ${field}`);
+      }
+    }
+  }
   if (
     path !== `${record.artifactDirectory}/run.json` ||
     typeof record.keep !== "boolean" ||
@@ -112,7 +143,10 @@ export async function readManagedResourceRun(root, recordPath) {
     record.services.some((service) => typeof service !== "string")
   )
     throw new Error("Invalid managed resource record paths or options");
-  if (record.apisix !== undefined) validateComposeStack(root, record.apisix);
+  if (record.apisix !== undefined) {
+    if (provider !== "docker") throw new Error("Non-docker managed resource record must not define a Compose stack");
+    validateComposeStack(root, record.apisix);
+  }
   if (
     record.endpoints !== undefined &&
     (!record.endpoints || typeof record.endpoints !== "object" || Array.isArray(record.endpoints))
@@ -171,6 +205,7 @@ export function managedComposeArguments(run, args) {
 }
 
 export async function runManagedComposeCommand(run, args, options = {}) {
+  requireDockerProvider(run, "Docker Compose command");
   const { runCommand = runOwnedCommand, ...commandOptions } = options;
   const environment = JSON.parse(await readFile(join(run.root, run.record.composeEnvironmentFile), "utf8"));
   if (
@@ -189,6 +224,7 @@ export async function runManagedComposeCommand(run, args, options = {}) {
 }
 
 export async function startManagedResources(run, options = {}) {
+  requireDockerProvider(run, "Docker Compose startup");
   run.record.status = "initializing";
   await saveManagedResourceRun(run);
   const start = performance.now();
@@ -204,6 +240,7 @@ export async function startManagedResources(run, options = {}) {
 }
 
 export async function managedServicePort(run, service, port, options = {}) {
+  requireDockerProvider(run, "Docker Compose port discovery");
   const result = await runManagedComposeCommand(run, ["port", service, String(port)], options);
   const match = result.output.trim().match(/^127\.0\.0\.1:(\d+)$/);
   if (result.exitCode !== 0 || !match) throw new Error(`Could not discover ${service} loopback port: ${result.output}`);
@@ -251,6 +288,7 @@ async function managedContainerBridgeIp(run, service, options = {}) {
 
 /** Prefer direct Compose bridge connectivity on Linux, WSL2 and AFK, with published loopback as a fallback. */
 export async function managedServiceEndpoint(run, service, port, options = {}) {
+  requireDockerProvider(run, "Docker endpoint discovery");
   const containerIp = await managedContainerBridgeIp(run, service, options);
   if (containerIp && (await probeTcpEndpoint(containerIp, port, options.signal))) {
     return { host: containerIp, port };
@@ -278,6 +316,7 @@ async function collectComposeStackDiagnostics(targetRun, prefix, options = {}) {
 }
 
 export async function collectManagedResourceDiagnostics(run, options = {}) {
+  if (runProvider(run) !== "docker") return;
   if (run.record.services.length > 0 || !run.record.apisix) {
     await collectComposeStackDiagnostics(run, "", options);
   }
@@ -311,6 +350,14 @@ async function cleanupComposeTarget(targetRun, logName, options = {}) {
 
 export async function cleanupManagedResources(run, options = {}) {
   if (options.respectKeep && run.record.keep) return;
+  if (runProvider(run) !== "docker") {
+    if (run.record.status === "cleaned") return;
+    const start = performance.now();
+    run.record.durations.cleanupMs = Math.round(performance.now() - start);
+    run.record.status = "cleaned";
+    await saveManagedResourceRun(run);
+    return;
+  }
   const apisixPending = Boolean(run.record.apisix && run.record.apisix.status !== "cleaned");
   if (run.record.status === "cleaned" && !apisixPending) return;
   const start = performance.now();

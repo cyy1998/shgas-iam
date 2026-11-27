@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import process from "node:process";
+import { testApisixAdminKeyEnv, testApisixAdminUrlEnv } from "./test-resources/apisix-admin.mjs";
 import {
   integrationDeclarations,
   integrationRedisSlotLimit,
@@ -15,6 +16,7 @@ import {
 } from "./test-resources/integration-selection.mjs";
 import { formatResourceFailure, readManagedResourceRun } from "./test-resources/managed-resources.mjs";
 import { pnpmCommand, runOwnedCommand } from "./test-resources/owned-command.mjs";
+import { formatRedisSlotUrl, parseTestRedisUrl } from "./test-resources/redis-preflight.mjs";
 
 function repositoryRoot(directory) {
   let root = directory;
@@ -85,22 +87,24 @@ try {
     testEnvironment[name] = environment[name];
   }
   if (declaration.resources.redis) {
-    const url = URL.parse(environment[testRedisUrlEnv]);
-    const slot = /^\/([1-9]\d*)$/u.exec(url?.pathname)?.[1];
+    const parsedRedis = parseTestRedisUrl(environment[testRedisUrlEnv], testRedisUrlEnv);
+    const endpointRedisUrl = run.record.endpoints?.redis?.url;
     if (
-      url?.protocol !== "redis:" ||
-      !url.hostname ||
-      !url.port ||
-      url.search ||
-      url.hash ||
-      !slot ||
-      Number(slot) > integrationRedisSlotLimit
+      parsedRedis.db < 1 ||
+      parsedRedis.db > integrationRedisSlotLimit ||
+      typeof endpointRedisUrl !== "string" ||
+      formatRedisSlotUrl(endpointRedisUrl, parsedRedis.db) !== environment[testRedisUrlEnv]
     )
       throw new Error(`Managed resource record has an invalid Redis slot for ${taskKey}`);
   }
   if (declaration.resources.postgres) {
     const templateName = environment.IAM_TEST_POSTGRES_TEMPLATE;
-    if (typeof templateName !== "string" || !templateName)
+    if (
+      typeof templateName !== "string" ||
+      !templateName ||
+      run.record.endpoints?.postgres?.databaseUrl !== environment[testPostgresUrlEnv] ||
+      run.record.endpoints?.postgres?.templateName !== templateName
+    )
       throw new Error("Managed resource record is missing the PostgreSQL template");
     testEnvironment.IAM_TEST_POSTGRES_TEMPLATE = templateName;
   }
@@ -112,8 +116,17 @@ try {
   const selectedTask = selected.find((task) => task.executor === executor && task.files.length === files.length);
   if (!selectedTask) throw new Error("No Integration files match this package executor");
   if (taskRequiresGatewayApisix(selectedTask)) {
-    for (const name of ["IAM_TEST_APISIX_ADMIN_URL", "IAM_TEST_APISIX_ADMIN_KEY"]) {
-      if (typeof environment[name] !== "string" || !environment[name] || environment[name] !== process.env[name])
+    const expectedApisix = {
+      [testApisixAdminUrlEnv]: run.record.endpoints?.apisix?.adminUrl,
+      [testApisixAdminKeyEnv]: run.record.endpoints?.apisix?.adminKey,
+    };
+    for (const name of [testApisixAdminUrlEnv, testApisixAdminKeyEnv]) {
+      if (
+        typeof environment[name] !== "string" ||
+        !environment[name] ||
+        environment[name] !== process.env[name] ||
+        environment[name] !== expectedApisix[name]
+      )
         throw new Error(`${name} must come from this run's managed resource record for ${taskKey}`);
       testEnvironment[name] = environment[name];
     }
