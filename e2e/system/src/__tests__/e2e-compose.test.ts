@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import {
   createE2ECompose,
   e2eBuildServices,
@@ -148,5 +149,10 @@ describe("production container E2E compose topology", () => {
     for (const service of e2eBuildServices) {
       expect(compose.services[service].image).toBe(`iam-e2e-${service}:${baseOptions.project}`);
     }
+  });
+
+  test("caps E2E APISIX DNS cache TTL so restarted backend containers refresh immediately after /reset", () => {
+    const apisixConfig = readFileSync(new URL("../../docker/apisix/apisix.yaml", import.meta.url), "utf8");
+    expect(apisixConfig).toMatch(/^\s*dns_resolver_valid:\s*1\b/mu);
   });
 });

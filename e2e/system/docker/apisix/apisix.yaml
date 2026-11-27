@@ -22,6 +22,10 @@ apisix:
   node_listen:
     - ip: ${{IAM_E2E_APISIX_LISTEN_IP:=0.0.0.0}}
       port: ${{IAM_E2E_APISIX_HTTP_PORT:=9080}}
+  # Backends are stopped and restarted on the Docker bridge network during per-test /reset,
+  # which can reassign container IPs. Override Docker DNS's 600s TTL so APISIX refreshes
+  # upstream IPs within 1s instead of returning 502 against stale container addresses.
+  dns_resolver_valid: 1
   enable_admin: true
   # The internal control API defaults to a fixed port shared by all host-network projects.
   enable_control: false
