@@ -4,11 +4,7 @@
   "version": "0.0.1",
   "private": true,
   "iamWorkspace": {
-    "kind": "backend",
-    "gates": [
-      "container-smoke",
-      "e2e-runtime"
-    ]
+    "kind": "backend"
   },
   "scripts": {
     "dev": "bun --watch src/main.ts",

@@ -1,6 +1,6 @@
 services:
   apisix-etcd:
-    image: docker.xuanyuan.run/bitnamilegacy/etcd:3.5.11
+    image: "${IAM_GATEWAY_TEST_ETCD_IMAGE:-docker.xuanyuan.run/bitnamilegacy/etcd:3.5.11}"
     # A disposable single node needs no bootstrap probe process from the image entrypoint.
     entrypoint: ["etcd"]
     command:
@@ -25,6 +25,8 @@ services:
     build:
       context: ./apps/gateway/test-integration/support
       dockerfile: apisix.Dockerfile
+      args:
+        APISIX_IMAGE: "${IAM_GATEWAY_TEST_APISIX_BASE_IMAGE:-docker.xuanyuan.run/apache/apisix:3.16.0-debian}"
     ports:
       - "127.0.0.1::9180"
     depends_on:

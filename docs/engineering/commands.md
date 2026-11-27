@@ -236,7 +236,7 @@ Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit�
 独立 RP 位于 [oidc-rp.integration.test.ts](../../apps/sso-api/test-integration/oidc/oidc-rp.integration.test.ts)。
 它们不是普通浏览器旅程，也不由基础 verify 自动运行。
 
-独立套件自管 Docker Compose 资源编排验证（[oidc-suite-resources.integration.test.ts](../../apps/sso-api/test-integration/oidc/oidc-suite-resources.integration.test.ts)）
+独立套件自管 Docker Compose 资源编排验证（`oidc-suite-resources.integration.test.ts`）
 已剥离出日常并发 `pnpm test:integration`（保留 `oidc-rp.integration.test.ts` 与全部其余业务 OIDC 用例），通过独立入口和路径门禁执行，并无条件纳入 `pnpm verify:release`：
 
 ```bash

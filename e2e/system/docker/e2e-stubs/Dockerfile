@@ -1,4 +1,5 @@
-FROM docker.xuanyuan.run/oven/bun:1.4.4-alpine
+ARG BUN_IMAGE=docker.xuanyuan.run/oven/bun:1.4.4-alpine
+FROM ${BUN_IMAGE}
 WORKDIR /app
 COPY src/wecom-provider.ts ./src/wecom-provider.ts
 COPY src/sms-provider.ts ./src/sms-provider.ts

@@ -125,7 +125,7 @@ Unit 由 Turbo 跨 workspace 编排，通过 `transit` 传播依赖源码变化�
 
 | 运行范围              | 失败后何时停止                                                                                                                                                                                                                                                                                                            |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 聚合验证              | 当前命令启动失败或非零退出，后续命令不再启动。[基础验证](../../scripts/verify.mjs) · [CI 与发布验证](../../scripts/run-verification-gate.mjs)                                                                                                                                                                             |
+| 聚合验证              | 当前命令启动失败或非零退出，后续命令不再启动。[聚合检查与验证](../../scripts/verify.mjs)                                                                                                                                                                                                                                  |
 | 根 Integration 任务   | 根 runner 优先启动耗时较长的任务，默认最多同时运行 3 个任务，允许不同执行器重叠。任一任务失败即取消在途进程树，停止新任务，并在回收资源前等待所有已启动任务收尾。[根 Integration runner](../../scripts/run-test-integration.mjs)                                                                                          |
 | 包级 Integration 用例 | Bun 与 Vitest 限制并发并启用首错停止。Playwright 零重试、失败上限为 1。带资源的集合固定单 worker，无资源集合默认使用 `min(4, max(2, floor(cpus / 2)))` 个 worker。Admin 和 SSO 的 mock API 用例可在同一文件内并行。达到失败上限时停止调度，已启动的用例仍需收尾。[包级 runner](../../scripts/run-package-integration.mjs) |
 | Full-system E2E       | 一次 Playwright 运行默认使用一个 worker、零重试，跑完全部选中用例。新文件开始前自动复位，按需用 `-x` 首错停止。[Playwright 配置](../../e2e/system/playwright.config.ts)                                                                                                                                                   |
@@ -145,7 +145,7 @@ Timeout 用于限制悬挂。进程测试等待实际 readiness，同时观察�
 
 ## Full-system E2E
 
-九个业务 spec 通过真实 APISIX 双入口观察业务结果。Docker 运行 PostgreSQL、Redis、etcd 和 APISIX，Auth API、SSO API、Integration API、Admin API、Worker、Gateway API、Admin 和 SSO 在当前执行环境监听回环地址。浏览器通过两个 hostname 分别访问网关，以验证 Cookie 作用域和入口隔离。根命令直连 Playwright 包装入口，剥离 `--` 前的运行时开关，透传文件筛选、`-g`、`-x`、`--last-failed` 和 `--ui` 等参数。[E2E 命令](commands.md#full-system-e2e) · [运行时编排](../../e2e/system/src/hybrid-runtime.ts)
+九个业务 spec 通过真实 APISIX 双入口观察业务结果。Docker 运行 PostgreSQL、Redis、etcd 和 APISIX，Auth API、SSO API、Integration API、Admin API、Worker、Gateway API、Admin 和 SSO 在当前执行环境监听回环地址。浏览器通过两个 hostname 分别访问网关，以验证 Cookie 作用域和入口隔离。根命令直连 Playwright 包装入口，剥离 `--` 前的运行时开关，透传文件筛选、`-g`、`-x`、`--last-failed` 和 `--ui` 等参数。[E2E 命令](commands.md#full-system-e2e) · [运行时编排](../../e2e/system/src/e2e-runtime.ts)
 
 ### 初始化与就绪
 
