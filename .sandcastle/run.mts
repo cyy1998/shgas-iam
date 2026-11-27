@@ -20,14 +20,6 @@ export function parsePositiveInt(name: string, raw: string): number {
   return value;
 }
 
-export function parseNonNegativeInt(name: string, raw: string): number {
-  const trimmed = raw.trim();
-  if (!/^(?:0|[1-9]\d*)$/.test(trimmed)) throw new Error(`参数 ${name} 必须为非负整数，收到：${JSON.stringify(raw)}`);
-  const value = Number(trimmed);
-  if (!Number.isSafeInteger(value) || value < 0) throw new Error(`参数 ${name} 超出安全整数范围：${raw}`);
-  return value;
-}
-
 async function loadDotEnv(): Promise<void> {
   const raw = await readFile(join(cwd, ".sandcastle", ".env"), "utf8").catch((err: unknown) => {
     if (err instanceof Error && "code" in err && err.code === "ENOENT") return "";
@@ -70,15 +62,6 @@ async function main(): Promise<void> {
   const imageName = env.SANDCASTLE_IMAGE?.trim() || "iam-sandcastle:local";
   const remote = env.SANDCASTLE_GIT_REMOTE?.trim() || undefined;
   const baseBranch = env.SANDCASTLE_BASE_BRANCH?.trim() || undefined;
-  const ciPollIntervalMs = env.SANDCASTLE_CI_POLL_INTERVAL_MS?.trim()
-    ? parsePositiveInt("SANDCASTLE_CI_POLL_INTERVAL_MS", env.SANDCASTLE_CI_POLL_INTERVAL_MS)
-    : undefined;
-  const ciTimeoutMs = env.SANDCASTLE_CI_TIMEOUT_MS?.trim()
-    ? parsePositiveInt("SANDCASTLE_CI_TIMEOUT_MS", env.SANDCASTLE_CI_TIMEOUT_MS)
-    : undefined;
-  const ciMaxRepairs = env.SANDCASTLE_CI_MAX_REPAIRS?.trim()
-    ? parseNonNegativeInt("SANDCASTLE_CI_MAX_REPAIRS", env.SANDCASTLE_CI_MAX_REPAIRS)
-    : undefined;
 
   await exec("docker", ["info", "--format", "{{.ServerVersion}}"], { cwd });
   if (values.build) {
@@ -109,7 +92,7 @@ async function main(): Promise<void> {
     return;
   }
   if (values.smoke) {
-    await smoke(cwd);
+    await smoke(cwd, imageName);
     return;
   }
 
@@ -136,9 +119,6 @@ async function main(): Promise<void> {
     maxSpecs,
     maxParallel,
     draft: values.draft ?? /^(?:1|true)$/i.test(env.SANDCASTLE_PR_DRAFT?.trim() ?? ""),
-    ciPollIntervalMs,
-    ciTimeoutMs,
-    ciMaxRepairs,
     agents,
     createSession: createRepoSessionFactory({
       cwd,

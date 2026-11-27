@@ -11,7 +11,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 RUN npm install -g pnpm@12.21.0 @openai/codex@${CODEX_VERSION}
 RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.4" \
-    && install -m 0755 /root/.bun/bin/bun /usr/local/bin/bun
+    && install -m 0755 /root/.bun/bin/bun /usr/local/bin/bun \
+    && rm -rf /root/.bun
 
 # Plan X native integration stack (no Docker CLI/Compose; no resident services):
 # PostgreSQL 18.4 (PGDG archive), Redis 8.8.0 (official Redis repo),

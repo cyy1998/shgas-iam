@@ -6,10 +6,6 @@ inputs:
     description: Optional Turbo cache scope name (empty to skip Turbo cache)
     required: false
     default: ""
-  playwright-filter:
-    description: Optional pnpm workspace filter to install Playwright Chromium for
-    required: false
-    default: ""
 
 runs:
   using: composite
@@ -34,6 +30,3 @@ runs:
       env:
         HUSKY: "0"
       run: pnpm install --frozen-lockfile
-    - if: ${{ inputs.playwright-filter != '' }}
-      shell: bash
-      run: pnpm --filter "${{ inputs.playwright-filter }}" exec playwright install --with-deps chromium

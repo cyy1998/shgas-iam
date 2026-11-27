@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { type AgentProvider, createBindMountSandboxProvider, type MountConfig } from "@ai-hero/sandcastle";
 import { type AfkOptions, extractTag, hasStandaloneCompletion, runAfk } from "../afk.ts";
 import {
@@ -14,22 +14,8 @@ import {
   verifyGitRemote,
   verifyMergeCommit,
 } from "../git.ts";
-import {
-  type CheckRun,
-  ensureClosesLines,
-  fetchSanitizedCiFailureLogs,
-  findBlockingOpenTickets,
-  listCommitCheckRuns,
-  listReadySpecNumbers,
-  readSpec,
-  redactSensitiveLog,
-  resolveSpecBranch,
-  sanitizeCiFailureLogs,
-  selectLatestCiGateCheckRun,
-  upsertPullRequest,
-  type WorkflowRun,
-} from "../github.ts";
-import { parseNonNegativeInt, parsePositiveInt } from "../run.mts";
+import { createGitHubClient, ensureClosesLines, findBlockingOpenTickets, resolveSpecBranch } from "../github.ts";
+import { parsePositiveInt } from "../run.mts";
 import { createRepoSessionFactory, stageCodexAuth } from "../session.ts";
 
 const PROMPTS_DIR = resolve(import.meta.dirname, "..", "prompts");
@@ -39,13 +25,6 @@ const tempDirs: string[] = [];
 
 const page = <T>(nodes: T[], hasNextPage = false) => ({ pageInfo: { hasNextPage }, nodes });
 const labelPage = (names: string[]) => page(names.map((name) => ({ name })));
-const checkRun = (
-  id: number,
-  name: string,
-  head_sha: string,
-  status = "completed",
-  conclusion: string | null = "success",
-): CheckRun => ({ id, name, head_sha, status, conclusion });
 const prEntry = (number: number, headRefName: string, body: string, headRefOid: string) => ({
   number,
   url: `https://github.com/${REPO}/pull/${number}`,
@@ -59,7 +38,7 @@ const prEntry = (number: number, headRefName: string, body: string, headRefOid: 
 });
 const specGraphql = (
   number: number,
-  opts: { branches?: string[]; branchOverflow?: boolean; subIssues?: unknown[]; comments?: string[] } = {},
+  opts: { branches?: string[]; branchOverflow?: boolean; subIssues?: unknown[]; labels?: string[] } = {},
 ) =>
   JSON.stringify({
     data: {
@@ -69,14 +48,8 @@ const specGraphql = (
           title: `Spec ${number}`,
           body: "Spec body",
           state: "OPEN",
-          labels: labelPage(["type:spec", "ready-for-agent"]),
-          comments: page(
-            (opts.comments ?? []).map((body) => ({
-              body,
-              createdAt: new Date(0).toISOString(),
-              author: { login: "sandcastle" },
-            })),
-          ),
+          labels: labelPage(opts.labels ?? ["type:spec", "ready-for-agent"]),
+          comments: page([]),
           linkedBranches: page(
             (opts.branches ?? []).map((name) => ({ ref: { name } })),
             Boolean(opts.branchOverflow),
@@ -117,31 +90,56 @@ afterEach(async () => {
     await rm(dir, { recursive: true, force: true });
 });
 
-describe("GitHub GraphQL filtering, pagination overflow, linkedBranches, and PR reuse", () => {
+describe("GitHub issue filtering, pagination overflow, linkedBranches, and PR reuse", () => {
   test("lists only ready-for-agent specs without needs-attention and rejects pagination overflow", async () => {
-    let query = "";
-    const nums = await listReadySpecNumbers(REPO, process.cwd(), async (_f, args) => {
-      query = args.join(" ");
-      const nodes = [
-        { number: 440, labels: labelPage(["type:spec", "ready-for-agent"]) },
-        { number: 433, labels: labelPage(["type:spec", "ready-for-agent"]) },
-        { number: 430, labels: labelPage(["type:spec", "ready-for-agent", "needs-attention"]) },
-      ];
-      return JSON.stringify({ data: { repository: { issues: page(nodes) } } });
+    const readyLabels = [{ name: "type:spec" }, { name: "ready-for-agent" }];
+    const client = createGitHubClient({
+      repo: REPO,
+      cwd: process.cwd(),
+      execFn: async (_file, args) => {
+        expect(args).toEqual([
+          "issue",
+          "list",
+          "--repo",
+          REPO,
+          "--state",
+          "open",
+          "--label",
+          "type:spec",
+          "--label",
+          "ready-for-agent",
+          "--limit",
+          "100",
+          "--json",
+          "number,labels",
+        ]);
+        return JSON.stringify([
+          { number: 440, labels: readyLabels },
+          { number: 433, labels: readyLabels },
+          { number: 430, labels: [...readyLabels, { name: "needs-attention" }] },
+          { number: 431, labels: [...readyLabels, { name: "type:ticket" }] },
+        ]);
+      },
     });
-    expect(query).toContain('labels:["type:spec","ready-for-agent"]');
+    const nums = await client.listReadySpecNumbers();
     expect(nums).toEqual([433, 440]);
-    const overflow = await captureError(() =>
-      listReadySpecNumbers(REPO, process.cwd(), async () =>
-        JSON.stringify({ data: { repository: { issues: page([], true) } } }),
-      ),
-    );
+
+    const fullPage = createGitHubClient({
+      repo: REPO,
+      cwd: process.cwd(),
+      execFn: async () => JSON.stringify(Array.from({ length: 100 }, (_, number) => ({ number, labels: readyLabels }))),
+    });
+    const overflow = await captureError(() => fullPage.listReadySpecNumbers());
     expect(overflow?.message).toContain("分页溢出");
   });
 
   test("resolves Spec branch from linkedBranches, rejects invalid branches, and reuses same-repo Open PR", async () => {
     const load = (branches: string[], branchOverflow = false) =>
-      readSpec(REPO, 450, process.cwd(), async () => specGraphql(450, { branches, branchOverflow }));
+      createGitHubClient({
+        repo: REPO,
+        cwd: process.cwd(),
+        execFn: async () => specGraphql(450, { branches, branchOverflow }),
+      }).readSpec(450);
     const defaultSpec = await load([]);
     expect(resolveSpecBranch(defaultSpec, "main")).toBe("sandcastle/spec-450");
     expect(resolveSpecBranch(await load(["feat/user-sync"]), "main")).toBe("feat/user-sync");
@@ -169,24 +167,38 @@ describe("GitHub GraphQL filtering, pagination overflow, linkedBranches, and PR 
     expect(findBlockingOpenTickets(partialSpec, new Map([[451, "deadbeef"]])).map((t) => t.number)).toEqual([452]);
 
     const calls: string[][] = [];
-    const prUrl = await upsertPullRequest({
+    const pr = prEntry(99, "feat/user-sync", "Existing\n\nCloses #450\n", "a".repeat(40));
+    const client = createGitHubClient({
       repo: REPO,
       cwd: process.cwd(),
+      execFn: async (_f, args) => {
+        calls.push(args);
+        if (args[1] === "list") {
+          return JSON.stringify([
+            { ...pr, number: 96, isCrossRepository: true },
+            { ...pr, number: 97, baseRefName: "release" },
+            { ...pr, number: 98, headRefName: "feat/other" },
+            pr,
+          ]);
+        }
+        if (args[1] === "edit") pr.body = args[args.indexOf("--body") + 1] ?? "";
+        return "";
+      },
+    });
+    const delivery = {
       specBranch: "feat/user-sync",
       baseBranch: "main",
       title: "Demo",
       body: "New body",
       closeNums: [450, 451],
-      specNumber: 450,
-      execFn: async (_f, args) => {
-        calls.push(args);
-        return args[1] === "list"
-          ? JSON.stringify([prEntry(99, "feat/user-sync", "Existing\n\nCloses #450\n", "a".repeat(40))])
-          : "";
-      },
-    });
+      draft: true,
+    };
+    const prUrl = await client.upsertPullRequest(delivery);
+    const reusedPrUrl = await client.upsertPullRequest(delivery);
+    expect(reusedPrUrl).toBe(prUrl);
+    expect(pr.body).toBe("Existing\n\nCloses #450\n\nCloses #451\n");
     expect(prUrl).toBe(`https://github.com/${REPO}/pull/99`);
-    expect(calls.some((a) => a[1] === "edit" && a.includes("99"))).toBe(true);
+    expect(calls.filter((a) => a[1] === "edit" && a.includes("99"))).toHaveLength(1);
     expect(calls.some((a) => a[1] === "create")).toBe(false);
   });
 });
@@ -271,10 +283,6 @@ describe("Credential preflight, remote URLs, Git refs/merges, completion/tag ext
       ["--spec", ""],
     ] as const)
       expect(() => parsePositiveInt(f, v)).toThrow("正整数");
-    expect(parseNonNegativeInt("SANDCASTLE_CI_MAX_REPAIRS", "0")).toBe(0);
-    expect(parseNonNegativeInt("SANDCASTLE_CI_MAX_REPAIRS", "2")).toBe(2);
-    for (const v of ["-1", "abc"])
-      expect(() => parseNonNegativeInt("SANDCASTLE_CI_MAX_REPAIRS", v)).toThrow("非负整数");
   });
 });
 
@@ -325,7 +333,7 @@ describe("Plan X unprivileged session isolation and one-way auth staging", () =>
       createDockerProvider: fakeDocker,
     });
 
-    const ro = await factory({ worktree: wt, readonly: true, runId: "ro-1" });
+    const ro = await factory({ readonly: true });
     expect(ro.hooks).toBeUndefined();
     expect(providerCalls[0]?.groups).toBeUndefined();
     expect(providerCalls[0]?.network).toBeUndefined();
@@ -349,7 +357,7 @@ describe("Plan X unprivileged session isolation and one-way auth staging", () =>
     expect(createCalls[0]?.mounts.every((m) => m.readonly === true)).toBe(true);
     await ro.cleanup?.();
 
-    const rw = await factory({ worktree: wt, readonly: false, runId: "rw-1" });
+    const rw = await factory({ readonly: false });
     expect(rw.hooks?.sandbox?.onSandboxReady?.[1]?.command).toBe("bash .sandcastle/start-test-infra.sh");
     expect(rw.hooks?.sandbox?.onSandboxReady?.[0]?.command).toContain(
       "pnpm install --frozen-lockfile --prefer-offline",
@@ -385,342 +393,133 @@ describe("Plan X unprivileged session isolation and one-way auth staging", () =>
   });
 });
 
-describe("GitHub check-runs strict head_sha matching and CI failure log redaction/truncation", () => {
-  test("strictly matches head_sha === finalSha && name === 'ci-gate', paginates, and selects highest run id", async () => {
-    const [targetSha, staleSha] = ["a".repeat(40), "b".repeat(40)];
-    const page1 = [
-      checkRun(10, "ci-gate", staleSha),
-      checkRun(20, "fast", targetSha),
-      checkRun(30, "ci-gate", targetSha, "completed", "failure"),
-    ];
-    const page2 = [checkRun(40, "ci-gate", targetSha, "in_progress", null), checkRun(50, "ci-gate", staleSha)];
-    const calls: string[] = [];
-    const filtered = await listCommitCheckRuns(REPO, targetSha, process.cwd(), async (_f, args) => {
-      const ep = args[1] ?? "";
-      calls.push(ep);
-      return JSON.stringify({ total_count: 102, check_runs: ep.includes("page=2") ? page2 : page1 });
-    });
-    expect(calls).toEqual([
-      `repos/${REPO}/commits/${targetSha}/check-runs?per_page=100`,
-      `repos/${REPO}/commits/${targetSha}/check-runs?per_page=100&page=2`,
-    ]);
-    expect(filtered.every((r) => r.head_sha === targetSha)).toBe(true);
-    expect(filtered.map((r) => r.id)).toEqual([20, 30, 40]);
-    const latest = selectLatestCiGateCheckRun(filtered, targetSha);
-    expect(latest?.id).toBe(40);
-    expect(latest?.status).toBe("in_progress");
-    expect(
-      selectLatestCiGateCheckRun(
-        [checkRun(99, "ci-gate", staleSha), checkRun(100, "integration", targetSha)],
-        targetSha,
-      ),
-    ).toBeUndefined();
-  });
+const SPEC_NUMBER = 10;
+const SPEC_BRANCH = `sandcastle/spec-${SPEC_NUMBER}`;
+const READY_SPEC = ["type:spec", "ready-for-agent"];
+type TicketPhase = { worktree: string; number: number };
 
-  test("redacts tokens, auth headers, cookies, passwords, PEM private keys, and URL credentials and truncates tail", async () => {
-    const rawLog = [
-      "Authorization: Bearer super_secret_bearer_token_12345",
-      "Proxy-Authorization: Basic dXNlcjpwYXNzMTIzNDU=",
-      "Cookie: sid=topsecretcookie; csrf=abc",
-      "Set-Cookie: session_id=anothersecret; HttpOnly; Secure",
-      "GH_TOKEN=ghp_1234567890abcdefghij1234567890abcd",
-      "PAT=github_pat_11ABCDEFGH0123456789_xyz9876543210",
-      "OPENAI=sk-proj-abc1234567890defghijk",
-      "AWS=AKIAIOSFODNN7EXAMPLE",
-      "JWT=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U",
-      "DB=postgresql://iam_test:db_secret_pass@127.0.0.1:5432/iam_test",
-      "REDIS=redis://:redis_secret_pass@127.0.0.1:6379/0",
-      "GIT=https://ghs_remotetoken1234567890@github.com/cyy1998/shgas-iam.git",
-      '{"password":"json-password-1","client_secret":"json-secret-2","ok":"visible"}',
-      "POSTGRES_PASSWORD=env-password-3&access_token=query-token-4&keep=yes",
-      "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEAtokenBodySecretLine1\nSecretLine2MoreBase64Content\n-----END RSA PRIVATE KEY-----",
-      "FAIL apps/auth-api/src/login.test.ts: expected 200 received 500",
-    ].join("\n");
+function rawTicket(number: number, blockers: number[] = []) {
+  return {
+    number,
+    title: `Ticket ${number}`,
+    body: "Ticket body",
+    state: "OPEN",
+    labels: labelPage(["type:ticket", "ready-for-agent"]),
+    comments: page([]),
+    blockedBy: page(blockers.map((number) => ({ number, state: "OPEN" }))),
+  };
+}
 
-    const redacted = redactSensitiveLog(rawLog);
-    const leaked =
-      "super_secret_bearer_token_12345 dXNlcjpwYXNzMTIzNDU= topsecretcookie anothersecret ghp_1234567890abcdefghij1234567890abcd github_pat_11ABCDEFGH0123456789_xyz9876543210 sk-proj-abc1234567890defghijk AKIAIOSFODNN7EXAMPLE dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U db_secret_pass redis_secret_pass ghs_remotetoken1234567890 json-password-1 json-secret-2 env-password-3 query-token-4 MIIEpAIBAAKCAQEAtokenBodySecretLine1";
-    for (const secret of leaked.split(" ")) expect(redacted).not.toContain(secret);
-    for (const kept of [
-      "[REDACTED_PRIVATE_KEY]",
-      "postgresql://iam_test:[REDACTED]@127.0.0.1:5432/iam_test",
-      "redis://:[REDACTED]@127.0.0.1:6379/0",
-      '"ok":"visible"',
-      "FAIL apps/auth-api/src/login.test.ts: expected 200 received 500",
-    ]) {
-      expect(redacted).toContain(kept);
-    }
-
-    const truncated = sanitizeCiFailureLogs(
-      Array.from({ length: 350 }, (_, i) => `line-${i + 1}: password=secret_${i + 1}`).join("\n"),
-      { maxLines: 200 },
-    );
-    const lines = truncated.split("\n");
-    expect(lines.length).toBe(200);
-    expect(lines[0]).toContain("truncated 151 earlier lines");
-    expect(lines.at(-1)).toBe("line-350: password=[REDACTED]");
-    expect(truncated).not.toContain("line-1:");
-    expect(truncated).not.toContain("secret_350");
-
-    const charBounded = sanitizeCiFailureLogs(`${"x".repeat(5000)}TAIL_ERROR_MARKER`, { maxLines: 200, maxChars: 256 });
-    expect(charBounded.length).toBeLessThanOrEqual(256);
-    expect(charBounded).toContain("TAIL_ERROR_MARKER");
-
-    const headSha = "c".repeat(40);
-    const fallbackLog = await fetchSanitizedCiFailureLogs({
-      repo: REPO,
-      headSha,
-      cwd: process.cwd(),
-      ciGate: checkRun(77, "ci-gate", headSha, "completed", "failure"),
-      execFn: async (_f, args) => {
-        if (args[1]?.includes("/actions/runs?head_sha="))
-          return JSON.stringify({
-            workflow_runs: [
-              {
-                id: 501,
-                name: "CI",
-                head_sha: headSha,
-                status: "completed",
-                conclusion: "failure",
-              } satisfies WorkflowRun,
-            ],
-          });
-        if (args[0] === "run" && args[1] === "view") throw new Error("log unavailable");
-        if (args[1]?.includes("/actions/runs/501/jobs"))
-          return JSON.stringify({
-            jobs: [
-              {
-                name: "integration",
-                status: "completed",
-                conclusion: "failure",
-                steps: [{ name: "Run full integration suite", status: "completed", conclusion: "failure" }],
-              },
-            ],
-          });
-        return "";
-      },
-    });
-    expect(fallbackLog).toContain('Job "integration"');
-    expect(fallbackLog).toContain('step "Run full integration suite"');
-  });
-
-  test("binds failure logs and fallback jobs to the run in ciGate.details_url", async () => {
-    const headSha = "c".repeat(40);
-    const calls: string[][] = [];
-    const logs = await fetchSanitizedCiFailureLogs({
-      repo: REPO,
-      headSha,
-      cwd: process.cwd(),
-      ciGate: {
-        ...checkRun(77, "ci-gate", headSha, "completed", "failure"),
-        details_url: `https://github.com/${REPO}/actions/runs/501/job/77`,
-        html_url: `https://github.com/${REPO}/actions/runs/502/job/78`,
-      },
-      execFn: async (_f, args) => {
-        calls.push(args);
-        if (args[1]?.includes("?head_sha=")) {
-          return JSON.stringify({ workflow_runs: [{ id: 999, head_sha: headSha, conclusion: "failure" }] });
-        }
-        if (args[0] === "run") throw new Error("log unavailable");
-        return JSON.stringify({ jobs: [{ name: "integration", status: "completed", conclusion: "failure" }] });
-      },
-    });
-    expect(calls).toEqual([
-      ["run", "view", "501", "--repo", REPO, "--log-failed"],
-      ["api", `repos/${REPO}/actions/runs/501/jobs?per_page=100`],
-    ]);
-    expect(logs).toContain('Job "integration"');
-  });
-});
-
-type CiGateScenarioConfig = {
-  specNumber: number;
-  existingPr?: boolean;
+async function setupDelivery(config: {
+  tickets: ReturnType<typeof rawTicket>[];
+  maxParallel?: number;
   draft?: boolean;
-  ciPollIntervalMs?: number;
-  ciTimeoutMs?: number;
-  ciRunAppearanceTimeoutMs?: number;
-  ciMaxRepairs?: number;
-  onAuthCheck?: () => boolean;
-  onPrCreate?: (args: string[]) => void;
-  onPrView?: () => { state?: "OPEN" | "CLOSED" | "MERGED"; isDraft?: boolean; headRefOid?: string };
-  onCheckRuns?: (sha: string) => CheckRun[];
-  onWorkflowRuns?: (sha: string) => WorkflowRun[];
-  failedLog?: string;
-  onRepairCi?: (ctx: { worktree: string; prompt: string; attempt: number }) => Promise<string>;
-};
+  implement?: (phase: TicketPhase) => Promise<string | undefined>;
+  merge?: (worktree: string, prompt: string) => Promise<void>;
+  repair?: (worktree: string) => Promise<void>;
+}) {
+  const root = await makeTempDir("afk-delivery-");
+  const [remote, cwd] = [join(root, "remote.git"), join(root, "repo")];
+  await mkdir(remote);
+  await mkdir(cwd);
+  await gitNoHooks(remote, "init", "--bare", "-q", "-b", "main");
+  await gitNoHooks(cwd, "init", "-q", "-b", "main");
+  await gitNoHooks(cwd, "config", "user.name", "Sandcastle Test");
+  await gitNoHooks(cwd, "config", "user.email", "test@example.invalid");
+  await gitNoHooks(cwd, "remote", "add", "origin", remote);
+  const baseSha = await commitFile(cwd, "README.md", "base\n", "init main");
+  await gitNoHooks(cwd, "push", "-q", "origin", "main");
 
-async function setupCiGateScenario(cfg: CiGateScenarioConfig) {
-  const [specNumber, ticketNumber] = [cfg.specNumber, cfg.specNumber + 1];
-  const [prUrl, specBranch] = [`https://github.com/${REPO}/pull/${specNumber}`, `sandcastle/spec-${specNumber}`];
-  const base = await makeTempDir(`afk-ci-spec-${specNumber}-`);
-  const [bareRemoteDir, repoDir] = [join(base, "remote.git"), join(base, "repo")];
-  await Promise.all([mkdir(bareRemoteDir, { recursive: true }), mkdir(repoDir, { recursive: true })]);
-
-  await gitNoHooks(bareRemoteDir, "init", "--bare", "-q", "-b", "main");
-  for (const args of [
-    ["init", "-q", "-b", "main"],
-    ["config", "user.name", "Sandcastle Test"],
-    ["config", "user.email", "test@example.invalid"],
-    ["remote", "add", "origin", bareRemoteDir],
-  ]) {
-    await gitNoHooks(repoDir, ...args);
-  }
-  await commitFile(repoDir, "README.md", "base\n", "init main");
-  await gitNoHooks(repoDir, "push", "-q", "-u", "origin", "main");
-  await gitNoHooks(repoDir, "checkout", "-q", "-b", specBranch);
-  await gitNoHooks(repoDir, "checkout", "-q", "-b", `sandcastle/ticket-${ticketNumber}`);
-  const tip = await commitFile(
-    repoDir,
-    `ticket-${ticketNumber}.txt`,
-    `impl #${ticketNumber}\n`,
-    `feat: implement #${ticketNumber}`,
-  );
-  await gitNoHooks(repoDir, "checkout", "-q", specBranch);
-  await gitNoHooks(
-    repoDir,
-    "merge",
-    "--no-ff",
-    "-q",
-    "-m",
-    `Merge #${ticketNumber}: Ticket\n\nSandcastle-Ticket: #${ticketNumber}`,
-    tip,
-  );
-  await gitNoHooks(repoDir, "branch", "-D", `sandcastle/ticket-${ticketNumber}`);
-  const initialHeadSha = await gitNoHooks(repoDir, "rev-parse", "HEAD");
-  if (cfg.existingPr) await gitNoHooks(repoDir, "push", "-q", "-u", "origin", specBranch);
-  await gitNoHooks(repoDir, "checkout", "-q", "main");
-
+  const state = {
+    labels: READY_SPEC,
+    prs: [] as (Omit<ReturnType<typeof prEntry>, "state"> & { state: string })[],
+  };
+  const specWorktree = join(cwd, ".sandcastle", "worktrees", `spec-${SPEC_NUMBER}`);
   const ghCalls: string[][] = [];
-  const phaseCalls: { runId: string; readonly: boolean; prompt: string }[] = [];
-  const removedReadyLabels: number[] = [];
-  const pausedCalls: { spec: number; reason: string }[] = [];
-  const repairComments: string[] = [];
-  let [nowMs, repairAttempts] = [1_000_000, 0];
-  const specWorktreePath = join(repoDir, ".sandcastle", "worktrees", `spec-${specNumber}`);
-
-  const ghExec: ExecFn = async (_f, args) => {
+  const phases: { worktree: string; readonly: boolean; prompt: string }[] = [];
+  const removedLabels: { number: number; specWorktreePresent: boolean }[] = [];
+  const remoteHead = () => gitNoHooks(remote, "rev-parse", "--verify", "--quiet", `refs/heads/${SPEC_BRANCH}`);
+  const prUrl = `https://github.com/${REPO}/pull/${SPEC_NUMBER}`;
+  const ghExec: ExecFn = async (_file, args) => {
     ghCalls.push(args);
-    const [cmd, sub] = args;
-    if (cmd === "issue" && sub === "edit") {
-      if (args.includes("--remove-label")) removedReadyLabels.push(Number(args[2]));
-      return "";
-    }
-    if (cmd === "issue" && sub === "comment") {
-      const body = args[args.indexOf("--body") + 1] ?? "";
-      if (body.startsWith("Sandcastle AFK 已暂停：")) pausedCalls.push({ spec: Number(args[2]), reason: body });
-      else repairComments.push(body);
-      return "";
-    }
+    const [cmd, sub, ref] = args;
     if (cmd === "api" && sub === "graphql") {
-      const q = args.find((a) => a.startsWith("query=")) ?? "";
-      if (!q.includes("subIssues")) {
-        const labels = (cfg.onAuthCheck ? cfg.onAuthCheck() : true) ? ["type:spec", "ready-for-agent"] : ["type:spec"];
-        return JSON.stringify({ data: { repository: { issue: { state: "OPEN", labels: labelPage(labels) } } } });
-      }
-      return specGraphql(specNumber, {
-        comments: repairComments,
-        subIssues: [
-          {
-            number: ticketNumber,
-            title: `Ticket ${ticketNumber}`,
-            body: "Ticket body",
-            state: "OPEN",
-            labels: labelPage(["type:ticket", "ready-for-agent"]),
-            comments: page([]),
-            blockedBy: page([]),
-          },
-        ],
-      });
+      return specGraphql(SPEC_NUMBER, { labels: state.labels, subIssues: config.tickets });
     }
-    if (cmd === "pr" && sub === "list")
-      return JSON.stringify(
-        cfg.existingPr
-          ? [
-              prEntry(
-                specNumber,
-                specBranch,
-                `Existing PR\n\nCloses #${specNumber}\nCloses #${ticketNumber}\n`,
-                await gitNoHooks(bareRemoteDir, "rev-parse", `refs/heads/${specBranch}`),
-              ),
-            ]
-          : [],
-      );
+    if (cmd === "issue" && sub === "view") {
+      expect(args).toEqual(["issue", "view", String(SPEC_NUMBER), "--repo", REPO, "--json", "state,labels"]);
+      return JSON.stringify({ state: "OPEN", labels: state.labels.map((name) => ({ name })) });
+    }
+    if (cmd === "issue" && sub === "edit") {
+      if (args.includes("--remove-label")) {
+        removedLabels.push({ number: Number(ref), specWorktreePresent: existsSync(specWorktree) });
+      }
+      return "";
+    }
+    if (cmd === "issue" && sub === "comment") return "";
+    if (cmd === "pr" && sub === "list") return JSON.stringify(state.prs);
     if (cmd === "pr" && sub === "create") {
-      cfg.onPrCreate?.(args);
+      expect(await remoteHead()).toBe(await gitNoHooks(cwd, "rev-parse", SPEC_BRANCH));
       return prUrl;
     }
-    if (cmd === "pr" && sub === "view") {
-      if (cfg.draft) throw new Error("Unexpected pr view in --draft mode");
-      const v = cfg.onPrView?.();
-      return JSON.stringify({
-        number: specNumber,
-        url: prUrl,
-        state: v?.state ?? "OPEN",
-        isDraft: v?.isDraft ?? false,
-        headRefOid: v?.headRefOid ?? (await gitNoHooks(bareRemoteDir, "rev-parse", `refs/heads/${specBranch}`)),
-      });
-    }
-    if (cmd === "api" && sub?.includes("/check-runs")) {
-      if (cfg.draft) throw new Error("Unexpected check-runs in --draft mode");
-      const runs = cfg.onCheckRuns?.(/commits\/([0-9a-f]+)\/check-runs/.exec(sub)?.[1] ?? "") ?? [];
-      return JSON.stringify({ total_count: runs.length, check_runs: runs });
-    }
-    if (cmd === "api" && sub?.includes("/actions/runs?head_sha=")) {
-      return JSON.stringify({ workflow_runs: cfg.onWorkflowRuns?.(/head_sha=([0-9a-f]+)/.exec(sub)?.[1] ?? "") ?? [] });
-    }
-    if (cmd === "run" && sub === "view") return cfg.failedLog ?? "";
+    if (cmd === "pr" && sub === "edit") return "";
     throw new Error(`Unexpected gh call: ${args.join(" ")}`);
   };
 
-  const PREFIX = "__MOCK_AGENT_PROMPT__:";
+  const prefix = "MOCK_PROMPT:";
   const agent: AgentProvider = {
     name: "mock-agent",
     env: {},
     captureSessions: false,
     parseStreamLine: (line) => [{ type: "text", text: line }],
-    buildPrintCommand: ({ prompt }) => ({ command: `${PREFIX}${prompt}` }),
+    buildPrintCommand: ({ prompt }) => ({ command: `${prefix}${prompt}` }),
   };
-  const slot = { provider: agent, instructions: "Role instructions" };
   const options: AfkOptions = {
     repo: REPO,
-    cwd: repoDir,
-    specNumber,
-    draft: cfg.draft,
+    cwd,
+    specNumber: SPEC_NUMBER,
+    maxParallel: config.maxParallel,
+    draft: config.draft,
     promptsDir: PROMPTS_DIR,
     ghExec,
-    ciPollIntervalMs: cfg.ciPollIntervalMs ?? 30_000,
-    ciTimeoutMs: cfg.ciTimeoutMs ?? 45 * 60_000,
-    ciRunAppearanceTimeoutMs: cfg.ciRunAppearanceTimeoutMs ?? 5 * 60_000,
-    ciMaxRepairs: cfg.ciMaxRepairs ?? 2,
-    agents: { light: slot, standard: slot, deep: slot, reviewStandards: slot, reviewSpec: slot, repair: slot },
-    gitExec: async (f, a, c) =>
-      f === "git" && a[0] === "remote" && a[1] === "get-url" ? `https://github.com/${REPO}.git` : runCommand(f, a, c),
-    now: () => nowMs,
-    sleep: async (ms) => {
-      nowMs += ms;
-    },
-    createSession: async ({ worktree, readonly, runId }) => ({
+    gitRemoteExec: async () => `https://github.com/${REPO}.git`,
+    agents: { light: agent, standard: agent, deep: agent, reviewStandards: agent, reviewSpec: agent, repair: agent },
+    createSession: async ({ readonly }) => ({
       sandbox: createBindMountSandboxProvider({
         name: "mock-sandbox",
-        create: async () => ({
-          sandboxId: `sb-${runId}`,
+        create: async ({ worktreePath: worktree }) => ({
+          sandboxId: basename(worktree),
           worktreePath: worktree,
           ...noopSandbox,
           exec: async (cmd, execOpts) => {
-            if (!cmd.startsWith(PREFIX))
+            if (!cmd.startsWith(prefix)) {
               return {
                 exitCode: 0,
-                stdout: cmd.includes("rev-parse --abbrev-ref HEAD") ? `${specBranch}\n` : "",
+                stdout: cmd.includes("rev-parse --abbrev-ref HEAD")
+                  ? await gitNoHooks(worktree, "branch", "--show-current")
+                  : "",
                 stderr: "",
               };
-            const prompt = cmd.slice(PREFIX.length);
-            phaseCalls.push({ runId, readonly, prompt });
-            const output =
-              runId.includes("-repair-ci-") && cfg.onRepairCi
-                ? await cfg.onRepairCi({ worktree, prompt, attempt: ++repairAttempts })
-                : `<pr-body>\n## Summary\n\nAutomated PR\n</pr-body>\n${COMPLETE}\n`;
-            for (const line of output.split(/\r?\n/)) execOpts?.onLine?.(line);
+            }
+            const prompt = cmd.slice(prefix.length);
+            phases.push({ worktree, readonly, prompt });
+            let output = COMPLETE;
+            if (basename(worktree).startsWith("ticket-")) {
+              const number = Number(basename(worktree).slice("ticket-".length));
+              const override = await config.implement?.({ number, worktree });
+              if (override === undefined) {
+                await commitFile(worktree, `ticket-${number}.txt`, `implementation #${number}\n`, `ticket #${number}`);
+              } else {
+                output = override;
+              }
+            } else if (prompt.includes("## Merge Context")) {
+              if (!config.merge) throw new Error("Unexpected Merger dispatch");
+              await config.merge(worktree, prompt);
+            } else if (prompt.includes("## Dual-Axis Review Report")) {
+              await config.repair?.(worktree);
+              output = `<pr-body>\n## Summary\n\nAutomated PR\n</pr-body>\n${COMPLETE}`;
+            }
+            for (const line of output.split("\n")) execOpts?.onLine?.(line);
             return { exitCode: 0, stdout: output, stderr: "" };
           },
         }),
@@ -728,254 +527,230 @@ async function setupCiGateScenario(cfg: CiGateScenarioConfig) {
     }),
   };
   return {
-    repoDir,
-    specBranch,
-    specWorktreePath,
-    prUrl,
-    initialHeadSha,
+    cwd,
+    state,
+    specWorktree,
+    baseSha,
+    remoteHead,
     ghCalls,
-    phaseCalls,
-    removedReadyLabels,
-    pausedCalls,
-    repairComments,
-    clockMs: () => nowMs,
+    phases,
+    removedLabels,
+    prUrl,
     run: () => runAfk(options),
   };
 }
 
-describe("Option-1 remote ci-gate wait, bounded auto-repair, --draft delivery, and crash/restart resume", () => {
-  test("--draft delivers immediately without polling ci-gate, cleans worktree, and removes ready-for-agent", async () => {
-    let sawDraft = false;
-    const sc = await setupCiGateScenario({
-      specNumber: 601,
-      draft: true,
-      onPrCreate: (a) => {
-        sawDraft = a.includes("--draft");
-      },
-    });
-    const res = await sc.run();
-    expect(sawDraft).toBe(true);
-    expect(res.delivered).toEqual([{ spec: 601, branch: sc.specBranch, prUrl: sc.prUrl, tickets: [602] }]);
-    expect(res.paused).toEqual([]);
-    expect(res.stopped).toEqual([]);
-    expect(sc.removedReadyLabels).toEqual([602, 601]);
-    expect(existsSync(sc.specWorktreePath)).toBe(false);
-    expect(sc.ghCalls.some((a) => a.join(" ").includes("check-runs") || (a[0] === "pr" && a[1] === "view"))).toBe(
-      false,
-    );
-  });
-
-  test("--draft pauses when the Spec already has a Ready PR", async () => {
-    const sc = await setupCiGateScenario({ specNumber: 603, existingPr: true, draft: true });
-    const res = await sc.run();
-    expect(res.paused[0]?.reason).toBe("Spec #603 已有非 Draft PR，不能使用 --draft 跳过 ci-gate");
-    expect(sc.ghCalls).toContainEqual(["issue", "edit", "603", "--repo", REPO, "--add-label", "needs-attention"]);
-    expect(res.delivered).toEqual([]);
-    expect(sc.removedReadyLabels).toEqual([]);
-    expect(sc.phaseCalls).toEqual([]);
-  });
-
-  test("ignores stale-SHA green ci-gate, auto-repairs up to 2 attempts with redacted failure logs, and delivers on green", async () => {
-    const staleSha = "1".repeat(40);
-    const [repairCommits, repairPrompts] = [[] as string[], [] as string[]];
-    let sha1Polls = 0;
-    const sc = await setupCiGateScenario({
-      specNumber: 610,
-      ciMaxRepairs: 2,
-      failedLog:
-        "Authorization: Bearer leaked_ci_token_999\nPOSTGRES_PASSWORD=leaked_db_pwd\nError: assertion failed in integration suite\n",
-      onCheckRuns: (sha) => {
-        if (sha === sc.initialHeadSha) {
-          return ++sha1Polls === 1
-            ? [
-                checkRun(100, "ci-gate", staleSha),
-                checkRun(101, "fast", sha),
-                checkRun(102, "integration", sha, "in_progress", null),
-              ]
-            : [checkRun(103, "ci-gate", sha, "completed", "failure")];
+describe("AFK ticket scheduling, real Git merges, and PR delivery", () => {
+  test("limits concurrency and dispatches blocked tickets only after their prerequisite is merged", async () => {
+    const secondStarted = Promise.withResolvers<void>();
+    const dependentStarted = Promise.withResolvers<void>();
+    const dispatched: number[] = [];
+    let active = 0;
+    let peak = 0;
+    const dispatchTrailers = new Map<number, string>();
+    const scenario = await setupDelivery({
+      tickets: [rawTicket(11), rawTicket(12), rawTicket(13, [11]), rawTicket(14)],
+      maxParallel: 2,
+      implement: async ({ number, worktree }) => {
+        dispatched.push(number);
+        peak = Math.max(peak, ++active);
+        try {
+          if (number === 11) await secondStarted.promise;
+          if (number === 12) {
+            secondStarted.resolve();
+            await dependentStarted.promise;
+          }
+          if (number === 13) dependentStarted.resolve();
+          if (number >= 13) {
+            dispatchTrailers.set(
+              number,
+              await gitNoHooks(worktree, "log", "--first-parent", "--merges", "--format=%B"),
+            );
+          }
+          await commitFile(worktree, `ticket-${number}.txt`, `implementation #${number}\n`, `ticket #${number}`);
+          return COMPLETE;
+        } finally {
+          active -= 1;
         }
-        if (sha === repairCommits[0]) return [checkRun(201, "ci-gate", sha, "completed", "failure")];
-        if (sha === repairCommits[1]) {
-          expect(existsSync(sc.specWorktreePath)).toBe(true);
-          return [checkRun(301, "ci-gate", sha)];
+      },
+    });
+    const result = await scenario.run();
+    expect(result.paused).toEqual([]);
+    expect(result.delivered[0]?.tickets).toEqual([11, 12, 13, 14]);
+    expect(dispatched.slice(0, 2).sort()).toEqual([11, 12]);
+    expect(peak).toBe(2);
+    expect(dispatchTrailers.get(13)).toContain("Sandcastle-Ticket: #11");
+    expect(dispatchTrailers.get(14)).toContain("Sandcastle-Ticket: #11");
+  });
+
+  test("drains independent in-flight tickets before marking a Spec paused after one ticket fails", async () => {
+    const secondStarted = Promise.withResolvers<void>();
+    const firstFailed = Promise.withResolvers<void>();
+    const scenario = await setupDelivery({
+      tickets: [rawTicket(11), rawTicket(12), rawTicket(13)],
+      maxParallel: 2,
+      implement: async ({ number, worktree }) => {
+        if (number === 11) {
+          await secondStarted.promise;
+          firstFailed.resolve();
+          return "blocked";
         }
-        return [];
-      },
-      onWorkflowRuns: (sha) => [{ id: 901, name: "CI", head_sha: sha, status: "completed", conclusion: "failure" }],
-      onRepairCi: async ({ worktree, prompt, attempt }) => {
-        repairPrompts.push(prompt);
-        repairCommits.push(
-          await commitFile(worktree, `ci-fix-${attempt}.txt`, `fix ${attempt}\n`, `fix(ci): attempt ${attempt}`),
-        );
-        return `Fixed attempt ${attempt}\n${COMPLETE}\n`;
-      },
-    });
-    const res = await sc.run();
-    expect(res.delivered).toEqual([{ spec: 610, branch: sc.specBranch, prUrl: sc.prUrl, tickets: [611] }]);
-    expect(res.paused).toEqual([]);
-    expect(sha1Polls).toBe(2);
-    expect(repairCommits).toHaveLength(2);
-    expect(repairPrompts).toHaveLength(2);
-    expect(repairPrompts[0]).toContain("Error: assertion failed in integration suite");
-    expect(repairPrompts[0]).not.toContain("leaked_ci_token_999");
-    expect(repairPrompts[0]).not.toContain("leaked_db_pwd");
-    expect(sc.removedReadyLabels).toEqual([611, 610]);
-    expect(existsSync(sc.specWorktreePath)).toBe(false);
-    expect(
-      (await runCommand("git", ["ls-remote", "--heads", "origin", `refs/heads/${sc.specBranch}`], sc.repoDir)).trim(),
-    ).toBe(`${repairCommits[1]}\trefs/heads/${sc.specBranch}`);
-  });
-
-  test("pauses Spec with needs-attention and preserves worktree after exhausting ciMaxRepairs = 2", async () => {
-    let repairs = 0;
-    const sc = await setupCiGateScenario({
-      specNumber: 620,
-      ciMaxRepairs: 2,
-      failedLog: "persistent failure",
-      onCheckRuns: (sha) => [checkRun(500 + repairs, "ci-gate", sha, "completed", "failure")],
-      onWorkflowRuns: (sha) => [
-        { id: 700 + repairs, name: "CI", head_sha: sha, status: "completed", conclusion: "failure" },
-      ],
-      onRepairCi: async ({ worktree, attempt }) => {
-        repairs = attempt;
-        await commitFile(worktree, `attempt-${attempt}.txt`, `${attempt}\n`, `fix attempt ${attempt}`);
-        return `${COMPLETE}\n`;
-      },
-    });
-    const res = await sc.run();
-    expect(repairs).toBe(2);
-    expect(res.delivered).toEqual([]);
-    expect(res.paused).toHaveLength(1);
-    expect(res.paused[0]?.reason).toContain("自动修红上限（2 次）");
-    expect(sc.pausedCalls).toHaveLength(1);
-    expect(sc.removedReadyLabels).toEqual([]);
-    expect(existsSync(sc.specWorktreePath)).toBe(true);
-  });
-
-  test("idempotently resumes straight into ci-gate loop when all tickets are integrated and open Ready PR already exists", async () => {
-    const sc = await setupCiGateScenario({
-      specNumber: 630,
-      existingPr: true,
-      onCheckRuns: (sha) => {
-        expect(sha).toBe(sc.initialHeadSha);
-        return [checkRun(801, "ci-gate", sha)];
-      },
-    });
-    const res = await sc.run();
-    expect(res.delivered).toEqual([{ spec: 630, branch: sc.specBranch, prUrl: sc.prUrl, tickets: [631] }]);
-    expect(sc.phaseCalls).toEqual([]);
-    expect(sc.removedReadyLabels).toEqual([631, 630]);
-    expect(existsSync(sc.specWorktreePath)).toBe(false);
-  });
-
-  test("pauses when the Ready PR head changes while reading a green ci-gate", async () => {
-    const changedSha = "f".repeat(40);
-    let moved = false;
-    const sc = await setupCiGateScenario({
-      specNumber: 632,
-      existingPr: true,
-      onPrView: () => (moved ? { headRefOid: changedSha } : {}),
-      onCheckRuns: (sha) => {
-        moved = true;
-        return [checkRun(802, "ci-gate", sha)];
-      },
-    });
-    const res = await sc.run();
-    expect(res.paused[0]?.reason).toContain(`headRefOid 已变为 ${changedSha}`);
-    expect(sc.ghCalls).toContainEqual(["issue", "edit", "632", "--repo", REPO, "--add-label", "needs-attention"]);
-    expect(res.delivered).toEqual([]);
-    expect(sc.removedReadyLabels).toEqual([]);
-    expect(existsSync(sc.specWorktreePath)).toBe(true);
-  });
-
-  test("a recorded attempt consumes the repair budget even if AFK restarts before a repair commit exists", async () => {
-    const sc = await setupCiGateScenario({
-      specNumber: 634,
-      existingPr: true,
-      ciMaxRepairs: 1,
-      onCheckRuns: (sha) => [checkRun(803, "ci-gate", sha, "completed", "failure")],
-      onRepairCi: async () => {
-        expect(sc.repairComments).toEqual([
-          `Sandcastle AFK 自动修红（attempt 1/1，head=${sc.initialHeadSha.slice(0, 8)}）`,
-        ]);
+        if (number === 12) {
+          secondStarted.resolve();
+          await firstFailed.promise;
+          await commitFile(worktree, "in-flight.txt", "completed\n", "ticket #12");
+        }
         return COMPLETE;
       },
     });
-    const first = await sc.run();
-    expect(first.paused[0]?.reason).toContain("未产生新提交");
-    const restarted = await sc.run();
-    expect(restarted.paused[0]?.reason).toContain("自动修红上限（1 次）");
-    expect(sc.ghCalls).toContainEqual(["issue", "edit", "634", "--repo", REPO, "--add-label", "needs-attention"]);
-    expect(sc.phaseCalls).toHaveLength(1);
-    expect(sc.repairComments).toHaveLength(1);
-    expect(restarted.delivered).toEqual([]);
-    expect(sc.removedReadyLabels).toEqual([]);
+    const result = await scenario.run();
+    const merges = await gitNoHooks(scenario.specWorktree, "log", "--first-parent", "--merges", "--format=%B");
+    const ticketDirs = scenario.phases.map(({ worktree }) => basename(worktree)).sort();
+    expect(result.paused[0]?.reason).toContain("#11");
+    expect(result.delivered).toEqual([]);
+    expect(ticketDirs).toEqual(["ticket-11", "ticket-12"]);
+    expect(merges).toContain("Sandcastle-Ticket: #12");
+    expect(merges).not.toContain("Sandcastle-Ticket: #11");
+    expect(scenario.ghCalls.some((args) => args.includes("needs-attention"))).toBe(true);
+    expect(scenario.removedLabels).toEqual([]);
   });
 
-  test("soft-stops into result.stopped when Spec authorization is revoked during ci-gate wait", async () => {
-    let authChecks = 0;
-    const sc = await setupCiGateScenario({
-      specNumber: 640,
-      existingPr: true,
-      onAuthCheck: () => ++authChecks === 1,
-      onCheckRuns: (sha) => [checkRun(1, "ci-gate", sha, "in_progress", null)],
+  test("soft-stops new dispatch after the parent Spec loses ready-for-agent", async () => {
+    const scenario = await setupDelivery({
+      tickets: [rawTicket(11), rawTicket(12, [11])],
+      maxParallel: 1,
+      implement: async () => {
+        scenario.state.labels = ["type:spec"];
+        return undefined;
+      },
     });
-    const res = await sc.run();
-    expect(res.stopped).toEqual([640]);
-    expect(res.paused).toEqual([]);
-    expect(res.delivered).toEqual([]);
-    expect(sc.pausedCalls).toEqual([]);
-    expect(existsSync(sc.specWorktreePath)).toBe(true);
+    const result = await scenario.run();
+    const merges = await gitNoHooks(scenario.specWorktree, "log", "--first-parent", "--merges", "--format=%B");
+    expect(result).toEqual({ delivered: [], paused: [], stopped: [SPEC_NUMBER] });
+    expect(scenario.phases.map(({ worktree }) => basename(worktree))).toEqual(["ticket-11"]);
+    expect(merges).toContain("Sandcastle-Ticket: #11");
+    expect(scenario.removedLabels).toEqual([]);
+    expect(scenario.ghCalls.some((args) => args[0] === "pr")).toBe(false);
   });
 
-  test("pauses cleanly when PR is externally closed during ci-gate wait", async () => {
-    let views = 0;
-    const sc = await setupCiGateScenario({
-      specNumber: 650,
-      existingPr: true,
-      onPrView: () => ({ state: ++views === 1 ? "OPEN" : "CLOSED" }),
-      onCheckRuns: (sha) => [checkRun(1, "ci-gate", sha, "queued", null)],
+  test.each([false, true])("uses the same fast merge and cleanup for draft=%s", async (draft) => {
+    const scenario = await setupDelivery({ tickets: [rawTicket(11)], draft });
+    const result = await scenario.run();
+    const sha = await gitNoHooks(scenario.cwd, "rev-parse", SPEC_BRANCH);
+    const remoteSha = await scenario.remoteHead();
+    const merge = await gitNoHooks(scenario.cwd, "show", "-s", "--format=%P%n%B", sha);
+    expect(result).toEqual({
+      delivered: [{ spec: SPEC_NUMBER, branch: SPEC_BRANCH, prUrl: scenario.prUrl, tickets: [11] }],
+      stopped: [],
+      paused: [],
     });
-    const res = await sc.run();
-    expect(res.paused).toHaveLength(1);
-    expect(res.paused[0]?.reason).toContain("CLOSED");
-    expect(res.delivered).toEqual([]);
-    expect(existsSync(sc.specWorktreePath)).toBe(true);
+    expect(remoteSha).toBe(sha);
+    expect(merge.split("\n")[0]?.split(" ")).toHaveLength(2);
+    expect(merge).toContain("Sandcastle-Ticket: #11");
+    expect(scenario.phases.some(({ prompt }) => prompt.includes("## Merge Context"))).toBe(false);
+    const reviews = scenario.phases.filter(({ readonly }) => readonly);
+    expect(reviews).toHaveLength(2);
+    expect(reviews.every(({ prompt }) => prompt.includes("禁止修改文件、Git 或 GitHub 状态"))).toBe(true);
+    expect(
+      scenario.phases
+        .filter(({ readonly }) => !readonly)
+        .every(
+          ({ prompt }) =>
+            prompt.includes("--no-verify") && prompt.includes("pnpm test:e2e") && prompt.includes(COMPLETE),
+        ),
+    ).toBe(true);
+    const create = scenario.ghCalls.find((args) => args[0] === "pr" && args[1] === "create");
+    expect(create?.includes("--draft")).toBe(draft);
+    expect(create?.at(draft ? -2 : -1)).toContain("Closes #10\nCloses #11");
+    expect(scenario.removedLabels).toEqual([
+      { number: 11, specWorktreePresent: true },
+      { number: SPEC_NUMBER, specWorktreePresent: false },
+    ]);
+    expect(existsSync(scenario.specWorktree)).toBe(false);
+    const ticketRef = await branchExists(scenario.cwd, "sandcastle/ticket-11");
+    expect(ticketRef).toBe(false);
   });
 
-  test("pauses with needs-attention on missing-run timeout and on overall ci-gate poll timeout", async () => {
-    const missing = await setupCiGateScenario({
-      specNumber: 660,
-      existingPr: true,
-      ciPollIntervalMs: 30_000,
-      ciRunAppearanceTimeoutMs: 60_000,
-      ciTimeoutMs: 600_000,
+  test.each([false, true])("aborts a real conflict before Merger and verifies its commit (merge=%s)", async (merge) => {
+    const scenario = await setupDelivery({
+      tickets: [rawTicket(11)],
+      implement: async () => COMPLETE,
+      merge: async (worktree, prompt) => {
+        const status = await gitNoHooks(worktree, "status", "--porcelain");
+        const mergeHead = await captureError(() => gitNoHooks(worktree, "rev-parse", "--verify", "MERGE_HEAD"));
+        expect(status).toBe("");
+        expect(mergeHead).toBeDefined();
+        expect(prompt).toContain("Sandcastle-Ticket: #11");
+        if (!merge) {
+          await commitFile(worktree, "README.md", "spec and ticket\n", "plain commit");
+          return;
+        }
+        const conflict = await captureError(() => gitNoHooks(worktree, "merge", "--no-ff", "--no-commit", ticketTip));
+        expect(conflict).toBeDefined();
+        await commitFile(worktree, "README.md", "spec and ticket\n", "Merge #11\n\nSandcastle-Ticket: #11");
+      },
     });
-    expect((await missing.run()).paused[0]?.reason).toContain("触发远端 ci-gate 超时");
-    expect(missing.clockMs()).toBe(1_060_000);
+    await gitNoHooks(scenario.cwd, "switch", "-c", SPEC_BRANCH);
+    const specTip = await commitFile(scenario.cwd, "README.md", "spec\n", "spec change");
+    await gitNoHooks(scenario.cwd, "switch", "-c", "sandcastle/ticket-11", scenario.baseSha);
+    const ticketTip = await commitFile(scenario.cwd, "README.md", "ticket\n", "ticket change");
+    await gitNoHooks(scenario.cwd, "switch", "main");
 
-    const timeout = await setupCiGateScenario({
-      specNumber: 670,
-      existingPr: true,
-      ciPollIntervalMs: 30_000,
-      ciRunAppearanceTimeoutMs: 60_000,
-      ciTimeoutMs: 120_000,
-      onWorkflowRuns: (sha) => [{ id: 88, name: "CI", head_sha: sha, status: "in_progress", conclusion: null }],
-    });
-    expect((await timeout.run()).paused[0]?.reason).toContain("完成超时");
-    expect(timeout.clockMs()).toBe(1_120_000);
+    const result = await scenario.run();
+    expect(scenario.phases.filter(({ prompt }) => prompt.includes("## Merge Context"))).toHaveLength(1);
+    if (merge) {
+      const parents = await gitNoHooks(scenario.cwd, "show", "-s", "--format=%P", SPEC_BRANCH);
+      expect(parents).toBe(`${specTip} ${ticketTip}`);
+      expect(result.paused).toEqual([]);
+      expect(result.delivered[0]?.tickets).toEqual([11]);
+    } else {
+      expect(result.delivered).toEqual([]);
+      expect(result.paused[0]?.reason).toContain("未找到包含");
+      expect(scenario.removedLabels).toEqual([]);
+    }
   });
 
-  test("pauses cleanly when repair-ci agent exits COMPLETE without creating a new commit", async () => {
-    const sc = await setupCiGateScenario({
-      specNumber: 680,
-      existingPr: true,
-      onCheckRuns: (sha) => [checkRun(9, "ci-gate", sha, "completed", "failure")],
-      onRepairCi: async () => `No commit created\n${COMPLETE}\n`,
+  test("pushes the repaired SHA and reuses an open PR whose head is an ancestor", async () => {
+    let finalSha = "";
+    const scenario = await setupDelivery({
+      tickets: [rawTicket(11)],
+      repair: async (worktree) => {
+        finalSha = await commitFile(worktree, "review-fix.txt", "review fix\n", "review fix");
+      },
     });
-    const res = await sc.run();
-    expect(res.paused).toHaveLength(1);
-    expect(res.paused[0]?.reason).toContain("未产生新提交");
-    expect(existsSync(sc.specWorktreePath)).toBe(true);
+    await gitNoHooks(scenario.cwd, "push", "origin", `${scenario.baseSha}:refs/heads/${SPEC_BRANCH}`);
+    const existing = prEntry(99, SPEC_BRANCH, "Existing PR", scenario.baseSha);
+    scenario.state.prs = [existing];
+
+    const result = await scenario.run();
+    const remoteSha = await scenario.remoteHead();
+    expect(result.paused).toEqual([]);
+    expect(result.delivered[0]?.prUrl).toBe(existing.url);
+    expect(remoteSha).toBe(finalSha);
+    const prCalls = scenario.ghCalls.filter((args) => args[0] === "pr");
+    expect(prCalls.map((args) => args[1])).toEqual(["list", "list", "edit"]);
+    expect(prCalls.at(-1)?.at(-1)).toBe("Existing PR\n\nCloses #10\nCloses #11\n");
+  });
+
+  test.each(["diverged", "closed"])("refuses to push over an unsafe existing PR (%s)", async (kind) => {
+    const scenario = await setupDelivery({ tickets: [rawTicket(11)] });
+    await gitNoHooks(scenario.cwd, "push", "origin", `${scenario.baseSha}:refs/heads/${SPEC_BRANCH}`);
+    await gitNoHooks(scenario.cwd, "switch", "-c", "manual");
+    const humanSha = await commitFile(scenario.cwd, "human.txt", "manual\n", "manual PR update");
+    await gitNoHooks(scenario.cwd, "switch", "main");
+    scenario.state.prs = [
+      {
+        ...prEntry(99, SPEC_BRANCH, "Existing PR", kind === "diverged" ? humanSha : scenario.baseSha),
+        state: kind === "closed" ? "CLOSED" : "OPEN",
+      },
+    ];
+
+    const result = await scenario.run();
+    const remoteSha = await scenario.remoteHead();
+    expect(result.paused[0]?.reason).toContain("拒绝推送");
+    expect(result.delivered).toEqual([]);
+    expect(remoteSha).toBe(scenario.baseSha);
+    expect(scenario.removedLabels).toEqual([]);
+    expect(scenario.ghCalls.filter((args) => args[0] === "pr").map((args) => args[1])).toEqual(["list"]);
   });
 });

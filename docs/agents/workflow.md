@@ -3,7 +3,7 @@
 本仓库采用**分析设计与执行交付分离**的工作流：
 
 - **Stage 1：分析与设计（T3 Code）** 负责只读代码调查、需求澄清、原型验证、在候选集成分支落盘设计产物及发布带原生任务图的 Spec/tickets（交接与回流见[设计与执行交接](sandcastle-afk.md#设计与执行交接)）。
-- **Stage 2：执行与交付（Sandcastle AFK）** 负责完整 Spec 的无人值守实施、双轴只读评审、推前轻量验证、PR 交付与远端 `ci-gate` 限次修红闭环（详见[AFK 工作流](sandcastle-afk.md)）。
+- **Stage 2：执行与交付（Sandcastle AFK）** 负责完整 Spec 的无人值守实施、双轴只读评审、推前轻量验证与 PR 交付（详见[AFK 工作流](sandcastle-afk.md)）。
 - **Fast Track：轻量直改与异常介入（T3 Code 单会话）** 负责小型明确改动、文档/配置修改、紧急 bugfix、UI 微调及 AFK 暂停后的人工排障，在单会话内完成实施、验证与 PR 交付。
 
 小型明确任务在单会话内直接实施并验证；需要额外流程时，由用户显式调用
@@ -18,7 +18,7 @@
 - **候选集成分支复用** 同一 feature 的设计产物（`ADR`、`GLOSSARY.md`、设计文档等）直接提交在候选集成分支中，待实现、评审与验证全部通过后通过 Pull Request 整体合入目标分支。
   首次落盘改动前核对目标分支、工作区和已有分支，优先复用已有或用户指定分支，否则创建引擎无关前缀的 `feat/<feature-slug>`。
 - **跨会话恢复** 文档随相关工作正常提交。跨会话按[议题跟踪](issue-tracker.md#当-skill-要求publish-to-the-issue-tracker)恢复同一分支与基线，保留未知改动并在覆盖前先解决重叠。
-- **交付授权与只读主分支** 所有交付路径均通过 GitHub Pull Request 合入，保持本地目标分支（如 `main`）只读、不执行本地 `git merge --squash`，也不强推远端分支；合入 PR、手动关票与部署须由维护者另行授权或在 GitHub 完成（维护者明确要求改为本地合入时再按指令执行）。手动单会话与异常收尾在推送并建 PR 前提出一次交付确认（若用户本次指令已明确要求提交 PR，则直接执行）；Sandcastle AFK 的分支推送、建 PR、CI 修红与标签更新授权在启动 AFK 时统一授予。
+- **交付授权与只读主分支** 所有交付路径均通过 GitHub Pull Request 合入，保持本地目标分支（如 `main`）只读、不执行本地 `git merge --squash`，也不强推远端分支；合入 PR、手动关票与部署须由维护者另行授权或在 GitHub 完成（维护者明确要求改为本地合入时再按指令执行）。手动单会话与异常收尾在推送并建 PR 前提出一次交付确认（若用户本次指令已明确要求提交 PR，则直接执行）；Sandcastle AFK 的分支推送、建 PR 与标签更新授权在启动 AFK 时统一授予。
 
 ## 验证节奏
 
@@ -29,7 +29,7 @@
 - **门禁分级** 合入 `main` 的唯一权威门禁是 GitHub Actions [`ci-gate`](../engineering/commands.md#github-actions-ci)（配合 Branch Protection）：
   - 差异仅属[纯文档验证](../engineering/commands.md#纯文档验证)范围且验收只涉及文档时，本地运行 `pnpm check:docs` 与 `git diff --check`（或完整 `pnpm check`）；推送 PR 后由 CI `detect` 路由至 `doc-check` 并经 `ci-gate` 放行。
   - 常规代码或配置改动在手动交付前完成 `pnpm check`、`pnpm test:unit` 与受影响范围的 `pnpm test:integration`（或运行 `pnpm verify` 覆盖上述检查与构建）；涉及跨服务旅程、生产 Dockerfile 或网关链路时，按需在本地补跑 `pnpm test:e2e`。推送 Ready PR 后由远端 CI 并行执行 `fast`、`integration` 并接续 `e2e`，最终以 `ci-gate` 绿灯为准。
-  - 设计产物先落候选集成分支交接给 Sandcastle 时，完成文档格式化、`pnpm check:docs` 与 `git diff --check`，实施与权威门禁由 AFK 推前检查与远端 `ci-gate` 覆盖。
+  - 设计产物先落候选集成分支交接给 Sandcastle 时，完成文档格式化、`pnpm check:docs` 与 `git diff --check`，AFK 负责实施、推前检查与 PR 交付，远端 `ci-gate` 判定合入资格。
 - **同宿主串行验证** 在同一宿主上串行运行 `pnpm verify`、全量 `pnpm test:integration` 和 `pnpm test:e2e`，跨会话、工作树及 Sandcastle AFK 均适用；
   待上一轮命令退出并完成测试资源清理后再启动下一轮。
 - **验证结果复用** 同一候选已有通过结果时，核对候选 SHA、实际命令与检查范围，确认依赖、配置与环境一致后，只通过独立入口补跑缺失或失效项：

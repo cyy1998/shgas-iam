@@ -40,19 +40,55 @@ ready etcd etcdctl endpoint health
 
 install=/usr/local/apisix
 prefix="$infra/apisix"
-config="$(dirname "$(realpath "$0")")/../apps/gateway/test-integration/support/apisix.config.yaml"
 mkdir -p "$prefix/conf" "$prefix/logs" "$prefix/disk_cache_one"
 ln -s "$install/apisix" "$install/deps" "$prefix/"
 for entry in mime.types debug.yaml cert; do
   if [[ -e "$install/conf/$entry" ]]; then ln -s "$install/conf/$entry" "$prefix/conf/"; fi
 done
 if [[ -d "$install/ui" ]]; then ln -s "$install/ui" "$prefix/"; fi
-sed -e 's/ip: 0.0.0.0/ip: 127.0.0.1/' -e 's/port: 9180/port: 59180/' \
-  -e 's@0.0.0.0/0@127.0.0.1/32@' -e 's@http://apisix-etcd:2379@http://127.0.0.1:2379@' \
-  -e '/^  node_listen:/c\  node_listen:\n    - ip: 127.0.0.1\n      port: 59080' \
-  -e '/^  enable_admin:/a\  enable_ipv6: false\n  enable_control: false\n  ssl:\n    enable: false' \
-  "$config" > "$prefix/conf/config.yaml"
-cat >> "$prefix/conf/config.yaml" <<'YAML'
+# Keep plugins and plugin_attr in sync with apps/gateway/test-integration/support/apisix.config.yaml.
+cat > "$prefix/conf/config.yaml" <<'YAML'
+deployment:
+  role: traditional
+  role_traditional:
+    config_provider: etcd
+  admin:
+    admin_api_version: v3
+    admin_listen:
+      ip: 127.0.0.1
+      port: 59180
+    allow_admin:
+      - 127.0.0.1/32
+    admin_key:
+      - name: integration
+        key: iam-gateway-integration-admin-key
+        role: admin
+  etcd:
+    host:
+      - http://127.0.0.1:2379
+
+apisix:
+  node_listen:
+    - ip: 127.0.0.1
+      port: 59080
+  enable_admin: true
+  enable_ipv6: false
+  enable_control: false
+  ssl:
+    enable: false
+
+plugins:
+  - request-id
+  - opentelemetry
+  - key-auth
+  - proxy-rewrite
+
+plugin_attr:
+  opentelemetry:
+    set_ngx_var: true
+    collector:
+      address: 127.0.0.1:9
+      request_timeout: 3
 
 nginx_config:
   worker_processes: 1

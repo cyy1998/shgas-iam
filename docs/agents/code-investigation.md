@@ -1,7 +1,7 @@
 # 代码调查与双引擎编排
 
 本页定义 T3 Code 双引擎角色分工、评审编排，以及项目级只读调查子代理的调用策略与返回契约。
-仓库的 7 个角色契约位于 `.codex/agents/*.toml`（供 Codex 原生子代理与 Sandcastle AFK 直接加载）。
+仓库的 7 个角色契约位于 `.codex/agents/*.toml`，供 Codex 原生子代理与 T3 跨引擎委派使用。Sandcastle AFK 从相应 TOML 读取模型与思考档位。
 
 ## 双引擎角色与评审编排
 
