@@ -18,7 +18,7 @@
 
 在 T3 Code 完成分析设计、准备为 Spec 与 tickets 标记 `ready-for-agent` 并交接给 Sandcastle AFK 前，按顺序核对以下事项：
 
-1. **`ready-for-agent` 轻量门禁**：标记 `ready-for-agent` 前，启动一个**同引擎的新鲜只读 subagent**（Antigravity 用原生 `research`，Codex 用原生 `code_researcher`）独立核查四项：
+1. **`ready-for-agent` 轻量门禁**：标记 `ready-for-agent` 前，启动一个**独立的新鲜只读 Codex `gpt-6.2-astra` subagent**（通过 `delegate_task` 启动，角色定位、思考档位与只读核验约定见[双引擎角色与评审编排](code-investigation.md#双引擎角色与评审编排)）独立核查四项：
    - 每张 ticket 的验收条件客观可测，明确测试 seam、验证层级（Unit / Integration / E2E / Gateway）与实施档位标签（`agent:light` / `agent:deep`，缺省为 standard，两者互斥）；
    - GitHub 原生父子关系（`--parent`）与阻塞边（`--blocked-by`）完整、无环且覆盖全部前置依赖；
    - 阻塞实现的 `ADR`、`GLOSSARY.md` 与设计决策均已提交到候选集成分支；
