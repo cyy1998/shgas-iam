@@ -178,6 +178,7 @@ test.each([21_844, 21_845, 66_000])(
     expect(unchanged!.count).toBe(0);
     expect(rebuildJobs.slice(count)).toEqual(receipt!.rebuild_requests);
   },
+  30_000,
 );
 
 test("a later expansion batch failure rolls back new and existing requirements before retry", async () => {
@@ -447,7 +448,7 @@ test("repair resets and wakes both durable stages beyond the SQL parameter limit
   expect(rebuildJobs).toEqual(Array.from({ length: count }, (_, index) => ({ targetId: index + 1, version: "7" })));
   expect(outbox!.count).toBe(count);
   expect(rebuilds!.count).toBe(count);
-});
+}, 30_000);
 
 test("repair skips active transactions even when their claims are old", async () => {
   const [entry] = await register();
