@@ -149,12 +149,27 @@ jobs:
           IAM_TEST_POSTGRES_URL: postgresql://iam_test:iam_test@127.0.0.1:5432/iam_test
           IAM_TEST_REDIS_URL: redis://127.0.0.1:6379/0
         run: pnpm test:integration
+      - name: Redact integration task logs
+        if: failure()
+        run: |
+          bun -e '
+            import { existsSync } from "node:fs";
+            import { stripVTControlCharacters } from "node:util";
+            import { redactSensitiveLog } from "./.sandcastle/github.ts";
+            const root = "test-results/integration";
+            if (existsSync(root)) {
+              for await (const path of new Bun.Glob("**/logs/*.log").scan({ cwd: root })) {
+                const raw = await Bun.file(`${root}/${path}`).text();
+                await Bun.write(`test-results/integration-redacted/${path}`, redactSensitiveLog(stripVTControlCharacters(raw)));
+              }
+            }
+          '
       - name: Upload redacted integration task logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: integration-logs-${{ github.run_attempt }}
-          path: test-results/integration/**/logs/*.log
+          path: test-results/integration-redacted/**/*.log
           retention-days: 7
           if-no-files-found: ignore
       - name: Teardown APISIX and Redis containers
@@ -197,6 +212,7 @@ jobs:
           path: |
             e2e/system/.reports/**/failure-summary.md
             e2e/system/.reports/**/failure-summary.json
+          include-hidden-files: true
           retention-days: 7
           if-no-files-found: ignore
 

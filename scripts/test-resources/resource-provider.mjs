@@ -51,7 +51,7 @@ export function validateExternalEnvironment(neededServices, env = process.env) {
     raw.postgresUrl = env[testPostgresUrlEnv].trim();
     requireDedicatedPostgresTestUrl({ name: TEST_POSTGRES_URL_ENV, value: raw.postgresUrl, environment: env });
   }
-  if (neededServices.includes("redis")) raw.redisUrl = parseTestRedisUrl(env[testRedisUrlEnv], testRedisUrlEnv).baseUrl;
+  if (neededServices.includes("redis")) raw.redis = parseTestRedisUrl(env[testRedisUrlEnv], testRedisUrlEnv);
   if (neededServices.includes("apisix")) raw.apisix = parseApisixAdminConfig(env);
   return raw;
 }
@@ -69,7 +69,7 @@ export const dockerResourceProvider = {
     }
     if (neededServices.includes("redis")) {
       const { host, port } = await managedServiceEndpoint(run, "redis", 6379, cmdOpts);
-      raw.redisUrl = `redis://${host}:${port}/0`;
+      raw.redis = parseTestRedisUrl(`redis://${host}:${port}/0`);
     }
     if (neededServices.includes("apisix")) {
       raw.apisix = await prepareManagedGatewayApisix({ run, ...cmdOpts, verifyBaseline: false });
@@ -88,30 +88,19 @@ export const dockerResourceProvider = {
 
 export const externalResourceProvider = {
   name: "external",
-  async prepare(neededServices, { run, env = process.env }) {
-    const raw = validateExternalEnvironment(neededServices, env);
+  async prepare(_neededServices, { run, externalEndpoints }) {
     run.record.status = "ready";
     await saveManagedResourceRun(run);
-    return raw;
+    return externalEndpoints;
   },
   cleanup: (run, options = {}) => finishManagedResourceRun(run, finishOpts(options)),
 };
 
-const registeredProviders = new Map([
-  [dockerResourceProvider.name, dockerResourceProvider],
-  [nativeResourceProvider.name, nativeResourceProvider],
-  [externalResourceProvider.name, externalResourceProvider],
-]);
-
-export function registerResourceProvider(provider) {
-  if (!provider || typeof provider !== "object" || !knownResourceProviders.includes(provider.name)) {
-    throw new Error(`Cannot register unknown resource provider: ${String(provider?.name)}`);
-  }
-  if (typeof provider.prepare !== "function" || typeof provider.cleanup !== "function") {
-    throw new Error(`Resource provider "${provider.name}" must implement prepare() and cleanup()`);
-  }
-  registeredProviders.set(provider.name, provider);
-}
+const providers = {
+  docker: dockerResourceProvider,
+  native: nativeResourceProvider,
+  external: externalResourceProvider,
+};
 
 export function normalizeNeededServices(neededServices) {
   const normalized = [];
@@ -132,19 +121,12 @@ export function parseResourceProviderName(env = process.env) {
   return name;
 }
 
-export function resolveResourceProvider(env = process.env, providers = registeredProviders) {
-  const name = parseResourceProviderName(env);
-  const provider = providers instanceof Map ? providers.get(name) : providers?.[name];
-  if (!provider) {
-    const available = [...(providers instanceof Map ? providers.keys() : Object.keys(providers ?? {}))].join(", ");
-    throw new Error(`${resourceProviderEnv}=${name} is not registered yet; available providers: ${available}`);
-  }
-  return provider;
+export function resolveResourceProvider(env = process.env) {
+  return providers[parseResourceProviderName(env)];
 }
 
 export function validateProviderEnvironment(providerName, neededServices, env = process.env) {
-  const services = normalizeNeededServices(neededServices);
-  if (providerName === "external") return validateExternalEnvironment(services, env);
+  if (providerName === "external") return validateExternalEnvironment(neededServices, env);
   const present = externalEndpointEnvNames.filter((name) => Boolean(env[name]?.trim()));
   if (present.length) {
     throw new Error(
@@ -164,16 +146,12 @@ export async function prepareManagedTestResources(neededServices, context) {
     signal,
     timeoutMs,
     cleanupTimeoutMs,
-    providers = registeredProviders,
-    preparePostgresTemplate = prepareManagedPostgresTemplate,
-    verifyRedis = verifyRedisDatabaseSlotSupport,
-    verifyApisix = verifyApisixAdminBaseline,
     onRunCreated,
   } = context;
 
   const services = normalizeNeededServices(neededServices);
-  const provider = resolveResourceProvider(env, providers);
-  validateProviderEnvironment(provider.name, services, env);
+  const provider = resolveResourceProvider(env);
+  const externalEndpoints = validateProviderEnvironment(provider.name, services, env);
   signal?.throwIfAborted();
 
   const run = await createManagedResourceRun({
@@ -193,12 +171,12 @@ export async function prepareManagedTestResources(neededServices, context) {
     });
 
   try {
-    const raw = await provider.prepare(services, { run, env, signal, timeoutMs, cleanupTimeoutMs });
+    const raw = await provider.prepare(services, { run, env, externalEndpoints, signal, timeoutMs, cleanupTimeoutMs });
     signal?.throwIfAborted();
     const endpoints = {};
     if (services.includes("postgres")) {
-      endpoints.postgres = await preparePostgresTemplate(run, {
-        databaseUrl: raw?.postgresUrl,
+      endpoints.postgres = await prepareManagedPostgresTemplate(run, {
+        databaseUrl: raw.postgresUrl,
         env,
         signal,
         timeoutMs,
@@ -206,17 +184,13 @@ export async function prepareManagedTestResources(neededServices, context) {
       });
     }
     if (services.includes("redis")) {
-      const { baseUrl, host, port } = parseTestRedisUrl(raw?.redisUrl, testRedisUrlEnv);
-      await verifyRedis(baseUrl, { signal, timeoutMs: Math.min(timeoutMs ?? 5000, 5000) });
+      const { baseUrl, host, port } = raw.redis;
+      await verifyRedisDatabaseSlotSupport(baseUrl, { signal, timeoutMs: Math.min(timeoutMs ?? 5000, 5000) });
       endpoints.redis = { url: baseUrl, host, port };
     }
     if (services.includes("apisix")) {
-      const ep = parseApisixAdminConfig({
-        [testApisixAdminUrlEnv]: raw?.apisix?.adminUrl,
-        [testApisixAdminKeyEnv]: raw?.apisix?.adminKey,
-      });
-      await verifyApisix(ep, { signal });
-      endpoints.apisix = ep;
+      await verifyApisixAdminBaseline(raw.apisix, { signal });
+      endpoints.apisix = raw.apisix;
     }
     if (Object.keys(endpoints).length) {
       run.record.endpoints = endpoints;

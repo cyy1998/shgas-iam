@@ -14,14 +14,14 @@ import { wecomAgent, wecomCorp, wecomMobileCallbackPath, wecomSecret } from "./w
 export const e2eBuildServices = [
   "apisix",
   "e2e-stubs",
+  "admin",
   "auth-api",
+  "sso",
   "sso-api",
   "integration-api",
   "admin-api",
   "worker",
   "gateway-api",
-  "admin",
-  "sso",
 ] as const;
 
 export const e2eInfrastructureServices = ["postgres", "redis", "apisix-etcd", "apisix", "e2e-stubs"] as const;
@@ -64,8 +64,12 @@ export const ssoTestLoginCredential = {
 
 export type E2EBuildxCacheMode = "gha" | "none";
 
+export function e2eImageTag(service: string, tag = "local") {
+  return `iam-e2e-${service}:${tag}`;
+}
+
 export function e2eLocalImageTag(service: string) {
-  return `iam-e2e-${service}:local`;
+  return e2eImageTag(service, "local");
 }
 
 export function resolveBuildxCacheMode(env: NodeJS.ProcessEnv = process.env): E2EBuildxCacheMode {
@@ -112,6 +116,7 @@ export interface E2EComposeOptions {
   stubsToken: string;
   adminClientCode?: string;
   stubsCaPem?: string;
+  imageTag?: string;
   env?: NodeJS.ProcessEnv;
 }
 
@@ -126,6 +131,7 @@ export function createE2ECompose(options: E2EComposeOptions) {
     seedRunId,
     stubsToken,
     adminClientCode = "iam-admin",
+    imageTag = "local",
     env = process.env,
   } = options;
   const stubsCaPem = options.stubsCaPem ?? readFileSync(stubsCaFile, "utf8");
@@ -153,7 +159,7 @@ export function createE2ECompose(options: E2EComposeOptions) {
       },
       apisix: {
         ...infrastructure.services.apisix,
-        image: e2eLocalImageTag("apisix"),
+        image: e2eImageTag("apisix", imageTag),
         build: withCache(
           "apisix",
           {
@@ -165,7 +171,7 @@ export function createE2ECompose(options: E2EComposeOptions) {
         ports: [`127.0.0.1:${httpPort}:9080`, `127.0.0.1:${httpsPort}:9443`, "127.0.0.1:0:9180"],
       },
       "e2e-stubs": {
-        image: e2eLocalImageTag("e2e-stubs"),
+        image: e2eImageTag("e2e-stubs", imageTag),
         build: withCache(
           "e2e-stubs",
           {
@@ -185,7 +191,7 @@ export function createE2ECompose(options: E2EComposeOptions) {
         healthcheck: httpHealth(e2eStubsHttpPort, "/health"),
       },
       "auth-api": {
-        image: e2eLocalImageTag("auth-api"),
+        image: e2eImageTag("auth-api", imageTag),
         build: withCache("auth-api", appImage("auth-api"), cacheMode),
         labels,
         configs: [{ source: "e2e-stubs-ca", target: e2eStubsCaMountPath }],
@@ -209,7 +215,7 @@ export function createE2ECompose(options: E2EComposeOptions) {
         },
       },
       "sso-api": {
-        image: e2eLocalImageTag("sso-api"),
+        image: e2eImageTag("sso-api", imageTag),
         build: withCache("sso-api", appImage("sso-api"), cacheMode),
         labels,
         healthcheck: httpHealth(30002, "/ready"),
@@ -225,7 +231,7 @@ export function createE2ECompose(options: E2EComposeOptions) {
         },
       },
       "integration-api": {
-        image: e2eLocalImageTag("integration-api"),
+        image: e2eImageTag("integration-api", imageTag),
         build: withCache("integration-api", appImage("integration-api"), cacheMode),
         labels,
         healthcheck: httpHealth(30005, "/ready"),
@@ -238,7 +244,7 @@ export function createE2ECompose(options: E2EComposeOptions) {
         },
       },
       "admin-api": {
-        image: e2eLocalImageTag("admin-api"),
+        image: e2eImageTag("admin-api", imageTag),
         build: withCache("admin-api", appImage("admin-api"), cacheMode),
         labels,
         healthcheck: httpHealth(30001, "/admin/users/search", 403),
@@ -252,7 +258,7 @@ export function createE2ECompose(options: E2EComposeOptions) {
         },
       },
       worker: {
-        image: e2eLocalImageTag("worker"),
+        image: e2eImageTag("worker", imageTag),
         build: withCache("worker", appImage("worker"), cacheMode),
         labels,
         healthcheck: httpHealth(30003, "/healthz"),
@@ -270,7 +276,7 @@ export function createE2ECompose(options: E2EComposeOptions) {
         },
       },
       "gateway-api": {
-        image: e2eLocalImageTag("gateway-api"),
+        image: e2eImageTag("gateway-api", imageTag),
         build: withCache("gateway-api", appImage("gateway"), cacheMode),
         labels,
         healthcheck: httpHealth(e2eGatewayApiPort, "/health"),
@@ -283,7 +289,7 @@ export function createE2ECompose(options: E2EComposeOptions) {
         },
       },
       admin: {
-        image: e2eLocalImageTag("admin"),
+        image: e2eImageTag("admin", imageTag),
         build: withCache(
           "admin",
           { ...appImage("admin"), args: frontendBuildArgs("admin", adminClientCode) },
@@ -293,7 +299,7 @@ export function createE2ECompose(options: E2EComposeOptions) {
         healthcheck: healthcheck("wget", "--quiet", "--spider", "http://127.0.0.1/iam-admin/"),
       },
       sso: {
-        image: e2eLocalImageTag("sso"),
+        image: e2eImageTag("sso", imageTag),
         build: withCache("sso", { ...appImage("sso"), args: frontendBuildArgs("sso", adminClientCode) }, cacheMode),
         labels,
         healthcheck: healthcheck("wget", "--quiet", "--spider", "http://127.0.0.1/portal/login"),

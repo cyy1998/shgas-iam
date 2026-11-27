@@ -11,10 +11,10 @@ import {
   requireDedicatedPostgresTestUrl,
   TEST_POSTGRES_URL_ENV,
 } from "../../packages/test-support/src/dedicated-postgres-test-url.mjs";
-import { verifyApisixAdminBaseline } from "./apisix-admin.mjs";
+import { waitForApisixAdmin } from "./apisix-admin.mjs";
 import { managedCleanupCommand, saveManagedResourceRun, writeAtomicResourceRecord } from "./managed-resources.mjs";
 import { runOwnedCommand } from "./owned-command.mjs";
-import { verifyRedisDatabaseSlotSupport } from "./redis-preflight.mjs";
+import { parseTestRedisUrl } from "./redis-preflight.mjs";
 
 const NATIVE_TEMP_PREFIX = "iam-test-native-";
 const APISIX_CONFIG_PATH = "apps/gateway/test-integration/support/apisix.config.yaml";
@@ -210,6 +210,7 @@ async function collectNativeDiagnostics(run, metadata) {
 }
 
 async function spawnAndSave(ctx, service, executable, args, cwd) {
+  ctx.signal?.throwIfAborted();
   const logFile = join(ctx.state.tempRoot, "logs", `${service}.log`);
   const child = spawnOwnedProcessTree({
     executable: "/bin/sh",
@@ -323,16 +324,16 @@ async function startNativePostgres(ctx, port) {
 async function startNativeRedis(ctx, port) {
   const redisDir = join(ctx.state.tempRoot, "redis");
   await mkdir(redisDir, { recursive: true });
+  // Keep Redis from overwriting the scope marker when it updates its process title.
   const redisArgs = ["--bind", "127.0.0.1", "--port", String(port), "--dir", redisDir, "--save", ""].concat(
-    "--databases 32 --appendonly no".split(" "),
+    "--databases 32 --appendonly no --set-proc-title no".split(" "),
   );
   const daemon = await spawnAndSave(ctx, "redis", "redis-server", redisArgs, redisDir);
-  const redisUrl = `redis://127.0.0.1:${port}/0`;
   await pollReady(ctx, "Native Redis", 15_000, [daemon], async () => {
-    await verifyRedisDatabaseSlotSupport(redisUrl, { signal: ctx.signal, timeoutMs: 1500 });
-    return true;
+    const reply = await runCmd(ctx, "", "redis-cli", ["-h", "127.0.0.1", "-p", String(port), "PING"], { maxMs: 1500 });
+    return reply.exitCode === 0 && reply.output.trim() === "PONG";
   });
-  return redisUrl;
+  return parseTestRedisUrl(`redis://127.0.0.1:${port}/0`);
 }
 
 async function startNativeApisix(ctx, [etcdClientPort, etcdPeerPort, httpPort, adminPort], apisixInstallDir) {
@@ -354,9 +355,9 @@ async function startNativeApisix(ctx, [etcdClientPort, etcdPeerPort, httpPort, a
     return health === "true" || health === true;
   });
 
-  await Promise.all(
-    [confDir, join(apisixDir, "logs"), join(apisixDir, "disk_cache_one")].map((d) => mkdir(d, { recursive: true })),
-  );
+  for (const dir of [confDir, join(apisixDir, "logs"), join(apisixDir, "disk_cache_one")]) {
+    await mkdir(dir, { recursive: true });
+  }
   for (const sub of ["apisix", "deps"]) {
     const src = join(apisixInstallDir, sub);
     if (!existsSync(src)) throw new Error(`APISIX installation directory is missing required path: ${src}`);
@@ -376,36 +377,24 @@ async function startNativeApisix(ctx, [etcdClientPort, etcdPeerPort, httpPort, a
 
   for (const sub of ["init", "init_etcd"])
     await runCmd(ctx, `Native APISIX ${sub}`, "apisix", [sub], { cwd: apisixDir });
-  const apisixDaemon = await spawnAndSave(
-    ctx,
-    "apisix",
-    "openresty",
-    ["-p", apisixDir, "-c", join(confDir, "nginx.conf")],
-    apisixDir,
-  );
+  const nginxConfigPath = join(confDir, "nginx.conf");
+  const nginxConfig = await readFile(nginxConfigPath, "utf8");
+  // OpenResty's master/worker process titles overwrite the scope marker in /proc.
+  const singleProcessConfig = nginxConfig.replace(/^\s*master_process\s+(?:on|off)\s*;/mu, "");
+  await writeFile(nginxConfigPath, `master_process off;\n${singleProcessConfig}`, { mode: 0o600 });
+  await spawnAndSave(ctx, "apisix", "openresty", ["-p", apisixDir, "-c", nginxConfigPath], apisixDir);
   const endpoint = { adminUrl: `http://127.0.0.1:${adminPort}/apisix/admin`, adminKey };
-  await pollReady(
-    ctx,
-    "Native APISIX",
-    25_000,
-    [etcdDaemon, apisixDaemon],
-    async () => {
-      await verifyApisixAdminBaseline(endpoint, {
-        signal: ctx.signal,
-        timeoutMs: 250,
-        requestTimeoutMs: 1000,
-        pollIntervalMs: 50,
-      });
-      return true;
-    },
-    100,
-  );
+  await waitForApisixAdmin(endpoint.adminUrl, endpoint.adminKey, {
+    signal: ctx.signal,
+    timeoutMs: Math.min(ctx.timeoutMs ?? 25_000, 25_000),
+  });
   return endpoint;
 }
 
 export async function cleanupNativeResourceRun(run, options = {}) {
   const { respectKeep = false, diagnostics = false, cleanupTimeoutMs = 30_000 } = options;
   const state = activeRunStates.get(run.record.runId);
+  if (run.record.status === "cleaned" && !state) return;
   const metadata = state ?? (await loadRuntimeMetadata(run));
   if (diagnostics || (respectKeep && run.record.keep)) await collectNativeDiagnostics(run, metadata);
   if (respectKeep && run.record.keep) {
@@ -415,7 +404,6 @@ export async function cleanupNativeResourceRun(run, options = {}) {
     console.log(`[test-resources] Environment retained; cleanup: ${managedCleanupCommand(run)}`);
     return;
   }
-  if (run.record.status === "cleaned" && !state && !metadata) return;
 
   const started = performance.now();
   run.record.status = "cleaning";
@@ -431,18 +419,23 @@ export async function cleanupNativeResourceRun(run, options = {}) {
   if (metadata) {
     if (metadata.scopeActiveFile) await capture(() => rm(metadata.scopeActiveFile, { force: true }));
     // Nudge PostgreSQL with SIGINT (fast shutdown) before scope SIGTERM so it drops idle connections immediately.
-    for (const { service, pid, pgid } of metadata.daemons ?? []) {
-      if (service !== "postgres" || (!pgid && !pid)) continue;
-      try {
-        process.kill(pgid ? -pgid : pid, "SIGINT");
-      } catch (err) {
-        if (err?.code !== "ESRCH") failures.push(err);
+    for (const { service, child } of state?.daemons ?? []) {
+      if (service === "postgres" && child && child.exitCode === null && child.signalCode === null) {
+        await capture(() => child.kill("SIGINT"));
       }
     }
     const forceAfterMs = Math.min(3000, Math.floor(cleanupTimeoutMs * 0.5));
     if (metadata.scopeId)
       await capture(() => closeOwnedProcessScope(metadata.scopeId, { timeoutMs: cleanupTimeoutMs, forceAfterMs }));
-    if (state?.daemons?.length) await Promise.all(state.daemons.map((d) => Promise.race([d.exited, delay(500)])));
+    await Promise.all(
+      (state?.daemons ?? []).map((daemon) =>
+        capture(async () => {
+          await Promise.race([daemon.exited, delay(500)]);
+          if (daemon.exitReason === undefined)
+            throw new Error(`Native ${daemon.service} is still running after scope cleanup`);
+        }),
+      ),
+    );
     if (metadata.tempRoot)
       await capture(async () => {
         assertSafeTempRoot(metadata.tempRoot);
@@ -452,6 +445,7 @@ export async function cleanupNativeResourceRun(run, options = {}) {
 
   activeRunStates.delete(run.record.runId);
   run.record.durations.cleanupMs = Math.round(performance.now() - started);
+  if (!failures.length) await capture(() => rm(runtimeRecordPath(run), { force: true }));
   run.record.status = failures.length ? "cleanup-failed" : "cleaned";
   await capture(() => saveManagedResourceRun(run));
   if (failures.length) {
@@ -492,19 +486,31 @@ export function createNativeResourceProvider(config = {}) {
       await saveRuntimeMetadata(run, state);
 
       const scopedEnv = ownedProcessScopeEnvironment({ id: scopeId, activeFile: scopeActiveFile }, stripProxyEnv(env));
-      const ctx = { run, state, env: scopedEnv, signal, timeoutMs, cleanupTimeoutMs };
+      const startAbort = new AbortController();
+      const startSignal = signal ? AbortSignal.any([signal, startAbort.signal]) : startAbort.signal;
+      const ctx = { run, state, env: scopedEnv, signal: startSignal, timeoutMs, cleanupTimeoutMs };
       const [needsPg, needsRedis, needsApisix] = ["postgres", "redis", "apisix"].map((s) => neededServices.includes(s));
       const ports = await allocateLoopbackPorts((needsPg ? 1 : 0) + (needsRedis ? 1 : 0) + (needsApisix ? 4 : 0));
       let i = 0;
-      const [postgresUrl, redisUrl, apisix] = await Promise.all([
+      const startups = [
         needsPg ? startNativePostgres(ctx, ports[i++]) : undefined,
         needsRedis ? startNativeRedis(ctx, ports[i++]) : undefined,
         needsApisix ? startNativeApisix(ctx, ports.slice(i, i + 4), apisixInstallDir) : undefined,
-      ]);
+      ];
+      const results = await Promise.allSettled(
+        startups.map((startup) =>
+          startup?.catch((error) => {
+            startAbort.abort(error);
+            throw error;
+          }),
+        ),
+      );
+      startSignal.throwIfAborted();
+      const [postgresUrl, redis, apisix] = results.map((result) => result.value);
       run.record.durations.createMs = Math.round(performance.now() - started);
       run.record.status = "ready";
       await saveManagedResourceRun(run);
-      return { ...(postgresUrl && { postgresUrl }), ...(redisUrl && { redisUrl }), ...(apisix && { apisix }) };
+      return { postgresUrl, redis, apisix };
     },
     cleanup: (run, opts = {}) =>
       cleanupNativeResourceRun(run, {

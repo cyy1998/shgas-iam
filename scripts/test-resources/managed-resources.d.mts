@@ -57,7 +57,6 @@ export function createManagedResourceRun(options: {
   registryFile?: string;
 }): Promise<ManagedResourceRun>;
 export function readManagedResourceRun(root: string, recordPath: string): Promise<ManagedResourceRun>;
-export function readManagedResourceRegistry(root: string, registryFile: string): Promise<string[]>;
 export function managedComposeStackView(run: ManagedResourceRun, stack: ManagedComposeStack): ManagedResourceRun;
 export function managedComposeArguments(run: ManagedResourceRun, args: readonly string[]): string[];
 export function runManagedComposeCommand(

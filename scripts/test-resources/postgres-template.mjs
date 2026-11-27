@@ -6,8 +6,6 @@ import {
 } from "../../packages/test-support/src/dedicated-postgres-test-url.mjs";
 import { pnpmCommand, runOwnedCommand } from "./owned-command.mjs";
 
-const SYSTEM_DATABASES = new Set(["postgres", "template0", "template1"]);
-
 export async function prepareManagedPostgresTemplate(run, options = {}) {
   const databaseUrl = options.databaseUrl ?? run?.record?.endpoints?.postgres?.databaseUrl;
   if (typeof databaseUrl !== "string" || !databaseUrl.trim()) {
@@ -20,9 +18,16 @@ export async function prepareManagedPostgresTemplate(run, options = {}) {
     environment,
   });
   const templateName = options.templateName ?? "iam_test_template";
-  if (!/^[a-z][a-z0-9_]{0,62}$/u.test(templateName) || SYSTEM_DATABASES.has(templateName)) {
+  if (!/^[a-z][a-z0-9_]{0,62}$/u.test(templateName)) {
     throw new Error(`Invalid PostgreSQL test template name: ${templateName}`);
   }
+  const templateUrl = new URL(databaseUrl);
+  templateUrl.pathname = `/${templateName}`;
+  requireDedicatedPostgresTestUrl({
+    name: "IAM_TEST_POSTGRES_TEMPLATE",
+    value: templateUrl.href,
+    environment,
+  });
   const command = process.versions.bun
     ? { executable: process.execPath, args: ["--no-env-file", "run", "test:postgres:prepare-template", templateName] }
     : process.env.npm_execpath

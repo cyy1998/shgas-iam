@@ -1,8 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { createReadStream } from "node:fs";
 import { relative, resolve } from "node:path";
-import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import type { FullConfig, Reporter, TestCase, TestError, TestResult, TestStep } from "@playwright/test/reporter";
 import { captureCommand } from "../command-runner.ts";
@@ -28,7 +26,6 @@ export interface ComposeLogSource {
 export interface FailureReporterOptions {
   reportDirectory?: string;
   runId?: string;
-  logFiles?: Readonly<Record<string, string | readonly string[]>>;
   compose?: ComposeLogSource;
 }
 
@@ -113,21 +110,13 @@ export default class FailureReporter implements Reporter {
   private async attachServiceLogs() {
     const windows = this.failures.map(({ window }) => window);
     if (!windows.length) return;
-    const sources: Array<{ name: string; lines: () => AsyncIterable<string> }> = Object.entries(
-      this.options.logFiles ?? {},
-    ).map(([name, paths]) => ({
-      name,
-      lines: () => serviceLines(typeof paths === "string" ? [paths] : paths),
-    }));
-    const compose = this.options.compose;
-    if (compose) {
-      for (const service of compose.services) {
-        if (service === "apisix") continue;
-        sources.push({ name: service, lines: () => composeServiceLines(compose, service, windows) });
-      }
-      if (compose.includeApisix !== false) {
-        sources.push({ name: "apisix", lines: () => apisixLines(compose, windows) });
-      }
+    const { compose } = this.options;
+    if (!compose) return;
+    const sources = compose.services
+      .filter((service) => service !== "apisix")
+      .map((service) => ({ name: service, lines: () => composeServiceLines(compose, service, windows) }));
+    if (compose.includeApisix !== false) {
+      sources.push({ name: "apisix", lines: () => apisixLines(compose, windows) });
     }
     await Promise.all(
       sources.map(async ({ name, lines }) => {
@@ -176,21 +165,6 @@ function readBrowserEvidence(result: TestResult): BrowserEvidence | undefined {
   }
 }
 
-async function* serviceLines(paths: readonly string[]) {
-  for (const path of paths) yield* fileLines(resolve(path));
-}
-
-async function* fileLines(path: string) {
-  const input = createReadStream(path, { encoding: "utf8", signal: AbortSignal.timeout(5_000) });
-  const lines = createInterface({ input, crlfDelay: Infinity });
-  try {
-    yield* lines;
-  } finally {
-    lines.close();
-    input.destroy();
-  }
-}
-
 function composeBaseArgs(source: ComposeLogSource) {
   return [
     "compose",
@@ -216,19 +190,13 @@ function captureCompose(source: ComposeLogSource, args: string[]) {
   });
 }
 
+function composeLogsArgs(since: string, until: string, service: string) {
+  return ["logs", "--no-color", "--no-log-prefix", "--timestamps", "--since", since, "--until", until, service];
+}
+
 async function* composeServiceLines(source: ComposeLogSource, service: string, windows: readonly EvidenceWindow[]) {
   const { since, until } = composeWindowBounds(windows);
-  const output = await captureCompose(source, [
-    "logs",
-    "--no-color",
-    "--no-log-prefix",
-    "--timestamps",
-    "--since",
-    since,
-    "--until",
-    until,
-    service,
-  ]);
+  const output = await captureCompose(source, composeLogsArgs(since, until, service));
   yield* output.stdout.split("\n");
   yield* output.stderr.split("\n");
 }
@@ -236,17 +204,7 @@ async function* composeServiceLines(source: ComposeLogSource, service: string, w
 async function* apisixLines(source: ComposeLogSource, windows: readonly EvidenceWindow[]) {
   const { since, until } = composeWindowBounds(windows);
   const [access, errors] = await Promise.all([
-    captureCompose(source, [
-      "logs",
-      "--no-color",
-      "--no-log-prefix",
-      "--timestamps",
-      "--since",
-      since,
-      "--until",
-      until,
-      "apisix",
-    ]),
+    captureCompose(source, composeLogsArgs(since, until, "apisix")),
     captureCompose(source, ["exec", "--no-TTY", "apisix", "tail", "-c", String(maxLogBytes), apisixErrorLog]),
   ]);
   yield* access.stdout.split("\n");

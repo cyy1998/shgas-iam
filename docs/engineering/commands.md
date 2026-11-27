@@ -148,12 +148,11 @@ pnpm test:e2e --keep dual-entry.spec.ts
 
 针对已完成初始化和网关发布的独立托管环境，使用 `pnpm test:e2e:managed`，配置见[托管环境验收](../releases/initial-installation.md#托管环境验收)。
 
-保留现场或异常中断后，按输出的资源记录或准确 project 清理（显式恢复使用 120 秒清理预算；相对 `--descriptor` 从 `e2e/system/` 解析，清理失败时保留记录可重试）：
+保留现场或异常中断后，可按输出的资源记录或准确 project 清理。清理失败时保留记录，可用同一命令重试。
 
 ```bash
 pnpm test:resources:cleanup --record test-results/e2e/<project>/run.json
 pnpm --filter @iam/e2e-system runtime:cleanup -- --project iam-e2e-<resource-id>
-pnpm --filter @iam/e2e-system runtime:cleanup -- --descriptor test-results/<run-id>/run-descriptor.json
 ```
 
 ### 聚合验证
@@ -169,14 +168,14 @@ pnpm --filter @iam/e2e-system runtime:cleanup -- --descriptor test-results/<run-
 
 仓库在 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) 运行权威合入门禁，覆盖 `pull_request`（`opened`、`reopened`、`synchronize`、`ready_for_review`）与 `push` 到 `main`。全部 Job 运行于 GitHub-hosted `ubuntu-latest`，顶层锁定 `permissions: { contents: read }`、固定 `pnpm install --frozen-lockfile`、PR 零外部 Secret、脱敏失败产物保留 7 天，并按 PR 编号开启 `cancel-in-progress: true`。
 
-| Job           | 触发条件                                                                        | 职责与关键配置                                                                                                                                                                                                                                                                   |
-| ------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `detect`      | 每次触发                                                                        | 计算 `base_sha` 并运行 `node scripts/verify-docs.mjs --classify --base "$BASE_SHA"`，输出 `docs_only`（异常时默认 `false`）。                                                                                                                                                    |
-| `doc-check`   | `docs_only == 'true'`                                                           | 运行 `node scripts/verify-docs.mjs --base "$BASE_SHA"`，校验 `git diff --check`、变动文档 Prettier 排版与 `pnpm check:docs`。                                                                                                                                                    |
-| `fast`        | `docs_only == 'false'`                                                          | 启用 `.turbo/cache`，顺序执行 `pnpm check`、`pnpm test:unit`、`pnpm build`。                                                                                                                                                                                                     |
-| `integration` | `docs_only == 'false'`（与 `fast` 并行）                                        | 启动 PostgreSQL 18.4（`services:` + `tmpfs: 1g`）、Redis 8.8.0（`--databases 32`）与 APISIX 3.16 + etcd 3.5（`if: always()` 拆除），以 `IAM_TEST_RESOURCE_PROVIDER=external` 运行全量 `pnpm test:integration`（197 文件）；失败时上传 `test-results/integration/**/logs/*.log`。 |
-| `e2e`         | `docs_only == 'false'` 且 `fast`、`integration` 通过，且为 `push` 或非 Draft PR | 启用 Docker Buildx + `IAM_E2E_BUILDX_CACHE=gha`，运行 `pnpm test:e2e`（生产容器栈 + 9 specs）；失败时上传 `e2e/system/.reports/**/failure-summary.{md,json}`。                                                                                                                   |
-| `ci-gate`     | `if: always()`，`needs` 全部 5 个上游 Job                                       | 唯一 Required Check，按严格真值表汇总：纯文档须 `doc-check=success` 且其余 3 项 `skipped`；代码变更拒绝 Draft PR，且须 `doc-check=skipped` 与 `fast`/`integration`/`e2e` 全部 `success`。                                                                                        |
+| Job           | 触发条件                                                                        | 职责与关键配置                                                                                                                                                                                                                                                                                       |
+| ------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `detect`      | 每次触发                                                                        | 计算 `base_sha` 并运行 `node scripts/verify-docs.mjs --classify --base "$BASE_SHA"`，输出 `docs_only`（异常时默认 `false`）。                                                                                                                                                                        |
+| `doc-check`   | `docs_only == 'true'`                                                           | 运行 `node scripts/verify-docs.mjs --base "$BASE_SHA"`，校验 `git diff --check`、变动文档 Prettier 排版与 `pnpm check:docs`。                                                                                                                                                                        |
+| `fast`        | `docs_only == 'false'`                                                          | 启用 `.turbo/cache`，顺序执行 `pnpm check`、`pnpm test:unit`、`pnpm build`。                                                                                                                                                                                                                         |
+| `integration` | `docs_only == 'false'`（与 `fast` 并行）                                        | 启动 PostgreSQL 18.4（`services:` + `tmpfs: 1g`）、Redis 8.8.0（`--databases 32`）与 APISIX 3.16 + etcd 3.5（`if: always()` 拆除），以 `IAM_TEST_RESOURCE_PROVIDER=external` 运行全量 `pnpm test:integration`（197 文件）；失败时将任务日志脱敏后上传 `test-results/integration-redacted/**/*.log`。 |
+| `e2e`         | `docs_only == 'false'` 且 `fast`、`integration` 通过，且为 `push` 或非 Draft PR | 启用 Docker Buildx + `IAM_E2E_BUILDX_CACHE=gha`，运行 `pnpm test:e2e`（生产容器栈 + 9 specs）；失败时上传 `e2e/system/.reports/**/failure-summary.{md,json}`。                                                                                                                                       |
+| `ci-gate`     | `if: always()`，`needs` 全部 5 个上游 Job                                       | 唯一 Required Check，按严格真值表汇总：纯文档须 `doc-check=success` 且其余 3 项 `skipped`；代码变更拒绝 Draft PR，且须 `doc-check=skipped` 与 `fast`/`integration`/`e2e` 全部 `success`。                                                                                                            |
 
 ### 纯文档验证
 

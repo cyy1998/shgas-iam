@@ -3,16 +3,19 @@ import type {
   ManagedResourceProviderName,
   ManagedResourceRun,
 } from "./managed-resources.mjs";
-import type { RedisPreflightOptions } from "./redis-preflight.mjs";
 
 export type ResourceServiceName = "postgres" | "redis" | "apisix";
 export type RawProviderEndpoints = {
   postgresUrl?: string;
-  redisUrl?: string;
+  redis?: { baseUrl: string; host: string; port: number };
   apisix?: { adminUrl: string; adminKey: string };
 };
 type TimingOptions = { signal?: AbortSignal; timeoutMs?: number; cleanupTimeoutMs?: number };
-export type ResourceProviderPrepareContext = TimingOptions & { run: ManagedResourceRun; env: NodeJS.ProcessEnv };
+export type ResourceProviderPrepareContext = TimingOptions & {
+  run: ManagedResourceRun;
+  env: NodeJS.ProcessEnv;
+  externalEndpoints?: RawProviderEndpoints;
+};
 export type ResourceProviderCleanupOptions = { cleanupTimeoutMs?: number; diagnostics?: boolean };
 export type ResourceProvider = {
   readonly name: ManagedResourceProviderName;
@@ -20,25 +23,12 @@ export type ResourceProvider = {
   prepare(services: readonly ResourceServiceName[], ctx: ResourceProviderPrepareContext): Promise<RawProviderEndpoints>;
   cleanup(run: ManagedResourceRun, options?: ResourceProviderCleanupOptions): Promise<void>;
 };
-type ProvidersMap =
-  | ReadonlyMap<ManagedResourceProviderName, ResourceProvider>
-  | Partial<Record<ManagedResourceProviderName, ResourceProvider>>;
 export type PrepareManagedTestResourcesContext = TimingOptions & {
   root: string;
   env?: NodeJS.ProcessEnv;
   projectPrefix?: string;
   keep?: boolean;
   registryFile?: string;
-  providers?: ProvidersMap;
-  preparePostgresTemplate?: (
-    run: ManagedResourceRun,
-    options?: TimingOptions & { databaseUrl?: string; env?: NodeJS.ProcessEnv },
-  ) => Promise<{ databaseUrl: string; templateName: string }>;
-  verifyRedis?: (rawUrl: string, options?: RedisPreflightOptions) => Promise<void>;
-  verifyApisix?: (
-    endpoint: { adminUrl: string; adminKey: string },
-    options?: { signal?: AbortSignal },
-  ) => Promise<void>;
   onRunCreated?: (run: ManagedResourceRun) => void;
 };
 export type PreparedManagedTestResources = {
@@ -64,10 +54,9 @@ export function validateExternalEnvironment(
   services: readonly ResourceServiceName[],
   env?: NodeJS.ProcessEnv,
 ): RawProviderEndpoints;
-export function registerResourceProvider(provider: ResourceProvider): void;
 export function normalizeNeededServices(services: readonly string[]): ResourceServiceName[];
 export function parseResourceProviderName(env?: NodeJS.ProcessEnv): ManagedResourceProviderName;
-export function resolveResourceProvider(env?: NodeJS.ProcessEnv, providers?: ProvidersMap): ResourceProvider;
+export function resolveResourceProvider(env?: NodeJS.ProcessEnv): ResourceProvider;
 export function validateProviderEnvironment(
   providerName: ManagedResourceProviderName,
   services: readonly ResourceServiceName[],
