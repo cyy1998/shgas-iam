@@ -9,7 +9,7 @@
 - 保留提交 Hook（禁止 `--no-verify`），核对 Hook 修复并提交聚焦修复（引用相关 issue 编号），对失效范围重跑检查。
 - 在最终干净候选上，以固定评审基线 `{{BASE_SHA}}` 按 `docs/agents/workflow.md` 与 `docs/agents/sandcastle-afk.md` 执行完整最终验证：
   - 纯文档差异运行 `pnpm verify:docs --base {{BASE_SHA}}`，其余改动运行 `pnpm verify` 并按 Spec 与风险补齐所需的 Integration、E2E、Gateway 检查；
-  - 修复提交后运行 `pnpm verify:container-smoke --base {{BASE_SHA}}` 与 `pnpm verify:e2e-runtime --base {{BASE_SHA}}`（若同一最终候选已通过 `pnpm verify:release`，可复用其结果）；
+  - 修复提交后运行 `pnpm verify:container-smoke --base {{BASE_SHA}}`、`pnpm verify:e2e-runtime --base {{BASE_SHA}}` 与 `pnpm verify:oidc-suite-resources --base {{BASE_SHA}}`（若同一最终候选已通过 `pnpm verify:release`，可复用其结果）；
   - 运行 `git diff --check`。
 - 禁止执行 `git push`、创建 PR 或修改 GitHub 议题；保持远端分支与议题状态不变。
 - 按 `.agents/skills/pr/SKILL.md` 与 `GLOSSARY.md` 基于最终 diff 与真实证据起草简洁的 PR 正文（包含 `## Summary`、`## Evidence`、`## Merge Danger`）。

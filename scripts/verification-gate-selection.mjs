@@ -73,6 +73,29 @@ const unconditionalE2eRuntimeMatchers = [
   (path) => /(?:^|\/)vite\.config\.[^/]+$/u.test(path),
 ];
 
+const oidcSuiteResourceExactPaths = new Set([
+  "apps/sso-api/test-integration/oidc/run-oidc-suite-resources.ts",
+  "apps/sso-api/test-integration/oidc/oidc-suite-resources.integration.test.ts",
+  "apps/sso-api/test-integration/oidc/oidc-suite.fixture.ts",
+  "apps/sso-api/test-integration/oidc/oidc-suite-runner.ts",
+  "apps/sso-api/test-integration/oidc/managed-api-resources.fixture.ts",
+  "apps/sso-api/test-integration/oidc/oidc-conformance.fixture.ts",
+  "apps/sso-api/src/testing/oidc-conformance-lifecycle.fixture.ts",
+  "packages/db/test-integration/support/prepare-postgres-template.ts",
+]);
+
+const unconditionalOidcSuiteResourcesMatchers = [
+  (path) => oidcSuiteResourceExactPaths.has(path),
+  (path) => path.startsWith("apps/sso-api/test-integration/support/"),
+  (path) => path.startsWith("packages/runtime/"),
+  (path) => path.startsWith("packages/test-support/"),
+  (path) => path.startsWith("scripts/test-resources/"),
+  (path) => gateScripts.has(path),
+  (path) => path === "pnpm-lock.yaml",
+  (path) => path === "pnpm-workspace.yaml",
+  (path) => path === ".npmrc",
+];
+
 function isPackageManifest(path) {
   return path === "package.json" || path.endsWith("/package.json");
 }
@@ -145,6 +168,15 @@ export function collectE2eRuntimeManifestClosures(repoRoot, snapshot) {
   };
 }
 
+export function collectOidcSuiteResourcesManifestClosures(repoRoot, snapshot) {
+  const graph = collectWorkspaceGraph(repoRoot, snapshot);
+  const ssoApi = graph.byManifestPath.get("apps/sso-api/package.json");
+  return {
+    backend: ssoApi ? expandWorkspaceClosure(graph, [ssoApi.manifestPath]) : new Set(),
+    invalidManifests: graph.invalidManifests,
+  };
+}
+
 function canonicalizeValue(value) {
   if (Array.isArray(value)) return value.map(canonicalizeValue);
   if (value && typeof value === "object") {
@@ -160,7 +192,13 @@ function canonicalizeValue(value) {
 
 function packagingSnapshot(manifest, scope, gate) {
   const fields =
-    scope === "root" ? rootPackagingFields : scope === "frontend" ? frontendPackagingFields : backendPackagingFields;
+    scope === "root"
+      ? rootPackagingFields
+      : scope === "frontend"
+        ? frontendPackagingFields
+        : gate === "oidc-suite-resources" && scope === "backend"
+          ? [...backendPackagingFields, "devDependencies"]
+          : backendPackagingFields;
   const snapshot = {};
   for (const field of fields) {
     if (Object.hasOwn(manifest, field) && manifest[field] !== undefined) {
@@ -185,6 +223,17 @@ function packagingSnapshot(manifest, scope, gate) {
         ) {
           snapshot[`scripts.${scriptName}`] = scriptValue;
         }
+      }
+    } else if (gate === "oidc-suite-resources" && scope === "backend") {
+      if (manifest.scripts["test:oidc-suite-resources"] !== undefined) {
+        snapshot["scripts.test:oidc-suite-resources"] = manifest.scripts["test:oidc-suite-resources"];
+      }
+      if (manifest.scripts["test:postgres:prepare-template"] !== undefined) {
+        snapshot["scripts.test:postgres:prepare-template"] = manifest.scripts["test:postgres:prepare-template"];
+      }
+    } else if (gate === "oidc-suite-resources" && scope === "root") {
+      if (manifest.scripts["verify:oidc-suite-resources"] !== undefined) {
+        snapshot["scripts.verify:oidc-suite-resources"] = manifest.scripts["verify:oidc-suite-resources"];
       }
     }
   }
@@ -335,5 +384,15 @@ export function evaluateE2eRuntimeTrigger(options) {
     pathLabel: "E2E runtime paths",
     unconditionalMatchers: unconditionalE2eRuntimeMatchers,
     collectClosures: collectE2eRuntimeManifestClosures,
+  });
+}
+
+export function evaluateOidcSuiteResourcesTrigger(options) {
+  return evaluateSemanticGateTrigger({
+    ...options,
+    gate: "oidc-suite-resources",
+    pathLabel: "OIDC suite resource paths",
+    unconditionalMatchers: unconditionalOidcSuiteResourcesMatchers,
+    collectClosures: collectOidcSuiteResourcesManifestClosures,
   });
 }

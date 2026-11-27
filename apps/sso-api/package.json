@@ -30,7 +30,8 @@
     "format": "biome format --write .",
     "format:check": "biome format .",
     "test:integration:bun": "node ../../scripts/run-package-integration.mjs bun -- bun test test-integration",
-    "test:integration:playwright": "node ../../scripts/run-package-integration.mjs playwright -- playwright test"
+    "test:integration:playwright": "node ../../scripts/run-package-integration.mjs playwright -- playwright test",
+    "test:oidc-suite-resources": "bun --no-env-file run test-integration/oidc/run-oidc-suite-resources.ts"
   },
   "dependencies": {
     "@hono/zod-openapi": "^1.6.3",

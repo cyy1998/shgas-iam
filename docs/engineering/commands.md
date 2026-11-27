@@ -68,9 +68,10 @@ pnpm test:integration
 `--file` 接受绝对路径、仓库相对路径或 owner 相对路径，须属于所选 owner 的 collection。
 无匹配、越界文件或未知参数均失败。根 `iam-monorepo` 负责聚合，测试 owner 是实际 workspace。
 
-同一候选的同一轮 Integration 检查按所需范围合并。根入口为整轮准备所需的 PostgreSQL 模板库和 Redis，
-按 `workspace:executor` 分配 Redis DB，并以同一并发池调度所选任务。默认并发上限为 3，首个失败会取消其他在途任务。
-`--concurrency <n>` 或 `IAM_TEST_INTEGRATION_CONCURRENCY` 可调整上限，两者接受正整数，命令行参数优先。
+同一候选的同一轮 Integration 检查按所需范围合并。根入口在所有并发任务开始前为整轮准备所需的 PostgreSQL 模板库、Redis
+及按最终选中文件按需启动的 Gateway APISIX/etcd（仅当命中 Gateway 五个真实 APISIX 文件时启动），按 `workspace:executor` 分配 Redis DB，
+并以同一并发池调度所选任务；所有任务进程树退出后再由根入口按 `children.jsonl` 逆序统一回收，确保并发执行期间 Docker 网络完全静止。
+默认并发上限为 3，首个失败会取消其他在途任务。`--concurrency <n>` 或 `IAM_TEST_INTEGRATION_CONCURRENCY` 可调整上限，两者接受正整数，命令行参数优先。
 
 - **多个文件**。重复传 `--file`，使用仓库相对路径区分不同 workspace 的文件。
 
@@ -96,7 +97,7 @@ pnpm test:integration
 Integration 的 `--timeout-ms` 默认 30 分钟，`--cleanup-timeout-ms` 默认 30 秒。
 Admin 和 SSO 的浏览器集成测试默认使用 `.cache/integration-frontend/` 中的静态构建。源码、workspace 传递依赖、锁定文件或公开构建环境变更时重新构建。
 设置 `IAM_PW_DEV_SERVER=1` 可切换到 Vite dev server。无资源的 Playwright 集合可通过 `--browser-workers <1–16>` 或 `IAM_TEST_BROWSER_WORKERS` 调整并发，命令行参数优先。
-选择带资源或 resource provider 的 Playwright 集合时须省略这两个覆盖项。
+选择带资源的 Playwright 集合时须省略这两个覆盖项。
 
 `--keep-resources` 显式保留本次环境并采集容器诊断。准确 project、配置与产物登记在 `test-results/integration/<run-id>/run.json`。
 同目录的 `logs/<package>-<executor>.log` 保存各任务的完整输出。终端列出逐任务耗时、日志路径和总墙钟。
@@ -177,12 +178,12 @@ CLI 闭包采用后端打包字段，并检查 `scripts.iam-ops`。同时命中�
 
 ### 聚合验证
 
-| 命令                  | 顺序                                                                          |
-| --------------------- | ----------------------------------------------------------------------------- |
-| `pnpm verify:static`  | `format:check`、`lint`、`check:docs`、`check:env-names`、`check:architecture` |
-| `pnpm verify`         | 静态检查 → typecheck → Unit → build                                           |
-| `pnpm verify:ci`      | verify → Integration                                                          |
-| `pnpm verify:release` | verify:ci → E2E 编排器 Integration → Full-system E2E → Container Smoke        |
+| 命令                  | 顺序                                                                                       |
+| --------------------- | ------------------------------------------------------------------------------------------ |
+| `pnpm verify:static`  | `format:check`、`lint`、`check:docs`、`check:env-names`、`check:architecture`              |
+| `pnpm verify`         | 静态检查 → typecheck → Unit → build                                                        |
+| `pnpm verify:ci`      | verify → Integration                                                                       |
+| `pnpm verify:release` | verify:ci → OIDC 套件资源编排 → E2E 编排器 Integration → Full-system E2E → Container Smoke |
 
 组合入口首错停止。何时执行见[验证节奏](../agents/workflow.md#验证节奏)，结果能证明的范围见[验证结果与交付](testing.md#验证结果与交付)。
 
@@ -234,6 +235,19 @@ Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit�
 正式 fixture 位于 [oidc-suite.fixture.ts](../../apps/sso-api/test-integration/oidc/oidc-suite.fixture.ts)，
 独立 RP 位于 [oidc-rp.integration.test.ts](../../apps/sso-api/test-integration/oidc/oidc-rp.integration.test.ts)。
 它们不是普通浏览器旅程，也不由基础 verify 自动运行。
+
+独立套件自管 Docker Compose 资源编排验证（[oidc-suite-resources.integration.test.ts](../../apps/sso-api/test-integration/oidc/oidc-suite-resources.integration.test.ts)）
+已剥离出日常并发 `pnpm test:integration`（保留 `oidc-rp.integration.test.ts` 与全部其余业务 OIDC 用例），通过独立入口和路径门禁执行，并无条件纳入 `pnpm verify:release`：
+
+```bash
+pnpm --filter @iam/sso-api test:oidc-suite-resources
+pnpm verify:oidc-suite-resources --base <target-commit-sha>
+```
+
+独立入口以单并发、首错停止运行专项测试，外层持有运行记录并在异常或中断后按 `children.jsonl` 回收未清理的子 Compose project。
+差异命中专项自身与 runner、OIDC 套件 fixture/driver、`apps/sso-api/test-integration/support/**`、`packages/runtime/**`、
+`packages/test-support/**`、`scripts/test-resources/**`、PG 模板脚本、门禁脚本、`pnpm-lock.yaml`、`pnpm-workspace.yaml`、`.npmrc`，
+或命中 `@iam/sso-api` 依赖闭包及根 `package.json` 的相关依赖/脚本字段（含 `test:oidc-suite-resources`、`test:postgres:prepare-template`、`verify:oidc-suite-resources`）时，路径门禁运行该专项。
 
 ### 固定套件与运行配置
 

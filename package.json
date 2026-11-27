@@ -39,6 +39,7 @@
     "verify:release": "node scripts/run-verification-gate.mjs release",
     "verify:container-smoke": "node scripts/run-verification-gate.mjs container-smoke",
     "verify:e2e-runtime": "node scripts/run-verification-gate.mjs e2e-runtime",
+    "verify:oidc-suite-resources": "node scripts/run-verification-gate.mjs oidc-suite-resources",
     "test:resources:cleanup": "node scripts/run-test-resource-cleanup.mjs"
   },
   "devDependencies": {
