@@ -8,10 +8,15 @@ function git(...args) {
   return execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 }
 
-const ROOT_DOCUMENTATION_FILES = new Set(["README.md", "AGENTS.md", "GLOSSARY.md"]);
+const ROOT_DOCUMENTATION_FILES = new Set(["README.md", "AGENTS.md", "GLOSSARY.md", ".sandcastle/README.md"]);
+const WORKSPACE_README_PATTERN = /^(?:apps|packages)\/[^/]+\/README\.md$/;
 
 function isDocumentation(path) {
-  return (path.startsWith("docs/") && path.endsWith(".md")) || ROOT_DOCUMENTATION_FILES.has(path);
+  return (
+    (path.startsWith("docs/") && path.endsWith(".md")) ||
+    ROOT_DOCUMENTATION_FILES.has(path) ||
+    WORKSPACE_README_PATTERN.test(path)
+  );
 }
 
 function inspectDiff(baseRef) {

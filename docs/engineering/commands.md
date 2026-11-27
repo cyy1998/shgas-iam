@@ -1,10 +1,10 @@
 # 构建、测试与开发命令
 
-从仓库根目录执行命令。使用 Linux 环境、Node.js 24、Bun 1.4.4 与根 [package.json](../../package.json) 的 `packageManager` 版本，先显式执行 `pnpm install`。检查命令遇依赖未就绪会失败。
+从仓库根目录执行命令。使用 Linux 环境、Node.js 24、Bun 1.4.4 与根 [package.json](../../package.json) 的 `packageManager` 版本，运行前先执行 `pnpm install`。
 
 ## 核心根命令
 
-面向日常开发与本地验证的根命令收敛为 6 个核心入口：
+日常开发与本地验证使用以下 6 个核心根命令：
 
 | 命令                    | 作用                                                                                                                                         |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -38,7 +38,7 @@ Admin 和 SSO 各自按 app 的 `.env.example` 准备 `.env.local`。默认入�
 - **数据库迁移与 schema** 使用 `pnpm --filter @iam/db <script>`。常用入口为 `db:generate`、`db:check`、`db:migrate` 和 `db:push`。
   目标环境的迁移与回退见[部署手册](../releases/deployment.md)。
 - **人工维护 CLI** 人工维护命令见 [Ops README](../../apps/ops/README.md)，按目标选择[运维手册](../releases/README.md)。
-- **Sandcastle AFK** 用 `pnpm sandcastle --help` 查看 CLI，`pnpm sandcastle:build` 构建方案 X 沙箱镜像，`pnpm sandcastle:check` 预检，`pnpm sandcastle:smoke` 运行真实 Docker 无特权冒烟，`pnpm sandcastle` 启动（外层由 `flock -n .sandcastle/runner.lock` 保证单实例互斥）。配置、凭据和恢复见 [AFK 运维与启动手册](../../.sandcastle/README.md#启动与诊断)。
+- **Sandcastle AFK** 用 `pnpm sandcastle --help` 查看 CLI，`pnpm sandcastle:build` 构建无特权沙箱镜像，`pnpm sandcastle:check` 预检，`pnpm sandcastle:smoke` 运行真实 Docker 无特权冒烟，`pnpm sandcastle` 启动（外层由 `flock -n .sandcastle/runner.lock` 保证单实例互斥）。配置、凭据和恢复见 [AFK 运维与启动手册](../../.sandcastle/README.md#启动与诊断)。
 
 ## 日常检查
 
@@ -138,7 +138,7 @@ pnpm test:e2e --keep dual-entry.spec.ts
 
 `--skip-build` 与 `--keep` 由运行时入口在 `--` 前解析，可和 Playwright 参数一起传入；遇到 `--` 后余下参数直接交给 Playwright：
 
-- `--skip-build`：校验并复用本地已构建的 `iam-e2e-*:local` 镜像（适合仅修改 `.spec.ts` 时零构建直跑；若缺少任意镜像会显式报错提示先不带开关构建一次）。
+- `--skip-build`：校验并复用本地已构建的 `iam-e2e-*:local` 镜像（适合仅修改 `.spec.ts` 时跳过构建直接运行；若缺少任意镜像会显式报错提示先不带开关构建一次）。
 - `--keep`：测试结束后保留容器栈并输出精确清理命令，便于排障。
 - `IAM_E2E_BUILD_CONCURRENCY` 设置 Compose 构建并发上限（默认 `2`，允许 `1`–`4`）。`IAM_E2E_BUILDX_CACHE` 可设为 `gha` / `none` / `off`。变量未设置时，仅当 `CI=true` 且提供 `ACTIONS_CACHE_URL` 或 `ACTIONS_RESULTS_URL` 才会启用 GHA 缓存。
 
@@ -152,16 +152,11 @@ pnpm --filter @iam/e2e-system runtime:cleanup -- --project iam-e2e-<resource-id>
 
 ### 聚合验证
 
-| 命令          | 顺序                                                                                                                 |
-| ------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `pnpm check`  | `format:check` → `lint` → `typecheck` → `@iam/db db:check` → `check:architecture` → `check:docs` → `check:env-names` |
-| `pnpm verify` | `check` → `test:unit` → `test:integration` → `build`                                                                 |
-
-组合入口首错停止。本地运行 `pnpm verify` 前先执行 `pnpm test:infra:up`。何时执行见[验证节奏](../agents/workflow.md#验证节奏)，结果能证明的范围见[验证结果与交付](testing.md#验证结果与交付)。
+`pnpm check` 与 `pnpm verify`（执行顺序见[核心根命令](#核心根命令)）均在首错时停止。本地运行 `pnpm verify` 前先执行 `pnpm test:infra:up`。何时执行见[验证节奏](../agents/workflow.md#验证节奏)，结果能证明的范围见[验证结果与交付](testing.md#验证结果与交付)。
 
 ## GitHub Actions CI
 
-仓库在 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) 运行权威合入门禁，覆盖 `pull_request`（`opened`、`reopened`、`synchronize`、`ready_for_review`）与 `push` 到 `main`。全部 Job 运行于 GitHub-hosted `ubuntu-latest`，顶层锁定 `permissions: { contents: read }`、固定 `pnpm install --frozen-lockfile`、PR 零外部 Secret、失败日志保留 7 天，并按 PR 编号开启 `cancel-in-progress: true`。
+仓库在 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) 运行合入门禁，触发事件为 `pull_request`（`opened`、`reopened`、`synchronize`、`ready_for_review`）与 `push` 到 `main`。所有 Job 均在 GitHub-hosted `ubuntu-latest` 上使用 `pnpm install --frozen-lockfile` 执行，顶层锁定 `permissions: { contents: read }`、PR 不依赖外部 Secret、失败日志保留 7 天，并按 PR 编号开启 `cancel-in-progress: true`。
 
 | Job           | 触发条件                                                                        | 职责与关键配置                                                                                                                                                                                                       |
 | ------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -178,7 +173,7 @@ pnpm --filter @iam/e2e-system runtime:cleanup -- --project iam-e2e-<resource-id>
 node scripts/verify-docs.mjs --base <target-commit>
 ```
 
-供 CI `detect`（加 `--classify`）与 `doc-check` 使用的底层脚本，也可在本地干净工作树中手动调用。传入本次合入目标的固定提交：候选须包含目标提交，且差异仅限 `docs/` 下的普通 Markdown 文件（含 `docs/agents/`）以及根目录 `README.md`、`AGENTS.md`、`GLOSSARY.md`。文件类型或权限变化以及范围外的改动（如 `.agents/`、`.codex/`、`.sandcastle/`、脚本或源码）都会被归类为非纯文档，须走完整代码路径。日常本地仅修改文档时运行 `pnpm check:docs` 与 `git diff --check`（或 `pnpm check`）即可。
+供 CI `detect`（加 `--classify`）与 `doc-check` 使用的底层脚本，也可在本地干净工作树中手动调用。传入本次合入目标的固定提交：候选须包含目标提交，且差异仅限 `docs/` 下的普通 Markdown 文件（含 `docs/agents/`）、根目录 `README.md`、`AGENTS.md`、`GLOSSARY.md`、`.sandcastle/README.md`，以及 `apps/*/README.md` 与 `packages/*/README.md`。文件类型或权限变化以及范围外的改动（如 `.agents/`、`.codex/`、`.sandcastle/` 下其他文件、脚本或源码）都会被归类为非纯文档，须走完整代码路径。日常本地仅修改文档时运行 `pnpm check:docs` 与 `git diff --check`（或 `pnpm check`）即可。
 
 ## 工具链排查
 
@@ -200,15 +195,8 @@ node -p "require('typescript').version"
 安全 lint 修复与 import 整理 → 自动排版 → git diff --cached --check
 ```
 
-lint-staged 按扩展名直接调用各工具，并复用公开命令的配置与排除范围；即使配置或依赖变化也不扩大到全仓。Biome 只做安全修复，
-Less 规则只检查，剩余错误、解析失败、工具失败及暂存 diff 空白错误都会阻止提交。无适用文件正常跳过工具检查。
-typecheck、test、build 与配置专属验证保持各自入口，不加入 pre-commit；不增加 pre-push 或 pre-merge-commit。
+`lint-staged` 按扩展名复用公开命令的配置与排除规则：Biome 仅应用安全修复，Less 只读检查；剩余错误、解析失败或暂存 diff 空白错误都会阻止提交。typecheck、test、build 与配置专属验证保留各自入口，不纳入 pre-commit。
 
-lint-staged 自动重新暂存修复结果，并暂时隐藏部分暂存文件的未暂存改动。允许暂存版本的整文件排版变化，
-原有未暂存代码仍保持未暂存，无关文件不进入提交。失败时先按终端诊断检查 `git status` 和 diff；恢复冲突会阻止提交，
-lint-staged 会尝试还原原始状态。若自动恢复失败，保留其输出的备份 stash 和恢复提示，核对备份内容后再按提示恢复，
-不要用全仓 `git add` 或清理 stash 掩盖冲突。
+`lint-staged` 自动重新暂存修复结果，并暂时隐藏部分暂存文件的未暂存改动。若恢复冲突导致提交中止且自动还原失败，请保留其输出的备份 stash 和恢复提示，核对备份内容后再按提示恢复，不要用全仓 `git add` 或清理 stash 掩盖冲突。
 
-Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit。最终候选仍按[验证节奏](../agents/workflow.md#验证节奏)执行只读检查。
-提交工具链变化时，在独立临时 Git 仓库中按[一次性验证约定](testing.md#root-工具链的一次性验证)
-检查涉及的真实提交、部分暂存和失败恢复行为。
+提交前 hook 可被绕过，merge commit 也不保证触发，最终候选仍须按[验证节奏](../agents/workflow.md#验证节奏)运行 `pnpm check` 等只读检查。修改提交工具链时，在独立临时 Git 仓库中按[一次性验证约定](testing.md#root-工具链的一次性验证)检查真实提交、部分暂存和失败恢复行为。

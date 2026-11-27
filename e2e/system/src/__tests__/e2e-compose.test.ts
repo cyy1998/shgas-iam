@@ -100,7 +100,7 @@ test("defines the isolated production-container E2E topology and WeCom stub trus
   const apisix = Bun.YAML.parse(readFileSync(new URL("../../docker/apisix/apisix.yaml", import.meta.url), "utf8"));
   expect(apisix).toMatchObject({
     apisix: { dns_resolver_valid: 1 },
-    nginx_config: { error_log: "/dev/stderr" },
+    nginx_config: { error_log: "/dev/shm/iam-e2e-apisix-error.log" },
   });
 });
 

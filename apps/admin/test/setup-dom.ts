@@ -1,9 +1,11 @@
 /// <reference types="vitest/jsdom" />
 
 import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
-import { afterEach, vi } from "vitest";
+import { act, cleanup } from "@testing-library/react";
+import { afterAll, afterEach, vi } from "vitest";
 import { resetTestAccess } from "./render";
+
+const nativeSetImmediate = globalThis.setImmediate;
 
 class ResizeObserverMock {
   observe = vi.fn();
@@ -122,4 +124,15 @@ afterEach(() => {
   cleanup();
   resetTestAccess();
   vi.clearAllMocks();
+});
+
+afterAll(async () => {
+  if (document.querySelector(".ant-message, .ant-modal-root")) {
+    const { Modal, message } = await import("antd");
+    await act(async () => {
+      Modal.destroyAll();
+      message.destroy();
+    });
+  }
+  await new Promise<void>((resolve) => nativeSetImmediate(resolve));
 });

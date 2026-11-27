@@ -1,7 +1,7 @@
 # 代码调查与双引擎编排
 
-本页统一维护 T3 Code 双引擎角色分工、评审编排，以及项目级只读调查子代理的调用策略与返回契约。
-仓库的 7 个角色契约定义统一维护在 `.codex/agents/*.toml`（供 Codex 原生子代理与 Sandcastle AFK 直接加载）。
+本页定义 T3 Code 双引擎角色分工、评审编排，以及项目级只读调查子代理的调用策略与返回契约。
+仓库的 7 个角色契约位于 `.codex/agents/*.toml`（供 Codex 原生子代理与 Sandcastle AFK 直接加载）。
 
 ## 双引擎角色与评审编排
 
@@ -9,8 +9,9 @@
 
 | 角色                                                                | 适用场景                                                                | 引擎与模型                                                                                                                 | 思考档位                                                                                             | 调用方式与隔离                                                               |
 | ------------------------------------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| [`code_researcher`](../../.codex/agents/code-researcher.toml)       | 跨文件入口定位、调用链追踪、隔离搜索噪声、`ready-for-agent` 轻量门禁    | 同引擎原生优先：Antigravity 用 `research`（默认 `inherit`，轻扫可选 `flash`）；Codex 用 `code_researcher`（`gpt-6.2-sol`） | Antigravity 默认 `high`；Codex `reasoningEffort: "high"`                                             | 同引擎原生子代理，`shared`（硬只读沙箱）                                     |
+| [`code_researcher`](../../.codex/agents/code-researcher.toml)       | 跨文件入口定位、调用链追踪、隔离搜索噪声                                | 同引擎原生优先：Antigravity 用 `research`（默认 `inherit`，轻扫可选 `flash`）；Codex 用 `code_researcher`（`gpt-6.2-sol`） | Antigravity 默认 `high`；Codex `reasoningEffort: "high"`                                             | 同引擎原生子代理，`shared`（硬只读沙箱）                                     |
 | [`deep_researcher`](../../.codex/agents/deep-researcher.toml)       | 事务边界、并发/幂等、安全边界、证据冲突反证、AFK 难解失败定位           | 默认 Codex `gpt-6.2-sol`（Codex 主会话需异构复核时可选 Antigravity `gemini-4-neon`）                                       | Codex `reasoningEffort: "xhigh"`（极端疑难可由用户指定 `max`）；Antigravity `thought_level: "xhigh"` | 跨引擎走 `delegate_task`（`isolation: "shared"`）；同引擎走原生              |
+| `ready-for-agent` 轻量门禁                                          | Spec 与 tickets 标记 `ready-for-agent` 交接 AFK 前的四项独立核查        | **固定** Codex `gpt-6.2-astra`                                                                                             | `reasoningEffort: "xhigh"`                                                                           | 独立 `delegate_task`（`role: "review"`、`isolation: "shared"`，只读限定）    |
 | [`standards_reviewer`](../../.codex/agents/standards-reviewer.toml) | 显式 `code-review` 的 Standards 轴（仓库规范 + Fowler smell baseline）  | **固定** Codex `gpt-6.2-astra`                                                                                             | `reasoningEffort: "xhigh"`                                                                           | 与 `spec_reviewer` 并发走 `delegate_task`（`isolation: "shared"`）           |
 | [`spec_reviewer`](../../.codex/agents/spec-reviewer.toml)           | 显式 `code-review` 的 Spec 轴（完整 Spec、tickets、验收与 scope creep） | **固定** Codex `gpt-6.2-astra`                                                                                             | `reasoningEffort: "xhigh"`                                                                           | 与 `standards_reviewer` 并发走 `delegate_task`（`isolation: "shared"`）      |
 | 浏览器与 UI 视觉验收（按需）                                        | 仅用户明确要求页面检查、交互验证、截图或可视化原型时                    | **固定** Antigravity `gemini-4-neon`                                                                                       | `thought_level: "high"`                                                                              | Antigravity 主会话或独立 `delegate_task`（使用 `preview_*` / `html_render`） |
@@ -24,10 +25,9 @@
    目标 provider 或模型不可用时直接报告阻塞并交由用户决策。
 2. **跨引擎角色契约与只读核验** 通过 `delegate_task` 委派角色时，`task` 传递稀疏上下文指针（对应 `.codex/agents/<role>.toml`、
    `AGENTS.md`、issue/spec 编号、固定 base/candidate SHA 与范围）。经 `delegate_task` 执行的只读角色
-   （`deep_researcher`、`standards_reviewer`、`spec_reviewer`）在 `task` 中明确限定为只读范围，返回后由主会话核对 `git status` 干净。
+   （`deep_researcher`、`ready-for-agent` 轻量门禁、`standards_reviewer`、`spec_reviewer`）在 `task` 中明确限定为只读范围，返回后由主会话核对 `git status` 干净。
 3. **显式双轴评审** 调用 `code-review` 时提供起始基线、固定候选 SHA 和已确认需求来源，评审期间保持候选固定。
-   两轴并发启动两个独立的 Codex `gpt-6.2-astra`（`reasoningEffort: "xhigh"`）`delegate_task`；每轮复审均新建独立
-   `delegate_task`，评审 findings 由主会话直接修复并验证。
+   两轴按上表模型与档位并发启动两个独立的 `delegate_task`；每轮复审均新建独立 `delegate_task`，评审 findings 由主会话直接修复并验证。
 4. **T3 Code 工作树与子任务管理** 主会话需要脱离主目录隔离工作时使用 `t3_worktree_handoff`。
    用户显式要求在 T3 Code 派发独立工作树子任务时，先提交父分支基线，再由父会话通过 `delegate_task(isolation: "worktree")`
    创建隔离 checkout；异步任务等待系统通知推进，需要停止时调用 `task_cancel`。
@@ -70,7 +70,7 @@
 1. 每个调查 agent 只接收一个问题，并明确 included scope、excluded scope 和 completion condition。
 2. 按独立 subsystem 或 concern 拆分调查任务，不按任意文件数量拆分。
    `deep_researcher` 默认只启动一个，负责范围更窄的复杂裁决。
-3. 调查 agent 不修改 production code、测试、文档、tracker 或配置，也不递归委派其他 agent。
+3. 调查 agent 严格只读（不修改任何仓库文件或 tracker），且不得递归委派其他 agent。
 4. 主代理等待所有必要调查完成后再综合，只针对冲突或缺口做聚焦补充调查，不重复已完成的扫描。
 5. 主代理负责最终判断、冲突消解、实现决策和任何需要落盘的调查记录。
 
@@ -96,14 +96,14 @@ protocol entry
 
 ## 返回契约与外置记忆
 
-调查结果必须包含：
+调查结果必须包含（`code_researcher` 使用 `Conclusion` + `Inferences`；`deep_researcher` 对应使用 `Verdict`、`Invariants and failure modes` 与 `Counterevidence`，详见对应 `.codex/agents/*.toml`）：
 
-1. `Conclusion`：直接结论与置信度；
+1. `Conclusion`（`deep_researcher` 为 `Verdict`）：直接结论与置信度；
 2. `Execution or data flow`：有序的符号与边界；
 3. `Evidence`：仓库相对路径、符号名称以及每条证据证明的内容；
-4. `Inferences`：有依据但未被直接证明的判断；
+4. `Inferences`（`code_researcher`）：有依据但未被直接证明的判断；
 5. `Unknowns`：未确认项与下一步最小调查动作。
 
-`deep_researcher` 还必须返回关键 `Invariants and failure modes`，以及用于挑战主假设的 `Counterevidence`。
+`deep_researcher` 另须返回关键 `Invariants and failure modes`，以及用于挑战主假设的 `Counterevidence`。
 
 结果只返回压缩后的证据摘要，不返回原始搜索日志或大段源码。需要跨上下文恢复时，由主代理把摘要、已排除假设、已覆盖文件和下一步动作写入当前 GitHub issue 的评论，或用户明确指定的调查报告路径；恢复后优先沿该记录继续。

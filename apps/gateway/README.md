@@ -28,7 +28,8 @@ pnpm --filter @iam/gateway-apisix dev
 ```bash
 pnpm --filter @iam/gateway-apisix test:unit
 pnpm --filter @iam/gateway-apisix typecheck
+pnpm test:infra:up
 pnpm test:integration --workspace apps/gateway
 ```
 
-[Unit](src/__tests__/) 使用合成 YAML 检查输入、规划和补偿分支。[Integration](test-integration/) 由根 runner 准备 PostgreSQL，并在独立 APISIX/etcd 上启动 Gateway、发布和回读配置。完整系统旅程使用[自己的网关配置](../../e2e/system/test-assets/)。
+[Unit](src/__tests__/) 使用合成 YAML 检查输入、规划和补偿分支。[Integration](test-integration/) 依赖预先启动的本地专用测试服务（`pnpm test:infra:up`，或外部注入 `IAM_TEST_POSTGRES_URL`、`IAM_TEST_APISIX_ADMIN_URL` 与 `IAM_TEST_APISIX_ADMIN_KEY`），根 runner 负责准备 PostgreSQL 模板库并校验 APISIX Admin 空基线，随后在测试中启动 Gateway 发布和回读配置。完整系统旅程通过 [gateway-sync.ts](../../e2e/system/src/runtime/gateway-sync.ts) 将[开发网关示例配置](../../docker/gateway/iam.dev.example.yaml)发布到 [E2E APISIX](../../e2e/system/docker/apisix/apisix.yaml)（TLS 测试证书位于 [test-assets](../../e2e/system/test-assets/)）。

@@ -8,7 +8,7 @@
 
 ## 术语与决策约束
 
-- **术语一致**：issue 标题、重构方案、假设、类型与测试命名统一沿用 `GLOSSARY.md` 定义的领域词汇，不随意漂移到明确避免的同义词。若出现词表尚未收录的新概念，评估是否为词汇漂移或真实领域缺口（后者交由 `/domain-modeling` 补齐）。
+- **术语一致**：issue 标题、重构方案、假设、类型与测试命名统一沿用 `GLOSSARY.md` 定义的领域词汇，不随意漂移到 `GLOSSARY.md` 排除的同义词。若出现词表尚未收录的新概念，评估是否为词汇漂移或真实领域缺口（后者交由 `/domain-modeling` 补齐）。
 - **显式上报 ADR 冲突**：产出若与现有已接受 ADR 冲突，必须显式标出并说明理由，不得静默覆盖：
 
   > _Contradicts ADR-0007 (`<decision title>`) — but worth reopening because…_

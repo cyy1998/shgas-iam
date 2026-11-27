@@ -1,6 +1,6 @@
 # 仓库指引入口
 
-本文件是 Antigravity、Codex 及其他 Agent 的仓库级导航入口，具体规范集中维护在 `docs/` 下。本页只保留按任务查找规范的指引。
+本文件是 Antigravity、Codex 及其他 Agent 的仓库级导航入口，具体规范集中维护在 `docs/` 下。
 
 ## 阅读顺序
 
@@ -26,7 +26,7 @@
 | Gateway、Docker、observability 配置，或部署、数据切换、运维修复                                | [仓库地图](docs/engineering/repository-map.md)及[发布与维护](docs/index.md#发布与维护)中对应的 Current runbook。执行命令前读完整的适用流程                                   |
 | 修改文档、AGENTS.md 或 skill                                                                   | [文档索引的维护方式](docs/index.md#维护方式)；涉及的架构或领域规则仍按上表叠加                                                                                               |
 
-`openspec/` 已冻结为只读历史参考。除非维护者明确要求修正历史记录，否则不得在其中新增、修改、同步或归档产物，也不得把其中的规格视为当前事实来源。
+`openspec/` 已冻结为只读历史参考，不作为当前事实来源；未经维护者明确要求，不得在其中新增、修改、同步或归档。
 
 ## Agent 交互与 Shell 约定
 

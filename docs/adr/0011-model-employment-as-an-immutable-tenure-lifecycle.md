@@ -56,9 +56,9 @@ Effective Employment 使用 Enable 与非墓碑，不再使用日期范围作为
 普通任职变化令 Profile 失效，不自行撤销会话或改变 Token TTL；账号停用和离职的安全作用独立。
 未来外部 Authority 可以拥有任职有效期与来源，但不能按 last-writer-wins 覆盖同一任职期。
 
-[Admin 写入决定](0025-align-admin-mutation-results-with-committed-facts.md) 已加强现存选中业务行的锁定。
-这不把跨表父完整性、后来新增记录或跨记录 Primary 检查提升为线性化保证。接受这些乐观边界；写入规模、外部 Authority
-或运行证据改变时再评估统一并发方案，不能用“已有事务/行锁”宣称所有条件强一致。
+[Admin 写入决定](0025-align-admin-mutation-results-with-committed-facts.md) 锁定现存选中的业务行，
+但不把跨表父完整性、并发新增记录或跨记录 Primary 检查提升为线性化保证。现阶段接受这些乐观并发边界，
+写入规模、外部 Authority 或运行证据变化时再评估统一并发方案。
 
 ## 诊断与历史数据
 

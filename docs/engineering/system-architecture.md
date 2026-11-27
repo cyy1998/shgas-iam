@@ -56,7 +56,7 @@ flowchart LR
   integration --> sms
 ```
 
-箭头表示逻辑依赖，不表示每次操作都会访问所有依赖。图中的分组也不表示物理共机、数据库读写分离或生产网络隔离。
+上图仅表示逻辑依赖，不代表物理部署、读写分离或网络隔离。
 三个公共后端在各自进程内使用共享 packages 访问 PostgreSQL 和 Redis，彼此之间没有同步 HTTP 调用。
 
 ### 请求入口与后台任务
@@ -125,7 +125,7 @@ Facts 可以重建，登录态不能重造，访问屏障缺失时拒绝访问�
 ## 部署与观测
 
 生产 Compose 分为 data、apps、gateway 和 observability。数据、应用与 Gateway 使用相同 project，观测独立；
-服务选择和现场检查见[部署手册](../releases/deployment.md)。本地验证不替代目标环境的停流、排空、恢复和放流。
+服务选择和现场检查见[部署手册](../releases/deployment.md)。
 旧来源升级须使用匹配版本的流程，入口见[历史工具](../releases/README.md#一次性迁移与旧版本)。
 
 应用日志经 Alloy 写入 Loki，Grafana 提供查询。APISIX OTLP 当前使用 debug exporter，尚不能作为持久化 trace backend。

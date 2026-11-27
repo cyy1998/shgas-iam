@@ -1,8 +1,8 @@
 # GitHub 议题跟踪
 
 本仓库新建的 spec、implementation ticket 和 wayfinding 记录统一存放在
-[`cyy1998/shgas-iam`](https://github.com/cyy1998/shgas-iam) 的 GitHub Issues 中。仓库统一使用 GitHub，远端
-remote 通常命名为 `github`；所有 `gh` 命令显式传入 `--repo cyy1998/shgas-iam`。
+[`cyy1998/shgas-iam`](https://github.com/cyy1998/shgas-iam) 的 GitHub Issues 中。仓库统一使用 GitHub，默认远端
+remote 为 `origin`（若本地另行命名为 `github` 则按实际名称传递）；所有 `gh` 命令显式传入 `--repo cyy1998/shgas-iam`。
 
 ## T3 Code 工具与 Remote 约定
 
@@ -10,8 +10,8 @@ remote 通常命名为 `github`；所有 `gh` 命令显式传入 `--repo cyy1998
 - **T3 线程绑定** 在 T3 Code 会话中接手或新建 issue 后（包括经 `gh` CLI 操作），补调 `link_issue` 将其关联到当前线程。
 - **PR 操作** 涉及 PR 读取、创建、评审、评论、合入或 CI 日志排查时，在 T3 Code 环境下优先使用 `pull_request_*`、`ci_logs`、
   `ci_rerun` 等内置工具。
-- **Worktree Remote 基线** 调用 `t3_worktree_handoff` 或 `t3_thread_launch` 创建 worktree 时，显式传入
-  `baseRef: "github/main"`，或基于本地分支设 `startFromOrigin: false`。
+- **Worktree Remote 基线** 调用 `t3_worktree_handoff` 或 `t3_thread_launch` 创建 worktree 时，默认使用远端基线
+  `baseRef: "origin/main"`（若本地 remote 名为 `github` 则传 `"github/main"`），或基于本地分支设 `startFromOrigin: false`。
 
 ## 常用操作
 
@@ -29,7 +29,7 @@ remote 通常命名为 `github`；所有 `gh` 命令显式传入 `--repo cyy1998
 - 认领：`gh issue edit <number> --repo cyy1998/shgas-iam --add-assignee '@me'`。
 - 关闭：`gh issue close <number> --repo cyy1998/shgas-iam --comment "..."`。
 
-实际标签名称由 [triage-labels.md](triage-labels.md) 定义，不得因远端暂时缺少标签而静默改用其他名称。
+标签定义与使用约束见 [triage-labels.md](triage-labels.md)。
 
 ## Pull request 是否进入 triage
 
@@ -62,26 +62,23 @@ GitHub Issues 与 PR 共用编号空间。遇到裸 `#42` 时，先运行
 - assignee 表达认领，open/closed 表达是否完成，triage label 表达当前处理角色；
 - 评论只追加重要决策、验证摘要、评审结果和下一安全动作，并链接正式来源，不复制整份 spec 或 ticket。
 
-手动工作流与 Sandcastle AFK 均通过 Pull Request 交付（规则见[完成与 PR 交付](workflow.md#完成与-pr-交付)与[Spec 交付与清理](sandcastle-afk.md#spec-交付与清理)）：
-交付时保持关联 tickets 与父 Spec 为 open，PR 正文逐行附加 `Closes #<number>` 并在创建 PR 后移除 `ready-for-agent` 标签，待维护者在 GitHub 合并 PR 时自动关票。
+交付时保持关联 tickets 与父 Spec 为 open，在 PR 正文逐行附加 `Closes #<number>`，由 GitHub 在合并 PR 时自动关票。PR 创建与 `ready-for-agent` 标签移除时机见[完成与 PR 交付](workflow.md#完成与-pr-交付)与[Spec 交付与清理](sandcastle-afk.md#spec-交付与清理)。
 
 ### Spec 任务图
 
 Spec 与 implementation ticket 使用[互斥类型标签](triage-labels.md#spec-与实施票类型)，AFK 实施档位与异常暂停使用[执行档位与暂停标签](triage-labels.md#afk-执行档位与暂停标签)。
 `/to-tickets` 为每张有父 Spec 的票应用 `type:ticket` 与 `ready-for-agent`（并在设计期按需打 `agent:light` 或 `agent:deep`，缺省为 standard，两者互斥），
 通过 GitHub 原生父子关系关联到父 Spec，通过原生 blocking 关系登记前置条件。
-正文中的 Parent 或依赖解释用于阅读，不替代这两种关系，也不授权自动推断或修正关系。
+机器调度仅以原生父子与阻塞关系为准；正文说明仅供阅读，不得据此推断或改写关系。
 
 当前 GitHub CLI 支持创建时传 `--parent <spec-number>` 与 `--blocked-by <numbers>`，
-修改已有子票时可用 `--parent`、`--add-blocked-by`；仍须显式指定仓库。
-Sandcastle AFK 通过有界懒加载 GraphQL 读取带 `type:spec` 与 `ready-for-agent` 的 open Spec 及单条 Spec 的 `linkedBranches`、子票、评论与阻塞边（检测 `pageInfo.hasNextPage` 溢出即显式报错）。关系或必要 API 不可用时报告阻塞。
-
-父 Spec 与待实施子票按 `OPEN ∧ 类型标签正确 ∧ ready-for-agent ∧ !needs-attention`、原生父子匹配与阻塞关系判定就绪（Spec 内前置看 Git 合并提交 `Sandcastle-Ticket: #<N>` trailer，Spec 外前置以 GitHub `CLOSED` 为准）。子票阻塞时受影响切片等待，独立切片继续推进；全部 `OPEN` 子票均须集成完成后才允许进入评审交付。
+修改已有子票时可用 `--parent`、`--add-blocked-by`（仍须显式指定仓库）；原生关系或对应 API 不可用时报告阻塞。
+AFK 的 GraphQL 懒加载、前沿就绪判定与异常暂停规则见[批量实施与按需 Merger](sandcastle-afk.md#批量实施与按需-merger)。
 
 ## Sandcastle AFK 交接
 
-AFK 使用上述类型、原生任务图、`linkedBranches` 与 `agent:light` / `agent:deep` / `needs-attention` 标签；异常暂停时由 runner 为 Spec 添加 `needs-attention` 标签并评论原因。若设计产物落在候选集成分支，建完 Spec 后通过 `gh issue develop <spec> --name feat/<slug>` 将分支原生关联到 Spec 的 Development 栏（未关联时默认 `sandcastle/spec-<N>`，交接前确保本地外部工作树未检出该分支）；标为 `ready-for-agent` 前的轻量门禁、分支契约及 PR 交付见
-[Sandcastle AFK 工作流](sandcastle-afk.md#设计与执行交接)。
+设计产物落在候选集成分支时，建完 Spec 后执行 `gh issue develop <spec> --name feat/<slug>` 将分支原生关联到 Spec 的 Development 栏（交接前确保本地外部工作树未检出该分支）。
+交接前的轻量门禁、分支契约与异常回流见[设计与执行交接](sandcastle-afk.md#设计与执行交接)。
 
 ## 当 skill 要求“fetch the relevant ticket”
 
@@ -107,8 +104,7 @@ AFK 使用上述类型、原生任务图、`linkedBranches` 与 `agent:light` / 
 
 ## 历史兼容
 
-`.scratch/archived/**` 是旧本地 tracker 的有效历史，保持原路径和原格式。不得为切换 GitHub 而批量迁移、删除、补写或
-重新校验其中的 spec、tickets、maps、prototypes 和 `delivery.md`；现有 release 文档对这些历史文件的链接继续有效。
+`.scratch/archived/**` 是旧本地 tracker 的只读历史归档，保持原路径与原格式不变，不随 GitHub 切换做迁移或改动；现有 release 文档对其中文件的链接继续有效。
 
 只有维护者明确点名某个旧 tracker 及其归档操作时，才适用仓库的历史 `archive-feature` 流程。新建 GitHub issues 不进入
 该归档流程，完成后直接按 issue 工作流关闭。

@@ -32,7 +32,7 @@ IAM 代理路由的责任。
   管理员必须确保所信任 origin 的代理确实指向正确 IAM 入口。host-only Cookie 不自动跨域同步。
   托管回调从 Code 绑定验证原会话关系与用途，不以请求 Host、浏览器根 Cookie 或 IAM 内部读取 Secret 作为托管认证依据。
 
-这些选择避免额外的全局 origin 配置和跨域登录同步机制，但不承诺代理部署正确或所有用户旅程已验收。
+这些选择避免额外的全局 origin 配置和跨域登录同步机制，但代理部署的正确性仍由运维与管理员保证。
 托管与业务失败作用继续分开，见 [ADR-0035](0035-unify-user-and-client-session-lifecycles.md#一次消费与失败作用)。
 
 ## 当前契约与历史
@@ -41,9 +41,8 @@ IAM 代理路由的责任。
 接入步骤见[第三方指南](../guides/custom-sso.md)，授权和回调规则见
 [Custom SSO 接入](../guides/custom-sso.md)。
 
-同代转换与跨代升级的源识别、原凭据及非目标数据保护、失败恢复和人工发布责任仍按匹配版本历史流程执行，不能把
-任意旧来源套到当前维护。入口见[历史维护命令](../releases/README.md#一次性迁移与旧版本)；
-删除升级正文不表示对应工具退役或环境已经升级。
+同代转换与跨代升级的源识别、原凭据及非目标数据保护、失败恢复和人工发布责任按匹配版本的历史流程执行，
+入口见[历史维护命令](../releases/README.md#一次性迁移与旧版本)。
 
 ORCAS 不再参与 managed/business 配置区分；完整退役历史见
 [ADR-0040](0040-retire-orcas-custom-sso-integration.md)。

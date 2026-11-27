@@ -35,8 +35,10 @@ apisix:
 
 nginx_config:
   worker_processes: 2
-  # Capture warnings and errors in Compose service logs for CI failure redaction.
-  error_log: /dev/stderr
+  # Nginx error records include raw request lines and Referer headers (which may carry
+  # oidcReturn or WeCom callback query strings). Keep them in container memory instead of
+  # /dev/stderr so unredacted query values never enter Compose/CI log streams.
+  error_log: /dev/shm/iam-e2e-apisix-error.log
   error_log_level: warn
   http_configuration_snippet: |
     # proxy-rewrite can replace $uri before the access log is written.

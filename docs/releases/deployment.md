@@ -67,13 +67,11 @@ docker compose --env-file docker/.env.ops -f docker/compose.prod.ops.yaml run --
 同一 Docker daemon 上沿用 `iam-service-prod` 的默认网络，可使用现有数据服务名；独立维护主机必须填写实际可达的 PostgreSQL、Redis 地址。
 相同 project 名不提供跨主机网络。只通过 `run --rm --no-deps` 执行一次性任务，不对这份局部 Compose 执行 `down` 或管理共享项目生命周期。
 
-执行具体维护前先读对应[数据维护](data-maintenance.md)或[会话维护](authentication-and-session.md)的停流、排空和权限要求。
-backfill、部分 repair 只登记或唤醒工作，仍须匹配版本的 consumer 收敛，再运行独立完整 gate；命令成功不能代替恢复完成或放流检查。
-失败或退出未知时保持适用的停流范围，按该能力的恢复步骤处理，再重新执行核验。
+执行具体维护前先读对应[数据维护](data-maintenance.md)或[会话维护](authentication-and-session.md)的停流、排空和权限要求；`backfill` 与部分 `repair` 仅负责登记或唤醒任务，仍须等待匹配版本的 consumer 收敛并运行独立核验。
 
 ## 首次部署
 
-适用于新环境。已有数据库先判断来源版本与迁移要求，不把空库安装流程当作旧环境升级。
+仅适用于空库新环境；已有数据库的环境按[常规更新](#常规更新)或[独立迁移指引](README.md#一次性迁移与旧版本)升级。
 
 1. **启动数据层与网关底座** 准备持久化目录与权限、配置和依赖网络。在各主机仅启动分配给本机的服务：
 
@@ -105,15 +103,14 @@ backfill、部分 repair 只登记或唤醒工作，仍须匹配版本的 consum
    按[新空环境首次初始化](initial-installation.md)使用一次性 Ops 命令准备管理员与 Client 配置。
    有导入源数据时，按[数据维护](data-maintenance.md)完成对应读模型构建及核验。
 
-4. **发布网关路由并放流** 按[网关发布流程](apisix-gateway-release.md)发布目标环境配置。经受限入口完成[完成检查](#完成检查与回退)，再开放公共流量。
-   任一步失败保持受影响入口关闭，修复后重做失败步骤及受影响检查。
+4. **发布网关路由并放流** 按[网关发布流程](apisix-gateway-release.md)发布目标环境配置。经受限入口通过[完成检查](#完成检查与回退)后，再开放公共流量。
 
 ## 常规更新
 
 先确定受影响服务及配对要求。数据库不兼容变更、密钥轮换、读模型升级各用其专门流程；普通应用更新不附带会话全清或全量重建。
 
 1. **备份与准备** 准备目标镜像和已知兼容的回退镜像、配置；涉及持久数据变更时先取得可恢复备份。
-2. **切流与排空** 通过实际网关/部署控制关闭受影响流量和任务，排空在途工作。Compose 的 `stop` 不是流量控制替代品。
+2. **切流与排空** 先通过网关与任务调度切走受影响流量并排空在途请求，再执行 `compose stop`。
 3. **拉取镜像与迁移** 更新 `docker/.env` 中相应 `*_IMAGE` 和配置。以下以 Auth API 与 Admin API 为例：
 
    ```bash
@@ -132,7 +129,7 @@ backfill、部分 repair 只登记或唤醒工作，仍须匹配版本的 consum
    docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml ps auth-api admin-api
    ```
 
-5. **核验并恢复放流** 按[完成检查](#完成检查与回退)核验受影响范围，再恢复流量与任务。检查或开放失败时停止继续开放，关闭不确定入口并按回退/修复流程处理。
+5. **核验并恢复放流** 按[完成检查与回退](#完成检查与回退)核验受影响范围，通过后恢复流量与任务。
 
 ### 切换三个公共后端
 
@@ -140,22 +137,21 @@ backfill、部分 repair 只登记或唤醒工作，仍须匹配版本的 consum
 2. 新旧版本并行前，冻结 Client 写入（含配置、启停和 Secret 轮换）。关闭 Admin Client 写入入口和直连，暂停相关维护任务，排空在途写入及提交后失效。旧 Admin API 直接删除缓存键，旧公共后端的回填也不检查失效代际。切换期间保留公共读取流量，直至切换并排空旧公共后端。
 3. 启动三个服务并确认 `/ready`，准备对应的前端制品和环境 manifest。同一宿主并行运行新旧服务时，若旧后端占用宿主端口 `30000`，给 `IAM_AUTH_API_PUBLISHED_PORT` 指定空闲端口，保持 Auth API 容器端口为 `30000`，并按实际网络更新 upstream。切换 Gateway upstream 和前端前，更新业务网关中仍直连旧后端的 `forward-auth.uri`。已有经 APISIX 的三条兼容别名继续保留。[网关切换与兼容路径](apisix-gateway-release.md#拆分后的-iam-路由示例)
 4. 经受控入口验证登录续接、会话鉴权、M2M 鉴权、三个兼容别名及受影响的直接调用。切换所有入口后排空并停止旧公共后端，升级全部 Admin API 副本和使用该缓存的维护制品。开放 Client 写入前，通过受限入口验证新 Admin API 提交后旧缓存失效，确认旧 Internal API Secret 被拒绝且当前凭据可用。
-5. 核验失败时暂停扩大流量并保持 Client 写入冻结。缓存异常按[全量修复与独立核验](authentication-and-session.md#client-snapshot-修复)处理。回退时先冻结并排空 Client 写入，协调恢复 Admin API、公共后端、前端及路由，排空退出版本后验证目标版本的写入及失效，再恢复 Client 写入。
+5. 缓存异常按[全量修复与独立核验](authentication-and-session.md#client-snapshot-修复)处理。若需[回退](#完成检查与回退)，先冻结并排空 Client 写入，协调恢复 Admin API、公共后端、前端及路由，待退出版本排空并验证目标版本的写入与缓存失效后，再解除写入冻结。
 
 ### 开放应用准入策略
 
 按常规更新流程先执行正式迁移，再重建 Auth API、SSO API、Admin API、SSO 和 Admin。迁移为存量应用保留默认关闭的策略。
 开放管理端启停前，确认内外网入口的全部 SSO API 副本均已升级，并经受限入口核对两种协议的准入结果。
 
-回退到不支持准入的版本前，先核对已开启策略的应用。旧版授权进程会跳过准入检查，需继续维持准入的应用应保持停流，
-直至恢复支持准入的版本。传播异常按 [Client Snapshot 修复](authentication-and-session.md#client-snapshot-修复)处理。
+若需[回退](#完成检查与回退)到不支持准入的版本，先核对已开启策略的应用——旧版授权进程会跳过准入检查，需维持准入的应用应保持停流。传播异常按 [Client Snapshot 修复](authentication-and-session.md#client-snapshot-修复)处理。
 
 ### 启用手机号和企业微信身份唯一性
 
-按[常规更新](#常规更新)准备 PostgreSQL 备份和同一候选的 API、Admin API、Admin、SSO 与 User Document Worker。
+按[常规更新](#常规更新)准备 PostgreSQL 备份和同一候选的三个公共后端（Auth API、SSO API、Integration API；旧版为单公共 API）、Admin API、Admin、SSO 与 User Document Worker。
 迁移会规范化未删除账号的登记值，并登记受影响用户的文档更新。停用账号保留占用，软删除记录保留原值。
 
-1. 关闭用户资料写入入口并排空在途请求，停止旧版 API、Admin API 和可能写入用户档案的维护任务。
+1. 关闭用户资料写入入口并排空在途请求，停止旧版公共后端、Admin API 和可能写入用户档案的维护任务。
 2. 用候选执行正式 `pnpm --filter @iam/db db:migrate`。如果规范化后出现重复登记值，本次迁移整体回滚。
    保持写入关闭，核对冲突值的归属，修正后再执行迁移。
 3. 启动候选应用和 Worker。发布收敛后，通过受限入口核对手机号查询、旧企业微信回调和用户资料写入，再恢复流量。
@@ -181,7 +177,7 @@ docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml up -d --n
 ### 启用全局角色
 
 按[全局角色决策](../adr/0048-model-global-roles-without-client-ownership.md)协调升级。准备同一候选的 Admin、Admin API、
-API、User Document Worker 及适用的 Ops 制品，并在停流前确认数据库备份可恢复。
+三个公共后端（Auth API、SSO API、Integration API）、User Document Worker 及适用的 Ops 制品，并在停流前确认数据库备份可恢复。
 
 1. 关闭受影响入口和 User Document 消费，排空在途请求、发布任务及相关 Ops 操作。
 2. 停止旧版写入与发布进程，用候选源码执行正式 `db:migrate`。重建受影响服务，并在受限入口检查新版可读取既有
@@ -189,8 +185,7 @@ API、User Document Worker 及适用的 Ops 制品，并在停流前确认数据
 3. 确认全部相关读写和发布进程已升级后，恢复 User Document 消费并开放全局角色的创建和分配。用已批准的验收数据
    经正式入口核对角色发布及两应用的可见范围。相关用户按源变化重建，既有会话和凭据继续按原期限使用。
 
-回退前检查旧版制品与当前源数据及已发布事实的兼容性。开始写入全局角色后，按下述回退流程恢复匹配的制品与数据，
-并处理备份后的变更和会话撤销。
+开始写入全局角色后，旧版制品不再兼容当前源数据与已发布事实；若需回退，按[完成检查与回退](#完成检查与回退)整体恢复匹配的旧制品与数据。
 
 ### 启用组合角色
 
@@ -199,61 +194,35 @@ User Document 构建与发布的进程均使用支持组合角色的同一候选
 以及负责文档重建和修复的 Ops 制品。停用旧版本的定时或人工构建入口。迁移将存量角色归为基本角色，
 既有 User Document 可继续读取，组合变化按受影响用户触发重建和发布。
 
-开放后用已批准的数据核对 Admin 实时授权、文档发布和应用端可见角色。写入组合角色或包含关系后，按下述回退流程
-检查制品与当前源数据及已发布事实的兼容性。旧版构建会遗漏继承角色，需要恢复匹配的制品与数据或在维护窗口内修复。
+开放后用已批准的数据核对 Admin 实时授权、文档发布和应用端可见角色。一旦写入组合角色或包含关系，旧版构建会遗漏继承角色，无法直接回退镜像，须在维护窗口修复或按[完成检查与回退](#完成检查与回退)恢复匹配的制品与数据。
 
 ### 启用按日任职有效期
 
-该升级将任职开始和截止字段由时间戳改为可空日期，加入未启用状态，并更新开放任职约束。Admin 页面与 Admin API、
-Internal API、Worker 及涉及任职诊断、构建或修复的 Ops 制品使用同一候选。旧 runtime 只能配对旧数据库与读模型，
-需要在同一停流窗口切换相关读写和任务。
+该升级将任职开始和截止字段由时间戳改为可空日期，加入未启用状态，并更新开放任职约束。Admin、Admin API、Internal API、Worker 及涉及任职诊断、构建或修复的 Ops 制品须使用同一候选，并在同一停流窗口内切换。
 
-1. **备份与停流** 准备可恢复且相互匹配的 PostgreSQL、Redis 备份以及新旧制品和配置。关闭 Admin、Internal、对外人员资料和涉及已发布
-   Facts 的认证入口，并排空源写入、文档发布、直连、脚本和重试。停止全部旧版任职读写、Worker 和相关 Ops。
-2. **执行迁移与唯一性核验** 在停流下用候选执行正式 `pnpm --filter @iam/db db:migrate`。旧时间戳按原应用的 UTC 读取语义转换为北京时间覆盖的自然日，
-   原状态和墓碑保留。发现逆序旧记录或重复开放任职时保持停流，按迁移报告核对样本 ID 和实际迁移状态。
-   在匹配源版本的维护环境中调查异常，按业务事实修正后重新执行正式迁移。需要查询重复关系完整清单时，使用与所查 schema
-   匹配的 `iam-ops employment verify`。升级后再用目标版本运行该命令，确认新区间和开放任职完整性。
-3. **启动补扫与读模型核验** 在受控环境启动匹配候选的 User Document Worker，确认启动补扫完成，并等待文档及 Facts 收敛。
-   在停流下独立执行 `iam-ops user-document verify-postgres` 和 `iam-ops user-document verify-redis`。
-   对外 User Document 和 Facts 的结构保持兼容，但任职生效依据改用状态，库存的任职和责任内容可能变化。
-   若新版构建发现内容差异，按[全量重建](data-maintenance.md#user-document-全量重建)运行正式 backfill，等待匹配 Worker
-   发布，再从头通过完整 PG、Redis 两项核验。仅有待处理工作、入队或后处理失败时，先按
-   [日常修复](data-maintenance.md#user-document-日常修复)收敛后重跑核验。Organization Document 无需因任职日期改型单独重建。
-4. **受控验收与放流** 在受控入口核对 Admin 日期保存、任职状态、组织责任及 Internal/协议资料的实际传播，处理验收数据并等待收敛。
-   再次通过两个完整 User Document gate 后恢复相关流量和任务。
+1. **备份与停流** 准备可恢复且相互匹配的 PostgreSQL、Redis 备份以及新旧制品与配置。关闭 Admin、Internal、对外人员资料及依赖 Redis Facts 的认证入口，排空源写入、文档发布、直连、脚本和重试，并停止全部旧版任职读写、Worker 和相关 Ops。
+2. **执行迁移与唯一性核验** 在停流下运行正式 `pnpm --filter @iam/db db:migrate`。旧时间戳按原应用的 UTC 读取语义转为北京时间覆盖的自然日，原状态与墓碑保留。
+   - 若迁移报逆序旧记录或重复开放任职，保持停流，按迁移报告核对样本 ID，在匹配源版本的维护环境中查清并按业务事实修正后重新执行迁移（查询完整重复清单使用匹配所查 schema 的 `iam-ops employment verify`）。
+   - 升级完成后用目标版本运行 `iam-ops employment verify`，确认新区间与开放任职完整性。
+3. **启动补扫与读模型核验** 在受控环境启动匹配候选的 User Document Worker，等待启动补扫、文档与 Redis Facts 收敛，再在停流下依次执行 `iam-ops user-document verify-postgres` 和 `iam-ops user-document verify-redis`。
+   - 对外 User Document 与 Facts 结构保持兼容，但任职生效依据改用状态，库存的任职和责任内容可能变化。
+   - 若核验报内容差异，按[全量重建](data-maintenance.md#user-document-全量重建)执行 `backfill` 并等待发布收敛后从头重跑两项核验；仅有待处理任务、入队或后处理失败时，按[日常修复](data-maintenance.md#user-document-日常修复)收敛后重跑核验。Organization Document 无需因此单独重建。
+4. **验收与恢复流量** 在受控入口核对 Admin 日期保存、任职状态、组织责任以及 Internal 与协议资料的实际传播，清理验收数据并等待收敛，再次通过两项 User Document 核验后恢复流量与任务。
 
-迁移、补扫或发布失败时保持停流，按各自持久事实恢复。Worker 源事务已提交时，使用 User Document 的发布或修复流程继续；
-源转换未提交时，恢复依赖后重启匹配 Worker 触发补扫。确需回退时，恢复兼容的制品、配置和一致数据，核对备份后的业务变更
-及会话撤销，避免恢复已撤销的访问。日期改型已提交后，旧镜像需要配对可恢复的旧数据才能启用。
+Worker 源事务已提交时，经 User Document 发布或修复流程继续收敛；源转换未提交时，恢复依赖后重启匹配 Worker 触发补扫。日期改型已提交后旧镜像不再兼容新库，确需回退时按[完成检查与回退](#完成检查与回退)整体恢复匹配的旧制品与数据。
 
 ### 启用目录自定义属性和 Custom SSO Wire v5
 
-从已使用 User Document 和 Organization Document schema 1 的版本升级。两类文档和 Redis Subject Facts 保持 schema 1，
-新增可选属性对象。新制品可读取省略这些属性的存量记录。旧 reader 的严格解析可能拒绝带属性的文档和 Facts，
-旧 Worker 也无法处理新增的 Outbox 事件类型。Custom SSO 主体响应统一使用 Wire v5，严格 v4 调用方需要协调切换。
+适用于已使用 User Document 和 Organization Document schema 1 的环境。两类文档与 Redis Subject Facts 保持 schema 1，新增可选属性对象，新制品可读取省略属性的存量记录；但旧 reader 的严格解析可能拒绝带属性的文档和 Facts，旧 Worker 也无法处理新增的 Outbox 事件类型。Custom SSO 主体响应统一使用 Wire v5，严格 v4 调用方须协调切换。
 
-1. **固定配套制品并停流** 准备 PostgreSQL 与 Redis 的一致备份、同一候选的 API、Admin API、两类 Document Worker、Ops、
-   Admin 与 SSO Portal，并协调第三方 UserInfo 和业务兑换解析器。关闭受影响的目录、属性写入及主体交付入口和直连重试，
-   排空请求、源写入、文档发布与回填，停用旧 Worker 和旧版人工或定时维护。
-2. **迁移并验证存量** 用候选运行正式 `db:migrate`，启动匹配的服务和 Worker，继续关闭公共流量和属性写入。
-   先用存量文档和 Redis Facts 验证 Internal、OIDC UserInfo 以及经新版解析器的 Custom SSO UserInfo 和业务兑换。
-   核对未配置属性时对象省略、已有合法凭据继续使用。独立执行 `iam-ops user-document verify-postgres`、
-   `iam-ops user-document verify-redis` 和 `iam-ops organization-document verify`，三项均通过才进入受控业务验收。
-3. **受控验收并放流** 确认所有旧消费者与写入方已停止，再通过 Admin 写入验收属性，检查真实 Worker 发布后的
-   Internal、OIDC UserInfo、Custom SSO UserInfo 与业务兑换。停用验收定义，等待两类文档重新发布并检查属性省略。
-   关闭并排空受控入口，等待 Outbox、Rebuild State 与 Facts 后续工作收敛，重新通过三项完整核验，
-   再开放目录写入、读取与主体交付，并观察解析失败、Worker 失败和持续积压。
-4. **失败恢复** 保持受影响入口关闭，保留已提交的业务数据和发布义务。依赖恢复后使用候选的
-   [用户修复](data-maintenance.md#user-document-日常修复)与[组织修复](data-maintenance.md#组织搜索日常修复)，收敛后重跑核验和受影响场景。
-   存量文档或缓存缺失、损坏或内容不一致时，按相应[用户](data-maintenance.md#user-document-全量重建)与
-   [组织](data-maintenance.md#组织搜索全量重建)流程重建和核验。开始写入属性后，回退前须确认旧版能够消费当前持久事件、
-   文档和 Facts。无法证明兼容时优先修复候选，确需回退则按下节恢复匹配的旧制品、调用方、配置和一致数据，
-   另行处理备份后的业务变更与会话撤销。现有会话与协议凭据沿用原期限和绑定。
+1. **准备配套制品并停流** 准备一致的 PostgreSQL 与 Redis 备份，以及同一候选的三个公共后端（Auth API、SSO API、Integration API）、Admin API、两类 Document Worker、Ops、Admin 与 SSO Portal，并协调第三方 UserInfo 及业务兑换解析器。关闭受影响的目录、属性写入与主体交付入口（含直连重试），排空请求、源写入、文档发布与回填，停止旧 Worker 和旧版维护任务。
+2. **迁移并验证存量** 用候选运行正式 `db:migrate`，启动匹配的服务与 Worker，继续关闭公共流量和属性写入。先基于存量文档和 Redis Facts 验证 Internal、OIDC UserInfo 及使用新版解析器的 Custom SSO UserInfo 和业务兑换，确认未配置属性时对象省略、既有合法凭据可继续使用。随后依次执行 `iam-ops user-document verify-postgres`、`iam-ops user-document verify-redis` 和 `iam-ops organization-document verify`，三项全部通过后再进入业务验收。
+3. **验收属性写入并恢复流量** 确认所有旧消费者与写入方已停止后，经 Admin 写入验收属性，检查真实 Worker 发布后的 Internal、OIDC UserInfo、Custom SSO UserInfo 与业务兑换；再停用验收定义，等待两类文档重新发布并确认属性已省略。关闭并排空受控入口，等待 Outbox、Rebuild State 与 Facts 后处理任务收敛并重跑三项完整核验，全部通过后开放目录读写与主体交付，持续观察解析失败、Worker 失败和积压。
+4. **失败恢复与回退** 依赖恢复后按[用户修复](data-maintenance.md#user-document-日常修复)与[组织修复](data-maintenance.md#组织搜索日常修复)收敛已提交数据的待发布任务并重跑核验；若存量文档或缓存缺失、损坏或内容不一致，按[用户](data-maintenance.md#user-document-全量重建)与[组织](data-maintenance.md#组织搜索全量重建)全量重建流程处理。开始写入属性后，旧版可能无法消费新增持久事件、文档与 Facts，无法证明兼容时优先修复当前候选；确需回退则按[完成检查与回退](#完成检查与回退)恢复匹配的旧制品、调用方、配置和一致数据。现有会话与协议凭据沿用原期限和绑定。
 
 ### 发布 Custom SSO 责任目标的自定义属性
 
-Wire v5 的责任目标新增可选的 `customAttributes`。启用新版 API 和 User Document Worker 前，先更新使用旧版严格 Wire v5 Schema 的调用方。
+Wire v5 的责任目标新增可选的 `customAttributes`。启用新版 SSO API 和 User Document Worker 前，先更新使用旧版严格 Wire v5 Schema 的调用方。
 新版可读取存量用户文档及 Redis Facts。已有责任目标的属性随用户文档重新发布生效，升级时按
 [User Document 全量重建](data-maintenance.md#user-document-全量重建)回填并核验存量。
 
@@ -265,12 +234,9 @@ Wire v5 的责任目标新增可选的 `customAttributes`。启用新版 API 和
 | 受影响功能 | 经正式业务入口验证本次改动：前端可加载、请求到达正确后端、需要的登录/授权成功且无效身份被拒绝                                                  |
 | 专项变更   | 网关回读、密钥兼容、数据核验或日志采集满足对应专题标准；未触及的专题不重复执行                                                                 |
 
-Gateway `/health` 只证明 HTTP 就绪，不能替代数据库认证、APISIX 连通性或业务路由检查。
-仅容器启动成功不算发布完成；失败可结合[日志与排障](observability-system-logs.md)定位。
+Gateway `/health` 仅表明 HTTP 进程就绪，不代表数据库认证、APISIX 连通性或业务路由正常；排障可结合[日志与排障](observability-system-logs.md)定位。
 
-回退前关闭受影响入口并排空，确认旧应用兼容当前 schema、协议状态和密钥集合，恢复旧镜像与匹配配置，再按更新步骤重建和检查。
-新版本已删除表、改写数据格式或签发新 key 的 Token 时，不能直接回退镜像；按专门恢复流程恢复一致状态，并处理备份之后的变化。
-不能通过恢复登录态备份重新启用已经撤销的访问。无法确认兼容性时保持维护并修复当前版本。
+**回退要求：** 回退前关闭受影响入口并排空在途请求，确认旧版本兼容当前 schema、已发布读模型、协议状态与密钥集合后，恢复旧镜像与匹配配置并按更新流程重建、核验。若新版本已删除表、改写数据格式、写入旧版无法识别的数据或签发新 key 的 Token，不可直接回退镜像：优先在维护窗口修复当前版本，确需回退时整体恢复相互匹配的旧制品、配置与一致数据备份，并另行处理备份之后的业务变更与会话撤销——严禁通过恢复登录态备份重新启用已撤销的访问。
 
 ## 本地开发与其他运行方式
 

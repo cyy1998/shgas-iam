@@ -79,17 +79,17 @@ Public Client 省略 Basic，在 Token form 中提交 `client_id`，仍必须使
   地址逐字匹配，host 大小写、默认端口、路径、query 顺序、百分号编码和末尾斜杠的差异均会影响匹配。
   生产优先 HTTPS，受控 HTTP 接入的网络边界由部署负责人核验。
 
-- **响应模式与错误处理** 授权支持 query、fragment、form_post。已确认安全地址上的成功和标准错误按所选 mode 返回；
-  form HTML 转义地址、state 和全部字段，使用 no-store/no-referrer。
-  未确认安全地址、重复必要参数或编码错误返回本地标准 JSON，不使用 IAM REST envelope 或通用 422。
+- **响应模式与错误处理** 授权端点支持 `query`、`fragment` 和 `form_post` 三种响应模式。
+  当回调地址已确认安全时，成功响应和标准协议错误均按所选模式返回；使用 `form_post` 时，返回的 HTML 表单会对回调地址、`state` 及全部字段做 HTML 转义，并设置 `Cache-Control: no-store` 与 `Referrer-Policy: no-referrer`。
+  若回调地址尚未确认安全，或出现重复的必要参数、参数编码错误，服务端会直接返回本地标准 JSON 错误，不使用 IAM REST envelope 或通用 422 响应。
 
-- **可选与不支持参数** 未知参数及关闭的 claims/resource 被忽略；request、request_uri、registration 返回各自 not-supported 错误。
-  scope 去重，忽略不支持的 offline_access。`prompt` 只接受 none/login，none 不可组合；
-  max_age 为非负安全整数，0 要求新鲜认证。当前不支持 claims、MFA 或 offline access。
+- **可选与不支持参数** 未知参数以及未启用的 `claims`、`resource` 参数会被忽略；传入 `request`、`request_uri` 或 `registration` 时，分别返回对应的 `*_not_supported` 错误。
+  `scope` 会自动去重并忽略不支持的 `offline_access`。`prompt` 仅支持 `none` 或 `login`，且 `none` 不可与其他值组合；
+  `max_age` 必须是非负安全整数，传 `0` 表示要求重新认证。当前不支持 `claims`、MFA 或 `offline_access`。
 
 `IAM_SSO_API_LOGIN_ENDPOINT` 使用根相对路径。登录、续接、退出确认和默认成功页沿用当前入口；
-拒绝绝对/协议相对 URL、反斜杠、控制字符和改变 authority 的歧义路径。
-Portal 对发现的完整端点先验证属于当前入口，再构造相对导航；登记的业务 redirect 保持完整地址。
+拒绝绝对 URL、协议相对 URL、反斜杠、控制字符以及会改变 authority 的歧义路径。
+Portal 对发现的完整端点会先验证其属于当前入口，再构造相对导航；已登记的业务回调地址保持完整 URL。
 
 ### 处理应用准入错误
 
@@ -125,28 +125,30 @@ IAM 按请求的响应模式向已登记的回调返回 `access_denied`、`iss` 
 [披露与发布时效](../adr/0054-disclose-directory-custom-attributes-to-all-eligible-clients.md)
 
 UserInfo 的标准资料、任职和角色声明由 Client 当前 `allowedScopes` 决定。范围变化也适用于旧 Token，无论原请求 `scope` 或调用方传入的 `scope` 为何。
-ID Token 在签名时固定 `iss`、`aud`、`sub`、`iat`、`exp`、`auth_time`，以及可选的 `nonce` 和 `profile`、`phone` 对应的声明。签发 ID Token 时，`profile` 和 `phone` 对应的披露使用完整 Facts。
-可以返回已发布的旧角色；必要 Facts 缺失时整次交付失败。详见[事实契约](../features/application-integration.md#用户信息共享)。
+ID Token 在签名时固定 `iss`、`aud`、`sub`、`iat`、`exp`、`auth_time`，以及可选的 `nonce` 和 `profile`、`phone` 对应的声明。签发 ID Token 时，`profile` 和 `phone` 对应的披露基于已发布的完整用户资料生成；
+角色可以返回已发布的旧版本，但必要用户资料缺失时整次交付会失败。详见[事实契约](../features/application-integration.md#用户信息共享)。
 
 - **JWKS** ID Token 使用 RS256，JWKS 仅公开 kty/kid/alg/use/n/e，不交付私钥。
 
 ## HTTP、CORS 与流量限制
 
-Token 错误采用标准 OAuth body，保留适用 401/WWW-Authenticate、503/Retry-After 和 no-store。
-UserInfo `/me` GET/POST 接受 Authorization Bearer；form POST 也可使用单一 access_token，
-混用或重复为 invalid_request，query bearer 拒绝。无凭据/无效 Token 为 401 Bearer challenge，
-无凭据时 challenge 不带 error；不套 IAM envelope。
+Token 端点错误采用标准 OAuth JSON 响应体，按场景返回 `401`（附 `WWW-Authenticate`）或 `503`（附 `Retry-After`），并附带 `Cache-Control: no-store`。
+UserInfo `/me` 端点支持 `GET` 和 `POST`，接受 `Authorization: Bearer` 凭据；以 `application/x-www-form-urlencoded` 发起 `POST` 时，也可以在请求体中提交单个 `access_token`。
+混用或重复传递凭据会返回 `invalid_request`，通过 query 参数传递 Token 会被拒绝。缺少凭据或 Token 无效时返回 `401` 及 Bearer challenge（无凭据时 challenge 不带 `error` 字段），不使用 IAM envelope。
 
-- **CORS 策略** Discovery/JWKS GET/OPTIONS 回显 Origin，无 Origin 时不返回 wildcard，不开放 credentials。
-  Token OPTIONS 不依赖 body/client_id，反射 Origin/请求 headers；实际 POST 只允许 Public 登记 redirect origins，
-  Confidential 不开放实际 Token CORS。UserInfo 预检反射 Origin/headers、声明 GET/POST，
-  实际请求按 Token 所属 Client 当前 redirect origins 检查，两类 Client 相同，不信任请求 client_id。
-  授权不开放 CORS。
+各端点的 CORS 策略如下：
 
-UserInfo 遇 Maintenance 返回 temporarily_unavailable/503 和 Retry-After，保留 Cookie 和会话。
-配置暂停/切换只拒绝当前访问，切回后未终止且未到期的 Token 可以恢复。
-配置/启停/轮换自身不自动撤销；Code 兑换失败仍遵守[失败作用矩阵](oidc.md#兑换失败与重新登录)。
-Discovery、JWKS、health 与退出不被 Client Maintenance 阻断；离线 ID Token 的 RP 验证仍可持续至原期限。
+| 端点             | 预检（`OPTIONS`）                                               | 实际请求                                                                                                              |
+| ---------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Discovery / JWKS | 回显请求 `Origin`；无 `Origin` 时不返回 `*`，不开放 credentials | `GET` 回显请求 `Origin`；无 `Origin` 时不返回 `*`，不开放 credentials                                                 |
+| Token            | 不依赖请求体或 `client_id`，回显 `Origin` 与请求的 headers      | 仅允许 Public Client 已登记的 redirect origin；Confidential Client 不开放 CORS                                        |
+| UserInfo         | 回显 `Origin` 与请求的 headers，声明允许 `GET`、`POST`          | 按 Token 所属 Client 当前登记的 redirect origin 校验（Public 与 Confidential 规则相同，不信任请求传入的 `client_id`） |
+| 授权端点         | 不开放 CORS                                                     | 不开放 CORS                                                                                                           |
+
+UserInfo 遇到 Client 维护状态（Maintenance）时返回 `503`（`temporarily_unavailable`）和 `Retry-After`，并保留已有 Cookie 和会话。
+停用或切换协议配置仅拒绝当前访问，恢复配置后未终止且未过期的 Token 仍可继续使用。
+修改配置、启停登录或轮换凭据不会自动撤销已有会话；Code 兑换失败仍遵守[兑换失败与重新登录](oidc.md#兑换失败与重新登录)。
+Discovery、JWKS、health 与退出端点不受 Client 维护状态阻断；离线 ID Token 的 RP 验签仍可持续至原期限。
 
 ## 兑换失败与重新登录
 
@@ -154,11 +156,11 @@ Code 兑换失败或结果未知时，按[共同处理流程](README.md#单点�
 Client 认证未通过或无法可靠定位原应用会话时，不消费 Code，也不撤销会话。
 认证并定位后，参数、Maintenance、协议、PKCE、issuer、期限等检查失败均可能终止原应用会话，Code 尚未消费也不例外。
 Public Client 的撤销门槛不要求先通过 PKCE；因此错误兑换也可能使同一应用会话的其他 Token 失效。
-撤销只针对原实例，不影响其他根、Client 或后来建立的实例；超时表示未知，不保证撤销已完成。
+撤销仅针对原应用会话，不影响其他 IAM 登录会话、其他应用或后续新建的会话；若请求超时则结果未知，不能假定撤销已完成。
 签名、Token 保存及响应交付失败不自动补偿或重签。精确顺序由[兑换实现](../../packages/oidc/src/tokens.ts)维护。
 
-重新授权不延长旧 Token 或 IAM 根登录的期限。已有有效根但要求新鲜认证时返回 login_required；
-首次登录须完成 IAM 的原续接流程，不能只带一个有效根跳过续接。普通允许列表编辑不改写已接受 Code/续接的 redirect 和 scope。
+重新授权不会延长旧 Token 或 IAM 登录会话的有效期。已有有效 IAM 登录会话但要求重新认证时，端点返回 `login_required`；
+首次登录必须完成 IAM 原有的认证续接流程，不能仅凭有效 IAM 登录会话跳过续接。普通回调允许列表编辑不会改写已受理的 Code 或续接记录中的 `redirect_uri` 与 `scope`。
 
 ## 退出确认与取消
 
@@ -166,7 +168,7 @@ Public Client 的撤销门槛不要求先通过 PKCE；因此错误兑换也可�
 post_logout_redirect_uri 必须同时携带合法 hint，并精确匹配登记地址；没有 hint 时使用默认落点，state 仅回传已接受的应用地址。
 确认页固定已接受的退出地址和 state，提交时不能替换。配置维护或关闭应用登录不妨碍退出。
 
-确认退出终止的是提交时的当前 IAM 根登录；若确认页打开后更换了登录，退出的是新登录。
-取消只关闭本次确认，保留登录和 Token；重复提交确认会失败。依赖故障或撤销结果未知时保留 Cookie，不能据此认定退出成功。
+确认退出终止的是提交时刻的当前 IAM 登录会话；若确认页打开后更换了登录账号，实际退出的是新会话。
+取消操作仅关闭本次确认，不会影响现有登录会话和 Token；重复提交同一确认会失败。若底层依赖故障或撤销结果未知，浏览器会保留原有 Cookie，此时不能认定退出已成功。
 各标签页独立处理退出。接入方按[共同退出责任](README.md#单点登录的共同处理)处理本地会话与离线 ID Token。
 密钥轮换及过期 hint 的兼容限制见[运维手册](../releases/authentication-and-session.md#签名密钥兼容边界)。

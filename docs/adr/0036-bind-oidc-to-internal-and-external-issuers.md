@@ -22,13 +22,13 @@ OIDC 按配置声明内部与外部 issuer，由可信 Gateway 入口信息选�
   浏览器状态与服务端中性关系的边界必须分开验收。
 
 Custom managed callback 不再固定属于某个 SSO origin，其显式类型与落地 origin 推导由
-[ADR-0038](0038-derive-managed-sso-callback-from-redirect-origin.md) 拥有，本页不保留已被其取代的回调结论。
+[ADR-0038](0038-derive-managed-sso-callback-from-redirect-origin.md) 定义。
 
 ## 当前契约与历史
 
 入口与产物规则见[OIDC 接入](../guides/oidc.md#接入与端点)，
 配置与 JWK 维护见[OIDC 手册](../releases/authentication-and-session.md#oidc-双入口配置)，
 真实代理边界见[Gateway 手册](../releases/apisix-gateway-release.md)。
-首次双入口切换与旧无 issuer 清场留在历史版本，不据此推定真实环境已经切换。
+首次双入口切换与旧无 issuer 清场记录在历史版本中。
 
 历史来源：[ADR-0036 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0036-bind-oidc-to-internal-and-external-issuers.md)。原始决定与后续修订按各版本追溯。

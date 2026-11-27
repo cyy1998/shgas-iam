@@ -26,5 +26,8 @@
 pnpm --filter @iam/auth-api typecheck
 pnpm --filter @iam/auth-api lint
 pnpm --filter @iam/auth-api test:unit
+pnpm test:infra:up
 pnpm test:integration --workspace @iam/auth-api
 ```
+
+> 运行 `test:integration` 前需先启动本地专用测试服务（`pnpm test:infra:up`），或提供外部专用 `IAM_TEST_POSTGRES_URL` / `IAM_TEST_REDIS_URL`。

@@ -11,7 +11,7 @@
 | [managed](#managed托管回调)       | 为每个业务 origin 配置 `/sso/callback` 代理，并接入用户信息或网关鉴权。 | 业务域下的局部 Cookie，并跳回原落地地址。 |
 
 两种方式都先完成下方 Client 配置和地址编码，再[发起授权](#发起授权)。
-本文中的 UserSession 是 IAM 根登录，ClientSession 是该根与一个应用的关系；业务自建的本地会话由业务自行管理。
+本文中的 `UserSession` 指 IAM 登录，`ClientSession` 指该 IAM 登录与单个接入应用之间的应用会话；业务自建的本地会话由业务自行管理。
 
 ## 地址与接入配置
 
@@ -26,7 +26,7 @@ authorizationEndpoint、logoutEndpoint、thirdPartyOAEndpoint。内外入口各�
 | /sso/token               | POST，业务后端用 Code 换取协议 Token 与主体投影。 |
 | `/api/iam/sso/user-info` | GET，按当前 Client 披露配置读取主体。             |
 | `/api/iam/sso/authz`     | GET，反向代理鉴权与最小用户 Header。              |
-| /sso/logout              | GET，退出 IAM 根及其关联在线访问。                |
+| `/sso/logout`            | GET，退出 IAM 登录及其关联的在线访问。            |
 
 APISIX 将 `/api/iam/public/user-info` 和 `/api/iam/auth/authz` 分别作为上述两个规范端点的兼容别名。
 
@@ -70,19 +70,19 @@ fragment 内不展开通配。嵌套 URL 用 URL API 编码，兑换时保留完
 {IAM_ORIGIN}/sso/authorize?client=tender&redirectUrl=https%3A%2F%2Fbiz.example.com%2F&state=opaque-state
 ```
 
-client、redirectUrl 必填，state 可选。浏览器通常携带 HttpOnly global_session；已有根时直接授权，
-无根时进入统一登录页并通过服务端续接完成认证。新请求校验当前允许列表，续接/Code 固定已接受地址；
-普通列表编辑不改写它，callbackType 改变要求重新授权。
+`client`、`redirectUrl` 必填，`state` 可选。浏览器通常携带 HttpOnly 的 `global_session` Cookie；已有有效 IAM 登录时直接授权，
+尚未登录时则进入统一登录页，认证后再通过服务端续接完成授权。新请求校验当前允许列表，续接记录和 Code 会固定已受理的地址；
+修改普通允许列表不会改写它，切换 `callbackType` 后需要重新授权。
 
 - **应用准入检查** 目标应用启用准入策略后，IAM 在签发 Code 前按当前已发布的用户文档检查资格。
   明确不符合时，IAM 直接把浏览器带到当前入口的「无权限访问应用」页，业务回调和托管回调都不会收到本次 Code。
   暂时无法完成检查时，授权返回 HTTP `503`。按 `Retry-After` 等待后从应用重新发起授权。
   这两种结果都保留已有登录和应用会话。此前签发的 Code 和 Token 仍按原有规则使用。
 
-Code 只能消费一次，成功结果不重放。根 UserSession 期限固定；
-Token 有效期取协议 TTL、根及 ClientSession 剩余期限的最小值，响应 ttl 以秒表示。
-普通访问、其他 Client 活动及新授权不延长旧 Token，也不提供 refresh 或 Cookie 滑动续期接口。
-新接入不要通过 query 传根 Token；现有兼容入口仍接受 token，第三方可信登录的既有跳转也仍使用它。
+Code 只能消费一次，成功结果不重放。IAM 登录（`UserSession`）的有效期固定；
+Token 有效期取协议 TTL、IAM 登录剩余期限和应用会话（`ClientSession`）剩余期限的最小值，响应中的 `ttl` 以秒表示。
+普通访问、其他应用活动及重新授权均不延长旧 Token，也不提供 refresh 或 Cookie 滑动续期接口。
+新接入不要通过 query 参数传递 IAM 登录 Token；现有兼容入口仍接受 `token`，第三方可信登录的既有跳转也仍使用它。
 
 ## business：业务后端兑换
 
@@ -125,11 +125,11 @@ code={urlencoded_code}&redirect_uri={urlencoded_original_redirect_url}
   业务后端自行建立本地会话、关联 sid、设置自己的 HttpOnly Cookie，再跳回原 redirectUrl。
 
 - **异常与诊断 Header** 遇 500、503 或响应结果未知时，按[共同处理流程](README.md#单点登录的共同处理)重新授权。
-  认证、参数或配置错误应先修正。认证并定位会话后发生的拒绝，即使是消费前的 Maintenance，也会尝试终止原 ClientSession。
-  旧应用 Token 可能因此失效，有效根仍可重新授权。
+  认证、参数或配置错误应先修正。认证并定位应用会话后发生的拒绝，即使是在消费 Code 前触发 Maintenance，也会尝试终止原应用会话。
+  同一应用的旧 Token 可能因此失效，但只要 IAM 登录仍有效，仍可重新授权。
   诊断 Header 分别报告 Code 消费、会话撤销和 Token 补偿结果；失败后仍须重新授权。
   三个诊断 Header 为 `X-IAM-Code-Consumption`、`X-IAM-Client-Session-Revocation`、`X-IAM-Token-Compensation`。
-  unknown/failed 不表示撤销成功；响应构造完成也不保证调用方已收到。managed 只报告消费和 Token 补偿，不返回业务兑换的会话撤销 Header。
+  状态为 `unknown` 或 `failed` 时不能假定撤销已成功。managed 模式只报告 Code 消费和 Token 补偿，不返回业务兑换的会话撤销 Header。
   具体结果类型和错误映射见[协议操作](../../packages/custom-sso/src/unified/operations.ts)。
 
 ## managed：托管回调
@@ -159,10 +159,10 @@ Authorization: {sid}
 ```
 
 Authorization 直接使用 sid，不加 Bearer 前缀。服务端优先读取该 Client 的局部 Cookie，缺少 Cookie 才使用 Header。
-`Client: iam` 专用于根 UserInfo，须使用 global_session/UserSession Token，不能传应用 Custom Token。
+`Client: iam` 专用于 IAM 登录态的 UserInfo，须使用 `global_session` 或 IAM 登录 Token，不能传应用的 Custom Token。
 
-应用 UserInfo 的 `data` 是 Wire v5 主体，已有有效 Token 使用当前披露范围和已发布资料。根 UserInfo 同样使用 v5，
-披露范围仍由 IAM Client 的 `subjectClaims` 控制。接入方负责刷新自己的资料副本；根、原实例或账号失效仍独立阻止访问。
+应用 UserInfo 的 `data` 是 Wire v5 主体，已有有效 Token 使用当前披露范围和已发布用户资料。IAM 登录态的 UserInfo 同样使用 v5，
+披露范围仍由 IAM Client 的 `subjectClaims` 控制。接入方负责刷新自己的资料副本；IAM 登录、应用会话或账号失效仍独立阻止访问。
 共有披露与时效保证见[主体信息交付](../features/application-integration.md#用户信息共享)。
 
 网关请求：
@@ -180,22 +180,22 @@ Client 和 X-Forwarded-Uri 必填，优先使用局部 Cookie。成功把相同 
 { "version": 1, "subjectIdentifier": "00000000-0000-4000-8000-000000001001", "username": "138550", "name": "张三" }
 ```
 
-subjectIdentifier 必有，username/name 仅在允许时出现。数据库 ID、phone、任职和授权不进入该 Header；
-仅主体不读 Facts。authz 不做接口级角色判定，业务系统仍负责自己的授权。
+`subjectIdentifier` 必有，`username` 和 `name` 仅在允许披露时出现。数据库 ID、手机号、任职和授权不进入该 Header；
+若仅配置返回主体标识，接口不会读取已发布用户资料。authz 不做接口级角色判定，业务系统仍负责自己的授权。
 
-| 情况                                                   | 接入方处理                                                                                                         |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| Header/Client 编码非法，或当前 Client/SSO/协议配置拒绝 | 400；修正配置，不把它当 Token 到期。该配置错误不触发 Cookie 清理或实例撤销。                                       |
-| Token/根/实例明确失效或账号明确拒绝                    | 401；重新授权，第三方自行处理本地 session。Cookie 来源的明确失效可清对应 Cookie；Client/用途不匹配不触发这种清理。 |
-| Maintenance                                            | 503、AUTH.MAINTENANCE 与 Retry-After；在线 UserInfo/authz 保留有效 Cookie，可重试原访问。                          |
-| Snapshot、账号状态或 Facts 暂时不可确认                | 503；保留仍有效凭据，按 Retry-After 重试访问。Code 兑换仍用前述重新授权策略。                                      |
+| 情况                                                            | 接入方处理                                                                                                                        |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Header 或 Client 编码非法，或当前应用未启用 SSO、协议配置不匹配 | 返回 `400`。请修正请求或应用配置，不要当作 Token 到期；此类配置错误不触发 Cookie 清理或应用会话撤销。                             |
+| Token、IAM 登录或应用会话明确失效，或账号被明确拒绝             | 返回 `401`。请重新发起授权并自行清理业务本地会话。凭据来自 Cookie 且明确失效时会清理对应 Cookie；仅 Client 或用途不匹配时不清理。 |
+| 应用处于维护状态（Maintenance）                                 | 返回 `503`（`AUTH.MAINTENANCE`）及 `Retry-After`。在线 UserInfo 和 authz 保留有效 Cookie，等待后可重试原请求。                    |
+| 应用配置缓存、账号状态或已发布用户资料暂时无法确认              | 返回 `503` 及 `Retry-After`。请保留当前有效凭据并稍后重试；Code 兑换阶段遇此错误仍按前文规则重新发起授权。                        |
 
 IAM Client 的交付配置不可用时，仍保留全局 Cookie。
-根成功终止后，即使子索引漏项或 Token 仍物理存在，后续在线使用仍拒绝。
+IAM 登录成功终止后，即使关联的应用 Token 尚未物理清理，后续在线访问也会一律拒绝。
 
 ## 第三方可信登录：OA 与微信
 
-已有可信登录态的第三方可通过 OA 签名入口建立或复用 IAM 根，再授权目标业务系统。
+已有可信登录态的第三方可通过 OA 签名入口建立或复用 IAM 登录，再授权目标业务系统。
 路径 clientCode 表示**发起认证的系统**，用于读取通用 clientSecret；query client 表示**目标业务系统**。
 二者可以不同，redirectUrl 始终属于目标。源凭据直接从源 Client 读取，此处不检查其 status/isDelete，也不使用目标 SSO 配置。
 后续 authorize 再检查目标 Client 的访问条件和落地地址。
@@ -225,18 +225,18 @@ url.searchParams.set("redirectUrl", "https://biz.example.com/");
 return redirect(url.toString());
 ```
 
-OA 同主体有效根复用原 Token/剩余期限；不同主体有效根先退出再创建新根。
-成功后写入适用 global_session Cookie，302 到相对 /sso/authorize，透传目标、地址、state/ssoReturn；
-既有跳转仍带根 token query，日志与代理需要按敏感值处理。
+如果当前浏览器已存在同一用户的有效 IAM 登录，OA 入口会直接复用原 Token 及剩余期限；如果是不同用户的有效 IAM 登录，则会先退出旧登录再创建新登录。
+成功后写入适用 `global_session` Cookie，并 302 跳转到相对路径 `/sso/authorize`，同时透传目标应用、落地地址以及可选的 `state` 和 `ssoReturn`；
+既有跳转仍附带 IAM 登录 token 查询参数，日志与代理需要按敏感值处理。
 
-微信入口为 `GET /sso/third-party/wx`，使用微信 code 加同样的目标/续接参数。
-服务端交换 wxId 并查 active 用户，没有 OA 的 Formal 类型限制；成功创建新根，不复用传入根。
-两种入口的全局 Cookie 均使用 HttpOnly、SameSite=Lax、Path=/、剩余秒数，当前未设置 Secure。
+微信入口为 `GET /sso/third-party/wx`，使用微信 `code` 以及相同的目标应用和续接参数。
+服务端交换 `wxId` 并查找 `active` 用户，没有 OA 的 `Formal` 类型限制；验证成功后总是创建新的 IAM 登录，不复用原有登录。
+两种入口的全局 Cookie 均使用 `HttpOnly`、`SameSite=Lax`、`Path=/` 并沿用剩余秒数，当前未设置 `Secure`。
 
 ## 退出与接入方责任
 
-浏览器请求 `/sso/logout?redirectUrl={encoded_after_logout_url}`，优先使用 global_session；
-兼容 token 参数接受根 Token，也可用 Custom 应用 Token 定位原根。退出无需账号访问许可，仅终止该根。
+浏览器请求 `/sso/logout?redirectUrl={encoded_after_logout_url}`，优先使用 `global_session` Cookie；
+兼容 `token` 参数既接受 IAM 登录 Token，也可用 Custom 应用 Token 定位所属的 IAM 登录。退出无需账号访问许可，仅终止该 IAM 登录。
 应用按[共同退出责任](README.md#单点登录的共同处理)清理本地状态。Custom SSO 沿前台退出流程完成 IAM 侧处理，无后台退出通知。
 business 应先清理自己的 Cookie/session，再退出 IAM；单独清应用 Token 不等于清理整个第三方登录态。
 
