@@ -84,7 +84,7 @@ test("a large completed receipt replays every target with its original version a
     ),
   ).toBe(true);
   expect(jobs.at(-1)?.userId).toBe(count);
-});
+}, 30_000);
 
 test("a large position expansion commits every requirement with its source metadata", async () => {
   const count = 65_534;
@@ -119,7 +119,7 @@ test("a large position expansion commits every requirement with its source metad
         job.reason === UserDocumentRebuildReason.PositionUpdated,
     ),
   ).toBe(true);
-});
+}, 30_000);
 
 test("a later registration metadata failure rolls back earlier batches and their receipt before retry", async () => {
   const count = 2_001;
@@ -194,7 +194,7 @@ test("large responsibility employment lists retain every distinct affected user"
   expect(ids).toContain(65_533);
   expect(ids).not.toContain(1001);
   expect(ids).not.toContain(65_534);
-});
+}, 30_000);
 
 test("large post-publication repair rolls back only the rejected ownership page", async () => {
   const count = 65_534;
@@ -227,7 +227,7 @@ test("large post-publication repair rolls back only the rejected ownership page"
     FROM user_document_rebuild_state`;
   expect(extractPostgresError(failure)?.code).toBe("P0001");
   expect(remaining).toEqual({ count, recorded: 10, untouched: count - 10 });
-});
+}, 30_000);
 
 async function seedEmployments(count: number) {
   await pg.sql`INSERT INTO employment (id, user_id, pos_id, dept_id, start_time)

@@ -143,11 +143,33 @@ jobs:
           [ -n "$APISIX_ADDR" ] || { echo "[ci] Failed to discover published APISIX admin port" >&2; exit 1; }
           printf 'IAM_TEST_APISIX_ADMIN_URL=http://%s/apisix/admin\nIAM_TEST_APISIX_ADMIN_KEY=iam-gateway-integration-admin-key\n' "$APISIX_ADDR" >> "$GITHUB_ENV"
           echo "[ci] APISIX Admin ready at http://${APISIX_ADDR}/apisix/admin"
+      - name: Tune ephemeral PostgreSQL service for integration tests
+        env:
+          IAM_TEST_POSTGRES_URL: postgresql://iam_test:iam_test@127.0.0.1:5432/iam_test
+        run: |
+          bun -e '
+            const sql = new Bun.SQL(process.env.IAM_TEST_POSTGRES_URL);
+            try {
+              for (const stmt of [
+                "ALTER SYSTEM SET fsync = off",
+                "ALTER SYSTEM SET synchronous_commit = off",
+                "ALTER SYSTEM SET full_page_writes = off",
+                "ALTER SYSTEM SET max_wal_size = \x272GB\x27",
+                "ALTER SYSTEM SET checkpoint_timeout = \x2715min\x27",
+                "SELECT pg_reload_conf()",
+              ]) {
+                await sql.unsafe(stmt);
+              }
+            } finally {
+              await sql.close();
+            }
+          '
       - name: Run full integration suite
         env:
           IAM_TEST_RESOURCE_PROVIDER: external
           IAM_TEST_POSTGRES_URL: postgresql://iam_test:iam_test@127.0.0.1:5432/iam_test
           IAM_TEST_REDIS_URL: redis://127.0.0.1:6379/0
+          IAM_TEST_INTEGRATION_CONCURRENCY: "2"
         run: pnpm test:integration
       - name: Redact integration task logs
         if: failure()
