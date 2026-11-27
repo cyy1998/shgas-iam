@@ -16,7 +16,13 @@ type IssueBase = {
 };
 export type TicketIssue = IssueBase & { blockedBy: { number: number; state: "OPEN" | "CLOSED" }[] };
 export type SpecIssue = IssueBase & { linkedBranches: string[]; subIssues: TicketIssue[] };
-export type PullRequestState = { number: number; url: string; state: "OPEN" | "CLOSED" | "MERGED"; isDraft: boolean };
+export type PullRequestState = {
+  number: number;
+  url: string;
+  state: "OPEN" | "CLOSED" | "MERGED";
+  isDraft: boolean;
+  headRefOid: string;
+};
 export type OpenPullRequest = PullRequestState & { body: string };
 export type CheckRun = {
   id: number;
@@ -291,6 +297,16 @@ export async function pauseSpec(
   }
 }
 
+export async function commentOnSpec(
+  repo: string,
+  specNumber: number,
+  body: string,
+  cwd: string,
+  execFn: ExecFn = runCommand,
+): Promise<void> {
+  await execFn("gh", ["issue", "comment", String(specNumber), "--repo", repo, "--body", body], cwd);
+}
+
 export async function findOpenPullRequest(opts: {
   repo: string;
   cwd: string;
@@ -300,7 +316,7 @@ export async function findOpenPullRequest(opts: {
 }): Promise<OpenPullRequest | undefined> {
   const { repo, cwd, specBranch, baseBranch, execFn } = opts;
   type RawPr = OpenPullRequest & { isCrossRepository: boolean; headRefName: string; baseRefName: string };
-  const fields = "number,url,body,state,isDraft,isCrossRepository,headRefName,baseRefName";
+  const fields = "number,url,body,state,isDraft,headRefOid,isCrossRepository,headRefName,baseRefName";
   const prs = await ghJson<RawPr[]>(
     ["pr", "list", "--repo", repo, "--state", "open", "--head", specBranch, "--base", baseBranch, "--json", fields],
     cwd,
@@ -308,7 +324,14 @@ export async function findOpenPullRequest(opts: {
   );
   const m = prs.find((p) => !p.isCrossRepository && p.headRefName === specBranch && p.baseRefName === baseBranch);
   return m
-    ? { number: m.number, url: m.url, body: m.body, state: m.state ?? "OPEN", isDraft: Boolean(m.isDraft) }
+    ? {
+        number: m.number,
+        url: m.url,
+        body: m.body,
+        state: m.state ?? "OPEN",
+        isDraft: Boolean(m.isDraft),
+        headRefOid: m.headRefOid,
+      }
     : undefined;
 }
 
@@ -320,14 +343,25 @@ export async function readPullRequestState(
 ): Promise<PullRequestState> {
   const raw = await execFn(
     "gh",
-    ["pr", "view", String(prRef), "--repo", repo, "--json", "number,url,state,isDraft"],
+    ["pr", "view", String(prRef), "--repo", repo, "--json", "number,url,state,isDraft,headRefOid"],
     cwd,
   );
   const parsed = JSON.parse(raw) as Partial<PullRequestState>;
-  if (typeof parsed.number !== "number" || typeof parsed.url !== "string" || typeof parsed.state !== "string") {
+  if (
+    typeof parsed.number !== "number" ||
+    typeof parsed.url !== "string" ||
+    typeof parsed.state !== "string" ||
+    typeof parsed.headRefOid !== "string"
+  ) {
     throw new Error(`无法解析 PR（${prRef}）状态：${raw}`);
   }
-  return { number: parsed.number, url: parsed.url, state: parsed.state, isDraft: Boolean(parsed.isDraft) };
+  return {
+    number: parsed.number,
+    url: parsed.url,
+    state: parsed.state,
+    isDraft: Boolean(parsed.isDraft),
+    headRefOid: parsed.headRefOid,
+  };
 }
 
 export async function upsertPullRequest(opts: {
@@ -338,12 +372,14 @@ export async function upsertPullRequest(opts: {
   title: string;
   body: string;
   closeNums: number[];
+  specNumber: number;
   draft?: boolean;
   execFn?: ExecFn;
 }): Promise<string> {
   const execFn = opts.execFn ?? runCommand;
   const existing = await findOpenPullRequest(opts);
   if (existing) {
+    assertDraftPrReusable(opts.specNumber, opts.draft, existing);
     await ensurePrClosesLines(opts.repo, existing, opts.closeNums, opts.cwd, execFn);
     return existing.url;
   }
@@ -364,6 +400,12 @@ export async function upsertPullRequest(opts: {
     ...(draft ? ["--draft"] : []),
   ];
   return (await execFn("gh", args, cwd)).split(/\r?\n/).at(-1) ?? "";
+}
+
+export function assertDraftPrReusable(specNumber: number, draft: boolean | undefined, pr: OpenPullRequest | undefined) {
+  if (draft && pr && !pr.isDraft) {
+    throw new Error(`Spec #${specNumber} 已有非 Draft PR，不能使用 --draft 跳过 ci-gate`);
+  }
 }
 
 export async function listCommitCheckRuns(
@@ -478,7 +520,20 @@ export async function fetchSanitizedCiFailureLogs(opts: {
   execFn?: ExecFn;
 }): Promise<string> {
   const execFn = opts.execFn ?? runCommand;
-  const runs = await listCommitWorkflowRuns(opts.repo, opts.headSha, opts.cwd, execFn).catch(() => [] as WorkflowRun[]);
+  const { ciGate } = opts;
+  const runIdPattern = /\/actions\/runs\/(\d+)/;
+  const matchedRun = ciGate?.details_url?.match(runIdPattern) ?? ciGate?.html_url?.match(runIdPattern);
+  const runs = matchedRun
+    ? [
+        {
+          id: Number(matchedRun[1]),
+          name: "CI",
+          status: ciGate?.status,
+          conclusion: ciGate?.conclusion,
+          html_url: matchedRun.input,
+        },
+      ]
+    : await listCommitWorkflowRuns(opts.repo, opts.headSha, opts.cwd, execFn).catch(() => []);
   const failing = runs.filter((r) => r.conclusion !== "success" && r.conclusion !== "skipped");
   const sections: string[] = [];
   for (const r of (failing.length ? failing : runs).slice(0, 2)) {

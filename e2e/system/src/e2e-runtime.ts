@@ -20,7 +20,9 @@ import {
   e2eApplicationServices,
   e2eBuildServices,
   e2eGatewayApiPort,
+  e2eImageTag,
   e2eInfrastructureServices,
+  e2eLocalImageTag,
   e2eLogServices,
   e2eResetBackendServices,
   e2eStubsHttpPort,
@@ -96,6 +98,7 @@ export async function withE2ERuntime<T>(
         seedRunId: runId,
         stubsToken,
         adminClientCode: "iam-admin",
+        imageTag: options.skipBuild ? "local" : project,
       }),
     );
 
@@ -104,7 +107,7 @@ export async function withE2ERuntime<T>(
       composeFile,
       artifactDirectory,
       project,
-      removeLocalImages: false,
+      removeLocalImages: !options.skipBuild,
       keep: Boolean(options.keep),
       composeEnvironment: { COMPOSE_DISABLE_ENV_FILE: "1", DOCKER_BUILDKIT: "1" },
       registryFile: process.env.IAM_TEST_RESOURCE_REGISTRY,
@@ -119,6 +122,17 @@ export async function withE2ERuntime<T>(
           await ensureLocalE2EImages(e2eBuildServices, { cwd: repositoryRoot, signal: startup });
         } else {
           await buildStackImages(run, artifacts, artifactDirectory, startup);
+          for (const service of e2eBuildServices) {
+            const localTag = e2eLocalImageTag(service);
+            const result = await runOwnedCommand({
+              executable: "docker",
+              args: ["tag", e2eImageTag(service, project), localTag],
+              cwd: repositoryRoot,
+              signal: startup,
+              timeoutMs: 10_000,
+            });
+            if (result.exitCode !== 0) throw new Error(`E2E could not tag ${localTag}:\n${result.output}`);
+          }
         }
 
         await compose(
@@ -206,7 +220,6 @@ export async function withE2ERuntime<T>(
           references,
           control: { origin: "", token: controlToken },
           logServices: e2eLogServices,
-          resetCount: 0,
         };
 
         const control = createE2EControl({
@@ -218,45 +231,16 @@ export async function withE2ERuntime<T>(
             await restoreE2EDatabaseFromTemplate(databaseUrl, resetSignal);
             await runSeedCommand(repositoryRoot, artifacts, seedEnv, "restore", resetSignal);
             await resetE2EStubs(stubsOrigin, stubsToken, references.runId, resetSignal);
-            await compose(
-              run,
-              "start backends after reset",
-              [
-                "up",
-                "--detach",
-                "--no-build",
-                "--no-deps",
-                "--no-recreate",
-                "--wait",
-                "--wait-timeout",
-                "60",
-                ...e2eResetBackendServices,
-              ],
-              resetSignal,
-              80_000,
-            );
+            await composeUpNoRecreate(run, "start backends after reset", e2eResetBackendServices, resetSignal, 80_000);
             await verifyRoutes({ origin, internalOrigin, wecomMobileOrigin }, resetSignal);
             resetSignal.throwIfAborted();
-            const refreshed: E2ERunContext = { ...context, resetCount: context.resetCount + 1 };
-            await writeAtomicJsonFile(contextPath, refreshed, 0o600);
-            context = refreshed;
           },
           stopWorker: () => compose(run, "stop worker", ["stop", "worker"], AbortSignal.timeout(30_000), 30_000),
           startWorker: (controlSignal) =>
-            compose(
+            composeUpNoRecreate(
               run,
               "start worker",
-              [
-                "up",
-                "--detach",
-                "--no-build",
-                "--no-deps",
-                "--no-recreate",
-                "--wait",
-                "--wait-timeout",
-                "60",
-                "worker",
-              ],
+              ["worker"],
               AbortSignal.any([signal, controlSignal, AbortSignal.timeout(60_000)]),
               60_000,
             ),
@@ -445,6 +429,22 @@ async function compose(run: ManagedResourceRun, stage: string, args: string[], s
   console.log(`[e2e] ${stage}`);
   const result = await runManagedComposeCommand(run, args, { signal, timeoutMs, inheritOutput: true });
   if (result.exitCode !== 0) throw new Error(`E2E could not ${stage} (exit ${result.exitCode})`);
+}
+
+function composeUpNoRecreate(
+  run: ManagedResourceRun,
+  stage: string,
+  services: readonly string[],
+  signal: AbortSignal,
+  timeoutMs: number,
+) {
+  return compose(
+    run,
+    stage,
+    ["up", "--detach", "--no-build", "--no-deps", "--no-recreate", "--wait", "--wait-timeout", "60", ...services],
+    signal,
+    timeoutMs,
+  );
 }
 
 async function allocateDistinctPorts(count: number) {

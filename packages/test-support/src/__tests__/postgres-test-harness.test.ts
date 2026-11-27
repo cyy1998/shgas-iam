@@ -4,9 +4,31 @@ import {
   requireDedicatedPostgresTestUrl,
   TEST_POSTGRES_URL_ENV,
 } from "@iam/test-support/postgres-test-harness";
+import type { ManagedResourceRun } from "../../../../scripts/test-resources/managed-resources.mjs";
 import { prepareManagedPostgresTemplate } from "../../../../scripts/test-resources/postgres-template.mjs";
 
 const name = TEST_POSTGRES_URL_ENV;
+
+const unusedRun = {
+  root: process.cwd(),
+  recordPath: "test-results/integration/unused/run.json",
+  record: {
+    schemaVersion: 1,
+    runId: "unused",
+    project: "iam-integration-unused",
+    composeFile: "scripts/test-resources/compose.yaml",
+    artifactDirectory: "test-results/integration/unused",
+    composeEnvironmentFile: "test-results/integration/unused/compose-environment.json",
+    envFile: "test-results/integration/unused/empty.env",
+    testEnvironmentFile: "test-results/integration/unused/test-environment.json",
+    services: ["postgres"],
+    removeLocalImages: false,
+    keep: false,
+    status: "ready",
+    createdAt: new Date(0).toISOString(),
+    durations: {},
+  },
+} satisfies ManagedResourceRun;
 
 test.each(["postgres", "template0", "template1", "%70ostgres", "POSTGRES"])(
   "rejects system database %s",
@@ -101,32 +123,10 @@ test.each(["iam_test", "iam_test_abc123", "shgas_iam_test", "test_iam", "iam-tes
 test("prepareManagedPostgresTemplate guards the PostgreSQL URL before running template creation", async () => {
   let failure: unknown;
   try {
-    await prepareManagedPostgresTemplate(
-      {
-        root: process.cwd(),
-        recordPath: "test-results/integration/unused/run.json",
-        record: {
-          schemaVersion: 1,
-          runId: "unused",
-          project: "iam-integration-unused",
-          composeFile: "scripts/test-resources/compose.yaml",
-          artifactDirectory: "test-results/integration/unused",
-          composeEnvironmentFile: "test-results/integration/unused/compose-environment.json",
-          envFile: "test-results/integration/unused/empty.env",
-          testEnvironmentFile: "test-results/integration/unused/test-environment.json",
-          services: ["postgres"],
-          removeLocalImages: false,
-          keep: false,
-          status: "ready",
-          createdAt: new Date(0).toISOString(),
-          durations: {},
-        },
-      },
-      {
-        databaseUrl: "postgres://iam_test:iam_test@127.0.0.1:5432/iam_dev",
-        env: { IAM_AUTH_API_DATABASE_URL: "postgresql://dev:dev@127.0.0.1:5432/iam_dev" },
-      },
-    );
+    await prepareManagedPostgresTemplate(unusedRun, {
+      databaseUrl: "postgres://iam_test:iam_test@127.0.0.1:5432/iam_dev",
+      env: { IAM_AUTH_API_DATABASE_URL: "postgresql://dev:dev@127.0.0.1:5432/iam_dev" },
+    });
   } catch (error) {
     failure = error;
   }
@@ -138,25 +138,8 @@ test("prepareManagedPostgresTemplate rejects missing databaseUrl without Docker 
   let failure: unknown;
   try {
     await prepareManagedPostgresTemplate({
-      root: process.cwd(),
-      recordPath: "test-results/integration/unused/run.json",
-      record: {
-        schemaVersion: 1,
-        provider: "external",
-        runId: "unused",
-        project: "iam-integration-unused",
-        composeFile: "",
-        artifactDirectory: "test-results/integration/unused",
-        composeEnvironmentFile: "",
-        envFile: "",
-        testEnvironmentFile: "test-results/integration/unused/test-environment.json",
-        services: ["postgres"],
-        removeLocalImages: false,
-        keep: false,
-        status: "ready",
-        createdAt: new Date(0).toISOString(),
-        durations: {},
-      },
+      ...unusedRun,
+      record: { ...unusedRun.record, provider: "external" },
     });
   } catch (error) {
     failure = error;
@@ -164,6 +147,36 @@ test("prepareManagedPostgresTemplate rejects missing databaseUrl without Docker 
   expect(failure).toBeInstanceOf(Error);
   expect((failure as Error).message).toContain("requires an explicit databaseUrl");
 });
+
+test.each([
+  {
+    templateName: "iam_test_template",
+    env: { DATABASE_URL: "postgresql://runtime@127.0.0.1/iam_test_template" },
+    message: "must not identify the same database as DATABASE_URL",
+  },
+  {
+    templateName: "iam_test_template",
+    env: { IAM_ADMIN_API_DATABASE_URL: "postgresql://runtime@127.0.0.1/iam_test_template" },
+    message: "must not identify the same database as IAM_ADMIN_API_DATABASE_URL",
+  },
+  { templateName: "iam_dev", env: {}, message: "must name a database containing a test marker" },
+])(
+  "rejects an unsafe template target before starting the migration: $message",
+  async ({ templateName, env, message }) => {
+    let failure: unknown;
+    try {
+      await prepareManagedPostgresTemplate(unusedRun, {
+        databaseUrl: "postgres://127.0.0.1/iam_test",
+        templateName,
+        env,
+      });
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toContain(`IAM_TEST_POSTGRES_TEMPLATE ${message}`);
+  },
+);
 
 test("createDrizzlePostgresTestHarness validates IAM_TEST_POSTGRES_URL before opening connections", async () => {
   let failure: unknown;

@@ -16,6 +16,8 @@ import {
   verifyMergeCommit,
 } from "./git.ts";
 import {
+  assertDraftPrReusable,
+  commentOnSpec,
   DEFAULT_CI_LOG_TAIL_LINES,
   ensureClosesLines,
   ensurePrClosesLines,
@@ -41,6 +43,7 @@ import {
 } from "./github.ts";
 
 const COMPLETE = "<promise>COMPLETE</promise>";
+const CI_REPAIR_COMMENT_PREFIX = "Sandcastle AFK 自动修红（attempt ";
 export const DEFAULT_CI_POLL_INTERVAL_MS = 30_000;
 export const DEFAULT_CI_TIMEOUT_MS = 45 * 60_000;
 export const DEFAULT_CI_RUN_APPEARANCE_TIMEOUT_MS = 5 * 60_000;
@@ -152,7 +155,12 @@ async function pushExactSha(ctx: RuntimeCtx, branch: string, sha: string, label:
   }
 }
 
-async function assertPrOpenReady(ctx: RuntimeCtx, prUrl: string, duringRepair = false): Promise<void> {
+async function assertPrOpenReady(
+  ctx: RuntimeCtx,
+  prUrl: string,
+  expectedSha: string,
+  duringRepair = false,
+): Promise<void> {
   const pr = await readPullRequestState(ctx.afk.repo, prUrl, ctx.cwd, ctx.ghExec);
   if (duringRepair && (pr.state !== "OPEN" || pr.isDraft)) {
     throw new Error(
@@ -162,6 +170,11 @@ async function assertPrOpenReady(ctx: RuntimeCtx, prUrl: string, duringRepair = 
   if (pr.state !== "OPEN")
     throw new Error(`PR #${pr.number}（${pr.url}）状态已变为 ${pr.state}，停止等待远端 ci-gate。`);
   if (pr.isDraft) throw new Error(`PR #${pr.number}（${pr.url}）当前为 Draft 状态，无法通过远端 ci-gate。`);
+  if (pr.headRefOid !== expectedSha) {
+    throw new Error(
+      `PR #${pr.number}（${pr.url}）headRefOid 已变为 ${pr.headRefOid}，预期为 ${expectedSha}，${duringRepair ? "拒绝推送 CI 修红提交" : "停止等待远端 ci-gate"}。`,
+    );
+  }
 }
 
 async function runPhase(
@@ -199,8 +212,7 @@ async function runPhase(
   }
 }
 
-async function prepareSpecWorktree(ctx: RuntimeCtx, spec: SpecIssue) {
-  const specBranch = resolveSpecBranch(spec, ctx.baseBranch);
+async function prepareSpecWorktree(ctx: RuntimeCtx, spec: SpecIssue, specBranch: string) {
   await git(ctx.cwd, "check-ref-format", "--branch", specBranch);
   let startRef = `${ctx.remote}/${ctx.baseBranch}`;
   const localExists = await branchExists(ctx.cwd, specBranch);
@@ -224,7 +236,7 @@ async function prepareSpecWorktree(ctx: RuntimeCtx, spec: SpecIssue) {
     startRef,
   );
   const mergeBase = await git(ctx.cwd, "merge-base", specBranch, `${ctx.remote}/${ctx.baseBranch}`);
-  return { specBranch, specWorktree, mergeBase, done: await integratedTickets(ctx.cwd, mergeBase, specBranch) };
+  return { specWorktree, mergeBase, done: await integratedTickets(ctx.cwd, mergeBase, specBranch) };
 }
 
 async function mergeTicket(
@@ -460,6 +472,7 @@ async function reviewAndOpenPr(
     title: spec.title,
     body: ensureClosesLines(extractTag(repairOut, "pr-body") ?? fallbackBody, closeNums),
     closeNums,
+    specNumber: spec.number,
     draft: ctx.afk.draft,
     execFn: ctx.ghExec,
   });
@@ -478,17 +491,21 @@ async function waitAndRepairCiGate(
     initialSha: string;
   },
 ): Promise<"passed" | "stopped"> {
-  let [currentSha, repairs, pushAt] = [opts.initialSha, 0, ctx.now()];
+  let [currentSha, pushAt] = [opts.initialSha, ctx.now()];
+  let repairs = opts.spec.comments.filter(({ body }) => body.startsWith(CI_REPAIR_COMMENT_PREFIX)).length;
   let missingSince: number | undefined;
 
   while (true) {
     if (!(await authorized(ctx, opts.spec.number))) return "stopped";
-    await assertPrOpenReady(ctx, opts.prUrl);
+    await assertPrOpenReady(ctx, opts.prUrl, currentSha);
     const checkRuns = await listCommitCheckRuns(ctx.afk.repo, currentSha, ctx.cwd, ctx.ghExec);
     const ciGate = selectLatestCiGateCheckRun(checkRuns, currentSha);
 
     if (ciGate?.status === "completed") {
-      if (ciGate.conclusion === "success") return "passed";
+      if (ciGate.conclusion === "success") {
+        await assertPrOpenReady(ctx, opts.prUrl, currentSha);
+        return "passed";
+      }
       if (repairs >= ctx.ci.maxRepairs) {
         throw new Error(
           `远端 ci-gate（${currentSha.slice(0, 8)}）失败（conclusion=${ciGate.conclusion ?? "unknown"}），已达到自动修红上限（${ctx.ci.maxRepairs} 次）。`,
@@ -510,6 +527,14 @@ async function waitAndRepairCiGate(
         );
 
       const attempt = repairs + 1;
+      await assertPrOpenReady(ctx, opts.prUrl, currentSha, true);
+      await commentOnSpec(
+        ctx.afk.repo,
+        opts.spec.number,
+        `${CI_REPAIR_COMMENT_PREFIX}${attempt}/${ctx.ci.maxRepairs}，head=${currentSha.slice(0, 8)}）`,
+        ctx.cwd,
+        ctx.ghExec,
+      );
       await runPhase(
         ctx,
         opts.specWorktree,
@@ -543,7 +568,7 @@ async function waitAndRepairCiGate(
         `CI 自动修红后 HEAD（${newSha.slice(0, 8)}）未包含原失败提交 ${currentSha.slice(0, 8)}，拒绝推送。`,
       );
       if (!(await authorized(ctx, opts.spec.number))) return "stopped";
-      await assertPrOpenReady(ctx, opts.prUrl, true);
+      await assertPrOpenReady(ctx, opts.prUrl, currentSha, true);
       await pushExactSha(ctx, opts.specBranch, newSha, "CI 修红提交");
       [repairs, currentSha, pushAt, missingSince] = [attempt, newSha, ctx.now(), undefined];
       continue;
@@ -653,7 +678,18 @@ export async function runAfk(options: AfkOptions): Promise<AfkResult> {
     }
 
     try {
-      const { specBranch, specWorktree, mergeBase, done } = await prepareSpecWorktree(ctx, spec);
+      const specBranch = resolveSpecBranch(spec, baseBranch);
+      if (options.draft) {
+        const existing = await findOpenPullRequest({
+          repo: options.repo,
+          cwd,
+          specBranch,
+          baseBranch,
+          execFn: ctx.ghExec,
+        });
+        assertDraftPrReusable(specNumber, options.draft, existing);
+      }
+      const { specWorktree, mergeBase, done } = await prepareSpecWorktree(ctx, spec, specBranch);
       const loop = await runTicketLoop(ctx, spec, specWorktree, done);
       if (loop.stopped) {
         result.stopped.push(specNumber);

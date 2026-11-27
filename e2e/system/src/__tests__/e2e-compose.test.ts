@@ -142,4 +142,11 @@ describe("production container E2E compose topology", () => {
       args: { BUN_IMAGE: "oven/bun:1.4.4-alpine" },
     });
   });
+
+  test("builds each application image under the project's tag", () => {
+    const compose = createE2ECompose({ ...baseOptions, imageTag: baseOptions.project });
+    for (const service of e2eBuildServices) {
+      expect(compose.services[service].image).toBe(`iam-e2e-${service}:${baseOptions.project}`);
+    }
+  });
 });

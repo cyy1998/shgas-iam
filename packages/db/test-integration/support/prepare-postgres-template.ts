@@ -5,13 +5,11 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 
-const SYSTEM_DATABASES = new Set(["postgres", "template0", "template1"]);
-
 const [templateName] = process.argv.slice(2);
 const databaseUrl = process.env[TEST_POSTGRES_URL_ENV];
 if (!databaseUrl || !templateName)
   throw new Error("Template setup requires a managed PostgreSQL URL and template name");
-if (!/^[a-z][a-z0-9_]{0,62}$/u.test(templateName) || SYSTEM_DATABASES.has(templateName))
+if (!/^[a-z][a-z0-9_]{0,62}$/u.test(templateName))
   throw new Error(`Invalid PostgreSQL test template name: ${templateName}`);
 
 requireDedicatedPostgresTestUrl({
@@ -25,17 +23,27 @@ if (templateName === baseDatabaseName) {
   throw new Error(`PostgreSQL test template name ${templateName} must differ from the base test database`);
 }
 
+const templateUrl = new URL(databaseUrl);
+templateUrl.pathname = `/${templateName}`;
+requireDedicatedPostgresTestUrl({
+  name: "IAM_TEST_POSTGRES_TEMPLATE",
+  value: templateUrl.href,
+  environment: process.env,
+});
+
 const admin = postgres(databaseUrl, { max: 1, connect_timeout: 5 });
 try {
-  // Recreate cleanly so external PostgreSQL runs remain idempotent across retries or repeated invocations.
-  const existing = await admin`SELECT 1 FROM pg_database WHERE datname = ${templateName}`;
-  if (existing.length > 0) {
+  const [existing] = await admin<{ datistemplate: boolean; datallowconn: boolean }[]>`
+    SELECT datistemplate, datallowconn FROM pg_database WHERE datname = ${templateName}
+  `;
+  if (existing) {
+    if (!(existing.datistemplate === true && existing.datallowconn === false)) {
+      throw new Error(`Refusing to drop PostgreSQL database ${templateName}: it is not a sealed test template`);
+    }
     await admin`ALTER DATABASE ${admin(templateName)} IS_TEMPLATE false`;
-    await admin`DROP DATABASE IF EXISTS ${admin(templateName)} WITH (FORCE)`;
+    await admin`DROP DATABASE ${admin(templateName)} WITH (FORCE)`;
   }
   await admin`CREATE DATABASE ${admin(templateName)} TEMPLATE template0`;
-  const templateUrl = new URL(databaseUrl);
-  templateUrl.pathname = `/${templateName}`;
   const sql = postgres(templateUrl.href, { max: 1, connect_timeout: 5 });
   try {
     const migrationsFolder = fileURLToPath(new URL("../../src/migrations/", import.meta.url));

@@ -4,19 +4,6 @@ import { e2eLocalImageTag } from "./e2e-compose.ts";
 export const defaultE2EBuildConcurrency = 2;
 export const maxE2EBuildConcurrency = 4;
 
-const preferredBuildOrder = [
-  "apisix",
-  "e2e-stubs",
-  "admin",
-  "auth-api",
-  "sso",
-  "sso-api",
-  "integration-api",
-  "admin-api",
-  "worker",
-  "gateway-api",
-];
-
 export function parseE2EBuildConcurrency(value: string | undefined, option = "IAM_E2E_BUILD_CONCURRENCY"): number {
   if (value === undefined || value.trim() === "") return defaultE2EBuildConcurrency;
   const trimmed = value.trim();
@@ -25,14 +12,6 @@ export function parseE2EBuildConcurrency(value: string | undefined, option = "IA
     throw new Error(`${option} requires an integer from 1 to ${maxE2EBuildConcurrency}`);
   }
   return parsed;
-}
-
-export function orderE2EBuildServices(services: readonly string[]): string[] {
-  const rank = (service: string) => {
-    const index = preferredBuildOrder.indexOf(service);
-    return index === -1 ? preferredBuildOrder.length : index;
-  };
-  return [...services].sort((left, right) => rank(left) - rank(right));
 }
 
 export interface E2EBuildOutcome {
@@ -47,12 +26,11 @@ export async function buildE2EImages(options: {
   signal: AbortSignal;
   buildOne: (service: string, signal: AbortSignal) => Promise<{ logPath: string }>;
 }): Promise<E2EBuildOutcome[]> {
-  const { concurrency, signal, buildOne } = options;
+  const { services, concurrency, signal, buildOne } = options;
   if (!Number.isSafeInteger(concurrency) || concurrency < 1 || concurrency > maxE2EBuildConcurrency) {
     throw new Error(`Build concurrency requires an integer from 1 to ${maxE2EBuildConcurrency}`);
   }
-  const ordered = orderE2EBuildServices(options.services);
-  if (ordered.length === 0) return [];
+  if (services.length === 0) return [];
 
   const controller = new AbortController();
   const onExternalAbort = () => controller.abort(signal.reason ?? new Error("E2E image build aborted"));
@@ -65,8 +43,8 @@ export async function buildE2EImages(options: {
   let next = 0;
 
   async function worker() {
-    while (!controller.signal.aborted && next < ordered.length) {
-      const service = ordered[next++]!;
+    while (!controller.signal.aborted && next < services.length) {
+      const service = services[next++]!;
       const started = performance.now();
       try {
         const { logPath } = await buildOne(service, controller.signal);
@@ -81,7 +59,7 @@ export async function buildE2EImages(options: {
   }
 
   try {
-    const slots = Math.min(ordered.length, concurrency);
+    const slots = Math.min(services.length, concurrency);
     await Promise.all(Array.from({ length: slots }, worker));
   } finally {
     signal.removeEventListener("abort", onExternalAbort);
@@ -90,7 +68,7 @@ export async function buildE2EImages(options: {
   if (failures.length === 1) throw failures[0]!;
   if (failures.length > 1) throw new AggregateError(failures, "E2E image builds failed");
   signal.throwIfAborted();
-  return ordered.map((service) => outcomes.get(service)!);
+  return services.map((service) => outcomes.get(service)!);
 }
 
 export async function ensureLocalE2EImages(

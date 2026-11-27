@@ -3,7 +3,6 @@ import {
   buildE2EImages,
   defaultE2EBuildConcurrency,
   ensureLocalE2EImages,
-  orderE2EBuildServices,
   parseE2EBuildConcurrency,
 } from "../e2e-build.ts";
 
@@ -17,36 +16,6 @@ describe("e2e-build", () => {
     expect(() => parseE2EBuildConcurrency("5")).toThrow(/1 to 4/u);
     expect(() => parseE2EBuildConcurrency("2.5")).toThrow(/1 to 4/u);
     expect(() => parseE2EBuildConcurrency("abc")).toThrow(/1 to 4/u);
-  });
-
-  test("orders known images including e2e-stubs while preserving unknown services", () => {
-    expect(
-      orderE2EBuildServices([
-        "gateway-api",
-        "integration-api",
-        "sso-api",
-        "sso",
-        "custom",
-        "e2e-stubs",
-        "apisix",
-        "worker",
-        "auth-api",
-        "admin",
-        "admin-api",
-      ]),
-    ).toEqual([
-      "apisix",
-      "e2e-stubs",
-      "admin",
-      "auth-api",
-      "sso",
-      "sso-api",
-      "integration-api",
-      "admin-api",
-      "worker",
-      "gateway-api",
-      "custom",
-    ]);
   });
 
   test("caps in-flight builds to the requested concurrency and reports outcomes in scheduled order", async () => {
@@ -65,7 +34,7 @@ describe("e2e-build", () => {
       },
     });
     expect(peak).toBe(2);
-    expect(outcomes.map((item) => item.service)).toEqual(["apisix", "e2e-stubs", "auth-api", "worker"]);
+    expect(outcomes.map((item) => item.service)).toEqual(["worker", "auth-api", "e2e-stubs", "apisix"]);
     expect(outcomes.every((item) => item.logPath === `logs/build-${item.service}.log`)).toBe(true);
   });
 

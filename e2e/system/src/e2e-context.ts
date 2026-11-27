@@ -21,7 +21,6 @@ export interface E2ERunContext {
   references: E2EScenarioReferences;
   control: { origin: string; token: string };
   logServices: readonly string[];
-  resetCount: number;
 }
 
 export async function readE2ERunContext(path = process.env.IAM_E2E_CONTEXT_PATH): Promise<E2ERunContext> {

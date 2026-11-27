@@ -46,7 +46,7 @@ const checkRun = (
   status = "completed",
   conclusion: string | null = "success",
 ): CheckRun => ({ id, name, head_sha, status, conclusion });
-const prEntry = (number: number, headRefName: string, body: string) => ({
+const prEntry = (number: number, headRefName: string, body: string, headRefOid: string) => ({
   number,
   url: `https://github.com/${REPO}/pull/${number}`,
   body,
@@ -54,11 +54,12 @@ const prEntry = (number: number, headRefName: string, body: string) => ({
   isDraft: false,
   isCrossRepository: false,
   headRefName,
+  headRefOid,
   baseRefName: "main",
 });
 const specGraphql = (
   number: number,
-  opts: { branches?: string[]; branchOverflow?: boolean; subIssues?: unknown[] } = {},
+  opts: { branches?: string[]; branchOverflow?: boolean; subIssues?: unknown[]; comments?: string[] } = {},
 ) =>
   JSON.stringify({
     data: {
@@ -69,7 +70,13 @@ const specGraphql = (
           body: "Spec body",
           state: "OPEN",
           labels: labelPage(["type:spec", "ready-for-agent"]),
-          comments: page([]),
+          comments: page(
+            (opts.comments ?? []).map((body) => ({
+              body,
+              createdAt: new Date(0).toISOString(),
+              author: { login: "sandcastle" },
+            })),
+          ),
           linkedBranches: page(
             (opts.branches ?? []).map((name) => ({ ref: { name } })),
             Boolean(opts.branchOverflow),
@@ -170,9 +177,12 @@ describe("GitHub GraphQL filtering, pagination overflow, linkedBranches, and PR 
       title: "Demo",
       body: "New body",
       closeNums: [450, 451],
+      specNumber: 450,
       execFn: async (_f, args) => {
         calls.push(args);
-        return args[1] === "list" ? JSON.stringify([prEntry(99, "feat/user-sync", "Existing\n\nCloses #450\n")]) : "";
+        return args[1] === "list"
+          ? JSON.stringify([prEntry(99, "feat/user-sync", "Existing\n\nCloses #450\n", "a".repeat(40))])
+          : "";
       },
     });
     expect(prUrl).toBe(`https://github.com/${REPO}/pull/99`);
@@ -492,6 +502,34 @@ describe("GitHub check-runs strict head_sha matching and CI failure log redactio
     expect(fallbackLog).toContain('Job "integration"');
     expect(fallbackLog).toContain('step "Run full integration suite"');
   });
+
+  test("binds failure logs and fallback jobs to the run in ciGate.details_url", async () => {
+    const headSha = "c".repeat(40);
+    const calls: string[][] = [];
+    const logs = await fetchSanitizedCiFailureLogs({
+      repo: REPO,
+      headSha,
+      cwd: process.cwd(),
+      ciGate: {
+        ...checkRun(77, "ci-gate", headSha, "completed", "failure"),
+        details_url: `https://github.com/${REPO}/actions/runs/501/job/77`,
+        html_url: `https://github.com/${REPO}/actions/runs/502/job/78`,
+      },
+      execFn: async (_f, args) => {
+        calls.push(args);
+        if (args[1]?.includes("?head_sha=")) {
+          return JSON.stringify({ workflow_runs: [{ id: 999, head_sha: headSha, conclusion: "failure" }] });
+        }
+        if (args[0] === "run") throw new Error("log unavailable");
+        return JSON.stringify({ jobs: [{ name: "integration", status: "completed", conclusion: "failure" }] });
+      },
+    });
+    expect(calls).toEqual([
+      ["run", "view", "501", "--repo", REPO, "--log-failed"],
+      ["api", `repos/${REPO}/actions/runs/501/jobs?per_page=100`],
+    ]);
+    expect(logs).toContain('Job "integration"');
+  });
 });
 
 type CiGateScenarioConfig = {
@@ -504,7 +542,7 @@ type CiGateScenarioConfig = {
   ciMaxRepairs?: number;
   onAuthCheck?: () => boolean;
   onPrCreate?: (args: string[]) => void;
-  onPrView?: () => { state?: "OPEN" | "CLOSED" | "MERGED"; isDraft?: boolean };
+  onPrView?: () => { state?: "OPEN" | "CLOSED" | "MERGED"; isDraft?: boolean; headRefOid?: string };
   onCheckRuns?: (sha: string) => CheckRun[];
   onWorkflowRuns?: (sha: string) => WorkflowRun[];
   failedLog?: string;
@@ -556,6 +594,7 @@ async function setupCiGateScenario(cfg: CiGateScenarioConfig) {
   const phaseCalls: { runId: string; readonly: boolean; prompt: string }[] = [];
   const removedReadyLabels: number[] = [];
   const pausedCalls: { spec: number; reason: string }[] = [];
+  const repairComments: string[] = [];
   let [nowMs, repairAttempts] = [1_000_000, 0];
   const specWorktreePath = join(repoDir, ".sandcastle", "worktrees", `spec-${specNumber}`);
 
@@ -567,7 +606,9 @@ async function setupCiGateScenario(cfg: CiGateScenarioConfig) {
       return "";
     }
     if (cmd === "issue" && sub === "comment") {
-      pausedCalls.push({ spec: Number(args[2]), reason: args[args.indexOf("--body") + 1] ?? "" });
+      const body = args[args.indexOf("--body") + 1] ?? "";
+      if (body.startsWith("Sandcastle AFK 已暂停：")) pausedCalls.push({ spec: Number(args[2]), reason: body });
+      else repairComments.push(body);
       return "";
     }
     if (cmd === "api" && sub === "graphql") {
@@ -577,6 +618,7 @@ async function setupCiGateScenario(cfg: CiGateScenarioConfig) {
         return JSON.stringify({ data: { repository: { issue: { state: "OPEN", labels: labelPage(labels) } } } });
       }
       return specGraphql(specNumber, {
+        comments: repairComments,
         subIssues: [
           {
             number: ticketNumber,
@@ -593,7 +635,14 @@ async function setupCiGateScenario(cfg: CiGateScenarioConfig) {
     if (cmd === "pr" && sub === "list")
       return JSON.stringify(
         cfg.existingPr
-          ? [prEntry(specNumber, specBranch, `Existing PR\n\nCloses #${specNumber}\nCloses #${ticketNumber}\n`)]
+          ? [
+              prEntry(
+                specNumber,
+                specBranch,
+                `Existing PR\n\nCloses #${specNumber}\nCloses #${ticketNumber}\n`,
+                await gitNoHooks(bareRemoteDir, "rev-parse", `refs/heads/${specBranch}`),
+              ),
+            ]
           : [],
       );
     if (cmd === "pr" && sub === "create") {
@@ -608,6 +657,7 @@ async function setupCiGateScenario(cfg: CiGateScenarioConfig) {
         url: prUrl,
         state: v?.state ?? "OPEN",
         isDraft: v?.isDraft ?? false,
+        headRefOid: v?.headRefOid ?? (await gitNoHooks(bareRemoteDir, "rev-parse", `refs/heads/${specBranch}`)),
       });
     }
     if (cmd === "api" && sub?.includes("/check-runs")) {
@@ -686,6 +736,7 @@ async function setupCiGateScenario(cfg: CiGateScenarioConfig) {
     phaseCalls,
     removedReadyLabels,
     pausedCalls,
+    repairComments,
     clockMs: () => nowMs,
     run: () => runAfk(options),
   };
@@ -711,6 +762,16 @@ describe("Option-1 remote ci-gate wait, bounded auto-repair, --draft delivery, a
     expect(sc.ghCalls.some((a) => a.join(" ").includes("check-runs") || (a[0] === "pr" && a[1] === "view"))).toBe(
       false,
     );
+  });
+
+  test("--draft pauses when the Spec already has a Ready PR", async () => {
+    const sc = await setupCiGateScenario({ specNumber: 603, existingPr: true, draft: true });
+    const res = await sc.run();
+    expect(res.paused[0]?.reason).toBe("Spec #603 已有非 Draft PR，不能使用 --draft 跳过 ci-gate");
+    expect(sc.ghCalls).toContainEqual(["issue", "edit", "603", "--repo", REPO, "--add-label", "needs-attention"]);
+    expect(res.delivered).toEqual([]);
+    expect(sc.removedReadyLabels).toEqual([]);
+    expect(sc.phaseCalls).toEqual([]);
   });
 
   test("ignores stale-SHA green ci-gate, auto-repairs up to 2 attempts with redacted failure logs, and delivers on green", async () => {
@@ -804,6 +865,50 @@ describe("Option-1 remote ci-gate wait, bounded auto-repair, --draft delivery, a
     expect(sc.phaseCalls).toEqual([]);
     expect(sc.removedReadyLabels).toEqual([631, 630]);
     expect(existsSync(sc.specWorktreePath)).toBe(false);
+  });
+
+  test("pauses when the Ready PR head changes while reading a green ci-gate", async () => {
+    const changedSha = "f".repeat(40);
+    let moved = false;
+    const sc = await setupCiGateScenario({
+      specNumber: 632,
+      existingPr: true,
+      onPrView: () => (moved ? { headRefOid: changedSha } : {}),
+      onCheckRuns: (sha) => {
+        moved = true;
+        return [checkRun(802, "ci-gate", sha)];
+      },
+    });
+    const res = await sc.run();
+    expect(res.paused[0]?.reason).toContain(`headRefOid 已变为 ${changedSha}`);
+    expect(sc.ghCalls).toContainEqual(["issue", "edit", "632", "--repo", REPO, "--add-label", "needs-attention"]);
+    expect(res.delivered).toEqual([]);
+    expect(sc.removedReadyLabels).toEqual([]);
+    expect(existsSync(sc.specWorktreePath)).toBe(true);
+  });
+
+  test("a recorded attempt consumes the repair budget even if AFK restarts before a repair commit exists", async () => {
+    const sc = await setupCiGateScenario({
+      specNumber: 634,
+      existingPr: true,
+      ciMaxRepairs: 1,
+      onCheckRuns: (sha) => [checkRun(803, "ci-gate", sha, "completed", "failure")],
+      onRepairCi: async () => {
+        expect(sc.repairComments).toEqual([
+          `Sandcastle AFK 自动修红（attempt 1/1，head=${sc.initialHeadSha.slice(0, 8)}）`,
+        ]);
+        return COMPLETE;
+      },
+    });
+    const first = await sc.run();
+    expect(first.paused[0]?.reason).toContain("未产生新提交");
+    const restarted = await sc.run();
+    expect(restarted.paused[0]?.reason).toContain("自动修红上限（1 次）");
+    expect(sc.ghCalls).toContainEqual(["issue", "edit", "634", "--repo", REPO, "--add-label", "needs-attention"]);
+    expect(sc.phaseCalls).toHaveLength(1);
+    expect(sc.repairComments).toHaveLength(1);
+    expect(restarted.delivered).toEqual([]);
+    expect(sc.removedReadyLabels).toEqual([]);
   });
 
   test("soft-stops into result.stopped when Spec authorization is revoked during ci-gate wait", async () => {

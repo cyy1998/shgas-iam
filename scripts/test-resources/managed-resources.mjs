@@ -156,24 +156,6 @@ export async function readManagedResourceRun(root, recordPath) {
   return { root: resolve(root), recordPath: path, record };
 }
 
-export async function readManagedResourceRegistry(root, registryFile) {
-  let contents;
-  try {
-    contents = await readFile(join(root, repositoryPath(root, registryFile)), "utf8");
-  } catch (error) {
-    if (error.code === "ENOENT") return [];
-    throw error;
-  }
-  return [
-    ...new Set(
-      contents
-        .split("\n")
-        .filter((line) => line.trim())
-        .map((line) => repositoryPath(root, JSON.parse(line))),
-    ),
-  ];
-}
-
 export function managedComposeStackView(run, stack) {
   return {
     root: run.root,
@@ -331,9 +313,11 @@ export function managedCleanupCommand(run) {
 }
 
 async function cleanupComposeTarget(targetRun, logName, options = {}) {
+  const { project, removeLocalImages } = targetRun.record;
+  const removeE2EImages = removeLocalImages && /^iam-e2e-[a-f0-9]{32}$/u.test(project);
   const result = await runManagedComposeCommand(
     targetRun,
-    ["down", "--volumes", "--remove-orphans", ...(targetRun.record.removeLocalImages ? ["--rmi", "local"] : [])],
+    ["down", "--volumes", "--remove-orphans", ...(removeLocalImages && !removeE2EImages ? ["--rmi", "local"] : [])],
     {
       timeoutMs: options.timeoutMs ?? 30_000,
       cleanupTimeoutMs: 5000,
@@ -346,6 +330,33 @@ async function cleanupComposeTarget(targetRun, logName, options = {}) {
       `Exact project ${targetRun.record.project} cleanup failed with exit ${result.exitCode}:\n${result.output}`,
     );
   }
+  if (removeE2EImages) await removeE2EProjectImages(targetRun, options);
+}
+
+async function removeE2EProjectImages(run, options) {
+  const { project } = run.record;
+  const docker = async (args) => {
+    const result = await (options.runCommand ?? runOwnedCommand)({
+      executable: "docker",
+      args,
+      cwd: run.root,
+      timeoutMs: options.timeoutMs ?? 30_000,
+      cleanupTimeoutMs: 5000,
+    });
+    if (result.exitCode !== 0) throw new Error(`Image cleanup for ${project} failed:\n${result.output}`);
+    return result.output.trim();
+  };
+  // Compose's --rmi local may remove the shared :local alias. Target this run's tags explicitly.
+  const imageList = await docker([
+    "image",
+    "ls",
+    "--filter",
+    `reference=iam-e2e-*:${project}`,
+    "--format",
+    "{{.Repository}}:{{.Tag}}",
+  ]);
+  const tags = imageList.split(/\r?\n/u).filter((tag) => tag.startsWith("iam-e2e-") && tag.endsWith(`:${project}`));
+  if (tags.length) await docker(["image", "rm", ...tags]);
 }
 
 export async function cleanupManagedResources(run, options = {}) {
