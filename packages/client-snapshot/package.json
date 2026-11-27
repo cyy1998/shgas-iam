@@ -33,7 +33,7 @@
   "iamTest": {
     "integration": {
       "bun": {
-        "redis": "IAM_CLIENT_SNAPSHOT_TEST_REDIS_URL"
+        "redis": true
       }
     }
   }

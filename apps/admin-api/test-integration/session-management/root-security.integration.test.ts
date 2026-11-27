@@ -108,8 +108,8 @@ afterAll(async () => {
 });
 
 async function fixture() {
-  const url = process.env.IAM_ADMIN_API_TEST_REDIS_URL;
-  if (!url) throw new Error("IAM_ADMIN_API_TEST_REDIS_URL is required");
+  const url = process.env.IAM_TEST_REDIS_URL;
+  if (!url) throw new Error("IAM_TEST_REDIS_URL is required");
   const scope = await createUnifiedSessionRedisTestScope(url, {}, (stop) => {
     barrierHarness.registerStopExecutor(stop);
   });

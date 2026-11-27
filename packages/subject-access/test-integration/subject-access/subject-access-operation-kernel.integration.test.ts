@@ -30,7 +30,7 @@ let reads: number;
 beforeAll(() => {
   harness = createExclusiveRedisTestHarness({
     environment: process.env,
-    name: "IAM_SUBJECT_ACCESS_TEST_REDIS_URL",
+    name: "IAM_TEST_REDIS_URL",
   });
 });
 beforeEach(async () => {

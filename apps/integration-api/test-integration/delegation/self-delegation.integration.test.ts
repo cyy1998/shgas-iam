@@ -29,7 +29,7 @@ let sessionFixture: ReturnType<typeof createSessionFixture>;
 const bearerBySubject = new Map<string, string>();
 const redisHarness = createExclusiveRedisTestHarness({
   environment: process.env,
-  name: "IAM_INTEGRATION_API_TEST_REDIS_URL",
+  name: "IAM_TEST_REDIS_URL",
 });
 beforeAll(async () => {
   harness = await createIntegrationPostgresTestHarness();

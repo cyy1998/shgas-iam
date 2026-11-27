@@ -11,7 +11,7 @@ import { z } from "zod";
 
 // Called by the API source-write contract in its random PostgreSQL schema.
 // Keep Admin imports in the Admin package and exercise its actual mutation UoW.
-const databaseUrl = z.url().parse(process.env.IAM_ADMIN_API_TEST_DATABASE_URL);
+const databaseUrl = z.url().parse(process.env.IAM_TEST_POSTGRES_URL);
 const mode = z.enum(["replace", "rename-only"]).parse(process.argv[2]);
 const client = postgres(databaseUrl, { max: 2 });
 const db = drizzle({ client, relations });

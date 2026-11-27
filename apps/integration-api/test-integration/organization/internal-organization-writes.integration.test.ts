@@ -284,7 +284,7 @@ async function reassignCodeWithAdmin(mode: "replace" | "rename-only") {
         executable: process.execPath,
         args: ["--no-env-file", "run", "test-integration/organization/organization-code-reassignment.fixture.ts", mode],
         cwd: adminRoot,
-        env: { ...process.env, NODE_ENV: "test", IAM_ADMIN_API_TEST_DATABASE_URL: harness.databaseUrl },
+        env: { ...process.env, NODE_ENV: "test", IAM_TEST_POSTGRES_URL: harness.databaseUrl },
       }),
     expectedExitCode: 0,
     completionTimeoutMs: 10_000,

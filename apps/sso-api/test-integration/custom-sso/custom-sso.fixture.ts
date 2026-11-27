@@ -42,8 +42,8 @@ export async function fixture(
   },
   wechatQrEnabled = false,
 ) {
-  const url = networkUrl ?? process.env.IAM_SSO_API_TEST_REDIS_URL;
-  if (!url) throw new Error("IAM_SSO_API_TEST_REDIS_URL is required");
+  const url = networkUrl ?? process.env.IAM_TEST_REDIS_URL;
+  if (!url) throw new Error("IAM_TEST_REDIS_URL is required");
   const resources: Array<() => unknown | Promise<unknown>> = [];
   let stopped = false;
   const close = ownApiTestExecutor(async () => {

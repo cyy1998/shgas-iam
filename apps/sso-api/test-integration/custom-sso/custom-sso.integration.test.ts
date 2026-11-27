@@ -459,7 +459,7 @@ test("candidate sub-only delivery avoids Facts, never falls back from a cookie, 
       headers: { Client: "iam", Cookie: "global_session=invalid", Authorization: token },
     });
     expect(invalidCookie.status).toBe(401);
-    const legacyRedis = new Redis(process.env.IAM_SSO_API_TEST_REDIS_URL!);
+    const legacyRedis = new Redis(process.env.IAM_TEST_REDIS_URL!);
     const closeLegacy = ownApiTestExecutor(() => closeApiRedisConnection(legacyRedis));
     const legacyToken = `iam_ps_legacy_${randomUUID()}`;
     const legacyKey = `global_session:${legacyToken}`;
@@ -777,7 +777,7 @@ test("managed unknown Token save with failed compensation leaves explicit residu
 });
 
 test("managed Gateway consumes real published old Facts without SQL", async () => {
-  const f = await businessFixture(30, process.env.IAM_SSO_API_TEST_REDIS_URL);
+  const f = await businessFixture(30, process.env.IAM_TEST_REDIS_URL);
   try {
     f.setClient({
       ...f.getClient(),
@@ -1117,8 +1117,8 @@ test("Custom SSO delivers published custom attributes and nested Roles through W
     },
   ];
   const secondaryEmployment = { ...employment, isPrimary: false, position: { code: "secondary", name: "副岗" } };
-  const redisUrl = process.env.IAM_SSO_API_TEST_REDIS_URL;
-  if (!redisUrl) throw new Error("IAM_SSO_API_TEST_REDIS_URL is required");
+  const redisUrl = process.env.IAM_TEST_REDIS_URL;
+  if (!redisUrl) throw new Error("IAM_TEST_REDIS_URL is required");
   const resources: Array<() => unknown | Promise<unknown>> = [];
   const close = ownApiTestExecutor(() => closeFixtureResources(resources));
   try {
@@ -1659,7 +1659,7 @@ test("owner maintenance clears Tokens, a legacy index and malformed Code while p
 });
 
 test("candidate complete warm HTTP endpoints reuse cached sources and record socket chunk samples", async () => {
-  const upstreamUrl = new URL(process.env.IAM_SSO_API_TEST_REDIS_URL!);
+  const upstreamUrl = new URL(process.env.IAM_TEST_REDIS_URL!);
   const upstreamAddress = { host: upstreamUrl.hostname, port: Number(upstreamUrl.port) };
   let requestChunks = 0;
   let responseChunks = 0;

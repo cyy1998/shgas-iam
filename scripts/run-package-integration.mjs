@@ -10,6 +10,8 @@ import {
   parseBrowserWorkers,
   selectIntegrationTasks,
   taskRequiresGatewayApisix,
+  testPostgresUrlEnv,
+  testRedisUrlEnv,
 } from "./test-resources/integration-selection.mjs";
 import { formatResourceFailure, readManagedResourceRun } from "./test-resources/managed-resources.mjs";
 import { pnpmCommand, runOwnedCommand } from "./test-resources/owned-command.mjs";
@@ -55,10 +57,11 @@ try {
   const taskKey = `${manifest.name}:${executor}`;
   const names = declaration.environmentNames;
   const testEnvironment = { ...process.env };
+  delete testEnvironment[testPostgresUrlEnv];
+  delete testEnvironment[testRedisUrlEnv];
   delete testEnvironment.IAM_TEST_POSTGRES_TEMPLATE;
   delete testEnvironment.IAM_TEST_APISIX_ADMIN_URL;
   delete testEnvironment.IAM_TEST_APISIX_ADMIN_KEY;
-  delete testEnvironment.IAM_GATEWAY_TEST_APISIX_RECORD;
   const workerOverride = executor === "playwright" ? process.env.IAM_TEST_BROWSER_WORKERS : undefined;
   const parallelBrowser = executor === "playwright" && names.length === 0;
   if (!parallelBrowser && (browserWorkers !== undefined || workerOverride !== undefined)) {
@@ -76,11 +79,13 @@ try {
   const environment = record.tasks?.[taskKey];
   if (!environment || typeof environment !== "object" || Array.isArray(environment))
     throw new Error(`Managed resource record is missing the assignment for ${taskKey}`);
-  for (const name of names)
+  for (const name of names) {
     if (!environment[name] || environment[name] !== process.env[name])
       throw new Error(`${name} must come from this run's managed resource record for ${taskKey}`);
+    testEnvironment[name] = environment[name];
+  }
   if (declaration.resources.redis) {
-    const url = URL.parse(environment[declaration.resources.redis]);
+    const url = URL.parse(environment[testRedisUrlEnv]);
     const slot = /^\/([1-9]\d*)$/u.exec(url?.pathname)?.[1];
     if (
       url?.protocol !== "redis:" ||
@@ -107,7 +112,7 @@ try {
   const selectedTask = selected.find((task) => task.executor === executor && task.files.length === files.length);
   if (!selectedTask) throw new Error("No Integration files match this package executor");
   if (taskRequiresGatewayApisix(selectedTask)) {
-    for (const name of ["IAM_TEST_APISIX_ADMIN_URL", "IAM_TEST_APISIX_ADMIN_KEY", "IAM_GATEWAY_TEST_APISIX_RECORD"]) {
+    for (const name of ["IAM_TEST_APISIX_ADMIN_URL", "IAM_TEST_APISIX_ADMIN_KEY"]) {
       if (typeof environment[name] !== "string" || !environment[name] || environment[name] !== process.env[name])
         throw new Error(`${name} must come from this run's managed resource record for ${taskKey}`);
       testEnvironment[name] = environment[name];

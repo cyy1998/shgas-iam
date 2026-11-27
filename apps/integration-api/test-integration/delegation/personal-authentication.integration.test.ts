@@ -17,7 +17,7 @@ test("personal delegation accepts the root cookie and token while enforcing Clie
   const env = testEnvironment(pg.databaseUrl);
   const redisHarness = createExclusiveRedisTestHarness({
     environment: process.env,
-    name: "IAM_INTEGRATION_API_TEST_REDIS_URL",
+    name: "IAM_TEST_REDIS_URL",
   });
   const api = await createIntegrationApiApp({ env, logger: pino({ enabled: false }) });
   try {

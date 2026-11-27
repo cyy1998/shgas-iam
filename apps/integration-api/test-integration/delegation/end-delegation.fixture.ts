@@ -4,8 +4,8 @@ import { ClientDelegationStatus, createDelegationService } from "@iam/delegation
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
-const url = process.env.IAM_INTEGRATION_API_TEST_DATABASE_URL;
-if (!url) throw new Error("IAM_INTEGRATION_API_TEST_DATABASE_URL is required");
+const url = process.env.IAM_TEST_POSTGRES_URL;
+if (!url) throw new Error("IAM_TEST_POSTGRES_URL is required");
 const client = postgres(url);
 try {
   const service = createDelegationService({

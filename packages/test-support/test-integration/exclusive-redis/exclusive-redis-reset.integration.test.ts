@@ -3,7 +3,7 @@ import { resetExclusiveRedisTestDatabase } from "@iam/test-support/external-test
 import Redis from "ioredis";
 
 async function connection() {
-  const url = process.env.IAM_TEST_SUPPORT_TEST_REDIS_URL;
+  const url = process.env.IAM_TEST_REDIS_URL;
   if (!url) throw new Error("Managed Test Support Redis URL is required");
   const redis = new Redis(url, { lazyConnect: true, enableOfflineQueue: false, retryStrategy: () => null });
   await redis.connect();

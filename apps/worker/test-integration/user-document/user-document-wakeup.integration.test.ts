@@ -182,11 +182,11 @@ test("a silent Redis peer bounds the committed save and repair publishes it afte
     expect(performance.now() - closeStarted).toBeLessThan(1_000);
 
     const redisConfig = parseDedicatedRedisTestUrl({
-      name: "IAM_WORKER_TEST_REDIS_URL",
+      name: "IAM_TEST_REDIS_URL",
       value: requireExternalTestUrl({
         environment: process.env,
         lane: "User Document wake-up integration",
-        name: "IAM_WORKER_TEST_REDIS_URL",
+        name: "IAM_TEST_REDIS_URL",
       }),
     });
     const redis = await createWorkerRedisTestHarness();

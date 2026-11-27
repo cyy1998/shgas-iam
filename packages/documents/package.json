@@ -56,8 +56,8 @@
   "iamTest": {
     "integration": {
       "bun": {
-        "postgres": "IAM_DOCUMENTS_TEST_DATABASE_URL",
-        "redis": "IAM_DOCUMENTS_TEST_REDIS_URL"
+        "postgres": true,
+        "redis": true
       }
     }
   }

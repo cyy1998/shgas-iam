@@ -6,7 +6,7 @@ import { createProcessSmokeEnvironment } from "@iam/test-support/process-smoke-h
 import type { Redis as RedisType } from "ioredis";
 import Redis from "ioredis";
 
-const TEST_REDIS_URL_ENV = "IAM_OPS_TEST_REDIS_URL";
+const TEST_REDIS_URL_ENV = "IAM_TEST_REDIS_URL";
 
 export interface OpsRedisTestHarness {
   readonly writer: RedisType;

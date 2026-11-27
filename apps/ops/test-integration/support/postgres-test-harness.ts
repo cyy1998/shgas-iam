@@ -1,16 +1,14 @@
 import { relations } from "@iam/db/relations";
-import { createPostgresTestHarness } from "@iam/test-support/postgres-test-harness";
+import { createDrizzlePostgresTestHarness } from "@iam/test-support/postgres-test-harness";
 import { drizzle } from "drizzle-orm/postgres-js";
 
 export type OpsPostgresTestHarness = Awaited<ReturnType<typeof createOpsPostgresTestHarness>>;
 
-export async function createOpsPostgresTestHarness() {
-  const pg = await createPostgresTestHarness({
-    environment: process.env,
-    name: "IAM_OPS_TEST_DATABASE_URL",
+export function createOpsPostgresTestHarness() {
+  return createDrizzlePostgresTestHarness({
     client: { max: 4 },
+    createDb: (client) => drizzle({ client, relations }),
   });
-  return { ...pg, db: drizzle({ client: pg.sql, relations }) };
 }
 
 export async function reserveOpsPostgresConnection(

@@ -15,7 +15,7 @@ import postgres from "postgres";
 import { z } from "zod";
 
 // Keep Admin's private wiring in its own process. The API test consumes the persisted Outbox.
-const databaseUrl = z.url().parse(process.env.IAM_ADMIN_API_TEST_DATABASE_URL);
+const databaseUrl = z.url().parse(process.env.IAM_TEST_POSTGRES_URL);
 const now = z.coerce.date().parse(process.argv[2]);
 const operation = z
   .enum([

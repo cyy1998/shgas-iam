@@ -2,7 +2,7 @@ import Redis from "ioredis";
 
 /** Kernel only owns one case executor; a failed stop prevents the exclusive reset. */
 export async function resetRedisTestCase(stopExecutor: () => Promise<void> | void) {
-  const url = process.env.IAM_SESSION_KERNEL_TEST_REDIS_URL;
+  const url = process.env.IAM_TEST_REDIS_URL;
   if (!url) throw new Error("Managed Kernel Redis URL is required");
   const control = new Redis(url, {
     lazyConnect: true,

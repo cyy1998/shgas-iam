@@ -75,8 +75,8 @@ export async function fixture(
     wechatQr?: boolean;
   } = {},
 ) {
-  const url = networkUrl ?? process.env.IAM_SSO_API_TEST_REDIS_URL;
-  if (!url) throw new Error("IAM_SSO_API_TEST_REDIS_URL is required");
+  const url = networkUrl ?? process.env.IAM_TEST_REDIS_URL;
+  if (!url) throw new Error("IAM_TEST_REDIS_URL is required");
   const issuers = authorization.issuers ?? {
     internal: "https://iam.internal/oidc",
     external: "https://iam.example/oidc",

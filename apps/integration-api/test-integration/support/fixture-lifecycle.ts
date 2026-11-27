@@ -38,10 +38,9 @@ export function ownIntegrationTestExecutor(stop: () => unknown | Promise<unknown
 export async function resetIntegrationRedisTestDatabase() {
   const stops = executors.splice(0);
   if (!stops.length) return;
-  const url = process.env.IAM_INTEGRATION_API_TEST_REDIS_URL;
+  const url = process.env.IAM_TEST_REDIS_URL;
   if (!url) {
-    if (stops.length)
-      throw new Error("IAM_INTEGRATION_API_TEST_REDIS_URL is required for Integration API fixture reset");
+    if (stops.length) throw new Error("IAM_TEST_REDIS_URL is required for Integration API fixture reset");
     return;
   }
   const control = new Redis(url, {

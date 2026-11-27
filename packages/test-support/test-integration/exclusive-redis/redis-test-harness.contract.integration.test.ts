@@ -5,7 +5,7 @@ test("closing one scope preserves another until the case reset stops every scope
   await runWithOwnedTestResources(async ({ registerCleanup }) => {
     const harness = createExclusiveRedisTestHarness({
       environment: process.env,
-      name: "IAM_TEST_SUPPORT_TEST_REDIS_URL",
+      name: "IAM_TEST_REDIS_URL",
     });
     registerCleanup(harness.close);
     const first = await harness.openPair();

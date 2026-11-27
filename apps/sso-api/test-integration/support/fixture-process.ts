@@ -13,7 +13,7 @@ export function fixtureBunExecutable() {
 }
 
 export async function startBrowserFixture(script: string, args: string[] = []) {
-  if (!process.env.IAM_SSO_API_TEST_REDIS_URL) throw new Error("IAM_SSO_API_TEST_REDIS_URL is required");
+  if (!process.env.IAM_TEST_REDIS_URL) throw new Error("IAM_TEST_REDIS_URL is required");
   // Resolve the real executable through the installed CLI shim, then own the direct child.
   const executable = fixtureBunExecutable();
   const child = spawn(executable, ["--no-env-file", script, ...args], {

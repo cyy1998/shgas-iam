@@ -13,8 +13,8 @@ import { resetExclusiveRedisTestDatabase, runWithOwnedTestResources } from "@iam
 import Redis from "ioredis";
 
 async function fixture() {
-  const url = process.env.IAM_OIDC_TEST_REDIS_URL;
-  if (!url) throw new Error("IAM_OIDC_TEST_REDIS_URL is required");
+  const url = process.env.IAM_TEST_REDIS_URL;
+  if (!url) throw new Error("IAM_TEST_REDIS_URL is required");
   const stopExecutors: Array<() => Promise<void>> = [];
   let closePromise: Promise<void> | undefined;
   function trackConnection(redis: Redis) {

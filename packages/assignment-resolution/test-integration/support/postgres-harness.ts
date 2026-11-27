@@ -1,5 +1,5 @@
 import { relations } from "@iam/db/relations";
-import { createPostgresTestHarness as clonePostgresTestHarness } from "@iam/test-support/postgres-test-harness";
+import { createDrizzlePostgresTestHarness } from "@iam/test-support/postgres-test-harness";
 import { drizzle } from "drizzle-orm/postgres-js";
 
 export type PostgresTestHarness = Awaited<ReturnType<typeof createPostgresTestHarness>>;
@@ -7,19 +7,17 @@ export type PostgresTestHarness = Awaited<ReturnType<typeof createPostgresTestHa
 export async function createPostgresTestHarness() {
   let queryCount = 0;
   let isMeasuringQueries = false;
-  const pg = await clonePostgresTestHarness({
-    environment: process.env,
-    name: "IAM_ASSIGNMENT_RESOLUTION_TEST_DATABASE_URL",
+  const pg = await createDrizzlePostgresTestHarness({
     client: {
       max: 1,
       debug() {
         if (isMeasuringQueries) queryCount += 1;
       },
     },
+    createDb: (client) => drizzle({ client, relations }),
   });
   return {
     ...pg,
-    db: drizzle({ client: pg.sql, relations }),
     async measureQueries<T>(operation: () => Promise<T>) {
       queryCount = 0;
       isMeasuringQueries = true;

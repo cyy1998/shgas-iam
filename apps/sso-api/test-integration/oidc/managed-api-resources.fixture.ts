@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { TEST_POSTGRES_URL_ENV, TEST_REDIS_URL_ENV } from "@iam/test-support/external-test-resources";
 import {
   createManagedResourceRun,
   finishManagedResourceRun,
@@ -25,7 +26,7 @@ export async function requireManagedApiResources() {
   const recordEnvironment = JSON.parse(await readFile(join(root, run.record.testEnvironmentFile), "utf8"));
   // The standalone suite owns its dedicated stack; root Integration uses task assignments.
   const environment = recordEnvironment.tasks ? recordEnvironment.tasks["@iam/sso-api:bun"] : recordEnvironment;
-  for (const name of ["IAM_SSO_API_TEST_DATABASE_URL", "IAM_SSO_API_TEST_REDIS_URL", "IAM_TEST_POSTGRES_TEMPLATE"]) {
+  for (const name of [TEST_POSTGRES_URL_ENV, TEST_REDIS_URL_ENV, "IAM_TEST_POSTGRES_TEMPLATE"]) {
     if (!environment?.[name] || environment[name] !== process.env[name])
       throw new Error(`${name} must come from this run's managed resource record`);
   }
@@ -63,7 +64,6 @@ export async function runManagedApiFixture(options: {
       services: ["postgres", "redis"],
       keep: options.args.includes("--keep"),
       registryFile: process.env.IAM_TEST_RESOURCE_REGISTRY,
-      parentRecord: process.env.IAM_TEST_RESOURCE_RECORD,
     });
     await startManagedResources(run, { signal: controller.signal, timeoutMs: 60000 });
     const { databaseUrl, templateName } = await prepareManagedPostgresTemplate(run, {
@@ -74,11 +74,15 @@ export async function runManagedApiFixture(options: {
     });
     const redis = await managedServiceEndpoint(run, "redis", 6379, { signal: controller.signal });
     const environment = {
-      IAM_SSO_API_TEST_DATABASE_URL: databaseUrl,
-      IAM_SSO_API_TEST_REDIS_URL: `redis://${redis.host}:${redis.port}/0`,
+      [TEST_POSTGRES_URL_ENV]: databaseUrl,
+      [TEST_REDIS_URL_ENV]: `redis://${redis.host}:${redis.port}/0`,
       IAM_TEST_POSTGRES_TEMPLATE: templateName,
     };
     controller.signal.throwIfAborted();
+    run.record.endpoints = {
+      postgres: { databaseUrl, templateName },
+      redis,
+    };
     await writeAtomicResourceRecord(join(root, run.record.testEnvironmentFile), environment);
     run.record.status = "running";
     await saveManagedResourceRun(run);

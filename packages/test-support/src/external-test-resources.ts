@@ -1,7 +1,9 @@
 import { type RedisConfig, redisUrlString } from "@iam/runtime/redis/config";
 import Redis from "ioredis";
 
-export { requireDedicatedPostgresTestUrl } from "./dedicated-postgres-test-url";
+export { requireDedicatedPostgresTestUrl, TEST_POSTGRES_URL_ENV } from "./dedicated-postgres-test-url";
+
+export const TEST_REDIS_URL_ENV = "IAM_TEST_REDIS_URL";
 
 export interface OwnedTestResourceLifecycle {
   readonly registerCleanup: (cleanup: () => Promise<void> | void) => void;

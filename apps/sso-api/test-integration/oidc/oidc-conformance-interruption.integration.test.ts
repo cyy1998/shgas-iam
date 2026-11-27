@@ -18,17 +18,17 @@ for (const interruptedPhase of ["postgres-ready", "redis-seeded", "api-ready", "
     const databaseUrl = requireExternalTestUrl({
       environment: process.env,
       lane: "API composition",
-      name: "IAM_SSO_API_TEST_DATABASE_URL",
+      name: "IAM_TEST_POSTGRES_URL",
     });
     requireDedicatedPostgresTestUrl({
-      name: "IAM_SSO_API_TEST_DATABASE_URL",
+      environment: process.env,
+      name: "IAM_TEST_POSTGRES_URL",
       value: databaseUrl,
-      forbidden: [{ name: "IAM_SSO_API_DATABASE_URL", value: process.env.IAM_SSO_API_DATABASE_URL }],
     });
     const redisUrl = requireExternalTestUrl({
       environment: process.env,
       lane: "API composition",
-      name: "IAM_SSO_API_TEST_REDIS_URL",
+      name: "IAM_TEST_REDIS_URL",
     });
     const sql = postgres(databaseUrl, { max: 1 });
     const redis = new Redis(redisUrl, { maxRetriesPerRequest: 1 });

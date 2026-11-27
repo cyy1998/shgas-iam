@@ -29,7 +29,7 @@ test("standalone managed login appends an audit and serves the two canonical del
   const redisUrl = requireExternalTestUrl({
     environment: process.env,
     lane: "SSO API protocol delivery",
-    name: "IAM_SSO_API_TEST_REDIS_URL",
+    name: "IAM_TEST_REDIS_URL",
   });
   const env = parseSsoApiEnv({
     NODE_ENV: "production",

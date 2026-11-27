@@ -183,7 +183,7 @@ async function createFixture(stopExecutors: Array<() => Promise<void> | void>) {
   const redis = await createWorkerRedisTestHarness();
   stopExecutors.push(redis.close);
   const redisConfig = parseDedicatedRedisTestUrl({
-    name: "IAM_WORKER_TEST_REDIS_URL",
+    name: "IAM_TEST_REDIS_URL",
     value: resolveWorkerRedisTestUrl(process.env),
   });
   await pg.db.insert(organizations).values({

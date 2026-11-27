@@ -62,8 +62,8 @@ async function withDeadline<T>(pending: Promise<T>, milliseconds: number) {
 }
 
 async function createPausedRedisProxy() {
-  const url = process.env.IAM_ADMIN_API_TEST_REDIS_URL;
-  if (!url) throw new Error("IAM_ADMIN_API_TEST_REDIS_URL is required; no fallback is allowed");
+  const url = process.env.IAM_TEST_REDIS_URL;
+  if (!url) throw new Error("IAM_TEST_REDIS_URL is required; no fallback is allowed");
   const redis = new URL(url);
   if (redis.protocol !== "redis:") throw new Error("This TCP fault fixture requires a dedicated redis: URL");
   const sockets = new Set<Socket>();

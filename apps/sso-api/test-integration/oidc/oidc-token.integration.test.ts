@@ -527,7 +527,7 @@ test("OIDC Token ignores mutable protocol marker, uses current config and denies
 
 test("OIDC Token maintenance clears a Token without TTL and unknown state while preserving session owner state", async () => {
   const f = await setup();
-  const independent = new Redis(process.env.IAM_SSO_API_TEST_REDIS_URL!, { maxRetriesPerRequest: 0 });
+  const independent = new Redis(process.env.IAM_TEST_REDIS_URL!, { maxRetriesPerRequest: 0 });
   const closeIndependent = ownApiTestExecutor(() => closeApiRedisConnection(independent));
   try {
     const issued = await f.authorizeCode();
@@ -624,7 +624,7 @@ test("OIDC scoped Code lookup never consumes another root/ClientSession Code ID"
 });
 
 test("OIDC complete HTTP warm samples reuse Snapshot Secret Barrier Facts and record socket chunk samples", async () => {
-  const url = new URL(process.env.IAM_SSO_API_TEST_REDIS_URL!);
+  const url = new URL(process.env.IAM_TEST_REDIS_URL!);
   const upstreamAddress = { host: url.hostname, port: Number(url.port) };
   let requestChunks = 0;
   let responseChunks = 0;
@@ -762,7 +762,7 @@ for (const fault of ["expired", "corrupt"] as const) {
 
 test("OIDC Token maintenance reports unlink failure and rerun clears all clients while preserving session state", async () => {
   const f = await setup();
-  const independent = new Redis(process.env.IAM_SSO_API_TEST_REDIS_URL!, { maxRetriesPerRequest: 0 });
+  const independent = new Redis(process.env.IAM_TEST_REDIS_URL!, { maxRetriesPerRequest: 0 });
   const closeIndependent = ownApiTestExecutor(() => closeApiRedisConnection(independent));
   try {
     const first = await f.authorizeCode();
@@ -832,7 +832,7 @@ test("OIDC required token parameters retain standard errors and Secret takes pre
 
 for (const fault of ["login", "configuration"] as const) {
   test(`OIDC setup ${fault} closes real HTTP/Redis resources and lets its proxy finish`, async () => {
-    const url = new URL(process.env.IAM_SSO_API_TEST_REDIS_URL!);
+    const url = new URL(process.env.IAM_TEST_REDIS_URL!);
     const upstreamAddress = { host: url.hostname, port: Number(url.port) };
     let acceptedConnections = 0;
     const proxy = createServer((downstream) => {
