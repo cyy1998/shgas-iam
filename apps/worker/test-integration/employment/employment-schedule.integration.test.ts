@@ -158,7 +158,7 @@ test("the production Worker catches up on startup and applies the next Beijing m
       [paused.id, status.Pause, "2026-11-01", null, false],
       [tombstone.id, status.Enable, null, "2026-10-02", false],
     ]);
-    await fixture.waitForPublication(startsTonight, 1);
+    await fixture.waitForPublication(startsTonight, 1, worker.output);
     await fixture.waitForPublication(endsTonight, 0);
     await fixture.waitForPublication(missed, 0);
     const assignments = await fixture.pg.db
@@ -423,20 +423,28 @@ async function createFixture(stopExecutors: Array<() => Promise<void> | void>) {
     async audit() {
       return await pg.db.select().from(auditLogs).orderBy(asc(auditLogs.id));
     },
-    async waitForPublication(employment: { userId: number; subjectIdentifier: string }, count: number) {
-      await waitFor(`Document and Facts for user ${employment.userId}`, async () => {
-        const [row] = await pg.db.select().from(userDocuments).where(eq(userDocuments.userId, employment.userId));
-        const [facts] = await factsInspector.inspectMany([employment.subjectIdentifier]);
-        if (
-          facts?.status !== "valid" ||
-          facts.record.kind !== "document" ||
-          row?.sourceVersion !== facts.record.sourceVersion ||
-          facts.record.facts.employments.length !== count
-        )
-          return;
-        expect(row.document).toMatchObject({ employments: facts.record.facts.employments });
-        return row;
-      });
+    async waitForPublication(
+      employment: { userId: number; subjectIdentifier: string },
+      count: number,
+      details?: () => string,
+    ) {
+      await waitFor(
+        `Document and Facts for user ${employment.userId}`,
+        async () => {
+          const [row] = await pg.db.select().from(userDocuments).where(eq(userDocuments.userId, employment.userId));
+          const [facts] = await factsInspector.inspectMany([employment.subjectIdentifier]);
+          if (
+            facts?.status !== "valid" ||
+            facts.record.kind !== "document" ||
+            row?.sourceVersion !== facts.record.sourceVersion ||
+            facts.record.facts.employments.length !== count
+          )
+            return;
+          expect(row.document).toMatchObject({ employments: facts.record.facts.employments });
+          return row;
+        },
+        details,
+      );
     },
   };
 }

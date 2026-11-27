@@ -1,6 +1,7 @@
 import { parseArgs } from "node:util";
 import type { OrganizationDocumentVerificationReport } from "@iam/documents/organization/maintenance";
 import { runMaintenanceCommandWithLifecycle } from "@iam/runtime/maintenance";
+import { type CommandContext, createCommandLogger } from "@ops/command-context";
 import { parseDocumentCommandDeadline } from "../document-command-lifecycle";
 
 export async function runOrganizationDocumentVerifyCommand(
@@ -18,7 +19,7 @@ export async function runOrganizationDocumentVerifyCommand(
   return report;
 }
 
-async function main(args: string[]) {
+async function main(args: string[], context: CommandContext) {
   const { values } = parseArgs({
     args: args,
     strict: true,
@@ -26,9 +27,9 @@ async function main(args: string[]) {
   });
   const deadlineMs = parseDocumentCommandDeadline(values["deadline-ms"]);
   const { parseOrganizationDocumentVerifyCommandEnv } = await import("@ops/env");
-  const env = parseOrganizationDocumentVerifyCommandEnv(process.env);
-  const { createLogger, LoggerSourceApp } = await import("@iam/runtime/logger");
-  const logger = createLogger({
+  const env = parseOrganizationDocumentVerifyCommandEnv(context.env, context.stderr);
+  const { LoggerSourceApp } = await import("@iam/runtime/logger");
+  const logger = createCommandLogger(context, {
     nodeEnv: env.nodeEnv,
     logLevel: env.log.level,
     logFormat: env.log.format,
@@ -43,20 +44,20 @@ async function main(args: string[]) {
     deadlineMs,
   });
   const report = await runMaintenanceCommandWithLifecycle({
-    signals: process,
+    signals: context,
     deadlineMs,
     shutdown: composition.shutdown,
     run: (signal) => runOrganizationDocumentVerifyCommand({ verifier: composition.verifier, logger }, signal),
   });
-  if (report.status === "failed") process.exitCode = 1;
+  if (report.status === "failed") context.exitCode = 1;
 }
 
-export async function run(args: string[]) {
+export async function run(args: string[], context: CommandContext = process) {
   try {
-    await main(args);
+    await main(args, context);
   } catch {
-    process.exitCode = process.exitCode || 1;
-    process.stderr.write(
+    context.exitCode = context.exitCode || 1;
+    context.stderr.write(
       "Organization document verification failed; keep maintenance active and inspect the full report.\n",
     );
   }

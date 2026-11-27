@@ -1,39 +1,18 @@
 import { expect, test } from "bun:test";
-import { fileURLToPath } from "node:url";
-import {
-  runProcessCommandSmoke,
-  spawnOwnedProcessTree,
-  withOwnedTemporaryDirectory,
-} from "@iam/test-support/process-smoke-harness";
-import { createUnavailableStorageCommandEnvironment } from "../support/worker-command-smoke-environment";
+import { parseFixtureWorkerEnv } from "../support/worker-composition.fixture";
 
-const workerRoot = fileURLToPath(new URL("../../", import.meta.url));
-test("Worker refuses a non-default organization namespace before starting its runtime", async () => {
-  const result = await withOwnedTemporaryDirectory({
-    prefix: "iam-worker-namespace-",
-    cleanupTimeoutMs: 5000,
-    run: (temporaryDirectory) =>
-      runProcessCommandSmoke({
-        label: "Fixed Worker namespace",
-        expectedExitCode: 1,
-        completionTimeoutMs: 10_000,
-        cleanupTimeoutMs: 5000,
-        start: () =>
-          spawnOwnedProcessTree({
-            executable: process.execPath,
-            args: ["--no-env-file", "run", "src/index.ts"],
-            cwd: workerRoot,
-            env: {
-              ...createUnavailableStorageCommandEnvironment({
-                databaseUrl: "postgresql://iam:private-namespace-secret@127.0.0.1:1/iam",
-                temporaryDirectory,
-              }),
-              IAM_WORKER_ORGANIZATION_DOCUMENT_QUEUE_PREFIX: "unsupported-private-prefix",
-            },
-          }),
-      }),
-  });
-  expect(result.output).toContain("Organization Search queue prefix is fixed to iam");
-  expect(result.output).not.toContain("private-namespace-secret");
-  expect(result.output).not.toContain("worker started");
-}, 20_000);
+test("Worker refuses a non-default organization namespace before starting its runtime", () => {
+  let failure: unknown;
+  try {
+    parseFixtureWorkerEnv({
+      NODE_ENV: "test",
+      IAM_WORKER_DATABASE_URL: "postgresql://iam:private-namespace-secret@127.0.0.1:1/iam",
+      IAM_WORKER_REDIS_URL: "redis://127.0.0.1:1/15",
+      IAM_WORKER_ORGANIZATION_DOCUMENT_QUEUE_PREFIX: "unsupported-private-prefix",
+    });
+  } catch (error) {
+    failure = error;
+  }
+  expect(String(failure)).toContain("Organization Search queue prefix is fixed to iam");
+  expect(String(failure)).not.toContain("private-namespace-secret");
+});

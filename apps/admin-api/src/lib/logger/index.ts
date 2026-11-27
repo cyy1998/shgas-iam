@@ -1,4 +1,4 @@
-import env from "@admin-api/env";
+import env from "@admin-api/runtime-env";
 import { createLogger, LoggerSourceApp } from "@iam/runtime/logger";
 
 export const logger = createLogger({

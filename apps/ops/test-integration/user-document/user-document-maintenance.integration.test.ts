@@ -1,6 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { fileURLToPath } from "node:url";
 import {
   ClientDelegationStatus,
   ClientStatus,
@@ -22,7 +21,6 @@ import { redisUrlString } from "@iam/runtime/redis/config";
 import { createSubjectAccessBarrier } from "@iam/subject-access";
 import { createSubjectAccessRepair } from "@iam/subject-access/recovery";
 import { createRedisSubjectAccessStore, createSubjectAccessBootstrap } from "@iam/subject-access/redis";
-import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
 import { runUserDocumentBackfillCommand } from "@ops/commands/user-document/user-document-backfill";
 import {
   runUserDocumentPostgresGateCommand,
@@ -36,8 +34,8 @@ import { parseUserDocumentCommandEnv } from "@ops/env";
 import Redis from "ioredis";
 import { createOpsPostgresTestHarness } from "../support/postgres-test-harness";
 import { resetOpsRedisTestDatabase, resolveOpsRedisTestUrl } from "../support/redis-test-harness";
+import { runOpsCommand } from "../support/run-ops-command";
 
-const opsRoot = fileURLToPath(new URL("../../", import.meta.url));
 let stopExecutors: Array<() => Promise<void> | void>;
 let pg: Awaited<ReturnType<typeof createOpsPostgresTestHarness>>;
 beforeAll(async () => {
@@ -407,28 +405,10 @@ async function createMaintenanceFixture() {
     args: string[] = [],
   ) {
     const readiness = operation.startsWith("verify-");
-    const pending = runProcessCommandSmoke({
-      label: `User Document maintenance ${operation}`,
-      start: () => {
-        return spawnOwnedProcessTree({
-          executable: process.execPath,
-          args: [
-            "--no-env-file",
-            "run",
-            "src/index.ts",
-            "user-document",
-            operation,
-            ...(readiness && args.length === 0 ? ["--batch-size", "1"] : []),
-            ...args,
-          ],
-          cwd: opsRoot,
-          env: commandEnvironment(readiness),
-        });
-      },
-      completionTimeoutMs: 15_000,
-      cleanupTimeoutMs: 5_000,
+    const pending = runOpsCommand({
+      args: ["user-document", operation, ...(readiness && args.length === 0 ? ["--batch-size", "1"] : []), ...args],
+      env: commandEnvironment(readiness),
       expectedExitCode,
-      maxOutputBytes: 128 * 1024,
     });
     stopExecutors.push(async () => {
       await pending;

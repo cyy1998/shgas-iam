@@ -4,7 +4,8 @@ async function main() {
   const env = parseWorkerEnv(process.env);
   const { logger } = await import("@worker/lib/logger");
   const { createWorkerComposition } = await import("@worker/composition");
-  const composition = await createWorkerComposition({ env, logger });
+  const { db, closeDb } = await import("@iam/db");
+  const composition = await createWorkerComposition({ env, logger, database: { db, close: closeDb } });
 
   process.once("SIGINT", () => void composition.shutdown("SIGINT"));
   process.once("SIGTERM", () => void composition.shutdown("SIGTERM"));

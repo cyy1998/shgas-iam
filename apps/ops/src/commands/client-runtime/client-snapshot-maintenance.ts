@@ -2,6 +2,7 @@ import { parseArgs } from "node:util";
 import { createClientSnapshotMaintenance, createClientSnapshotVerifier } from "@iam/client-snapshot/maintenance";
 import { ClientCodeSchema } from "@iam/contracts";
 import { createOfflineMaintenanceRedis, runMaintenanceCommandWithLifecycle } from "@iam/runtime/maintenance";
+import type { CommandContext } from "@ops/command-context";
 import { parseOfflineMaintenanceEnv } from "@ops/env";
 import { z } from "zod";
 
@@ -105,8 +106,8 @@ export async function runClientSnapshotMaintenance(
   return { report, exitCode: report.status === "completed" ? 0 : 1 };
 }
 
-export async function run(args: string[]) {
-  const { report, exitCode } = await runClientSnapshotMaintenance(args, process.env, process);
-  process.stdout.write(`${JSON.stringify(report)}\n`);
-  process.exitCode = exitCode;
+export async function run(args: string[], context: CommandContext = process) {
+  const { report, exitCode } = await runClientSnapshotMaintenance(args, context.env, context);
+  context.stdout.write(`${JSON.stringify(report)}\n`);
+  context.exitCode = exitCode;
 }

@@ -11,7 +11,11 @@ export async function runMaintenanceCommandWithLifecycle<T>(input: {
   run: (signal: AbortSignal) => Promise<T>;
   shutdown: (reason: string) => Promise<void>;
   deadlineMs: number;
-  signals?: Pick<NodeJS.Process, "once" | "off" | "exitCode">;
+  signals?: {
+    once(event: "SIGINT" | "SIGTERM", listener: () => void): unknown;
+    off(event: "SIGINT" | "SIGTERM", listener: () => void): unknown;
+    exitCode?: NodeJS.Process["exitCode"];
+  };
 }): Promise<T> {
   const controller = new AbortController();
   let closing: Promise<void> | undefined;

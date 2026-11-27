@@ -1,27 +1,15 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import * as rp from "openid-client";
 import { resetApiRedisTestDatabase } from "../support/fixture-lifecycle";
-import { createOidcConformanceCandidate } from "./oidc-conformance.fixture";
+import { createOidcRpFixture } from "./oidc-rp.fixture";
 
 const redirectUri = "https://rp.example/callback";
-let candidate: Awaited<ReturnType<typeof createOidcConformanceCandidate>>;
+let candidate: Awaited<ReturnType<typeof createOidcRpFixture>>;
 
 beforeAll(async () => {
-  const directory = await mkdtemp(join(tmpdir(), "iam195-rp-"));
-  process.stdout.write(`OIDC RP shared dual-entry evidence: ${directory}\n`);
-  candidate = await createOidcConformanceCandidate({
-    issuerMode: "dual",
-    redirectUris: [redirectUri],
-    postLogoutRedirectUris: [redirectUri],
-    logPath: join(directory, "api.log"),
-  });
+  candidate = await createOidcRpFixture(redirectUri);
 }, 45_000);
 
-// The file owns the API executor. Stop it before flushing the exclusive Redis DB;
-// per-case resets must never close this shared process or erase another live request.
 afterAll(resetApiRedisTestDatabase);
 
 function createBrowserRequest() {

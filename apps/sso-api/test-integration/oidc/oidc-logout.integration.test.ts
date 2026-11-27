@@ -142,6 +142,35 @@ describe("OIDC candidate logout HTTP and real Redis", () => {
     expect((await confirm(f, start.xsrf)).status).toBe(400);
     expect(await rootStatus(f)).toBe("resolved");
   });
+  it("rejects tampered forms and unsafe destinations, then supports cancel and confirm in the same session", async () => {
+    const f = await setup();
+    const start = await begin(f);
+    expect(start.html).toContain("Yes, sign me out");
+    const tampered = await confirm(f, "invalid");
+    expect(tampered.status).toBe(400);
+    expect((await tampered.json()).error).toBe("invalid_request");
+    expect(tampered.headers.get("Location")).toBeNull();
+
+    const unsafe = await begin(f, f.logoutParameters({ post_logout_redirect_uri: "https://evil.example" }));
+    expect(unsafe.response.status).toBe(400);
+    expect(unsafe.response.headers.get("Location")).toBeNull();
+    expect(JSON.parse(unsafe.html).error).toBe("invalid_request");
+    expect(f.cookies.get("global_session")).toBe(f.rootToken);
+    expect((await use(f)).status).toBe(200);
+
+    const redirect = new URL("https://rp.example/logout?kept=yes");
+    redirect.searchParams.set("state", 'state&<"=');
+    const cancel = await confirm(f, (await begin(f)).xsrf, false);
+    expect(cancel.headers.get("Location")).toBe(redirect.href);
+    expect(f.cookies.get("global_session")).toBe(f.rootToken);
+    expect((await use(f)).status).toBe(200);
+
+    const logout = await confirm(f, (await begin(f)).xsrf);
+    expect(logout.headers.get("Location")).toBe(redirect.href);
+    expect(logout.headers.getSetCookie()).toContainEqual(expect.stringMatching(/^global_session=;.*Max-Age=0/iu));
+    expect((await use(f)).status).toBe(401);
+  });
+
   it("uses the root at confirm rather than the root shown by the confirmation page", async () => {
     const f = await setup();
     const start = await begin(f);

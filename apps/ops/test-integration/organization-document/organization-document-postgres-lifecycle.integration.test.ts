@@ -1,19 +1,16 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
-import { fileURLToPath } from "node:url";
 import { OrganizationStatus, OrganizationType } from "@iam/contracts";
 import { createJobQueue } from "@iam/jobs";
 import { redisUrlString } from "@iam/runtime/redis/config";
 import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
-import { spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
-import { runOpsCommandSmoke } from "../support/ops-command-smoke";
 import {
   createOpsPostgresTestHarness,
   reserveOpsPostgresConnection,
   waitForOpsPostgresLock,
 } from "../support/postgres-test-harness";
 import { resetOpsRedisTestDatabase, resolveOpsRedisTestUrl } from "../support/redis-test-harness";
+import { runOpsCommand } from "../support/run-ops-command";
 
-const opsRoot = fileURLToPath(new URL("../../", import.meta.url));
 let harness: Awaited<ReturnType<typeof createOpsPostgresTestHarness>>;
 let queue: ReturnType<typeof createJobQueue>;
 let stopExecutors: Array<() => Promise<void> | void>;
@@ -160,26 +157,18 @@ async function command(
   args: string[] = [],
   interruptWhen?: (signal: AbortSignal) => Promise<void>,
 ) {
-  const pending = runOpsCommandSmoke(
+  const pending = runOpsCommand(
     {
-      label: `Organization ${mode} PG lifecycle`,
+      args: ["organization-document", mode, ...args],
+      env: {
+        ...process.env,
+        NODE_ENV: "test",
+        IAM_OPS_DATABASE_URL: harness.databaseUrl,
+        IAM_OPS_REDIS_URL: resolveOpsRedisTestUrl(process.env),
+        IAM_OPS_LOG_FORMAT: "json",
+        IAM_OPS_LOG_LEVEL: "info",
+      },
       expectedExitCode,
-      completionTimeoutMs: 5000,
-      cleanupTimeoutMs: 5000,
-      start: () =>
-        spawnOwnedProcessTree({
-          executable: process.execPath,
-          args: ["--no-env-file", "run", "src/index.ts", "organization-document", mode, ...args],
-          cwd: opsRoot,
-          env: {
-            ...process.env,
-            NODE_ENV: "test",
-            IAM_OPS_DATABASE_URL: harness.databaseUrl,
-            IAM_OPS_REDIS_URL: resolveOpsRedisTestUrl(process.env),
-            IAM_OPS_LOG_FORMAT: "json",
-            IAM_OPS_LOG_LEVEL: "info",
-          },
-        }),
     },
     interruptWhen,
   );
@@ -189,3 +178,45 @@ async function command(
   void pending.catch(() => {}); // The caller and fixture teardown propagate rejection.
   return await pending;
 }
+
+test.each([
+  ["repair", "--limit", "0"],
+  ["verify", "--deadline-ms", "0"],
+  ["verify", "--schema-version", "1"],
+  ["verify", "--batch-size", "1"],
+])(
+  "rejects invalid Organization Document command arguments %s %s %s before opening resources",
+  async (operation, flag, value) => {
+    const result = await runOpsCommand({
+      args: ["organization-document", operation!, flag!, value!],
+      env: {
+        NODE_ENV: "test",
+        IAM_OPS_DATABASE_URL: "postgres://iam:private-command-secret@127.0.0.1:1/iam_test",
+        IAM_OPS_REDIS_URL: "redis://127.0.0.1:1/15",
+      },
+      expectedExitCode: 1,
+    });
+    expect(result.output).toMatch(/Organization document (?:repair|verification) failed;/u);
+    expect(result.output).not.toMatch(
+      /private-command-secret|command shutting down|wakeups finished|verification completed/u,
+    );
+  },
+);
+
+test.each(["backfill", "repair"])(
+  "%s rejects a non-default queue prefix before opening resources",
+  async (operation) => {
+    const result = await runOpsCommand({
+      args: ["organization-document", operation],
+      env: {
+        NODE_ENV: "test",
+        IAM_OPS_DATABASE_URL: "postgres://iam:private-command-secret@127.0.0.1:1/iam_test",
+        IAM_OPS_REDIS_URL: "redis://127.0.0.1:1/15",
+        IAM_OPS_ORGANIZATION_DOCUMENT_QUEUE_PREFIX: "unsupported-private-prefix",
+      },
+      expectedExitCode: 1,
+    });
+    expect(result.output).toContain(`Organization document ${operation} failed;`);
+    expect(result.output).not.toMatch(/private-command-secret|command shutting down|worker started/u);
+  },
+);

@@ -1,4 +1,4 @@
-import { createRedisClient } from "@iam/runtime/redis/connection";
+import { createOwnedRedisClient } from "@iam/runtime/redis/connection";
 import type { WorkerEnv } from "@worker/env";
 import type Redis from "ioredis";
 import type { Logger } from "pino";
@@ -24,16 +24,17 @@ export interface CreateWorkerRuntimeOptions {
   env: WorkerEnv;
   logger: WorkerLogger;
   redis?: Redis;
+  clock?: WorkerRuntime["clock"];
 }
 
 export function createWorkerRuntime(options: CreateWorkerRuntimeOptions): WorkerRuntime {
-  const redis = options.redis ?? createRedisClient(options.env.redis);
+  const redis = options.redis ?? createOwnedRedisClient(options.env.redis);
 
   return {
     env: options.env,
     logger: options.logger,
     redis,
-    clock: {
+    clock: options.clock ?? {
       now: Date.now,
       nowDate() {
         return new Date();

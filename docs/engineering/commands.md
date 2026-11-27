@@ -11,7 +11,7 @@
 | `pnpm check`            | 7 步只读静态与契约检查：`format:check` → `lint` → `typecheck` → `@iam/db db:check` → `check:architecture` → `check:docs` → `check:env-names` |
 | `pnpm fix`              | 自动排版与安全 lint 修复（`pnpm format && pnpm lint:fix`）                                                                                   |
 | `pnpm test:unit`        | L1 进程内单测（`pnpm test` 别名）：先跑 `pnpm test:unit:sandcastle`，再用 Turbo 跑全仓 Unit（`--concurrency=2`）                             |
-| `pnpm test:integration` | L2 全仓集成测试（覆盖全部 197 个集成测试文件，支持 `IAM_TEST_RESOURCE_PROVIDER=docker\|native\|external` 与定向筛选）                        |
+| `pnpm test:integration` | L2 全仓集成测试（支持 `IAM_TEST_RESOURCE_PROVIDER=docker\|native\|external` 与定向筛选）                                                     |
 | `pnpm test:e2e`         | L3 生产容器 Full-system E2E（独占 Docker Compose 生产容器栈 + 9 个跨服务业务旅程，支持 `--skip-build` / `--keep`）                           |
 | `pnpm verify`           | 本地一键全量 L1 + L2 验证：`check` → `test:unit` → `test:integration` → `build`                                                              |
 
@@ -83,7 +83,7 @@ pnpm test:integration
 `--file` 接受绝对路径、仓库相对路径或 owner 相对路径，须属于所选 owner 的 collection。
 无匹配、越界文件或未知参数均失败。根 `iam-monorepo` 负责聚合，测试 owner 是实际 workspace。
 
-同一候选的同一轮 Integration 检查按所需范围合并。根入口通过 `IAM_TEST_RESOURCE_PROVIDER=docker|native|external` 选择资源供给（本地默认 `docker`，方案 X 沙箱默认注入 `native`，GitHub Actions CI 固定注入 `external`），在所有并发任务开始前为整轮准备所需的 PostgreSQL 模板库、Redis（预检 `/31`）及按最终选中文件按需启动的 Gateway APISIX/etcd（仅当命中 Gateway 五个真实 APISIX 文件时准备），按 `workspace:executor` 分配独占 Redis DB（`/1`–`/31`），并以同一并发池调度所选任务；所有任务进程树退出后再由对应 Provider 统一回收，确保并发执行期间 Docker 网络完全静止。
+同一候选的同一轮 Integration 检查按所需范围合并。根入口通过 `IAM_TEST_RESOURCE_PROVIDER=docker|native|external` 选择资源供给（本地默认 `docker`，方案 X 沙箱默认注入 `native`，GitHub Actions CI 固定注入 `external`），在所有并发任务开始前为整轮准备所需的 PostgreSQL 模板库、Redis（预检 `/31`）及按最终选中文件按需启动的 Gateway APISIX/etcd（仅当命中 Gateway 真实 APISIX 文件时准备），按 `workspace:executor` 分配独占 Redis DB（`/1`–`/31`），并以同一并发池调度所选任务；所有任务进程树退出后再由对应 Provider 统一回收，确保并发执行期间 Docker 网络完全静止。
 默认并发上限为 3，首个失败会取消其他在途任务。`--concurrency <n>` 或 `IAM_TEST_INTEGRATION_CONCURRENCY` 可调整上限，两者接受正整数，命令行参数优先。
 
 - **多个文件**。重复传 `--file`，使用仓库相对路径区分不同 workspace 的文件。
@@ -168,14 +168,14 @@ pnpm --filter @iam/e2e-system runtime:cleanup -- --project iam-e2e-<resource-id>
 
 仓库在 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) 运行权威合入门禁，覆盖 `pull_request`（`opened`、`reopened`、`synchronize`、`ready_for_review`）与 `push` 到 `main`。全部 Job 运行于 GitHub-hosted `ubuntu-latest`，顶层锁定 `permissions: { contents: read }`、固定 `pnpm install --frozen-lockfile`、PR 零外部 Secret、脱敏失败产物保留 7 天，并按 PR 编号开启 `cancel-in-progress: true`。
 
-| Job           | 触发条件                                                                        | 职责与关键配置                                                                                                                                                                                                                                                                                       |
-| ------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `detect`      | 每次触发                                                                        | 计算 `base_sha` 并运行 `node scripts/verify-docs.mjs --classify --base "$BASE_SHA"`，输出 `docs_only`（异常时默认 `false`）。                                                                                                                                                                        |
-| `doc-check`   | `docs_only == 'true'`                                                           | 运行 `node scripts/verify-docs.mjs --base "$BASE_SHA"`，校验 `git diff --check`、变动文档 Prettier 排版与 `pnpm check:docs`。                                                                                                                                                                        |
-| `fast`        | `docs_only == 'false'`                                                          | 启用 `.turbo/cache`，顺序执行 `pnpm check`、`pnpm test:unit`、`pnpm build`。                                                                                                                                                                                                                         |
-| `integration` | `docs_only == 'false'`（与 `fast` 并行）                                        | 启动 PostgreSQL 18.4（`services:` + `tmpfs: 1g`）、Redis 8.8.0（`--databases 32`）与 APISIX 3.16 + etcd 3.5（`if: always()` 拆除），以 `IAM_TEST_RESOURCE_PROVIDER=external` 运行全量 `pnpm test:integration`（197 文件）；失败时将任务日志脱敏后上传 `test-results/integration-redacted/**/*.log`。 |
-| `e2e`         | `docs_only == 'false'` 且 `fast`、`integration` 通过，且为 `push` 或非 Draft PR | 启用 Docker Buildx + `IAM_E2E_BUILDX_CACHE=gha`，运行 `pnpm test:e2e`（生产容器栈 + 9 specs）；失败时上传脱敏后的 `test-results/e2e-redacted/**/*.log`。                                                                                                                                             |
-| `ci-gate`     | `if: always()`，`needs` 全部 5 个上游 Job                                       | 唯一 Required Check，按严格真值表汇总：纯文档须 `doc-check=success` 且其余 3 项 `skipped`；代码变更拒绝 Draft PR，且须 `doc-check=skipped` 与 `fast`/`integration`/`e2e` 全部 `success`。                                                                                                            |
+| Job           | 触发条件                                                                        | 职责与关键配置                                                                                                                                                                                                                                                                           |
+| ------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `detect`      | 每次触发                                                                        | 计算 `base_sha` 并运行 `node scripts/verify-docs.mjs --classify --base "$BASE_SHA"`，输出 `docs_only`（异常时默认 `false`）。                                                                                                                                                            |
+| `doc-check`   | `docs_only == 'true'`                                                           | 运行 `node scripts/verify-docs.mjs --base "$BASE_SHA"`，校验 `git diff --check`、变动文档 Prettier 排版与 `pnpm check:docs`。                                                                                                                                                            |
+| `fast`        | `docs_only == 'false'`                                                          | 启用 `.turbo/cache`，顺序执行 `pnpm check`、`pnpm test:unit`、`pnpm build`。                                                                                                                                                                                                             |
+| `integration` | `docs_only == 'false'`（与 `fast` 并行）                                        | 启动 PostgreSQL 18.4（`services:` + `tmpfs: 1g`）、Redis 8.8.0（`--databases 32`）与 APISIX 3.16 + etcd 3.5（`if: always()` 拆除），以 `IAM_TEST_RESOURCE_PROVIDER=external` 运行全量 `pnpm test:integration`；失败时将任务日志脱敏后上传 `test-results/integration-redacted/**/*.log`。 |
+| `e2e`         | `docs_only == 'false'` 且 `fast`、`integration` 通过，且为 `push` 或非 Draft PR | 启用 Docker Buildx + `IAM_E2E_BUILDX_CACHE=gha`，运行 `pnpm test:e2e`（生产容器栈 + 9 specs）；失败时上传脱敏后的 `test-results/e2e-redacted/**/*.log`。                                                                                                                                 |
+| `ci-gate`     | `if: always()`，`needs` 全部 5 个上游 Job                                       | 唯一 Required Check，按严格真值表汇总：纯文档须 `doc-check=success` 且其余 3 项 `skipped`；代码变更拒绝 Draft PR，且须 `doc-check=skipped` 与 `fast`/`integration`/`e2e` 全部 `success`。                                                                                                |
 
 ### 纯文档验证
 
@@ -217,59 +217,3 @@ lint-staged 会尝试还原原始状态。若自动恢复失败，保留其输�
 Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit。最终候选仍按[验证节奏](../agents/workflow.md#验证节奏)执行只读检查。
 提交工具链变化时，在独立临时 Git 仓库中按[一次性验证约定](testing.md#root-工具链的一次性验证)
 检查涉及的真实提交、部分暂存和失败恢复行为。
-
-## OIDC 协议套件
-
-正式手动协议套件 fixture 位于 [oidc-suite.fixture.ts](../../apps/sso-api/test-integration/oidc/oidc-suite.fixture.ts)，
-独立 RP 集成测试位于 [oidc-rp.integration.test.ts](../../apps/sso-api/test-integration/oidc/oidc-rp.integration.test.ts)（已纳入日常 `pnpm test:integration`）。
-官方一致性套件不是普通浏览器旅程，也不由 `pnpm verify` 或 CI 自动运行。
-
-### 固定套件与运行配置
-
-复现使用 OpenID conformance-suite release-v5.2.4，固定提交
-`ab35a8df4864da35b49eff11483e204e01aa7961`。在对应源码目录应用
-[S256 补丁](../../apps/sso-api/test-integration/oidc/patches/conformance-suite-s256.patch)，以 Java 21.0.4、Maven 3.9.11 构建。
-补丁作为 API OIDC Integration 的测试资产，与 fixture、runner 一同维护：
-
-```bash
-git apply --unidiff-zero <iam-checkout>/apps/sso-api/test-integration/oidc/patches/conformance-suite-s256.patch
-mvn -B -Dmaven.test.skip -Dpmd.skip clean package
-```
-
-这些参数跳过套件自身构建测试/PMD，不表示已执行 IAM 协议验证。
-补丁仅在 Code Flow 且 `iam_s256_required=true` 时增加 S256 sequence/verifier，默认关闭；
-仓库 suite runner 为本用途显式启用，专用 PKCE 正负用例仍保持原构造，不修改官方断言。
-
-独立 fixture 通过 [`prepareManagedTestResources()`](../../scripts/test-resources/resource-provider.mjs) 自动准备并销毁本次 PostgreSQL/Redis（遵循同一 `IAM_TEST_RESOURCE_PROVIDER` 边界、扁平 `run.json` 记录和恢复能力）。
-调用方准备固定套件及其 MongoDB 6.0.13、Java 原生 HTTPS 与合成 PKCS12、loopback 端口和
-`fintechlabs.devmode=true`。Node/tsx/Playwright 使用仓库锁定依赖。
-fixture 启动 SSO API 候选，经 loopback TLS 代理转发协议请求。测试代理仅为本次生成的合成用户准备根会话。
-`NODE_EXTRA_CA_CERTS` 只传给任务 Node 子进程。
-
-`config.json` 示例（填写本次真实路径与候选 SHA）：
-
-```json
-{
-  "suiteOrigin": "https://localhost:<suite-port>",
-  "outputDirectory": "<absolute-task-evidence-directory>",
-  "candidate": "<candidate-sha>",
-  "issuerMode": "dual",
-  "tls": { "keyPath": "<key.pem>", "certPath": "<cert.pem>" }
-}
-```
-
-`issuerMode` 默认 `dual`；需要指定主机时使用 fixture 的 `hostnames` 配置。
-可选 `plans`/`modules` 仅用于聚焦重跑，未选择项必须作为未执行记录。
-`outputDirectory` 使用独立任务目录，不放在会被 API Browser 清理的默认产物根。
-
-```bash
-pnpm --filter @iam/sso-api exec bun run test-integration/oidc/oidc-suite.fixture.ts <config.json>
-pnpm test:integration --workspace @iam/sso-api
-```
-
-需要调试保留时，在独立 fixture 命令的配置路径后增加 `--keep`；结束时按打印的准确 `run.json` 执行 `pnpm test:resources:cleanup --record <path>` 清理，内部 marker 不作为公开运行模式。
-独立入口先迁移并封存本次 PostgreSQL 模板库。fixture 负责候选 API、TLS 代理、独立 PostgreSQL 克隆库、Redis 和 Node 进程树，driver 负责浏览器与官方模块。
-信号/失败仍逐项尝试收尾，再以独立预算清理资源；超时不冒称清理完成，原始失败与清理失败均保留。
-官方 `REVIEW` 使自动 driver 非零，必须独立完成图像判读并保留官方结果，不把它改写为套件 `PASSED`。
-不同 loopback 端口只证明两 issuer 协议；hostname/Cookie 隔离须由真实 APISIX/browser 验证，
-见[验证选择](testing.md#验证选择)。

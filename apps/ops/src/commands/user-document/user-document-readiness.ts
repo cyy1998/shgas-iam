@@ -1,5 +1,6 @@
 import { parseArgs } from "node:util";
 import { runMaintenanceCommandWithLifecycle } from "@iam/runtime/maintenance";
+import { type CommandContext, createCommandLogger } from "@ops/command-context";
 import { parseDocumentCommandDeadline } from "../document-command-lifecycle";
 
 interface UserDocumentGateReport {
@@ -77,14 +78,15 @@ function parseReadinessArgs(argv: string[]) {
   };
 }
 
-async function main(args: string[]) {
+async function main(args: string[], context: CommandContext) {
   const options = parseReadinessArgs(args);
   const { parseUserDocumentPostgresReadinessCommandEnv, parseOfflineMaintenanceEnv } = await import("@ops/env");
-  const env = parseUserDocumentPostgresReadinessCommandEnv(process.env);
-  const redis = options.operation === "verify-redis" ? parseOfflineMaintenanceEnv(process.env) : undefined;
+  const env = parseUserDocumentPostgresReadinessCommandEnv(context.env, context.stderr);
+  const redis =
+    options.operation === "verify-redis" ? parseOfflineMaintenanceEnv(context.env, context.stderr) : undefined;
   const batchSize = options.batchSize ?? env.userDocument.backfillBatchSize;
   requirePositiveSafeInteger(batchSize, "batchSize");
-  const logger = await createReadinessLogger(env);
+  const logger = await createReadinessLogger(context, env);
   const { createUserDocumentReadinessCommandComposition } = await import(
     "@ops/composition/user-document-readiness-command"
   );
@@ -96,7 +98,7 @@ async function main(args: string[]) {
     redis,
   });
   const report = await runMaintenanceCommandWithLifecycle({
-    signals: process,
+    signals: context,
     deadlineMs: options.deadlineMs,
     shutdown: composition.shutdown,
     run: (signal) =>
@@ -104,15 +106,18 @@ async function main(args: string[]) {
         ? runUserDocumentPostgresGateCommand({ verifier: composition, logger }, { batchSize, signal })
         : runUserDocumentRedisGateCommand({ verifier: composition, logger }, { batchSize, signal }),
   });
-  process.exitCode = userDocumentGateExitCode(report);
+  context.exitCode = userDocumentGateExitCode(report);
 }
 
-async function createReadinessLogger(env: {
-  nodeEnv: string;
-  log: { level: string; format: "auto" | "json" | "pretty" };
-}) {
-  const { createLogger, LoggerSourceApp } = await import("@iam/runtime/logger");
-  return createLogger({
+async function createReadinessLogger(
+  context: CommandContext,
+  env: {
+    nodeEnv: string;
+    log: { level: string; format: "auto" | "json" | "pretty" };
+  },
+) {
+  const { LoggerSourceApp } = await import("@iam/runtime/logger");
+  return createCommandLogger(context, {
     nodeEnv: env.nodeEnv,
     logLevel: env.log.level,
     logFormat: env.log.format,
@@ -120,12 +125,12 @@ async function createReadinessLogger(env: {
   });
 }
 
-export async function run(args: string[]) {
+export async function run(args: string[], context: CommandContext = process) {
   try {
-    await main(args);
+    await main(args, context);
   } catch {
-    process.exitCode = process.exitCode || 1;
-    process.stderr.write("User Document readiness failed; inspect structured logs for the gate report.\n");
+    context.exitCode = context.exitCode || 1;
+    context.stderr.write("User Document readiness failed; inspect structured logs for the gate report.\n");
   }
 }
 

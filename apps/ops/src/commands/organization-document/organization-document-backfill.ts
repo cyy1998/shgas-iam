@@ -1,5 +1,6 @@
 import { parseArgs } from "node:util";
 import { runMaintenanceCommandWithLifecycle } from "@iam/runtime/maintenance";
+import { type CommandContext, createCommandLogger } from "@ops/command-context";
 import { parseDocumentCommandDeadline } from "../document-command-lifecycle";
 
 export interface OrganizationDocumentBackfillCommandDeps {
@@ -27,7 +28,7 @@ export async function runOrganizationDocumentBackfillCommand(
   return report;
 }
 
-async function main(args: string[]) {
+async function main(args: string[], context: CommandContext) {
   const { values } = parseArgs({
     args: args,
     options: { "batch-size": { type: "string" }, "deadline-ms": { type: "string" } },
@@ -35,13 +36,13 @@ async function main(args: string[]) {
   });
   const deadlineMs = parseDocumentCommandDeadline(values["deadline-ms"]);
   const { parseOrganizationDocumentBackfillCommandEnv } = await import("@ops/env");
-  const env = parseOrganizationDocumentBackfillCommandEnv(process.env);
+  const env = parseOrganizationDocumentBackfillCommandEnv(context.env, context.stderr);
   const batchSize =
     values["batch-size"] === undefined ? env.organizationDocument.backfillBatchSize : Number(values["batch-size"]);
   if (!Number.isSafeInteger(batchSize) || batchSize <= 0)
     throw new RangeError("batchSize must be a positive safe integer");
-  const { createLogger, LoggerSourceApp } = await import("@iam/runtime/logger");
-  const logger = createLogger({
+  const { LoggerSourceApp } = await import("@iam/runtime/logger");
+  const logger = createCommandLogger(context, {
     nodeEnv: env.nodeEnv,
     logLevel: env.log.level,
     logFormat: env.log.format,
@@ -52,7 +53,7 @@ async function main(args: string[]) {
   );
   const composition = createOrganizationDocumentBackfillCommandComposition({ env, logger, deadlineMs });
   await runMaintenanceCommandWithLifecycle({
-    signals: process,
+    signals: context,
     deadlineMs,
     shutdown: composition.shutdown,
     run: (signal) =>
@@ -60,11 +61,11 @@ async function main(args: string[]) {
   });
 }
 
-export async function run(args: string[]) {
+export async function run(args: string[], context: CommandContext = process) {
   try {
-    await main(args);
+    await main(args, context);
   } catch {
-    process.exitCode = process.exitCode || 1;
-    process.stderr.write("Organization document backfill failed; inspect structured logs.\n");
+    context.exitCode = context.exitCode || 1;
+    context.stderr.write("Organization document backfill failed; inspect structured logs.\n");
   }
 }

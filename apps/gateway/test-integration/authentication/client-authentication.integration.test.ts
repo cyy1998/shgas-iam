@@ -15,6 +15,7 @@ test("Gateway HTTP observes current PostgreSQL credentials, lifecycle and dataso
       IAM_GATEWAY_DATABASE_URL: database.databaseUrl,
       IAM_GATEWAY_APISIX_ADMIN_URL: "http://127.0.0.1:1/apisix/admin",
       IAM_GATEWAY_APISIX_ADMIN_KEY: "synthetic-admin-key",
+      IAM_GATEWAY_MAX_REQUEST_BYTES: "4096",
     }),
   );
   const request = (scope = "test:tender", secret?: string) =>
@@ -49,6 +50,14 @@ test("Gateway HTTP observes current PostgreSQL credentials, lifecycle and dataso
     ]);
     const accepted = await request("test:tender", "old-secret");
     expect(accepted.status).toBe(200);
+    expect((await accepted.json()).data).toMatchObject({ valid: true, resources: { services: 1 } });
+    const oversized = await composition.app.request("/validate", {
+      method: "POST",
+      headers: { "content-type": "application/json", apikey: "old-secret" },
+      body: JSON.stringify({ scope: "test:tender", yaml: "service: {}".repeat(1024) }),
+    });
+    expect(oversized.status).toBe(413);
+    expect((await oversized.json()).code).toBe("GATEWAY_INPUT_TOO_LARGE");
     for (const [scope, secret] of [
       ["test:tender", undefined],
       ["test:tender", "wrong"],

@@ -80,6 +80,8 @@ Use case 由 root 的 `useCases` 交给路由。Admin API 的入口与审计实�
 
 ## Root-owned Full-system E2E Workspace
 
+后端 L2 业务测试位于各 workspace 的 `test-integration/`，由根 runner 供给专用 PostgreSQL、Redis 与按需的 APISIX。进程入口 smoke 使用共享 [进程测试辅助](../../packages/test-support/src/process-smoke-harness.ts)，SSO API 的独立 RP 场景由 [双入口 fixture](../../apps/sso-api/test-integration/oidc/oidc-rp.fixture.ts) 提供 HTTP 端点。
+
 `e2e/system` 拥有 Full-system E2E 的 [静态 Compose 拓扑](../../e2e/system/docker-compose.e2e.yml) 与 [GHA 构建缓存覆盖](../../e2e/system/docker-compose.e2e.gha-cache.yml)。[specs/](../../e2e/system/specs/) 包含 9 个生产容器业务 spec 和 1 个托管环境验收 spec。[src/runtime/](../../e2e/system/src/runtime/) 负责容器编排、快照与 spec 边界复位，`src/runtime/cli.ts` 提供运行和清理入口。[src/seed/](../../e2e/system/src/seed/) 维护场景数据，[src/journeys/](../../e2e/system/src/journeys/) 提供业务旅程与托管验收辅助代码。[src/stubs/](../../e2e/system/src/stubs/) 和 `docker/e2e-stubs/` 提供外部桩服务，`docker/apisix/` 提供测试网关镜像。Unit 测试位于 `src/__tests__/`。生产容器测试的快照、Playwright 留证和日志写入仓库根目录的 `test-results/e2e/`。
 
 ## 基础设施与仓库工具

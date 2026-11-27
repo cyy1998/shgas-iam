@@ -89,5 +89,5 @@ AFK 启动时拉取 `<remote>/<baseBranch>`（默认 `origin` / `main`，可由 
 
 - **票级并行实施与按需 Merger**：只运行受影响范围的聚焦测试（相关 workspace 的 Unit、typecheck、适用文档检查、受影响包的定向 Integration `pnpm test:integration -- --workspace <pkg>` / `--file <path>` 与 `git diff --check`；容器内自动使用 `IAM_TEST_RESOURCE_PROVIDER=native`）；禁止在并行票阶段运行全仓 `pnpm verify`、全量 Integration 或 `pnpm test:e2e`。
 - **Spec 推前轻量验证（`repair-and-verify`）**：单实例串行的集中修复者在最终干净候选上运行 `pnpm check`（7 步静态与契约检查）、本阶段评审修复涉及的定向 Unit 与定向 Integration，以及 `git diff --check`；不在无特权沙箱内运行 `pnpm test:e2e`。
-- **远端权威验证与自动修红（`ci-gate` / `repair-ci`）**：全量 `fast`、`integration`（197 文件）与生产容器 `e2e`（9 specs）或纯文档 `doc-check` 由推送后的 [GitHub Actions CI](../engineering/commands.md#github-actions-ci) 统一裁判；触发 `repair-ci` 自动修红时，在沙箱内结合脱敏失败日志最小化修复，提交前运行 `pnpm check`、失败范围的定向 Unit/Integration（构建失败时同时运行 `pnpm build`）与 `git diff --check`。
+- **远端权威验证与自动修红（`ci-gate` / `repair-ci`）**：全量 `fast`、`integration`与生产容器 `e2e`（9 specs）或纯文档 `doc-check` 由推送后的 [GitHub Actions CI](../engineering/commands.md#github-actions-ci) 统一裁判；触发 `repair-ci` 自动修红时，在沙箱内结合脱敏失败日志最小化修复，提交前运行 `pnpm check`、失败范围的定向 Unit/Integration（构建失败时同时运行 `pnpm build`）与 `git diff --check`。
 - 后续修复重跑失效检查，仍有效的通过证据可复用；必需检查未通过或 findings 未解决时不得输出 `<promise>COMPLETE</promise>`。

@@ -875,9 +875,6 @@ importers:
       '@iam/test-support':
         specifier: workspace:*
         version: link:../../packages/test-support
-      '@playwright/test':
-        specifier: ^1.65.1
-        version: 1.65.1
       '@types/bun':
         specifier: latest
         version: 1.4.5
@@ -887,9 +884,6 @@ importers:
       openid-client:
         specifier: 6.9.0
         version: 6.9.0
-      tsx:
-        specifier: 4.23.15
-        version: 4.23.15
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'

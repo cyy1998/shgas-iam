@@ -1,5 +1,4 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
-import { fileURLToPath } from "node:url";
 import { OrganizationStatus, OrganizationType } from "@iam/contracts";
 import {
   createOrganizationDocumentQueryRepository,
@@ -8,17 +7,12 @@ import {
 import { DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
 import { createOrganizationDocumentWorkerModule } from "@iam/jobs/documents/organization";
 import { createLogger, LoggerSourceApp } from "@iam/runtime/logger";
-import {
-  PROCESS_SMOKE_TEST_TIMEOUT_MS,
-  runProcessCommandSmoke,
-  spawnOwnedProcessTree,
-  withOwnedTemporaryDirectory,
-} from "@iam/test-support/process-smoke-harness";
+import { PROCESS_SMOKE_TEST_TIMEOUT_MS } from "@iam/test-support/process-smoke-harness";
 import { createOpsPostgresTestHarness } from "../support/postgres-test-harness";
 import { resetOpsRedisTestDatabase, resolveOpsRedisTestUrl } from "../support/redis-test-harness";
+import { runOpsCommand } from "../support/run-ops-command";
 import { createOrganizationFixtureRuntime } from "./organization-worker-runtime";
 
-const opsRoot = fileURLToPath(new URL("../../", import.meta.url));
 let harness: Awaited<ReturnType<typeof createOpsPostgresTestHarness>>;
 let stopExecutors: Array<() => Promise<void> | void>;
 beforeAll(async () => {
@@ -98,36 +92,20 @@ test("organization backfill uses the normal consumer to publish complete documen
 test(
   "the real backfill CLI retains committed changes and closes resources when Redis wakeup fails",
   async () => {
-    const pending = withOwnedTemporaryDirectory({
-      prefix: "iam-organization-backfill-postgres-",
-      cleanupTimeoutMs: 5_000,
-      async run(temporaryDirectory) {
-        return await runProcessCommandSmoke({
-          label: "Organization backfill committed work with unavailable Redis",
-          start() {
-            return spawnOwnedProcessTree({
-              executable: process.execPath,
-              args: ["--no-env-file", "run", "src/index.ts", "organization-document", "backfill", "--batch-size", "1"],
-              cwd: opsRoot,
-              env: {
-                ...process.env,
-                TMP: temporaryDirectory,
-                TEMP: temporaryDirectory,
-                NODE_ENV: "test",
-                IAM_OPS_DATABASE_URL: harness.databaseUrl,
-                IAM_OPS_REDIS_URL: "redis://127.0.0.1:1/15",
-                IAM_OPS_LOG_LEVEL: "info",
-                IAM_OPS_LOG_FORMAT: "json",
-                FORCE_COLOR: "0",
-                NO_COLOR: "1",
-              },
-            });
-          },
-          completionTimeoutMs: 15_000,
-          cleanupTimeoutMs: 5_000,
-          expectedExitCode: 1,
-        });
+    const pending = runOpsCommand({
+      args: ["organization-document", "backfill", "--batch-size", "1"],
+      env: {
+        ...process.env,
+
+        NODE_ENV: "test",
+        IAM_OPS_DATABASE_URL: harness.databaseUrl,
+        IAM_OPS_REDIS_URL: "redis://127.0.0.1:1/15",
+        IAM_OPS_LOG_LEVEL: "info",
+        IAM_OPS_LOG_FORMAT: "json",
+        FORCE_COLOR: "0",
+        NO_COLOR: "1",
       },
+      expectedExitCode: 1,
     });
     stopExecutors.push(async () => {
       await pending;
@@ -164,37 +142,21 @@ async function waitForPublishedChild(search: ReturnType<typeof createOrganizatio
 }
 
 async function runBackfillCLI(prefix: string) {
-  const pending = withOwnedTemporaryDirectory({
-    prefix: "iam-organization-backfill-success-",
-    cleanupTimeoutMs: 5_000,
-    async run(temporaryDirectory) {
-      return await runProcessCommandSmoke({
-        label: "Organization document backfill production command",
-        start() {
-          return spawnOwnedProcessTree({
-            executable: process.execPath,
-            args: ["--no-env-file", "run", "src/index.ts", "organization-document", "backfill", "--batch-size", "1"],
-            cwd: opsRoot,
-            env: {
-              ...process.env,
-              TMP: temporaryDirectory,
-              TEMP: temporaryDirectory,
-              NODE_ENV: "test",
-              IAM_OPS_DATABASE_URL: harness.databaseUrl,
-              IAM_OPS_REDIS_URL: resolveOpsRedisTestUrl(process.env),
-              IAM_OPS_ORGANIZATION_DOCUMENT_QUEUE_PREFIX: prefix,
-              IAM_OPS_LOG_LEVEL: "info",
-              IAM_OPS_LOG_FORMAT: "json",
-              FORCE_COLOR: "0",
-              NO_COLOR: "1",
-            },
-          });
-        },
-        completionTimeoutMs: 15_000,
-        cleanupTimeoutMs: 5_000,
-        expectedExitCode: 0,
-      });
+  const pending = runOpsCommand({
+    args: ["organization-document", "backfill", "--batch-size", "1"],
+    env: {
+      ...process.env,
+
+      NODE_ENV: "test",
+      IAM_OPS_DATABASE_URL: harness.databaseUrl,
+      IAM_OPS_REDIS_URL: resolveOpsRedisTestUrl(process.env),
+      IAM_OPS_ORGANIZATION_DOCUMENT_QUEUE_PREFIX: prefix,
+      IAM_OPS_LOG_LEVEL: "info",
+      IAM_OPS_LOG_FORMAT: "json",
+      FORCE_COLOR: "0",
+      NO_COLOR: "1",
     },
+    expectedExitCode: 0,
   });
   stopExecutors.push(async () => {
     await pending;

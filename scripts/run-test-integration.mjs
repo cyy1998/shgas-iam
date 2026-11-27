@@ -26,7 +26,6 @@ const taskPriority = [
   "@iam/auth-api:bun",
   "@iam/sso-api:bun",
   "@iam/integration-api:bun",
-  "@iam/sso-api:playwright",
   "@iam/admin:playwright",
   "@iam/admin-api:bun",
   "@iam/ops:bun",

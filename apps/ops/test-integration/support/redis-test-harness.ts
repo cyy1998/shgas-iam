@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import process from "node:process";
 import { redisUrlString } from "@iam/runtime/redis/config";
 import { resetExclusiveRedisTestDatabase, runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
-import { createProcessSmokeEnvironment } from "@iam/test-support/process-smoke-harness";
 import type { Redis as RedisType } from "ioredis";
 import Redis from "ioredis";
 
@@ -12,7 +11,7 @@ export interface OpsRedisTestHarness {
   readonly writer: RedisType;
   readonly observer: RedisType;
   readonly seedNonOwnerSentinels: (prefixes: readonly string[]) => Promise<string[]>;
-  readonly commandEnvironment: (temporaryDirectory: string) => NodeJS.ProcessEnv;
+  readonly commandEnvironment: () => NodeJS.ProcessEnv;
   readonly close: () => Promise<void>;
 }
 
@@ -52,9 +51,7 @@ export async function createOpsRedisTestHarness(source: NodeJS.ProcessEnv = proc
       }
       return keys;
     },
-    commandEnvironment(temporaryDirectory) {
-      return createClientRuntimeMaintenanceProcessEnvironment(redisUrl, temporaryDirectory);
-    },
+    commandEnvironment: () => ({ NODE_ENV: "test", IAM_OPS_REDIS_URL: redisUrl }),
     close,
   };
 }
@@ -75,23 +72,6 @@ export async function resetOpsRedisTestDatabase(stopExecutors: ReadonlyArray<() 
       },
       stopExecutors,
     });
-  });
-}
-
-function createClientRuntimeMaintenanceProcessEnvironment(redisUrl: string, temporaryDirectory: string) {
-  return createProcessSmokeEnvironment({
-    source: process.env,
-    temporaryDirectory,
-    overrides: {
-      NODE_ENV: "test",
-      IAM_OPS_REDIS_URL: redisUrl,
-      IAM_OPS_LOG_LEVEL: "warn",
-      IAM_OPS_LOG_FORMAT: "json",
-      FORCE_COLOR: "0",
-      NO_COLOR: "1",
-      NO_PROXY: "127.0.0.1,localhost",
-      no_proxy: "127.0.0.1,localhost",
-    },
   });
 }
 

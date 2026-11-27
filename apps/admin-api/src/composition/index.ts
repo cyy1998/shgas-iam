@@ -1,5 +1,6 @@
-import env from "@admin-api/env";
+import redis from "@admin-api/lib/infra/redis";
 import { logger } from "@admin-api/lib/logger";
+import env from "@admin-api/runtime-env";
 import { createAdminAuthorizationPolicy } from "@admin-api/services/admin-authorization/admin-authorization.policy";
 import { createHrAdministrationScopeResolver } from "@admin-api/services/admin-authorization/hr-administration-scope.resolver";
 import { createAdminAuditService } from "@admin-api/services/audit/audit.service";
@@ -49,7 +50,7 @@ export async function createAdminApiComposition(
   const compositionEnv = options.env ?? env;
   const compositionLogger = options.logger ?? logger;
   const compositionDb = options.db ?? db;
-  const runtime = createAdminApiRuntime({ env: compositionEnv, logger: compositionLogger });
+  const runtime = createAdminApiRuntime({ env: compositionEnv, logger: compositionLogger, redis });
   const session = createAdminApiSession({ runtime });
   const roleAssignmentResolver = createRoleAssignmentResolver(compositionDb);
   const hrAdministrationScopeResolver = createHrAdministrationScopeResolver({

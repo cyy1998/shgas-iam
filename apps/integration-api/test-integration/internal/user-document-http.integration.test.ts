@@ -45,7 +45,7 @@ import {
 } from "@iam/documents/user/worker";
 import type { GenericClientRuntimeDto } from "@iam/domain/client";
 import { GenericClientRuntimeDtoSchema, toGenericClientRuntimeDto } from "@iam/domain/client";
-import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
+import { runCommand, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
 import { createUnitOfWork } from "@iam/unit-of-work";
 import { createDatabaseResource } from "@integration-api/composition/resources";
 import { createInternalMiddlewares } from "@integration-api/routes/internal/_middleware";
@@ -858,7 +858,7 @@ test("deleting a nested bridge Role withdraws its published grants and retains a
 }, 30_000);
 
 async function runAdminRoleWrite(...args: string[]) {
-  await runProcessCommandSmoke({
+  await runCommand({
     label: "Admin role writes for User Document",
     start: () =>
       spawnOwnedProcessTree({
@@ -875,7 +875,6 @@ async function runAdminRoleWrite(...args: string[]) {
       }),
     expectedExitCode: 0,
     completionTimeoutMs: 10_000,
-    cleanupTimeoutMs: 5_000,
   });
 }
 

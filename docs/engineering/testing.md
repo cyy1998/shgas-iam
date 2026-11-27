@@ -4,14 +4,14 @@
 
 ## 验证选择
 
-| 要验证的事实                       | 选择依据                                                                                                                                                       |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 类型兼容、包出口、依赖方向         | 由消费方 typecheck 验证类型与公开出口，用[架构守卫](#架构守卫)检查可静态表达的依赖边。                                                                         |
-| 业务规则、DTO 裁剪                 | 通过模块公开接口验证输入、结果和副作用。进程内能观察到目标行为时选 Unit。                                                                                      |
-| 事务、失败恢复、正式接线、进程关闭 | 依赖数据库提交、Redis 状态、网络或子进程退出的结论，用相应真实资源做 Integration。                                                                             |
-| 浏览器与平台能力                   | 构建前端，并在所需运行环境验证。Cookie 域隔离要经过不同 hostname、真实代理与浏览器，两个 loopback 端口只验证端点差异。                                         |
-| 跨服务业务旅程与生产镜像           | 需要同时验证真实前后端、生产 Dockerfile / Nginx、网关、协议或后台处理时，运行生产容器 Full-system E2E。正式协议套件另有[独立入口](commands.md#oidc-协议套件)。 |
-| 目标环境恢复、放流                 | 按[对应运维手册](../releases/README.md)核验现场的配置、数据和入口。                                                                                            |
+| 要验证的事实                       | 选择依据                                                                                                               |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 类型兼容、包出口、依赖方向         | 由消费方 typecheck 验证类型与公开出口，用[架构守卫](#架构守卫)检查可静态表达的依赖边。                                 |
+| 业务规则、DTO 裁剪                 | 通过模块公开接口验证输入、结果和副作用。进程内能观察到目标行为时选 Unit。                                              |
+| 事务、失败恢复、正式接线、进程关闭 | 依赖数据库提交、Redis 状态、网络或子进程退出的结论，用相应真实资源做 Integration。                                     |
+| 浏览器与平台能力                   | 构建前端，并在所需运行环境验证。Cookie 域隔离要经过不同 hostname、真实代理与浏览器，两个 loopback 端口只验证端点差异。 |
+| 跨服务业务旅程与生产镜像           | 需要同时验证真实前后端、生产 Dockerfile / Nginx、网关、协议或后台处理时，运行生产容器 Full-system E2E。                |
+| 目标环境恢复、放流                 | 按[对应运维手册](../releases/README.md)核验现场的配置、数据和入口。                                                    |
 
 跨模块变更要明确观察时点、哪些作用已经生效，以及谁负责恢复。共享能力的故障与恢复由所属模块集中验证，消费方验证正式接线和自己的差异。静态规则只能证明已检查的依赖关系，授权和事务原子性需用行为证据。进程停止由集成测试发送真实 POSIX 信号验证。合入 `main` 的权威门禁统一由 [GitHub Actions CI](commands.md#github-actions-ci) 的 `ci-gate` 承担。
 
@@ -122,11 +122,11 @@ expect(failure).toBeInstanceOf(ExpectedError);
 
 Turbo 负责带缓存任务（`build`、`build:test`、`typecheck`、`test:unit`，通过 `transit` 传播依赖源码变化），`turbo.json` 不再维护闲置的 `test:integration:*` 配置。[任务图与缓存配置](../../turbo.json)
 
-根 Integration runner（[`scripts/run-test-integration.mjs`](../../scripts/run-test-integration.mjs)）100% 覆盖全仓 `apps/*` 与 `packages/*` 的全部 197 个集成测试文件（20 个 `workspace:executor` 任务），不再保留 `e2e/system` 编排器集成测试或 `oidc-suite-resources` 等孤立特例。各包在 `package.json` 的 `iamTest.integration` 中以布尔值声明 `postgres` / `redis` 依赖，所有任务统一消费标准环境变量 `IAM_TEST_POSTGRES_URL` 与 `IAM_TEST_REDIS_URL`。根 runner 在完成 `--workspace` / `--file` 筛选得到最终 `task.files` 后，仅当命中 `@iam/gateway-apisix` 的五个真实 APISIX 测试文件时在所有并发任务启动前按需准备 APISIX/etcd，再以 `workspace:executor` 为单位直接调度包级脚本。筛选单个文件仍沿用所属执行器的完整 PostgreSQL / Redis 资源声明。包级 runner（[`scripts/run-package-integration.mjs`](../../scripts/run-package-integration.mjs)）核验本次 run ID、记录的 `running` 状态、该任务在 `test-environment.json` 中的端点分配（含 `IAM_TEST_POSTGRES_TEMPLATE` 及按需注入的 APISIX 端点）和选中的文件。参数无效、无匹配或缺少资源时退出失败。[声明示例](../../apps/sso-api/package.json) · [收集与筛选](../../scripts/test-resources/integration-selection.mjs) · [运行及定向命令](commands.md#测试与验证通道)
+根 Integration runner（[`scripts/run-test-integration.mjs`](../../scripts/run-test-integration.mjs)）100% 覆盖全仓 `apps/*` 与 `packages/*` 的集成测试文件，按 `workspace:executor` 调度。各包在 `package.json` 的 `iamTest.integration` 中以布尔值声明 `postgres` / `redis` 依赖，所有任务统一消费标准环境变量 `IAM_TEST_POSTGRES_URL` 与 `IAM_TEST_REDIS_URL`。根 runner 在完成 `--workspace` / `--file` 筛选得到最终 `task.files` 后，仅当命中 `@iam/gateway-apisix` 的真实 APISIX 测试文件时在所有并发任务启动前按需准备 APISIX/etcd，再以 `workspace:executor` 为单位直接调度包级脚本。筛选单个文件仍沿用所属执行器的完整 PostgreSQL / Redis 资源声明。包级 runner（[`scripts/run-package-integration.mjs`](../../scripts/run-package-integration.mjs)）核验本次 run ID、记录的 `running` 状态、该任务在 `test-environment.json` 中的端点分配（含 `IAM_TEST_POSTGRES_TEMPLATE` 及按需注入的 APISIX 端点）和选中的文件。参数无效、无匹配或缺少资源时退出失败。[声明示例](../../apps/sso-api/package.json) · [收集与筛选](../../scripts/test-resources/integration-selection.mjs) · [运行及定向命令](commands.md#测试与验证通道)
 
 **前端 L2 Playwright 解耦与动态端口**。`@iam/admin` 与 `@iam/sso` 的浏览器集成测试彻底移除了手写文件哈希缓存与对 `e2e/system` 的反向依赖：两个应用新增独立的 Turbo 缓存任务 `build:test`（输出至 `dist-test/`，不污染生产 `dist/`；`@iam/sso` 在脚本内固化测试登录公钥，`turbo.json` 将 `IAM_ADMIN_WEB_*` / `IAM_SSO_WEB_*` 纳入缓存键）。各自的 [`playwright.config.ts`](../../apps/admin/playwright.config.ts)（及 [SSO 配置](../../apps/sso/playwright.config.ts)）在启动时动态分配 loopback 端口（`IAM_ADMIN_PW_PORT` / `IAM_SSO_PW_PORT`），通过 `webServer` 先执行 `turbo run build:test`，再启动 `vite preview --outDir dist-test --host 127.0.0.1 --port <动态端口> --strictPort`（[`apps/sso/vite.config.ts`](../../apps/sso/vite.config.ts) 通过 `configurePreviewServer` 补齐 `/portal` → `/portal/` 重定向）；本地调试设置 `IAM_PW_DEV_SERVER=1` 即可切换为 `vite` dev server。
 
-`e2e/system` 仅保留进程内 Unit 测试（`src/__tests__/`，随 `pnpm test:unit` 执行）与 L3 生产容器 Full-system E2E（`pnpm test:e2e`）。手动 OpenID 官方一致性套件入口独立于常规测试集合，但复用同一套 `prepareManagedTestResources()` 资源供给与恢复契约，见[OIDC 协议套件](commands.md#oidc-协议套件)。
+`e2e/system` 仅保留进程内 Unit 测试（`src/__tests__/`，随 `pnpm test:unit` 执行）与 L3 生产容器 Full-system E2E（`pnpm test:e2e`）。SSO API 的独立 RP 场景通过进程内双入口 HTTP fixture 接入常规 Bun 集成测试。
 
 ## 并发、timeout 与清理
 
@@ -148,10 +148,10 @@ Timeout 用于限制悬挂。进程测试等待实际 readiness，同时观察�
 - **扁平 `run.json` 与命令隔离**。每条顶层集成命令独占一份扁平记录 `test-results/integration/<run-id>/run.json`（不再拆分嵌套子记录或为 APISIX 单独维护外部记录变量）：`docker` 模式下若按需启动了 APISIX stack，其元数据直接记在同份 `run.json` 的 `apisix` 字段；`native` 模式在同目录记录 `native-runtime.json`。各任务的端点分配写入同目录 `test-environment.json`。
 - **PostgreSQL 隔离与建模板前双保险守卫**。[`prepareManagedPostgresTemplate()`](../../scripts/test-resources/postgres-template.mjs) 在执行任何 `CREATE DATABASE` 准备模板库**之前**，先调用 [`requireDedicatedPostgresTestUrl()`](../../packages/test-support/src/dedicated-postgres-test-url.mjs) 完成双保险校验：拒绝系统库（`postgres`/`template0`/`template1`）、拒绝与 `DATABASE_URL` 或当前环境任意 `IAM_*_DATABASE_URL` 指向同一数据库、并要求数据库名包含测试标识（如 `iam_test` / `*_test`）。通过校验后一次性执行全量迁移并封存只读模板库 `iam_test_template`。业务测试统一通过 `@iam/test-support` 共享的 [`createDrizzlePostgresTestHarness()`](../../packages/test-support/src/postgres-test-harness.ts) 按文件克隆独立库并在用例间动态 `TRUNCATE` 业务表（保留 `__drizzle_migrations`），文件结束后 `DROP DATABASE ... WITH (FORCE)`。迁移专项用例经 `createEmptyPostgresTestHarness()` 从 `template0` 开始。
 - **Redis 32 DB 槽位与 `/31` 预检**。所有 Provider 在就绪前均通过 [`verifyRedisDatabaseSlotSupport()`](../../scripts/test-resources/redis-preflight.mjs) 实测 `PING` 与 `SELECT 31`，强制验证 Redis 已开启至少 32 个逻辑库。根 runner 为每个声明 `redis: true` 的 `workspace:executor` 分配独占 `/1` 至 `/31` 槽位（保留 `/0`）并注入 `IAM_TEST_REDIS_URL`。用例结束先完成观察并停止全部 consumer、子进程与连接，再对独占 DB 执行 `FLUSHDB`，最后关闭控制连接。任一停止失败即跳过重置，仍尝试其余收尾并汇总错误。禁止 `FLUSHALL`。[资源生命周期 helper](../../packages/test-support/src/external-test-resources.ts)
-- **Gateway APISIX 预检与重置**。命中 `@iam/gateway-apisix` 五个真实 APISIX 测试文件时，所选 Provider 在并发任务开始前准备独占 APISIX/etcd 端点（`docker` 模式按 `apisix.Dockerfile` 与 `apisix.config.yaml` 内容哈希复用本地镜像），由共享协调层经 [`verifyApisixAdminBaseline()`](../../scripts/test-resources/apisix-admin.mjs) 探活 Admin API 并核验七类初始资源为空，将 `IAM_TEST_APISIX_ADMIN_URL` 与 `IAM_TEST_APISIX_ADMIN_KEY` 注入任务环境。[Gateway fixture](../../apps/gateway/test-integration/support/apisix.fixture.ts) 消费注入端点并在用例成功收尾后重置并回读空基线，失败即停止复用。[Gateway provider](../../apps/gateway/test-integration/support/apisix-provider.mjs)
+- **Gateway APISIX 预检与重置**。命中 `@iam/gateway-apisix` 真实 APISIX 测试文件时，所选 Provider 在并发任务开始前准备独占 APISIX/etcd 端点（`docker` 模式按 `apisix.Dockerfile` 与 `apisix.config.yaml` 内容哈希复用本地镜像），由共享协调层经 [`verifyApisixAdminBaseline()`](../../scripts/test-resources/apisix-admin.mjs) 探活 Admin API 并核验七类初始资源为空，将 `IAM_TEST_APISIX_ADMIN_URL` 与 `IAM_TEST_APISIX_ADMIN_KEY` 注入任务环境。[Gateway fixture](../../apps/gateway/test-integration/support/apisix.fixture.ts) 消费注入端点并在用例成功收尾后重置并回读空基线，失败即停止复用。[Gateway provider](../../apps/gateway/test-integration/support/apisix-provider.mjs)
 - **诊断、清理与人工恢复**。每个已启动任务的完整输出写入 `test-results/integration/<run-id>/logs/<package>-<executor>.log`，终端汇总逐任务耗时、日志路径和总墙钟。正常通过后由对应 Provider 统一回收（`docker` 先拆 `run.json` 内的 `apisix` stack 再拆主 stack；`native` 停止所属进程组/作用域并删除 `/tmp/iam-test-native-*`；`external` 仅标记记录状态为 `cleaned`）。执行失败、超时、中断、`--keep-resources` 或清理失败时采集诊断日志（`docker` 保存 `containers.log`、`services.log` 及按需 `apisix-*.log`；`native` 保存 `native-services.log`）。保留现场或强制中断后，先确认所属进程树已退出，再按准确记录执行恢复命令（自动按 `run.json` 的 `provider` 分派清理，禁止按前缀猜测或全局 prune）。[资源管理](../../scripts/test-resources/managed-resources.mjs) · [手工清理入口](../../scripts/run-test-resource-cleanup.mjs) · [恢复命令](commands.md#测试与验证通道)
 
-正常业务状态由生产模块建立，损坏变体和内部状态观察使用所属模块的 `/testing`。Unit 可使用事务替身，Admin 的正式事务接线和 Ops 的维护 CLI 由 Integration 验证。Worker 验证正式进程的周期恢复，Worker 与 Ops 使用各自的专用环境。API 协议浏览器测试使用候选 API、独立 RP 和专用资源。各通道分开保存产物，正式协议套件使用独立输出目录。[进程测试辅助](../../packages/test-support/src/process-smoke-harness.ts) · [OIDC 协议套件](commands.md#oidc-协议套件)
+正常业务状态由生产模块建立，损坏变体和内部状态观察使用所属模块的 `/testing`。Unit 可使用事务替身，Admin 的正式事务接线和 Ops 的维护 CLI 由 Integration 验证。Worker 通过进程内 composition 验证周期恢复，Ops 通过正式命令函数验证维护行为。独立进程 smoke 覆盖服务监听、就绪探测、环境装配、信号与退出码。API 协议集成测试使用进程内 API、独立 RP 和专用资源。[进程测试辅助](../../packages/test-support/src/process-smoke-harness.ts)
 
 ## Full-system E2E
 

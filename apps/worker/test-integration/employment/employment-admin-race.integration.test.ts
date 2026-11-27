@@ -18,10 +18,15 @@ import { createUnifiedSessionKernel } from "@iam/session-kernel";
 import { encodeSubjectAccessContext } from "@iam/subject-access";
 import { createSubjectAccessBootstrap } from "@iam/subject-access/redis";
 import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
-import { createProcessSmokeEnvironment, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
+import {
+  allocateLoopbackPort,
+  createProcessSmokeEnvironment,
+  spawnOwnedProcessTree,
+  startProcess,
+  waitForReadiness,
+} from "@iam/test-support/process-smoke-harness";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
-import { startEmploymentProcess } from "../support/employment-process.fixture";
 import { startEmploymentWorker, waitFor, waitForEmploymentWorkerLock } from "../support/employment-worker";
 import { useWorkerPostgresTestHarness, type WorkerPostgresTestHarness } from "../support/postgres-test-harness";
 import {
@@ -260,41 +265,41 @@ async function startAdmin(
   stopExecutors: Array<() => Promise<void> | void>,
   authorization: string,
 ) {
-  const { origin } = await startEmploymentProcess({
-    label: "Admin API for Employment race",
-    temporaryDirectoryPrefix: "iam-employment-admin-",
-    hostname: "localhost",
-    stopExecutors,
-    start({ port, temporaryDirectory }) {
-      return spawnOwnedProcessTree({
-        executable: process.execPath,
-        args: ["--no-env-file", "run", "src/index.ts"],
-        cwd: adminApiRoot,
-        env: createProcessSmokeEnvironment({
-          source: process.env,
-          temporaryDirectory,
-          overrides: {
-            NODE_ENV: "test",
-            IAM_ADMIN_API_DATABASE_URL: pg.databaseUrl,
-            IAM_ADMIN_API_REDIS_URL: resolveWorkerRedisTestUrl(process.env),
-            IAM_ADMIN_API_PORT: String(port),
-            IAM_ADMIN_API_ADMIN_CLIENT_CODES: clientCode,
-            IAM_ADMIN_API_SESSION_KERNEL_NAMESPACE: namespace,
-            IAM_ADMIN_API_LOG_FORMAT: "json",
-            IAM_ADMIN_API_LOG_LEVEL: "info",
-          },
-        }),
-      });
-    },
-    async probe(origin, output, signal) {
-      if (!output.includes(`server: ${origin}`)) return false;
+  // Exercise the Admin HTTP boundary while Worker composition runs in this test process.
+  const port = await allocateLoopbackPort("localhost");
+  const origin = `http://localhost:${port}`;
+  const running = startProcess(
+    spawnOwnedProcessTree({
+      executable: process.execPath,
+      args: ["--no-env-file", "run", "src/index.ts"],
+      cwd: adminApiRoot,
+      env: createProcessSmokeEnvironment({
+        source: process.env,
+        temporaryDirectory: "/tmp",
+        overrides: {
+          NODE_ENV: "test",
+          IAM_ADMIN_API_DATABASE_URL: pg.databaseUrl,
+          IAM_ADMIN_API_REDIS_URL: resolveWorkerRedisTestUrl(process.env),
+          IAM_ADMIN_API_PORT: String(port),
+          IAM_ADMIN_API_ADMIN_CLIENT_CODES: clientCode,
+          IAM_ADMIN_API_SESSION_KERNEL_NAMESPACE: namespace,
+          IAM_ADMIN_API_LOG_FORMAT: "json",
+          IAM_ADMIN_API_LOG_LEVEL: "info",
+        },
+      }),
+    }),
+  );
+  stopExecutors.push(running.stop);
+  await waitForReadiness(
+    running,
+    async (signal) => {
       const response = await fetch(`${origin}/admin/doc`, { signal });
-      if (response.status !== 200) return false;
       const document = await response.json();
       const schema = z.object({ info: z.object({ title: z.literal("管理端API") }) });
-      return schema.safeParse(document).success;
+      return response.ok && schema.safeParse(document).success ? true : undefined;
     },
-  });
+    `server: ${origin}`,
+  );
   return {
     async request(path: string, init?: RequestInit) {
       const response = await fetch(`${origin}${path}`, {

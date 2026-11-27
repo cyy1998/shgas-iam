@@ -456,6 +456,12 @@ test("public Client status looks up dot, double dot and literal percent codes in
   }
 });
 
+test("mobile login rejects a request without credentials", async () => {
+  const f = await fixture();
+  const response = await f.post("/auth/login/mobile", {});
+  expect(response.status).toBe(422);
+});
+
 test("SMS login consumes a delivered code and keeps the same-phone cooldown", async () => {
   const f = await fixture();
   const sent = await f.post("/auth/sms/send", { usage: "login", phoneNumber: mobile });

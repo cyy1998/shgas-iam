@@ -13,7 +13,6 @@ export const integrationResourceEnvNames = {
 export const gatewayApisixWorkspace = "@iam/gateway-apisix";
 export const gatewayApisixIntegrationFiles = new Set([
   "test-integration/preview/preview.integration.test.ts",
-  "test-integration/publication/process-publication.integration.test.ts",
   "test-integration/publication/publication.integration.test.ts",
   "test-integration/publication/seven-kinds.integration.test.ts",
   "test-integration/runtime/publication-lifecycle.integration.test.ts",

@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, mock, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 import { createAdminApiRepositories } from "@admin-api/composition/repositories";
 import { createAdminApiUnitOfWork } from "@admin-api/composition/tx";
 import { createCustomAttributeAdapter } from "@admin-api/routes/admin/custom-attribute/custom-attribute.index";
@@ -27,6 +26,7 @@ import {
   UserType,
 } from "@iam/contracts";
 import type { CustomAttributeDefinition } from "@iam/contracts/custom-attributes";
+import { createAuditLogWriter, createAuditRepository } from "@iam/db/audit";
 import { extractPostgresError } from "@iam/db/postgres-error";
 import {
   auditLogs,
@@ -40,13 +40,13 @@ import {
   users,
   userWechatExternalBindings,
 } from "@iam/db/schema";
+import { createDelegationService } from "@iam/delegation";
 import { createSubjectAccessTransitionRepository } from "@iam/documents/user/subject-access-transition";
 import { UserHasOpenEmploymentError, UserNotFoundError, UsernameAlreadyExistsError } from "@iam/domain/user";
 import { BadRequestError } from "@iam/runtime/errors";
 import { createSubjectAccessBarrier, createSubjectAccessOperations } from "@iam/subject-access";
 import { createSubjectAccessLifecycle } from "@iam/subject-access/lifecycle";
 import { createInMemorySubjectAccessStore } from "@iam/subject-access/testing";
-import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
 import { mapUnitOfWork } from "@iam/unit-of-work";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono } from "hono";
@@ -635,26 +635,17 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
       const { service } = createCommand(undefined, undefined, stableStore(user.subjectIdentifier));
       const error = await failure(() => service.deleteUser("user"));
       expect(error).toMatchObject({ code: "USER.HAS_OPEN_CLIENT_DELEGATION" });
-      await runProcessCommandSmoke({
-        label: "Internal delegation end before Admin user deletion",
-        start: () =>
-          spawnOwnedProcessTree({
-            executable: process.execPath,
-            args: [
-              "--no-env-file",
-              "run",
-              "test-integration/delegation/end-delegation.fixture.ts",
-              String(delegation.id),
-              String(delegation.clientId),
-            ],
-            cwd: fileURLToPath(new URL("../../../integration-api/", import.meta.url)),
-            env: { ...process.env, IAM_TEST_POSTGRES_URL: harness.databaseUrl },
-          }),
-        completionTimeoutMs: 15_000,
-        cleanupTimeoutMs: 5_000,
-        maxOutputBytes: 64 * 1024,
-        expectedExitCode: 0,
+      const delegations = createDelegationService({
+        db: harness.db,
+        recordAudit: async (tx, event) =>
+          createAuditLogWriter({ sourceApp: "iam", auditRepository: createAuditRepository(tx) }).recordAuditLog(event),
       });
+      await delegations.update(
+        delegation.id,
+        { status: ClientDelegationStatus.Disable },
+        { kind: "client", clientId: delegation.clientId },
+        { actionPrefix: "internal", actor: { actorType: "client", actorClientCode: "delegation-test" } },
+      );
       const ended = await deletionFacts();
       expect(ended.delegations).toMatchObject([{ id: delegation.id, status: ClientDelegationStatus.Disable }]);
       const result = await service.deleteUser("user");

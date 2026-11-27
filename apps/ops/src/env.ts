@@ -3,6 +3,7 @@ import { parseEnv } from "node:util";
 import { DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
 import { redisUrlString } from "@iam/runtime/redis/config";
 import { z } from "zod";
+import type { CommandContext } from "./command-context";
 
 /** Only the Ops entrypoint loads this file; inherited process variables take precedence. */
 export function loadOpsEnvironment() {
@@ -36,12 +37,16 @@ const userDocument = {
   IAM_OPS_USER_DOCUMENT_BACKFILL_BATCH_SIZE: z.coerce.number().int().positive().default(500),
 };
 
-function parse<T extends z.ZodType>(schema: T, source: NodeJS.ProcessEnv): z.output<T> {
+function parse<T extends z.ZodType>(
+  schema: T,
+  source: NodeJS.ProcessEnv,
+  stderr: CommandContext["stderr"],
+): z.output<T> {
   const result = schema.safeParse(source);
   if (!result.success) {
     const keys = [...new Set(result.error.issues.map((issue) => issue.path.join(".")))];
     // Never render supplied values or Zod's raw input in operator output.
-    process.stderr.write(`Invalid Ops configuration: ${keys.join(", ")}\n`);
+    stderr.write(`Invalid Ops configuration: ${keys.join(", ")}\n`);
     throw new Error("Invalid Ops configuration");
   }
   return result.data;
@@ -55,18 +60,30 @@ function toPostgresCommandEnv(raw: z.output<typeof RawOpsEnvSchema>) {
   };
 }
 
-export function parseOfflineMaintenanceEnv(source: NodeJS.ProcessEnv) {
-  return parse(z.object(redis), source).IAM_OPS_REDIS_URL;
+export function parseOfflineMaintenanceEnv(
+  source: NodeJS.ProcessEnv,
+  stderr: CommandContext["stderr"] = process.stderr,
+) {
+  return parse(z.object(redis), source, stderr).IAM_OPS_REDIS_URL;
 }
-export function parseEmploymentCommandEnv(source: NodeJS.ProcessEnv) {
-  return toPostgresCommandEnv(parse(RawOpsEnvSchema, source));
+export function parseEmploymentCommandEnv(
+  source: NodeJS.ProcessEnv,
+  stderr: CommandContext["stderr"] = process.stderr,
+) {
+  return toPostgresCommandEnv(parse(RawOpsEnvSchema, source, stderr));
 }
-export function parseAuditActionMaintenanceCommandEnv(source: NodeJS.ProcessEnv) {
-  const raw = parse(z.object(postgres), source);
+export function parseAuditActionMaintenanceCommandEnv(
+  source: NodeJS.ProcessEnv,
+  stderr: CommandContext["stderr"] = process.stderr,
+) {
+  const raw = parse(z.object(postgres), source, stderr);
   return { databaseUrl: raw.IAM_OPS_DATABASE_URL };
 }
-export function parseUserDocumentPostgresReadinessCommandEnv(source: NodeJS.ProcessEnv) {
-  const raw = parse(RawOpsEnvSchema.extend(userDocument), source);
+export function parseUserDocumentPostgresReadinessCommandEnv(
+  source: NodeJS.ProcessEnv,
+  stderr: CommandContext["stderr"] = process.stderr,
+) {
+  const raw = parse(RawOpsEnvSchema.extend(userDocument), source, stderr);
   return {
     ...toPostgresCommandEnv(raw),
     userDocument: {
@@ -75,26 +92,36 @@ export function parseUserDocumentPostgresReadinessCommandEnv(source: NodeJS.Proc
     },
   };
 }
-export function parseUserDocumentCommandEnv(source: NodeJS.ProcessEnv) {
-  const base = parseUserDocumentPostgresReadinessCommandEnv(source);
+export function parseUserDocumentCommandEnv(
+  source: NodeJS.ProcessEnv,
+  stderr: CommandContext["stderr"] = process.stderr,
+) {
+  const base = parseUserDocumentPostgresReadinessCommandEnv(source, stderr);
   const raw = parse(
     z.object({
       IAM_OPS_USER_DOCUMENT_REPAIR_STALE_SECONDS: z.coerce.number().int().positive().max(86_400).default(300),
     }),
     source,
+    stderr,
   );
   return {
     ...base,
-    redis: parseOfflineMaintenanceEnv(source),
+    redis: parseOfflineMaintenanceEnv(source, stderr),
     userDocument: { ...base.userDocument, repairStaleSeconds: raw.IAM_OPS_USER_DOCUMENT_REPAIR_STALE_SECONDS },
   };
 }
 export type UserDocumentCommandEnv = ReturnType<typeof parseUserDocumentCommandEnv>;
 
-export function parseOrganizationDocumentVerifyCommandEnv(source: NodeJS.ProcessEnv) {
-  return parseEmploymentCommandEnv(source);
+export function parseOrganizationDocumentVerifyCommandEnv(
+  source: NodeJS.ProcessEnv,
+  stderr: CommandContext["stderr"] = process.stderr,
+) {
+  return parseEmploymentCommandEnv(source, stderr);
 }
-export function parseOrganizationDocumentBackfillCommandEnv(source: NodeJS.ProcessEnv) {
+export function parseOrganizationDocumentBackfillCommandEnv(
+  source: NodeJS.ProcessEnv,
+  stderr: CommandContext["stderr"] = process.stderr,
+) {
   const prefix = source.IAM_OPS_ORGANIZATION_DOCUMENT_QUEUE_PREFIX;
   if (prefix !== undefined && prefix !== DEFAULT_QUEUE_PREFIX)
     throw new RangeError(`Organization Search queue prefix is fixed to ${DEFAULT_QUEUE_PREFIX}`);
@@ -104,10 +131,11 @@ export function parseOrganizationDocumentBackfillCommandEnv(source: NodeJS.Proce
       IAM_OPS_ORGANIZATION_DOCUMENT_REPAIR_STALE_SECONDS: z.coerce.number().int().positive().max(86_400).default(300),
     }),
     source,
+    stderr,
   );
   return {
-    ...parseEmploymentCommandEnv(source),
-    redis: parseOfflineMaintenanceEnv(source),
+    ...parseEmploymentCommandEnv(source, stderr),
+    redis: parseOfflineMaintenanceEnv(source, stderr),
     organizationDocument: {
       backfillBatchSize: raw.IAM_OPS_ORGANIZATION_DOCUMENT_BACKFILL_BATCH_SIZE,
       repairStaleSeconds: raw.IAM_OPS_ORGANIZATION_DOCUMENT_REPAIR_STALE_SECONDS,

@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
-import { fileURLToPath } from "node:url";
+import { randomUUID } from "node:crypto";
 import { createOrganizationDocumentInvalidation } from "@iam/documents/organization/producer";
 import {
   createOrganizationDocumentQueryRepository,
@@ -16,18 +16,16 @@ import {
 import { createJobQueue, DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
 import { createOrganizationDocumentWorkerModule } from "@iam/jobs/documents/organization";
 import { redisUrlString } from "@iam/runtime/redis/config";
-import { spawnOwnedProcessTree, terminateProcessTree } from "@iam/test-support/process-smoke-harness";
 import { createUnitOfWork } from "@iam/unit-of-work";
 import { createHangingRedisServer } from "../support/hanging-redis-server";
-import { runOpsCommandSmoke } from "../support/ops-command-smoke";
-import { createOpsPostgresTestHarness, reserveOpsPostgresConnection } from "../support/postgres-test-harness";
+import { createOpsPostgresTestHarness } from "../support/postgres-test-harness";
 import {
   overrideOpsRedisTestUrl,
   resetOpsRedisTestDatabase,
   resolveOpsRedisTestUrl,
 } from "../support/redis-test-harness";
+import { runOpsCommand } from "../support/run-ops-command";
 
-const opsRoot = fileURLToPath(new URL("../../", import.meta.url));
 let harness: Awaited<ReturnType<typeof createOpsPostgresTestHarness>>;
 let module: ReturnType<typeof createOrganizationDocumentWorkerModule>;
 let prefix: string;
@@ -154,19 +152,11 @@ async function command(
   overrides: NodeJS.ProcessEnv = {},
   interruptWhen?: (signal: AbortSignal) => Promise<void>,
 ) {
-  const pending = runOpsCommandSmoke(
+  const pending = runOpsCommand(
     {
-      label: `Organization document ${mode}`,
-      completionTimeoutMs: 15_000,
-      cleanupTimeoutMs: 5_000,
+      args: ["organization-document", mode, ...args],
+      env: environment(overrides),
       expectedExitCode,
-      start: () =>
-        spawnOwnedProcessTree({
-          executable: process.execPath,
-          args: ["--no-env-file", "run", "src/index.ts", "organization-document", mode, ...args],
-          cwd: opsRoot,
-          env: environment(overrides),
-        }),
     },
     interruptWhen,
   );
@@ -318,45 +308,26 @@ test("repair handles interruption through the real CLI signal listener and close
 });
 
 for (const stage of ["expand", "build"] as const) {
-  test(`a killed Ops leaves ${stage} ownership recoverable and repeated repair converges through the ordinary consumer`, async () => {
+  test(`abandoned ${stage} ownership is recoverable and repeated repair converges through the ordinary consumer`, async () => {
     if (stage === "expand") {
       await renameRoot();
-      await module.processor.repairFailedOrStale({ staleBefore: new Date(0), limit: 10 });
+      // The former consumer committed a claim and disappeared before recording its outcome.
+      const claimed = await harness.sql`
+        UPDATE organization_document_outbox
+        SET status='processing', processing_token=${randomUUID()}, processing_started_at=NOW(), attempts=attempts+1
+        WHERE status='pending'
+        RETURNING status`;
+      expect(claimed.length).toBeGreaterThan(0);
     } else {
-      // Expand normally without starting this module's consumers, then abandon the queued build in the child.
       await module.processor.backfillAllOrganizations();
       const changes = await harness.sql<{ id: string }[]>`SELECT id FROM organization_document_outbox`;
       for (const change of changes) await module.processor.processOutbox({ outboxId: change.id });
+      const prepared = await module.processor.prepareRebuild({ organizationId: 1, version: "1" });
+      expect(prepared?.processingToken).toBeDefined();
+      const claimed =
+        await harness.sql`SELECT status FROM organization_document_rebuild_state WHERE status='processing'`;
+      expect(claimed.length).toBeGreaterThan(0);
     }
-    const reserved = await reserveOpsPostgresConnection(harness, stopExecutors);
-    const blocker = reserved.sql;
-    let stopChild: (() => Promise<void>) | undefined;
-    await blocker.unsafe("BEGIN");
-    await blocker.unsafe("LOCK TABLE organization_closure IN ACCESS EXCLUSIVE MODE");
-    const child = spawnOwnedProcessTree({
-      executable: process.execPath,
-      args: ["--no-env-file", "run", "test-integration/organization-document/organization-consumer.fixture.ts"],
-      cwd: opsRoot,
-      env: environment({}),
-    });
-    let closePromise: Promise<void> | undefined;
-    stopChild = () => {
-      closePromise ??= terminateProcessTree(child, { timeoutMs: 5000 });
-      return closePromise;
-    };
-    stopExecutors.push(stopChild);
-    const claimed = await until(async () => {
-      const rows =
-        stage === "expand"
-          ? await harness.sql`SELECT status FROM organization_document_outbox WHERE status='processing'`
-          : await harness.sql`SELECT status FROM organization_document_rebuild_state WHERE status='processing'`;
-      const locks = await harness.sql`SELECT count(*)::int AS blocked FROM pg_stat_activity
-          WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%organization_closure%' AND query NOT LIKE '%pg_stat_activity%'`;
-      return rows.length && locks[0]?.blocked ? rows : undefined;
-    });
-    expect(claimed.length).toBeGreaterThan(0);
-    await stopChild();
-    await reserved.close();
     await command("repair", ["--stale-before", "2100-01-01T00:00:00Z"]);
     await module.startConsumers();
     const documents = await published("1", stage === "expand" ? "Recovered root" : "Root");

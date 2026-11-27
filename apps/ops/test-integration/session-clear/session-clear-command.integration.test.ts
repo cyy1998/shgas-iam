@@ -2,7 +2,6 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import type { Socket } from "node:net";
 import { createConnection, createServer } from "node:net";
-import { fileURLToPath } from "node:url";
 import { createClientSnapshots } from "@iam/client-snapshot/composition";
 import { createClientSnapshotMaintenance, createClientSnapshotVerifier } from "@iam/client-snapshot/maintenance";
 import { createClientSnapshotMaintenanceTestFixture } from "@iam/client-snapshot/testing";
@@ -11,11 +10,6 @@ import { createCustomSsoMaintenanceTestFixture } from "@iam/custom-sso/testing";
 import { createOidcMaintenanceTestFixture } from "@iam/oidc/testing";
 import { createOfflineMaintenanceRedis, runMaintenanceCommandWithLifecycle } from "@iam/runtime/maintenance";
 import { createSessionMaintenanceTestFixture } from "@iam/session-kernel/testing";
-import {
-  runProcessCommandSmoke,
-  spawnOwnedProcessTree,
-  withOwnedTemporaryDirectory,
-} from "@iam/test-support/process-smoke-harness";
 import { runClientSnapshotMaintenance } from "@ops/commands/client-runtime/client-snapshot-maintenance";
 import { parseSessionClearArgs } from "@ops/commands/session-clear/arguments";
 import { createSessionClearMaintenance } from "@ops/composition/session-clear-maintenance";
@@ -27,8 +21,8 @@ import {
   resetOpsRedisTestDatabase,
   resolveOpsRedisTestUrl,
 } from "../support/redis-test-harness";
+import { runOpsCommand } from "../support/run-ops-command";
 
-const opsRoot = fileURLToPath(new URL("../../", import.meta.url));
 let harness: Awaited<ReturnType<typeof createOpsRedisTestHarness>>;
 const cleanups: Array<() => Promise<void>> = [];
 let stopHarness: (() => Promise<void>) | undefined;
@@ -51,24 +45,10 @@ async function observation(keys: string[]) {
   );
 }
 async function command(operation: string, args: string[], expectedExitCode = 0, overrides: NodeJS.ProcessEnv = {}) {
-  const pending = withOwnedTemporaryDirectory({
-    prefix: "iam-session-clear-",
-    cleanupTimeoutMs: 5000,
-    async run(temporaryDirectory) {
-      return await runProcessCommandSmoke({
-        label: `iam-ops session ${operation}`,
-        completionTimeoutMs: 20_000,
-        cleanupTimeoutMs: 5000,
-        expectedExitCode,
-        start: () =>
-          spawnOwnedProcessTree({
-            executable: process.execPath,
-            args: ["--no-env-file", "run", "iam-ops", "session", operation, ...args],
-            cwd: opsRoot,
-            env: { ...harness.commandEnvironment(temporaryDirectory), ...overrides },
-          }),
-      });
-    },
+  const pending = runOpsCommand({
+    args: ["session", operation, ...args],
+    env: { ...harness.commandEnvironment(), ...overrides },
+    expectedExitCode,
   });
   cleanups.push(async () => {
     await pending;

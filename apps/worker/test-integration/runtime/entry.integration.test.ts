@@ -1,114 +1,53 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import process from "node:process";
+import { expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
-import type { ProcessSmokeAttemptContext } from "@iam/test-support/process-smoke-harness";
 import {
   createProcessSmokeEnvironment,
-  createProcessSmokeSuite,
-  PortCollisionError,
-  PROCESS_SMOKE_TEST_TIMEOUT_MS,
   spawnOwnedProcessTree,
+  withReadyProcess,
 } from "@iam/test-support/process-smoke-harness";
+import { useWorkerPostgresTestHarness } from "../support/postgres-test-harness";
+import { resolveWorkerRedisTestUrl } from "../support/redis-test-harness";
 
-const workerRoot = fileURLToPath(new URL("../../", import.meta.url));
-const entrySmoke = createProcessSmokeSuite({
-  label: "Worker entry",
-  temporaryDirectoryPrefix: "iam-worker-entry-smoke-",
-  hostname: "localhost",
-});
+const getDatabase = useWorkerPostgresTestHarness();
 
-afterEach(entrySmoke.cleanup);
-
-function entryOrigin(context: ProcessSmokeAttemptContext) {
-  return `http://${context.hostname}:${context.port}`;
-}
-
-function createEntryEnvironment(context: ProcessSmokeAttemptContext, enabledModules = "none") {
-  return createProcessSmokeEnvironment({
-    source: process.env,
-    temporaryDirectory: context.temporaryDirectory,
-    overrides: {
-      NODE_ENV: "test",
-      IAM_WORKER_DATABASE_URL: "postgresql://iam:password@127.0.0.1:1/iam",
-      IAM_WORKER_REDIS_URL: "redis://127.0.0.1:1/15",
-      IAM_WORKER_ENABLED_MODULES: enabledModules,
-      IAM_WORKER_HTTP_ENABLED: "true",
-      IAM_WORKER_HTTP_PORT: String(context.port),
-      IAM_WORKER_BULL_BOARD_ENABLED: "true",
-      IAM_WORKER_BULL_BOARD_QUEUES: "none",
-      IAM_WORKER_BULL_BOARD_AUTH_ENABLED: "false",
-      IAM_WORKER_LOG_LEVEL: "info",
-      IAM_WORKER_LOG_FORMAT: "json",
-      FORCE_COLOR: "0",
-      NO_COLOR: "1",
-      NO_PROXY: "127.0.0.1,localhost",
-      no_proxy: "127.0.0.1,localhost",
+test("Worker starts its consumer, reports readiness and shuts down", async () => {
+  const result = await withReadyProcess({
+    label: "Worker entry",
+    temporaryDirectoryPrefix: "iam-worker-entry-",
+    start(context) {
+      return spawnOwnedProcessTree({
+        executable: process.execPath,
+        args: ["--no-env-file", "run", "src/index.ts"],
+        cwd: fileURLToPath(new URL("../../", import.meta.url)),
+        env: createProcessSmokeEnvironment({
+          source: process.env,
+          temporaryDirectory: context.temporaryDirectory,
+          overrides: {
+            NODE_ENV: "test",
+            IAM_WORKER_DATABASE_URL: getDatabase().databaseUrl,
+            IAM_WORKER_REDIS_URL: resolveWorkerRedisTestUrl(process.env),
+            IAM_WORKER_ENABLED_MODULES: "organization-document",
+            IAM_WORKER_HTTP_ENABLED: "true",
+            IAM_WORKER_HTTP_HOSTNAME: context.hostname,
+            IAM_WORKER_HTTP_PORT: String(context.port),
+            IAM_WORKER_BULL_BOARD_ENABLED: "false",
+            IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_ENABLED: "false",
+            IAM_WORKER_LOG_FORMAT: "json",
+          },
+        }),
+      });
+    },
+    childReadinessEvidence: "worker started",
+    async probe({ hostname, port }, signal) {
+      const response = await fetch(`http://${hostname}:${port}/healthz`, { signal, headers: { Connection: "close" } });
+      const body = await response.json();
+      return response.ok ? body : undefined;
     },
   });
-}
-
-async function probeWorkerReadiness(origin: string, signal: AbortSignal) {
-  const response = await fetch(`${origin}/healthz`, { signal });
-  if (response.status !== 503) {
-    throw new PortCollisionError(
-      `port served an unexpected Worker readiness status: expected 503, received ${response.status}`,
-    );
-  }
-  return (await response.json()) as Record<string, unknown>;
-}
-
-describe("Worker entry", () => {
-  test(
-    "starts the independent organization consumer and reports unavailable storage as not ready",
-    async () => {
-      const result = await entrySmoke.run({
-        start(context) {
-          return spawnOwnedProcessTree({
-            executable: process.execPath,
-            args: ["--no-env-file", "run", "src/index.ts"],
-            cwd: workerRoot,
-            env: createEntryEnvironment(context, "organization-document"),
-          });
-        },
-        probe: (context, signal) => probeWorkerReadiness(entryOrigin(context), signal),
-        childReadinessEvidence: "worker started",
-      });
-      expect(result).toMatchObject({
-        ok: false,
-        enabledModules: ["organization-document"],
-        modulesStarted: true,
-        dependencies: { db: "error", redis: "error" },
-      });
-    },
-    PROCESS_SMOKE_TEST_TIMEOUT_MS,
-  );
-
-  test(
-    "reports unavailable storage as not ready without starting consumers",
-    async () => {
-      const result = await entrySmoke.run({
-        start(context) {
-          return spawnOwnedProcessTree({
-            executable: process.execPath,
-            args: ["--no-env-file", "run", "src/index.ts"],
-            cwd: workerRoot,
-            env: createEntryEnvironment(context),
-          });
-        },
-        probe: (context, signal) => probeWorkerReadiness(entryOrigin(context), signal),
-        childReadinessEvidence: "worker started",
-      });
-
-      expect(result).toMatchObject({
-        ok: false,
-        enabledModules: [],
-        modulesStarted: true,
-        dependencies: {
-          db: "error",
-          redis: "error",
-        },
-      });
-    },
-    PROCESS_SMOKE_TEST_TIMEOUT_MS,
-  );
-});
+  expect(result).toMatchObject({
+    ok: true,
+    enabledModules: ["organization-document"],
+    modulesStarted: true,
+    dependencies: { db: "ok", redis: "ok" },
+  });
+}, 30_000);

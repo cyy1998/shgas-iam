@@ -1,8 +1,8 @@
 import createApp from "@iam/api-core/core/create-app";
 import appConfig from "~admin-api/app.config";
 import { createAdminApiComposition } from "./composition";
-import env from "./env";
 import { logger } from "./lib/logger";
+import env from "./runtime-env";
 
 const composition = await createAdminApiComposition({ env, logger });
 

@@ -1,11 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
-import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
-import { runAuditActionMaintenance } from "../../src/commands/audit-action-maintenance";
+import { runAuditActionMaintenance } from "@iam/db/audit";
 import { createOpsPostgresTestHarness } from "../support/postgres-test-harness";
-
-const opsRoot = fileURLToPath(new URL("../../", import.meta.url));
+import { runOpsCommand } from "../support/run-ops-command";
 
 describe("historical audit action maintenance command", () => {
   let harness: Awaited<ReturnType<typeof createOpsPostgresTestHarness>>;
@@ -32,18 +29,9 @@ describe("historical audit action maintenance command", () => {
     return Array.from(await harness.sql`SELECT * FROM audit_log ORDER BY id`);
   }
   async function run(args: string[], expectedExitCode = 0, url = harness.databaseUrl) {
-    const result = await runProcessCommandSmoke({
-      label: "audit action command",
-      start: () =>
-        spawnOwnedProcessTree({
-          executable: process.execPath,
-          args: ["--no-env-file", "run", "iam-ops", "audit-action", ...args],
-          cwd: opsRoot,
-          env: { ...process.env, IAM_OPS_DATABASE_URL: url, NO_COLOR: "1" },
-        }),
-      completionTimeoutMs: 15_000,
-      cleanupTimeoutMs: 5_000,
-      maxOutputBytes: 64 * 1024,
+    const result = await runOpsCommand({
+      args: ["audit-action", ...args],
+      env: { ...process.env, IAM_OPS_DATABASE_URL: url, NO_COLOR: "1" },
       expectedExitCode,
     });
     const active = await harness.sql`SELECT count(*)::int AS count FROM pg_stat_activity
