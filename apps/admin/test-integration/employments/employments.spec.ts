@@ -98,18 +98,27 @@ test("Employment filters and creation selectors use the granted organization sco
   await expect(page.getByText("范围外根")).toHaveCount(0);
   await scopedOrganization.click();
   await createDialog.getByRole("combobox", { name: /岗位/ }).click();
-  await page.getByText("财务经理 (FIN-001)").last().click();
+  await page.locator(".ant-select-dropdown:visible").getByText("财务经理 (FIN-001)").click();
+  await expect(createDialog).toContainText("财务经理 (FIN-001)");
   const startDate = createDialog.getByPlaceholder("开始日");
+  const endDate = createDialog.getByPlaceholder("截止日");
   await expect(startDate).toHaveValue("2090-03-02");
   await startDate.click();
   await calendarDay(page, pending.startTime).click();
   await calendarDay(page, pending.startTime).click();
+  await expect(startDate).toHaveValue(pending.startTime);
+  await expect(endDate).toHaveValue(pending.startTime);
+  await expect(page.locator(".ant-picker-dropdown:visible")).toHaveCount(0);
   await createDialog.getByRole("button", { name: /确\s*定/ }).click();
   await expect(createDialog.getByText("开始日必须早于截止日")).toBeVisible();
   expect(requests).toEqual([]);
   await startDate.click();
   await calendarDay(page, pending.startTime).click();
   await calendarDay(page, pending.endTime).click();
+  await expect(startDate).toHaveValue(pending.startTime);
+  await expect(endDate).toHaveValue(pending.endTime);
+  await expect(page.locator(".ant-picker-dropdown:visible")).toHaveCount(0);
+  await expect(createDialog.getByText("开始日必须早于截止日")).toHaveCount(0);
   await createDialog.getByRole("button", { name: /确\s*定/ }).click();
   await expect
     .poll(() => requests)
@@ -156,8 +165,7 @@ test("Employment transfers between granted roots using the global Position catal
   await expect(page.getByText("范围外根")).toHaveCount(0);
   await page.getByText("授权根 B (ROOT-B)").click();
   await transferDialog.getByRole("combobox").nth(1).click();
-  await expect(page.getByText("财务经理 (FIN-001)").last()).toBeVisible();
-  await page.getByText("财务经理 (FIN-001)").last().click();
+  await page.locator(".ant-select-dropdown:visible").getByText("财务经理 (FIN-001)").click();
   await transferDialog.getByRole("radio", { name: "主任职", exact: true }).check();
   await transferDialog.getByLabel("新任职截止日").fill("2090-04-01");
   await transferDialog.getByRole("button", { name: /确\s*定/ }).click();
