@@ -6,57 +6,33 @@ import type {
 import type { RedisPreflightOptions } from "./redis-preflight.mjs";
 
 export type ResourceServiceName = "postgres" | "redis" | "apisix";
-
 export type RawProviderEndpoints = {
   postgresUrl?: string;
   redisUrl?: string;
   apisix?: { adminUrl: string; adminKey: string };
 };
-
-export type ResourceProviderPrepareContext = {
-  run: ManagedResourceRun;
-  env: NodeJS.ProcessEnv;
-  signal?: AbortSignal;
-  timeoutMs?: number;
-  cleanupTimeoutMs?: number;
-};
-
-export type ResourceProviderCleanupOptions = {
-  cleanupTimeoutMs?: number;
-  diagnostics?: boolean;
-};
-
+type TimingOptions = { signal?: AbortSignal; timeoutMs?: number; cleanupTimeoutMs?: number };
+export type ResourceProviderPrepareContext = TimingOptions & { run: ManagedResourceRun; env: NodeJS.ProcessEnv };
+export type ResourceProviderCleanupOptions = { cleanupTimeoutMs?: number; diagnostics?: boolean };
 export type ResourceProvider = {
   readonly name: ManagedResourceProviderName;
   readonly composeFile?: string;
-  prepare(
-    neededServices: readonly ResourceServiceName[],
-    context: ResourceProviderPrepareContext,
-  ): Promise<RawProviderEndpoints>;
+  prepare(services: readonly ResourceServiceName[], ctx: ResourceProviderPrepareContext): Promise<RawProviderEndpoints>;
   cleanup(run: ManagedResourceRun, options?: ResourceProviderCleanupOptions): Promise<void>;
 };
-
-export type PrepareManagedTestResourcesContext = {
+type ProvidersMap =
+  | ReadonlyMap<ManagedResourceProviderName, ResourceProvider>
+  | Partial<Record<ManagedResourceProviderName, ResourceProvider>>;
+export type PrepareManagedTestResourcesContext = TimingOptions & {
   root: string;
   env?: NodeJS.ProcessEnv;
   projectPrefix?: string;
   keep?: boolean;
   registryFile?: string;
-  signal?: AbortSignal;
-  timeoutMs?: number;
-  cleanupTimeoutMs?: number;
-  providers?:
-    | ReadonlyMap<ManagedResourceProviderName, ResourceProvider>
-    | Partial<Record<ManagedResourceProviderName, ResourceProvider>>;
+  providers?: ProvidersMap;
   preparePostgresTemplate?: (
     run: ManagedResourceRun,
-    options?: {
-      databaseUrl?: string;
-      env?: NodeJS.ProcessEnv;
-      signal?: AbortSignal;
-      timeoutMs?: number;
-      cleanupTimeoutMs?: number;
-    },
+    options?: TimingOptions & { databaseUrl?: string; env?: NodeJS.ProcessEnv },
   ) => Promise<{ databaseUrl: string; templateName: string }>;
   verifyRedis?: (rawUrl: string, options?: RedisPreflightOptions) => Promise<void>;
   verifyApisix?: (
@@ -65,7 +41,6 @@ export type PrepareManagedTestResourcesContext = {
   ) => Promise<void>;
   onRunCreated?: (run: ManagedResourceRun) => void;
 };
-
 export type PreparedManagedTestResources = {
   provider: ManagedResourceProviderName;
   run: ManagedResourceRun;
@@ -82,20 +57,23 @@ export declare const externalEndpointEnvNames: readonly [
   "IAM_TEST_APISIX_ADMIN_URL",
   "IAM_TEST_APISIX_ADMIN_KEY",
 ];
+export declare const dockerResourceProvider: ResourceProvider;
+export declare const externalResourceProvider: ResourceProvider;
 
-export function registerResourceProvider(provider: ResourceProvider): void;
-export function normalizeNeededServices(neededServices: readonly string[]): ResourceServiceName[];
-export function parseResourceProviderName(env?: NodeJS.ProcessEnv): ManagedResourceProviderName;
-export function resolveResourceProvider(
+export function validateExternalEnvironment(
+  services: readonly ResourceServiceName[],
   env?: NodeJS.ProcessEnv,
-  providers?: PrepareManagedTestResourcesContext["providers"],
-): ResourceProvider;
+): RawProviderEndpoints;
+export function registerResourceProvider(provider: ResourceProvider): void;
+export function normalizeNeededServices(services: readonly string[]): ResourceServiceName[];
+export function parseResourceProviderName(env?: NodeJS.ProcessEnv): ManagedResourceProviderName;
+export function resolveResourceProvider(env?: NodeJS.ProcessEnv, providers?: ProvidersMap): ResourceProvider;
 export function validateProviderEnvironment(
   providerName: ManagedResourceProviderName,
-  neededServices: readonly ResourceServiceName[],
+  services: readonly ResourceServiceName[],
   env?: NodeJS.ProcessEnv,
 ): RawProviderEndpoints | undefined;
 export function prepareManagedTestResources(
-  neededServices: readonly ResourceServiceName[],
+  services: readonly ResourceServiceName[],
   context: PrepareManagedTestResourcesContext,
 ): Promise<PreparedManagedTestResources>;

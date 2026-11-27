@@ -10,24 +10,13 @@ export declare const apisixResourceEndpoints: readonly [
   "routes",
 ];
 
-export type ApisixAdminEndpoint = {
-  adminUrl: string;
-  adminKey: string;
-};
-
-export type ApisixAdminReadinessOptions = {
-  signal?: AbortSignal;
-  timeoutMs?: number;
-  requestTimeoutMs?: number;
-  pollIntervalMs?: number;
-  fetch?: typeof globalThis.fetch;
-};
-
+export type ApisixAdminEndpoint = { adminUrl: string; adminKey: string };
 export type ApisixAdminBaselineOptions = {
   signal?: AbortSignal;
   requestTimeoutMs?: number;
   fetch?: typeof globalThis.fetch;
 };
+export type ApisixAdminReadinessOptions = ApisixAdminBaselineOptions & { timeoutMs?: number; pollIntervalMs?: number };
 
 export function parseApisixAdminConfig(environment?: NodeJS.ProcessEnv): ApisixAdminEndpoint;
 export function waitForApisixAdmin(

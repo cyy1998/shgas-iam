@@ -7,20 +7,13 @@ export type NativeApisixConfigOptions = {
   etcdClientPort: number;
   apisixDir: string;
 };
-
-export type NativeResourceProviderConfig = {
-  apisixInstallDir?: string;
-  tempBaseDir?: string;
-};
-
+export type NativeResourceProviderConfig = { apisixInstallDir?: string; tempBaseDir?: string };
 export type CleanupNativeResourceRunOptions = {
   respectKeep?: boolean;
   cleanupTimeoutMs?: number;
   diagnostics?: boolean;
 };
 
-export function parseSimpleYaml(source: string): unknown;
-export function stringifySimpleYaml(value: unknown, indent?: number): string;
 export function buildNativeApisixConfig(
   sourceYaml: string,
   options: NativeApisixConfigOptions,
