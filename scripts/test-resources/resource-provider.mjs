@@ -9,6 +9,7 @@ import { dockerResourceProvider } from "./docker-provider.mjs";
 import { externalResourceProvider, validateExternalEnvironment } from "./external-provider.mjs";
 import { testPostgresUrlEnv, testRedisUrlEnv } from "./integration-selection.mjs";
 import { createManagedResourceRun, saveManagedResourceRun } from "./managed-resources.mjs";
+import { nativeResourceProvider } from "./native-provider.mjs";
 import { prepareManagedPostgresTemplate } from "./postgres-template.mjs";
 import { parseTestRedisUrl, verifyRedisDatabaseSlotSupport } from "./redis-preflight.mjs";
 
@@ -24,6 +25,7 @@ export const externalEndpointEnvNames = [
 
 const registeredProviders = new Map([
   [dockerResourceProvider.name, dockerResourceProvider],
+  [nativeResourceProvider.name, nativeResourceProvider],
   [externalResourceProvider.name, externalResourceProvider],
 ]);
 
