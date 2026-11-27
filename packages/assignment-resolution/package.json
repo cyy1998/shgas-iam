@@ -37,7 +37,7 @@
   "iamTest": {
     "integration": {
       "bun": {
-        "postgres": "IAM_ASSIGNMENT_RESOLUTION_TEST_DATABASE_URL"
+        "postgres": true
       }
     }
   }

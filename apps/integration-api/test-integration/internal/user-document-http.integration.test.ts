@@ -477,8 +477,8 @@ test("Internal selects published custom attribute objects while preserving legac
 });
 
 function createPublicationFixture() {
-  const redisUrl = process.env.IAM_INTEGRATION_API_TEST_REDIS_URL;
-  if (!redisUrl) throw new Error("IAM_INTEGRATION_API_TEST_REDIS_URL is required");
+  const redisUrl = process.env.IAM_TEST_REDIS_URL;
+  if (!redisUrl) throw new Error("IAM_TEST_REDIS_URL is required");
   const redis = new Redis(redisUrl, { maxRetriesPerRequest: 0, retryStrategy: () => null });
   const close = ownIntegrationTestExecutor(() => closeIntegrationRedisConnection(redis));
   const logger = { info() {}, warn() {}, error() {} };
@@ -871,7 +871,7 @@ async function runAdminRoleWrite(...args: string[]) {
           ...args,
         ],
         cwd: adminRoot,
-        env: { ...process.env, NODE_ENV: "test", IAM_ADMIN_API_TEST_DATABASE_URL: pg.databaseUrl },
+        env: { ...process.env, NODE_ENV: "test", IAM_TEST_POSTGRES_URL: pg.databaseUrl },
       }),
     expectedExitCode: 0,
     completionTimeoutMs: 10_000,

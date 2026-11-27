@@ -648,7 +648,7 @@ describe("User lifecycle mutations through production PostgreSQL UnitOfWork", ()
               String(delegation.clientId),
             ],
             cwd: fileURLToPath(new URL("../../../integration-api/", import.meta.url)),
-            env: { ...process.env, IAM_INTEGRATION_API_TEST_DATABASE_URL: harness.databaseUrl },
+            env: { ...process.env, IAM_TEST_POSTGRES_URL: harness.databaseUrl },
           }),
         completionTimeoutMs: 15_000,
         cleanupTimeoutMs: 5_000,

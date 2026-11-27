@@ -5,7 +5,7 @@ import { redisUrlString } from "@iam/runtime/redis/config";
 import Redis from "ioredis";
 
 function configuration() {
-  const value = process.env.IAM_RUNTIME_TEST_REDIS_URL;
+  const value = process.env.IAM_TEST_REDIS_URL;
   if (!value) throw new Error("Root-managed Redis test resource is required");
   return redisUrlString().parse(value);
 }

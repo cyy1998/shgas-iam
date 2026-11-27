@@ -167,7 +167,7 @@ describe("Subject Projection cutover tightening migration", () => {
     const [schema] = await sql<{ schemaName: string }[]>`
       SELECT current_schema() AS "schemaName"
     `;
-    const databaseUrl = process.env.IAM_DB_TEST_DATABASE_URL!;
+    const databaseUrl = process.env.IAM_TEST_POSTGRES_URL!;
     const blocker = postgres(databaseUrl, {
       connection: { search_path: schema!.schemaName },
       max: 1,

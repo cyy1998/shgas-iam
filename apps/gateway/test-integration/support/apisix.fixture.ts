@@ -1,17 +1,6 @@
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { fileURLToPath } from "node:url";
-import {
-  readManagedResourceRegistry,
-  readManagedResourceRun,
-} from "../../../../scripts/test-resources/managed-resources.mjs";
 import { ApisixAdminClient } from "../../src/apisix-admin-client";
 import { deleteOrder, getDefinition, getResourceId, resourceDefinitions } from "../../src/resources";
-
-const root = fileURLToPath(new URL("../../../../", import.meta.url));
-const expectedComposeFile = "apps/gateway/test-integration/support/apisix.compose.yaml";
-const expectedProjectPrefix = "iam-gateway-apisix-";
 
 export type ApisixEndpointConfig = {
   adminUrl: string;
@@ -50,38 +39,6 @@ export function parseApisixEndpointConfig(environment: NodeJS.ProcessEnv = proce
   };
 }
 
-async function verifyManagedApisixLease(endpoint: ApisixEndpointConfig, environment: NodeJS.ProcessEnv = process.env) {
-  const recordPath = environment.IAM_GATEWAY_TEST_APISIX_RECORD;
-  const parentPath = environment.IAM_TEST_RESOURCE_RECORD;
-  const parentRunId = environment.IAM_TEST_RESOURCE_RUN_ID;
-  if (!recordPath || !parentPath || !parentRunId) {
-    throw new Error("Use the root Integration entry to prepare managed Gateway APISIX resources");
-  }
-  const parent = await readManagedResourceRun(root, parentPath);
-  const children = await readManagedResourceRegistry(root, `${parent.record.artifactDirectory}/children.jsonl`);
-  if (parent.record.runId !== parentRunId || parent.record.status !== "running" || !children.includes(recordPath)) {
-    throw new Error("APISIX resource lease must belong to this Integration command");
-  }
-  const run = await readManagedResourceRun(root, recordPath);
-  if (
-    run.record.status !== "ready" ||
-    run.record.composeFile !== expectedComposeFile ||
-    !run.record.project.startsWith(expectedProjectPrefix)
-  ) {
-    throw new Error(`Invalid Gateway APISIX resource lease (expected ready status, received ${run.record.status})`);
-  }
-  const recorded = JSON.parse(await readFile(join(root, run.record.testEnvironmentFile), "utf8")) as Record<
-    string,
-    unknown
-  >;
-  if (
-    recorded.IAM_TEST_APISIX_ADMIN_URL !== endpoint.adminUrl ||
-    recorded.IAM_TEST_APISIX_ADMIN_KEY !== endpoint.adminKey
-  ) {
-    throw new Error("APISIX Admin endpoint must match this run's managed Gateway APISIX record");
-  }
-}
-
 async function waitForAdmin(adminUrl: string, adminKey: string, signal?: AbortSignal) {
   const deadline = performance.now() + 15_000;
   let failure: unknown;
@@ -118,7 +75,6 @@ let leased = false;
 
 async function startSharedApisix(): Promise<ApisixFixture> {
   const endpoint = parseApisixEndpointConfig(process.env);
-  await verifyManagedApisixLease(endpoint, process.env);
   return await connectApisixEndpoint(endpoint);
 }
 

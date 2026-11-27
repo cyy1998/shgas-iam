@@ -119,8 +119,8 @@ function makeUserService(mobileService: UserMobileBindingPort) {
 }
 
 function createSmsFixture(code: string) {
-  const redisUrl = process.env.IAM_AUTH_API_TEST_REDIS_URL;
-  if (!redisUrl) throw new Error("IAM_AUTH_API_TEST_REDIS_URL is required");
+  const redisUrl = process.env.IAM_TEST_REDIS_URL;
+  if (!redisUrl) throw new Error("IAM_TEST_REDIS_URL is required");
   const redis = new Redis(redisUrl, { lazyConnect: true, maxRetriesPerRequest: 0 });
   const closeRedis = ownAuthApiTestExecutor(() => closeAuthApiRedisConnection(redis));
   const mobileService = createMobileService({

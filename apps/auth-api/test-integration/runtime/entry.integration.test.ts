@@ -23,7 +23,7 @@ afterEach(suite.cleanup);
 const redisUrl = requireExternalTestUrl({
   environment: process.env,
   lane: "Auth API entry",
-  name: "IAM_AUTH_API_TEST_REDIS_URL",
+  name: "IAM_TEST_REDIS_URL",
 });
 
 test(

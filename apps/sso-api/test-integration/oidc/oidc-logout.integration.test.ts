@@ -302,7 +302,7 @@ describe("OIDC candidate logout HTTP and real Redis", () => {
     expect(before).toMatchObject({ matching: 4, unknown: 0 });
     const applied = await maintenance.apply();
     expect(applied).toMatchObject({ matching: 4, removed: 4, unknown: 0 });
-    const independent = await createOidcRedisTestScope(process.env.IAM_SSO_API_TEST_REDIS_URL!);
+    const independent = await createOidcRedisTestScope(process.env.IAM_TEST_REDIS_URL!);
     const closeIndependent = ownApiTestExecutor(() => independent.close());
     try {
       const after = await createOidcInventory(independent.redis, f.oidcState.namespace).inventory();

@@ -106,7 +106,7 @@ test("preserves the body failure while attempting every owned resource cleanup",
 });
 
 test("rejects rediss when the production Redis configuration cannot carry TLS", () => {
-  const name = "IAM_EXAMPLE_TEST_REDIS_URL";
+  const name = "IAM_TEST_REDIS_URL";
   let redissFailure: unknown;
   try {
     parseDedicatedRedisTestUrl({
@@ -135,7 +135,7 @@ test("rejects rediss when the production Redis configuration cannot carry TLS", 
 });
 
 test("test Redis URLs preserve ACL identities and reject options that override connection policy", () => {
-  const name = "IAM_EXAMPLE_TEST_REDIS_URL";
+  const name = "IAM_TEST_REDIS_URL";
   expect(parseDedicatedRedisTestUrl({ name, value: "redis://user%40test:p%40ss@[::1]:6380/12" })).toEqual({
     host: "::1",
     port: 6380,
@@ -152,7 +152,7 @@ test("test Redis URLs preserve ACL identities and reject options that override c
 });
 
 test("requires a dedicated PostgreSQL URL without falling back to a runtime database", () => {
-  const name = "IAM_EXAMPLE_TEST_DATABASE_URL";
+  const name = "IAM_TEST_POSTGRES_URL";
   const lane = "the explicit example external lane";
   const missing = captureErrorMessage(() =>
     requireExternalTestUrl({
@@ -162,7 +162,7 @@ test("requires a dedicated PostgreSQL URL without falling back to a runtime data
     }),
   );
   const value = requireExternalTestUrl({
-    environment: { [name]: "postgres://test@db.test/dedicated" },
+    environment: { [name]: "postgres://test@db.test/iam_test" },
     lane,
     name,
   });
@@ -171,18 +171,18 @@ test("requires a dedicated PostgreSQL URL without falling back to a runtime data
       forbidden: [
         {
           name: "IAM_EXAMPLE_DATABASE_URL",
-          value: "postgresql://runtime-secret@db.test:5432/dedicated",
+          value: "postgresql://runtime-secret@db.test:5432/iam_test",
         },
       ],
       name,
-      value: "postgres://test-secret@DB.TEST/dedicated",
+      value: "postgres://test-secret@DB.TEST/iam_test",
     }),
   );
 
   expect({ missing, runtimeIdentity, value }).toEqual({
     missing: `${name} is required for ${lane}; provide dedicated disposable test resources`,
     runtimeIdentity: `${name} must not identify the same database as IAM_EXAMPLE_DATABASE_URL`,
-    value: "postgres://test@db.test/dedicated",
+    value: "postgres://test@db.test/iam_test",
   });
 });
 
@@ -196,7 +196,7 @@ function captureErrorMessage(operation: () => unknown) {
 }
 
 test("requires the dedicated Redis test URL even when runtime configuration is present", () => {
-  const name = "IAM_EXAMPLE_TEST_REDIS_URL";
+  const name = "IAM_TEST_REDIS_URL";
   const failure = captureErrorMessage(() =>
     createExclusiveRedisTestHarness({
       environment: {

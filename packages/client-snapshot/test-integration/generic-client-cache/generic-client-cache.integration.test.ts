@@ -28,7 +28,7 @@ let closeRedis: () => Promise<void>;
 beforeAll(() => {
   harness = createExclusiveRedisTestHarness({
     environment: process.env,
-    name: "IAM_CLIENT_SNAPSHOT_TEST_REDIS_URL",
+    name: "IAM_TEST_REDIS_URL",
   });
 });
 beforeEach(async () => {

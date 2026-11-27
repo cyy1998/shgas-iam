@@ -1,17 +1,15 @@
 import { afterAll, beforeAll, beforeEach } from "bun:test";
 import { relations } from "@iam/db/relations";
-import { createPostgresTestHarness } from "@iam/test-support/postgres-test-harness";
+import { createDrizzlePostgresTestHarness } from "@iam/test-support/postgres-test-harness";
 import { drizzle } from "drizzle-orm/postgres-js";
 
 export type WorkerPostgresTestHarness = Awaited<ReturnType<typeof createWorkerPostgresTestHarness>>;
 
-export async function createWorkerPostgresTestHarness() {
-  const pg = await createPostgresTestHarness({
-    environment: process.env,
-    name: "IAM_WORKER_TEST_DATABASE_URL",
+export function createWorkerPostgresTestHarness() {
+  return createDrizzlePostgresTestHarness({
     client: { max: 4 },
+    createDb: (client) => drizzle({ client, relations }),
   });
-  return { ...pg, db: drizzle({ client: pg.sql, relations }) };
 }
 
 export function useWorkerPostgresTestHarness() {

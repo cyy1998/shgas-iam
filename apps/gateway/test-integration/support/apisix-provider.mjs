@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
-  createManagedResourceRun,
+  managedComposeStackView,
   managedServiceEndpoint,
-  startManagedResources,
-  writeAtomicResourceRecord,
+  runManagedComposeCommand,
+  saveManagedResourceRun,
 } from "../../../../scripts/test-resources/managed-resources.mjs";
 
 export const gatewayApisixComposeFile = "apps/gateway/test-integration/support/apisix.compose.yaml";
@@ -69,14 +69,14 @@ async function assertApisixAdminEmpty(adminUrl, adminKey, signal) {
 
 /**
  * Prepare and start the Gateway APISIX + etcd Compose stack before concurrent Integration tasks start.
- * Teardown is owned exclusively by the root runner after all concurrent task process trees exit.
+ * Recorded directly on the single root run.json so teardown is owned uniformly by the root runner.
  */
-export async function prepareManagedGatewayApisix({ parentRun, signal, timeoutMs, cleanupTimeoutMs, registryFile }) {
-  if (!parentRun?.root || !parentRun?.recordPath) {
+export async function prepareManagedGatewayApisix({ run, signal, timeoutMs, cleanupTimeoutMs }) {
+  if (!run?.root || !run?.recordPath || !run?.record?.runId) {
     throw new Error("prepareManagedGatewayApisix requires the root managed resource run");
   }
   signal?.throwIfAborted();
-  const root = parentRun.root;
+  const root = run.root;
   const supportDirectory = join(root, "apps/gateway/test-integration/support");
   const [dockerfile, config] = await Promise.all([
     readFile(join(supportDirectory, "apisix.Dockerfile"), "utf8"),
@@ -86,22 +86,39 @@ export async function prepareManagedGatewayApisix({ parentRun, signal, timeoutMs
     .update(JSON.stringify([dockerfile, config]))
     .digest("hex");
   signal?.throwIfAborted();
-  const run = await createManagedResourceRun({
-    root,
+
+  const composeEnvironmentFile = `${run.record.artifactDirectory}/apisix-compose-environment.json`;
+  await writeFile(
+    join(root, composeEnvironmentFile),
+    `${JSON.stringify({ IAM_GATEWAY_TEST_APISIX_IMAGE: `iam-gateway-apisix:${fingerprint}` }, null, 2)}\n`,
+    { mode: 0o600 },
+  );
+
+  const stack = {
+    project: `${gatewayApisixProjectPrefix}-${run.record.runId.replaceAll("-", "")}`,
     composeFile: gatewayApisixComposeFile,
-    projectPrefix: gatewayApisixProjectPrefix,
+    composeEnvironmentFile,
     services: ["apisix-etcd", "apisix"],
-    parentRecord: parentRun.recordPath,
-    keep: parentRun.record.keep,
-    registryFile,
-    composeEnvironment: { IAM_GATEWAY_TEST_APISIX_IMAGE: `iam-gateway-apisix:${fingerprint}` },
-  });
-  await startManagedResources(run, {
+    removeLocalImages: false,
+    status: "initializing",
+  };
+  run.record.apisix = stack;
+  await saveManagedResourceRun(run);
+
+  const stackRun = managedComposeStackView(run, stack);
+  const result = await runManagedComposeCommand(stackRun, ["up", "--detach", "--wait", ...stack.services], {
     signal,
     timeoutMs: Math.min(timeoutMs ?? 120_000, 120_000),
     cleanupTimeoutMs,
+    logFile: join(root, run.record.artifactDirectory, "apisix-initialize.log"),
   });
-  const apisix = await managedServiceEndpoint(run, "apisix", 9180, {
+  if (result.exitCode !== 0) {
+    throw new Error(`Gateway APISIX initialization failed with exit ${result.exitCode}:\n${result.output}`);
+  }
+  stack.status = "ready";
+  await saveManagedResourceRun(run);
+
+  const apisix = await managedServiceEndpoint(stackRun, "apisix", 9180, {
     signal,
     timeoutMs: Math.min(timeoutMs ?? 10_000, 10_000),
     cleanupTimeoutMs,
@@ -110,9 +127,5 @@ export async function prepareManagedGatewayApisix({ parentRun, signal, timeoutMs
   const adminKey = gatewayTestApisixAdminKey;
   await waitForApisixAdmin(adminUrl, adminKey, signal);
   await assertApisixAdminEmpty(adminUrl, adminKey, signal);
-  await writeAtomicResourceRecord(join(root, run.record.testEnvironmentFile), {
-    IAM_TEST_APISIX_ADMIN_URL: adminUrl,
-    IAM_TEST_APISIX_ADMIN_KEY: adminKey,
-  });
-  return { run, recordPath: run.recordPath, adminUrl, adminKey };
+  return { adminUrl, adminKey };
 }

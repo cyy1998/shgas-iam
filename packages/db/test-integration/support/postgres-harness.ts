@@ -1,9 +1,7 @@
 import { expect } from "bun:test";
 import { randomUUID } from "node:crypto";
+import { requireDedicatedPostgresTestUrl, TEST_POSTGRES_URL_ENV } from "@iam/test-support/postgres-test-harness";
 import postgres from "postgres";
-
-const TEST_DATABASE_URL_ENV = "IAM_DB_TEST_DATABASE_URL";
-const RESERVED_DATABASE_NAMES = new Set(["postgres", "template0", "template1"]);
 
 export interface PostgresTestHarness {
   readonly schemaName: string;
@@ -59,28 +57,17 @@ export async function createPostgresTestHarness(): Promise<PostgresTestHarness> 
 }
 
 function requireDedicatedTestDatabaseUrl(): string {
-  const databaseUrl = process.env[TEST_DATABASE_URL_ENV];
+  const databaseUrl = process.env[TEST_POSTGRES_URL_ENV]?.trim();
   if (!databaseUrl) {
     throw new Error(
-      `${TEST_DATABASE_URL_ENV} must point to a dedicated PostgreSQL test database; no fallback is allowed`,
+      `${TEST_POSTGRES_URL_ENV} must point to a dedicated PostgreSQL test database; no fallback is allowed`,
     );
   }
-
-  let parsed: URL;
-  try {
-    parsed = new URL(databaseUrl);
-  } catch {
-    throw new Error(`${TEST_DATABASE_URL_ENV} must be a valid PostgreSQL URL`);
-  }
-  if (parsed.protocol !== "postgres:" && parsed.protocol !== "postgresql:")
-    throw new Error(`${TEST_DATABASE_URL_ENV} must use the postgres or postgresql protocol`);
-
-  const databaseName = decodeURIComponent(parsed.pathname.slice(1));
-  if (!databaseName || RESERVED_DATABASE_NAMES.has(databaseName.toLowerCase())) {
-    throw new Error(`${TEST_DATABASE_URL_ENV} must name a dedicated, non-system test database`);
-  }
-
-  return databaseUrl;
+  return requireDedicatedPostgresTestUrl({
+    name: TEST_POSTGRES_URL_ENV,
+    value: databaseUrl,
+    environment: process.env,
+  });
 }
 
 function quoteIdentifier(identifier: string): string {

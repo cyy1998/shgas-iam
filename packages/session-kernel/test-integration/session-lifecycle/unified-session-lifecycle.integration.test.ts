@@ -10,8 +10,8 @@ let scope: Awaited<ReturnType<typeof createUnifiedSessionRedisTestScope>>;
 let stopScope: (() => Promise<void>) | undefined;
 beforeEach(async () => {
   stopScope = undefined;
-  const url = process.env.IAM_SESSION_KERNEL_TEST_REDIS_URL;
-  if (!url) throw new Error("IAM_SESSION_KERNEL_TEST_REDIS_URL must point to a dedicated Redis instance");
+  const url = process.env.IAM_TEST_REDIS_URL;
+  if (!url) throw new Error("IAM_TEST_REDIS_URL must point to a dedicated Redis instance");
   scope = await createUnifiedSessionRedisTestScope(url, {}, (close) => {
     stopScope = close;
   });
@@ -21,7 +21,7 @@ afterEach(async () => {
 });
 
 test("an initializing scope registers its stop before readiness and cannot return after being stopped", async () => {
-  const upstreamUrl = new URL(process.env.IAM_SESSION_KERNEL_TEST_REDIS_URL!);
+  const upstreamUrl = new URL(process.env.IAM_TEST_REDIS_URL!);
   const sockets = new Set<Socket>();
   let observeReply!: () => void;
   let rejectReply!: (error: unknown) => void;
@@ -84,7 +84,7 @@ test("an initializing scope registers its stop before readiness and cannot retur
 test("scope close stops its connection while case data remains for the outer reset", async () => {
   const op = operation();
   await op.api.createUserSession(authentication);
-  const observer = new Redis(process.env.IAM_SESSION_KERNEL_TEST_REDIS_URL!, {
+  const observer = new Redis(process.env.IAM_TEST_REDIS_URL!, {
     maxRetriesPerRequest: 0,
     retryStrategy: () => null,
   });

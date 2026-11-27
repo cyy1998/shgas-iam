@@ -5,7 +5,7 @@ import { runWithOwnedTestResources } from "@iam/test-support/external-test-resou
 import { createEmptyPostgresTestHarness, createPostgresTestHarness } from "@iam/test-support/postgres-test-harness";
 import postgres from "postgres";
 
-const options = { environment: process.env, name: "IAM_TEST_SUPPORT_TEST_DATABASE_URL" };
+const options = { environment: process.env, name: "IAM_TEST_POSTGRES_URL" };
 const databaseUrl = options.environment[options.name];
 if (!databaseUrl) throw new Error("Use the root Integration entry to supply PostgreSQL");
 

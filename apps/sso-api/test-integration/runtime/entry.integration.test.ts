@@ -24,7 +24,7 @@ afterEach(suite.cleanup);
 const redisUrl = requireExternalTestUrl({
   environment: process.env,
   lane: "SSO API entry",
-  name: "IAM_SSO_API_TEST_REDIS_URL",
+  name: "IAM_TEST_REDIS_URL",
 });
 
 test.each(["production", "development"] as const)(

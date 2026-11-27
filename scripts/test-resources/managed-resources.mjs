@@ -5,6 +5,9 @@ import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import process from "node:process";
 import { runOwnedCommand } from "./owned-command.mjs";
 
+const validStatuses = ["created", "initializing", "ready", "running", "cleaning", "cleaned", "cleanup-failed", "kept"];
+const validStackStatuses = ["created", "initializing", "ready", "cleaning", "cleaned", "cleanup-failed", "kept"];
+
 export function repositoryPath(root, path) {
   if (typeof path !== "string" || !path) throw new Error("A repository-relative path is required");
   const normalized = relative(root, resolve(root, path));
@@ -25,7 +28,6 @@ export async function saveManagedResourceRun(run) {
 
 export async function createManagedResourceRun(options) {
   const root = resolve(options.root);
-  const parent = options.parentRecord ? await readManagedResourceRun(root, options.parentRecord) : undefined;
   const runId = randomUUID();
   const project = options.project ?? `${options.projectPrefix ?? "iam-integration"}-${runId.replaceAll("-", "")}`;
   if (!/^[a-z0-9][a-z0-9_-]+$/.test(project)) throw new Error("An exact Compose project name is required");
@@ -42,7 +44,7 @@ export async function createManagedResourceRun(options) {
     testEnvironmentFile: `${artifactDirectory}/test-environment.json`,
     services: [...(options.services ?? [])],
     removeLocalImages: options.removeLocalImages ?? false,
-    keep: Boolean(options.keep ?? parent?.record.keep),
+    keep: Boolean(options.keep),
     status: "created",
     createdAt: new Date().toISOString(),
     durations: {},
@@ -57,9 +59,8 @@ export async function createManagedResourceRun(options) {
   await writeFile(join(root, record.testEnvironmentFile), "{}\n", { mode: 0o600 });
   const run = { root, recordPath, record };
   await saveManagedResourceRun(run);
-  for (const file of [options.registryFile, parent && `${parent.record.artifactDirectory}/children.jsonl`]) {
-    if (!file) continue;
-    const registry = join(root, repositoryPath(root, file));
+  if (options.registryFile) {
+    const registry = join(root, repositoryPath(root, options.registryFile));
     await mkdir(dirname(registry), { recursive: true });
     await appendFile(registry, `${JSON.stringify(recordPath)}\n`, { mode: 0o600 });
   }
@@ -67,17 +68,34 @@ export async function createManagedResourceRun(options) {
   return run;
 }
 
+function validateComposeStack(root, stack) {
+  if (!stack || typeof stack !== "object" || Array.isArray(stack)) {
+    throw new Error("Invalid managed resource stack record");
+  }
+  if (
+    typeof stack.project !== "string" ||
+    !/^[a-z0-9][a-z0-9_-]*$/.test(stack.project) ||
+    !validStackStatuses.includes(stack.status) ||
+    typeof stack.removeLocalImages !== "boolean" ||
+    !Array.isArray(stack.services) ||
+    stack.services.some((service) => typeof service !== "string")
+  ) {
+    throw new Error("Invalid managed resource stack record");
+  }
+  repositoryPath(root, stack.composeFile);
+  repositoryPath(root, stack.composeEnvironmentFile);
+}
+
 export async function readManagedResourceRun(root, recordPath) {
   const path = repositoryPath(root, recordPath);
   const record = JSON.parse(await readFile(join(root, path), "utf8"));
-  const statuses = ["created", "initializing", "ready", "running", "cleaning", "cleaned", "cleanup-failed", "kept"];
   if (
     record.schemaVersion !== 1 ||
     typeof record.runId !== "string" ||
     !record.runId ||
     typeof record.project !== "string" ||
     !/^[a-z0-9][a-z0-9_-]*$/.test(record.project) ||
-    !statuses.includes(record.status) ||
+    !validStatuses.includes(record.status) ||
     typeof record.removeLocalImages !== "boolean" ||
     typeof record.createdAt !== "string" ||
     !record.durations ||
@@ -94,6 +112,13 @@ export async function readManagedResourceRun(root, recordPath) {
     record.services.some((service) => typeof service !== "string")
   )
     throw new Error("Invalid managed resource record paths or options");
+  if (record.apisix !== undefined) validateComposeStack(root, record.apisix);
+  if (
+    record.endpoints !== undefined &&
+    (!record.endpoints || typeof record.endpoints !== "object" || Array.isArray(record.endpoints))
+  ) {
+    throw new Error("Invalid managed resource endpoints record");
+  }
   return { root: resolve(root), recordPath: path, record };
 }
 
@@ -113,6 +138,21 @@ export async function readManagedResourceRegistry(root, registryFile) {
         .map((line) => repositoryPath(root, JSON.parse(line))),
     ),
   ];
+}
+
+export function managedComposeStackView(run, stack) {
+  return {
+    root: run.root,
+    recordPath: run.recordPath,
+    record: {
+      ...run.record,
+      project: stack.project,
+      composeFile: stack.composeFile,
+      composeEnvironmentFile: stack.composeEnvironmentFile,
+      services: stack.services,
+      removeLocalImages: stack.removeLocalImages,
+    },
+  };
 }
 
 export function managedComposeArguments(run, args) {
@@ -218,22 +258,31 @@ export async function managedServiceEndpoint(run, service, port, options = {}) {
   return { host: "127.0.0.1", port: await managedServicePort(run, service, port, options) };
 }
 
-export async function collectManagedResourceDiagnostics(run, options = {}) {
+async function collectComposeStackDiagnostics(targetRun, prefix, options = {}) {
   for (const [name, args] of [
-    ["containers", ["ps", "--all", "--format", "json"]],
-    ["services", ["logs", "--no-color", "--tail", "150"]],
+    [`${prefix}containers`, ["ps", "--all", "--format", "json"]],
+    [`${prefix}services`, ["logs", "--no-color", "--tail", "150"]],
   ]) {
     try {
-      const result = await runManagedComposeCommand(run, args, {
+      const result = await runManagedComposeCommand(targetRun, args, {
         timeoutMs: 10_000,
         cleanupTimeoutMs: 5000,
         ...options,
       });
       if (result.exitCode !== 0) throw new Error(`Docker diagnostic exited ${result.exitCode}: ${result.output}`);
-      await writeFile(join(run.root, run.record.artifactDirectory, `${name}.log`), result.output);
+      await writeFile(join(targetRun.root, targetRun.record.artifactDirectory, `${name}.log`), result.output);
     } catch (error) {
       console.warn(`Warning: ${name} diagnostics failed: ${error.message}`);
     }
+  }
+}
+
+export async function collectManagedResourceDiagnostics(run, options = {}) {
+  if (run.record.services.length > 0 || !run.record.apisix) {
+    await collectComposeStackDiagnostics(run, "", options);
+  }
+  if (run.record.apisix && run.record.apisix.status !== "created" && run.record.apisix.status !== "cleaned") {
+    await collectComposeStackDiagnostics(managedComposeStackView(run, run.record.apisix), "apisix-", options);
   }
 }
 
@@ -242,34 +291,52 @@ export function managedCleanupCommand(run) {
   return `pnpm test:resources:cleanup --record ${path}`;
 }
 
+async function cleanupComposeTarget(targetRun, logName, options = {}) {
+  const result = await runManagedComposeCommand(
+    targetRun,
+    ["down", "--volumes", "--remove-orphans", ...(targetRun.record.removeLocalImages ? ["--rmi", "local"] : [])],
+    {
+      timeoutMs: options.timeoutMs ?? 30_000,
+      cleanupTimeoutMs: 5000,
+      logFile: join(targetRun.root, targetRun.record.artifactDirectory, logName),
+      runCommand: options.runCommand,
+    },
+  );
+  if (result.exitCode !== 0) {
+    throw new Error(
+      `Exact project ${targetRun.record.project} cleanup failed with exit ${result.exitCode}:\n${result.output}`,
+    );
+  }
+}
+
 export async function cleanupManagedResources(run, options = {}) {
   if (options.respectKeep && run.record.keep) return;
-  if (run.record.status === "cleaned") return;
+  const apisixPending = Boolean(run.record.apisix && run.record.apisix.status !== "cleaned");
+  if (run.record.status === "cleaned" && !apisixPending) return;
   const start = performance.now();
   run.record.status = "cleaning";
+  if (apisixPending) run.record.apisix.status = "cleaning";
   const failures = [];
   try {
     await saveManagedResourceRun(run);
   } catch (error) {
     failures.push(error);
   }
-  try {
-    const result = await runManagedComposeCommand(
-      run,
-      ["down", "--volumes", "--remove-orphans", ...(run.record.removeLocalImages ? ["--rmi", "local"] : [])],
-      {
-        timeoutMs: options.timeoutMs ?? 30_000,
-        cleanupTimeoutMs: 5000,
-        logFile: join(run.root, run.record.artifactDirectory, "cleanup.log"),
-        runCommand: options.runCommand,
-      },
-    );
-    if (result.exitCode !== 0)
-      throw new Error(
-        `Exact project ${run.record.project} cleanup failed with exit ${result.exitCode}:\n${result.output}`,
-      );
-  } catch (error) {
-    failures.push(error);
+  if (apisixPending) {
+    try {
+      await cleanupComposeTarget(managedComposeStackView(run, run.record.apisix), "apisix-cleanup.log", options);
+      run.record.apisix.status = "cleaned";
+    } catch (error) {
+      run.record.apisix.status = "cleanup-failed";
+      failures.push(error);
+    }
+  }
+  if (run.record.services.length > 0 || !run.record.apisix) {
+    try {
+      await cleanupComposeTarget(run, "cleanup.log", options);
+    } catch (error) {
+      failures.push(error);
+    }
   }
   run.record.durations.cleanupMs = Math.round(performance.now() - start);
   run.record.status = failures.length > 0 ? "cleanup-failed" : "cleaned";
@@ -287,6 +354,7 @@ export async function finishManagedResourceRun(run, options = {}) {
   if (diagnose) await collectManagedResourceDiagnostics(run);
   if (run.record.keep) {
     run.record.status = "kept";
+    if (run.record.apisix && run.record.apisix.status !== "cleaned") run.record.apisix.status = "kept";
     await saveManagedResourceRun(run);
     console.log(`[test-resources] Environment retained; cleanup: ${managedCleanupCommand(run)}`);
     return;

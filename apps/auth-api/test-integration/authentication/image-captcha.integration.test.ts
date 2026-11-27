@@ -15,8 +15,8 @@ import {
 afterEach(resetAuthApiRedisTestDatabase);
 
 async function fixture() {
-  const url = process.env.IAM_AUTH_API_TEST_REDIS_URL;
-  if (!url) throw new Error("IAM_AUTH_API_TEST_REDIS_URL is required");
+  const url = process.env.IAM_TEST_REDIS_URL;
+  if (!url) throw new Error("IAM_TEST_REDIS_URL is required");
   const redis = new Redis(url, {
     keyPrefix: `image-captcha-test:${randomUUID()}:`,
     maxRetriesPerRequest: 0,

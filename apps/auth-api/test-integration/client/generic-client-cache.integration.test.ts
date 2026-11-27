@@ -23,7 +23,7 @@ test("the API reader warms both Redis aliases with only the generic Client DTO",
       requireExternalTestUrl({
         environment: process.env,
         lane: "API Integration",
-        name: "IAM_AUTH_API_TEST_REDIS_URL",
+        name: "IAM_TEST_REDIS_URL",
       }),
       { lazyConnect: true, maxRetriesPerRequest: 0, retryStrategy: () => null },
     );

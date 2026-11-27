@@ -24,8 +24,8 @@ const getDatabase = useAuthApiPostgresTestHarness();
 afterEach(resetAuthApiRedisTestDatabase);
 
 test("a rolled-back password reset spends its code and only one submission can use the next code", async () => {
-  const redisUrl = process.env.IAM_AUTH_API_TEST_REDIS_URL;
-  if (!redisUrl) throw new Error("IAM_AUTH_API_TEST_REDIS_URL is required");
+  const redisUrl = process.env.IAM_TEST_REDIS_URL;
+  if (!redisUrl) throw new Error("IAM_TEST_REDIS_URL is required");
   const pg = getDatabase();
   const redis = new Redis(redisUrl, { lazyConnect: true, maxRetriesPerRequest: 0 });
   const close = ownAuthApiTestExecutor(() => closeAuthApiRedisConnection(redis));

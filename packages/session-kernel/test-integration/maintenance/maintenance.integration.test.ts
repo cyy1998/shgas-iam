@@ -12,8 +12,8 @@ import Redis from "ioredis";
 import { closeRedisTestClient, resetRedisTestCase } from "../support/redis-test-harness";
 
 test("maintenance clears all owner versions and Redis types using only SCAN and UNLINK", async () => {
-  const url = process.env.IAM_SESSION_KERNEL_TEST_REDIS_URL;
-  if (!url) throw new Error("IAM_SESSION_KERNEL_TEST_REDIS_URL is required");
+  const url = process.env.IAM_TEST_REDIS_URL;
+  if (!url) throw new Error("IAM_TEST_REDIS_URL is required");
   const redis = new Redis(url, { maxRetriesPerRequest: 0, retryStrategy: () => null });
   const namespace = `test:maintenance:${randomUUID()}:`;
   let failure: unknown;

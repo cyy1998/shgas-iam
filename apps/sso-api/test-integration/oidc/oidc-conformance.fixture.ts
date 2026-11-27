@@ -44,9 +44,9 @@ export async function createOidcConformanceCandidate(options: {
   };
   await checkpoint("setup");
   await requireManagedApiResources();
-  const redisUrl = process.env.IAM_SSO_API_TEST_REDIS_URL;
-  if (!redisUrl) throw new Error("IAM_SSO_API_TEST_REDIS_URL is required");
-  parseDedicatedRedisTestUrl({ name: "IAM_SSO_API_TEST_REDIS_URL", value: redisUrl });
+  const redisUrl = process.env.IAM_TEST_REDIS_URL;
+  if (!redisUrl) throw new Error("IAM_TEST_REDIS_URL is required");
+  parseDedicatedRedisTestUrl({ name: "IAM_TEST_REDIS_URL", value: redisUrl });
   const temporaryDirectory = await mkdtemp(join(tmpdir(), "iam195-candidate-"));
   const cleanups: (() => unknown | Promise<unknown>)[] = [];
   function registerCleanup(cleanup: () => unknown | Promise<unknown>) {

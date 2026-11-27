@@ -1,41 +1,88 @@
 import { randomUUID } from "node:crypto";
+import process from "node:process";
 import postgres from "postgres";
-import { requireDedicatedPostgresTestUrl } from "./dedicated-postgres-test-url";
+import { requireDedicatedPostgresTestUrl, TEST_POSTGRES_URL_ENV } from "./dedicated-postgres-test-url";
 
-export { requireDedicatedPostgresTestUrl } from "./dedicated-postgres-test-url";
+export { requireDedicatedPostgresTestUrl, TEST_POSTGRES_URL_ENV } from "./dedicated-postgres-test-url";
 
 type TestClientOptions = Pick<postgres.Options<Record<string, never>>, "max" | "debug" | "onnotice">;
 
-interface PostgresTestHarnessOptions {
-  readonly environment: Readonly<Record<string, string | undefined>>;
-  readonly name: string;
+export interface PostgresTestHarnessOptions {
+  readonly environment?: Readonly<Record<string, string | undefined>>;
+  readonly name?: string;
   readonly forbiddenEnvironmentNames?: readonly string[];
   readonly client?: TestClientOptions;
 }
 
-export async function createPostgresTestHarness(options: PostgresTestHarnessOptions) {
-  const baseUrl = dedicatedDatabaseUrl(options);
-  const templateName = options.environment.IAM_TEST_POSTGRES_TEMPLATE;
+export interface DrizzlePostgresTestHarnessOptions<TDatabase> extends PostgresTestHarnessOptions {
+  readonly createDb: (client: ReturnType<typeof postgres>) => TDatabase;
+  readonly trackStop?: (close: () => Promise<void>) => void;
+}
+
+export type PostgresTestHarness = Awaited<ReturnType<typeof createPostgresTestHarness>>;
+export type DrizzlePostgresTestHarness<TDatabase> = PostgresTestHarness & { readonly db: TDatabase };
+
+export async function createPostgresTestHarness(options: PostgresTestHarnessOptions = {}) {
+  const environment = options.environment ?? process.env;
+  const baseUrl = dedicatedDatabaseUrl({ ...options, environment });
+  const templateName = environment.IAM_TEST_POSTGRES_TEMPLATE;
   if (!templateName || !/^[a-z][a-z0-9_]{0,62}$/u.test(templateName)) {
     throw new Error("IAM_TEST_POSTGRES_TEMPLATE must name the prepared PostgreSQL test template");
   }
   return await cloneDatabase(baseUrl, templateName, options.client);
 }
 
-export async function createEmptyPostgresTestHarness(options: PostgresTestHarnessOptions) {
+export async function createDrizzlePostgresTestHarness<TDatabase>(
+  options: DrizzlePostgresTestHarnessOptions<TDatabase>,
+): Promise<DrizzlePostgresTestHarness<TDatabase>> {
+  const { createDb, trackStop, ...harnessOptions } = options;
+  if (!trackStop) {
+    const harness = await createPostgresTestHarness(harnessOptions);
+    return { ...harness, db: createDb(harness.sql) };
+  }
+
+  let stopped = false;
+  const ready = Promise.resolve().then(() => {
+    if (stopped) throw new Error("API PostgreSQL fixture stopped during initialization");
+    return createPostgresTestHarness(harnessOptions);
+  });
+  try {
+    trackStop(async () => {
+      stopped = true;
+      // The shared harness cleans up on setup failure. Otherwise wait for the clone before dropping it.
+      const harness = await ready.catch(() => undefined);
+      await harness?.close();
+    });
+  } catch (error) {
+    stopped = true;
+    await ready.catch(() => undefined);
+    throw error;
+  }
+  const harness = await ready;
+  if (stopped) {
+    await harness.close();
+    throw new Error("API PostgreSQL fixture stopped during initialization");
+  }
+  return { ...harness, db: createDb(harness.sql) };
+}
+
+export async function createEmptyPostgresTestHarness(options: PostgresTestHarnessOptions = {}) {
   return await cloneDatabase(dedicatedDatabaseUrl(options), "template0", options.client);
 }
 
-function dedicatedDatabaseUrl({ environment, name, forbiddenEnvironmentNames = [] }: PostgresTestHarnessOptions) {
+function dedicatedDatabaseUrl({
+  environment = process.env,
+  name = TEST_POSTGRES_URL_ENV,
+  forbiddenEnvironmentNames = [],
+}: PostgresTestHarnessOptions = {}) {
   const value = environment[name]?.trim();
   if (!value) throw new Error(`${name} must be supplied with a dedicated PostgreSQL test URL`);
-  const workspaceDevelopmentName = name.replace(/_TEST_DATABASE_URL$/u, "_DATABASE_URL");
   const forbidden = new Set(["DATABASE_URL", ...forbiddenEnvironmentNames]);
-  if (workspaceDevelopmentName !== name) forbidden.add(workspaceDevelopmentName);
   return requireDedicatedPostgresTestUrl({
+    environment,
     name,
     value,
-    forbidden: [...forbidden].map((name) => ({ name, value: environment[name] })),
+    forbidden: [...forbidden].map((entry) => ({ name: entry, value: environment[entry] })),
   });
 }
 

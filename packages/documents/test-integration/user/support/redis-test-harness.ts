@@ -16,7 +16,7 @@ import type {
   SubjectFactsRedisInspectionClient,
 } from "../../../src/user/subject-facts/subject-facts-redis-publisher.core";
 
-const TEST_REDIS_URL_ENV = "IAM_DOCUMENTS_TEST_REDIS_URL";
+const TEST_REDIS_URL_ENV = "IAM_TEST_REDIS_URL";
 
 export interface RedisTestScope {
   readonly projectionRedis: {

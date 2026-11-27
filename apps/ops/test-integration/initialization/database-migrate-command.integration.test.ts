@@ -36,7 +36,7 @@ test("正式 db:migrate 子进程迁移真实空库，重复迁移保留账本�
     close,
   } = await createEmptyPostgresTestHarness({
     environment: process.env,
-    name: "IAM_OPS_TEST_DATABASE_URL",
+    name: "IAM_TEST_POSTGRES_URL",
   });
   try {
     const [empty] = await target`SELECT to_regclass('drizzle.__drizzle_migrations') AS journal,

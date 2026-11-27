@@ -1,12 +1,26 @@
 import { join } from "node:path";
 import process from "node:process";
+import {
+  requireDedicatedPostgresTestUrl,
+  TEST_POSTGRES_URL_ENV,
+} from "../../packages/test-support/src/dedicated-postgres-test-url.mjs";
 import { managedServiceEndpoint } from "./managed-resources.mjs";
 import { pnpmCommand, runOwnedCommand } from "./owned-command.mjs";
 
-export async function prepareManagedPostgresTemplate(run, options) {
+async function discoverManagedPostgresUrl(run, options) {
   const { host, port } = await managedServiceEndpoint(run, "postgres", 5432, options);
-  const databaseUrl = `postgres://iam_test:iam_test@${host}:${port}/iam_test`;
-  const templateName = "iam_test_template";
+  return `postgres://iam_test:iam_test@${host}:${port}/iam_test`;
+}
+
+export async function prepareManagedPostgresTemplate(run, options = {}) {
+  const databaseUrl = options.databaseUrl ?? (await discoverManagedPostgresUrl(run, options));
+  const environment = options.env ?? process.env;
+  requireDedicatedPostgresTestUrl({
+    name: TEST_POSTGRES_URL_ENV,
+    value: databaseUrl,
+    environment,
+  });
+  const templateName = options.templateName ?? "iam_test_template";
   const command = process.versions.bun
     ? { executable: process.execPath, args: ["--no-env-file", "run", "test:postgres:prepare-template", templateName] }
     : process.env.npm_execpath
@@ -16,7 +30,7 @@ export async function prepareManagedPostgresTemplate(run, options) {
     ...options,
     ...command,
     cwd: join(run.root, "packages/db"),
-    env: { ...options.env, IAM_DB_TEST_DATABASE_URL: databaseUrl },
+    env: { ...environment, [TEST_POSTGRES_URL_ENV]: databaseUrl },
     logFile: join(run.root, run.record.artifactDirectory, "template-migration.log"),
   });
   if (result.exitCode !== 0) throw new Error(`PostgreSQL test template migration failed:\n${result.output}`);

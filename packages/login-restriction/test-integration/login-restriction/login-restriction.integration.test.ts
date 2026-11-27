@@ -13,7 +13,7 @@ let observer: LoginRestriction;
 beforeAll(() => {
   harness = createExclusiveRedisTestHarness({
     environment: process.env,
-    name: "IAM_LOGIN_RESTRICTION_TEST_REDIS_URL",
+    name: "IAM_TEST_REDIS_URL",
   });
 });
 beforeEach(async () => {

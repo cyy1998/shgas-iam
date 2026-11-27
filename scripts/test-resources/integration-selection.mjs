@@ -4,6 +4,12 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 export const integrationExecutors = ["bun", "vitest", "playwright"];
 // The root Compose Redis enables 32 logical databases. Slot 0 is reserved.
 export const integrationRedisSlotLimit = 31;
+export const testPostgresUrlEnv = "IAM_TEST_POSTGRES_URL";
+export const testRedisUrlEnv = "IAM_TEST_REDIS_URL";
+export const integrationResourceEnvNames = {
+  postgres: testPostgresUrlEnv,
+  redis: testRedisUrlEnv,
+};
 export const gatewayApisixWorkspace = "@iam/gateway-apisix";
 export const gatewayApisixIntegrationFiles = new Set([
   "test-integration/preview/preview.integration.test.ts",
@@ -12,12 +18,6 @@ export const gatewayApisixIntegrationFiles = new Set([
   "test-integration/publication/seven-kinds.integration.test.ts",
   "test-integration/runtime/publication-lifecycle.integration.test.ts",
 ]);
-export const excludedIntegrationFiles = new Map([
-  [
-    "apps/sso-api/test-integration/oidc/oidc-suite-resources.integration.test.ts",
-    "pnpm --filter @iam/sso-api test:oidc-suite-resources",
-  ],
-]);
 
 export function taskRequiresGatewayApisix(task) {
   return (
@@ -25,18 +25,6 @@ export function taskRequiresGatewayApisix(task) {
     task.executor === "bun" &&
     task.files.some((file) => gatewayApisixIntegrationFiles.has(file))
   );
-}
-
-function findExcludedIntegrationFile(root, file, candidateOwners) {
-  const paths = isAbsolute(file)
-    ? [resolve(file)]
-    : [resolve(root, file), ...candidateOwners.map((owner) => resolve(root, owner.directory, file))];
-  for (const candidatePath of paths) {
-    const repoRelative = relative(root, candidatePath);
-    const replacement = excludedIntegrationFiles.get(repoRelative);
-    if (replacement) return { file: repoRelative, replacement };
-  }
-  return undefined;
 }
 
 export function parseBrowserWorkers(value, option) {
@@ -65,14 +53,20 @@ export function integrationDeclarations(manifest) {
     if (!integrationExecutors.includes(executor)) throw new Error(`Unknown Integration executor: ${executor}`);
     if (!resources || typeof resources !== "object" || Array.isArray(resources))
       throw new Error(`Invalid resources for ${manifest.name}:${executor}`);
-    for (const [service, name] of Object.entries(resources)) {
-      const suffix = { postgres: "DATABASE", redis: "REDIS" }[service];
-      if (!suffix || typeof name !== "string" || !new RegExp(`^IAM_[A-Z_]+_TEST_${suffix}_URL$`).test(name))
-        throw new Error(`Invalid ${service} environment mapping for ${manifest.name}:${executor}`);
+    const enabledResources = {};
+    for (const [service, enabled] of Object.entries(resources)) {
+      if (!Object.hasOwn(integrationResourceEnvNames, service) || typeof enabled !== "boolean")
+        throw new Error(`Invalid ${service} resource declaration for ${manifest.name}:${executor}`);
+      if (enabled) enabledResources[service] = true;
     }
     const task = `test:integration:${executor}`;
     if (!manifest.scripts?.[task]) throw new Error(`Missing declared Integration task ${manifest.name}#${task}`);
-    return { executor, resources, task, environmentNames: Object.values(resources) };
+    return {
+      executor,
+      resources: enabledResources,
+      task,
+      environmentNames: Object.keys(enabledResources).map((service) => integrationResourceEnvNames[service]),
+    };
   });
 }
 
@@ -131,21 +125,11 @@ export function selectIntegrationTasks(root, options) {
           options.workspaces.some((workspace) => workspace === owner.name || workspace === owner.directory),
         )
       : owners;
-  for (const file of options.files) {
-    const excluded = findExcludedIntegrationFile(root, file, selectedOwners);
-    if (excluded) {
-      throw new Error(
-        `${excluded.file} is excluded from pnpm test:integration because it manages its own Docker Compose lifecycle; run \`${excluded.replacement}\` instead`,
-      );
-    }
-  }
   const tasks = [];
   for (const owner of selectedOwners) {
     const candidates = globSync("test-integration/**/*.{integration.test.ts,integration.test.tsx,spec.ts}", {
       cwd: join(root, owner.directory),
-    })
-      .filter((file) => !excludedIntegrationFiles.has(`${owner.directory}/${file}`))
-      .sort();
+    }).sort();
     if (
       options.files.length > 0 &&
       !options.files.some((file) => {

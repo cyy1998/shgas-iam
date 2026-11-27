@@ -45,7 +45,7 @@
   "iamTest": {
     "integration": {
       "bun": {
-        "postgres": "IAM_DB_TEST_DATABASE_URL"
+        "postgres": true
       }
     }
   }

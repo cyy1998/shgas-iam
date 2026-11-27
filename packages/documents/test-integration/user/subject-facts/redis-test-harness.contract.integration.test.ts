@@ -24,7 +24,7 @@ test("closing a Subject Facts scope preserves another until the case resets", as
     const retained = await second.readPublishedUserDocumentRecord(record.subjectIdentifier);
     expect(retained).toEqual(record);
     await harness.reset();
-    const nextCase = new Redis(process.env.IAM_DOCUMENTS_TEST_REDIS_URL!, {
+    const nextCase = new Redis(process.env.IAM_TEST_REDIS_URL!, {
       maxRetriesPerRequest: 0,
       retryStrategy: () => null,
     });

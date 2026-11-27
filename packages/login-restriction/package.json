@@ -27,7 +27,7 @@
   "iamTest": {
     "integration": {
       "bun": {
-        "redis": "IAM_LOGIN_RESTRICTION_TEST_REDIS_URL"
+        "redis": true
       }
     }
   }

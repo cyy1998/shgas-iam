@@ -5,10 +5,10 @@ import { createAdminApiRedisTestHarness } from "../../../test-integration/suppor
 
 // These failure paths stop before resource creation; real isolation stays in resource contracts.
 test.each([
-  { name: "IAM_ADMIN_API_TEST_DATABASE_URL", create: createAdminApiPostgresTestHarness },
-  { name: "IAM_ADMIN_API_TEST_REDIS_URL", create: createAdminApiRedisTestHarness },
+  { name: "IAM_TEST_POSTGRES_URL", create: createAdminApiPostgresTestHarness },
+  { name: "IAM_TEST_REDIS_URL", create: createAdminApiRedisTestHarness },
 ])("$name is required even when runtime configuration is present", async ({ name, create }) => {
-  const runtimePrefix = name.replace(/_TEST_(DATABASE|REDIS)_URL$/u, "");
+  const runtimePrefix = "IAM_ADMIN_API";
   const overrides: Record<string, string | undefined> = {
     [name]: undefined,
     DATABASE_URL: "postgres://127.0.0.1:1/runtime-sentinel",

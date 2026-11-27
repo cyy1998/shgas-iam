@@ -1,13 +1,20 @@
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { requireDedicatedPostgresTestUrl, TEST_POSTGRES_URL_ENV } from "@iam/test-support/postgres-test-harness";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 
 const [templateName] = process.argv.slice(2);
-const databaseUrl = process.env.IAM_DB_TEST_DATABASE_URL;
+const databaseUrl = process.env[TEST_POSTGRES_URL_ENV];
 if (!databaseUrl || !templateName)
   throw new Error("Template setup requires a managed PostgreSQL URL and template name");
+
+requireDedicatedPostgresTestUrl({
+  name: TEST_POSTGRES_URL_ENV,
+  value: databaseUrl,
+  environment: process.env,
+});
 
 const admin = postgres(databaseUrl, { max: 1, connect_timeout: 5 });
 try {

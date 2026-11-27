@@ -10,14 +10,14 @@ import {
   parseIntegrationConcurrency,
   selectIntegrationTasks,
   taskRequiresGatewayApisix,
+  testPostgresUrlEnv,
+  testRedisUrlEnv,
 } from "./test-resources/integration-selection.mjs";
 import {
   createManagedResourceRun,
   finishManagedResourceRun,
   formatResourceFailure,
   managedServiceEndpoint,
-  readManagedResourceRegistry,
-  readManagedResourceRun,
   saveManagedResourceRun,
   startManagedResources,
   writeAtomicResourceRecord,
@@ -57,24 +57,29 @@ async function prepareTaskEnvironments(run, tasks, environment, commandOptions) 
     : undefined;
   const gatewayApisix = tasks.some(taskRequiresGatewayApisix)
     ? await prepareManagedGatewayApisix({
-        parentRun: run,
-        registryFile: process.env.IAM_TEST_RESOURCE_REGISTRY,
+        run,
         ...commandOptions,
       })
     : undefined;
+  const endpoints = {
+    ...(postgres ? { postgres } : {}),
+    ...(redis ? { redis } : {}),
+    ...(gatewayApisix ? { apisix: gatewayApisix } : {}),
+  };
+  if (Object.keys(endpoints).length > 0) record.endpoints = endpoints;
+
   let redisSlot = 0;
   const taskEnvironments = Object.fromEntries(
     tasks.map((task) => {
       const variables = {};
       if (task.resources.postgres) {
-        variables[task.resources.postgres] = postgres.databaseUrl;
+        variables[testPostgresUrlEnv] = postgres.databaseUrl;
         variables.IAM_TEST_POSTGRES_TEMPLATE = postgres.templateName;
       }
-      if (task.resources.redis) variables[task.resources.redis] = `redis://${redis.host}:${redis.port}/${++redisSlot}`;
+      if (task.resources.redis) variables[testRedisUrlEnv] = `redis://${redis.host}:${redis.port}/${++redisSlot}`;
       if (taskRequiresGatewayApisix(task)) {
         variables.IAM_TEST_APISIX_ADMIN_URL = gatewayApisix.adminUrl;
         variables.IAM_TEST_APISIX_ADMIN_KEY = gatewayApisix.adminKey;
-        variables.IAM_GATEWAY_TEST_APISIX_RECORD = gatewayApisix.recordPath;
       }
       return [`${task.name}:${task.executor}`, variables];
     }),
@@ -159,33 +164,19 @@ async function executeTasks({ run, tasks, taskEnvironments, environment, pnpmCli
 }
 
 async function finishIntegrationRun(run, cleanupTimeoutMs, failures, signal) {
-  // All package trees are joined before the root takes over their registered resources.
-  const finish = async (resource) => {
-    if (resource.record.status === "created" || resource.record.services.length === 0) {
-      resource.record.status = "cleaned";
-      await saveManagedResourceRun(resource);
+  // All package trees are joined before the root tears down this run's resources.
+  try {
+    const hasManagedStack =
+      (run.record.status !== "created" && run.record.services.length > 0) || Boolean(run.record.apisix);
+    if (!hasManagedStack) {
+      run.record.status = "cleaned";
+      await saveManagedResourceRun(run);
     } else {
-      await finishManagedResourceRun(resource, {
+      await finishManagedResourceRun(run, {
         cleanupTimeoutMs,
         diagnostics: failures.length > 0 || signal.aborted,
       });
     }
-  };
-  try {
-    const children = await readManagedResourceRegistry(run.root, `${run.record.artifactDirectory}/children.jsonl`);
-    for (const path of children.reverse()) {
-      try {
-        const child = await readManagedResourceRun(run.root, path);
-        if (child.record.status !== "cleaned" && child.record.status !== "kept") await finish(child);
-      } catch (error) {
-        failures.push(error);
-      }
-    }
-  } catch (error) {
-    failures.push(error);
-  }
-  try {
-    await finish(run);
   } catch (error) {
     failures.push(error);
   }
@@ -229,16 +220,13 @@ try {
   );
   const environment = { ...process.env };
   if (browserWorkers !== undefined) environment.IAM_TEST_BROWSER_WORKERS = String(browserWorkers);
-  for (const name of Object.keys(environment)) {
-    if (/^IAM_.*_TEST_(DATABASE|REDIS)_URL$/.test(name)) delete environment[name];
-  }
+  delete environment[testPostgresUrlEnv];
+  delete environment[testRedisUrlEnv];
   delete environment.IAM_TEST_INTEGRATION_SELECTION;
   delete environment.IAM_TEST_POSTGRES_TEMPLATE;
   delete environment.IAM_TEST_APISIX_ADMIN_URL;
   delete environment.IAM_TEST_APISIX_ADMIN_KEY;
-  delete environment.IAM_GATEWAY_TEST_APISIX_RECORD;
   const services = ["postgres", "redis"].filter((service) => tasks.some((task) => task.resources[service]));
-  // Even workspaces without shared data services may create child Compose projects.
   run = await createManagedResourceRun({
     root,
     composeFile: "scripts/test-resources/compose.yaml",
