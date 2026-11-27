@@ -1,33 +1,49 @@
-import { createHmac } from "node:crypto";
-import { writeFile } from "node:fs/promises";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 export const smsBindingUsername = "e2e-wecom-sms";
 export const smsBindingMobile = "13800005558";
-export const smsDeliveryPath = "/run/iam-e2e/sms-delivery";
+export const smsSignatureKey = "e2e-sms";
 
-export function createSmsProvider(deliveryPath: string): typeof fetch {
-  const request = async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
-    const candidate = new Request(input, init);
-    const failure = { resultCode: "-1", resultInfo: "unexpected provider request", result: "" };
-    if (candidate.url !== "http://127.0.0.1:9/test-sms" || candidate.method !== "POST") {
-      return Response.json(failure, { status: 400 });
-    }
-    const body = await candidate.json().catch(() => null);
-    if (body?.mobile !== smsBindingMobile || body.origin !== "SHGAS" || !Number.isSafeInteger(body.timestamp)) {
-      return Response.json(failure, { status: 400 });
-    }
-    const code = /^验证码：(\d{4})$/u.exec(body.message)?.[1];
-    const signature = createHmac("sha256", "e2e-sms")
-      .update(`${body.timestamp}${body.origin}${body.mobile}${body.message}`)
-      .digest("hex");
-    if (!code || signature !== body.signature) return Response.json(failure, { status: 400 });
+export function createSmsStub() {
+  let latestSmsCode: string | null = null;
 
-    await writeFile(deliveryPath, code, { encoding: "utf8", mode: 0o600 });
-    return Response.json({ resultCode: "0000", resultInfo: "ok", result: "" });
-  };
-  return Object.assign(request, {
-    preconnect() {
-      throw new Error("E2E SMS provider does not open network connections");
+  return {
+    async handle(request: Request): Promise<Response> {
+      const failure = { resultCode: "-1", resultInfo: "unexpected provider request", result: "" };
+      const url = new URL(request.url);
+      if (url.pathname !== "/test-sms" || request.method !== "POST") {
+        return Response.json(failure, { status: 400 });
+      }
+      const body = await request.json().catch(() => null);
+      if (
+        !body ||
+        typeof body !== "object" ||
+        body.mobile !== smsBindingMobile ||
+        body.origin !== "SHGAS" ||
+        !Number.isSafeInteger(body.timestamp) ||
+        typeof body.message !== "string" ||
+        typeof body.signature !== "string"
+      ) {
+        return Response.json(failure, { status: 400 });
+      }
+      const code = /^验证码：(\d{4})$/u.exec(body.message)?.[1];
+      const expected = createHmac("sha256", smsSignatureKey)
+        .update(`${body.timestamp}${body.origin}${body.mobile}${body.message}`)
+        .digest("hex");
+      const actualBytes = Buffer.from(body.signature);
+      const expectedBytes = Buffer.from(expected);
+      if (!code || actualBytes.length !== expectedBytes.length || !timingSafeEqual(actualBytes, expectedBytes)) {
+        return Response.json(failure, { status: 400 });
+      }
+
+      latestSmsCode = code;
+      return Response.json({ resultCode: "0000", resultInfo: "ok", result: "" });
     },
-  });
+    latestCode() {
+      return latestSmsCode;
+    },
+    reset() {
+      latestSmsCode = null;
+    },
+  };
 }

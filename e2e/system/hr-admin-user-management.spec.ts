@@ -1,15 +1,13 @@
-import { readFile, stat } from "node:fs/promises";
-import { join } from "node:path";
 import { OrganizationResponsibilityAssignmentStatus } from "@iam/contracts";
 import type { APIRequestContext, Browser, Page, Response } from "@playwright/test";
 import { expect } from "@playwright/test";
 import { expectRpcMutationResult, isSuccessfulRpcResponse, loginToAdmin } from "./src/admin-client-journey.ts";
 import { runWithCleanup } from "./src/bounded-operation.ts";
 import { containsScalarValue } from "./src/concealment.ts";
+import { type E2ERunContext, readE2EServiceLogs } from "./src/e2e-context.ts";
 import { test } from "./src/gateway-test.ts";
 import { assertHrAdminDenialLog, verifyHrAdminOutcome } from "./src/hr-admin-outcome.ts";
 import { createProductionHrAdminOutcomeOwner } from "./src/hr-admin-outcome-owner.ts";
-import type { HybridRunContext } from "./src/hybrid-context.ts";
 
 test("HR Admin manages cross-root responsibilities without widening either endpoint", async ({
   runtime,
@@ -18,8 +16,7 @@ test("HR Admin manages cross-root responsibilities without widening either endpo
   page,
 }) => {
   const scenario = readScenario(runtime);
-  const logFiles = ["stdout", "stderr"].map((stream) => join(runtime.logDirectory, `admin-api.${stream}.log`));
-  const logOffsets = await Promise.all(logFiles.map(async (file) => (await stat(file)).size));
+  const startedAt = new Date(Math.floor(Date.now() / 1000) * 1000);
   await expectMixedAndFullAdminGlobalCapability(browser, scenario);
   await loginToAdmin({
     adminPassword: scenario.adminPassword,
@@ -138,10 +135,8 @@ test("HR Admin manages cross-root responsibilities without widening either endpo
   });
 
   await test.step("Verify authorization denials conceal scope in the Admin API logs", async () => {
-    const logs = await Promise.all(
-      logFiles.map(async (file, index) => (await readFile(file)).subarray(logOffsets[index]).toString("utf8")),
-    );
-    assertHrAdminDenialLog(logs.join("\n"), runtime.references, runtime.references);
+    const logs = await readE2EServiceLogs(runtime, "admin-api", { since: startedAt });
+    assertHrAdminDenialLog(logs, runtime.references, runtime.references);
   });
 });
 
@@ -524,7 +519,7 @@ function adminHeaders(clientCode: string) {
   return { Client: clientCode };
 }
 
-function readScenario(runtime: HybridRunContext) {
+function readScenario(runtime: E2ERunContext) {
   return {
     ...runtime.references,
     origin: runtime.origin,

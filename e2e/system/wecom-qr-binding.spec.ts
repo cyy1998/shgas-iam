@@ -1,22 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { ApiErrorCode, UserType } from "@iam/contracts";
 import { devices, expect, type Page } from "@playwright/test";
 import { loginToAdmin } from "./src/admin-client-journey.ts";
+import { type E2ERunContext, readDeliveredSmsCode } from "./src/e2e-context.ts";
 import { test } from "./src/gateway-test.ts";
-import type { HybridRunContext } from "./src/hybrid-context.ts";
 import { smsBindingMobile, smsBindingUsername } from "./src/sms-provider.ts";
 import { standInForWecomAuthorization } from "./src/wecom-journey.ts";
 
 const firstBindingMember = "wecom-e2e-password-binding";
 const deniedBindingMember = "wecom-e2e-password-denied";
 const smsBindingMember = "wecom-e2e-sms-binding";
-
-async function readDeliveredSmsCode(path: string) {
-  const code = (await readFile(path, "utf8")).trim();
-  if (!/^\d{4}$/u.test(code)) throw new Error("The SMS provider did not deliver a verification code");
-  return code;
-}
 
 function customAuthorization(origin: string, client: string) {
   const redirectUrl = `${origin}/e2e/custom-sso/callback`;
@@ -26,7 +19,7 @@ function customAuthorization(origin: string, client: string) {
   return { url, redirectUrl, state };
 }
 
-async function confirmWecom(desktop: Page, phone: Page, authorization: URL, member: string, runtime: HybridRunContext) {
+async function confirmWecom(desktop: Page, phone: Page, authorization: URL, member: string, runtime: E2ERunContext) {
   const mobileOrigin = runtime.wecomMobileOrigin;
   await standInForWecomAuthorization(phone, { mobileOrigin, member, runId: runtime.references.runId });
   await desktop.goto(authorization.href);
@@ -151,7 +144,7 @@ test("WeCom SMS binding continues the original Custom SSO application after swit
     expect(sent.request().postDataJSON()).toMatchObject({ phoneNumber: smsBindingMobile });
     expect(sent.status()).toBe(200);
     expect(await sent.json()).toMatchObject({ data: { decision: "sent" } });
-    const code = await readDeliveredSmsCode(runtime.smsDeliveryPath);
+    const code = await readDeliveredSmsCode(runtime);
 
     await page.getByRole("button", { name: "使用密码验证" }).click();
     await page.getByRole("button", { name: "使用短信验证" }).click();

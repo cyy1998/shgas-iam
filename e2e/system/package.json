@@ -4,10 +4,7 @@
   "version": "0.0.1",
   "private": true,
   "iamWorkspace": {
-    "kind": "e2e",
-    "gates": [
-      "e2e-runtime"
-    ]
+    "kind": "e2e"
   },
   "dependencies": {
     "@iam/assignment-resolution": "workspace:*",
@@ -25,16 +22,12 @@
   "scripts": {
     "runtime:cleanup": "bun src/cli.ts cleanup",
     "test:e2e": "bun src/cli.ts e2e",
-    "test:e2e:container-smoke": "bun src/cli.ts container-smoke",
-    "test:e2e:down": "bun src/cli.ts down",
     "test:e2e:managed": "bun src/cli.ts managed",
     "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
     "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "test": "pnpm test:unit",
     "test:unit": "bun test --max-concurrency=2 src/__tests__",
     "typecheck": "pnpm exec tsc --noEmit",
-    "test:integration": "bun src/cli.ts integration",
-    "test:frontend:serve": "bun --no-env-file src/frontend/integration-frontend.ts",
     "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
     "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check"
   },

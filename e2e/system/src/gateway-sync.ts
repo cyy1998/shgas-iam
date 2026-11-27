@@ -32,9 +32,24 @@ export async function publishGateway(
   );
   if (!frontend || typeof frontend.plugins !== "object" || frontend.plugins === null)
     throw new Error("E2E Gateway manifest has no frontend logging policy");
-  // These test-owned RP terminals only receive completed protocol navigation.
-  // The static upstream has no IAM logic or browser script that can redirect.
+
+  const variables: Record<string, string> = { ...input.variables };
+  // Route test-owned RP terminals to the isolated e2e-stubs container so the production SSO image stays untouched.
   if (input.includeRpTerminals !== false) {
+    if (
+      !source.upstreams.some(
+        (upstream: unknown) =>
+          typeof upstream === "object" && upstream !== null && "key" in upstream && upstream.key === "e2e-stubs",
+      )
+    ) {
+      source.upstreams.push({
+        key: "e2e-stubs",
+        type: "roundrobin",
+        nodes: { "${E2E_STUBS_UPSTREAM_HOST}:${E2E_STUBS_UPSTREAM_PORT}": 1 },
+      });
+    }
+    variables.E2E_STUBS_UPSTREAM_HOST ??= "e2e-stubs";
+    variables.E2E_STUBS_UPSTREAM_PORT ??= "8080";
     for (const [entry, authority] of [
       ["internal", input.variables.IAM_SSO_INTERNAL_HOST],
       ["external", input.variables.IAM_SSO_EXTERNAL_HOST],
@@ -48,14 +63,13 @@ export async function publishGateway(
           ...frontend.plugins,
           "proxy-rewrite": { uri: "/portal/e2e-rp.html" },
         },
-        upstream: "sso-frontend",
+        upstream: "e2e-stubs",
       });
     }
   }
-  // Smoke has no dedicated TLS listener. The route still requires HTTPS.
   const mobileHost = input.wecomMobile?.authority ?? input.variables.IAM_SSO_EXTERNAL_HOST;
   if (!mobileHost) throw new Error("E2E Gateway mobile authority is missing");
-  const variables = { ...input.variables, IAM_WECHAT_MOBILE_HOST: mobileHost };
+  variables.IAM_WECHAT_MOBILE_HOST = mobileHost;
 
   if (input.wecomMobile) {
     const { authority, cert, privateKey } = input.wecomMobile;
