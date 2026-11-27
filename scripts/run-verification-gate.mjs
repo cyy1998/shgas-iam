@@ -2,14 +2,19 @@
 import "./require-linux.mjs";
 import process from "node:process";
 import { runPnpmCommand } from "./run-pnpm-command.mjs";
-import { evaluateContainerSmokeTrigger, evaluateE2eRuntimeTrigger } from "./verification-gate-selection.mjs";
+import {
+  evaluateContainerSmokeTrigger,
+  evaluateE2eRuntimeTrigger,
+  evaluateOidcSuiteResourcesTrigger,
+} from "./verification-gate-selection.mjs";
 
 const args = process.argv.slice(2);
 const [gate, flag, base] = args;
 const e2eRuntimeCommand = ["--filter", "@iam/e2e-system", "test:integration"];
+const oidcSuiteResourcesCommand = ["--filter", "@iam/sso-api", "test:oidc-suite-resources"];
 const commands = {
   ci: [["verify"], ["test:integration"]],
-  release: [["verify:ci"], e2eRuntimeCommand, ["test:e2e"], ["test:e2e:container-smoke"]],
+  release: [["verify:ci"], oidcSuiteResourcesCommand, e2eRuntimeCommand, ["test:e2e"], ["test:e2e:container-smoke"]],
 };
 const conditionalGates = {
   "container-smoke": {
@@ -24,6 +29,12 @@ const conditionalGates = {
     pathLabel: "E2E runtime paths",
     evaluate: (repoRoot, baseSha) => evaluateE2eRuntimeTrigger({ repoRoot, base: baseSha }),
   },
+  "oidc-suite-resources": {
+    command: oidcSuiteResourcesCommand,
+    label: "OIDC Suite Resources",
+    pathLabel: "OIDC suite resource paths",
+    evaluate: (repoRoot, baseSha) => evaluateOidcSuiteResourcesTrigger({ repoRoot, base: baseSha }),
+  },
 };
 const conditional = Object.hasOwn(conditionalGates, gate) ? conditionalGates[gate] : undefined;
 const valid = conditional
@@ -31,7 +42,7 @@ const valid = conditional
   : args.length === 1 && Object.hasOwn(commands, gate);
 if (!valid) {
   console.error(
-    "Usage: pnpm verify:ci | pnpm verify:release | pnpm verify:container-smoke --base <commit-sha> | pnpm verify:e2e-runtime --base <commit-sha>",
+    "Usage: pnpm verify:ci | pnpm verify:release | pnpm verify:container-smoke --base <commit-sha> | pnpm verify:e2e-runtime --base <commit-sha> | pnpm verify:oidc-suite-resources --base <commit-sha>",
   );
   process.exit(1);
 }

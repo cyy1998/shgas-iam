@@ -4,12 +4,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import process from "node:process";
-import { pathToFileURL } from "node:url";
 import {
   integrationDeclarations,
   integrationRedisSlotLimit,
   parseBrowserWorkers,
   selectIntegrationTasks,
+  taskRequiresGatewayApisix,
 } from "./test-resources/integration-selection.mjs";
 import { formatResourceFailure, readManagedResourceRun } from "./test-resources/managed-resources.mjs";
 import { pnpmCommand, runOwnedCommand } from "./test-resources/owned-command.mjs";
@@ -28,14 +28,12 @@ const controller = new AbortController();
 const interrupt = () => controller.abort(new Error("Package Integration interrupted"));
 process.on("SIGINT", interrupt);
 process.on("SIGTERM", interrupt);
-let resources;
 try {
   const parameters = process.argv.slice(2);
   const executor = parameters.shift();
   let preflight;
-  let resourceProvider;
   let browserWorkers;
-  while (["--preflight", "--resources", "--browser-workers"].includes(parameters[0])) {
+  while (["--preflight", "--browser-workers"].includes(parameters[0])) {
     const option = parameters.shift();
     const value = parameters.shift();
     if (option === "--browser-workers") {
@@ -43,8 +41,7 @@ try {
       browserWorkers = parseBrowserWorkers(value, option);
     } else {
       if (!value) throw new Error(`${option} requires a script path`);
-      if (option === "--preflight") preflight = value;
-      else resourceProvider = value;
+      preflight = value;
     }
   }
   const [separator, executable, ...arguments_] = parameters;
@@ -59,12 +56,13 @@ try {
   const names = declaration.environmentNames;
   const testEnvironment = { ...process.env };
   delete testEnvironment.IAM_TEST_POSTGRES_TEMPLATE;
+  delete testEnvironment.IAM_TEST_APISIX_ADMIN_URL;
+  delete testEnvironment.IAM_TEST_APISIX_ADMIN_KEY;
+  delete testEnvironment.IAM_GATEWAY_TEST_APISIX_RECORD;
   const workerOverride = executor === "playwright" ? process.env.IAM_TEST_BROWSER_WORKERS : undefined;
-  const parallelBrowser = executor === "playwright" && names.length === 0 && !resourceProvider;
+  const parallelBrowser = executor === "playwright" && names.length === 0;
   if (!parallelBrowser && (browserWorkers !== undefined || workerOverride !== undefined)) {
-    throw new Error(
-      "Browser worker overrides require a resource-free Playwright collection without a resource provider",
-    );
+    throw new Error("Browser worker overrides require a resource-free Playwright collection");
   }
   const recordPath = process.env.IAM_TEST_RESOURCE_RECORD;
   const runId = process.env.IAM_TEST_RESOURCE_RUN_ID;
@@ -106,8 +104,15 @@ try {
   if (!Array.isArray(files) || files.length === 0 || files.some((file) => typeof file !== "string"))
     throw new Error("Use the root Integration entry to select this package's files");
   const selected = selectIntegrationTasks(root, { workspaces: [manifest.name], files });
-  if (!selected.some((task) => task.executor === executor && task.files.length === files.length))
-    throw new Error("No Integration files match this package executor");
+  const selectedTask = selected.find((task) => task.executor === executor && task.files.length === files.length);
+  if (!selectedTask) throw new Error("No Integration files match this package executor");
+  if (taskRequiresGatewayApisix(selectedTask)) {
+    for (const name of ["IAM_TEST_APISIX_ADMIN_URL", "IAM_TEST_APISIX_ADMIN_KEY", "IAM_GATEWAY_TEST_APISIX_RECORD"]) {
+      if (typeof environment[name] !== "string" || !environment[name] || environment[name] !== process.env[name])
+        throw new Error(`${name} must come from this run's managed resource record for ${taskKey}`);
+      testEnvironment[name] = environment[name];
+    }
+  }
   const args = [...arguments_];
   if (executor === "bun") {
     for (let index = args.length - 1; index >= 0; index--)
@@ -142,14 +147,10 @@ try {
     });
     if (result.exitCode !== 0) throw new Error(`Browser preflight failed with exit ${result.exitCode}`);
   }
-  if (resourceProvider) {
-    const provider = await import(pathToFileURL(resolve(cwd, resourceProvider)).href);
-    resources = await provider.prepare({ root, signal: controller.signal });
-  }
   const result = await runOwnedCommand({
     ...pnpmCommand(pnpmCli, ["exec", executable, ...args]),
     cwd,
-    env: { ...testEnvironment, ...resources?.environment },
+    env: testEnvironment,
     signal: controller.signal,
     inheritOutput: true,
   });
@@ -158,12 +159,6 @@ try {
   console.error(formatResourceFailure(error));
   process.exitCode = 1;
 } finally {
-  try {
-    await resources?.close({ diagnostics: Boolean(process.exitCode) || controller.signal.aborted });
-  } catch (error) {
-    console.error(formatResourceFailure(error));
-    process.exitCode = 1;
-  }
   process.off("SIGINT", interrupt);
   process.off("SIGTERM", interrupt);
 }

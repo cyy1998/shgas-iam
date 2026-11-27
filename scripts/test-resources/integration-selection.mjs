@@ -4,6 +4,40 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 export const integrationExecutors = ["bun", "vitest", "playwright"];
 // The root Compose Redis enables 32 logical databases. Slot 0 is reserved.
 export const integrationRedisSlotLimit = 31;
+export const gatewayApisixWorkspace = "@iam/gateway-apisix";
+export const gatewayApisixIntegrationFiles = new Set([
+  "test-integration/preview/preview.integration.test.ts",
+  "test-integration/publication/process-publication.integration.test.ts",
+  "test-integration/publication/publication.integration.test.ts",
+  "test-integration/publication/seven-kinds.integration.test.ts",
+  "test-integration/runtime/publication-lifecycle.integration.test.ts",
+]);
+export const excludedIntegrationFiles = new Map([
+  [
+    "apps/sso-api/test-integration/oidc/oidc-suite-resources.integration.test.ts",
+    "pnpm --filter @iam/sso-api test:oidc-suite-resources",
+  ],
+]);
+
+export function taskRequiresGatewayApisix(task) {
+  return (
+    task.name === gatewayApisixWorkspace &&
+    task.executor === "bun" &&
+    task.files.some((file) => gatewayApisixIntegrationFiles.has(file))
+  );
+}
+
+function findExcludedIntegrationFile(root, file, candidateOwners) {
+  const paths = isAbsolute(file)
+    ? [resolve(file)]
+    : [resolve(root, file), ...candidateOwners.map((owner) => resolve(root, owner.directory, file))];
+  for (const candidatePath of paths) {
+    const repoRelative = relative(root, candidatePath);
+    const replacement = excludedIntegrationFiles.get(repoRelative);
+    if (replacement) return { file: repoRelative, replacement };
+  }
+  return undefined;
+}
 
 export function parseBrowserWorkers(value, option) {
   const workers = Number(value);
@@ -91,16 +125,27 @@ export function selectIntegrationTasks(root, options) {
   for (const workspace of options.workspaces)
     if (!owners.some((owner) => owner.name === workspace || owner.directory === workspace))
       throw new Error(`Unknown workspace: ${workspace}`);
+  const selectedOwners =
+    options.workspaces.length > 0
+      ? owners.filter((owner) =>
+          options.workspaces.some((workspace) => workspace === owner.name || workspace === owner.directory),
+        )
+      : owners;
+  for (const file of options.files) {
+    const excluded = findExcludedIntegrationFile(root, file, selectedOwners);
+    if (excluded) {
+      throw new Error(
+        `${excluded.file} is excluded from pnpm test:integration because it manages its own Docker Compose lifecycle; run \`${excluded.replacement}\` instead`,
+      );
+    }
+  }
   const tasks = [];
-  for (const owner of owners) {
-    if (
-      options.workspaces.length > 0 &&
-      !options.workspaces.some((workspace) => workspace === owner.name || workspace === owner.directory)
-    )
-      continue;
+  for (const owner of selectedOwners) {
     const candidates = globSync("test-integration/**/*.{integration.test.ts,integration.test.tsx,spec.ts}", {
       cwd: join(root, owner.directory),
-    }).sort();
+    })
+      .filter((file) => !excludedIntegrationFiles.has(`${owner.directory}/${file}`))
+      .sort();
     if (
       options.files.length > 0 &&
       !options.files.some((file) => {
@@ -147,7 +192,9 @@ export function selectIntegrationTasks(root, options) {
     }
     for (const task of tasks) task.files = [...(selected.get(`${task.name}:${task.executor}`) ?? [])];
   }
-  const selectedTasks = tasks.filter((task) => task.files.length > 0);
+  const selectedTasks = tasks
+    .filter((task) => task.files.length > 0)
+    .map((task) => ({ ...task, requiresApisix: taskRequiresGatewayApisix(task) }));
   if (selectedTasks.length === 0) throw new Error("No Integration tests match the selection");
   for (const workspace of options.workspaces)
     if (!selectedTasks.some((task) => task.name === workspace || task.directory === workspace))

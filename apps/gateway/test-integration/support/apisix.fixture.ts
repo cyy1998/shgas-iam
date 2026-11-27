@@ -1,22 +1,86 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import {
-  managedServiceEndpoint,
   readManagedResourceRegistry,
   readManagedResourceRun,
-  startManagedResources,
 } from "../../../../scripts/test-resources/managed-resources.mjs";
 import { ApisixAdminClient } from "../../src/apisix-admin-client";
 import { deleteOrder, getDefinition, getResourceId, resourceDefinitions } from "../../src/resources";
 
 const root = fileURLToPath(new URL("../../../../", import.meta.url));
-const adminKey = "iam-gateway-integration-admin-key";
+const expectedComposeFile = "apps/gateway/test-integration/support/apisix.compose.yaml";
+const expectedProjectPrefix = "iam-gateway-apisix-";
 
-export type ApisixFixture = {
+export type ApisixEndpointConfig = {
   adminUrl: string;
   adminKey: string;
+};
+
+export type ApisixFixture = ApisixEndpointConfig & {
   readonly signal: AbortSignal;
 };
+
+export function parseApisixEndpointConfig(environment: NodeJS.ProcessEnv = process.env): ApisixEndpointConfig {
+  const rawUrl = environment.IAM_TEST_APISIX_ADMIN_URL?.trim();
+  const adminKey = environment.IAM_TEST_APISIX_ADMIN_KEY?.trim();
+  if (!rawUrl || !adminKey) {
+    throw new Error(
+      "Gateway APISIX integration tests require IAM_TEST_APISIX_ADMIN_URL and IAM_TEST_APISIX_ADMIN_KEY from the root Integration runner",
+    );
+  }
+  const parsed = URL.parse(rawUrl);
+  if (
+    !parsed ||
+    (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+    !parsed.hostname ||
+    parsed.search ||
+    parsed.hash
+  ) {
+    throw new Error(`Invalid IAM_TEST_APISIX_ADMIN_URL: ${rawUrl}`);
+  }
+  const normalizedPathname = parsed.pathname.replace(/\/+$/u, "");
+  if (!normalizedPathname.endsWith("/apisix/admin")) {
+    throw new Error(`IAM_TEST_APISIX_ADMIN_URL must end with /apisix/admin: ${rawUrl}`);
+  }
+  return {
+    adminUrl: `${parsed.origin}${normalizedPathname}`,
+    adminKey,
+  };
+}
+
+async function verifyManagedApisixLease(endpoint: ApisixEndpointConfig, environment: NodeJS.ProcessEnv = process.env) {
+  const recordPath = environment.IAM_GATEWAY_TEST_APISIX_RECORD;
+  const parentPath = environment.IAM_TEST_RESOURCE_RECORD;
+  const parentRunId = environment.IAM_TEST_RESOURCE_RUN_ID;
+  if (!recordPath || !parentPath || !parentRunId) {
+    throw new Error("Use the root Integration entry to prepare managed Gateway APISIX resources");
+  }
+  const parent = await readManagedResourceRun(root, parentPath);
+  const children = await readManagedResourceRegistry(root, `${parent.record.artifactDirectory}/children.jsonl`);
+  if (parent.record.runId !== parentRunId || parent.record.status !== "running" || !children.includes(recordPath)) {
+    throw new Error("APISIX resource lease must belong to this Integration command");
+  }
+  const run = await readManagedResourceRun(root, recordPath);
+  if (
+    run.record.status !== "ready" ||
+    run.record.composeFile !== expectedComposeFile ||
+    !run.record.project.startsWith(expectedProjectPrefix)
+  ) {
+    throw new Error(`Invalid Gateway APISIX resource lease (expected ready status, received ${run.record.status})`);
+  }
+  const recorded = JSON.parse(await readFile(join(root, run.record.testEnvironmentFile), "utf8")) as Record<
+    string,
+    unknown
+  >;
+  if (
+    recorded.IAM_TEST_APISIX_ADMIN_URL !== endpoint.adminUrl ||
+    recorded.IAM_TEST_APISIX_ADMIN_KEY !== endpoint.adminKey
+  ) {
+    throw new Error("APISIX Admin endpoint must match this run's managed Gateway APISIX record");
+  }
+}
 
 async function waitForAdmin(adminUrl: string, adminKey: string, signal?: AbortSignal) {
   const deadline = performance.now() + 15_000;
@@ -39,33 +103,23 @@ async function waitForAdmin(adminUrl: string, adminKey: string, signal?: AbortSi
   throw new Error("APISIX Admin did not become ready", { cause: failure });
 }
 
+/** Reusable boundary for consuming an already-provisioned exclusive APISIX Admin endpoint. */
+export async function connectApisixEndpoint(endpoint: ApisixEndpointConfig): Promise<ApisixFixture> {
+  const signal = new AbortController().signal;
+  await waitForAdmin(endpoint.adminUrl, endpoint.adminKey, signal);
+  const fixture: ApisixFixture = { adminUrl: endpoint.adminUrl, adminKey: endpoint.adminKey, signal };
+  await assertEmpty(new ApisixAdminClient(fixture));
+  return fixture;
+}
+
 let shared: Promise<ApisixFixture> | undefined;
 let poisoned = false;
 let leased = false;
 
 async function startSharedApisix(): Promise<ApisixFixture> {
-  const recordPath = process.env.IAM_GATEWAY_TEST_APISIX_RECORD;
-  const parentPath = process.env.IAM_TEST_RESOURCE_RECORD;
-  if (!recordPath || !parentPath) throw new Error("Use the root Integration entry with the Gateway resource provider");
-  const parent = await readManagedResourceRun(root, parentPath);
-  const children = await readManagedResourceRegistry(root, `${parent.record.artifactDirectory}/children.jsonl`);
-  if (parent.record.runId !== process.env.IAM_TEST_RESOURCE_RUN_ID || !children.includes(recordPath))
-    throw new Error("APISIX resource lease must belong to this Integration command");
-  const run = await readManagedResourceRun(root, recordPath);
-  if (
-    run.record.status !== "created" ||
-    run.record.composeFile !== "apps/gateway/test-integration/support/apisix.compose.yaml" ||
-    !run.record.project.startsWith("iam-gateway-apisix-")
-  )
-    throw new Error("Invalid Gateway APISIX resource lease");
-  const signal = new AbortController().signal;
-  await startManagedResources(run, { signal, timeoutMs: 120_000 });
-  const apisix = await managedServiceEndpoint(run, "apisix", 9180, { signal, timeoutMs: 10_000 });
-  const adminUrl = `http://${apisix.host}:${apisix.port}/apisix/admin`;
-  await waitForAdmin(adminUrl, adminKey, signal);
-  const fixture = { adminUrl, adminKey, signal };
-  await assertEmpty(new ApisixAdminClient(fixture));
-  return fixture;
+  const endpoint = parseApisixEndpointConfig(process.env);
+  await verifyManagedApisixLease(endpoint, process.env);
+  return await connectApisixEndpoint(endpoint);
 }
 
 async function assertEmpty(client: ApisixAdminClient) {

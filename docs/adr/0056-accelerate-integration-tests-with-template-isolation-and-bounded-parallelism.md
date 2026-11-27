@@ -16,7 +16,7 @@ status: accepted
   - 普通集成测试文件在 `beforeAll` 执行 `CREATE DATABASE <rand> TEMPLATE iam_test_template`，获得标准 `public` schema 的独立数据库；文件内用例间通过动态查询 `pg_tables`（排除 `__drizzle_migrations`）执行完整 `TRUNCATE ... RESTART IDENTITY CASCADE`（根治手写表清单漏表导致的 per-test 重复迁移）；`afterAll` 执行 `DROP DATABASE WITH (FORCE)`。
   - 原先显式读取 `schemaName` 或 `search_path` 的少量测试（如 `apps/worker`、`apps/ops`、`apps/api` OIDC fixture）适配为标准独立数据库 URL 与 `public` schema；`@iam/db` 的迁移专项测试与 `apps/ops` 的 `database-migrate-command` 仍从空库验证真实 `migrate()`。
   - 我们拒绝“每 workspace 复用单个预迁移 schema + `search_path`”方案，因为前者保留了 `search_path` 耦合、无法天然隔离 `GRANT`/DDL 副作用，且限制后续并发扩展。
-- **APISIX 本地镜像按配置哈希复用与按需诊断**。Gateway APISIX 子栈取消 `removeLocalImages: true`，改用按 `apisix.config.yaml` 内容哈希打确定性 tag 的本地镜像，仅在配置变化时重建。`managed-resources.mjs` 仅在执行失败、超时或清理异常时采集 `docker compose ps` 与 `docker compose logs` 诊断，正常通过路径直接执行精确 `down`。
+- **APISIX 本地镜像按配置哈希复用、并发期网络静止与按需诊断**。Gateway APISIX 子栈取消 `removeLocalImages: true`，改用按 `apisix.Dockerfile` 与 `apisix.config.yaml` 内容哈希打确定性 tag 的本地镜像，仅在配置变化时重建。为防止并发执行窗口内动态创建/销毁 Docker bridge 网络与 `veth` 接口触发 Linux `NETLINK_ROUTE` 广播、导致同宿主 Chromium 报 `net::ERR_NETWORK_CHANGED`，Gateway APISIX+etcd 的启动与拆除均由根 runner 统一托管：按最终选中 `task.files` 与 Gateway 五个真实 APISIX 文件的交集按需在所有并发任务开始前准备就绪，待全部任务进程树退出后按 `children.jsonl` 逆序统一回收（包级 runner 不再中途拆栈）。`managed-resources.mjs` 仅在执行失败、超时或清理异常时采集 `docker compose ps` 与 `docker compose logs` 诊断，正常通过路径直接执行精确 `down`。
 
 ## Redis 多 DB 槽位与根 Runner 有界并行
 
@@ -42,7 +42,8 @@ status: accepted
 
 - **独立入口与默认剥离**。`@iam/e2e-system` 的集成测试验证的是 E2E 编排器本身（每例独立启停整套容器与宿主机进程），不属于业务应用日常集成回归。从 `e2e/system/package.json` 移除 `iamTest.integration` 声明并从 [integration-selection.mjs](../../scripts/test-resources/integration-selection.mjs) 的默认扫描范围剥离，同时在 `e2e/system/package.json` 保留可直接执行的 `test:integration` 脚本，确保 `pnpm --filter @iam/e2e-system test:integration` 开箱即用。
 - **路径触发门禁与发布覆盖**。在 [run-verification-gate.mjs](../../scripts/run-verification-gate.mjs) 新增与 `verify:container-smoke --base <commit-sha>` 同构的 `pnpm verify:e2e-runtime --base <commit-sha>`：当差异命中 `e2e/system/**`、`packages/runtime/**`、`scripts/test-resources/**`、门禁脚本、`pnpm-lock.yaml`、`pnpm-workspace.yaml`、`.npmrc`、`turbo.json`、`**/vite.config.*`，或命中 Hybrid E2E 运行时闭包内（及根）`package.json` 的运行时/构建敏感字段（含前端闭包 `devDependencies`/`scripts.build`/`scripts.dev`、后端闭包 `scripts.db:migrate` 及根 `test:e2e*`/`verify:e2e-runtime` 脚本）时自动执行 `pnpm --filter @iam/e2e-system test:integration`（修改无关 `Dockerfile`、测试脚本、`iamTest` 或非闭包 `package.json` 时跳过）。
-- `pnpm verify:ci` 运行瘦身后的默认 `pnpm test:integration`；`pnpm verify:release` 显式执行 `pnpm --filter @iam/e2e-system test:integration`；手动交付与 Sandcastle AFK 最终验证阶段与 `verify:container-smoke` 一致，按合入基线自动运行 `pnpm verify:e2e-runtime --base <target-commit-sha>`。代价是仅修改普通业务代码且不触碰上述路径时，日常 `verify:ci` 不再自动跑 E2E 运行时测试，由发布门禁与路径规则兜底。
+- `pnpm verify:ci` 运行瘦身后的默认 `pnpm test:integration`；`pnpm verify:release` 显式执行 `pnpm --filter @iam/sso-api test:oidc-suite-resources` 与 `pnpm --filter @iam/e2e-system test:integration`；手动交付与 Sandcastle AFK 最终验证阶段与 `verify:container-smoke` 一致，按合入基线自动运行 `pnpm verify:e2e-runtime --base <target-commit-sha>` 与 `pnpm verify:oidc-suite-resources --base <target-commit-sha>`。代价是仅修改普通业务代码且不触碰上述路径时，日常 `verify:ci` 不再自动跑 E2E 运行时测试或 OIDC 套件资源编排专项，由发布门禁与路径规则兜底。
+- **OIDC 套件自管资源编排专项剥离**。`apps/sso-api/test-integration/oidc/oidc-suite-resources.integration.test.ts` 与 `@iam/e2e-system` 编排器测试同属独立 Docker Compose 资源编排验证，并发期动态启停子网络同样触发 `NETLINK_ROUTE` 抖动；将其明确排除出日常并发 `pnpm test:integration`（保留 `oidc-rp.integration.test.ts` 及全部业务 OIDC 测试），改为独立单并发入口 `pnpm --filter @iam/sso-api test:oidc-suite-resources` 与路径触发门禁 `pnpm verify:oidc-suite-resources --base <commit-sha>`，并无条件纳入 `pnpm verify:release`。
 
 ## 重型用例与冗余子进程的覆盖保底边界
 

@@ -3,11 +3,13 @@ import "./require-linux.mjs";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import process from "node:process";
+import { prepareManagedGatewayApisix } from "../apps/gateway/test-integration/support/apisix-provider.mjs";
 import {
   integrationRedisSlotLimit,
   parseIntegrationArguments,
   parseIntegrationConcurrency,
   selectIntegrationTasks,
+  taskRequiresGatewayApisix,
 } from "./test-resources/integration-selection.mjs";
 import {
   createManagedResourceRun,
@@ -53,6 +55,13 @@ async function prepareTaskEnvironments(run, tasks, environment, commandOptions) 
   const redis = record.services.includes("redis")
     ? await managedServiceEndpoint(run, "redis", 6379, commandOptions)
     : undefined;
+  const gatewayApisix = tasks.some(taskRequiresGatewayApisix)
+    ? await prepareManagedGatewayApisix({
+        parentRun: run,
+        registryFile: process.env.IAM_TEST_RESOURCE_REGISTRY,
+        ...commandOptions,
+      })
+    : undefined;
   let redisSlot = 0;
   const taskEnvironments = Object.fromEntries(
     tasks.map((task) => {
@@ -62,6 +71,11 @@ async function prepareTaskEnvironments(run, tasks, environment, commandOptions) 
         variables.IAM_TEST_POSTGRES_TEMPLATE = postgres.templateName;
       }
       if (task.resources.redis) variables[task.resources.redis] = `redis://${redis.host}:${redis.port}/${++redisSlot}`;
+      if (taskRequiresGatewayApisix(task)) {
+        variables.IAM_TEST_APISIX_ADMIN_URL = gatewayApisix.adminUrl;
+        variables.IAM_TEST_APISIX_ADMIN_KEY = gatewayApisix.adminKey;
+        variables.IAM_GATEWAY_TEST_APISIX_RECORD = gatewayApisix.recordPath;
+      }
       return [`${task.name}:${task.executor}`, variables];
     }),
   );
@@ -220,6 +234,9 @@ try {
   }
   delete environment.IAM_TEST_INTEGRATION_SELECTION;
   delete environment.IAM_TEST_POSTGRES_TEMPLATE;
+  delete environment.IAM_TEST_APISIX_ADMIN_URL;
+  delete environment.IAM_TEST_APISIX_ADMIN_KEY;
+  delete environment.IAM_GATEWAY_TEST_APISIX_RECORD;
   const services = ["postgres", "redis"].filter((service) => tasks.some((task) => task.resources[service]));
   // Even workspaces without shared data services may create child Compose projects.
   run = await createManagedResourceRun({
