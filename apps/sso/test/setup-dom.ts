@@ -1,8 +1,10 @@
 /// <reference types="vitest/jsdom" />
 
 import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
-import { afterEach, beforeEach, vi } from "vitest";
+import { act, cleanup } from "@testing-library/react";
+import { afterAll, afterEach, beforeEach, vi } from "vitest";
+
+const nativeSetImmediate = globalThis.setImmediate;
 
 class ResizeObserverMock {
   observe = vi.fn();
@@ -116,4 +118,15 @@ beforeEach(() => window.history.replaceState(null, "", "/portal/"));
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+});
+
+afterAll(async () => {
+  if (document.querySelector(".ant-message, .ant-modal-root")) {
+    const { Modal, message } = await import("antd");
+    await act(async () => {
+      Modal.destroyAll();
+      message.destroy();
+    });
+  }
+  await new Promise<void>((resolve) => nativeSetImmediate(resolve));
 });

@@ -4,12 +4,22 @@ import ResetPasswordPage from "@sso/pages/reset-password";
 import UserInfoPage from "@sso/pages/user-info";
 import { message } from "antd";
 import { HttpResponse, http } from "msw";
-import { expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { server } from "~sso/test/mocks/server";
 import { fireEvent, render, screen, waitFor } from "~sso/test/render";
 import { registerMswLifecycle } from "~sso/test/setup-msw";
 
 registerMswLifecycle();
+
+let showError: ReturnType<typeof vi.spyOn>;
+
+beforeEach(() => {
+  showError = vi.spyOn(message, "error").mockImplementation((() => undefined) as never);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 type Page = "login" | "resetPassword" | "bindPhone";
 
@@ -86,7 +96,6 @@ it.each([
   [ApiErrorCode.SmsUnavailable, 503],
   ["GATEWAY_LIMIT", 429],
 ] as const)("does not invent a phone countdown for %s", async (code, status) => {
-  const showError = vi.spyOn(message, "error");
   server.use(
     http.post("*/api/iam/auth/sms/send", () =>
       HttpResponse.json({ code, message: "暂时不可用", data: null }, { status, headers: { "Retry-After": "30" } }),
@@ -96,5 +105,4 @@ it.each([
   fireEvent.click(screen.getByRole("button", { name: "获取验证码" }));
   await waitFor(() => expect(showError).toHaveBeenCalledWith("暂时不可用"));
   expect(screen.getByRole("button", { name: "获取验证码" })).toBeEnabled();
-  showError.mockRestore();
 });
