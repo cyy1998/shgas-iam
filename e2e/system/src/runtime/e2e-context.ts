@@ -6,8 +6,8 @@ import {
   type ManagedResourceRun,
   readManagedResourceRun,
   runManagedComposeCommand,
-} from "../../../scripts/test-resources/managed-resources.mjs";
-import type { E2EScenarioReferences } from "./seed.ts";
+} from "../../../../scripts/test-resources/managed-resources.mjs";
+import type { E2EScenarioReferences } from "../seed/seed.ts";
 
 export interface E2ERunContext {
   version: 3;

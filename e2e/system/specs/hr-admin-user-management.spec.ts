@@ -2,10 +2,14 @@ import { OrganizationResponsibilityAssignmentStatus } from "@iam/contracts";
 import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import type { APIRequestContext, Browser, Page, Response } from "@playwright/test";
 import { expect } from "@playwright/test";
-import { expectRpcMutationResult, isSuccessfulRpcResponse, loginToAdmin } from "./src/admin-client-journey.ts";
-import { type E2ERunContext, readE2EServiceLogs } from "./src/e2e-context.ts";
-import { test } from "./src/gateway-test.ts";
-import { assertHrAdminDenialLog, containsScalarValue, verifyHrAdminOutcome } from "./src/hr-admin-outcome.ts";
+import {
+  expectRpcMutationResult,
+  isSuccessfulRpcResponse,
+  loginToAdmin,
+} from "../src/journeys/admin-client-journey.ts";
+import { assertHrAdminDenialLog, containsScalarValue, verifyHrAdminOutcome } from "../src/journeys/hr-admin-outcome.ts";
+import { type E2ERunContext, readE2EServiceLogs } from "../src/runtime/e2e-context.ts";
+import { test } from "../src/runtime/gateway-test.ts";
 
 test("HR Admin manages cross-root responsibilities without widening either endpoint", async ({
   runtime,

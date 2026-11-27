@@ -1,11 +1,11 @@
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import { devices, expect } from "@playwright/test";
-import { type E2ERunContext, readE2EServiceLogs } from "./src/e2e-context.ts";
-import { test } from "./src/gateway-test.ts";
-import { createPkceS256Pair, receiveOidcAuthorizationCallback } from "./src/oidc-rp.ts";
-import { standInForWecomAuthorization } from "./src/wecom-journey.ts";
-import { wecomBoundMember, wecomMobileCallbackPath } from "./src/wecom-provider.ts";
+import { createPkceS256Pair, receiveOidcAuthorizationCallback } from "../src/journeys/oidc-rp.ts";
+import { standInForWecomAuthorization } from "../src/journeys/wecom-journey.ts";
+import { type E2ERunContext, readE2EServiceLogs } from "../src/runtime/e2e-context.ts";
+import { test } from "../src/runtime/gateway-test.ts";
+import { wecomBoundMember, wecomMobileCallbackPath } from "../src/stubs/wecom-provider.ts";
 
 test("an internal OIDC request completes with WeCom confirmation on a separate public phone", async ({
   runtime,

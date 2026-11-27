@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { devices, expect } from "@playwright/test";
-import { loginToAdmin } from "./src/admin-client-journey.ts";
-import { test } from "./src/gateway-test.ts";
-import { standInForWecomAuthorization } from "./src/wecom-journey.ts";
-import { wecomUnboundMember, wecomUnlinkMember } from "./src/wecom-provider.ts";
+import { loginToAdmin } from "../src/journeys/admin-client-journey.ts";
+import { standInForWecomAuthorization } from "../src/journeys/wecom-journey.ts";
+import { test } from "../src/runtime/gateway-test.ts";
+import { wecomUnboundMember, wecomUnlinkMember } from "../src/stubs/wecom-provider.ts";
 
 test("WeCom confirmation on the public phone updates the originating internal browser", async ({
   runtime,

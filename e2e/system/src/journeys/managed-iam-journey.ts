@@ -2,14 +2,14 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runOwnedCommand } from "../../../scripts/test-resources/owned-command.mjs";
+import { runOwnedCommand } from "../../../../scripts/test-resources/owned-command.mjs";
 import { managedIamFailure, readManagedIamInput, redactManagedIamText } from "./managed-iam-input.ts";
 
 export async function runManagedIamJourney(signal?: AbortSignal) {
   const inputFile = process.env.IAM_MANAGED_ACCEPTANCE_INPUT_FILE;
   if (!inputFile) throw new Error("IAM_MANAGED_ACCEPTANCE_INPUT_FILE 必须指向本次正式初始化后的私有输入");
   const input = await readManagedIamInput(inputFile);
-  const workspace = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+  const workspace = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
   const output = resolve(workspace, "test-results", `managed-iam-${randomUUID()}`);
   await mkdir(output, { recursive: true });
   const environment: NodeJS.ProcessEnv = {};

@@ -1,9 +1,9 @@
 import { Buffer } from "node:buffer";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
-import type { E2ERunContext } from "./src/e2e-context.ts";
-import { test } from "./src/gateway-test.ts";
-import { createPkceS256Pair } from "./src/oidc-rp.ts";
+import { createPkceS256Pair } from "../src/journeys/oidc-rp.ts";
+import type { E2ERunContext } from "../src/runtime/e2e-context.ts";
+import { test } from "../src/runtime/gateway-test.ts";
 
 test.beforeEach(({ runtime }) => {
   expect(new URL(runtime.internalOrigin).hostname).not.toBe(new URL(runtime.origin).hostname);

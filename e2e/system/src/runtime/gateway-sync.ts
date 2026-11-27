@@ -1,4 +1,4 @@
-export const iamGatewayManifest = new URL("../../../docker/gateway/iam.dev.example.yaml", import.meta.url);
+export const iamGatewayManifest = new URL("../../../../docker/gateway/iam.dev.example.yaml", import.meta.url);
 
 export async function publishGateway(
   input: {

@@ -14,19 +14,19 @@ import {
   readManagedResourceRun,
   runManagedComposeCommand,
   writeAtomicResourceRecord,
-} from "../../../scripts/test-resources/managed-resources.mjs";
-import { pnpmCommand, runOwnedCommand } from "../../../scripts/test-resources/owned-command.mjs";
-import { type E2ERedisSnapshotEntry, type E2ERunContext, runE2ECompose } from "./e2e-context.ts";
-import { iamGatewayManifest, publishGateway } from "./gateway-sync.ts";
-import { waitForHttpRoute } from "./http-probes.ts";
+} from "../../../../scripts/test-resources/managed-resources.mjs";
+import { pnpmCommand, runOwnedCommand } from "../../../../scripts/test-resources/owned-command.mjs";
 import {
   createE2EGatewayApiKey,
   createE2EScenarioIdentity,
   createE2EScenarioInternalApiKey,
   seedE2EScenario,
-} from "./seed.ts";
-import { createProductionE2EScenarioOwner } from "./seed-owner.ts";
-import { wecomMobileCallbackPath } from "./wecom-provider.ts";
+} from "../seed/seed.ts";
+import { createProductionE2EScenarioOwner } from "../seed/seed-owner.ts";
+import { wecomMobileCallbackPath } from "../stubs/wecom-provider.ts";
+import { type E2ERedisSnapshotEntry, type E2ERunContext, runE2ECompose } from "./e2e-context.ts";
+import { iamGatewayManifest, publishGateway } from "./gateway-sync.ts";
+import { waitForHttpRoute } from "./http-probes.ts";
 
 export interface E2ERuntimeOptions {
   repositoryRoot: string;
@@ -381,7 +381,7 @@ async function publishContainerRoutes(options: {
   signal: AbortSignal;
 }) {
   console.log("[e2e] publish APISIX routes");
-  const assets = new URL("../test-assets/", import.meta.url);
+  const assets = new URL("../../test-assets/", import.meta.url);
   const [yaml, cert, privateKey] = await Promise.all([
     readFile(iamGatewayManifest, "utf8"),
     readFile(new URL("wecom-mobile-cert.pem", assets), "utf8"),
@@ -432,7 +432,7 @@ async function verifyRoutes(
   for (const origin of [origins.origin, origins.internalOrigin]) {
     for (const [path, status] of routes) await waitForHttpRoute(new URL(path, origin), status, signal);
   }
-  const ca = await readFile(new URL("../test-assets/wecom-mobile-cert.pem", import.meta.url), "utf8");
+  const ca = await readFile(new URL("../../test-assets/wecom-mobile-cert.pem", import.meta.url), "utf8");
   await waitForHttpRoute(new URL(wecomMobileCallbackPath, origins.wecomMobileOrigin), 400, signal, ca);
 }
 

@@ -21,7 +21,7 @@ import { roleAssignments } from "@iam/db/schema/role-assignments";
 import { StoredUserDocumentSchema } from "@iam/documents/user/document";
 import { SystemLogEvent } from "@iam/runtime/logger";
 import { and, asc, eq, inArray } from "drizzle-orm";
-import type { E2EScenarioGeneratedReferences } from "./seed.ts";
+import type { E2EScenarioGeneratedReferences } from "../seed/seed.ts";
 
 const HR_ADMIN_RESPONSIBILITY_AUDIT_ACTIONS = [
   "admin.organization_responsibility_assignment.create",

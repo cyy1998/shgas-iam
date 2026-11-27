@@ -1,11 +1,11 @@
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { formatResourceFailure } from "../../../scripts/test-resources/managed-resources.mjs";
-import { runOwnedCommand } from "../../../scripts/test-resources/owned-command.mjs";
+import { formatResourceFailure } from "../../../../scripts/test-resources/managed-resources.mjs";
+import { runOwnedCommand } from "../../../../scripts/test-resources/owned-command.mjs";
+import { runManagedIamJourney } from "../journeys/managed-iam-journey.ts";
 import { readE2ERunContext } from "./e2e-context.ts";
-import { runManagedIamJourney } from "./managed-iam-journey.ts";
 
-const workspaceRoot = fileURLToPath(new URL("../", import.meta.url));
+const workspaceRoot = fileURLToPath(new URL("../../", import.meta.url));
 const repositoryRoot = resolve(workspaceRoot, "../..");
 
 export function parsePlaywrightArguments(args: string[]) {

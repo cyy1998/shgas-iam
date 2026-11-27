@@ -1,5 +1,10 @@
 import { expect, type Page } from "@playwright/test";
-import { createWecomAuthorizationCode, wecomAgent, wecomCorp, wecomMobileCallbackPath } from "./wecom-provider.ts";
+import {
+  createWecomAuthorizationCode,
+  wecomAgent,
+  wecomCorp,
+  wecomMobileCallbackPath,
+} from "../stubs/wecom-provider.ts";
 
 const authorizationEndpoint = "https://open.weixin.qq.com/connect/oauth2/authorize";
 

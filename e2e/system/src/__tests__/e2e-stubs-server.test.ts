@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { createHmac } from "node:crypto";
-import { createE2EStubsServer } from "../e2e-stubs-server.ts";
-import { smsBindingMobile, smsSignatureKey } from "../sms-provider.ts";
-import { createWecomAuthorizationCode, wecomCorp, wecomSecret } from "../wecom-provider.ts";
+import { createE2EStubsServer } from "../stubs/e2e-stubs-server.ts";
+import { smsBindingMobile, smsSignatureKey } from "../stubs/sms-provider.ts";
+import { createWecomAuthorizationCode, wecomCorp, wecomSecret } from "../stubs/wecom-provider.ts";
 
 function signSmsRequest(code: string, options: { mobile?: string; origin?: string; timestamp?: number } = {}) {
   const mobile = options.mobile ?? smsBindingMobile;

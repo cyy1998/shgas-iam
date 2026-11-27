@@ -1,7 +1,7 @@
 **
-!src/wecom-provider.ts
-!src/sms-provider.ts
-!src/e2e-stubs-server.ts
+!src/stubs/wecom-provider.ts
+!src/stubs/sms-provider.ts
+!src/stubs/e2e-stubs-server.ts
 !docker/e2e-stubs/Dockerfile
 !docker/e2e-stubs/entrypoint.ts
 !docker/rp-terminal.html

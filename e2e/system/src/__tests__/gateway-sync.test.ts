@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { iamGatewayManifest, publishGateway } from "../gateway-sync";
+import { iamGatewayManifest, publishGateway } from "../runtime/gateway-sync";
 
 test("publishes the E2E topology with RP terminals routed to e2e-stubs and verifies APISIX", async () => {
   const requests: Array<{ url: string; init?: RequestInit }> = [];

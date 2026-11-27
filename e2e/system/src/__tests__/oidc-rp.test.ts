@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Buffer } from "node:buffer";
-import { createPkceS256Pair, deriveS256CodeChallenge, receiveOidcAuthorizationCallback } from "../oidc-rp.ts";
+import { createPkceS256Pair, deriveS256CodeChallenge, receiveOidcAuthorizationCallback } from "../journeys/oidc-rp.ts";
 
 describe("test-owned OIDC RP helper", () => {
   test("derives the RFC 7636 S256 challenge", () => {

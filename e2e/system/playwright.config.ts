@@ -2,7 +2,7 @@ import { createHash, X509Certificate } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
-import type { E2ERunContext } from "./src/e2e-context.ts";
+import type { E2ERunContext } from "./src/runtime/e2e-context.ts";
 
 const contextPath = process.env.IAM_E2E_CONTEXT_PATH;
 const context: E2ERunContext | undefined = contextPath ? JSON.parse(readFileSync(contextPath, "utf8")) : undefined;
@@ -22,7 +22,7 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   reporter: "list",
   retries: process.env.CI ? 1 : 0,
-  testDir: ".",
+  testDir: "./specs",
   testMatch: [
     "admin-custom-sso.spec.ts",
     "application-admission.spec.ts",

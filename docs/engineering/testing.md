@@ -27,12 +27,12 @@
 
 ## 路径与命名
 
-| Collection               | 位置                                                                                           |
-| ------------------------ | ---------------------------------------------------------------------------------------------- |
-| Unit                     | workspace 模块对应层级的 `__tests__/*.test.ts[x]`（以及 `.sandcastle/__tests__/*.test.ts`）    |
-| Bun / Vitest Integration | workspace 的 `test-integration/<feature>/**/*.integration.test.ts[x]`                          |
-| Playwright Integration   | 所属 workspace 的 `test-integration/<feature>/**/*.spec.ts`                                    |
-| Full-system E2E          | `e2e/system/**/*.spec.ts`，由 [Playwright 配置](../../e2e/system/playwright.config.ts)实际选取 |
+| Collection               | 位置                                                                                                 |
+| ------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Unit                     | workspace 模块对应层级的 `__tests__/*.test.ts[x]`（以及 `.sandcastle/__tests__/*.test.ts`）          |
+| Bun / Vitest Integration | workspace 的 `test-integration/<feature>/**/*.integration.test.ts[x]`                                |
+| Playwright Integration   | 所属 workspace 的 `test-integration/<feature>/**/*.spec.ts`                                          |
+| Full-system E2E          | `e2e/system/specs/**/*.spec.ts`，由 [Playwright 配置](../../e2e/system/playwright.config.ts)实际选取 |
 
 Admin 和 SSO 的普通 Unit 使用 Node。依赖浏览器全局或 React DOM 的 `*.dom.test.ts[x]` 在同一 Unit runner 的 jsdom 环境加载兼容 setup。各文件按需注册 MSW 生命周期，复用所在应用的 Testing Library 和路由辅助代码。纯类型契约放在 typecheck 收集的 `*.type-contract.ts`，对允许和禁止的用法分别做正向约束和必要的 `@ts-expect-error` 断言。
 
@@ -155,14 +155,14 @@ Timeout 用于限制悬挂。进程测试等待实际 readiness，同时观察�
 
 ## Full-system E2E
 
-全部 9 个跨服务业务 spec（`admin-custom-sso`、`application-admission`、`directory-custom-attributes`、`dual-entry`、`hr-admin-user-management`、`oidc-pkce`、`wecom-qr-binding`、`wecom-qr-oidc`、`wecom-qr`）统一在生产 Dockerfile 构建的独占 Docker Compose 容器栈上运行，天然覆盖 8 个生产应用镜像、`nginx.conf` 与 `pnpm deploy` 依赖闭包。浏览器经真实 APISIX 双入口（`external.iam.localhost` 与 `internal.iam.localhost`，以及企业微信扫码手机端 HTTPS 入口）观察跨服务业务结果、Cookie 作用域与入口隔离。根命令 `pnpm test:e2e` 直连 Playwright 包装入口，剥离 `--` 前的运行时开关（`--skip-build`、`--keep`），透传文件筛选、`-g`、`-x`、`--last-failed` 和 `--ui` 等参数。[E2E 命令](commands.md#full-system-e2e) · [运行时编排](../../e2e/system/src/e2e-runtime.ts) · [Compose 配置](../../e2e/system/docker-compose.e2e.yml)
+全部 9 个跨服务业务 spec（`admin-custom-sso`、`application-admission`、`directory-custom-attributes`、`dual-entry`、`hr-admin-user-management`、`oidc-pkce`、`wecom-qr-binding`、`wecom-qr-oidc`、`wecom-qr`）统一在生产 Dockerfile 构建的独占 Docker Compose 容器栈上运行，天然覆盖 8 个生产应用镜像、`nginx.conf` 与 `pnpm deploy` 依赖闭包。浏览器经真实 APISIX 双入口（`external.iam.localhost` 与 `internal.iam.localhost`，以及企业微信扫码手机端 HTTPS 入口）观察跨服务业务结果、Cookie 作用域与入口隔离。根命令 `pnpm test:e2e` 直连 Playwright 包装入口，剥离 `--` 前的运行时开关（`--skip-build`、`--keep`），透传文件筛选、`-g`、`-x`、`--last-failed` 和 `--ui` 等参数。[E2E 命令](commands.md#full-system-e2e) · [运行时编排](../../e2e/system/src/runtime/e2e-runtime.ts) · [Compose 配置](../../e2e/system/docker-compose.e2e.yml)
 
 ### 初始化与就绪
 
 - **独占生产容器栈**。每轮创建独立项目 `iam-e2e-<uuid>`。静态 Compose 配置声明服务、网络和数据卷，动态端点与测试凭据由资源记录注入。Compose 构建 10 个镜像（APISIX、桩服务与 8 个生产应用），并发由 `COMPOSE_PARALLEL_LIMIT` 控制，日志写入 `build.log`。启用 GHA 缓存时，仅构建命令叠加 [缓存配置](../../e2e/system/docker-compose.e2e.gha-cache.yml)。镜像构建成功后标记为 `iam-e2e-<service>:local`，供 `--skip-build` 校验并复用。
-- **四合一桩服务**。[容器 `e2e-stubs`](../../e2e/system/src/e2e-stubs-server.ts) 使用网络别名 `qyapi.weixin.qq.com` 和仅挂载给 `auth-api` 的测试 CA 承接企业微信 HTTPS 请求，通过 `IAM_AUTH_API_SMS_URL` 接收短信并供测试轮询，托管 RP 回调终端页 `/portal/e2e-rp.html`，并通过鉴权端点 `POST /_stubs/reset` 清空企业微信与短信状态。
+- **四合一桩服务**。[容器 `e2e-stubs`](../../e2e/system/src/stubs/e2e-stubs-server.ts) 使用网络别名 `qyapi.weixin.qq.com` 和仅挂载给 `auth-api` 的测试 CA 承接企业微信 HTTPS 请求，通过 `IAM_AUTH_API_SMS_URL` 接收短信并供测试轮询，托管 RP 回调终端页 `/portal/e2e-rp.html`，并通过鉴权端点 `POST /_stubs/reset` 清空企业微信与短信状态。
 - **一次性初始化与快照**。基础设施健康后迁移 PostgreSQL，启动 Worker，在运行时进程中执行 seed 并等待 User Documents 发布。PostgreSQL 快照 `seed-data.sql` 包含 `public` 表的截断与数据恢复语句，保留 `drizzle` schema。Redis 快照 `seed-redis.json` 保存非 `bull:*` 键的值和剩余有效期。随后启动其余应用，通过 Gateway API 发布 APISIX 路由并探测双入口和企业微信手机端 HTTPS 路由。Worker 保持运行。
-- **按 spec 边界原地复位**。首个 spec 直接使用已初始化的数据。[Playwright fixture](../../e2e/system/src/gateway-test.ts) 在切换 spec、重试或重复执行时检查 Worker 是否运行，必要时启动同一容器。接着在单个 PostgreSQL 事务中恢复快照，在同一 Redis 事务中执行 `FLUSHDB` 和 `RESTORE`，最后重置桩状态。全程使用该轮独占的数据库和 Redis，已运行的容器及 APISIX 路由继续服务。需要验证 Worker 恢复的 spec 可显式停启 Worker。[复位实现](../../e2e/system/src/e2e-context.ts)
+- **按 spec 边界原地复位**。首个 spec 直接使用已初始化的数据。[Playwright fixture](../../e2e/system/src/runtime/gateway-test.ts) 在切换 spec、重试或重复执行时检查 Worker 是否运行，必要时启动同一容器。接着在单个 PostgreSQL 事务中恢复快照，在同一 Redis 事务中执行 `FLUSHDB` 和 `RESTORE`，最后重置桩状态。全程使用该轮独占的数据库和 Redis，已运行的容器及 APISIX 路由继续服务。需要验证 Worker 恢复的 spec 可显式停启 Worker。[复位实现](../../e2e/system/src/runtime/e2e-context.ts)
 
 ### 失败诊断与清理
 

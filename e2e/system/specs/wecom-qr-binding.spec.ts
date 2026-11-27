@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { ApiErrorCode, UserType } from "@iam/contracts";
 import { devices, expect, type Page } from "@playwright/test";
-import { loginToAdmin } from "./src/admin-client-journey.ts";
-import { type E2ERunContext, readDeliveredSmsCode } from "./src/e2e-context.ts";
-import { test } from "./src/gateway-test.ts";
-import { smsBindingMobile, smsBindingUsername } from "./src/sms-provider.ts";
-import { standInForWecomAuthorization } from "./src/wecom-journey.ts";
+import { loginToAdmin } from "../src/journeys/admin-client-journey.ts";
+import { standInForWecomAuthorization } from "../src/journeys/wecom-journey.ts";
+import { type E2ERunContext, readDeliveredSmsCode } from "../src/runtime/e2e-context.ts";
+import { test } from "../src/runtime/gateway-test.ts";
+import { smsBindingMobile, smsBindingUsername } from "../src/stubs/sms-provider.ts";
 
 const firstBindingMember = "wecom-e2e-password-binding";
 const deniedBindingMember = "wecom-e2e-password-denied";

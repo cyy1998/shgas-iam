@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { createE2EStubsServer } from "../../src/e2e-stubs-server.ts";
+import { createE2EStubsServer } from "../../src/stubs/e2e-stubs-server.ts";
 
 const token = process.env.IAM_E2E_STUBS_TOKEN?.trim();
 if (!token) throw new Error("IAM_E2E_STUBS_TOKEN is required");

@@ -13,7 +13,7 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   reporter: "list",
   retries: 0,
-  testDir: ".",
+  testDir: "./specs",
   testMatch: "managed-hosting.spec.ts",
   timeout: 120_000,
   use: {

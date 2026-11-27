@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createE2ESeedSubjects, type E2EScenarioOwner, seedE2EScenario } from "../seed.ts";
+import { createE2ESeedSubjects, type E2EScenarioOwner, seedE2EScenario } from "../seed/seed.ts";
 
 describe("E2E scenario seed", () => {
   test("establishes the fixed scenario through its owner and returns only run-scoped references", async () => {

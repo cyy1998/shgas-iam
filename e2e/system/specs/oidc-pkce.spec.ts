@@ -9,11 +9,11 @@ import {
   runClientProtocolLifecycleAction,
   saveUnchangedClientProtocolConfiguration,
   updateClientStatus,
-} from "./src/admin-client-journey.ts";
-import { exerciseDatedEmployment } from "./src/employment-journey.ts";
-import { test } from "./src/gateway-test.ts";
-import { createPkceS256Pair, receiveOidcAuthorizationCallback } from "./src/oidc-rp.ts";
-import { exerciseUnifiedSession } from "./src/unified-session-journey.ts";
+} from "../src/journeys/admin-client-journey.ts";
+import { exerciseDatedEmployment } from "../src/journeys/employment-journey.ts";
+import { createPkceS256Pair, receiveOidcAuthorizationCallback } from "../src/journeys/oidc-rp.ts";
+import { exerciseUnifiedSession } from "../src/journeys/unified-session-journey.ts";
+import { test } from "../src/runtime/gateway-test.ts";
 
 test("public RP observes reversible Maintenance and permanent logout through real Admin control", async ({
   runtime,

@@ -6,9 +6,9 @@ import {
   isSuccessfulRpcResponse,
   loginToAdmin,
   openClientSection,
-} from "./src/admin-client-journey.ts";
-import { test } from "./src/gateway-test.ts";
-import { createPkceS256Pair, receiveOidcAuthorizationCallback } from "./src/oidc-rp.ts";
+} from "../src/journeys/admin-client-journey.ts";
+import { createPkceS256Pair, receiveOidcAuthorizationCallback } from "../src/journeys/oidc-rp.ts";
+import { test } from "../src/runtime/gateway-test.ts";
 
 test("Admin admission changes govern new Custom SSO and OIDC grants while existing sessions remain usable", async ({
   runtime,

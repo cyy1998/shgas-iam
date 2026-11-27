@@ -12,10 +12,10 @@ import {
   UserStatus,
 } from "@iam/contracts";
 import type { clients } from "@iam/db/schema";
+import { smsBindingMobile, smsBindingUsername } from "../stubs/sms-provider";
+import { wecomBoundMember, wecomUnlinkMember } from "../stubs/wecom-provider";
 import type { E2EScenarioOwner, E2EScenarioSeedReferences } from "./seed.ts";
 import type { CreateProductionE2EScenarioOwnerInput } from "./seed-owner.ts";
-import { smsBindingMobile, smsBindingUsername } from "./sms-provider";
-import { wecomBoundMember, wecomUnlinkMember } from "./wecom-provider";
 
 type SeedClient = typeof clients.$inferInsert;
 

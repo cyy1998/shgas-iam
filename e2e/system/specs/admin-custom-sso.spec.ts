@@ -9,18 +9,18 @@ import {
   runClientProtocolLifecycleAction,
   saveUnchangedClientProtocolConfiguration,
   updateClientStatus,
-} from "./src/admin-client-journey.ts";
-import { test } from "./src/gateway-test.ts";
+} from "../src/journeys/admin-client-journey.ts";
 import {
   createHeadResponsibility,
   customSsoProfileHasResponsibility,
   expectInternalResponsibilityDsl,
   waitForInternalResponsibility,
-} from "./src/responsibility-journey.ts";
+} from "../src/journeys/responsibility-journey.ts";
 import {
   expectInternalUserDocumentSearchMatrix,
   expectUserSearchDelegationResolution,
-} from "./src/user-document-search-journey.ts";
+} from "../src/journeys/user-document-search-journey.ts";
+import { test } from "../src/runtime/gateway-test.ts";
 
 test("Admin prepares Custom SSO in Maintenance and existing access resumes after recovery", async ({
   runtime,

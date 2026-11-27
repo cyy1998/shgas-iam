@@ -24,8 +24,8 @@ import type { APIRequestContext } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import { sql } from "drizzle-orm";
 import Redis from "ioredis";
-import { loginToAdmin } from "./src/admin-client-journey.ts";
-import { managedIamFailure, readManagedIamInput } from "./src/managed-iam-input.ts";
+import { loginToAdmin } from "../src/journeys/admin-client-journey.ts";
+import { managedIamFailure, readManagedIamInput } from "../src/journeys/managed-iam-input.ts";
 
 async function rpc<T>(
   request: APIRequestContext,

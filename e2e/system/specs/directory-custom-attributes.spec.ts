@@ -6,14 +6,14 @@ import type { CustomAttributeValues } from "@iam/contracts/custom-attributes";
 import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import type { APIResponse } from "@playwright/test";
 import { expect } from "@playwright/test";
-import { formatResourceFailure } from "../../scripts/test-resources/managed-resources.mjs";
-import { loginToAdmin } from "./src/admin-client-journey.ts";
-import { runE2ECommand, startE2EWorker, stopE2EWorker } from "./src/e2e-context.ts";
-import { test as gatewayTest } from "./src/gateway-test.ts";
-import { createPkceS256Pair, receiveOidcAuthorizationCallback } from "./src/oidc-rp.ts";
+import { formatResourceFailure } from "../../../scripts/test-resources/managed-resources.mjs";
+import { loginToAdmin } from "../src/journeys/admin-client-journey.ts";
+import { createPkceS256Pair, receiveOidcAuthorizationCallback } from "../src/journeys/oidc-rp.ts";
+import { runE2ECommand, startE2EWorker, stopE2EWorker } from "../src/runtime/e2e-context.ts";
+import { test as gatewayTest } from "../src/runtime/gateway-test.ts";
 
 const publicationTimeoutMs = 45_000;
-const workspaceRoot = fileURLToPath(new URL(".", import.meta.url));
+const workspaceRoot = fileURLToPath(new URL("../", import.meta.url));
 const definitionPath = "/api/iam/admin/custom-attribute-definitions";
 const attributes = [
   { entityType: "user", code: "on_call", displayName: "On call", valueType: "boolean" },
@@ -59,7 +59,7 @@ const test = gatewayTest.extend<{ withStoppedWorker: RunWithStoppedWorker }>({
             runDuringTest(() =>
               runE2ECommand(
                 process.env.IAM_E2E_BUN_EXECUTABLE || "bun",
-                ["--no-env-file", "src/drop-user-attribute-wake.ts", code],
+                ["--no-env-file", "src/journeys/drop-user-attribute-wake.ts", code],
                 {
                   cwd: workspaceRoot,
                   env: { ...process.env, DATABASE_URL: runtime.databaseUrl, IAM_E2E_REDIS_URL: runtime.redisUrl },

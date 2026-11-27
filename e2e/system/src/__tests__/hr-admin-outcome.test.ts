@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import type { HrAdminOutcomeScenario } from "../hr-admin-outcome.ts";
-import { assertHrAdminDenialLog } from "../hr-admin-outcome.ts";
+import type { HrAdminOutcomeScenario } from "../journeys/hr-admin-outcome.ts";
+import { assertHrAdminDenialLog } from "../journeys/hr-admin-outcome.ts";
 
 const scenario = {
   runId: "outcome-01",

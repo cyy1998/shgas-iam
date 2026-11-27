@@ -19,9 +19,9 @@
     "ioredis": "^6.0.0"
   },
   "scripts": {
-    "runtime:cleanup": "bun src/cli.ts cleanup",
-    "test:e2e": "bun src/cli.ts e2e",
-    "test:e2e:managed": "bun src/cli.ts managed",
+    "runtime:cleanup": "bun src/runtime/cli.ts cleanup",
+    "test:e2e": "bun src/runtime/cli.ts e2e",
+    "test:e2e:managed": "bun src/runtime/cli.ts managed",
     "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
     "lint:fix": "biome check --formatter-enabled=false --write . && stylelint \"**/*.less\" --allow-empty-input",
     "test": "pnpm test:unit",

@@ -1,9 +1,8 @@
 import { UserDocumentSchema, UserStatus } from "@iam/contracts";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
-
+import { smsBindingUsername } from "../stubs/sms-provider.ts";
 import { expectClientDelegationJourney } from "./delegation-journey.ts";
-import { smsBindingUsername } from "./sms-provider.ts";
 
 const publicationTimeoutMs = 45_000;
 
