@@ -22,7 +22,7 @@
 | 新增或修改测试、选择验证通道                                                                   | [测试与验证](docs/engineering/testing.md#验证选择)，按需读测试分类、命名和质量规则                                                                                           |
 | 修改 runner、测试收集、fixture、资源隔离或清理                                                 | [收集与编排](docs/engineering/testing.md#收集与编排)、[专用资源与隔离](docs/engineering/testing.md#专用资源与隔离)                                                           |
 | 调整模块依赖边界、公开出口，或新增/修改 Architecture Guard                                     | [架构守卫](docs/engineering/testing.md#架构守卫)                                                                                                                             |
-| 运行本地开发、构建、测试或检查命令                                                             | [命令入口](docs/engineering/commands.md)中的对应通道或 workspace 入口                                                                                                        |
+| 运行本地开发、构建、测试、检查命令或排查 CI                                                    | [命令入口](docs/engineering/commands.md)中的对应通道、CI 说明或 workspace 入口                                                                                               |
 | Gateway、Docker、observability 配置，或部署、数据切换、运维修复                                | [仓库地图](docs/engineering/repository-map.md)及[发布与维护](docs/index.md#发布与维护)中对应的 Current runbook。执行命令前读完整的适用流程                                   |
 | 修改文档、AGENTS.md 或 skill                                                                   | [文档索引的维护方式](docs/index.md#维护方式)；涉及的架构或领域规则仍按上表叠加                                                                                               |
 
