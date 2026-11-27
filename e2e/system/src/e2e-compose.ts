@@ -154,12 +154,27 @@ export function createE2ECompose(options: E2EComposeOptions) {
       apisix: {
         ...infrastructure.services.apisix,
         image: e2eLocalImageTag("apisix"),
-        build: withCache("apisix", { context: apisixBuildContext }, cacheMode),
+        build: withCache(
+          "apisix",
+          {
+            context: apisixBuildContext,
+            ...(env.IAM_E2E_APISIX_BASE_IMAGE ? { args: { APISIX_IMAGE: env.IAM_E2E_APISIX_BASE_IMAGE } } : {}),
+          },
+          cacheMode,
+        ),
         ports: [`127.0.0.1:${httpPort}:9080`, `127.0.0.1:${httpsPort}:9443`, "127.0.0.1:0:9180"],
       },
       "e2e-stubs": {
         image: e2eLocalImageTag("e2e-stubs"),
-        build: withCache("e2e-stubs", { context: e2eStubsBuildContext, dockerfile: e2eStubsDockerfile }, cacheMode),
+        build: withCache(
+          "e2e-stubs",
+          {
+            context: e2eStubsBuildContext,
+            dockerfile: e2eStubsDockerfile,
+            ...(env.IAM_E2E_BUN_IMAGE ? { args: { BUN_IMAGE: env.IAM_E2E_BUN_IMAGE } } : {}),
+          },
+          cacheMode,
+        ),
         labels,
         ports: [`127.0.0.1:0:${e2eStubsHttpPort}`],
         networks: { default: { aliases: ["qyapi.weixin.qq.com"] } },

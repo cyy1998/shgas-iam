@@ -118,10 +118,9 @@ export function resolveWorkspaceDependency(graph, from, dependency) {
   return { name: targetName, workspace: graph.byName.get(targetName) };
 }
 
-export function selectWorkspaces(graph, { kind, gate, tier }) {
+export function selectWorkspaces(graph, { kind, tier }) {
   return [...graph.byManifestPath.values()].filter(({ iamWorkspace }) => {
     if (kind && iamWorkspace?.kind !== kind) return false;
-    if (gate && !(Array.isArray(iamWorkspace?.gates) && iamWorkspace.gates.includes(gate))) return false;
     const declaredTier = iamWorkspace?.architecture?.tier;
     return !tier || tier === declaredTier || (tier === "layered-backend" && declaredTier === "public-api");
   });

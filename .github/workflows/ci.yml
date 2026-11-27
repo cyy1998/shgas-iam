@@ -1,0 +1,408 @@
+name: CI
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  detect:
+    name: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+      base_sha: ${{ steps.classify.outputs.base_sha }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Classify change scope
+        id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          ZERO_SHA="0000000000000000000000000000000000000000"
+          BASE_SHA=""
+
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            if git rev-parse --verify -q HEAD^2 >/dev/null 2>&1; then
+              BASE_SHA="$(git rev-parse HEAD^1)"
+            elif [ -n "$PR_BASE_SHA" ] && [ "$PR_BASE_SHA" != "$ZERO_SHA" ]; then
+              BASE_SHA="$(git merge-base "$PR_BASE_SHA" HEAD || true)"
+            fi
+          elif [ "$EVENT_NAME" = "push" ]; then
+            if [ -n "$PUSH_BEFORE_SHA" ] && [ "$PUSH_BEFORE_SHA" != "$ZERO_SHA" ]; then
+              if git cat-file -e "${PUSH_BEFORE_SHA}^{commit}" 2>/dev/null; then
+                MERGE_BASE="$(git merge-base "$PUSH_BEFORE_SHA" HEAD || true)"
+                if [ "$MERGE_BASE" = "$PUSH_BEFORE_SHA" ]; then
+                  BASE_SHA="$PUSH_BEFORE_SHA"
+                fi
+              fi
+            fi
+          fi
+
+          if [ -z "$BASE_SHA" ]; then
+            echo "base_sha=" >> "$GITHUB_OUTPUT"
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "[detect] Base SHA unavailable or unexpected; defaulting docs_only=false"
+            exit 0
+          fi
+
+          DOCS_ONLY="$(node scripts/verify-docs.mjs --classify --base "$BASE_SHA")"
+          if [ "$DOCS_ONLY" != "true" ] && [ "$DOCS_ONLY" != "false" ]; then
+            DOCS_ONLY="false"
+          fi
+          echo "base_sha=${BASE_SHA}" >> "$GITHUB_OUTPUT"
+          echo "docs_only=${DOCS_ONLY}" >> "$GITHUB_OUTPUT"
+          echo "[detect] base_sha=${BASE_SHA} docs_only=${DOCS_ONLY}"
+
+  doc-check:
+    name: doc-check
+    needs: [detect]
+    if: success() && needs.detect.outputs.docs_only == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HUSKY: "0"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.22.3"
+          cache: pnpm
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify documentation-only changes
+        env:
+          BASE_SHA: ${{ needs.detect.outputs.base_sha }}
+        run: node scripts/verify-docs.mjs --base "$BASE_SHA"
+
+  fast:
+    name: fast
+    needs: [detect]
+    if: success() && needs.detect.outputs.docs_only == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      HUSKY: "0"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.22.3"
+          cache: pnpm
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
+
+      - name: Cache Turbo
+        uses: actions/cache@v4
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-fast-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-fast-
+            turbo-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run static checks
+        run: pnpm check
+
+      - name: Run unit tests
+        run: pnpm test:unit
+
+      - name: Build workspaces
+        run: pnpm build
+
+  integration:
+    name: integration
+    needs: [detect]
+    if: success() && needs.detect.outputs.docs_only == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HUSKY: "0"
+    services:
+      postgres:
+        image: postgres:18.4
+        env:
+          POSTGRES_USER: iam_test
+          POSTGRES_PASSWORD: iam_test
+          POSTGRES_DB: iam_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -h 127.0.0.1 -U iam_test -d iam_test"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=12
+          --tmpfs /var/lib/postgresql:size=1g
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.22.3"
+          cache: pnpm
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
+
+      - name: Cache Turbo
+        uses: actions/cache@v4
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-integration-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-integration-
+            turbo-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @iam/admin exec playwright install --with-deps chromium
+
+      - name: Start Redis 8.8.0 (32 logical databases)
+        run: |
+          set -euo pipefail
+          docker run -d \
+            --name ci-test-redis \
+            -p 127.0.0.1:6379:6379 \
+            redis:8.8.0 \
+            redis-server --databases 32 --save "" --appendonly no
+          for _ in $(seq 1 30); do
+            if [ "$(docker exec ci-test-redis redis-cli -n 31 PING 2>/dev/null || true)" = "PONG" ]; then
+              echo "[ci] Redis 8.8.0 ready on 127.0.0.1:6379 (SELECT 31 verified)"
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs ci-test-redis || true
+          echo "[ci] Redis did not become ready with 32 logical databases" >&2
+          exit 1
+
+      - name: Start APISIX 3.16 + etcd 3.5
+        env:
+          IAM_GATEWAY_TEST_ETCD_IMAGE: bitnamilegacy/etcd:3.5.11
+          IAM_GATEWAY_TEST_APISIX_BASE_IMAGE: apache/apisix:3.16.0-debian
+          IAM_GATEWAY_TEST_APISIX_IMAGE: iam-gateway-apisix:ci
+        run: |
+          set -euo pipefail
+          docker compose \
+            --project-name ci-gateway-apisix \
+            --project-directory . \
+            -f apps/gateway/test-integration/support/apisix.compose.yaml \
+            up -d --build --wait
+          APISIX_ADDR="$(docker compose \
+            --project-name ci-gateway-apisix \
+            --project-directory . \
+            -f apps/gateway/test-integration/support/apisix.compose.yaml \
+            port apisix 9180 | head -n 1 | tr -d '\r')"
+          if [ -z "$APISIX_ADDR" ]; then
+            echo "[ci] Failed to discover published APISIX admin port" >&2
+            exit 1
+          fi
+          echo "IAM_TEST_APISIX_ADMIN_URL=http://${APISIX_ADDR}/apisix/admin" >> "$GITHUB_ENV"
+          echo "IAM_TEST_APISIX_ADMIN_KEY=iam-gateway-integration-admin-key" >> "$GITHUB_ENV"
+          echo "[ci] APISIX Admin ready at http://${APISIX_ADDR}/apisix/admin"
+
+      - name: Run full integration suite
+        env:
+          IAM_TEST_RESOURCE_PROVIDER: external
+          IAM_TEST_POSTGRES_URL: postgresql://iam_test:iam_test@127.0.0.1:5432/iam_test
+          IAM_TEST_REDIS_URL: redis://127.0.0.1:6379/0
+        run: pnpm test:integration
+
+      - name: Upload redacted integration task logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-logs-${{ github.run_attempt }}
+          path: test-results/integration/**/logs/*.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Teardown APISIX and Redis containers
+        if: always()
+        env:
+          IAM_GATEWAY_TEST_ETCD_IMAGE: bitnamilegacy/etcd:3.5.11
+          IAM_GATEWAY_TEST_APISIX_BASE_IMAGE: apache/apisix:3.16.0-debian
+          IAM_GATEWAY_TEST_APISIX_IMAGE: iam-gateway-apisix:ci
+        run: |
+          docker compose \
+            --project-name ci-gateway-apisix \
+            --project-directory . \
+            -f apps/gateway/test-integration/support/apisix.compose.yaml \
+            down --volumes --remove-orphans || true
+          docker rm -f ci-test-redis 2>/dev/null || true
+
+  e2e:
+    name: e2e
+    needs: [detect, fast, integration]
+    if: >-
+      success() &&
+      needs.detect.outputs.docs_only == 'false' &&
+      (github.event_name == 'push' || github.event.pull_request.draft == false)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      HUSKY: "0"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.22.3"
+          cache: pnpm
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Expose GitHub Actions runtime for BuildKit GHA cache
+        uses: crazy-max/ghaction-github-runtime@v3
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm --filter @iam/e2e-system exec playwright install --with-deps chromium
+
+      - name: Run full-system E2E suite
+        env:
+          IAM_E2E_BUILDX_CACHE: gha
+          IAM_E2E_POSTGRES_IMAGE: postgres:18.4
+          IAM_E2E_REDIS_IMAGE: redis:8.8.0
+          IAM_E2E_ETCD_IMAGE: bitnamilegacy/etcd:3.5.11
+          IAM_E2E_APISIX_BASE_IMAGE: apache/apisix:3.16.0-debian
+          IAM_E2E_BUN_IMAGE: oven/bun:1.4.4-alpine
+        run: pnpm test:e2e
+
+      - name: Upload redacted E2E failure summaries
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-summaries-${{ github.run_attempt }}
+          path: |
+            e2e/system/.reports/**/failure-summary.md
+            e2e/system/.reports/**/failure-summary.json
+          retention-days: 7
+          if-no-files-found: ignore
+
+  ci-gate:
+    name: ci-gate
+    needs: [detect, doc-check, fast, integration, e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Evaluate CI gate truth table
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          DOCS_ONLY: ${{ needs.detect.outputs.docs_only }}
+          RESULT_DETECT: ${{ needs.detect.result }}
+          RESULT_DOC_CHECK: ${{ needs.doc-check.result }}
+          RESULT_FAST: ${{ needs.fast.result }}
+          RESULT_INTEGRATION: ${{ needs.integration.result }}
+          RESULT_E2E: ${{ needs.e2e.result }}
+        run: |
+          set -euo pipefail
+          echo "[ci-gate] event=${EVENT_NAME} draft=${PR_DRAFT:-false} docs_only=${DOCS_ONLY:-<unset>}"
+          echo "[ci-gate] results: detect=${RESULT_DETECT} doc-check=${RESULT_DOC_CHECK} fast=${RESULT_FAST} integration=${RESULT_INTEGRATION} e2e=${RESULT_E2E}"
+
+          if [ "$RESULT_DETECT" != "success" ]; then
+            echo "::error::ci-gate failed: detect job result is '${RESULT_DETECT}' (expected 'success')."
+            exit 1
+          fi
+
+          if [ "$DOCS_ONLY" = "true" ]; then
+            if [ "$RESULT_DOC_CHECK" != "success" ]; then
+              echo "::error::ci-gate failed: docs-only change requires doc-check='success' (got '${RESULT_DOC_CHECK}')."
+              exit 1
+            fi
+            if [ "$RESULT_FAST" != "skipped" ] || [ "$RESULT_INTEGRATION" != "skipped" ] || [ "$RESULT_E2E" != "skipped" ]; then
+              echo "::error::ci-gate failed: docs-only change requires fast/integration/e2e='skipped' (got fast='${RESULT_FAST}', integration='${RESULT_INTEGRATION}', e2e='${RESULT_E2E}')."
+              exit 1
+            fi
+            echo "[ci-gate] passed (docs-only path)."
+            exit 0
+          fi
+
+          if [ "$DOCS_ONLY" != "false" ]; then
+            echo "::error::ci-gate failed: unexpected docs_only output '${DOCS_ONLY}' (expected 'true' or 'false')."
+            exit 1
+          fi
+
+          if [ "$EVENT_NAME" = "pull_request" ] && [ "${PR_DRAFT:-false}" = "true" ]; then
+            echo "::error::ci-gate failed: Draft code PRs skip e2e and cannot pass ci-gate. Mark the PR Ready for Review to run e2e."
+            exit 1
+          fi
+
+          if [ "$RESULT_DOC_CHECK" != "skipped" ]; then
+            echo "::error::ci-gate failed: code change requires doc-check='skipped' (got '${RESULT_DOC_CHECK}')."
+            exit 1
+          fi
+
+          if [ "$RESULT_FAST" != "success" ] || [ "$RESULT_INTEGRATION" != "success" ] || [ "$RESULT_E2E" != "success" ]; then
+            echo "::error::ci-gate failed: code change requires fast, integration, and e2e to all succeed (got fast='${RESULT_FAST}', integration='${RESULT_INTEGRATION}', e2e='${RESULT_E2E}')."
+            exit 1
+          fi
+
+          echo "[ci-gate] passed (full code path)."

@@ -55,8 +55,6 @@ export function createManagedResourceRun(options: {
   removeLocalImages?: boolean;
   keep?: boolean;
   registryFile?: string;
-  /** @deprecated Ignored; kept temporarily for legacy e2e/system typecheck until #445 removes hybrid-middleware. */
-  parentRecord?: string;
 }): Promise<ManagedResourceRun>;
 export function readManagedResourceRun(root: string, recordPath: string): Promise<ManagedResourceRun>;
 export function readManagedResourceRegistry(root: string, registryFile: string): Promise<string[]>;

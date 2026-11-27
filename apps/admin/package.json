@@ -2,11 +2,7 @@
   "name": "@iam/admin",
   "private": true,
   "iamWorkspace": {
-    "kind": "frontend",
-    "gates": [
-      "container-smoke",
-      "e2e-runtime"
-    ]
+    "kind": "frontend"
   },
   "author": "cyy",
   "scripts": {

@@ -121,5 +121,25 @@ describe("production container E2E compose topology", () => {
       cache_from: ["type=gha,scope=e2e-e2e-stubs"],
       cache_to: ["type=gha,mode=max,scope=e2e-e2e-stubs"],
     });
+
+    const imageOverrideCompose = createE2ECompose({
+      ...baseOptions,
+      env: {
+        IAM_E2E_POSTGRES_IMAGE: "postgres:18.4",
+        IAM_E2E_REDIS_IMAGE: "redis:8.8.0",
+        IAM_E2E_ETCD_IMAGE: "bitnamilegacy/etcd:3.5.11",
+        IAM_E2E_APISIX_BASE_IMAGE: "apache/apisix:3.16.0-debian",
+        IAM_E2E_BUN_IMAGE: "oven/bun:1.4.4-alpine",
+      },
+    });
+    expect(imageOverrideCompose.services.postgres.image).toBe("postgres:18.4");
+    expect(imageOverrideCompose.services.redis.image).toBe("redis:8.8.0");
+    expect(imageOverrideCompose.services["apisix-etcd"].image).toBe("bitnamilegacy/etcd:3.5.11");
+    expect(imageOverrideCompose.services.apisix.build).toMatchObject({
+      args: { APISIX_IMAGE: "apache/apisix:3.16.0-debian" },
+    });
+    expect(imageOverrideCompose.services["e2e-stubs"].build).toMatchObject({
+      args: { BUN_IMAGE: "oven/bun:1.4.4-alpine" },
+    });
   });
 });
