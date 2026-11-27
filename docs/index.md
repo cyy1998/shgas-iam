@@ -130,7 +130,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [ADR-0057](adr/0057-split-public-api-by-trust-and-traffic-boundaries.md)                | decision | Current    | 2026-11-25    | 2026-12-25  | 已确认的设计：将公共 `apps/api` 拆分为 `auth-api`、`sso-api`、`integration-api` 三服务、规范前缀与 APISIX 双轨兼容、无同步 RPC 与整体交付。                                                                                                                                                                                                                 |
 | [ADR-0058](adr/0058-standardize-development-and-runtime-tooling-on-linux.md)            | decision | Current    | 2026-11-27    | 2026-12-27  | 已确认的设计：将开发、测试、AFK 编排与运行时工具链收敛为纯 Linux，退役 Windows/macOS 适配层、Worker standalone 与假 `SIGTERM` 夹具；过渡 Sandcastle 补丁条款由 ADR-0059 取代，原 ADR-0055/0056 已由 ADR-0060 取代。                                                                                                                                         |
 | [ADR-0059](adr/0059-adopt-native-sandcastle-afk-orchestration.md)                       | decision | Current    | 2026-11-27    | 2026-12-27  | 已确认的设计：基于零补丁 `@ai-hero/sandcastle@0.14.0` 与原生 `docker()` 在 `.sandcastle/` 构建单目录 AFK 编排，采用方案 X 无特权单容器（零 `docker.sock`/`--network=host`）、原生 `linkedBranches`、宿主独占 worktree 与按需 Merger、单向 `auth.json`、`captureSessions: false`、轻推前 `pnpm check` 与远端 `ci-gate` 等绿限次修红闭环，同步配合 ADR-0060。 |
-| [ADR-0060](adr/0060-unify-test-architecture-sandbox-and-ci-gate.md)                     | decision | Current    | 2026-11-27    | 2026-12-27  | 已确认的设计：统一测试分层与 6 核心根命令面、L2 窄 Provider 与 2 变量收敛、前端 `build:test` + `vite preview` 解耦、方案 X 单容器无特权沙箱、生产容器全量 9-spec E2E（四合一 `e2e-stubs`）与 GitHub Actions `ci-gate` 权威门禁；合并并取代原 ADR-0009、ADR-0055 与 ADR-0056。                                                                               |
+| [ADR-0060](adr/0060-unify-test-architecture-sandbox-and-ci-gate.md)                     | decision | Current    | 2026-11-27    | 2026-12-27  | 已确认的设计：统一测试分层与 6 核心根命令面、L2 窄 Provider 与 2 变量收敛、前端测试架构的原始决定（当前入口见 [测试与验证](engineering/testing.md#收集与编排)）、方案 X 单容器无特权沙箱、生产容器全量 9-spec E2E（四合一 `e2e-stubs`）与 GitHub Actions `ci-gate` 权威门禁；合并并取代原 ADR-0009、ADR-0055 与 ADR-0056。                                  |
 
 </details>
 
@@ -172,10 +172,10 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 
 #### 编写、运行或排查测试
 
-| Document                                        | Type        | Status  | Last verified | Next review | Notes                                                                                                                                                                     |
-| ----------------------------------------------- | ----------- | ------- | ------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [测试与验证](engineering/testing.md)            | development | Current | 2026-11-27    | 2026-12-27  | 验证选择、L1/L2/L3 测试编排、窄 `ResourceProvider`（`docker`/`native`/`external`）、前端 `build:test` + `vite preview`、Sandcastle 方案 X 验证与生产容器全量 9-spec E2E。 |
-| [构建、测试与开发命令](engineering/commands.md) | development | Current | 2026-11-27    | 2026-12-27  | 6 个核心根命令（`check`/`fix`/`test:unit`/`test:integration`/`test:e2e`/`verify`）、workspace 与 Sandcastle CLI、GitHub Actions `ci-gate`、手动 OIDC 套件与资源清理。     |
+| Document                                        | Type        | Status  | Last verified | Next review | Notes                                                                                                                                                             |
+| ----------------------------------------------- | ----------- | ------- | ------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [测试与验证](engineering/testing.md)            | development | Current | 2026-11-27    | 2026-12-27  | 验证选择、L1/L2/L3 测试编排、专用测试端点（`test:infra:up/down` / 外部注入）、前端 Vitest DOM 与 Vite 代理测试、Sandcastle 方案 X 验证与生产容器全量 9-spec E2E。 |
+| [构建、测试与开发命令](engineering/commands.md) | development | Current | 2026-11-27    | 2026-12-27  | 6 个核心根命令（`check`/`fix`/`test:unit`/`test:integration`/`test:e2e`/`verify`）、`test:infra:up/down`、workspace 与 Sandcastle CLI、GitHub Actions `ci-gate`。 |
 
 #### 查编码规范
 

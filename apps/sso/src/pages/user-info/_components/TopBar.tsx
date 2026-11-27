@@ -2,6 +2,7 @@ import { LogoutOutlined } from "@ant-design/icons";
 import logo from "@sso/assets/logo.png";
 import { buildLogoutUrl } from "@sso/lib/sso";
 import { useSso } from "@sso/models/sso-context";
+import { assignBrowserLocation } from "@sso/utils/navigation";
 import { getQuery } from "@sso/utils/url";
 import { Avatar, Dropdown, message } from "antd";
 
@@ -15,7 +16,7 @@ export default function TopBar() {
       message.error("SSO 配置未就绪，请刷新重试");
       return;
     }
-    window.location.href = buildLogoutUrl(authConfig, redirectUrl, client);
+    assignBrowserLocation(buildLogoutUrl(authConfig, redirectUrl, client));
   };
 
   return (

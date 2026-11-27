@@ -7,12 +7,8 @@
   "author": "cyy",
   "scripts": {
     "build": "vite build",
-    "build:test": "vite build --outDir dist-test",
     "dev": "vite",
     "dev:e2e": "vite --host 127.0.0.1 --port 8001",
-    "e2e:install": "playwright install --with-deps chromium",
-    "e2e:install:browsers": "playwright install chromium",
-    "e2e:ui": "playwright test --ui",
     "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
     "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
     "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check",
@@ -23,11 +19,6 @@
     "test:coverage": "vitest run --config vitest.unit.config.ts --coverage",
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:watch": "vitest --config vitest.unit.config.ts"
-  },
-  "iamTest": {
-    "integration": {
-      "playwright": {}
-    }
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.4",

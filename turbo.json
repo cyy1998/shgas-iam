@@ -6,11 +6,6 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
-    "build:test": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist-test/**"],
-      "env": ["IAM_ADMIN_WEB_*", "IAM_SSO_WEB_*"]
-    },
     "dev": {
       "dependsOn": ["^build"],
       "persistent": true,

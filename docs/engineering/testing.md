@@ -17,22 +17,21 @@
 
 ## 测试分类
 
-| 层级                  | 归类依据                                                                                                                                                                            |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unit（L1）            | 进程内完成。可使用多个真实模块、Hono 内存请求、jsdom 或无真实网络的 MSW。读取固定只读 fixture 也可归入此层。由 Turbo 编排并缓存。                                                   |
-| Integration（L2）     | 使用真实 PostgreSQL、Redis、APISIX、网络、监听端口、子进程、浏览器，或需要创建和清理文件系统状态。单个前端的真实浏览器测试属于此层，全部由 `pnpm test:integration` 统一收集与调度。 |
-| Full-system E2E（L3） | 启动完整生产容器 Docker Compose 栈，经真实 APISIX 双入口完成 9 个跨服务业务旅程，并同时覆盖生产镜像、`nginx.conf` 与 `pnpm deploy` 依赖闭包。                                       |
+| 层级                  | 归类依据                                                                                                                                      |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit（L1）            | 进程内完成。可使用多个真实模块、Hono 内存请求、jsdom 或无真实网络的 MSW。读取固定只读 fixture 也可归入此层。由 Turbo 编排并缓存。             |
+| Integration（L2）     | 使用真实 PostgreSQL、Redis、APISIX、HTTP 服务或应用子进程，由 `pnpm test:integration` 统一收集与调度。                                        |
+| Full-system E2E（L3） | 启动完整生产容器 Docker Compose 栈，经真实 APISIX 双入口完成 9 个跨服务业务旅程，并同时覆盖生产镜像、`nginx.conf` 与 `pnpm deploy` 依赖闭包。 |
 
 先判断是否需要完整系统，再按实际资源依赖归类。同一行为可在不同层验证不同事实，例如前端验证权限变化后的交互，后端验证请求是否获得授权。
 
 ## 路径与命名
 
-| Collection               | 位置                                                                                                 |
-| ------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Unit                     | workspace 模块对应层级的 `__tests__/*.test.ts[x]`（以及 `.sandcastle/__tests__/*.test.ts`）          |
-| Bun / Vitest Integration | workspace 的 `test-integration/<feature>/**/*.integration.test.ts[x]`                                |
-| Playwright Integration   | 所属 workspace 的 `test-integration/<feature>/**/*.spec.ts`                                          |
-| Full-system E2E          | `e2e/system/specs/**/*.spec.ts`，由 [Playwright 配置](../../e2e/system/playwright.config.ts)实际选取 |
+| Collection      | 位置                                                                                                 |
+| --------------- | ---------------------------------------------------------------------------------------------------- |
+| Unit            | workspace 模块对应层级的 `__tests__/*.test.ts[x]`（以及 `.sandcastle/__tests__/*.test.ts`）          |
+| Bun Integration | workspace 的 `test-integration/<feature>/**/*.integration.test.ts[x]`                                |
+| Full-system E2E | `e2e/system/specs/**/*.spec.ts`，由 [Playwright 配置](../../e2e/system/playwright.config.ts)实际选取 |
 
 Admin 和 SSO 的普通 Unit 使用 Node。依赖浏览器全局或 React DOM 的 `*.dom.test.ts[x]` 在同一 Unit runner 的 jsdom 环境加载兼容 setup。各文件按需注册 MSW 生命周期，复用所在应用的 Testing Library 和路由辅助代码。纯类型契约放在 typecheck 收集的 `*.type-contract.ts`，对允许和禁止的用法分别做正向约束和必要的 `@ts-expect-error` 断言。
 
@@ -118,30 +117,30 @@ expect(failure).toBeInstanceOf(ExpectedError);
 
 ## 收集与编排
 
-每个测试归属一个 workspace 的一个 collection。所属 workspace 维护 runner、收集目录、setup 和 fixture。Vitest 不跨 workspace 共用配置或 setup。非浏览器 Integration 在同一 workspace 选 Bun 或 Vitest，浏览器由 Playwright 收集。新增用例遵循[路径与命名](#路径与命名)。调整 include/exclude、Vitest projects 或脚本时，核对根入口能到达受影响集合并实际运行。一次成功运行只覆盖被收集的用例。
+每个测试归属一个 workspace 的一个 collection。所属 workspace 维护 runner、收集目录、setup 和 fixture。Vitest 不跨 workspace 共用配置或 setup。L2 Integration 由 Bun 执行，L3 Full-system E2E 由 Playwright 执行。新增用例遵循[路径与命名](#路径与命名)。调整 include/exclude、Vitest projects 或脚本时，核对根入口能到达受影响集合并实际运行。一次成功运行只覆盖被收集的用例。
 
-Turbo 负责带缓存任务（`build`、`build:test`、`typecheck`、`test:unit`，通过 `transit` 传播依赖源码变化），`turbo.json` 不再维护闲置的 `test:integration:*` 配置。[任务图与缓存配置](../../turbo.json)
+Turbo 负责带缓存任务（`build`、`typecheck`、`test:unit`，通过 `transit` 传播依赖源码变化），`turbo.json` 不再维护闲置的 `test:integration:*` 配置。[任务图与缓存配置](../../turbo.json)
 
 根 [Integration runner](../../scripts/run-test-integration.mjs) 收集 `apps/*` 与 `packages/*` 的集成测试文件。各包在 `package.json` 的 `iamTest.integration` 中以布尔值声明执行器所需的 `postgres` / `redis` 依赖。根入口先处理 `--workspace` / `--file` 筛选和资源预检，再在所属 workspace 直接启动执行器。Bun 只使用进程环境中的配置，关闭自动加载工作区 `.env`。定向到单文件时仍使用所属执行器的资源声明。[声明示例](../../apps/sso-api/package.json) · [收集与筛选](../../scripts/test-resources/integration-selection.mjs) · [运行及定向命令](commands.md#测试与验证通道)
 
-**前端 L2 Playwright 解耦与动态端口**。`@iam/admin` 与 `@iam/sso` 的浏览器集成测试彻底移除了手写文件哈希缓存与对 `e2e/system` 的反向依赖：两个应用新增独立的 Turbo 缓存任务 `build:test`（输出至 `dist-test/`，不污染生产 `dist/`；`@iam/sso` 在脚本内固化测试登录公钥，`turbo.json` 将 `IAM_ADMIN_WEB_*` / `IAM_SSO_WEB_*` 纳入缓存键）。各自的 [`playwright.config.ts`](../../apps/admin/playwright.config.ts)（及 [SSO 配置](../../apps/sso/playwright.config.ts)）在启动时动态分配 loopback 端口（`IAM_ADMIN_PW_PORT` / `IAM_SSO_PW_PORT`），通过 `webServer` 先执行 `turbo run build:test`，再启动 `vite preview --outDir dist-test --host 127.0.0.1 --port <动态端口> --strictPort`（[`apps/sso/vite.config.ts`](../../apps/sso/vite.config.ts) 通过 `configurePreviewServer` 补齐 `/portal` → `/portal/` 重定向）；本地调试设置 `IAM_PW_DEV_SERVER=1` 即可切换为 `vite` dev server。
+Admin 与 SSO 的页面和路由行为在 L1 中通过 Vitest 的 jsdom project、React Testing Library 与 MSW 验证。应用级用例加载生产路由并在 HTTP 边界替换后端响应。SSO 开发代理由 Vitest Node project 启动 Vite 与 loopback 上游验证。跨服务旅程、浏览器 Cookie 与生产容器入口由 L3 Full-system E2E 验证。
 
 `e2e/system` 仅保留进程内 Unit 测试（`src/__tests__/`，随 `pnpm test:unit` 执行）与 L3 生产容器 Full-system E2E（`pnpm test:e2e`）。SSO API 的独立 RP 场景通过进程内双入口 HTTP fixture 接入常规 Bun 集成测试。
 
 ## 并发、timeout 与清理
 
-| 运行范围              | 失败后何时停止                                                                                                                                                                                                                                                                                                       |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 聚合检查与验证        | 当前命令启动失败或非零退出，后续命令不再启动。[检查与验证入口](../../scripts/verify.mjs)                                                                                                                                                                                                                             |
-| 根 Integration 任务   | 根 runner 优先启动耗时较长的任务，默认最多同时运行 3 个任务，允许不同执行器重叠。任一任务失败即取消在途进程树，停止新任务，并在回收资源前等待所有已启动任务收尾。[根 Integration runner](../../scripts/run-test-integration.mjs)                                                                                     |
-| 包级 Integration 用例 | Bun 与 Vitest 限制并发并启用首错停止。Playwright 零重试、失败上限为 1。带资源的集合固定单 worker，无资源集合默认使用 `min(4, max(2, floor(cpus / 2)))` 个 worker。Admin 和 SSO 的 mock API 用例可在同一文件内并行。达到失败上限时停止调度，已启动的用例仍需收尾。[根 runner](../../scripts/run-test-integration.mjs) |
-| Full-system E2E       | 一次 Playwright 运行固定单个 worker（本地 0 重试、CI 1 次重试），跑完全部选中用例。每个 spec 文件边界（含 `retry` 与 `repeatEachIndex`）自动复位，按需用 `-x` 首错停止。[Playwright 配置](../../e2e/system/playwright.config.ts)                                                                                     |
+| 运行范围              | 失败后何时停止                                                                                                                                                                                                                   |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 聚合检查与验证        | 当前命令启动失败或非零退出，后续命令不再启动。[检查与验证入口](../../scripts/verify.mjs)                                                                                                                                         |
+| 根 Integration 任务   | 根 runner 优先启动耗时较长的任务，默认最多同时运行 3 个任务。任一任务失败即取消在途进程树，停止新任务，并在回收资源前等待所有已启动任务收尾。[根 Integration runner](../../scripts/run-test-integration.mjs)                     |
+| 包级 Integration 用例 | Bun 以 `--max-concurrency=1` 运行用例并启用首错停止。达到失败上限时停止调度，已启动的用例仍需收尾。[根 runner](../../scripts/run-test-integration.mjs)                                                                           |
+| Full-system E2E       | 一次 Playwright 运行固定单个 worker（本地 0 重试、CI 1 次重试），跑完全部选中用例。每个 spec 文件边界（含 `retry` 与 `repeatEachIndex`）自动复位，按需用 `-x` 首错停止。[Playwright 配置](../../e2e/system/playwright.config.ts) |
 
 Timeout 用于限制悬挂。进程测试等待实际 readiness，同时观察启动错误与退出。成功、失败、超时或可捕获中断后均须尝试停止并等待所属进程树，再释放端口、连接及目录。清理有独立预算，失败时报告原因并保留原始错误。Linux 通过 `/proc` 中继承的进程归属标记回收后代。需要管道 stdin 的直接子进程由测试夹具单独创建进程组后按组回收。[进程生命周期](../../packages/runtime/src/process/owned-process-tree.mjs) · [进程 smoke harness](../../packages/test-support/src/process-smoke-harness.ts)
 
 ### 专用资源与隔离
 
-- **独占测试端点**。本地通过 [Compose](../../scripts/test-resources/compose.yaml) 启停，Sandcastle 可写沙箱和 CI 在执行前各自准备服务。根 runner 消费 `IAM_TEST_POSTGRES_URL`、`IAM_TEST_REDIS_URL`，以及真实 Gateway APISIX 文件需要的 `IAM_TEST_APISIX_ADMIN_URL` 和 `IAM_TEST_APISIX_ADMIN_KEY`。本地未指定的端点使用固定 loopback 端口。同一套端点每次仅供一条顶层 Integration 命令使用。整个并发测试窗口内保持 Docker 网络稳定，避免 `NETLINK_ROUTE` 广播中断在途 Chromium 请求。
+- **独占测试端点**。本地通过 [Compose](../../scripts/test-resources/compose.yaml) 启停，Sandcastle 可写沙箱和 CI 在执行前各自准备服务。根 runner 消费 `IAM_TEST_POSTGRES_URL`、`IAM_TEST_REDIS_URL`，以及真实 Gateway APISIX 文件需要的 `IAM_TEST_APISIX_ADMIN_URL` 和 `IAM_TEST_APISIX_ADMIN_KEY`。本地未指定的端点使用固定 loopback 端口。同一套端点每次仅供一条顶层 Integration 命令使用。
 - **PostgreSQL 建模板前双保险守卫**。[模板准备脚本](../../scripts/test-resources/postgres-template.mjs) 在建库前校验基础库与模板库，要求库名包含测试标识，拒绝系统库及与 `DATABASE_URL` 或任意 `IAM_*_DATABASE_URL` 匹配的数据库。每轮迁移并封存 `iam_test_template`。[共享 harness](../../packages/test-support/src/postgres-test-harness.ts) 按文件克隆独立库，在第一次重置时缓存业务表与所属序列。重置通过实际行数据和序列状态选择表，执行 `TRUNCATE ... RESTART IDENTITY CASCADE` 并保留迁移日志。文件结束后删除克隆库。迁移专项用例可从 `template0` 克隆空库。
 - **Redis 槽位与清理顺序**。根 runner 预检 `PING` 与 `SELECT 31`，为每个使用 Redis 的任务分配独占 `/1` 至 `/31` 槽位。`/0` 保留。用例结束先完成观察并停止已登记的执行者，再对独占 DB 执行 `FLUSHDB`，最后关闭控制连接。停止失败时跳过重置并报告失败。禁止 `FLUSHALL`。[共享 Redis harness](../../packages/test-support/src/external-test-resources.ts)
 - **Gateway APISIX 预检与重置**。命中真实 APISIX 测试文件时，runner 探活 Admin API 并验证七类资源的空基线。[Gateway fixture](../../apps/gateway/test-integration/support/apisix.fixture.ts) 在用例成功收尾后重置并回读空基线，失败时停止复用。

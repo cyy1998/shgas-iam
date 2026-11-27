@@ -13,13 +13,6 @@ RUN npm install -g pnpm@12.21.0 @openai/codex@${CODEX_VERSION}
 RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.4" \
     && install -m 0755 /root/.bun/bin/bun /usr/local/bin/bun
 
-# Keep this version aligned with pnpm-lock.yaml; smoke launches the workspace version.
-ARG PLAYWRIGHT_VERSION=1.65.1
-ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
-RUN npx --yes playwright@${PLAYWRIGHT_VERSION} install --with-deps chromium \
-    && chmod -R a+rX /opt/ms-playwright \
-    && rm -rf /var/lib/apt/lists/*
-
 # Plan X native integration stack (no Docker CLI/Compose; no resident services):
 # PostgreSQL 18.4 (PGDG archive), Redis 8.8.0 (official Redis repo),
 # Apache APISIX 3.16.0 (official APISIX repo), and etcd 3.5.11 (official release binary).

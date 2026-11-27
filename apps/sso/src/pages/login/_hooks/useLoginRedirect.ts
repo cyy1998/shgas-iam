@@ -1,6 +1,7 @@
 import { buildAuthorizeUrl } from "@sso/lib/sso";
 import { useSso } from "@sso/models/sso-context";
 import { clientStatus } from "@sso/services/open";
+import { replaceBrowserLocation } from "@sso/utils/navigation";
 import { getQuery } from "@sso/utils/url";
 import { message } from "antd";
 import { useCallback, useEffect, useState } from "react";
@@ -45,7 +46,7 @@ export function useLoginRedirect() {
         message.error("OIDC 登录请求已失效，请返回应用重新发起登录");
         return;
       }
-      window.location.replace(`/oidc/resume?oidcReturn=${encodeURIComponent(oidcReturn)}`);
+      replaceBrowserLocation(`/oidc/resume?oidcReturn=${encodeURIComponent(oidcReturn)}`);
       return;
     }
     if (!authConfig || !client) {
@@ -54,7 +55,7 @@ export function useLoginRedirect() {
     }
     const authorizeUrl = new URL(buildAuthorizeUrl(authConfig, redirectUrl, client, state), window.location.origin);
     if (ssoReturn !== undefined) authorizeUrl.searchParams.set("ssoReturn", ssoReturn);
-    window.location.replace(`${authorizeUrl.pathname}${authorizeUrl.search}${authorizeUrl.hash}`);
+    replaceBrowserLocation(`${authorizeUrl.pathname}${authorizeUrl.search}${authorizeUrl.hash}`);
   }, [authConfig, client, oidcReturn, redirectUrl, state, ssoReturn]);
 
   return {

@@ -8,7 +8,7 @@ import {
   OrganizationType,
   UserStatus,
 } from "@iam/contracts";
-import type { BrowserContext } from "@playwright/test";
+import type { BrowserContext, Route } from "@playwright/test";
 import {
   adminPositionSearchResult,
   adminUsers,
@@ -18,7 +18,10 @@ import {
   hrAdminEmploymentDetail,
   hrAdminUserDetail,
 } from "../test/mocks/fixtures";
-import { fulfillJson } from "../test-integration/fixtures";
+
+async function fulfillJson(route: Route, data: unknown) {
+  await route.fulfill({ contentType: "application/json", json: data, status: 200 });
+}
 
 const allowed = { allowed: true, reason: null } as const;
 const blocked = { allowed: false, reason: "INTEGRITY_GUARD_BLOCKED" } as const;

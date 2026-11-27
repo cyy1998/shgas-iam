@@ -21,7 +21,7 @@ export default defineConfig({
     },
   },
   test: {
-    exclude: ["dist/**", "dist-test/**", "test-integration/**", "node_modules/**"],
+    exclude: ["dist/**", "node_modules/**"],
     maxWorkers: "25%",
     testTimeout: 10_000,
     coverage: {

@@ -2,7 +2,6 @@
 import "./require-linux.mjs";
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
-import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import process from "node:process";
 import { formatResourceFailure, runOwnedCommand } from "./owned-command.mjs";
@@ -14,7 +13,6 @@ import {
 } from "./test-resources/apisix-admin.mjs";
 import {
   integrationRedisSlotLimit,
-  parseBrowserWorkers,
   parseIntegrationArguments,
   parseIntegrationConcurrency,
   selectIntegrationTasks,
@@ -35,12 +33,10 @@ const taskPriority = [
   "@iam/auth-api:bun",
   "@iam/sso-api:bun",
   "@iam/integration-api:bun",
-  "@iam/admin:playwright",
   "@iam/admin-api:bun",
   "@iam/ops:bun",
   "@iam/documents:bun",
   "@iam/worker:bun",
-  "@iam/sso:playwright",
   "@iam/gateway-apisix:bun",
   "@iam/db:bun",
 ];
@@ -116,35 +112,7 @@ async function prepareTaskEnvironments(root, logDirectory, tasks, signal) {
   );
 }
 
-function executorCommand(task, cwd, browserWorkers) {
-  if (task.executor === "bun")
-    return {
-      executable: "bun",
-      args: ["--no-env-file", "test", "--max-concurrency=1", "--bail", ...task.files.map((file) => `./${file}`)],
-    };
-  if (task.executor === "vitest")
-    return {
-      executable: join(cwd, "node_modules/.bin/vitest"),
-      args: ["run", "--maxWorkers=1", "--no-file-parallelism", "--bail=1", ...task.files],
-    };
-  const workers =
-    Object.keys(task.resources).length === 0
-      ? (browserWorkers ?? Math.min(4, Math.max(2, Math.floor(availableParallelism() / 2))))
-      : 1;
-  return {
-    executable: process.execPath,
-    args: [
-      join(cwd, "node_modules/@playwright/test/cli.js"),
-      "test",
-      `--workers=${workers}`,
-      "--max-failures=1",
-      "--retries=0",
-      ...task.files,
-    ],
-  };
-}
-
-async function executeTasks({ root, logDirectory, tasks, taskEnvironments, browserWorkers, options, controller }) {
+async function executeTasks({ root, logDirectory, tasks, taskEnvironments, options, controller }) {
   const outcomes = new Map();
   const canceledAfterFailure = new Error("Integration canceled after a task failed");
   const cancelRemaining = () => controller.abort(canceledAfterFailure);
@@ -162,27 +130,15 @@ async function executeTasks({ root, logDirectory, tasks, taskEnvironments, brows
       let failure;
       try {
         const cwd = join(root, task.directory);
-        const commandOptions = {
+        const result = await runOwnedCommand({
           cwd,
           env: taskEnvironments.get(task),
           signal: controller.signal,
           timeoutMs: options.timeoutMs,
           cleanupTimeoutMs: options.cleanupTimeoutMs,
           onExecutionFailure: cancelRemaining,
-        };
-        if (task.executor === "playwright") {
-          const preflightPath = join(root, "scripts/playwright-e2e-preflight.mjs");
-          const browser = await runOwnedCommand({
-            ...commandOptions,
-            executable: process.execPath,
-            args: [preflightPath],
-            fullLogFile: `${logPath}.preflight.log`,
-          });
-          if (browser.exitCode !== 0) throw new Error(browser.output);
-        }
-        const result = await runOwnedCommand({
-          ...commandOptions,
-          ...executorCommand(task, cwd, browserWorkers),
+          executable: "bun",
+          args: ["--no-env-file", "test", "--max-concurrency=1", "--bail", ...task.files.map((file) => `./${file}`)],
           fullLogFile: logPath,
         });
         if (result.exitCode !== 0) {
@@ -242,18 +198,6 @@ try {
   if (tasks.filter((task) => task.resources.redis).length > integrationRedisSlotLimit) {
     throw new Error(`Integration Redis supports at most ${integrationRedisSlotLimit} task slots`);
   }
-  const playwrightTasks = tasks.filter((task) => task.executor === "playwright");
-  const browserWorkers =
-    options.browserWorkers ??
-    (playwrightTasks.length && process.env.IAM_TEST_BROWSER_WORKERS !== undefined
-      ? parseBrowserWorkers(process.env.IAM_TEST_BROWSER_WORKERS, "IAM_TEST_BROWSER_WORKERS")
-      : undefined);
-  if (options.browserWorkers !== undefined && playwrightTasks.length === 0) {
-    throw new Error("--browser-workers requires a Playwright collection");
-  }
-  if (browserWorkers !== undefined && playwrightTasks.some((task) => Object.keys(task.resources).length > 0)) {
-    throw new Error("--browser-workers and IAM_TEST_BROWSER_WORKERS require resource-free Playwright collections");
-  }
   timer = setTimeout(
     () => controller.abort(new Error(`Integration deadline exceeded after ${options.timeoutMs}ms`)),
     options.timeoutMs,
@@ -261,9 +205,7 @@ try {
   const logDirectory = join("test-results", "integration", randomUUID(), "logs");
   await mkdir(logDirectory, { recursive: true });
   const taskEnvironments = await prepareTaskEnvironments(root, logDirectory, tasks, controller.signal);
-  failures.push(
-    ...(await executeTasks({ root, logDirectory, tasks, taskEnvironments, browserWorkers, options, controller })),
-  );
+  failures.push(...(await executeTasks({ root, logDirectory, tasks, taskEnvironments, options, controller })));
 } catch (error) {
   failures.push(error);
 } finally {

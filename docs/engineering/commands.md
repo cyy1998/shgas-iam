@@ -118,7 +118,7 @@ pnpm test:infra:down
   ```
 
 Integration 的 `--timeout-ms` 默认 30 分钟，`--cleanup-timeout-ms` 默认 30 秒。
-Admin 和 SSO 的浏览器集成测试默认经 Turbo 缓存执行 `build:test`（输出到 `dist-test/`），再通过 `vite preview` 监听动态 loopback 端口提供静态产物；设置 `IAM_PW_DEV_SERVER=1` 可切换到 Vite dev server。无资源的 Playwright 集合可通过 `--browser-workers <1–16>` 或 `IAM_TEST_BROWSER_WORKERS` 调整并发，命令行参数优先；选择带资源的 Playwright 集合时须省略这两个覆盖项。
+L2 runner 使用 Bun。Admin 与 SSO 的前端行为测试随 `pnpm test:unit` 运行，也可通过 `pnpm --filter @iam/admin test:unit` 或 `pnpm --filter @iam/sso test:unit` 单独执行。
 
 各任务的完整输出位于 `test-results/integration/<run-id>/logs/<package>-<executor>.log`。终端显示逐任务耗时、日志路径和总墙钟。若命令被强制结束或资源预检发现 APISIX 有残留，确认任务进程树已退出后，用 `pnpm test:infra:down` 再执行 `pnpm test:infra:up` 清理本地专用服务。外置环境由对应调用方恢复。
 

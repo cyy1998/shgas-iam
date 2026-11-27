@@ -1,6 +1,5 @@
 # Build outputs, caches, and generated reports.
 dist/
-dist-test/
 out/
 coverage/
 test-results/

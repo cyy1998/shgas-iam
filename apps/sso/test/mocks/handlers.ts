@@ -1,10 +1,7 @@
 import { ClientStatus, LoginPageGuardDecision } from "@iam/contracts";
-import { HttpResponse, http } from "msw";
+import { http } from "msw";
+import { ok } from "./auth";
 import { authenticationConfig, currentUserInfo, resetPasswordMaskedMobile } from "./fixtures";
-
-function ok<T>(data: T) {
-  return HttpResponse.json({ code: 200, message: "OK", data });
-}
 
 export const handlers = [
   http.get("*/sso/login-guard", () => ok({ decision: LoginPageGuardDecision.Login })),
@@ -12,6 +9,10 @@ export const handlers = [
   http.get("*/api/iam/sso/user-info", () => ok(currentUserInfo)),
   http.post("*/api/iam/delegations/search", () => ok([])),
   http.post("*/api/iam/auth/sms/send", () => ok(null)),
+  http.post("*/api/iam/auth/sms/verify", () => ok({ result: true })),
+  http.post("*/api/iam/auth/recovery/password-reset", () => ok(null)),
+  http.post("*/api/iam/auth/login/password", () => ok({ isMobileSet: true })),
+  http.post("*/api/iam/auth/account/mobile", () => ok(null)),
   http.get("*/api/iam/auth/client/status", () =>
     ok({
       clientCode: "iam-admin",

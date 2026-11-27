@@ -18,12 +18,10 @@ pnpm-debug.log*
 
 # Build outputs
 dist
-dist-test
 build
 .next
 .nuxt
 **/dist
-**/dist-test
 **/.turbo
 **/.cache
 tmp

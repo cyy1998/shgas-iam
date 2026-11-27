@@ -4,7 +4,7 @@
 
 ## 启动与诊断
 
-1. 准备 Linux 环境、仓库锁定的工具链、Git、GitHub CLI、`flock` 与运行中的 Docker（原生 Linux 或 WSL2；方案 X 为无特权单容器，**不再需要**挂载宿主机 Docker socket，也不需要 Docker Desktop 开启 host networking）。沙箱镜像由 [Dockerfile](Dockerfile)（基于 `node:24.22.3-bookworm`）定义，除 Node 24、pnpm、Bun 1.4.4、Codex 与 Playwright Chromium 外，精准预装方案 X 四件套——**PostgreSQL 18.4**、**Redis 8.8.0**、**etcd 3.5.11** 与 **Apache APISIX 3.16.0**（移除 Docker CLI / Compose 插件，且镜像内不启任何常驻服务）。`pnpm sandcastle:build` 会自动透传当前宿主 UID/GID 作为 `AGENT_UID`/`AGENT_GID`（默认 `1000`），确保容器用户可写宿主绑定的 worktree、pnpm store 与 Turbo 缓存目录。
+1. 准备 Linux 环境、仓库锁定的工具链、Git、GitHub CLI、`flock` 与运行中的 Docker（原生 Linux 或 WSL2；方案 X 为无特权单容器，**不再需要**挂载宿主机 Docker socket，也不需要 Docker Desktop 开启 host networking）。沙箱镜像由 [Dockerfile](Dockerfile)（基于 `node:24.22.3-bookworm`）定义，除 Node 24、pnpm、Bun 1.4.4、Codex 外，精准预装方案 X 四件套——**PostgreSQL 18.4**、**Redis 8.8.0**、**etcd 3.5.11** 与 **Apache APISIX 3.16.0**（移除 Docker CLI / Compose 插件，且镜像内不启任何常驻服务）。`pnpm sandcastle:build` 会自动透传当前宿主 UID/GID 作为 `AGENT_UID`/`AGENT_GID`（默认 `1000`），确保容器用户可写宿主绑定的 worktree、pnpm store 与 Turbo 缓存目录。
 2. 按[环境模板](.env.example)创建未跟踪的 `.sandcastle/.env`。宿主经 `gh auth login` 登录或在启动进程环境中提供 `GH_TOKEN`（需对 `cyy1998/shgas-iam` 具备 Issues 与 Pull Requests 写权限，且具备读取 Actions / Check Runs 与日志权限）。**严禁在 `.sandcastle/.env` 中声明 `GH_TOKEN` 或 `GITHUB_TOKEN`（含空值）**，同时确保 `.git/config` 不含内嵌凭据或 HTTP Authorization header。按下节准备 Codex 认证。
 3. 无需切换本地分支或清空当前工作区。启动时 runner 自动 `git fetch <remote> <baseBranch>`（默认 `origin` / `main`，若远端命名为 `github` 则设置 `SANDCASTLE_GIT_REMOTE=github`），不读取也不改动本地当前 checkout。
 4. 在仓库根构建镜像并运行预检（镜像标签默认 `iam-sandcastle:local`，可用 `SANDCASTLE_IMAGE` 覆盖）：

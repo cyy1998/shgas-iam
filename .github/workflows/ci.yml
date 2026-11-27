@@ -118,7 +118,6 @@ jobs:
       - uses: ./.github/actions/setup-workspace
         with:
           turbo-cache-scope: integration
-          playwright-filter: "@iam/admin"
       - name: Start Redis 8.8.0 (32 logical databases)
         run: |
           set -euo pipefail
