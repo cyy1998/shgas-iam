@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 
-interface HybridControlOptions {
+export interface E2EControlOptions {
   token: string;
   reset(file: string, signal: AbortSignal): Promise<void>;
   stopWorker(): Promise<void>;
@@ -8,7 +8,7 @@ interface HybridControlOptions {
   onFailure(error: unknown): void;
 }
 
-export function createHybridControl(options: HybridControlOptions) {
+export function createE2EControl(options: E2EControlOptions) {
   const authorization = Buffer.from(`Bearer ${options.token}`);
   const shutdown = new AbortController();
   let active: Promise<void> | undefined;

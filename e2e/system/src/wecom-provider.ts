@@ -16,10 +16,12 @@ export function createWecomAuthorizationCode(member: string, state: string, runI
   return `${claims}.${createHmac("sha256", `wecom-e2e:${runId}`).update(claims).digest("hex")}`;
 }
 
-export function createWecomProvider(runId: string): typeof fetch {
+export function createWecomStub(initialRunId: string) {
+  let runId = initialRunId;
   const consumed = new Set<string>();
+
   const exchangeCode = (code: string | null) => {
-    if (!code) return null;
+    if (!code || !runId) return null;
     const fields = code.split(".");
     if (fields.length !== 3) return null;
     const [member, state, signature] = fields;
@@ -34,32 +36,45 @@ export function createWecomProvider(runId: string): typeof fetch {
     )
       return null;
     const expected = createWecomAuthorizationCode(member, state, runId);
-    if (!timingSafeEqual(Buffer.from(code), Buffer.from(expected))) return null;
+    const actualBytes = Buffer.from(code);
+    const expectedBytes = Buffer.from(expected);
+    if (actualBytes.length !== expectedBytes.length || !timingSafeEqual(actualBytes, expectedBytes)) return null;
     consumed.add(code);
     return member;
   };
 
-  const request = async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
-    const candidate = new Request(input, init);
-    const url = new URL(candidate.url);
-    if (candidate.method !== "GET" || url.origin !== providerOrigin || candidate.body)
-      return Response.json({ errcode: 400, errmsg: "unexpected provider request" }, { status: 400 });
-    const query = url.searchParams;
-    if (
-      url.pathname === "/cgi-bin/gettoken" &&
-      query.size === 2 &&
-      query.get("corpid") === wecomCorp &&
-      query.get("corpsecret") === wecomSecret
-    ) {
-      return Response.json({ errcode: 0, errmsg: "ok", access_token: token, expires_in: 7200 });
-    }
-    if (url.pathname === "/cgi-bin/auth/getuserinfo" && query.size === 2 && query.get("access_token") === token) {
-      const member = exchangeCode(query.get("code"));
-      if (member) return Response.json({ errcode: 0, errmsg: "ok", userid: member });
-      return Response.json({ errcode: 40029, errmsg: "invalid or consumed authorization code" });
-    }
-    return Response.json({ errcode: 404, errmsg: "unexpected provider endpoint" }, { status: 404 });
+  return {
+    async handle(request: Request): Promise<Response> {
+      const url = new URL(request.url);
+      if (request.method !== "GET" || url.origin !== providerOrigin || request.body)
+        return Response.json({ errcode: 400, errmsg: "unexpected provider request" }, { status: 400 });
+      const query = url.searchParams;
+      if (
+        url.pathname === "/cgi-bin/gettoken" &&
+        query.size === 2 &&
+        query.get("corpid") === wecomCorp &&
+        query.get("corpsecret") === wecomSecret
+      ) {
+        return Response.json({ errcode: 0, errmsg: "ok", access_token: token, expires_in: 7200 });
+      }
+      if (url.pathname === "/cgi-bin/auth/getuserinfo" && query.size === 2 && query.get("access_token") === token) {
+        const member = exchangeCode(query.get("code"));
+        if (member) return Response.json({ errcode: 0, errmsg: "ok", userid: member });
+        return Response.json({ errcode: 40029, errmsg: "invalid or consumed authorization code" });
+      }
+      return Response.json({ errcode: 404, errmsg: "unexpected provider endpoint" }, { status: 404 });
+    },
+    reset(nextRunId?: string) {
+      consumed.clear();
+      if (nextRunId !== undefined) runId = nextRunId;
+    },
   };
+}
+
+export function createWecomProvider(runId: string): typeof fetch {
+  const stub = createWecomStub(runId);
+  const request = async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
+    stub.handle(new Request(input, init));
   return Object.assign(request, {
     preconnect() {
       throw new Error("E2E WeCom provider does not open network connections");

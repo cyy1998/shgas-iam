@@ -1,12 +1,12 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
+import type { E2ERunContext } from "./src/e2e-context.ts";
 import { createFailureReporters } from "./src/failure-report/reporter-config.ts";
-import type { HybridRunContext } from "./src/hybrid-context.ts";
 import { wecomMobileCertificatePin } from "./src/wecom-mobile-tls.ts";
 
 const contextPath = process.env.IAM_E2E_CONTEXT_PATH;
-const context: HybridRunContext | undefined = contextPath ? JSON.parse(readFileSync(contextPath, "utf8")) : undefined;
+const context: E2ERunContext | undefined = contextPath ? JSON.parse(readFileSync(contextPath, "utf8")) : undefined;
 
 export default defineConfig({
   expect: { timeout: 30_000 },
@@ -16,17 +16,17 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   reporter: createFailureReporters(
     context && {
-      logFiles: Object.fromEntries(
-        Object.keys(context.backendOrigins).map((service) => [
-          service,
-          ["stdout", "stderr"].map((stream) => join(context.logDirectory, `${service}.${stream}.log`)),
-        ]),
-      ),
-      apisix: { project: context.project, composeFile: context.apisixComposeFile },
+      compose: {
+        project: context.project,
+        composeFile: context.composeFile,
+        projectDirectory: context.projectDirectory,
+        services: context.logServices,
+        includeApisix: true,
+      },
     },
     process.env.IAM_E2E_INTERACTIVE === undefined ? process.stdout.isTTY : process.env.IAM_E2E_INTERACTIVE === "1",
   ),
-  retries: 0,
+  retries: process.env.CI ? 1 : 0,
   testDir: ".",
   testMatch: [
     "admin-custom-sso.spec.ts",

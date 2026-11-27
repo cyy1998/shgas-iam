@@ -9,8 +9,8 @@ import { expect } from "@playwright/test";
 import { formatResourceFailure } from "../../scripts/test-resources/managed-resources.mjs";
 import { loginToAdmin } from "./src/admin-client-journey.ts";
 import { runCommand } from "./src/command-runner.ts";
+import { requestE2EControl } from "./src/e2e-context.ts";
 import { test as gatewayTest } from "./src/gateway-test.ts";
-import { requestHybridControl } from "./src/hybrid-context.ts";
 import { createPkceS256Pair, receiveOidcAuthorizationCallback } from "./src/oidc-rp.ts";
 
 const publicationTimeoutMs = 45_000;
@@ -55,7 +55,7 @@ const test = gatewayTest.extend<{ withStoppedWorker: RunWithStoppedWorker }>({
       try {
         await use(async (observeMissedWake) => {
           restoreRequired = true;
-          await runDuringTest(() => requestHybridControl(runtime, "/worker/stop"));
+          await runDuringTest(() => requestE2EControl(runtime, "/worker/stop"));
           await observeMissedWake((code) =>
             runDuringTest(() =>
               runCommand(
@@ -70,13 +70,13 @@ const test = gatewayTest.extend<{ withStoppedWorker: RunWithStoppedWorker }>({
               ),
             ),
           );
-          await runDuringTest(() => requestHybridControl(runtime, "/worker/start"));
+          await runDuringTest(() => requestE2EControl(runtime, "/worker/start"));
           restoreRequired = false;
         });
       } finally {
         // Playwright can begin teardown while the test body is still running.
         await runWithOwnedTestResources(async ({ registerCleanup }) => {
-          if (restoreRequired) registerCleanup(() => requestHybridControl(runtime, "/worker/start"));
+          if (restoreRequired) registerCleanup(() => requestE2EControl(runtime, "/worker/start"));
           const pending = inFlight;
           controller.abort(new Error("Playwright ended the directory attribute test during Worker recovery"));
           // The control server serializes requests. Settle any issued stop/start before attempting recovery.

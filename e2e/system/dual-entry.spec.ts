@@ -1,8 +1,8 @@
 import { Buffer } from "node:buffer";
 import type { APIRequestContext, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
+import type { E2ERunContext } from "./src/e2e-context.ts";
 import { test } from "./src/gateway-test.ts";
-import type { HybridRunContext } from "./src/hybrid-context.ts";
 import { createPkceS256Pair } from "./src/oidc-rp.ts";
 
 test.beforeEach(({ runtime }) => {
@@ -20,7 +20,7 @@ function gatewayRequest(
   return request.fetch(target.href, { ...options, maxRedirects: 0 });
 }
 
-async function login(page: Page, origin: string, runtime: HybridRunContext) {
+async function login(page: Page, origin: string, runtime: E2ERunContext) {
   await expect(page).toHaveURL((url) => url.origin === origin && url.pathname === "/portal/login");
   await page.getByLabel("工号 / 账号").fill(runtime.references.adminUsername);
   await page.getByPlaceholder("请输入登录密码").fill(runtime.adminPassword);

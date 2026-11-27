@@ -1,11 +1,8 @@
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
-import { readFile, stat } from "node:fs/promises";
-import { join } from "node:path";
 import { devices, expect } from "@playwright/test";
-import { captureCommand } from "./src/command-runner.ts";
+import { type E2ERunContext, readE2EServiceLogs } from "./src/e2e-context.ts";
 import { test } from "./src/gateway-test.ts";
-import type { HybridRunContext } from "./src/hybrid-context.ts";
 import { createPkceS256Pair, receiveOidcAuthorizationCallback } from "./src/oidc-rp.ts";
 import { standInForWecomAuthorization } from "./src/wecom-journey.ts";
 import { wecomBoundMember, wecomMobileCallbackPath } from "./src/wecom-provider.ts";
@@ -16,13 +13,7 @@ test("an internal OIDC request completes with WeCom confirmation on a separate p
   page,
   request,
 }) => {
-  const startedAt = new Date();
-  const apiLogs = await Promise.all(
-    ["stdout", "stderr"].map(async (stream) => {
-      const path = join(runtime.logDirectory, `auth-api.${stream}.log`);
-      return { path, offset: (await stat(path)).size };
-    }),
-  );
+  const startedAt = new Date(Math.floor(Date.now() / 1000) * 1000);
   const desktopOrigin = runtime.internalOrigin;
   const mobileOrigin = runtime.wecomMobileOrigin;
   const clientId = `${runtime.references.oidcClientCode}-dual`;
@@ -112,7 +103,7 @@ test("an internal OIDC request completes with WeCom confirmation on a separate p
       oauthState: oauthQuery.get("state"),
       oidcContinuation: login.searchParams.get("oidcReturn"),
     };
-    await expectRedactedQrLogs(runtime, startedAt, apiLogs, secretValues);
+    await expectRedactedQrLogs(runtime, startedAt, secretValues);
     expect(new URL(page.url()).searchParams.get("iss")).toBe(issuer);
 
     const root = (await page.context().cookies(desktopOrigin)).find(({ name }) => name === "global_session");
@@ -154,45 +145,15 @@ test("an internal OIDC request completes with WeCom confirmation on a separate p
 });
 
 async function expectRedactedQrLogs(
-  runtime: HybridRunContext,
+  runtime: E2ERunContext,
   startTime: Date,
-  apiLogs: Array<{ path: string; offset: number }>,
   secretValues: Record<string, string | null | undefined>,
 ) {
-  async function readLogs(service: "auth-api" | "apisix") {
-    if (service === "auth-api") {
-      const logs = await Promise.all(
-        apiLogs.map(async ({ path, offset }) => (await readFile(path)).subarray(offset).toString("utf8")),
-      );
-      return logs.join("\n");
-    }
-    const { stdout, stderr } = await captureCommand(
-      "docker",
-      [
-        "compose",
-        "--project-name",
-        runtime.project,
-        "--file",
-        runtime.apisixComposeFile,
-        "logs",
-        "--no-color",
-        "--no-log-prefix",
-        "--since",
-        startTime.toISOString(),
-        "--tail",
-        "300",
-        "apisix",
-      ],
-      { cwd: process.cwd(), signal: AbortSignal.timeout(8_000) },
-    );
-    return stdout + stderr;
-  }
-
   for (const service of ["auth-api", "apisix"] as const) {
     await expect
       .poll(
         async () => {
-          const logs = await readLogs(service);
+          const logs = await readE2EServiceLogs(runtime, service, { since: startTime, tail: 500 });
           expect(logs.includes("/sso/wechat-qr/mobile/callback?"), `${service} logged the callback query`).toBe(false);
           for (const [name, value] of Object.entries(secretValues)) {
             if (!value) throw new Error(`The WeCom browser journey omitted ${name}`);

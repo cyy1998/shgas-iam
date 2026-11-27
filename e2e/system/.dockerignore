@@ -1,0 +1,9 @@
+**
+!src/wecom-provider.ts
+!src/sms-provider.ts
+!src/e2e-stubs-server.ts
+!docker/e2e-stubs/Dockerfile
+!docker/e2e-stubs/entrypoint.ts
+!docker/rp-terminal.html
+!test-assets/e2e-stubs-cert.pem
+!test-assets/e2e-stubs-key.pem

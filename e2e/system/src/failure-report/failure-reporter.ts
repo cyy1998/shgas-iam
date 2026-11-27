@@ -17,14 +17,23 @@ import {
 } from "./report-format.ts";
 import { reportSecrets, sanitizeReportText } from "./report-redaction.ts";
 
+export interface ComposeLogSource {
+  project: string;
+  composeFile: string;
+  projectDirectory?: string;
+  services: readonly string[];
+  includeApisix?: boolean;
+}
+
 export interface FailureReporterOptions {
   reportDirectory?: string;
   runId?: string;
   logFiles?: Readonly<Record<string, string | readonly string[]>>;
-  apisix?: { project: string; composeFile: string };
+  compose?: ComposeLogSource;
 }
 
 const defaultReportDirectory = fileURLToPath(new URL("../../.reports/", import.meta.url));
+const maxLogBytes = 1024 * 1024;
 
 export default class FailureReporter implements Reporter {
   private readonly directory: string;
@@ -104,12 +113,22 @@ export default class FailureReporter implements Reporter {
   private async attachServiceLogs() {
     const windows = this.failures.map(({ window }) => window);
     if (!windows.length) return;
-    const sources = Object.entries(this.options.logFiles ?? {}).map(([name, paths]) => ({
+    const sources: Array<{ name: string; lines: () => AsyncIterable<string> }> = Object.entries(
+      this.options.logFiles ?? {},
+    ).map(([name, paths]) => ({
       name,
       lines: () => serviceLines(typeof paths === "string" ? [paths] : paths),
     }));
-    const apisix = this.options.apisix;
-    if (apisix) sources.push({ name: "apisix", lines: () => apisixLines(apisix, windows) });
+    const compose = this.options.compose;
+    if (compose) {
+      for (const service of compose.services) {
+        if (service === "apisix") continue;
+        sources.push({ name: service, lines: () => composeServiceLines(compose, service, windows) });
+      }
+      if (compose.includeApisix !== false) {
+        sources.push({ name: "apisix", lines: () => apisixLines(compose, windows) });
+      }
+    }
     await Promise.all(
       sources.map(async ({ name, lines }) => {
         try {
@@ -172,19 +191,63 @@ async function* fileLines(path: string) {
   }
 }
 
-async function* apisixLines(source: NonNullable<FailureReporterOptions["apisix"]>, windows: readonly EvidenceWindow[]) {
-  const since = new Date(Math.min(...windows.map(({ start }) => start))).toISOString();
-  const until = new Date(Math.max(...windows.map(({ end }) => end)) + 1).toISOString();
-  const maxBytes = 1024 * 1024;
-  const capture = (args: string[]) =>
-    captureCommand("docker", ["compose", "--project-name", source.project, "--file", source.composeFile, ...args], {
-      cwd: process.cwd(),
-      signal: AbortSignal.timeout(10_000),
-      capture: { mode: "line-tail", maxBytes },
-    });
+function composeBaseArgs(source: ComposeLogSource) {
+  return [
+    "compose",
+    "--project-name",
+    source.project,
+    ...(source.projectDirectory ? ["--project-directory", source.projectDirectory] : []),
+    "--file",
+    source.composeFile,
+  ];
+}
+
+function composeWindowBounds(windows: readonly EvidenceWindow[]) {
+  const since = new Date(Math.max(0, Math.min(...windows.map(({ start }) => start)) - 1_000)).toISOString();
+  const until = new Date(Math.max(...windows.map(({ end }) => end)) + 1_000).toISOString();
+  return { since, until };
+}
+
+function captureCompose(source: ComposeLogSource, args: string[]) {
+  return captureCommand("docker", [...composeBaseArgs(source), ...args], {
+    cwd: source.projectDirectory ?? process.cwd(),
+    signal: AbortSignal.timeout(10_000),
+    capture: { mode: "line-tail", maxBytes: maxLogBytes },
+  });
+}
+
+async function* composeServiceLines(source: ComposeLogSource, service: string, windows: readonly EvidenceWindow[]) {
+  const { since, until } = composeWindowBounds(windows);
+  const output = await captureCompose(source, [
+    "logs",
+    "--no-color",
+    "--no-log-prefix",
+    "--timestamps",
+    "--since",
+    since,
+    "--until",
+    until,
+    service,
+  ]);
+  yield* output.stdout.split("\n");
+  yield* output.stderr.split("\n");
+}
+
+async function* apisixLines(source: ComposeLogSource, windows: readonly EvidenceWindow[]) {
+  const { since, until } = composeWindowBounds(windows);
   const [access, errors] = await Promise.all([
-    capture(["logs", "--no-color", "--no-log-prefix", "--timestamps", "--since", since, "--until", until, "apisix"]),
-    capture(["exec", "--no-TTY", "apisix", "tail", "-c", String(maxBytes), apisixErrorLog]),
+    captureCompose(source, [
+      "logs",
+      "--no-color",
+      "--no-log-prefix",
+      "--timestamps",
+      "--since",
+      since,
+      "--until",
+      until,
+      "apisix",
+    ]),
+    captureCompose(source, ["exec", "--no-TTY", "apisix", "tail", "-c", String(maxLogBytes), apisixErrorLog]),
   ]);
   yield* access.stdout.split("\n");
   yield* access.stderr.split("\n");
