@@ -200,19 +200,35 @@ test("maps persistence, statement, and handler timeouts to one sanitized contrac
   }
 
   const handlerLogs: Record<string, unknown>[] = [];
-  const handlerTimeoutResult = await requestResolution(
-    createResolutionApp({
-      logger: createMemoryLogger(handlerLogs),
-      resolution: {
-        resolveCurrent: () => new Promise(() => {}),
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const timeouts: number[] = [];
+  globalThis.setTimeout = ((callback: () => void, timeoutMs: number) => {
+    timeouts.push(timeoutMs);
+    callback();
+    return 1;
+  }) as typeof setTimeout;
+  globalThis.clearTimeout = (() => {}) as typeof clearTimeout;
+  let handlerTimeoutResult: Awaited<ReturnType<typeof requestResolution>>;
+  try {
+    handlerTimeoutResult = await requestResolution(
+      createResolutionApp({
+        logger: createMemoryLogger(handlerLogs),
+        resolution: {
+          resolveCurrent: () => new Promise(() => {}),
+        },
+      }),
+      {
+        usernames: ["alice"],
+        orgCode: "ORG",
       },
-    }),
-    {
-      usernames: ["alice"],
-      orgCode: "ORG",
-    },
-  );
+    );
+  } finally {
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
 
+  expect(timeouts).toEqual([5_000]);
   expect(handlerTimeoutResult).toEqual(unavailableResolutionResponse);
   expect(handlerLogs.find((log) => log.event === "api.error.handled")).toMatchObject({
     statusCode: 503,
@@ -228,7 +244,7 @@ test("maps persistence, statement, and handler timeouts to one sanitized contrac
       },
     },
   });
-}, 10_000);
+});
 
 test("publishes the strict success contract in the Internal OpenAPI document", async () => {
   const response = await createResolutionApp().request("http://localhost/internal/doc");

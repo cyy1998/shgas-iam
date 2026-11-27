@@ -3,8 +3,10 @@ import {
   parseApisixAdminConfig,
   verifyApisixAdminBaseline,
 } from "../../../../scripts/test-resources/apisix-admin.mjs";
+import { ApisixWriteError } from "../../src/apisix.error";
 import { ApisixAdminClient } from "../../src/apisix-admin-client";
 import { deleteOrder, getDefinition, getResourceId } from "../../src/resources";
+import type { ResourceKind } from "../../src/types";
 
 export type ApisixEndpointConfig = {
   adminUrl: string;
@@ -35,6 +37,25 @@ async function startSharedApisix(): Promise<ApisixFixture> {
   return await connectApisixEndpoint(endpoint);
 }
 
+async function deleteAfterReferenceSettle(
+  client: ApisixAdminClient,
+  kind: ResourceKind,
+  id: string,
+  signal: AbortSignal,
+) {
+  // APISIX validates DELETE against its async etcd watcher cache, so deleting a service or
+  // upstream immediately after deleting its referencing route can briefly return 400.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await client.delete(kind, id, signal);
+      return;
+    } catch (error) {
+      if (!(error instanceof ApisixWriteError) || error.effect !== "rejected" || attempt >= 20) throw error;
+      await Bun.sleep(50);
+    }
+  }
+}
+
 async function resetApisix(fixture: ApisixFixture) {
   const started = performance.now();
   // Direct Admin access bypasses each case's rejected/delayed requests and journal.
@@ -44,7 +65,7 @@ async function resetApisix(fixture: ApisixFixture) {
     for (const resource of state[kind]) {
       const id = getResourceId(getDefinition(kind), resource);
       if (!id) throw new Error(`APISIX reset found an invalid ${kind} identity`);
-      await client.delete(kind, id);
+      await deleteAfterReferenceSettle(client, kind, id, fixture.signal);
     }
   }
   await assertApisixAdminEmpty(fixture.adminUrl, fixture.adminKey, { signal: fixture.signal });
