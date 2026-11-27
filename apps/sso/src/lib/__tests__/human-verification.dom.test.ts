@@ -1,6 +1,6 @@
 import { ApiErrorCode } from "@iam/contracts";
 import { message } from "antd";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ServiceError } from "../../utils/request";
 import { withHumanVerification } from "../human-verification";
 
@@ -16,21 +16,14 @@ vi.mock("cap-widget", () => {
   return { default: vi.fn(MockCap) };
 });
 
-vi.mock("antd", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("antd")>();
-  return {
-    ...actual,
-    message: {
-      ...actual.message,
-      error: vi.fn(),
-    },
-  };
-});
-
 describe("withHumanVerification", () => {
+  beforeEach(() => {
+    vi.spyOn(message, "error").mockImplementation((() => undefined) as never);
+  });
+
   afterEach(() => {
     capSolve.mockReset();
-    vi.mocked(message.error).mockReset();
+    vi.restoreAllMocks();
     window.CAP_CUSTOM_FETCH = undefined;
   });
 

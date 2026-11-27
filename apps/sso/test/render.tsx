@@ -9,9 +9,11 @@ import { BrowserRouter } from "react-router";
 
 type SsoRenderOptions = RenderOptions & { withSso?: boolean };
 
+const testTheme = { token: { motion: false } };
+
 function Providers({ children, withSso }: { children: ReactNode; withSso: boolean }) {
   return (
-    <ConfigProvider locale={zhCN}>
+    <ConfigProvider locale={zhCN} theme={testTheme}>
       <BrowserRouter basename={portalBase}>{withSso ? <SsoProvider>{children}</SsoProvider> : children}</BrowserRouter>
     </ConfigProvider>
   );

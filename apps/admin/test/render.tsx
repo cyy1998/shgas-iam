@@ -33,9 +33,11 @@ type AdminRenderOptions = RenderOptions & {
   path?: string;
 };
 
+const testTheme = { token: { motion: false } };
+
 function Providers({ children, router }: { children: ReactNode; router: ReturnType<typeof createMemoryRouter> }) {
   return (
-    <ConfigProvider locale={zhCN}>
+    <ConfigProvider locale={zhCN} theme={testTheme}>
       <AdminAccessContext.Provider value={testAccess}>
         <RenderContentContext.Provider value={children}>
           <RouterProvider router={router} />
