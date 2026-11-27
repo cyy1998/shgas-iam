@@ -22,9 +22,7 @@ apisix:
   node_listen:
     - ip: ${{IAM_E2E_APISIX_LISTEN_IP:=0.0.0.0}}
       port: ${{IAM_E2E_APISIX_HTTP_PORT:=9080}}
-  # Backends are stopped and restarted on the Docker bridge network during per-test /reset,
-  # which can reassign container IPs. Override Docker DNS's 600s TTL so APISIX refreshes
-  # upstream IPs within 1s instead of returning 502 against stale container addresses.
+  # Refresh test upstream addresses quickly if Docker assigns a new bridge IP.
   dns_resolver_valid: 1
   enable_admin: true
   # The internal control API defaults to a fixed port shared by all host-network projects.
@@ -37,9 +35,8 @@ apisix:
 
 nginx_config:
   worker_processes: 2
-  # Error records can contain the original request line. Keep them in container memory
-  # and let the failure reporter redact them before writing the persistent summary.
-  error_log: /dev/shm/iam-e2e-apisix-error.log
+  # Capture warnings and errors in Compose service logs for CI failure redaction.
+  error_log: /dev/stderr
   error_log_level: warn
   http_configuration_snippet: |
     # proxy-rewrite can replace $uri before the access log is written.

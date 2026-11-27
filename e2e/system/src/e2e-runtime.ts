@@ -1,6 +1,10 @@
-import { randomBytes, randomUUID } from "node:crypto";
-import { mkdir, readFile } from "node:fs/promises";
+import { generateKeyPairSync, randomBytes, randomUUID } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createServer } from "node:net";
 import { join } from "node:path";
+import { redisUrlString } from "@iam/runtime/redis/config";
+import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
+import Redis from "ioredis";
 import {
   cleanupManagedResources,
   createManagedResourceRun,
@@ -12,30 +16,16 @@ import {
   writeAtomicResourceRecord,
 } from "../../../scripts/test-resources/managed-resources.mjs";
 import { pnpmCommand, runOwnedCommand } from "../../../scripts/test-resources/owned-command.mjs";
-import { writeAtomicJsonFile } from "./atomic-json-file.ts";
-import { runWithCleanup } from "./bounded-operation.ts";
-import { buildE2EImages, ensureLocalE2EImages, parseE2EBuildConcurrency } from "./e2e-build.ts";
-import {
-  createE2ECompose,
-  e2eApplicationServices,
-  e2eBuildServices,
-  e2eGatewayApiPort,
-  e2eImageTag,
-  e2eInfrastructureServices,
-  e2eLocalImageTag,
-  e2eLogServices,
-  e2eResetBackendServices,
-  e2eStubsHttpPort,
-} from "./e2e-compose.ts";
-import { type E2ERunContext, resetE2EStubs } from "./e2e-context.ts";
-import { createE2EControl } from "./e2e-control.ts";
-import { restoreE2EDatabaseFromTemplate, sealE2ETemplateDatabase } from "./e2e-database.ts";
-import { createE2EGatewayApiKey } from "./gateway-credential.ts";
+import { type E2ERedisSnapshotEntry, type E2ERunContext, runE2ECompose } from "./e2e-context.ts";
 import { iamGatewayManifest, publishGateway } from "./gateway-sync.ts";
-import { probeHttpRoute, probeOidcDiscovery, probeSsoConfiguration } from "./http-probes.ts";
-import { apisixAdminKey, e2eDatabaseName, e2eDatabasePassword } from "./middleware-compose.ts";
-import { allocateAvailablePort } from "./port-allocation.ts";
-import { createE2EScenarioInternalApiKey, type E2EScenarioReferences } from "./seed.ts";
+import { waitForHttpRoute } from "./http-probes.ts";
+import {
+  createE2EGatewayApiKey,
+  createE2EScenarioIdentity,
+  createE2EScenarioInternalApiKey,
+  seedE2EScenario,
+} from "./seed.ts";
+import { createProductionE2EScenarioOwner } from "./seed-owner.ts";
 import { wecomMobileCallbackPath } from "./wecom-provider.ts";
 
 export interface E2ERuntimeOptions {
@@ -46,22 +36,29 @@ export interface E2ERuntimeOptions {
   startupTimeoutMs?: number;
 }
 
-const adminPassword = "iam-e2e-admin-password-local-only";
 const resourcePrefix = "test-results/e2e";
+const composeFile = "e2e/system/docker-compose.e2e.yml";
+const cacheComposeFile = "e2e/system/docker-compose.e2e.gha-cache.yml";
+const infrastructureServices = ["postgres", "redis", "apisix-etcd", "apisix", "e2e-stubs"];
+const applicationServices = ["auth-api", "sso-api", "integration-api", "admin-api", "gateway-api", "admin", "sso"];
+const buildServices = ["apisix", "e2e-stubs", "worker", ...applicationServices];
+const e2eStubsHttpPort = 8080;
+const apisixAdminKey = "dev-local-admin-key-change-me";
+const adminPassword = "iam-e2e-admin-password-local-only";
 
 export async function withE2ERuntime<T>(
   options: E2ERuntimeOptions,
   use: (contextPath: string, signal: AbortSignal) => Promise<T>,
 ) {
-  requireLinux();
+  if (process.platform !== "linux") throw new Error(`Container E2E requires Linux (current: ${process.platform})`);
   const { repositoryRoot } = options;
   const runId = randomUUID();
   const project = `iam-e2e-${runId.replaceAll("-", "")}`;
   const artifactDirectory = `${resourcePrefix}/${project}`;
   const artifacts = join(repositoryRoot, artifactDirectory);
-  const composeFile = `${artifactDirectory}/compose.json`;
   const contextPath = join(artifacts, "runtime-context.json");
-  const scenarioPath = join(artifacts, "scenario.json");
+  const pgSnapshotPath = join(artifacts, "seed-data.sql");
+  const redisSnapshotPath = join(artifacts, "seed-redis.json");
 
   const interruption = new AbortController();
   const signal = AbortSignal.any([interruption.signal, ...(options.signal ? [options.signal] : [])]);
@@ -73,35 +70,22 @@ export async function withE2ERuntime<T>(
   const deadline = new AbortController();
   const timeoutMs = options.startupTimeoutMs ?? 25 * 60_000;
   const timer = setTimeout(() => deadline.abort(new Error(`E2E startup timed out after ${timeoutMs}ms`)), timeoutMs);
-
   try {
     const startup = AbortSignal.any([signal, deadline.signal]);
     startup.throwIfAborted();
-
-    const ports = await allocateDistinctPorts(2);
-    const [httpPort, httpsPort] = ports as [number, number];
+    const httpPort = await allocateAvailablePort();
+    let httpsPort = await allocateAvailablePort();
+    while (httpsPort === httpPort) httpsPort = await allocateAvailablePort();
     const origin = `http://external.iam.localhost:${httpPort}`;
     const internalOrigin = `http://internal.iam.localhost:${httpPort}`;
     const wecomMobileOrigin = `https://external.iam.localhost:${httpsPort}`;
     const stubsToken = randomBytes(32).toString("base64url");
+    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const jwk = { ...privateKey.export({ format: "jwk" }), kid: "e2e-runtime-rs256", alg: "RS256", use: "sig" };
+    const concurrency = process.env.IAM_E2E_BUILD_CONCURRENCY?.trim() || "2";
+    if (!/^[1-4]$/u.test(concurrency)) throw new Error("IAM_E2E_BUILD_CONCURRENCY requires an integer from 1 to 4");
 
     await mkdir(artifacts, { recursive: true, mode: 0o700 });
-    await writeAtomicResourceRecord(
-      join(repositoryRoot, composeFile),
-      createE2ECompose({
-        project,
-        origin,
-        internalOrigin,
-        wecomMobileOrigin,
-        httpPort,
-        httpsPort,
-        seedRunId: runId,
-        stubsToken,
-        adminClientCode: "iam-admin",
-        imageTag: options.skipBuild ? "local" : project,
-      }),
-    );
-
     const run = await createManagedResourceRun({
       root: repositoryRoot,
       composeFile,
@@ -109,176 +93,114 @@ export async function withE2ERuntime<T>(
       project,
       removeLocalImages: !options.skipBuild,
       keep: Boolean(options.keep),
-      composeEnvironment: { COMPOSE_DISABLE_ENV_FILE: "1", DOCKER_BUILDKIT: "1" },
+      composeEnvironment: {
+        COMPOSE_DISABLE_ENV_FILE: "1",
+        DOCKER_BUILDKIT: "1",
+        COMPOSE_PARALLEL_LIMIT: concurrency,
+        E2E_PROJECT: project,
+        E2E_HTTP_PORT: String(httpPort),
+        E2E_HTTPS_PORT: String(httpsPort),
+        E2E_ORIGIN: origin,
+        E2E_INTERNAL_ORIGIN: internalOrigin,
+        E2E_WECOM_MOBILE_ORIGIN: wecomMobileOrigin,
+        E2E_RUN_ID: runId,
+        E2E_STUBS_TOKEN: stubsToken,
+        E2E_OIDC_JWK_JSON: JSON.stringify(jwk),
+        E2E_IMAGE_TAG: options.skipBuild ? "local" : project,
+        E2E_ADMIN_CLIENT_CODE: createE2EScenarioIdentity(runId).adminClientCode,
+        IAM_E2E_POSTGRES_IMAGE: process.env.IAM_E2E_POSTGRES_IMAGE ?? "",
+        IAM_E2E_REDIS_IMAGE: process.env.IAM_E2E_REDIS_IMAGE ?? "",
+        IAM_E2E_ETCD_IMAGE: process.env.IAM_E2E_ETCD_IMAGE ?? "",
+        IAM_E2E_APISIX_BASE_IMAGE: process.env.IAM_E2E_APISIX_BASE_IMAGE ?? "",
+        IAM_E2E_BUN_IMAGE: process.env.IAM_E2E_BUN_IMAGE ?? "",
+      },
       registryFile: process.env.IAM_TEST_RESOURCE_REGISTRY,
     });
     console.log(`[e2e] Project ${project}; diagnostics ${artifacts}`);
 
     let passed = false;
-    return await runWithCleanup(
-      async () => {
-        if (options.skipBuild) {
-          console.log(`[e2e] --skip-build enabled; verifying ${e2eBuildServices.length} local images`);
-          await ensureLocalE2EImages(e2eBuildServices, { cwd: repositoryRoot, signal: startup });
-        } else {
-          await buildStackImages(run, artifacts, artifactDirectory, startup);
-          for (const service of e2eBuildServices) {
-            const localTag = e2eLocalImageTag(service);
-            const result = await runOwnedCommand({
-              executable: "docker",
-              args: ["tag", e2eImageTag(service, project), localTag],
-              cwd: repositoryRoot,
-              signal: startup,
-              timeoutMs: 10_000,
-            });
-            if (result.exitCode !== 0) throw new Error(`E2E could not tag ${localTag}:\n${result.output}`);
-          }
-        }
+    return await runWithOwnedTestResources(async ({ registerCleanup }) => {
+      registerCleanup(() =>
+        finishManagedResourceRun(run, { cleanupTimeoutMs: 120_000, diagnostics: !passed || signal.aborted }),
+      );
+      await prepareImages(run, options.skipBuild, concurrency, startup);
 
-        await compose(
-          run,
-          "start infrastructure",
-          ["up", "--detach", "--wait", "--wait-timeout", "120", "--no-build", ...e2eInfrastructureServices],
-          startup,
-          150_000,
-        );
+      await startServices(run, infrastructureServices, startup);
+      const endpoint = (service: string, containerPort: number) =>
+        managedServiceEndpoint(run, service, containerPort, { signal: startup, timeoutMs: 10_000 });
+      const [postgres, redis, apisixAdmin, stubs] = await Promise.all([
+        endpoint("postgres", 5432),
+        endpoint("redis", 6379),
+        endpoint("apisix", 9180),
+        endpoint("e2e-stubs", e2eStubsHttpPort),
+      ]);
+      const databaseUrl = `postgresql://iam_e2e:iam_e2e_local_password@${postgres.host}:${postgres.port}/iam_e2e`;
+      const redisUrl = `redis://${redis.host}:${redis.port}/0`;
 
-        const endpoint = (service: string, containerPort: number) =>
-          managedServiceEndpoint(run, service, containerPort, { signal: startup, timeoutMs: 10_000 });
-        const [postgres, redis, apisixAdmin, stubs] = await Promise.all([
-          endpoint("postgres", 5432),
-          endpoint("redis", 6379),
-          endpoint("apisix", 9180),
-          endpoint("e2e-stubs", e2eStubsHttpPort),
-        ]);
-        const databaseUrl = `postgresql://${e2eDatabaseName}:${e2eDatabasePassword}@${postgres.host}:${postgres.port}/${e2eDatabaseName}`;
-        const redisUrl = `redis://${redis.host}:${redis.port}/0`;
-        const stubsOrigin = `http://${stubs.host}:${stubs.port}`;
-        const apisixAdminUrl = `http://${apisixAdmin.host}:${apisixAdmin.port}/apisix/admin`;
+      console.log("[e2e] migrate database");
+      const migration = await runOwnedCommand({
+        ...pnpmCommand(process.env.npm_execpath ?? "pnpm", ["--filter", "@iam/db", "db:migrate"]),
+        cwd: repositoryRoot,
+        env: { ...process.env, DATABASE_URL: databaseUrl },
+        signal: startup,
+        timeoutMs: 90_000,
+        logFile: join(artifacts, "migration.log"),
+      });
+      if (migration.exitCode !== 0) throw new Error(`E2E database migration failed:\n${migration.output}`);
 
-        await runMigrations(repositoryRoot, artifacts, databaseUrl, startup);
+      await startServices(run, ["worker"], startup);
+      console.log("[e2e] seed scenario and capture PostgreSQL and Redis snapshots");
+      const references = await seedAndCapture(run, {
+        runId,
+        origin,
+        internalOrigin,
+        databaseUrl,
+        redisUrl,
+        pgSnapshotPath,
+        redisSnapshotPath,
+        signal: startup,
+      });
 
-        await compose(
-          run,
-          "start worker for seeding",
-          ["up", "--detach", "--wait", "--wait-timeout", "90", "--no-build", "--no-deps", "worker"],
-          startup,
-          120_000,
-        );
-        const seedEnv: NodeJS.ProcessEnv = {
-          ...process.env,
-          DATABASE_URL: databaseUrl,
-          IAM_E2E_REDIS_URL: redisUrl,
-          IAM_E2E_RUN_ID: runId,
-          IAM_E2E_ORIGIN: origin,
-          IAM_E2E_INTERNAL_ORIGIN: internalOrigin,
-          IAM_E2E_ADMIN_PASSWORD: adminPassword,
-          IAM_E2E_SCENARIO_PATH: scenarioPath,
-        };
-        await runSeedCommand(repositoryRoot, artifacts, seedEnv, "template", startup);
-        const references: E2EScenarioReferences = JSON.parse(await readFile(scenarioPath, "utf8"));
+      await startServices(run, applicationServices, startup);
+      const gateway = await endpoint("gateway-api", 30004);
+      await publishContainerRoutes({
+        seedRunId: references.runId,
+        origin,
+        internalOrigin,
+        wecomMobileOrigin,
+        gatewayOrigin: `http://${gateway.host}:${gateway.port}`,
+        apisixAdminUrl: `http://${apisixAdmin.host}:${apisixAdmin.port}/apisix/admin`,
+        signal: startup,
+      });
+      await verifyRoutes({ origin, internalOrigin, wecomMobileOrigin }, startup);
 
-        await compose(run, "stop worker before sealing template", ["stop", "worker"], startup, 40_000);
-        await sealE2ETemplateDatabase(databaseUrl, startup);
-
-        await compose(
-          run,
-          "start applications",
-          ["up", "--detach", "--wait", "--wait-timeout", "120", "--no-build", ...e2eApplicationServices],
-          startup,
-          150_000,
-        );
-
-        const gatewayApi = await endpoint("gateway-api", e2eGatewayApiPort);
-        await publishContainerRoutes({
-          seedRunId: references.runId,
-          origin,
-          internalOrigin,
-          wecomMobileOrigin,
-          gatewayOrigin: `http://${gatewayApi.host}:${gatewayApi.port}`,
-          apisixAdminUrl,
-          signal: startup,
-        });
-        await verifyRoutes({ origin, internalOrigin, wecomMobileOrigin }, startup);
-
-        const controlToken = randomBytes(32).toString("base64url");
-        let context: E2ERunContext = {
-          version: 2,
-          runId,
-          project,
-          composeFile: join(repositoryRoot, composeFile),
-          projectDirectory: repositoryRoot,
-          origin,
-          internalOrigin,
-          wecomMobileOrigin,
-          stubsOrigin,
-          stubsToken,
-          databaseUrl,
-          redisUrl,
-          adminPassword,
-          internalApiKey: createE2EScenarioInternalApiKey(references.runId),
-          references,
-          control: { origin: "", token: controlToken },
-          logServices: e2eLogServices,
-        };
-
-        const control = createE2EControl({
-          token: controlToken,
-          async reset(_file, controlSignal) {
-            const resetSignal = AbortSignal.any([signal, controlSignal, AbortSignal.timeout(100_000)]);
-            await compose(run, "stop backends for reset", ["stop", ...e2eResetBackendServices], resetSignal, 40_000);
-            resetSignal.throwIfAborted();
-            await restoreE2EDatabaseFromTemplate(databaseUrl, resetSignal);
-            await runSeedCommand(repositoryRoot, artifacts, seedEnv, "restore", resetSignal);
-            await resetE2EStubs(stubsOrigin, stubsToken, references.runId, resetSignal);
-            await composeUpNoRecreate(run, "start backends after reset", e2eResetBackendServices, resetSignal, 80_000);
-            await verifyRoutes({ origin, internalOrigin, wecomMobileOrigin }, resetSignal);
-            resetSignal.throwIfAborted();
-          },
-          stopWorker: () => compose(run, "stop worker", ["stop", "worker"], AbortSignal.timeout(30_000), 30_000),
-          startWorker: (controlSignal) =>
-            composeUpNoRecreate(
-              run,
-              "start worker",
-              ["worker"],
-              AbortSignal.any([signal, controlSignal, AbortSignal.timeout(60_000)]),
-              60_000,
-            ),
-          onFailure(error) {
-            console.error("[e2e] Runtime control failed", error);
-          },
-        });
-
-        const server = Bun.serve({
-          hostname: "127.0.0.1",
-          port: 0,
-          idleTimeout: 120,
-          maxRequestBodySize: 16_384,
-          fetch: control.fetch,
-        });
-        context = { ...context, control: { origin: server.url.origin, token: controlToken } };
-
-        return await runWithCleanup(
-          async () => {
-            startup.throwIfAborted();
-            await writeAtomicJsonFile(contextPath, context, 0o600);
-            clearTimeout(timer);
-            const result = await use(contextPath, signal);
-            signal.throwIfAborted();
-            passed = true;
-            return result;
-          },
-          async () => {
-            const closed = control.close();
-            await runWithCleanup(
-              () => server.stop(true),
-              () => closed,
-            );
-          },
-        );
-      },
-      () => finishManagedResourceRun(run, { cleanupTimeoutMs: 120_000, diagnostics: !passed || signal.aborted }),
-    );
+      const context: E2ERunContext = {
+        version: 3,
+        runId,
+        project,
+        projectDirectory: repositoryRoot,
+        resourceRecordPath: run.recordPath,
+        origin,
+        internalOrigin,
+        wecomMobileOrigin,
+        stubsOrigin: `http://${stubs.host}:${stubs.port}`,
+        stubsToken,
+        databaseUrl,
+        redisUrl,
+        pgSnapshotPath,
+        redisSnapshotPath,
+        adminPassword,
+        internalApiKey: createE2EScenarioInternalApiKey(references.runId),
+        references,
+      };
+      startup.throwIfAborted();
+      await writeAtomicResourceRecord(contextPath, context);
+      clearTimeout(timer);
+      const result = await use(contextPath, signal);
+      signal.throwIfAborted();
+      passed = true;
+      return result;
+    });
   } finally {
     clearTimeout(timer);
     process.off("SIGINT", interrupt);
@@ -287,80 +209,165 @@ export async function withE2ERuntime<T>(
 }
 
 export async function cleanupE2EProject(repositoryRoot: string, project: string) {
-  const run = await readManagedResourceRun(repositoryRoot, `${resourcePrefix}/${project}/run.json`);
-  if (run.record.project !== project || run.record.composeFile !== `${run.record.artifactDirectory}/compose.json`) {
+  if (!/^iam-e2e-[a-f0-9]{32}$/u.test(project)) throw new Error("An exact iam-e2e-<uuid> project is required");
+  const artifactDirectory = `${resourcePrefix}/${project}`;
+  const run = await readManagedResourceRun(repositoryRoot, `${artifactDirectory}/run.json`);
+  if (run.record.project !== project || run.record.composeFile !== composeFile) {
     throw new Error(`E2E resource record does not name the requested exact project ${project}`);
   }
   await cleanupManagedResources(run, { timeoutMs: 120_000 });
 }
 
-async function buildStackImages(
+async function prepareImages(
   run: ManagedResourceRun,
-  artifacts: string,
-  artifactDirectory: string,
+  skipBuild: boolean | undefined,
+  concurrency: string,
   signal: AbortSignal,
 ) {
-  const concurrency = parseE2EBuildConcurrency(process.env.IAM_E2E_BUILD_CONCURRENCY);
-  console.log(`[e2e] build ${e2eBuildServices.length} images (concurrency ${concurrency})`);
-  const outcomes = await buildE2EImages({
-    services: e2eBuildServices,
-    concurrency,
-    signal,
-    buildOne: async (service, buildSignal) => {
-      const logPath = join(artifacts, `build-${service}.log`);
-      const relativeLog = `${artifactDirectory}/build-${service}.log`;
-      console.log(`[e2e] build ${service} started; log ${relativeLog}`);
-      const started = performance.now();
-      const result = await runManagedComposeCommand(run, ["build", service], {
-        signal: buildSignal,
-        timeoutMs: 20 * 60_000,
-        fullLogFile: logPath,
+  const docker = (args: string[]) =>
+    runOwnedCommand({ executable: "docker", args, cwd: run.root, signal, timeoutMs: 10_000 });
+  const localImages = buildServices.map((service) => `iam-e2e-${service}:local`);
+  if (skipBuild) {
+    const missing: string[] = [];
+    for (const image of localImages) {
+      const result = await docker(["image", "inspect", "--format", "{{.Id}}", image]);
+      if (result.exitCode !== 0) missing.push(image);
+    }
+    if (missing.length > 0) {
+      throw new Error(
+        `--skip-build requires local E2E images; missing: ${missing.join(", ")}. Run pnpm test:e2e without --skip-build first.`,
+      );
+    }
+    console.log(`[e2e] --skip-build verified ${localImages.length} local images`);
+    return;
+  }
+
+  const cache = process.env.IAM_E2E_BUILDX_CACHE?.trim().toLowerCase();
+  if (cache && !["gha", "off", "none"].includes(cache)) {
+    throw new Error("IAM_E2E_BUILDX_CACHE must be gha, off, or none");
+  }
+  const useGhaCache =
+    cache === "gha" ||
+    (!cache && process.env.CI === "true" && Boolean(process.env.ACTIONS_CACHE_URL || process.env.ACTIONS_RESULTS_URL));
+  const logPath = join(run.root, run.record.artifactDirectory, "build.log");
+  console.log(`[e2e] build ${buildServices.length} images (concurrency ${concurrency}); log ${logPath}`);
+  const result = await runManagedComposeCommand(
+    run,
+    [...(useGhaCache ? ["--file", join(run.root, cacheComposeFile)] : []), "build", ...buildServices],
+    { signal, timeoutMs: 20 * 60_000, fullLogFile: logPath },
+  );
+  if (result.exitCode !== 0)
+    throw new Error(`E2E image build failed; inspect ${logPath}\n${result.output.split("\n").slice(-40).join("\n")}`);
+  for (const service of buildServices) {
+    const local = `iam-e2e-${service}:local`;
+    const tag = await docker(["tag", `iam-e2e-${service}:${run.record.project}`, local]);
+    if (tag.exitCode !== 0) throw new Error(`E2E could not tag ${local}:\n${tag.output}`);
+  }
+}
+
+async function startServices(run: ManagedResourceRun, services: string[], signal: AbortSignal) {
+  console.log(`[e2e] start ${services.join(", ")}`);
+  const result = await runManagedComposeCommand(
+    run,
+    ["up", "--detach", "--wait", "--wait-timeout", "120", "--no-build", ...services],
+    { signal, timeoutMs: 150_000, inheritOutput: true },
+  );
+  if (result.exitCode !== 0) throw new Error(`E2E could not start ${services.join(", ")} (exit ${result.exitCode})`);
+}
+
+const truncatePublicTables = `SET LOCAL lock_timeout = '10s';
+DO $$
+DECLARE
+  tables text;
+BEGIN
+  SELECT string_agg(format('%I.%I', schemaname, tablename), ', ' ORDER BY tablename)
+    INTO tables FROM pg_catalog.pg_tables WHERE schemaname = 'public';
+  IF tables IS NOT NULL THEN
+    EXECUTE 'TRUNCATE TABLE ' || tables || ' RESTART IDENTITY CASCADE';
+  END IF;
+END $$;
+`;
+
+async function seedAndCapture(
+  run: ManagedResourceRun,
+  options: Pick<
+    E2ERunContext,
+    "runId" | "origin" | "internalOrigin" | "databaseUrl" | "redisUrl" | "pgSnapshotPath" | "redisSnapshotPath"
+  > & { signal: AbortSignal },
+) {
+  const queueRedis = redisUrlString().parse(options.redisUrl);
+  const redis = new Redis({
+    ...queueRedis,
+    lazyConnect: true,
+    connectTimeout: 5_000,
+    commandTimeout: 10_000,
+    retryStrategy: () => null,
+  });
+  try {
+    await redis.connect();
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    process.env.DATABASE_URL = options.databaseUrl;
+    const references = await runWithOwnedTestResources(async ({ registerCleanup }) => {
+      registerCleanup(() => {
+        if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+        else process.env.DATABASE_URL = previousDatabaseUrl;
       });
-      if (result.exitCode !== 0) {
-        const tail = result.output.trim().split(/\r?\n/u).slice(-40).join("\n");
-        throw new Error(
-          `E2E could not build ${service} (exit ${result.exitCode}; log ${relativeLog})${tail ? `:\n${tail}` : ""}`,
-        );
+      const { db, closeDb } = await import("@iam/db");
+      registerCleanup(() => closeDb({ timeoutSeconds: 5 }));
+      return await seedE2EScenario({
+        owner: createProductionE2EScenarioOwner({
+          db,
+          redis,
+          queueRedis,
+          clock: { nowDate: () => new Date() },
+          random: { uuid: randomUUID },
+          passwordHashCost: 10,
+        }),
+        runId: options.runId,
+        canonicalOrigin: options.origin,
+        internalOrigin: options.internalOrigin,
+        adminPassword,
+        random: { uuid: randomUUID },
+      });
+    });
+
+    const dump = await runE2ECompose(
+      run,
+      [
+        "exec",
+        "-T",
+        "postgres",
+        "pg_dump",
+        "-U",
+        "iam_e2e",
+        "--schema=public",
+        "--data-only",
+        "--disable-triggers",
+        "iam_e2e",
+      ],
+      { signal: options.signal, timeoutMs: 30_000 },
+    );
+    await writeFile(options.pgSnapshotPath, truncatePublicTables + dump, { mode: 0o600 });
+
+    const entries = new Map<string, E2ERedisSnapshotEntry>();
+    let cursor = "0";
+    do {
+      options.signal.throwIfAborted();
+      const [next, keys] = await redis.scan(cursor, "COUNT", 100);
+      cursor = next;
+      for (const key of keys) {
+        if (key.startsWith("bull:")) continue;
+        const ttl = await redis.pttl(key);
+        if (ttl === -2) continue;
+        const value = await redis.dumpBuffer(key);
+        if (value)
+          entries.set(key, { key, ttlMs: ttl === -1 ? 0 : Math.max(1, ttl), valueBase64: value.toString("base64") });
       }
-      console.log(`[e2e] build ${service} passed in ${Math.round(performance.now() - started)} ms`);
-      return { logPath: relativeLog };
-    },
-  });
-  const totalBuildMs = outcomes.reduce((sum, item) => sum + item.durationMs, 0);
-  console.log(`[e2e] built ${outcomes.length} images (sum ${totalBuildMs} ms across ${concurrency} slots)`);
-}
-
-async function runMigrations(repositoryRoot: string, artifacts: string, databaseUrl: string, signal: AbortSignal) {
-  console.log("[e2e] migrate database");
-  const result = await runOwnedCommand({
-    ...pnpmCommand(process.env.npm_execpath ?? "pnpm", ["--filter", "@iam/db", "db:migrate"]),
-    cwd: repositoryRoot,
-    env: { ...process.env, DATABASE_URL: databaseUrl },
-    signal,
-    timeoutMs: 90_000,
-    logFile: join(artifacts, "migration.log"),
-  });
-  if (result.exitCode !== 0) throw new Error(`E2E database migration failed:\n${result.output}`);
-}
-
-async function runSeedCommand(
-  repositoryRoot: string,
-  artifacts: string,
-  env: NodeJS.ProcessEnv,
-  mode: "template" | "restore",
-  signal: AbortSignal,
-) {
-  const result = await runOwnedCommand({
-    executable: process.execPath,
-    args: ["--no-env-file", "src/seed-cli.ts", mode],
-    cwd: join(repositoryRoot, "e2e/system"),
-    env,
-    signal,
-    timeoutMs: 60_000,
-    logFile: join(artifacts, mode === "template" ? "seed.log" : "restore.log"),
-  });
-  if (result.exitCode !== 0) {
-    throw new Error(`E2E ${mode === "template" ? "seed" : "Redis restore"} failed:\n${result.output}`);
+    } while (cursor !== "0");
+    await writeAtomicResourceRecord(options.redisSnapshotPath, [...entries.values()]);
+    return references;
+  } finally {
+    redis.disconnect();
   }
 }
 
@@ -414,47 +421,29 @@ async function verifyRoutes(
   origins: Pick<E2ERunContext, "origin" | "internalOrigin" | "wecomMobileOrigin">,
   signal: AbortSignal,
 ) {
+  const routes = [
+    ["/portal/login", 200],
+    ["/iam-admin/", 200],
+    ["/api/iam/admin/users/search", 403],
+    ["/e2e/oidc/callback", 200],
+    ["/oidc/.well-known/openid-configuration", 200],
+    ["/sso/.well-known/authentication-configuration", 200],
+  ] as const;
   for (const origin of [origins.origin, origins.internalOrigin]) {
-    await probeHttpRoute(origin, "/portal/login", [200], signal);
-    await probeHttpRoute(origin, "/iam-admin/", [200], signal);
-    await probeHttpRoute(origin, "/api/iam/admin/users/search", [403], signal);
-    await probeHttpRoute(origin, "/e2e/oidc/callback", [200], signal);
-    await probeOidcDiscovery(origin, signal);
-    await probeSsoConfiguration(origin, signal);
+    for (const [path, status] of routes) await waitForHttpRoute(new URL(path, origin), status, signal);
   }
-  await probeHttpRoute(origins.wecomMobileOrigin, wecomMobileCallbackPath, [400], signal);
+  const ca = await readFile(new URL("../test-assets/wecom-mobile-cert.pem", import.meta.url), "utf8");
+  await waitForHttpRoute(new URL(wecomMobileCallbackPath, origins.wecomMobileOrigin), 400, signal, ca);
 }
 
-async function compose(run: ManagedResourceRun, stage: string, args: string[], signal: AbortSignal, timeoutMs: number) {
-  console.log(`[e2e] ${stage}`);
-  const result = await runManagedComposeCommand(run, args, { signal, timeoutMs, inheritOutput: true });
-  if (result.exitCode !== 0) throw new Error(`E2E could not ${stage} (exit ${result.exitCode})`);
-}
-
-function composeUpNoRecreate(
-  run: ManagedResourceRun,
-  stage: string,
-  services: readonly string[],
-  signal: AbortSignal,
-  timeoutMs: number,
-) {
-  return compose(
-    run,
-    stage,
-    ["up", "--detach", "--no-build", "--no-deps", "--no-recreate", "--wait", "--wait-timeout", "60", ...services],
-    signal,
-    timeoutMs,
-  );
-}
-
-async function allocateDistinctPorts(count: number) {
-  const allocated = new Set<number>();
-  while (allocated.size < count) allocated.add(await allocateAvailablePort());
-  return [...allocated];
-}
-
-function requireLinux(platform = process.platform) {
-  if (platform !== "linux") {
-    throw new Error(`Container E2E requires Linux (native Linux or WSL2). Current platform: ${platform}`);
-  }
+async function allocateAvailablePort() {
+  const server = createServer();
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  if (!address || typeof address === "string") throw new Error("E2E could not allocate a loopback port");
+  return address.port;
 }

@@ -155,22 +155,18 @@ Timeout 用于限制悬挂。进程测试等待实际 readiness，同时观察�
 
 ## Full-system E2E
 
-全部 9 个跨服务业务 spec（`admin-custom-sso`、`application-admission`、`directory-custom-attributes`、`dual-entry`、`hr-admin-user-management`、`oidc-pkce`、`wecom-qr-binding`、`wecom-qr-oidc`、`wecom-qr`）统一在生产 Dockerfile 构建的独占 Docker Compose 容器栈上运行，天然覆盖 8 个生产应用镜像、`nginx.conf` 与 `pnpm deploy` 依赖闭包。浏览器经真实 APISIX 双入口（`external.iam.localhost` 与 `internal.iam.localhost`，以及企业微信扫码手机端 HTTPS 入口）观察跨服务业务结果、Cookie 作用域与入口隔离。根命令 `pnpm test:e2e` 直连 Playwright 包装入口，剥离 `--` 前的运行时开关（`--skip-build`、`--keep`），透传文件筛选、`-g`、`-x`、`--last-failed` 和 `--ui` 等参数。[E2E 命令](commands.md#full-system-e2e) · [运行时编排](../../e2e/system/src/e2e-runtime.ts) · [Compose 生成](../../e2e/system/src/e2e-compose.ts)
+全部 9 个跨服务业务 spec（`admin-custom-sso`、`application-admission`、`directory-custom-attributes`、`dual-entry`、`hr-admin-user-management`、`oidc-pkce`、`wecom-qr-binding`、`wecom-qr-oidc`、`wecom-qr`）统一在生产 Dockerfile 构建的独占 Docker Compose 容器栈上运行，天然覆盖 8 个生产应用镜像、`nginx.conf` 与 `pnpm deploy` 依赖闭包。浏览器经真实 APISIX 双入口（`external.iam.localhost` 与 `internal.iam.localhost`，以及企业微信扫码手机端 HTTPS 入口）观察跨服务业务结果、Cookie 作用域与入口隔离。根命令 `pnpm test:e2e` 直连 Playwright 包装入口，剥离 `--` 前的运行时开关（`--skip-build`、`--keep`），透传文件筛选、`-g`、`-x`、`--last-failed` 和 `--ui` 等参数。[E2E 命令](commands.md#full-system-e2e) · [运行时编排](../../e2e/system/src/e2e-runtime.ts) · [Compose 配置](../../e2e/system/docker-compose.e2e.yml)
 
 ### 初始化与就绪
 
-- **独占生产容器栈与四合一 `e2e-stubs`**。每次运行创建全新独占 Compose project（`iam-e2e-<uuid>`），按有界并发（默认 2，可通过 `IAM_E2E_BUILD_CONCURRENCY` 设为 1–4；各镜像日志独立写入 `build-<service>.log` 并首错取消）构建 10 个本地镜像（`apisix`、`e2e-stubs` 与 8 个生产应用镜像，标记为 `iam-e2e-<service>:local`）。CI 通过 `IAM_E2E_BUILDX_CACHE=gha` 启用 BuildKit GHA 缓存；本地保留镜像层缓存，并在仅修改 `.spec.ts` 时支持 `--skip-build` 校验并直接复用本地镜像。测试侧替身集中于轻量 Bun 容器 [`e2e-stubs`](../../e2e/system/src/e2e-stubs-server.ts)，对生产镜像与源码零侵入：
-  1. 通过 Compose 网络 `aliases: ["qyapi.weixin.qq.com"]` 与测试自签 CA（通过 Compose 内联 `configs:` 仅挂载到 `auth-api` 容器 `/etc/e2e-ca/ca.pem` 并设 `NODE_EXTRA_CA_CERTS`）承接企业微信 HTTPS 请求；
-  2. 通过既有 `IAM_AUTH_API_SMS_URL`（`http://e2e-stubs:8080/test-sms`）接收短信并在内存缓存，测试经带 Bearer token 的 `GET /_stubs/sms` 轮询读取，无宿主 bind-mount 文件；
-  3. 承载 `gateway-sync.ts` 指向的 RP 回调终端页 `/portal/e2e-rp.html`；
-  4. 暴露鉴权端点 `POST /_stubs/reset`，随每次整库复位清空企业微信与短信内存状态。
-- **固定模板 `e2e_template` 与 5 后端 `/reset`**。基础设施（`postgres` `tmpfs: 1g` 关闭 `fsync`/`synchronous_commit`/`full_page_writes`、`redis`、`apisix-etcd`、`apisix`、`e2e-stubs`）健康后，执行数据库迁移、短暂启动 `worker` 完成完整 seed，停止 `worker` 后直接封存固定只读模板库 `e2e_template`（[`e2e-database.ts`](../../e2e/system/src/e2e-database.ts)），随后启动 8 个应用容器并通过真实 Gateway API 发布路由与完成双入口探针检查。
-- **按 spec 文件边界复位**。进入每个 spec（或发生 `retry` / `repeatEachIndex` 切换）时，[运行时 fixture](../../e2e/system/src/gateway-test.ts) 调用本轮回环鉴权控制端点 `POST /reset`：仅 `docker compose stop` 5 个连库后端容器（`auth-api`、`sso-api`、`integration-api`、`admin-api`、`worker`），释放 `gateway-api` 空闲只读连接后从 `e2e_template` 克隆重建数据库、执行 Redis `FLUSHDB` 复位和 `POST /_stubs/reset`，再以 `--no-recreate --wait` 启动这 5 个后端并重探双入口；Nginx 前端、APISIX、etcd 与 `gateway-api` 全程保持运行。`/worker/stop` 与 `/worker/start` 直接控制 `worker` 容器停启。[网关测试资源](../../e2e/system/test-assets/)
+- **独占生产容器栈**。每轮创建独立项目 `iam-e2e-<uuid>`。静态 Compose 配置声明服务、网络和数据卷，动态端点与测试凭据由资源记录注入。Compose 构建 10 个镜像（APISIX、桩服务与 8 个生产应用），并发由 `COMPOSE_PARALLEL_LIMIT` 控制，日志写入 `build.log`。启用 GHA 缓存时，仅构建命令叠加 [缓存配置](../../e2e/system/docker-compose.e2e.gha-cache.yml)。镜像构建成功后标记为 `iam-e2e-<service>:local`，供 `--skip-build` 校验并复用。
+- **四合一桩服务**。[容器 `e2e-stubs`](../../e2e/system/src/e2e-stubs-server.ts) 使用网络别名 `qyapi.weixin.qq.com` 和仅挂载给 `auth-api` 的测试 CA 承接企业微信 HTTPS 请求，通过 `IAM_AUTH_API_SMS_URL` 接收短信并供测试轮询，托管 RP 回调终端页 `/portal/e2e-rp.html`，并通过鉴权端点 `POST /_stubs/reset` 清空企业微信与短信状态。
+- **一次性初始化与快照**。基础设施健康后迁移 PostgreSQL，启动 Worker，在运行时进程中执行 seed 并等待 User Documents 发布。PostgreSQL 快照 `seed-data.sql` 包含 `public` 表的截断与数据恢复语句，保留 `drizzle` schema。Redis 快照 `seed-redis.json` 保存非 `bull:*` 键的值和剩余有效期。随后启动其余应用，通过 Gateway API 发布 APISIX 路由并探测双入口和企业微信手机端 HTTPS 路由。Worker 保持运行。
+- **按 spec 边界原地复位**。首个 spec 直接使用已初始化的数据。[Playwright fixture](../../e2e/system/src/gateway-test.ts) 在切换 spec、重试或重复执行时检查 Worker 是否运行，必要时启动同一容器。接着在单个 PostgreSQL 事务中恢复快照，在同一 Redis 事务中执行 `FLUSHDB` 和 `RESTORE`，最后重置桩状态。全程使用该轮独占的数据库和 Redis，已运行的容器及 APISIX 路由继续服务。需要验证 Worker 恢复的 spec 可显式停启 Worker。[复位实现](../../e2e/system/src/e2e-context.ts)
 
 ### 失败诊断与清理
 
-运行目录位于 `test-results/e2e/<project>/`（含 `run.json`、`compose.json`、`runtime-context.json`、`build-*.log` 与 Playwright 临时产物 `playwright/`）。失败摘要独立落在 `e2e/system/.reports/<run-id>/failure-summary.{md,json}`，末尾输出绝对路径，并更新 `.reports/last-failure.{md,json}`。[`FailureReporter`](../../e2e/system/src/failure-report/failure-reporter.ts) 按用例失败时间窗通过 `docker compose logs --no-color --no-log-prefix --timestamps --since ... --until ...` 采集容器日志并读取 APISIX 容器内 error log，经脱敏后与断言、浏览器错误和失败请求一并聚合。原始 trace、截图和视频可能含合成凭据，按运行目录控制访问与保留期（CI 仅上传脱敏 `failure-summary.{md,json}`）。
-
+运行目录为 `test-results/e2e/<project>/`，包含资源记录 `run.json`、运行上下文 `runtime-context.json`、种子快照及日志。Playwright 使用 `list` reporter，失败时保留截图、trace 和视频于 `playwright/`。失败或保留现场时，共享资源管理器采集 `containers.log` 与 `services.log`。CI 对运行目录内的 `.log` 文件脱敏后，仅上传 `test-results/e2e-redacted/` 下的日志。
 运行结束后按 `run.json` 精确回收本轮容器、网络与数据卷（保留 `iam-e2e-*:local` 本地镜像供后续运行与 `--skip-build` 复用）。指定 `--keep` 时保留容器栈并输出精确清理命令；强制中断后先确认所属进程树退出，再按[恢复命令](commands.md#full-system-e2e)清理准确记录或 project。
 
 ## 验证结果与交付

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { parsePlaywrightArguments } from "../playwright-arguments.ts";
+import { parsePlaywrightArguments } from "../cli.ts";
 
 test("strips runtime switches while forwarding native filters and flags in order", () => {
   expect(

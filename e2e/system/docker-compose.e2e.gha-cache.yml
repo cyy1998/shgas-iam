@@ -1,0 +1,41 @@
+services:
+  apisix:
+    build:
+      cache_from: ["type=gha,scope=e2e-apisix"]
+      cache_to: ["type=gha,mode=max,scope=e2e-apisix"]
+  e2e-stubs:
+    build:
+      cache_from: ["type=gha,scope=e2e-e2e-stubs"]
+      cache_to: ["type=gha,mode=max,scope=e2e-e2e-stubs"]
+  auth-api:
+    build:
+      cache_from: ["type=gha,scope=e2e-auth-api"]
+      cache_to: ["type=gha,mode=max,scope=e2e-auth-api"]
+  sso-api:
+    build:
+      cache_from: ["type=gha,scope=e2e-sso-api"]
+      cache_to: ["type=gha,mode=max,scope=e2e-sso-api"]
+  integration-api:
+    build:
+      cache_from: ["type=gha,scope=e2e-integration-api"]
+      cache_to: ["type=gha,mode=max,scope=e2e-integration-api"]
+  admin-api:
+    build:
+      cache_from: ["type=gha,scope=e2e-admin-api"]
+      cache_to: ["type=gha,mode=max,scope=e2e-admin-api"]
+  worker:
+    build:
+      cache_from: ["type=gha,scope=e2e-worker"]
+      cache_to: ["type=gha,mode=max,scope=e2e-worker"]
+  gateway-api:
+    build:
+      cache_from: ["type=gha,scope=e2e-gateway-api"]
+      cache_to: ["type=gha,mode=max,scope=e2e-gateway-api"]
+  admin:
+    build:
+      cache_from: ["type=gha,scope=e2e-admin"]
+      cache_to: ["type=gha,mode=max,scope=e2e-admin"]
+  sso:
+    build:
+      cache_from: ["type=gha,scope=e2e-sso"]
+      cache_to: ["type=gha,mode=max,scope=e2e-sso"]

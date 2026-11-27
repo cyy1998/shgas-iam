@@ -80,8 +80,7 @@ Use case 由 root 的 `useCases` 交给路由。Admin API 的入口与审计实�
 
 ## Root-owned Full-system E2E Workspace
 
-`e2e/system` 拥有生产容器 Full-system E2E 的 Compose 生成器（`src/e2e-compose.ts`）、运行时编排与复位控制（`src/e2e-runtime.ts`、`src/e2e-control.ts`、`src/e2e-database.ts`）、四合一 `e2e-stubs` 测试容器（`docker/e2e-stubs/`、`src/e2e-stubs-server.ts`）、APISIX 镜像（`docker/apisix/`）、seed、9 个跨服务业务 spec、失败报告采集（`src/failure-report/`）、恢复入口（`src/cli.ts`）以及编排器自身 Unit 测试（`src/__tests__/`）。生成产物位于根 `test-results/e2e/` 与 `e2e/system/.reports/`，不提交。
-资源生命周期见[测试架构](testing.md#full-system-e2e)，命令见[开发命令](commands.md#full-system-e2e)。
+`e2e/system` 拥有 Full-system E2E 的 [静态 Compose 拓扑](../../e2e/system/docker-compose.e2e.yml) 与 [GHA 构建缓存覆盖](../../e2e/system/docker-compose.e2e.gha-cache.yml)。`src/e2e-runtime.ts` 启动容器、执行 seed 并保存快照，`src/gateway-test.ts` 与 `src/e2e-context.ts` 负责 Playwright 的 spec 边界复位。`docker/e2e-stubs/`、`src/e2e-stubs-server.ts` 与 `docker/apisix/` 提供桩服务和测试网关镜像。9 个业务 spec 位于工作区根目录，编排器 Unit 测试位于 `src/__tests__/`，恢复入口位于 `src/cli.ts`。快照、Playwright 留证和日志写入仓库根目录的 `test-results/e2e/`。
 
 ## 基础设施与仓库工具
 
@@ -119,7 +118,7 @@ Sandcastle 通过根脚本外层 `flock -n .sandcastle/runner.lock` 保证单实
 以下内容可由依赖安装、构建、测试或工具重新生成，不要手动编辑：
 
 - dependency/cache output：`**/node_modules/`、`**/.turbo/`、`**/.cache/`、`**/.eslintcache`、`**/*.tsbuildinfo`；
-- build/test output：`**/dist/`、`**/dist-test/`、`**/out/`、`**/coverage/`、`**/test-results/`、`e2e/system/.reports/`；
+- build/test output：`**/dist/`、`**/dist-test/`、`**/out/`、`**/coverage/`、`**/test-results/`；
 
 `apps/admin-api/static/` 包含 vendored API documentation assets。它们不是普通业务源码；
 除非任务明确针对这些 assets，否则不要修改。

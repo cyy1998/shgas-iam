@@ -1,17 +1,29 @@
 import { setTimeout } from "node:timers/promises";
-import type { OrganizationResponsibilityAssignmentStatus, OrganizationResponsibilityTypeCode } from "@iam/contracts";
 import {
   OrganizationResponsibilityAssignmentStatus as AssignmentStatus,
   OrganizationResponsibilityTypeCode as ResponsibilityTypeCode,
   UserDocumentRebuildReason,
   UserDocumentWorkStatus,
 } from "@iam/contracts";
-
+import type { db as database } from "@iam/db";
+import {
+  auditLogs,
+  employments,
+  organizationResponsibilityAssignments,
+  organizations,
+  positions,
+  roles,
+  userDocumentRebuildStates,
+  userDocuments,
+  users,
+} from "@iam/db/schema";
+import { roleAssignments } from "@iam/db/schema/role-assignments";
+import { StoredUserDocumentSchema } from "@iam/documents/user/document";
 import { SystemLogEvent } from "@iam/runtime/logger";
-import { containsScalarValue } from "./concealment.ts";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import type { E2EScenarioGeneratedReferences } from "./seed.ts";
 
-export const HR_ADMIN_RESPONSIBILITY_AUDIT_ACTIONS = [
+const HR_ADMIN_RESPONSIBILITY_AUDIT_ACTIONS = [
   "admin.organization_responsibility_assignment.create",
   "admin.organization_responsibility_assignment.pause",
   "admin.organization_responsibility_assignment.resume",
@@ -19,39 +31,6 @@ export const HR_ADMIN_RESPONSIBILITY_AUDIT_ACTIONS = [
   "admin.organization_responsibility_assignment.end",
   "admin.organization_responsibility_assignment.end",
 ] as const;
-
-export interface HrAdminOutcomeReadBack {
-  assignment: {
-    id: number;
-    status: OrganizationResponsibilityAssignmentStatus;
-    ended: boolean;
-    typeCode: OrganizationResponsibilityTypeCode;
-    actorVisibleTargetCode: string;
-    holderPositionCode: string;
-  } | null;
-  assignmentAudits: Array<{
-    action: string;
-    actorUsername: string | null;
-    outcome: string;
-  }>;
-  rebuildState: {
-    version: string;
-    reasonCodes: UserDocumentRebuildReason[];
-    status: UserDocumentWorkStatus;
-  } | null;
-  document: {
-    sourceVersion: string;
-    containsEndedTargetResponsibility: boolean;
-  } | null;
-  hiddenBlocker: {
-    count: number;
-    status: OrganizationResponsibilityAssignmentStatus | null;
-  };
-  deniedCombinationAssignments: number;
-  deniedAssignmentAudits: number;
-  adminMixedRoleAssignmentExists: boolean;
-  secondScopeRoleAssignmentExists: boolean;
-}
 
 export interface HrAdminOutcomeScenario {
   runId: string;
@@ -65,63 +44,158 @@ export interface HrAdminOutcomeScenario {
   hrResponsibilityTargetOrganizationCode: string;
 }
 
-export interface HrAdminOutcomeOwner {
-  readBack: (scenario: HrAdminOutcomeScenario) => Promise<HrAdminOutcomeReadBack>;
-}
-
-export async function verifyHrAdminOutcome(input: {
-  owner: HrAdminOutcomeOwner;
-  scenario: HrAdminOutcomeScenario;
-  sleep?: (milliseconds: number) => Promise<unknown>;
-  timeoutMs?: number;
-}) {
-  const sleep = input.sleep ?? setTimeout;
-  const deadline = Date.now() + (input.timeoutMs ?? 30_000);
+export async function verifyHrAdminOutcome(
+  db: typeof database,
+  scenario: HrAdminOutcomeScenario,
+  options?: { timeoutMs?: number },
+) {
+  const deadline = Date.now() + (options?.timeoutMs ?? 30_000);
   do {
-    const readBack = await input.owner.readBack(input.scenario);
-    if (matchesExpectedOutcome(readBack, input.scenario)) {
-      return {
-        status: "passed" as const,
-        assignmentId: readBack.assignment?.id ?? 0,
-        version: readBack.rebuildState?.version ?? "",
-      };
+    const assignmentRows = await db
+      .select({
+        id: organizationResponsibilityAssignments.id,
+        status: organizationResponsibilityAssignments.status,
+        typeCode: organizationResponsibilityAssignments.typeCode,
+        endTime: organizationResponsibilityAssignments.endTime,
+        holderPositionCode: positions.posCode,
+        holderUsername: users.username,
+        targetOrganizationCode: organizations.orgCode,
+      })
+      .from(organizationResponsibilityAssignments)
+      .innerJoin(employments, eq(employments.id, organizationResponsibilityAssignments.employmentId))
+      .innerJoin(positions, eq(positions.id, employments.posId))
+      .innerJoin(users, eq(users.id, employments.userId))
+      .innerJoin(organizations, eq(organizations.id, organizationResponsibilityAssignments.targetOrganizationId));
+    const assignment = assignmentRows.find(
+      (row) =>
+        row.holderUsername === scenario.adminUsername &&
+        row.holderPositionCode === scenario.responsibilityHolderPositionCode &&
+        row.targetOrganizationCode === scenario.hrResponsibilityTargetOrganizationCode &&
+        row.typeCode === ResponsibilityTypeCode.Supervising,
+    );
+    const hiddenBlockers = assignmentRows.filter(
+      (row) =>
+        row.holderPositionCode === scenario.outsideResponsibilityHolderPositionCode &&
+        row.targetOrganizationCode === scenario.hrResponsibilityTargetOrganizationCode &&
+        row.typeCode === ResponsibilityTypeCode.Head,
+    );
+    const deniedCombinationAssignments = assignmentRows.filter(
+      (row) =>
+        row.typeCode === ResponsibilityTypeCode.Supervising &&
+        (row.holderPositionCode === scenario.outsideResponsibilityHolderPositionCode ||
+          row.targetOrganizationCode === scenario.responsibilityTargetOrganizationCode),
+    ).length;
+
+    const admin = await db.query.users.findFirst({
+      columns: { id: true },
+      where: { username: scenario.adminUsername, isDelete: false },
+    });
+    const publication =
+      admin === undefined
+        ? undefined
+        : (
+            await db
+              .select({
+                version: userDocumentRebuildStates.version,
+                reasonCodes: userDocumentRebuildStates.reasonCodes,
+                status: userDocumentRebuildStates.status,
+                sourceVersion: userDocuments.sourceVersion,
+                document: userDocuments.document,
+              })
+              .from(userDocumentRebuildStates)
+              .innerJoin(userDocuments, eq(userDocuments.userId, userDocumentRebuildStates.userId))
+              .where(eq(userDocumentRebuildStates.userId, admin.id))
+              .limit(1)
+          )[0];
+
+    const hrResponsibilityAudits = await db
+      .select({
+        action: auditLogs.action,
+        actorUsername: auditLogs.actorUsername,
+        outcome: auditLogs.outcome,
+        targetId: auditLogs.targetId,
+      })
+      .from(auditLogs)
+      .where(
+        and(
+          eq(auditLogs.actorUsername, scenario.hrAdminUsername),
+          eq(auditLogs.targetType, "organization_responsibility_assignment"),
+          inArray(auditLogs.action, HR_ADMIN_RESPONSIBILITY_AUDIT_ACTIONS),
+        ),
+      )
+      .orderBy(asc(auditLogs.id));
+
+    const secondScopeRoleAssignment = await db
+      .select({
+        id: roleAssignments.id,
+      })
+      .from(roleAssignments)
+      .innerJoin(roles, eq(roles.id, roleAssignments.roleId))
+      .innerJoin(employments, eq(employments.id, roleAssignments.targetId))
+      .innerJoin(users, eq(users.id, employments.userId))
+      .innerJoin(organizations, eq(organizations.id, employments.orgId))
+      .where(
+        and(
+          eq(roles.roleCode, scenario.hrAdminRoleCode),
+          eq(users.username, scenario.hrAdminUsername),
+          eq(organizations.orgCode, scenario.hrSecondScopeRootOrganizationCode),
+        ),
+      )
+      .limit(1);
+    const adminMixedRoleAssignment = await db
+      .select({
+        id: roleAssignments.id,
+      })
+      .from(roleAssignments)
+      .innerJoin(roles, eq(roles.id, roleAssignments.roleId))
+      .innerJoin(employments, eq(employments.id, roleAssignments.targetId))
+      .innerJoin(users, eq(users.id, employments.userId))
+      .where(and(eq(roles.roleCode, scenario.hrAdminRoleCode), eq(users.username, scenario.adminUsername)))
+      .limit(1);
+
+    const assignmentAudits =
+      assignment === undefined ? [] : hrResponsibilityAudits.filter((audit) => audit.targetId === assignment.id);
+    const containsEndedTargetResponsibility =
+      publication !== undefined &&
+      containsResponsibilityTarget(publication.document, scenario.hrResponsibilityTargetOrganizationCode);
+    if (
+      assignment !== undefined &&
+      assignment.status === AssignmentStatus.Disable &&
+      assignment.endTime !== null &&
+      assignmentAudits.length === HR_ADMIN_RESPONSIBILITY_AUDIT_ACTIONS.length &&
+      assignmentAudits.every(
+        (audit, index) =>
+          audit.action === HR_ADMIN_RESPONSIBILITY_AUDIT_ACTIONS[index] &&
+          audit.actorUsername === scenario.hrAdminUsername &&
+          audit.outcome === "success",
+      ) &&
+      publication !== undefined &&
+      BigInt(publication.version) > 1n &&
+      publication.status === UserDocumentWorkStatus.Processed &&
+      publication.reasonCodes.length === 1 &&
+      publication.reasonCodes[0] === UserDocumentRebuildReason.OrganizationResponsibilityAssignmentUpdated &&
+      publication.sourceVersion === publication.version &&
+      !containsEndedTargetResponsibility &&
+      hiddenBlockers.length === 1 &&
+      hiddenBlockers[0]?.status === AssignmentStatus.Enable &&
+      deniedCombinationAssignments === 0 &&
+      hrResponsibilityAudits.length === assignmentAudits.length &&
+      adminMixedRoleAssignment.length === 0 &&
+      secondScopeRoleAssignment.length === 0
+    ) {
+      return { status: "passed" as const, assignmentId: assignment.id, version: publication.version };
     }
-    await sleep(250);
+    await setTimeout(250);
   } while (Date.now() < deadline);
   throw new Error(
     "HR Admin journey outcome did not confirm responsibility, audit, invalidation, revocation, and denial facts",
   );
 }
 
-function matchesExpectedOutcome(actual: HrAdminOutcomeReadBack, expected: HrAdminOutcomeScenario) {
-  return (
-    actual.assignment !== null &&
-    actual.assignment.status === AssignmentStatus.Disable &&
-    actual.assignment.ended &&
-    actual.assignment.typeCode === ResponsibilityTypeCode.Supervising &&
-    actual.assignment.actorVisibleTargetCode === expected.hrResponsibilityTargetOrganizationCode &&
-    actual.assignment.holderPositionCode === expected.responsibilityHolderPositionCode &&
-    actual.assignmentAudits.length === HR_ADMIN_RESPONSIBILITY_AUDIT_ACTIONS.length &&
-    actual.assignmentAudits.every(
-      (audit, index) =>
-        audit.action === HR_ADMIN_RESPONSIBILITY_AUDIT_ACTIONS[index] &&
-        audit.actorUsername === expected.hrAdminUsername &&
-        audit.outcome === "success",
-    ) &&
-    actual.rebuildState !== null &&
-    BigInt(actual.rebuildState.version) > 1n &&
-    actual.rebuildState.status === UserDocumentWorkStatus.Processed &&
-    actual.rebuildState.reasonCodes.length === 1 &&
-    actual.rebuildState.reasonCodes[0] === UserDocumentRebuildReason.OrganizationResponsibilityAssignmentUpdated &&
-    actual.document !== null &&
-    actual.document.sourceVersion === actual.rebuildState.version &&
-    !actual.document.containsEndedTargetResponsibility &&
-    actual.hiddenBlocker.count === 1 &&
-    actual.hiddenBlocker.status === AssignmentStatus.Enable &&
-    actual.deniedCombinationAssignments === 0 &&
-    actual.deniedAssignmentAudits === 0 &&
-    !actual.adminMixedRoleAssignmentExists &&
-    !actual.secondScopeRoleAssignmentExists
+function containsResponsibilityTarget(document: unknown, code: string) {
+  const parsed = StoredUserDocumentSchema.parse(document);
+  return parsed.employments.some((employment) =>
+    employment.responsibilities.some((responsibility) => responsibility.targetOrganization.code === code),
   );
 }
 
@@ -189,4 +263,11 @@ function parseJsonObject(value: string): Record<string, unknown> | undefined {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function containsScalarValue(value: unknown, forbidden: number | string): boolean {
+  if (value === forbidden) return true;
+  if (Array.isArray(value)) return value.some((item) => containsScalarValue(item, forbidden));
+  if (typeof value !== "object" || value === null) return false;
+  return Object.values(value).some((item) => containsScalarValue(item, forbidden));
 }

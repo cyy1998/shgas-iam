@@ -128,7 +128,7 @@ pnpm test:resources:cleanup --record test-results/integration/<run-id>/run.json
 
 ### Full-system E2E
 
-完整系统入口为 `pnpm test:e2e`，在独占生产容器 Docker Compose 栈上运行全部 9 个跨服务业务旅程，同步覆盖生产 Dockerfile、Nginx 与 `pnpm deploy` 依赖闭包。需要本机 Chromium 时按环境选择 `pnpm e2e:install`（含系统依赖）或 `pnpm e2e:install:browsers`。就绪、模板复位、四合一 `e2e-stubs` 与报告目录见[完整系统测试](testing.md#full-system-e2e)。
+完整系统入口为 `pnpm test:e2e`，在独占生产容器 Docker Compose 栈上运行全部 9 个跨服务业务旅程，同步覆盖生产 Dockerfile、Nginx 与 `pnpm deploy` 依赖闭包。需要本机 Chromium 时按环境选择 `pnpm e2e:install`（含系统依赖）或 `pnpm e2e:install:browsers`。就绪、快照复位、四合一 `e2e-stubs` 与诊断目录见[完整系统测试](testing.md#full-system-e2e)。
 
 ```bash
 pnpm test:e2e
@@ -144,7 +144,7 @@ pnpm test:e2e --keep dual-entry.spec.ts
 
 - `--skip-build`：校验并复用本地已构建的 `iam-e2e-*:local` 镜像（适合仅修改 `.spec.ts` 时零构建直跑；若缺少任意镜像会显式报错提示先不带开关构建一次）。
 - `--keep`：测试结束后保留容器栈并输出精确清理命令，便于排障。
-- `IAM_E2E_BUILD_CONCURRENCY`：调整镜像并发构建上限（默认 `2`，允许 `1`–`4`）；`IAM_E2E_BUILDX_CACHE` 可设为 `gha` / `none` / `off` 控制 BuildKit 缓存。
+- `IAM_E2E_BUILD_CONCURRENCY` 设置 Compose 构建并发上限（默认 `2`，允许 `1`–`4`）。`IAM_E2E_BUILDX_CACHE` 可设为 `gha` / `none` / `off`。变量未设置时，仅当 `CI=true` 且提供 `ACTIONS_CACHE_URL` 或 `ACTIONS_RESULTS_URL` 才会启用 GHA 缓存。
 
 针对已完成初始化和网关发布的独立托管环境，使用 `pnpm test:e2e:managed`，配置见[托管环境验收](../releases/initial-installation.md#托管环境验收)。
 
@@ -174,7 +174,7 @@ pnpm --filter @iam/e2e-system runtime:cleanup -- --project iam-e2e-<resource-id>
 | `doc-check`   | `docs_only == 'true'`                                                           | 运行 `node scripts/verify-docs.mjs --base "$BASE_SHA"`，校验 `git diff --check`、变动文档 Prettier 排版与 `pnpm check:docs`。                                                                                                                                                                        |
 | `fast`        | `docs_only == 'false'`                                                          | 启用 `.turbo/cache`，顺序执行 `pnpm check`、`pnpm test:unit`、`pnpm build`。                                                                                                                                                                                                                         |
 | `integration` | `docs_only == 'false'`（与 `fast` 并行）                                        | 启动 PostgreSQL 18.4（`services:` + `tmpfs: 1g`）、Redis 8.8.0（`--databases 32`）与 APISIX 3.16 + etcd 3.5（`if: always()` 拆除），以 `IAM_TEST_RESOURCE_PROVIDER=external` 运行全量 `pnpm test:integration`（197 文件）；失败时将任务日志脱敏后上传 `test-results/integration-redacted/**/*.log`。 |
-| `e2e`         | `docs_only == 'false'` 且 `fast`、`integration` 通过，且为 `push` 或非 Draft PR | 启用 Docker Buildx + `IAM_E2E_BUILDX_CACHE=gha`，运行 `pnpm test:e2e`（生产容器栈 + 9 specs）；失败时上传 `e2e/system/.reports/**/failure-summary.{md,json}`。                                                                                                                                       |
+| `e2e`         | `docs_only == 'false'` 且 `fast`、`integration` 通过，且为 `push` 或非 Draft PR | 启用 Docker Buildx + `IAM_E2E_BUILDX_CACHE=gha`，运行 `pnpm test:e2e`（生产容器栈 + 9 specs）；失败时上传脱敏后的 `test-results/e2e-redacted/**/*.log`。                                                                                                                                             |
 | `ci-gate`     | `if: always()`，`needs` 全部 5 个上游 Job                                       | 唯一 Required Check，按严格真值表汇总：纯文档须 `doc-check=success` 且其余 3 项 `skipped`；代码变更拒绝 Draft PR，且须 `doc-check=skipped` 与 `fast`/`integration`/`e2e` 全部 `success`。                                                                                                            |
 
 ### 纯文档验证

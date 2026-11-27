@@ -1,0 +1,247 @@
+x-labels: &labels
+  com.shgas-iam.e2e.managed: "true"
+  com.shgas-iam.e2e.project: "${E2E_PROJECT}"
+x-infra-health: &infra-health
+  interval: 1s
+  timeout: 3s
+  retries: 40
+x-app-health: &app-health
+  <<: *infra-health
+  retries: 60
+x-database-url: &database-url postgresql://iam_e2e:iam_e2e_local_password@postgres:5432/iam_e2e
+x-redis-url: &redis-url redis://redis:6379/0
+
+services:
+  postgres:
+    image: "${IAM_E2E_POSTGRES_IMAGE:-docker.xuanyuan.run/postgres:18.4}"
+    labels: *labels
+    environment:
+      POSTGRES_USER: iam_e2e
+      POSTGRES_DB: iam_e2e
+      POSTGRES_PASSWORD: iam_e2e_local_password
+    command:
+      [
+        postgres,
+        -c,
+        fsync=off,
+        -c,
+        synchronous_commit=off,
+        -c,
+        full_page_writes=off,
+        -c,
+        max_wal_size=2GB,
+        -c,
+        checkpoint_timeout=15min,
+      ]
+    tmpfs: [/var/lib/postgresql:size=1g]
+    ports: ["127.0.0.1:0:5432"]
+    healthcheck:
+      <<: *infra-health
+      test: [CMD, pg_isready, -h, 127.0.0.1, -U, iam_e2e, -d, postgres]
+  redis:
+    image: "${IAM_E2E_REDIS_IMAGE:-docker.xuanyuan.run/library/redis:8.8.0}"
+    labels: *labels
+    command: [redis-server, --save, "", --appendonly, "no"]
+    ports: ["127.0.0.1:0:6379"]
+    volumes: [redis-data:/data]
+    healthcheck:
+      <<: *infra-health
+      test: [CMD, redis-cli, ping]
+  apisix-etcd:
+    image: "${IAM_E2E_ETCD_IMAGE:-docker.xuanyuan.run/bitnamilegacy/etcd:3.5.11}"
+    labels: *labels
+    entrypoint: [etcd]
+    command:
+      - --name=default
+      - --data-dir=/bitnami/etcd/data
+      - --advertise-client-urls=http://apisix-etcd:2379
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --initial-advertise-peer-urls=http://apisix-etcd:2380
+      - --initial-cluster=default=http://apisix-etcd:2380
+    volumes: [etcd-data:/bitnami/etcd]
+    healthcheck:
+      <<: *infra-health
+      test: [CMD, etcdctl, endpoint, health, --endpoints=http://127.0.0.1:2379]
+  apisix:
+    image: "iam-e2e-apisix:${E2E_IMAGE_TAG:-local}"
+    build:
+      context: e2e/system/docker/apisix
+      args:
+        APISIX_IMAGE: "${IAM_E2E_APISIX_BASE_IMAGE:-docker.xuanyuan.run/apache/apisix:3.16.0-debian}"
+    labels: *labels
+    environment:
+      TZ: UTC
+    depends_on:
+      apisix-etcd:
+        condition: service_healthy
+    ports: ["127.0.0.1:${E2E_HTTP_PORT:-0}:9080", "127.0.0.1:${E2E_HTTPS_PORT:-0}:9443", "127.0.0.1:0:9180"]
+    healthcheck:
+      <<: *infra-health
+      test: [CMD, apisix, status]
+  e2e-stubs:
+    image: "iam-e2e-e2e-stubs:${E2E_IMAGE_TAG:-local}"
+    build:
+      context: e2e/system
+      dockerfile: docker/e2e-stubs/Dockerfile
+      args:
+        BUN_IMAGE: "${IAM_E2E_BUN_IMAGE:-docker.xuanyuan.run/oven/bun:1.4.4-alpine}"
+    labels: *labels
+    ports: ["127.0.0.1:0:8080"]
+    networks:
+      default:
+        aliases: [qyapi.weixin.qq.com]
+    environment:
+      IAM_E2E_WECOM_RUN_ID: "${E2E_RUN_ID:-}"
+      IAM_E2E_STUBS_TOKEN: "${E2E_STUBS_TOKEN:-}"
+    healthcheck:
+      <<: *app-health
+      test: [CMD, bun, -e, 'if ((await fetch("http://127.0.0.1:8080/health")).status !== 200) process.exit(1)']
+  auth-api:
+    image: "iam-e2e-auth-api:${E2E_IMAGE_TAG:-local}"
+    build: { context: ., dockerfile: apps/auth-api/Dockerfile }
+    labels: *labels
+    configs:
+      - { source: e2e-stubs-ca, target: /etc/e2e-ca/ca.pem }
+    healthcheck:
+      <<: *app-health
+      test: [CMD, bun, -e, 'if ((await fetch("http://127.0.0.1:30000/ready")).status !== 200) process.exit(1)']
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/e2e-ca/ca.pem
+      IAM_AUTH_API_DATABASE_URL: *database-url
+      IAM_AUTH_API_REDIS_URL: *redis-url
+      IAM_AUTH_API_LOG_FORMAT: json
+      IAM_AUTH_API_MAGIC_CODE: "1234"
+      IAM_AUTH_API_CAP_ENABLED: "false"
+      IAM_AUTH_API_LOGIN_CREDENTIAL_ACTIVE_KID: "2026-05-primary"
+      IAM_AUTH_API_LOGIN_CREDENTIAL_PRIVATE_KEYS_JSON: '{"2026-05-primary":"319b4e59ca80d7b4cc35955b63da4edf1ed51772ec8f33c0a4f769dda7b9fc65"}'
+      IAM_AUTH_API_WECHAT_CORP_ID: ww-e2e-local
+      IAM_AUTH_API_WECHAT_CORP_SECRET: wecom-e2e-secret-only
+      IAM_AUTH_API_WECHAT_QR_AGENT_ID: "1000002"
+      IAM_AUTH_API_WECHAT_QR_CALLBACK_URL: "${E2E_WECOM_MOBILE_ORIGIN:-}/sso/wechat-qr/mobile/callback"
+      IAM_AUTH_API_SMS_URL: http://e2e-stubs:8080/test-sms
+      IAM_AUTH_API_SMS_SIGNATURE_KEY: e2e-sms
+      IAM_AUTH_API_SSO_INTERNAL_ORIGIN: "${E2E_INTERNAL_ORIGIN:-}"
+      IAM_AUTH_API_SSO_EXTERNAL_ORIGIN: "${E2E_ORIGIN:-}"
+  sso-api:
+    image: "iam-e2e-sso-api:${E2E_IMAGE_TAG:-local}"
+    build: { context: ., dockerfile: apps/sso-api/Dockerfile }
+    labels: *labels
+    healthcheck:
+      <<: *app-health
+      test: [CMD, bun, -e, 'if ((await fetch("http://127.0.0.1:30002/ready")).status !== 200) process.exit(1)']
+    environment:
+      IAM_SSO_API_DATABASE_URL: *database-url
+      IAM_SSO_API_REDIS_URL: *redis-url
+      IAM_SSO_API_LOG_FORMAT: json
+      IAM_SSO_API_OIDC_CURRENT_JWK_JSON: "${E2E_OIDC_JWK_JSON:-}"
+      IAM_SSO_API_OIDC_COOKIE_SECURE: "false"
+      IAM_SSO_API_WECHAT_QR_ENABLED: "true"
+      IAM_SSO_API_SSO_INTERNAL_ORIGIN: "${E2E_INTERNAL_ORIGIN:-}"
+      IAM_SSO_API_SSO_EXTERNAL_ORIGIN: "${E2E_ORIGIN:-}"
+  integration-api:
+    image: "iam-e2e-integration-api:${E2E_IMAGE_TAG:-local}"
+    build: { context: ., dockerfile: apps/integration-api/Dockerfile }
+    labels: *labels
+    healthcheck:
+      <<: *app-health
+      test: [CMD, bun, -e, 'if ((await fetch("http://127.0.0.1:30005/ready")).status !== 200) process.exit(1)']
+    environment:
+      IAM_INTEGRATION_API_DATABASE_URL: *database-url
+      IAM_INTEGRATION_API_REDIS_URL: *redis-url
+      IAM_INTEGRATION_API_LOG_FORMAT: json
+      IAM_INTEGRATION_API_SMS_URL: http://sms.example.invalid/test-sms
+      IAM_INTEGRATION_API_SMS_SIGNATURE_KEY: e2e-sms
+  admin-api:
+    image: "iam-e2e-admin-api:${E2E_IMAGE_TAG:-local}"
+    build: { context: ., dockerfile: apps/admin-api/Dockerfile }
+    labels: *labels
+    healthcheck:
+      <<: *app-health
+      test:
+        [CMD, bun, -e, 'if ((await fetch("http://127.0.0.1:30001/admin/users/search")).status !== 403) process.exit(1)']
+    environment:
+      IAM_ADMIN_API_DATABASE_URL: *database-url
+      IAM_ADMIN_API_REDIS_URL: *redis-url
+      IAM_ADMIN_API_HOSTNAME: 0.0.0.0
+      IAM_ADMIN_API_LOG_FORMAT: json
+      IAM_ADMIN_API_ADMIN_CLIENT_CODES: "${E2E_ADMIN_CLIENT_CODE:-iam-admin}"
+      IAM_ADMIN_API_SESSION_KERNEL_NAMESPACE: "iam:session"
+  worker:
+    image: "iam-e2e-worker:${E2E_IMAGE_TAG:-local}"
+    build: { context: ., dockerfile: apps/worker/Dockerfile }
+    labels: *labels
+    healthcheck:
+      <<: *app-health
+      test: [CMD, bun, -e, 'if ((await fetch("http://127.0.0.1:30003/healthz")).status !== 200) process.exit(1)']
+    environment:
+      IAM_WORKER_DATABASE_URL: *database-url
+      IAM_WORKER_REDIS_URL: *redis-url
+      IAM_WORKER_ENABLED_MODULES: user-document,organization-document
+      IAM_WORKER_USER_DOCUMENT_REPAIR_ENABLED: "true"
+      IAM_WORKER_HTTP_ENABLED: "true"
+      IAM_WORKER_HTTP_HOSTNAME: 0.0.0.0
+      IAM_WORKER_HTTP_PORT: "30003"
+      IAM_WORKER_HEALTH_PATH: /healthz
+      IAM_WORKER_BULL_BOARD_ENABLED: "false"
+      IAM_WORKER_LOG_FORMAT: json
+  gateway-api:
+    image: "iam-e2e-gateway-api:${E2E_IMAGE_TAG:-local}"
+    build: { context: ., dockerfile: apps/gateway/Dockerfile }
+    labels: *labels
+    healthcheck:
+      <<: *app-health
+      test: [CMD, bun, -e, 'if ((await fetch("http://127.0.0.1:30004/health")).status !== 200) process.exit(1)']
+    ports: ["127.0.0.1:0:30004"]
+    environment:
+      IAM_GATEWAY_DATABASE_URL: *database-url
+      IAM_GATEWAY_APISIX_ADMIN_URL: http://apisix:9180/apisix/admin
+      IAM_GATEWAY_APISIX_ADMIN_KEY: dev-local-admin-key-change-me
+      IAM_GATEWAY_HOSTNAME: 0.0.0.0
+  admin:
+    image: "iam-e2e-admin:${E2E_IMAGE_TAG:-local}"
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+      args:
+        IAM_ADMIN_WEB_API_PREFIX: /api/iam
+        IAM_ADMIN_WEB_SSO_AUTHORIZE_URL: /sso/authorize
+        IAM_ADMIN_WEB_SSO_LOGOUT_URL: /sso/logout
+        IAM_ADMIN_WEB_CLIENT_CODE: "${E2E_ADMIN_CLIENT_CODE:-iam-admin}"
+        IAM_ADMIN_WEB_GRAFANA_URL: ""
+        IAM_ADMIN_WEB_SYSTEM_LOG_ENV: e2e
+    labels: *labels
+    healthcheck:
+      <<: *app-health
+      test: [CMD, wget, --quiet, --spider, "http://127.0.0.1/iam-admin/"]
+  sso:
+    image: "iam-e2e-sso:${E2E_IMAGE_TAG:-local}"
+    build:
+      context: .
+      dockerfile: apps/sso/Dockerfile
+      args:
+        IAM_SSO_WEB_API_PREFIX: /api/iam
+        IAM_SSO_WEB_CLIENT_CODE: iam
+        IAM_SSO_WEB_CAP_SITE_KEY: iam-sso
+        IAM_SSO_WEB_CAP_ENDPOINT: /api/iam/auth/captcha/cap/iam-sso/
+        IAM_SSO_WEB_CAP_WASM_URL: /portal/cap/cap_wasm_bg.wasm
+        IAM_SSO_WEB_CAP_PAKO_URL: /portal/cap/pako_inflate.min.js
+        IAM_SSO_WEB_LOGIN_CREDENTIAL_KID: "2026-05-primary"
+        IAM_SSO_WEB_LOGIN_CREDENTIAL_PUBLIC_KEY: "04112ddd8854e8262db2520bba112535844884c03348a45fcf4ee0f9a967979be52bd46caf43be697ae557ed2e4fa5b4dca8d2dbfa08c0f2f710c0f61591bb17dc"
+        IAM_SSO_WEB_WELL_KNOWN_URL: /sso/.well-known/authentication-configuration
+    labels: *labels
+    healthcheck:
+      <<: *app-health
+      test: [CMD, wget, --quiet, --spider, "http://127.0.0.1/portal/login"]
+
+networks:
+  default:
+    labels: *labels
+volumes:
+  redis-data:
+    labels: *labels
+  etcd-data:
+    labels: *labels
+configs:
+  e2e-stubs-ca:
+    file: e2e/system/test-assets/e2e-stubs-ca.pem

@@ -28,7 +28,7 @@ status: accepted
 
 - **回归单一生产容器拓扑，整块退役 Hybrid 与独立 Container Smoke**。全部 9 个跨服务业务旅程直接在生产 Dockerfile 构建的 Docker Compose 容器栈上运行，天然覆盖生产镜像、`nginx.conf` 与 `pnpm deploy` 依赖闭包；原 `container-smoke.spec.ts` 被超集覆盖后直接退役。
 - **生产镜像零侵入的四合一 `e2e-stubs` 容器**。全部测试侧替代能力集中在一个轻量 Bun 容器 `e2e-stubs` 中：① 通过 Compose 网络 `aliases: ["qyapi.weixin.qq.com"]` 与测试自签 CA（仅挂载给 `auth-api` 容器并设 `NODE_EXTRA_CA_CERTS`）拦截企微 HTTPS 请求；② 通过既有 `IAM_AUTH_API_SMS_URL` 接收短信并在内存中缓存，由测试通过 `GET /_stubs/sms` 轮询读取（免除宿主共享文件与 bind-mount）；③ 承载 `gateway-sync.ts` 指向的 RP 回调终端页 `/portal/e2e-rp.html`（不侵入生产 `sso` 镜像）；④ 暴露 `POST /_stubs/reset` 随整库复位清空状态。
-- **一次性固定模板复位与本地排障提速**。每次 `pnpm test:e2e` 启动全新独占 PG 容器，迁移与完整 seed 后直接封存固定模板 `e2e_template`（淘汰跨轮源码指纹与旧模板垃圾回收）；复用鉴权控制端点与按 spec 文件边界（含 `retry` 维度）触发的整库复位，仅 `docker compose stop/start` 5 个连库后端容器（`auth-api`、`sso-api`、`integration-api`、`admin-api`、`worker`）并克隆模板 + `FLUSHDB`（Nginx / APISIX / etcd / `gateway-api` 保持运行），`/worker/stop|start` 直接对应容器停启；复用 `failure-report/` 通过 `docker compose logs --since` 采集容器日志。CI 启用 BuildKit `type=gha` 缓存，本地保留构建层缓存并提供 `--skip-build` 支持仅改 `.spec.ts` 时零构建直跑。
+- **静态 Compose 与原地复位**。拓扑由 [Compose 文件](../../e2e/system/docker-compose.e2e.yml) 声明，构建交给 Compose，CI 仅在构建时叠加 GHA 缓存配置。本地可复用 `iam-e2e-*:local` 镜像。每轮迁移后由运行时进程完成 seed 并等待 Worker 发布 User Documents，再一次性保存 PostgreSQL 与 Redis 快照。后续 spec、重试或重复执行由单个 Playwright worker 原地恢复两份快照并重置桩状态。容器和已发布的 APISIX 路由贯穿整轮。既有连接会经历数据切换，因此这一模式依赖单 worker 串行执行及每轮资源独占。失败通过 Playwright 原生留证和共享资源日志定位。
 
 ## GitHub Actions CI 权威合入门禁
 

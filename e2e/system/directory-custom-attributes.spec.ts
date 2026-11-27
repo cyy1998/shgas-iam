@@ -8,8 +8,7 @@ import type { APIResponse } from "@playwright/test";
 import { expect } from "@playwright/test";
 import { formatResourceFailure } from "../../scripts/test-resources/managed-resources.mjs";
 import { loginToAdmin } from "./src/admin-client-journey.ts";
-import { runCommand } from "./src/command-runner.ts";
-import { requestE2EControl } from "./src/e2e-context.ts";
+import { runE2ECommand, startE2EWorker, stopE2EWorker } from "./src/e2e-context.ts";
 import { test as gatewayTest } from "./src/gateway-test.ts";
 import { createPkceS256Pair, receiveOidcAuthorizationCallback } from "./src/oidc-rp.ts";
 
@@ -55,31 +54,31 @@ const test = gatewayTest.extend<{ withStoppedWorker: RunWithStoppedWorker }>({
       try {
         await use(async (observeMissedWake) => {
           restoreRequired = true;
-          await runDuringTest(() => requestE2EControl(runtime, "/worker/stop"));
+          await runDuringTest(() => stopE2EWorker(runtime));
           await observeMissedWake((code) =>
             runDuringTest(() =>
-              runCommand(
+              runE2ECommand(
                 process.env.IAM_E2E_BUN_EXECUTABLE || "bun",
                 ["--no-env-file", "src/drop-user-attribute-wake.ts", code],
                 {
                   cwd: workspaceRoot,
                   env: { ...process.env, DATABASE_URL: runtime.databaseUrl, IAM_E2E_REDIS_URL: runtime.redisUrl },
                   signal: controller.signal,
-                  inheritOutput: true,
+                  timeoutMs: 25_000,
                 },
               ),
             ),
           );
-          await runDuringTest(() => requestE2EControl(runtime, "/worker/start"));
+          await runDuringTest(() => startE2EWorker(runtime));
           restoreRequired = false;
         });
       } finally {
         // Playwright can begin teardown while the test body is still running.
         await runWithOwnedTestResources(async ({ registerCleanup }) => {
-          if (restoreRequired) registerCleanup(() => requestE2EControl(runtime, "/worker/start"));
+          if (restoreRequired) registerCleanup(() => startE2EWorker(runtime));
           const pending = inFlight;
           controller.abort(new Error("Playwright ended the directory attribute test during Worker recovery"));
-          // The control server serializes requests. Settle any issued stop/start before attempting recovery.
+          // Settle any issued stop/start before attempting recovery.
           await pending;
         }).catch(throwFormattedResourceFailure);
       }

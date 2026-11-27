@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { runOwnedCommand } from "../../../scripts/test-resources/owned-command.mjs";
 import { managedIamFailure, readManagedIamInput, redactManagedIamText } from "./managed-iam-input.ts";
-import { captureCommand } from "./system-boundaries.ts";
 
 export async function runManagedIamJourney(signal?: AbortSignal) {
   const inputFile = process.env.IAM_MANAGED_ACCEPTANCE_INPUT_FILE;
@@ -22,32 +22,26 @@ export async function runManagedIamJourney(signal?: AbortSignal) {
     IAM_MANAGED_ACCEPTANCE_INPUT_FILE: resolve(inputFile),
     DATABASE_URL: input.databaseUrl,
   });
-  const record = async (stdout: string, stderr: string) => {
-    const text = redactManagedIamText(`${stdout}\n${stderr}`, input);
-    await writeFile(resolve(output, "playwright.log"), text, { mode: 0o600 });
-    process.stdout.write(text);
-  };
   try {
-    const result = await captureCommand(
-      process.execPath,
-      [
+    const result = await runOwnedCommand({
+      executable: process.execPath,
+      args: [
         resolve(workspace, "node_modules/@playwright/test/cli.js"),
         "test",
         "--config",
         resolve(workspace, "playwright.managed.config.ts"),
       ],
-      {
-        cwd: workspace,
-        env: environment,
-        capture: { mode: "tail", maxBytes: 256 * 1024 },
-        signal: AbortSignal.any([AbortSignal.timeout(300_000), ...(signal ? [signal] : [])]),
-      },
-    );
-    await record(result.stdout, result.stderr);
+      cwd: workspace,
+      env: environment,
+      signal,
+      timeoutMs: 300_000,
+    });
+    const text = redactManagedIamText(result.output, input);
+    await writeFile(resolve(output, "playwright.log"), text, { mode: 0o600 });
+    process.stdout.write(text);
+    if (result.exitCode !== 0) throw new Error(`Managed Playwright exited with code ${result.exitCode}`);
     console.log(JSON.stringify({ scope: "managed-iam-login-and-workers", environment: input.environment, output }));
   } catch (error) {
-    const captured = error as { stdout?: string; stderr?: string };
-    if (captured.stdout || captured.stderr) await record(captured.stdout ?? "", captured.stderr ?? "");
     throw managedIamFailure(error, input);
   }
 }

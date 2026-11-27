@@ -1,14 +1,20 @@
+import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
-import { captureCommand } from "./command-runner.ts";
+import Redis from "ioredis";
+import {
+  type ManagedResourceRun,
+  readManagedResourceRun,
+  runManagedComposeCommand,
+} from "../../../scripts/test-resources/managed-resources.mjs";
 import type { E2EScenarioReferences } from "./seed.ts";
 
 export interface E2ERunContext {
-  version: 2;
+  version: 3;
   runId: string;
   project: string;
-  composeFile: string;
   projectDirectory: string;
+  resourceRecordPath: string;
   origin: string;
   internalOrigin: string;
   wecomMobileOrigin: string;
@@ -16,37 +22,144 @@ export interface E2ERunContext {
   stubsToken: string;
   databaseUrl: string;
   redisUrl: string;
+  pgSnapshotPath: string;
+  redisSnapshotPath: string;
   adminPassword: string;
   internalApiKey: string;
   references: E2EScenarioReferences;
-  control: { origin: string; token: string };
-  logServices: readonly string[];
 }
+
+export type E2ERedisSnapshotEntry = { key: string; ttlMs: number; valueBase64: string };
 
 export async function readE2ERunContext(path = process.env.IAM_E2E_CONTEXT_PATH): Promise<E2ERunContext> {
   if (!path) throw new Error("IAM_E2E_CONTEXT_PATH is required for Container E2E");
   const context: E2ERunContext = JSON.parse(await readFile(path, "utf8"));
-  if (context?.version !== 2) throw new Error("Unsupported E2E runtime context");
+  if (context?.version !== 3) throw new Error("Unsupported E2E runtime context");
   return context;
 }
 
-export async function requestE2EControl(
-  context: E2ERunContext,
-  path: "/reset" | "/worker/stop" | "/worker/start",
-  options: { file?: string; signal?: AbortSignal } = {},
-) {
-  const timeout = AbortSignal.timeout(110_000);
-  const response = await fetch(new URL(path, context.control.origin), {
-    method: "POST",
-    headers: { authorization: `Bearer ${context.control.token}`, "content-type": "application/json" },
-    body: options.file === undefined ? undefined : JSON.stringify({ file: options.file }),
-    redirect: "error",
-    signal: options.signal ? AbortSignal.any([options.signal, timeout]) : timeout,
+export async function resetE2EState(context: E2ERunContext) {
+  const run = await readE2EResourceRun(context);
+  const sql = await readFile(context.pgSnapshotPath);
+  const entries: E2ERedisSnapshotEntry[] = JSON.parse(await readFile(context.redisSnapshotPath, "utf8"));
+  const running = await runE2ECompose(run, ["ps", "--status", "running", "-q", "worker"]);
+  if (!running.trim()) await startWorker(run);
+  await runE2ECompose(
+    run,
+    [
+      "exec",
+      "-T",
+      "postgres",
+      "psql",
+      "--no-psqlrc",
+      "-U",
+      "iam_e2e",
+      "-d",
+      "iam_e2e",
+      "-v",
+      "ON_ERROR_STOP=1",
+      "--single-transaction",
+      "--file=-",
+    ],
+    { input: sql, timeoutMs: 40_000 },
+  );
+
+  const redis = new Redis(context.redisUrl, {
+    lazyConnect: true,
+    connectTimeout: 5_000,
+    commandTimeout: 10_000,
+    retryStrategy: () => null,
   });
-  await response.body?.cancel();
-  if (response.status !== 204) {
-    throw new Error(`E2E control ${path} failed (HTTP ${response.status}); inspect the runtime logs`);
+  try {
+    await redis.connect();
+    // Keep the seeded Redis state visible as a unit to services that remain live.
+    const restore = redis.multi().flushdb();
+    for (const { key, ttlMs, valueBase64 } of entries) {
+      restore.restore(key, ttlMs, Buffer.from(valueBase64, "base64"), "REPLACE");
+    }
+    const results = await restore.exec();
+    if (!results) throw new Error("E2E Redis snapshot transaction did not execute");
+    for (const [error] of results) {
+      if (error) throw new Error("E2E Redis snapshot restore failed", { cause: error });
+    }
+  } finally {
+    redis.disconnect();
   }
+
+  await resetE2EStubs(context.stubsOrigin, context.stubsToken, context.references.runId);
+}
+
+export async function stopE2EWorker(context: E2ERunContext) {
+  await runE2ECompose(await readE2EResourceRun(context), ["stop", "worker"], { timeoutMs: 30_000 });
+}
+
+export async function startE2EWorker(context: E2ERunContext) {
+  await startWorker(await readE2EResourceRun(context));
+}
+
+async function startWorker(run: ManagedResourceRun) {
+  await runE2ECompose(
+    run,
+    ["up", "--detach", "--no-build", "--no-deps", "--no-recreate", "--wait", "--wait-timeout", "40", "worker"],
+    { timeoutMs: 45_000 },
+  );
+}
+
+async function readE2EResourceRun(context: E2ERunContext) {
+  const run = await readManagedResourceRun(context.projectDirectory, context.resourceRecordPath);
+  if (run.record.project !== context.project) throw new Error("E2E resource record does not match the runtime context");
+  return run;
+}
+
+interface E2ECommandOptions {
+  cwd?: string;
+  env?: NodeJS.ProcessEnv;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  input?: Buffer;
+}
+
+export function runE2ECommand(executable: string, args: readonly string[], options: E2ECommandOptions = {}) {
+  options.signal?.throwIfAborted();
+  const { cwd, env, signal, timeoutMs = 10_000, input } = options;
+  return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+    const child = execFile(
+      executable,
+      args,
+      { cwd, env, signal, timeout: timeoutMs, maxBuffer: 32 * 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject(
+            new Error(
+              `${executable} ${args.join(" ")} failed
+${(stderr || stdout || error.message).slice(-4096)}`,
+              { cause: error },
+            ),
+          );
+        } else {
+          resolve({ stdout, stderr });
+        }
+      },
+    );
+    child.stdin?.on("error", (error) => {
+      if ((error as NodeJS.ErrnoException).code !== "EPIPE") reject(error);
+    });
+    child.stdin?.end(input);
+  });
+}
+
+export async function runE2ECompose(
+  run: ManagedResourceRun,
+  args: string[],
+  options: Pick<E2ECommandOptions, "signal" | "timeoutMs" | "input"> & { includeStderr?: boolean } = {},
+) {
+  const { output } = await runManagedComposeCommand(run, args, {
+    runCommand: async ({ executable, args = [], cwd, env }) => {
+      const { stdout, stderr } = await runE2ECommand(executable, args, { ...options, cwd, env });
+      return { exitCode: 0, signal: null, output: options.includeStderr ? stdout + stderr : stdout };
+    },
+  });
+  return output;
 }
 
 export async function resetE2EStubs(stubsOrigin: string, stubsToken: string, runId: string, signal?: AbortSignal) {
@@ -96,35 +209,15 @@ export async function readDeliveredSmsCode(
 }
 
 export async function readE2EServiceLogs(
-  context: Pick<E2ERunContext, "project" | "composeFile" | "projectDirectory">,
+  context: E2ERunContext,
   service: string,
   options: { since?: Date; tail?: number; signal?: AbortSignal } = {},
 ) {
-  const args = [
-    "compose",
-    "--project-name",
-    context.project,
-    "--project-directory",
-    context.projectDirectory,
-    "--file",
-    context.composeFile,
-    "logs",
-    "--no-color",
-    "--no-log-prefix",
-  ];
-  if (options.since !== undefined) {
-    args.push("--since", options.since.toISOString());
-  }
-  if (options.tail !== undefined) {
-    args.push("--tail", String(options.tail));
-  }
-  args.push(service);
-  const { stdout, stderr } = await captureCommand("docker", args, {
-    cwd: context.projectDirectory,
-    signal: options.signal
-      ? AbortSignal.any([options.signal, AbortSignal.timeout(10_000)])
-      : AbortSignal.timeout(10_000),
-    capture: { mode: "line-tail", maxBytes: 1024 * 1024 },
+  const args = ["logs", "--no-color", "--no-log-prefix"];
+  if (options.since !== undefined) args.push("--since", options.since.toISOString());
+  if (options.tail !== undefined) args.push("--tail", String(options.tail));
+  return await runE2ECompose(await readE2EResourceRun(context), [...args, service], {
+    signal: options.signal,
+    includeStderr: true,
   });
-  return `${stdout}${stderr}`;
 }

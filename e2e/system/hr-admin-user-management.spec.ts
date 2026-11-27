@@ -1,13 +1,11 @@
 import { OrganizationResponsibilityAssignmentStatus } from "@iam/contracts";
+import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
 import type { APIRequestContext, Browser, Page, Response } from "@playwright/test";
 import { expect } from "@playwright/test";
 import { expectRpcMutationResult, isSuccessfulRpcResponse, loginToAdmin } from "./src/admin-client-journey.ts";
-import { runWithCleanup } from "./src/bounded-operation.ts";
-import { containsScalarValue } from "./src/concealment.ts";
 import { type E2ERunContext, readE2EServiceLogs } from "./src/e2e-context.ts";
 import { test } from "./src/gateway-test.ts";
-import { assertHrAdminDenialLog, verifyHrAdminOutcome } from "./src/hr-admin-outcome.ts";
-import { createProductionHrAdminOutcomeOwner } from "./src/hr-admin-outcome-owner.ts";
+import { assertHrAdminDenialLog, containsScalarValue, verifyHrAdminOutcome } from "./src/hr-admin-outcome.ts";
 
 test("HR Admin manages cross-root responsibilities without widening either endpoint", async ({
   runtime,
@@ -128,10 +126,10 @@ test("HR Admin manages cross-root responsibilities without widening either endpo
 
   await test.step("Verify responsibility, audit, and Worker publication in PostgreSQL", async () => {
     const { db, closeDb } = await import("@iam/db");
-    await runWithCleanup(
-      () => verifyHrAdminOutcome({ owner: createProductionHrAdminOutcomeOwner(db), scenario: runtime.references }),
-      () => closeDb({ timeoutSeconds: 5 }),
-    );
+    await runWithOwnedTestResources(async ({ registerCleanup }) => {
+      registerCleanup(() => closeDb({ timeoutSeconds: 5 }));
+      await verifyHrAdminOutcome(db, runtime.references);
+    });
   });
 
   await test.step("Verify authorization denials conceal scope in the Admin API logs", async () => {

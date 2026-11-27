@@ -1,12 +1,18 @@
+import { createHash, X509Certificate } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 import type { E2ERunContext } from "./src/e2e-context.ts";
-import { createFailureReporters } from "./src/failure-report/reporter-config.ts";
-import { wecomMobileCertificatePin } from "./src/wecom-mobile-tls.ts";
 
 const contextPath = process.env.IAM_E2E_CONTEXT_PATH;
 const context: E2ERunContext | undefined = contextPath ? JSON.parse(readFileSync(contextPath, "utf8")) : undefined;
+
+const mobileCertificate = new X509Certificate(
+  readFileSync(new URL("./test-assets/wecom-mobile-cert.pem", import.meta.url)),
+);
+const mobileCertificatePin = createHash("sha256")
+  .update(mobileCertificate.publicKey.export({ type: "spki", format: "der" }))
+  .digest("base64");
 
 export default defineConfig({
   expect: { timeout: 30_000 },
@@ -14,18 +20,7 @@ export default defineConfig({
   fullyParallel: false,
   outputDir: contextPath ? join(dirname(contextPath), "playwright") : "test-results/playwright",
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
-  reporter: createFailureReporters(
-    context && {
-      compose: {
-        project: context.project,
-        composeFile: context.composeFile,
-        projectDirectory: context.projectDirectory,
-        services: context.logServices,
-        includeApisix: true,
-      },
-    },
-    process.env.IAM_E2E_INTERACTIVE === undefined ? process.stdout.isTTY : process.env.IAM_E2E_INTERACTIVE === "1",
-  ),
+  reporter: "list",
   retries: process.env.CI ? 1 : 0,
   testDir: ".",
   testMatch: [
@@ -46,7 +41,7 @@ export default defineConfig({
     launchOptions: {
       args: [
         "--host-resolver-rules=MAP internal.iam.localhost 127.0.0.1, MAP external.iam.localhost 127.0.0.1",
-        `--ignore-certificate-errors-spki-list=${wecomMobileCertificatePin()}`,
+        `--ignore-certificate-errors-spki-list=${mobileCertificatePin}`,
       ],
     },
     screenshot: "only-on-failure",

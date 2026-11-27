@@ -966,9 +966,6 @@ importers:
 
   e2e/system:
     dependencies:
-      '@iam/assignment-resolution':
-        specifier: workspace:*
-        version: link:../../packages/assignment-resolution
       '@iam/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts

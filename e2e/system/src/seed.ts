@@ -1,14 +1,3 @@
-import {
-  ClientSsoCallbackType,
-  ClientSsoProtocol,
-  OidcClientType,
-  SubjectClaim,
-  UserDocumentWorkStatus,
-} from "@iam/contracts";
-import { USER_DOCUMENT_SCHEMA_VERSION } from "@iam/documents/user/document";
-import { createE2EGatewayApiKey } from "./gateway-credential";
-import { smsBindingMobile, smsBindingUsername } from "./sms-provider";
-
 export interface E2EScenarioReferences {
   version: 1;
   runId: string;
@@ -91,129 +80,6 @@ export type E2EScenarioIdentity = Pick<
   | "oidcClientCode"
 >;
 
-export interface E2EScenarioReadBack {
-  subjects: Array<{
-    subjectIdentifier: string;
-    documentSchemaVersion: number;
-    documentVersion: string;
-    rebuildVersion: string;
-    rebuildStatus: UserDocumentWorkStatus | null;
-    factsSubjectIdentifier: string;
-    factsVersion: string;
-    subjectAccess: "enabled" | "disabled" | "blocking" | "missing" | "invalid";
-  }>;
-  admin: {
-    active: boolean;
-    passwordConfigured: boolean;
-    subjectIdentifier: string;
-    username: string;
-  };
-  hrAdmin: {
-    active: boolean;
-    passwordConfigured: boolean;
-    subjectIdentifier: string;
-    username: string;
-  };
-  delegatee: {
-    active: boolean;
-    passwordConfigured: boolean;
-    subjectIdentifier: string;
-    username: string;
-  };
-  noScopeHrAdmin: {
-    active: boolean;
-    passwordConfigured: boolean;
-    subjectIdentifier: string;
-    username: string;
-  };
-  smsBindingUser: { username: string; mobile: string | null; wxId: string | null } | undefined;
-  organization: { active: boolean; code: string };
-  responsibilityHolderOrganization: { active: boolean; code: string };
-  responsibilityTargetOrganization: { active: boolean; code: string };
-  hrSecondScopeRootOrganization: { active: boolean; code: string };
-  hrResponsibilityTargetOrganization: { active: boolean; code: string };
-  position: { active: boolean; code: string };
-  globalPosition: { active: boolean; code: string };
-  outsideResponsibilityHolderPosition: { active: boolean; code: string };
-  employment: { active: boolean };
-  responsibilityHolderEmployment: { active: boolean };
-  outsideResponsibilityHolderEmployment: { active: boolean; id: number };
-  role: { active: boolean; assigned: boolean; code: string };
-  hrRole: { active: boolean; assigned: boolean; code: string };
-  hrRoleBearingEmployment: { active: boolean };
-  hrSecondScopeRoleBearingEmployment: { active: boolean };
-  hrOrdinaryEmployment: { active: boolean };
-  adminHasMixedRole: boolean;
-  noScopeHrRoleIsIneffective: boolean;
-  hiddenResponsibilityAssignment: {
-    active: boolean;
-    id: number;
-    holderEmploymentId: number;
-    targetOrganizationCode: string;
-  };
-  adminClient: {
-    active: boolean;
-    ssoEnabled: boolean;
-    clientCode: string;
-    callbackEndpoint: string | null;
-    redirectUris: string[];
-  };
-  customSsoClient: {
-    active: boolean;
-    ssoEnabled: boolean;
-    clientCode: string;
-    callbackEndpoint: string | null;
-    redirectUris: string[];
-  };
-  internalClient: { active: boolean; clientCode: string };
-  gatewayClient: {
-    active: boolean;
-    ssoEnabled: boolean;
-    clientCode: string;
-    credentialMatches: boolean;
-    ssoProtocol: ClientSsoProtocol | null;
-    callbackType: ClientSsoCallbackType | null;
-    redirectUris: string[];
-    subjectClaims: string[];
-  };
-  oidcClient: {
-    active: boolean;
-    clientCode: string;
-    clientType: OidcClientType | null;
-    redirectUris: string[];
-  };
-  subjectAccess: "enabled" | "disabled" | "blocking" | "missing" | "invalid";
-  subjectFacts: {
-    ready: boolean;
-    subjectIdentifier: string;
-    sourceVersion: string;
-    profileUsername: string;
-    organizationCodes: string[];
-    positionCodes: string[];
-    clientCodes: string[];
-    roleCodes: string[];
-    responsibilityTypeCodes: string[];
-    responsibilityTargetOrganizationCodes: string[];
-  };
-  subjectDocumentReady: boolean;
-  subjectDocumentVersion: string;
-  subjectDocumentSchemaVersion: number;
-  hrSubjectAccess: "enabled" | "disabled" | "blocking" | "missing" | "invalid";
-  hrSubjectFacts: {
-    ready: boolean;
-    subjectIdentifier: string;
-    sourceVersion: string;
-    profileUsername: string;
-    organizationCodes: string[];
-    positionCodes: string[];
-    clientCodes: string[];
-    roleCodes: string[];
-  };
-  hrSubjectDocumentReady: boolean;
-  hrSubjectDocumentVersion: string;
-  hrSubjectDocumentSchemaVersion: number;
-}
-
 export interface E2EScenarioOwner {
   establish: (
     input: E2EScenarioSeedReferences & {
@@ -222,7 +88,6 @@ export interface E2EScenarioOwner {
       gatewayApiKey: string;
     },
   ) => Promise<E2EScenarioGeneratedReferences>;
-  readBack: (references: E2EScenarioReferences) => Promise<E2EScenarioReadBack>;
 }
 
 export interface SeedE2EScenarioInput {
@@ -264,12 +129,7 @@ export async function seedE2EScenario(input: SeedE2EScenarioInput): Promise<E2ES
     internalApiKey: createE2EScenarioInternalApiKey(input.runId),
     gatewayApiKey: createE2EGatewayApiKey(input.runId),
   });
-  const references: E2EScenarioReferences = {
-    ...fixedReferences,
-    ...generatedReferences,
-  };
-  assertScenarioReadBack(references, await input.owner.readBack(references));
-  return references;
+  return { ...fixedReferences, ...generatedReferences };
 }
 
 export function createE2EScenarioIdentity(runId: string): E2EScenarioIdentity {
@@ -298,6 +158,10 @@ export function createE2EScenarioIdentity(runId: string): E2EScenarioIdentity {
     internalClientCode: `e2e-internal-${runKey}`,
     oidcClientCode: `e2e-oidc-${runKey}`,
   };
+}
+
+export function createE2EGatewayApiKey(runId: string) {
+  return `iam-e2e-gateway-api-key-${requireRunKey(runId)}`;
 }
 
 export function createE2EScenarioInternalApiKey(runId: string) {
@@ -337,173 +201,4 @@ function requireRunKey(runId: string) {
   if (!/^[a-z0-9-]+$/u.test(runId))
     throw new Error("E2E run id must contain only lowercase letters, digits, and hyphens");
   return runId.slice(-18);
-}
-
-export function assertScenarioReadBack(expected: E2EScenarioReferences, actual: E2EScenarioReadBack) {
-  const expectedSubjects = createE2ESeedSubjects(expected);
-  const subjects = new Map(actual.subjects.map((subject) => [subject.subjectIdentifier, subject]));
-  if (
-    actual.subjects.length !== expectedSubjects.length ||
-    subjects.size !== expectedSubjects.length ||
-    !expectedSubjects.every(({ subjectIdentifier, state }) => {
-      const subject = subjects.get(subjectIdentifier);
-      return (
-        subject !== undefined &&
-        subject.documentSchemaVersion === USER_DOCUMENT_SCHEMA_VERSION &&
-        subject.documentVersion !== "" &&
-        subject.documentVersion === subject.rebuildVersion &&
-        subject.rebuildStatus === UserDocumentWorkStatus.Processed &&
-        subject.factsSubjectIdentifier === subjectIdentifier &&
-        subject.factsVersion === subject.documentVersion &&
-        subject.subjectAccess === state
-      );
-    })
-  ) {
-    throw new Error("E2E seed read-back did not confirm all users' documents, facts and access barriers");
-  }
-  const matches =
-    actual.admin.active &&
-    actual.admin.passwordConfigured &&
-    actual.admin.subjectIdentifier === expected.adminSubjectIdentifier &&
-    actual.admin.username === expected.adminUsername &&
-    actual.hrAdmin.active &&
-    actual.hrAdmin.passwordConfigured &&
-    actual.hrAdmin.subjectIdentifier === expected.hrAdminSubjectIdentifier &&
-    actual.hrAdmin.username === expected.hrAdminUsername &&
-    actual.delegatee.active &&
-    actual.delegatee.passwordConfigured &&
-    actual.delegatee.subjectIdentifier === expected.delegateeSubjectIdentifier &&
-    actual.delegatee.username === expected.delegateeUsername &&
-    actual.noScopeHrAdmin.active &&
-    actual.noScopeHrAdmin.passwordConfigured &&
-    actual.noScopeHrAdmin.subjectIdentifier === expected.noScopeHrAdminSubjectIdentifier &&
-    actual.noScopeHrAdmin.username === expected.noScopeHrAdminUsername &&
-    actual.smsBindingUser?.username === smsBindingUsername &&
-    actual.smsBindingUser.mobile === smsBindingMobile &&
-    actual.smsBindingUser.wxId === null &&
-    actual.organization.active &&
-    actual.organization.code === expected.organizationCode &&
-    actual.responsibilityHolderOrganization.active &&
-    actual.responsibilityHolderOrganization.code === expected.responsibilityHolderOrganizationCode &&
-    actual.responsibilityTargetOrganization.active &&
-    actual.responsibilityTargetOrganization.code === expected.responsibilityTargetOrganizationCode &&
-    actual.hrSecondScopeRootOrganization.active &&
-    actual.hrSecondScopeRootOrganization.code === expected.hrSecondScopeRootOrganizationCode &&
-    actual.hrResponsibilityTargetOrganization.active &&
-    actual.hrResponsibilityTargetOrganization.code === expected.hrResponsibilityTargetOrganizationCode &&
-    actual.position.active &&
-    actual.position.code === expected.positionCode &&
-    actual.globalPosition.active &&
-    actual.globalPosition.code === expected.globalPositionCode &&
-    actual.outsideResponsibilityHolderPosition.active &&
-    actual.outsideResponsibilityHolderPosition.code === expected.outsideResponsibilityHolderPositionCode &&
-    actual.employment.active &&
-    actual.responsibilityHolderEmployment.active &&
-    actual.outsideResponsibilityHolderEmployment.active &&
-    actual.outsideResponsibilityHolderEmployment.id === expected.outsideResponsibilityHolderEmploymentId &&
-    actual.role.active &&
-    actual.role.assigned &&
-    actual.role.code === expected.adminRoleCode &&
-    actual.hrRole.active &&
-    actual.hrRole.assigned &&
-    actual.hrRole.code === expected.hrAdminRoleCode &&
-    actual.hrRoleBearingEmployment.active &&
-    actual.hrSecondScopeRoleBearingEmployment.active &&
-    actual.hrOrdinaryEmployment.active &&
-    actual.adminHasMixedRole &&
-    actual.noScopeHrRoleIsIneffective &&
-    actual.hiddenResponsibilityAssignment.active &&
-    actual.hiddenResponsibilityAssignment.id === expected.hiddenResponsibilityAssignmentId &&
-    actual.hiddenResponsibilityAssignment.holderEmploymentId === expected.outsideResponsibilityHolderEmploymentId &&
-    actual.hiddenResponsibilityAssignment.targetOrganizationCode === expected.hrResponsibilityTargetOrganizationCode &&
-    actual.gatewayClient.active &&
-    actual.gatewayClient.ssoEnabled &&
-    actual.gatewayClient.clientCode === "iam" &&
-    actual.gatewayClient.credentialMatches &&
-    actual.gatewayClient.ssoProtocol === ClientSsoProtocol.CustomSso &&
-    actual.gatewayClient.callbackType === ClientSsoCallbackType.Managed &&
-    exactlyAll(
-      actual.gatewayClient.redirectUris,
-      [...new Set([expected.canonicalOrigin, expected.internalOrigin ?? expected.canonicalOrigin])].map(
-        (origin) => `${origin}/portal/*`,
-      ),
-    ) &&
-    exactlyAll(actual.gatewayClient.subjectClaims, [
-      SubjectClaim.SubjectIdentifier,
-      SubjectClaim.ProfileUsername,
-      SubjectClaim.ProfileName,
-      SubjectClaim.ProfilePhone,
-      SubjectClaim.ProfileEmployments,
-    ]) &&
-    actual.adminClient.active &&
-    actual.adminClient.ssoEnabled &&
-    actual.adminClient.clientCode === expected.adminClientCode &&
-    actual.adminClient.callbackEndpoint === null &&
-    actual.adminClient.redirectUris.length === 1 &&
-    actual.adminClient.redirectUris[0] === expected.adminRedirectUri &&
-    actual.customSsoClient.active &&
-    !actual.customSsoClient.ssoEnabled &&
-    actual.customSsoClient.clientCode === expected.customSsoClientCode &&
-    actual.customSsoClient.callbackEndpoint === null &&
-    actual.customSsoClient.redirectUris.length === 0 &&
-    actual.internalClient.active &&
-    actual.internalClient.clientCode === expected.internalClientCode &&
-    actual.oidcClient.active &&
-    actual.oidcClient.clientCode === expected.oidcClientCode &&
-    actual.oidcClient.clientType === OidcClientType.Public &&
-    actual.oidcClient.redirectUris.length === 1 &&
-    actual.oidcClient.redirectUris[0] === expected.oidcRedirectUri &&
-    actual.subjectAccess === "enabled" &&
-    actual.subjectFacts.ready &&
-    actual.subjectFacts.subjectIdentifier === expected.adminSubjectIdentifier &&
-    actual.subjectFacts.sourceVersion === actual.subjectDocumentVersion &&
-    actual.subjectDocumentSchemaVersion === 1 &&
-    actual.subjectFacts.profileUsername === expected.adminUsername &&
-    exactlyAll(actual.subjectFacts.organizationCodes, [
-      expected.organizationCode,
-      expected.responsibilityHolderOrganizationCode,
-    ]) &&
-    exactlyAll(actual.subjectFacts.positionCodes, [expected.positionCode, expected.responsibilityHolderPositionCode]) &&
-    exactlyAll(actual.subjectFacts.clientCodes, [expected.adminClientCode, expected.internalClientCode]) &&
-    exactlyAll(actual.subjectFacts.roleCodes, [
-      expected.adminRoleCode,
-      expected.hrAdminRoleCode,
-      `${expected.adminRoleCode}-internal`,
-    ]) &&
-    actual.subjectFacts.responsibilityTypeCodes.length === 0 &&
-    actual.subjectFacts.responsibilityTargetOrganizationCodes.length === 0 &&
-    actual.subjectDocumentReady;
-  const hrMatches =
-    actual.hrSubjectAccess === "enabled" &&
-    actual.hrSubjectFacts.ready &&
-    actual.hrSubjectFacts.subjectIdentifier === expected.hrAdminSubjectIdentifier &&
-    actual.hrSubjectFacts.sourceVersion === actual.hrSubjectDocumentVersion &&
-    actual.hrSubjectFacts.profileUsername === expected.hrAdminUsername &&
-    exactlyAll(actual.hrSubjectFacts.organizationCodes, [
-      expected.responsibilityHolderOrganizationCode,
-      expected.responsibilityTargetOrganizationCode,
-      expected.hrSecondScopeRootOrganizationCode,
-    ]) &&
-    exactlyAll(actual.hrSubjectFacts.positionCodes, [
-      expected.positionCode,
-      expected.outsideResponsibilityHolderPositionCode,
-    ]) &&
-    exactly(actual.hrSubjectFacts.clientCodes, expected.adminClientCode) &&
-    exactly(actual.hrSubjectFacts.roleCodes, expected.hrAdminRoleCode) &&
-    actual.hrSubjectDocumentReady &&
-    actual.hrSubjectDocumentSchemaVersion === 1;
-  if (!matches || !hrMatches)
-    throw new Error("E2E scenario owner read-back did not confirm the complete fixed scenario");
-}
-
-function exactly(values: string[], expected: string) {
-  return values.length === 1 && values[0] === expected;
-}
-
-function exactlyAll(values: string[], expected: string[]) {
-  const sortedExpected = [...expected].sort();
-  return (
-    values.length === sortedExpected.length &&
-    [...values].sort().every((value, index) => value === sortedExpected[index])
-  );
 }

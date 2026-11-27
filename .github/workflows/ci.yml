@@ -226,15 +226,27 @@ jobs:
           IAM_E2E_APISIX_BASE_IMAGE: apache/apisix:3.16.0-debian
           IAM_E2E_BUN_IMAGE: oven/bun:1.4.4-alpine
         run: pnpm test:e2e
-      - name: Upload redacted E2E failure summaries
+      - name: Redact E2E logs
+        if: failure()
+        run: |
+          bun -e '
+            import { existsSync } from "node:fs";
+            import { stripVTControlCharacters } from "node:util";
+            import { redactSensitiveLog } from "./.sandcastle/github.ts";
+            const root = "test-results/e2e";
+            if (existsSync(root)) {
+              for await (const path of new Bun.Glob("**/*.log").scan({ cwd: root })) {
+                const raw = await Bun.file(`${root}/${path}`).text();
+                await Bun.write(`test-results/e2e-redacted/${path}`, redactSensitiveLog(stripVTControlCharacters(raw)));
+              }
+            }
+          '
+      - name: Upload redacted E2E logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-failure-summaries-${{ github.run_attempt }}
-          path: |
-            e2e/system/.reports/**/failure-summary.md
-            e2e/system/.reports/**/failure-summary.json
-          include-hidden-files: true
+          name: e2e-logs-${{ github.run_attempt }}
+          path: test-results/e2e-redacted/**/*.log
           retention-days: 7
           if-no-files-found: ignore
 
