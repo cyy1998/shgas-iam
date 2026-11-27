@@ -4,7 +4,7 @@ status: accepted
 
 # 将开发、测试与编排运行面收敛为纯 Linux 并退役 Windows 适配层
 
-仓库的全部生产服务（API / Admin API / Worker / Ops / Gateway / PostgreSQL / Redis / APISIX）与 Sandcastle AFK 执行器均运行在 Linux 环境，本地开发机也已全面切换至原生 Linux。决定将本仓库的开发、测试、Sandcastle AFK 编排与运行时工具链**统一收敛为纯 Linux（Linux-only）**，彻底退役全部 Windows（`win32`）以及缺乏真实运行验证的 macOS（`darwin` / Docker Desktop）宿主适配层，并在非 Linux 宿主上显式快速失败（fail-fast）。本决定修订 [ADR-0055](0055-adopt-hybrid-host-runtime-for-full-system-e2e.md) 中关于 Docker Desktop（Windows / macOS）`bridge` + `host.docker.internal` 连通模式与三场景验收的条款，以及 [ADR-0056](0056-accelerate-integration-tests-with-template-isolation-and-bounded-parallelism.md) 中关于 Windows Job `.dll` 哈希缓存与 `@iam/worker` Windows standalone 编译验证的条款。
+仓库的全部生产服务（API / Admin API / Worker / Ops / Gateway / PostgreSQL / Redis / APISIX）与 Sandcastle AFK 执行器均运行在 Linux 环境，本地开发机也已全面切换至原生 Linux。决定将本仓库的开发、测试、Sandcastle AFK 编排与运行时工具链**统一收敛为纯 Linux（Linux-only）**，彻底退役全部 Windows（`win32`）以及缺乏真实运行验证的 macOS（`darwin` / Docker Desktop）宿主适配层，并在非 Linux 宿主上显式快速失败（fail-fast）。本决定当年同步修订了原 ADR-0055 与 ADR-0056 中的跨平台与 Windows 条款（两篇旧 ADR 现已由 [ADR-0060](0060-unify-test-architecture-sandbox-and-ci-gate.md) 整体取代）。
 
 我们拒绝“保留原生 Windows 支持、仅做局部抽象收口”的渐进路线——在开发、编排与生产均已脱离 Windows 的前提下，继续维护 PowerShell Job Object 包装器、`taskkill.exe`、进程内假 `SIGTERM` 预加载夹具、NTFS `rename` 重试、`cmd.exe` 路径转义与双轨 E2E 网络拓扑只会持续制造维护噪声与测试失真；我们也拒绝“仅删除 Windows、保留 macOS 分支”的折中方案，因为无人实测的 `macOwnedProcesses`（`/bin/ps`）与 Docker Desktop `bridge` 路径终将退化为不可信代码。由此接受的代价是：非 Linux 工作站（Windows / macOS）上的贡献者需通过原生 Linux、WSL2 或 Linux 容器/虚拟机运行本仓库的开发与测试命令；若未来需要重新支持原生 Windows 或 macOS 宿主，须通过新的架构决策并重新设计对应运行面。
 
@@ -34,4 +34,4 @@ status: accepted
 - **明确保留项**。保留 `.gitattributes`（`* text=auto eol=lf`）通用换行符护栏、`scripts/sandcastle/` 对 GitHub API 响应体 `\r\n` 的规范化、HTTP/Redis 协议层 `\r\n` 处理，以及业务代码中面向终端用户浏览器的 Windows User-Agent 识别。
 - **文档与词表影响**。实施落地后同步更新 [仓库地图](../engineering/repository-map.md)、[测试与验证](../engineering/testing.md)、`AGENTS.md`、`apps/worker/README.md`、`.sandcastle/README.md` 与对应运维手册；本决策不涉及 IAM 业务领域概念，不修改 `GLOSSARY.md`。
 
-[Hybrid Full-system E2E](0055-adopt-hybrid-host-runtime-for-full-system-e2e.md) · [Integration 测试加速](0056-accelerate-integration-tests-with-template-isolation-and-bounded-parallelism.md)
+[统一测试与 CI 架构](0060-unify-test-architecture-sandbox-and-ci-gate.md) · [原生 Sandcastle AFK 编排](0059-adopt-native-sandcastle-afk-orchestration.md)
