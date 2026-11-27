@@ -173,7 +173,7 @@ pnpm --filter @iam/e2e-system runtime:cleanup -- --project iam-e2e-<resource-id>
 node scripts/verify-docs.mjs --base <target-commit>
 ```
 
-供 CI `detect`（加 `--classify`）与 `doc-check` 使用的底层脚本，也可在本地干净工作树中手动调用。传入本次合入目标的固定提交：候选须包含目标提交，且差异仅限 `docs/` 下的普通 Markdown 文件（含 `docs/agents/`）以及根目录 `README.md`、`AGENTS.md`、`GLOSSARY.md`。文件类型或权限变化以及范围外的改动（如 `.agents/`、`.codex/`、`.sandcastle/`、脚本或源码）都会被归类为非纯文档，须走完整代码路径。日常本地仅修改文档时运行 `pnpm check:docs` 与 `git diff --check`（或 `pnpm check`）即可。
+供 CI `detect`（加 `--classify`）与 `doc-check` 使用的底层脚本，也可在本地干净工作树中手动调用。传入本次合入目标的固定提交：候选须包含目标提交，且差异仅限 `docs/` 下的普通 Markdown 文件（含 `docs/agents/`）、根目录 `README.md`、`AGENTS.md`、`GLOSSARY.md`、`.sandcastle/README.md`，以及 `apps/*/README.md` 与 `packages/*/README.md`。文件类型或权限变化以及范围外的改动（如 `.agents/`、`.codex/`、`.sandcastle/` 下其他文件、脚本或源码）都会被归类为非纯文档，须走完整代码路径。日常本地仅修改文档时运行 `pnpm check:docs` 与 `git diff --check`（或 `pnpm check`）即可。
 
 ## 工具链排查
 
