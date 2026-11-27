@@ -1,29 +1,30 @@
 import "../scripts/require-linux.mjs";
 import { execFile, spawn } from "node:child_process";
-import { mkdir, readFile, stat } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs, parseEnv, promisify } from "node:util";
 import { checkAfk, runAfk } from "./afk.ts";
-import {
-  checkCodexAuth,
-  createRepoSessionFactory,
-  dockerRegistryMount,
-  loadCodexAgents,
-  resolveHostPnpmStore,
-} from "./session.ts";
+import { checkCodexAuth, createRepoSessionFactory, loadCodexAgents, resolveHostPnpmStore } from "./session.ts";
 import { smoke } from "./smoke.mts";
 
 const exec = promisify(execFile);
 const cwd = fileURLToPath(new URL("..", import.meta.url));
 const REPO = "cyy1998/shgas-iam";
-const DOCKER_SOCKET = "/var/run/docker.sock";
 
 export function parsePositiveInt(name: string, raw: string): number {
   const trimmed = raw.trim();
   if (!/^[1-9]\d*$/.test(trimmed)) throw new Error(`参数 ${name} 必须为正整数，收到：${JSON.stringify(raw)}`);
   const value = Number(trimmed);
   if (!Number.isSafeInteger(value) || value < 1) throw new Error(`参数 ${name} 超出安全整数范围：${raw}`);
+  return value;
+}
+
+export function parseNonNegativeInt(name: string, raw: string): number {
+  const trimmed = raw.trim();
+  if (!/^(?:0|[1-9]\d*)$/.test(trimmed)) throw new Error(`参数 ${name} 必须为非负整数，收到：${JSON.stringify(raw)}`);
+  const value = Number(trimmed);
+  if (!Number.isSafeInteger(value) || value < 0) throw new Error(`参数 ${name} 超出安全整数范围：${raw}`);
   return value;
 }
 
@@ -69,6 +70,15 @@ async function main(): Promise<void> {
   const imageName = env.SANDCASTLE_IMAGE?.trim() || "iam-sandcastle:local";
   const remote = env.SANDCASTLE_GIT_REMOTE?.trim() || undefined;
   const baseBranch = env.SANDCASTLE_BASE_BRANCH?.trim() || undefined;
+  const ciPollIntervalMs = env.SANDCASTLE_CI_POLL_INTERVAL_MS?.trim()
+    ? parsePositiveInt("SANDCASTLE_CI_POLL_INTERVAL_MS", env.SANDCASTLE_CI_POLL_INTERVAL_MS)
+    : undefined;
+  const ciTimeoutMs = env.SANDCASTLE_CI_TIMEOUT_MS?.trim()
+    ? parsePositiveInt("SANDCASTLE_CI_TIMEOUT_MS", env.SANDCASTLE_CI_TIMEOUT_MS)
+    : undefined;
+  const ciMaxRepairs = env.SANDCASTLE_CI_MAX_REPAIRS?.trim()
+    ? parseNonNegativeInt("SANDCASTLE_CI_MAX_REPAIRS", env.SANDCASTLE_CI_MAX_REPAIRS)
+    : undefined;
 
   await exec("docker", ["info", "--format", "{{.ServerVersion}}"], { cwd });
   if (values.build) {
@@ -105,9 +115,6 @@ async function main(): Promise<void> {
 
   await exec("docker", ["image", "inspect", imageName, "--format", "{{.Id}}"], { cwd });
   await checkCodexAuth(cwd, env);
-  const socketInfo = await stat(DOCKER_SOCKET);
-  if (!socketInfo.isSocket()) throw new Error(`Expected Docker socket at ${DOCKER_SOCKET}.`);
-  const registryMount = await dockerRegistryMount(cwd, env);
   const agents = await loadCodexAgents(cwd, env);
 
   if (values.check) {
@@ -129,6 +136,9 @@ async function main(): Promise<void> {
     maxSpecs,
     maxParallel,
     draft: values.draft ?? /^(?:1|true)$/i.test(env.SANDCASTLE_PR_DRAFT?.trim() ?? ""),
+    ciPollIntervalMs,
+    ciTimeoutMs,
+    ciMaxRepairs,
     agents,
     createSession: createRepoSessionFactory({
       cwd,
@@ -136,8 +146,6 @@ async function main(): Promise<void> {
       imageName,
       hostStore,
       turboCacheDir,
-      dockerGid: socketInfo.gid,
-      registryMount,
     }),
     promptsDir: join(cwd, ".sandcastle", "prompts"),
   });

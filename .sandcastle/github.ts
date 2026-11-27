@@ -1,4 +1,10 @@
+import { stripVTControlCharacters } from "node:util";
 import { type ExecFn, runCommand } from "./git.ts";
+
+export const CI_GATE_CHECK_NAME = "ci-gate";
+export const DEFAULT_CI_LOG_TAIL_LINES = 200;
+export const DEFAULT_CI_LOG_MAX_CHARS = 32_000;
+const MAX_CHECK_RUN_PAGES = 10;
 
 export type CommentNote = { author: string; createdAt: string; body: string };
 
@@ -21,6 +27,41 @@ export type SpecIssue = {
   comments: CommentNote[];
   linkedBranches: string[];
   subIssues: TicketIssue[];
+};
+
+export type OpenPullRequest = {
+  number: number;
+  url: string;
+  body: string;
+  state: "OPEN" | "CLOSED" | "MERGED";
+  isDraft: boolean;
+};
+
+export type PullRequestState = {
+  number: number;
+  url: string;
+  state: "OPEN" | "CLOSED" | "MERGED";
+  isDraft: boolean;
+};
+
+export type CheckRun = {
+  id: number;
+  name: string;
+  head_sha: string;
+  status: string;
+  conclusion: string | null;
+  html_url?: string | null;
+  details_url?: string | null;
+};
+
+export type WorkflowRun = {
+  id: number;
+  name?: string | null;
+  head_sha: string;
+  status: string;
+  conclusion: string | null;
+  html_url?: string | null;
+  run_attempt?: number;
 };
 
 type Page<T> = { pageInfo: { hasNextPage: boolean }; nodes: T[] };
@@ -263,22 +304,20 @@ export async function pauseSpec(
   }
 }
 
-export async function upsertPullRequest(opts: {
+export async function findOpenPullRequest(opts: {
   repo: string;
   cwd: string;
   specBranch: string;
   baseBranch: string;
-  title: string;
-  body: string;
-  closeNums: number[];
-  draft?: boolean;
   execFn?: ExecFn;
-}): Promise<string> {
+}): Promise<OpenPullRequest | undefined> {
   const execFn = opts.execFn ?? runCommand;
-  type OpenPr = {
+  type RawOpenPr = {
     number: number;
     url: string;
     body: string;
+    state?: "OPEN" | "CLOSED" | "MERGED";
+    isDraft?: boolean;
     isCrossRepository: boolean;
     headRefName: string;
     baseRefName: string;
@@ -299,14 +338,67 @@ export async function upsertPullRequest(opts: {
           "--base",
           opts.baseBranch,
           "--json",
-          "number,url,body,isCrossRepository,headRefName,baseRefName",
+          "number,url,body,state,isDraft,isCrossRepository,headRefName,baseRefName",
         ],
         opts.cwd,
       ),
-    ) as OpenPr[]
+    ) as RawOpenPr[]
   ).filter((pr) => !pr.isCrossRepository && pr.headRefName === opts.specBranch && pr.baseRefName === opts.baseBranch);
 
-  const existing = openPrs[0];
+  const match = openPrs[0];
+  if (!match) return undefined;
+  return {
+    number: match.number,
+    url: match.url,
+    body: match.body,
+    state: match.state ?? "OPEN",
+    isDraft: Boolean(match.isDraft),
+  };
+}
+
+export async function readPullRequestState(
+  repo: string,
+  prRef: number | string,
+  cwd: string,
+  execFn: ExecFn = runCommand,
+): Promise<PullRequestState> {
+  const raw = await execFn(
+    "gh",
+    ["pr", "view", String(prRef), "--repo", repo, "--json", "number,url,state,isDraft"],
+    cwd,
+  );
+  const parsed = JSON.parse(raw) as Partial<PullRequestState>;
+  if (typeof parsed.number !== "number" || typeof parsed.url !== "string" || typeof parsed.state !== "string") {
+    throw new Error(`无法解析 PR（${prRef}）状态：${raw}`);
+  }
+  return {
+    number: parsed.number,
+    url: parsed.url,
+    state: parsed.state as PullRequestState["state"],
+    isDraft: Boolean(parsed.isDraft),
+  };
+}
+
+export async function upsertPullRequest(opts: {
+  repo: string;
+  cwd: string;
+  specBranch: string;
+  baseBranch: string;
+  title: string;
+  body: string;
+  closeNums: number[];
+  draft?: boolean;
+  execFn?: ExecFn;
+}): Promise<string> {
+  const execFn = opts.execFn ?? runCommand;
+  const existing = await findOpenPullRequest({
+    repo: opts.repo,
+    cwd: opts.cwd,
+    specBranch: opts.specBranch,
+    baseBranch: opts.baseBranch,
+    execFn,
+  });
+
   if (existing) {
     const updated = ensureClosesLines(existing.body, opts.closeNums);
     if (updated !== existing.body) {
@@ -331,6 +423,205 @@ export async function upsertPullRequest(opts: {
     ...(opts.draft ? ["--draft"] : []),
   ];
   return (await execFn("gh", createArgs, opts.cwd)).split(/\r?\n/).at(-1) ?? "";
+}
+
+export async function listCommitCheckRuns(
+  repo: string,
+  headSha: string,
+  cwd: string,
+  execFn: ExecFn = runCommand,
+): Promise<CheckRun[]> {
+  const { owner, name } = splitRepo(repo);
+  const collected: CheckRun[] = [];
+  for (let page = 1; page <= MAX_CHECK_RUN_PAGES; page++) {
+    const endpoint =
+      page === 1
+        ? `repos/${owner}/${name}/commits/${headSha}/check-runs?per_page=100`
+        : `repos/${owner}/${name}/commits/${headSha}/check-runs?per_page=100&page=${page}`;
+    const raw = await execFn("gh", ["api", endpoint], cwd);
+    const parsed = JSON.parse(raw) as { total_count?: number; check_runs?: CheckRun[] };
+    const runs = parsed.check_runs ?? [];
+    for (const run of runs) {
+      if (run.head_sha === headSha) collected.push(run);
+    }
+    const totalCount = typeof parsed.total_count === "number" ? parsed.total_count : runs.length;
+    if (runs.length === 0 || page * 100 >= totalCount) break;
+  }
+  return collected;
+}
+
+export function selectLatestCiGateCheckRun(
+  checkRuns: readonly CheckRun[],
+  headSha: string,
+  checkName = CI_GATE_CHECK_NAME,
+): CheckRun | undefined {
+  let latest: CheckRun | undefined;
+  for (const run of checkRuns) {
+    if (run.head_sha !== headSha || run.name !== checkName) continue;
+    if (!latest || run.id > latest.id) latest = run;
+  }
+  return latest;
+}
+
+export async function listCommitWorkflowRuns(
+  repo: string,
+  headSha: string,
+  cwd: string,
+  execFn: ExecFn = runCommand,
+): Promise<WorkflowRun[]> {
+  const { owner, name } = splitRepo(repo);
+  const raw = await execFn("gh", ["api", `repos/${owner}/${name}/actions/runs?head_sha=${headSha}&per_page=100`], cwd);
+  const parsed = JSON.parse(raw) as { workflow_runs?: WorkflowRun[] };
+  return (parsed.workflow_runs ?? []).filter((run) => run.head_sha === headSha).sort((a, b) => b.id - a.id);
+}
+
+export function redactSensitiveLog(text: string): string {
+  let out = text;
+  // 1. PEM private key blocks (complete and dangling/truncated).
+  out = out.replace(
+    /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----/g,
+    "[REDACTED_PRIVATE_KEY]",
+  );
+  out = out.replace(/-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*/g, "[REDACTED_PRIVATE_KEY]");
+
+  // 2. Authorization / Bearer / Basic headers and tokens.
+  out = out.replace(/(\b(?:proxy-)?authorization\s*[:=]\s*)(?:bearer|basic|token)\s+[^\s'",;]+/gi, "$1[REDACTED]");
+  out = out.replace(/(\b(?:proxy-)?authorization\s*[:=]\s*)[^\s'",;]{8,}/gi, "$1[REDACTED]");
+  out = out.replace(/(\bBearer\s+)[A-Za-z0-9._~+/=-]{8,}/gi, "$1[REDACTED]");
+  out = out.replace(/(\bBasic\s+)[A-Za-z0-9+/=]{12,}/gi, "$1[REDACTED]");
+
+  // 3. Cookie / Set-Cookie headers.
+  out = out.replace(/(\b(?:set-cookie|cookie)\s*[:=]\s*)[^\r\n]+/gi, "$1[REDACTED]");
+
+  // 4. Connection URL credentials (scheme://user:pass@host, scheme://:pass@host, scheme://token@host).
+  out = out.replace(/(\b[a-z][a-z0-9+.-]*:\/\/)([^/\s:@]*):([^/\s@]+)@/gi, "$1$2:[REDACTED]@");
+  out = out.replace(/(\b[a-z][a-z0-9+.-]*:\/\/)([^/\s:@]{8,})@/gi, "$1[REDACTED]@");
+
+  // 5. Well-known token formats (GitHub, OpenAI/sk-, AWS, JWT).
+  out = out.replace(/\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{20,}\b/g, "[REDACTED_TOKEN]");
+  out = out.replace(/\bgithub_pat_[A-Za-z0-9_]{20,}\b/g, "[REDACTED_TOKEN]");
+  out = out.replace(/\bsk-(?:proj-|live-|test-)?[A-Za-z0-9_-]{16,}\b/g, "[REDACTED_TOKEN]");
+  out = out.replace(/\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g, "[REDACTED_TOKEN]");
+  out = out.replace(/\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g, "[REDACTED_JWT]");
+
+  // 6. JSON & key=value / key:value secret fields.
+  out = out.replace(
+    /("(?:[^"]*(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret|session[_-]?id|cookie)[^"]*)"\s*:\s*")([^"\\]*(?:\\.[^"\\]*)*)(")/gi,
+    "$1[REDACTED]$3",
+  );
+  out = out.replace(
+    /(\b(?:[A-Z0-9_]*?(?:PASSWORD|PASSWD|SECRET|TOKEN|API_KEY|ACCESS_KEY|PRIVATE_KEY|CLIENT_SECRET|AUTH_KEY)|(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret|x-api-key))\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s&'",;)}\]]+)/gi,
+    "$1[REDACTED]",
+  );
+
+  return out;
+}
+
+export function sanitizeCiFailureLogs(raw: string, opts: { maxLines?: number; maxChars?: number } = {}): string {
+  const maxLines = opts.maxLines ?? DEFAULT_CI_LOG_TAIL_LINES;
+  const maxChars = opts.maxChars ?? DEFAULT_CI_LOG_MAX_CHARS;
+  const normalized = redactSensitiveLog(stripVTControlCharacters(raw).replace(/\r\n/g, "\n")).trimEnd();
+  if (!normalized) return "";
+
+  const lines = normalized.split("\n");
+  let bounded: string;
+  if (lines.length > maxLines) {
+    if (maxLines <= 1) {
+      bounded = lines.at(-1) ?? "";
+    } else {
+      const keepCount = maxLines - 1;
+      const dropped = lines.length - keepCount;
+      bounded = [`[... truncated ${dropped} earlier lines ...]`, ...lines.slice(-keepCount)].join("\n");
+    }
+  } else {
+    bounded = normalized;
+  }
+
+  if (bounded.length > maxChars) {
+    const marker = `[... truncated to last ${maxChars} chars ...]\n`;
+    if (maxChars <= marker.length) return bounded.slice(-maxChars);
+    bounded = `${marker}${bounded.slice(-(maxChars - marker.length))}`;
+  }
+
+  return bounded;
+}
+
+async function fetchWorkflowRunJobsSummary(repo: string, runId: number, cwd: string, execFn: ExecFn): Promise<string> {
+  const { owner, name } = splitRepo(repo);
+  try {
+    const raw = await execFn("gh", ["api", `repos/${owner}/${name}/actions/runs/${runId}/jobs?per_page=100`], cwd);
+    const parsed = JSON.parse(raw) as {
+      jobs?: {
+        name: string;
+        status: string;
+        conclusion: string | null;
+        html_url?: string | null;
+        steps?: { name: string; status: string; conclusion: string | null }[];
+      }[];
+    };
+    const failingJobs = (parsed.jobs ?? []).filter((j) => j.conclusion !== "success" && j.conclusion !== "skipped");
+    if (failingJobs.length === 0) return "";
+    return failingJobs
+      .map((job) => {
+        const failedSteps = (job.steps ?? [])
+          .filter((s) => s.conclusion !== "success" && s.conclusion !== "skipped")
+          .map((s) => `  - step "${s.name}": status=${s.status}, conclusion=${s.conclusion ?? "unknown"}`)
+          .join("\n");
+        return `Job "${job.name}": status=${job.status}, conclusion=${job.conclusion ?? "unknown"}${job.html_url ? ` (${job.html_url})` : ""}${failedSteps ? `\n${failedSteps}` : ""}`;
+      })
+      .join("\n");
+  } catch {
+    return "";
+  }
+}
+
+export async function fetchSanitizedCiFailureLogs(opts: {
+  repo: string;
+  headSha: string;
+  cwd: string;
+  ciGate?: CheckRun;
+  maxLines?: number;
+  maxChars?: number;
+  execFn?: ExecFn;
+}): Promise<string> {
+  const execFn = opts.execFn ?? runCommand;
+  const maxLines = opts.maxLines ?? DEFAULT_CI_LOG_TAIL_LINES;
+  const maxChars = opts.maxChars ?? DEFAULT_CI_LOG_MAX_CHARS;
+
+  const runs = await listCommitWorkflowRuns(opts.repo, opts.headSha, opts.cwd, execFn).catch(() => [] as WorkflowRun[]);
+  const nonSuccessRuns = runs.filter((r) => r.conclusion !== "success" && r.conclusion !== "skipped");
+  const targetRuns = (nonSuccessRuns.length > 0 ? nonSuccessRuns : runs).slice(0, 2);
+
+  const sections: string[] = [];
+  for (const run of targetRuns) {
+    const runHeader = `=== Workflow Run #${run.id} (${run.name ?? "CI"}, status=${run.status}, conclusion=${run.conclusion ?? "unknown"}) ===`;
+    const failedLog = await execFn("gh", ["run", "view", String(run.id), "--repo", opts.repo, "--log-failed"], opts.cwd)
+      .then((out) => out.trim())
+      .catch(() => "");
+    if (failedLog) {
+      sections.push(`${runHeader}\n${failedLog}`);
+      continue;
+    }
+    const jobsSummary = await fetchWorkflowRunJobsSummary(opts.repo, run.id, opts.cwd, execFn);
+    if (jobsSummary) {
+      sections.push(`${runHeader}\n${jobsSummary}`);
+    } else {
+      sections.push(`${runHeader}\n(failed job logs unavailable; url=${run.html_url ?? "unknown"})`);
+    }
+  }
+
+  const checkSummary = opts.ciGate
+    ? `ci-gate check_run #${opts.ciGate.id} (head_sha=${opts.ciGate.head_sha}, status=${opts.ciGate.status}, conclusion=${opts.ciGate.conclusion ?? "unknown"}, url=${opts.ciGate.html_url ?? opts.ciGate.details_url ?? "unknown"})`
+    : `head_sha=${opts.headSha}`;
+
+  if (sections.length === 0) {
+    return sanitizeCiFailureLogs(`${checkSummary}\nNo matching GitHub Actions failed logs were returned.`, {
+      maxLines,
+      maxChars,
+    });
+  }
+
+  return sanitizeCiFailureLogs(`${checkSummary}\n${sections.join("\n\n")}`, { maxLines, maxChars });
 }
 
 export async function removeReadyLabel(
