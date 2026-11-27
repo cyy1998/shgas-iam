@@ -11,6 +11,7 @@
   "author": "cyy",
   "scripts": {
     "build": "vite build",
+    "build:test": "vite build --outDir dist-test",
     "dev": "vite",
     "dev:e2e": "vite --host 127.0.0.1 --port 8001",
     "e2e:install": "playwright install --with-deps chromium",

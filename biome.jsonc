@@ -23,6 +23,7 @@
       "!!**/.turbo",
       "!!**/coverage",
       "!!**/dist",
+      "!!**/dist-test",
       "!!**/generated",
       "!!**/node_modules",
       "!!**/out",

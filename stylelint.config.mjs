@@ -7,7 +7,7 @@ export default {
     "apps/sso/public/cap/**",
     "openspec/**",
     "packages/db/src/migrations/**",
-    "**/{.cache,.turbo,coverage,dist,generated,node_modules,out,playwright-report,test-results}/**",
+    "**/{.cache,.turbo,coverage,dist,dist-test,generated,node_modules,out,playwright-report,test-results}/**",
   ],
   extends: ["stylelint-config-standard"],
   customSyntax: "postcss-less",

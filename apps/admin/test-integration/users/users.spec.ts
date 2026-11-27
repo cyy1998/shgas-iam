@@ -105,6 +105,7 @@ test("User list query failure stays visible and can be retried", async ({ page }
 
 test("scoped User detail navigates to the selected Employment without exposing authorization internals", async ({
   page,
+  baseURL,
 }) => {
   const mutations = collectMutationRequests(page);
   await mockScopedManagementApi(page);
@@ -157,7 +158,7 @@ test("scoped User detail navigates to the selected Employment without exposing a
   await page.getByText("人事管理员(hradmin)").click();
   await Promise.all([page.waitForURL(/\/sso\/logout\?/), page.getByText("退出登录", { exact: true }).click()]);
   expect(logoutUrl?.pathname).toBe("/sso/logout");
-  expect(logoutUrl?.searchParams.get("redirectUrl")).toBe("http://127.0.0.1:8001/iam-admin");
+  expect(logoutUrl?.searchParams.get("redirectUrl")).toBe(`${baseURL}/iam-admin`);
 });
 
 test("User Employment history is hidden by default and can be revealed without mutations", async ({ page }) => {
