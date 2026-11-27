@@ -10,18 +10,18 @@
 | 业务规则、DTO 裁剪                 | 通过模块公开接口验证输入、结果和副作用。进程内能观察到目标行为时选 Unit。                                              |
 | 事务、失败恢复、正式接线、进程关闭 | 依赖数据库提交、Redis 状态、网络或子进程退出的结论，用相应真实资源做 Integration。                                     |
 | 浏览器与平台能力                   | 构建前端，并在所需运行环境验证。Cookie 域隔离要经过不同 hostname、真实代理与浏览器，两个 loopback 端口只验证端点差异。 |
-| 跨服务业务旅程与生产镜像           | 需要同时验证真实前后端、生产 Dockerfile / Nginx、网关、协议或后台处理时，运行生产容器 Full-system E2E。                |
+| 跨服务业务旅程与生产镜像           | 需要同时验证真实前后端、生产镜像、网关、协议或后台处理时，运行 Full-system E2E。                                       |
 | 目标环境恢复、放流                 | 按[对应运维手册](../releases/README.md)核验现场的配置、数据和入口。                                                    |
 
-跨模块变更要明确观察时点、哪些作用已经生效，以及谁负责恢复。共享能力的故障与恢复由所属模块集中验证，消费方验证正式接线和自己的差异。静态规则只能证明已检查的依赖关系，授权和事务原子性需用行为证据。进程停止由集成测试发送真实 POSIX 信号验证。合入 `main` 的权威门禁统一由 [GitHub Actions CI](commands.md#github-actions-ci) 的 `ci-gate` 承担。
+跨模块变更要明确观察时点、哪些作用已经生效，以及谁负责恢复。共享能力的故障与恢复由所属模块集中验证，消费方验证正式接线和自己的差异。进程停止由集成测试发送真实 POSIX 信号验证。合入 `main` 的合入门禁统一由 [GitHub Actions CI](commands.md#github-actions-ci) 的 `ci-gate` 承担。
 
 ## 测试分类
 
-| 层级                  | 归类依据                                                                                                                                      |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unit（L1）            | 进程内完成。可使用多个真实模块、Hono 内存请求、jsdom 或无真实网络的 MSW。读取固定只读 fixture 也可归入此层。由 Turbo 编排并缓存。             |
-| Integration（L2）     | 使用真实 PostgreSQL、Redis、APISIX、HTTP 服务或应用子进程，由 `pnpm test:integration` 统一收集与调度。                                        |
-| Full-system E2E（L3） | 启动完整生产容器 Docker Compose 栈，经真实 APISIX 双入口完成 9 个跨服务业务旅程，并同时覆盖生产镜像、`nginx.conf` 与 `pnpm deploy` 依赖闭包。 |
+| 层级                  | 归类依据                                                                                                                               |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit（L1）            | 进程内完成，可使用多个真实模块、Hono 内存请求、jsdom 或无真实网络的 MSW，读取只读 fixture 也归入此层。由 Turbo 编排并缓存。            |
+| Integration（L2）     | 使用真实 PostgreSQL、Redis、APISIX、HTTP 服务或应用子进程，由 `pnpm test:integration` 统一收集与调度。                                 |
+| Full-system E2E（L3） | 启动独占生产容器 Docker Compose 栈，经真实 APISIX 双入口运行跨服务业务旅程，同时覆盖生产镜像、`nginx.conf` 与 `pnpm deploy` 依赖闭包。 |
 
 先判断是否需要完整系统，再按实际资源依赖归类。同一行为可在不同层验证不同事实，例如前端验证权限变化后的交互，后端验证请求是否获得授权。
 
@@ -33,22 +33,22 @@
 | Bun Integration | workspace 的 `test-integration/<feature>/**/*.integration.test.ts[x]`                                |
 | Full-system E2E | `e2e/system/specs/**/*.spec.ts`，由 [Playwright 配置](../../e2e/system/playwright.config.ts)实际选取 |
 
-Admin 和 SSO 的普通 Unit 使用 Node。依赖浏览器全局或 React DOM 的 `*.dom.test.ts[x]` 在同一 Unit runner 的 jsdom 环境加载兼容 setup。各文件按需注册 MSW 生命周期，复用所在应用的 Testing Library 和路由辅助代码。纯类型契约放在 typecheck 收集的 `*.type-contract.ts`，对允许和禁止的用法分别做正向约束和必要的 `@ts-expect-error` 断言。
+Admin 与 SSO 的浏览器/DOM 用例命名为 `*.dom.test.ts[x]`；纯类型契约放在 typecheck 收集的 `*.type-contract.ts`，对允许和禁止的用法分别做正向约束和必要的 `@ts-expect-error` 断言。
 
 ## 测试质量原则
 
 - 一个用例保护一个可命名行为，可同时断言其前后状态、结果和副作用。每例建立并清理自己的状态，用显式信号、可控 Promise 或时钟同步并发，真实到期和进程退出用真实资源验证。
 - 仅替换外部依赖，保留被测模块的内部协作。断言应能识别错误实现，例如给正式 mapper 多余的输入以验证裁剪，通过可观察的写入验证禁止重放。顺序和次数只有属于契约时才固定，性能预算需直接测量。
 - 共享 mapper 的完整输出由所属模块验证。消费方验证自己的转换和调用。通过行为验证业务规则，静态分析器才以路径和 import 文本作为测试输入。
-- Admin 测试按功能组织。共同行为只覆盖一次，角色差异通过能力和范围输入表达。对权限拒绝、范围变化和失败恢复分别验证，mock API 的前端测试只证明前端行为。
+- Admin 测试按功能组织。共同行为只覆盖一次，角色差异通过能力和范围输入表达，对权限拒绝、范围变化和失败恢复分别验证。
 
 ### 当前契约与测试清理
 
-按保护的行为判断是否删测试。删除仅检查历史名称缺席或重复验证相同结果的断言前，确认仍生效的契约已有等效证据。迁移、兼容和恢复能力保留历史输入及非目标数据保护的行为测试。临时迁移检查注明负责人、原因和移除日期。替代测试暴露缺陷时保留失败证据，清理退役测试时一并移除专用 fixture 和故障开关。测试清理本身不改变生产行为，也不引入断言扫描器。
+按保护的行为判断是否删测试。删除仅检查历史名称缺席或重复验证相同结果的断言前，确认仍生效的契约已有等效证据。迁移、兼容和恢复能力保留历史输入及非目标数据保护的行为测试。临时迁移检查注明负责人、原因和移除日期。替代测试暴露缺陷时保留失败证据，清理退役测试时一并移除专用 fixture 和故障开关。
 
 ### 禁止纯展示测试
 
-删除只锁定静态文案、图标、样式、DOM 排列或 mock 回显的断言。权限、输入、状态或恢复引起的可见变化属于前端功能，协议文本、转义和脱敏也可构成独立契约。以行为判断保留范围，文案定位和 matcher 名称均不能单独作为删除依据。
+避免只锁定静态文案、图标、样式、DOM 排列或 mock 回显的断言。由权限、输入、状态或恢复驱动的可见变化，以及协议文本、转义与脱敏契约应保留；判断取舍以保护的行为为准，不单凭定位方式或 matcher 名称。
 
 完整系统里可用元素定位完成点击、输入和同步。旅程的结果通过真实请求、接口回读、持久状态、回调 URL 或 Cookie 断言。页面布局、按钮状态和提示文案的检查留给前端相应层级。
 
@@ -69,12 +69,11 @@ try {
 expect(failure).toBeInstanceOf(ExpectedError);
 ```
 
-真实 I/O 禁用 `.resolves`、`.rejects` 和 async `toThrow`，即使外层使用 `await expect(...)` 也一样。Bun 1.3.14 曾在异步 matcher 内重入事件循环，导致测试悬挂。升级后仍保留此规则，解除前须确认上游修复并完成真实 PostgreSQL、Redis 和进程回归。排查时保留现有超时与生产生命周期。此约束仅适用于 Bun。[上游跟踪](https://github.com/oven-sh/bun/issues/33261)
+真实 I/O 禁用 `.resolves`、`.rejects` 和 async `toThrow`，即使外层使用 `await expect(...)` 也一样。Bun 1.3.14 曾在异步 matcher 内重入事件循环导致测试悬挂；升级后仍保留此规则，解除前须确认上游修复并完成真实 PostgreSQL、Redis 和进程回归。此约束仅适用于 Bun。[上游跟踪](https://github.com/oven-sh/bun/issues/33261)
 
 ## Root 工具链的一次性验证
 
-仓库级 runner、资源管理、Git hook、质量命令和静态守卫通常采用一次性行为验证。静态检查与显式诊断继续保留，各 app/package 及 `e2e/system` 维护各自的测试集合。
-[ADR-0060](../adr/0060-unify-test-architecture-sandbox-and-ci-gate.md#收集分层与根工具链)规定根工具链通常采用一次性验证，[ADR-0059](../adr/0059-adopt-native-sandcastle-afk-orchestration.md) 为 Sandcastle AFK 保留窄范围常驻边界单测。
+仓库级 runner、资源管理、Git hook、质量命令与静态守卫按 [ADR-0060](../adr/0060-unify-test-architecture-sandbox-and-ci-gate.md#收集分层与根工具链) 采用一次性行为验证，保留静态检查与显式诊断；[ADR-0059](../adr/0059-adopt-native-sandcastle-afk-orchestration.md) 另为 Sandcastle AFK 保留窄范围常驻边界单测。各 app/package 与 `e2e/system` 维护各自的测试集合。
 
 1. 用实际命令或临时 fixture 验证正常结果及相关失败、退出码和清理。对只读守卫，分别验证应通过和应拒绝的输入。涉及 Git、进程或 Docker 时使用独立临时资源。
 2. 涉及消费方接线或跨服务行为时，从[正式入口](commands.md#测试与验证通道)运行受影响的 Integration 或 E2E。
@@ -82,16 +81,9 @@ expect(failure).toBeInstanceOf(ExpectedError);
 
 ### Sandcastle 验证
 
-- **窄范围常驻边界单测**。根 `pnpm test:unit`（含在 `pnpm verify` 内）先执行 `pnpm test:unit:sandcastle`（`bun test ./.sandcastle/__tests__`），再用 Turbo 执行各 workspace 的 Unit。[`.sandcastle/__tests__/boundaries.test.ts`](../../.sandcastle/__tests__/boundaries.test.ts) 聚焦覆盖：
-  - GraphQL 过滤、分页溢出、`linkedBranches`、Spec 完整范围判据与同仓库 Open PR 复用；
-  - 凭据预检、远端 URL、精确 Git ref、兼容后续修复提交的 `verifyMergeCommit`、末次闭合 `extractTag` 与 CLI 参数校验；
-  - 方案 X 无特权只读/可写会话隔离（零 `/var/run/docker.sock`、零 `--network=host`、零额外 `groups`、可写阶段注入专用测试端点）与单向只读 `auth.json`；
-  - 远端 `ci-gate` 闭环（严格 `head_sha === finalSha && name === 'ci-gate'` 匹配与分页、失败日志脱敏与尾部截断、最多 2 次自动修红、超限/超时/无前进提交/外部关闭 PR 暂停、`--draft` 立即交付、断线重启续接与取消授权软停止）。
-    单实例互斥由根 `package.json` 的外部 `flock -n .sandcastle/runner.lock` 提供。
-- **类型检查**。`pnpm typecheck:root` 通过 [Sandcastle tsconfig](../../.sandcastle/tsconfig.json) 与 [scripts tsconfig](../../scripts/tsconfig.json) 检查 `.sandcastle/` 全部代码与测试，以及 `scripts/tsconfig.json` 纳入的根脚本 TypeScript 与声明目标。
-- **方案 X 真实 Docker 冒烟**。`pnpm sandcastle:smoke`（经 `node .sandcastle/run.mts --smoke` 调用 [`.sandcastle/smoke.mts`](../../.sandcastle/smoke.mts)）在临时克隆仓库上用本地探测 Provider 串行验证两类无特权沙箱：
-  - linked worktree 自洽只读评审沙箱（工作树与 `.git` 不可写、`auth.json` 单向只读、无 `/var/run/docker.sock` 与 `docker` CLI、无法访问宿主 loopback、无 `pnpm-store` / Turbo 缓存 / Docker registry / GitHub 凭据，且未设 `DOCKER_HOST`，未注入专用测试端点）；
-  - 可写方案 X 实施沙箱（宿主独占 worktree + `head` 模式、零 `/var/run/docker.sock` / `docker` CLI / `--network=host`、`onSandboxReady` 安装依赖并启动专用测试服务、Turbo 跨次缓存落盘宿主、经 `core.hooksPath=.husky` 直接启用 `.husky/pre-commit` 且不改宿主 `.git/config`、容器内实跑原生 PostgreSQL + Redis + etcd + APISIX 集成测试并确认测试命令退出后服务仍可用）。准备、诊断与恢复见[运维手册](../../.sandcastle/README.md#启动与诊断)。
+- **常驻边界单测**（`pnpm test:unit:sandcastle`，已纳入根 `pnpm test:unit`）：运行 [`.sandcastle/__tests__/boundaries.test.ts`](../../.sandcastle/__tests__/boundaries.test.ts)，覆盖 GitHub 议题与分支解析、凭据/Git/CLI 预检、无特权单容器沙箱隔离（只读/可写边界与单向 `auth.json`），以及远端 `ci-gate` 自动修红流程与暂停恢复逻辑。单实例互斥由根脚本外层的 `flock -n .sandcastle/runner.lock` 保证。
+- **类型检查**（`pnpm typecheck:root`）：通过 [Sandcastle tsconfig](../../.sandcastle/tsconfig.json) 与 [scripts tsconfig](../../scripts/tsconfig.json) 检查 `.sandcastle/` 及纳入检查的根脚本。
+- **无特权单容器沙箱真实 Docker 冒烟**（`pnpm sandcastle:smoke`）：经 `node .sandcastle/run.mts --smoke` 调用 [`.sandcastle/smoke.mts`](../../.sandcastle/smoke.mts)，在临时克隆仓库上串行验证两类无特权沙箱——只读评审沙箱（工作树与 `.git` 不可写、无 Docker 权限与宿主机凭据/网络访问）与可写实施沙箱（独占 worktree、无特权容器内启动本地测试服务并实跑原生集成测试、复用 `.husky/pre-commit` 与 Turbo 缓存）。准备、诊断与恢复见[运维手册](../../.sandcastle/README.md#启动与诊断)。
 
 ### 架构守卫
 
@@ -103,11 +95,17 @@ expect(failure).toBeInstanceOf(ExpectedError);
 包名导入映射到非 E2E workspace 的 `src`，公共 API 与分层后端由 `iamWorkspace.architecture.tier` 标识，公共 API 同时属于分层后端。
 公共 API 的相互隔离由该 tier 推导。传递生产依赖违规报告禁用依赖的声明行，并输出从公共 API 到该依赖的完整链。
 
-永久规则只根据生产源码路径、规范的静态 import/re-export（含类型或值、裸 side-effect import）、供 `consumer-owned-port` 使用的生产 `*.port.ts` 中直接 `Pick<T, ...>` 的未解析基类型名，以及 workspace 依赖闭包和 Dockerfile 字面量 `COPY` 建立。Specifier 按已支持的 alias、相对路径、扩展名和包子路径做词法归一化，裸 side-effect import 按值依赖处理，第三方依赖按包名或其子路径匹配。公共后端的包边界沿生产 workspace 清单检查传递依赖，包含 dependencies、optionalDependencies 和 peerDependencies。符号来源、第三方内部依赖、类型解析、计算所得的加载路径、控制流和数据流超出守卫范围。[规则与例外](../../scripts/architecture-guard.ts)
+永久规则仅基于以下静态事实建立（[规则与例外](../../scripts/architecture-guard.ts)）：
+
+- 生产源码路径与规范的静态 import/re-export（含类型/值及裸 side-effect import）；
+- 供 `consumer-owned-port` 检查的生产 `*.port.ts` 中直接 `Pick<T, ...>` 的未解析基类型名；
+- workspace 依赖闭包与 Dockerfile 字面量 `COPY`。
+
+Specifier 按已支持的 alias、相对路径、扩展名和包子路径做词法归一化；裸 side-effect import 视为值依赖，第三方依赖按包名或其子路径匹配。公共后端的包边界沿生产 workspace 清单检查 `dependencies`、`optionalDependencies` 和 `peerDependencies` 的传递依赖。符号来源、第三方内部依赖、类型解析、动态计算路径、控制流和数据流超出守卫范围。
 
 #### 永久规则准入与验证
 
-新增永久规则须对应 `Current` 文档中的依赖或模块归属约束，能由上述事实完整表达，且现有包出口、类型或行为验证无法更直接地覆盖。例外限于明确路径或模块，退役路径或标识符的迁移检查随迁移结束移除。每个受影响的语义事实用允许和违规的临时 fixture 调用 `analyzeRepositoryArchitecture(repoRoot)` 验证，诊断须含稳定 rule ID、文件、行号及原因。工具性能单独观察，保留既有超时和重试策略。
+新增永久规则须对应 `Current` 文档中的依赖或模块归属约束，能由上述事实完整表达，且现有包出口、类型或行为验证无法更直接地覆盖。例外限于明确路径或模块，退役路径或标识符的迁移检查随迁移结束移除。每个受影响的语义事实用允许和违规的临时 fixture 调用 `analyzeRepositoryArchitecture(repoRoot)` 验证，诊断须含稳定 rule ID、文件、行号及原因。
 
 #### Docker 依赖闭包
 
@@ -117,13 +115,13 @@ expect(failure).toBeInstanceOf(ExpectedError);
 
 ## 收集与编排
 
-每个测试归属一个 workspace 的一个 collection。所属 workspace 维护 runner、收集目录、setup 和 fixture。Vitest 不跨 workspace 共用配置或 setup。L2 Integration 由 Bun 执行，L3 Full-system E2E 由 Playwright 执行。新增用例遵循[路径与命名](#路径与命名)。调整 include/exclude、Vitest projects 或脚本时，核对根入口能到达受影响集合并实际运行。一次成功运行只覆盖被收集的用例。
+每个测试归属一个 workspace 的一个 collection。所属 workspace 维护 runner、收集目录、setup 和 fixture。Vitest 不跨 workspace 共用配置或 setup。L2 Integration 由 Bun 执行，L3 Full-system E2E 由 Playwright 执行。新增用例遵循[路径与命名](#路径与命名)。调整 include/exclude、Vitest projects 或脚本时，核对根入口能到达受影响集合并实际运行。
 
 Turbo 负责带缓存任务（`build`、`typecheck`、`test:unit`，通过 `transit` 传播依赖源码变化），`turbo.json` 不再维护闲置的 `test:integration:*` 配置。[任务图与缓存配置](../../turbo.json)
 
 根 [Integration runner](../../scripts/run-test-integration.mjs) 收集 `apps/*` 与 `packages/*` 的集成测试文件。各包在 `package.json` 的 `iamTest.integration` 中以布尔值声明执行器所需的 `postgres` / `redis` 依赖。根入口先处理 `--workspace` / `--file` 筛选和资源预检，再在所属 workspace 直接启动执行器。Bun 只使用进程环境中的配置，关闭自动加载工作区 `.env`。定向到单文件时仍使用所属执行器的资源声明。[声明示例](../../apps/sso-api/package.json) · [收集与筛选](../../scripts/test-resources/integration-selection.mjs) · [运行及定向命令](commands.md#测试与验证通道)
 
-Admin 与 SSO 的页面和路由行为在 L1 中通过 Vitest 的 jsdom project、React Testing Library 与 MSW 验证。应用级用例加载生产路由并在 HTTP 边界替换后端响应。SSO 开发代理由 Vitest Node project 启动 Vite 与 loopback 上游验证。跨服务旅程、浏览器 Cookie 与生产容器入口由 L3 Full-system E2E 验证。
+Admin 与 SSO 的普通 Unit 运行于 Node，`*.dom.test.ts[x]` 运行于同一 Vitest runner 的 jsdom project，挂载生产路由、复用 Testing Library 辅助代码并在 HTTP 边界按需注册 MSW；SSO 开发代理由 Vitest Node project 启动 Vite 与 loopback 上游验证。跨服务旅程、浏览器 Cookie 与生产容器入口由 L3 Full-system E2E 验证。
 
 `e2e/system` 仅保留进程内 Unit 测试（`src/__tests__/`，随 `pnpm test:unit` 执行）与 L3 生产容器 Full-system E2E（`pnpm test:e2e`）。SSO API 的独立 RP 场景通过进程内双入口 HTTP fixture 接入常规 Bun 集成测试。
 
@@ -141,7 +139,7 @@ Timeout 用于限制悬挂。进程测试等待实际 readiness，同时观察�
 ### 专用资源与隔离
 
 - **独占测试端点**。本地通过 [Compose](../../scripts/test-resources/compose.yaml) 启停，Sandcastle 可写沙箱和 CI 在执行前各自准备服务。根 runner 消费 `IAM_TEST_POSTGRES_URL`、`IAM_TEST_REDIS_URL`，以及真实 Gateway APISIX 文件需要的 `IAM_TEST_APISIX_ADMIN_URL` 和 `IAM_TEST_APISIX_ADMIN_KEY`。本地未指定的端点使用固定 loopback 端口。同一套端点每次仅供一条顶层 Integration 命令使用。
-- **PostgreSQL 建模板前双保险守卫**。[模板准备脚本](../../scripts/test-resources/postgres-template.mjs) 在建库前校验基础库与模板库，要求库名包含测试标识，拒绝系统库及与 `DATABASE_URL` 或任意 `IAM_*_DATABASE_URL` 匹配的数据库。每轮迁移并封存 `iam_test_template`。[共享 harness](../../packages/test-support/src/postgres-test-harness.ts) 按文件克隆独立库，在第一次重置时缓存业务表与所属序列。重置通过实际行数据和序列状态选择表，执行 `TRUNCATE ... RESTART IDENTITY CASCADE` 并保留迁移日志。文件结束后删除克隆库。迁移专项用例可从 `template0` 克隆空库。
+- **PostgreSQL 模板库防误操作校验**。[模板准备脚本](../../scripts/test-resources/postgres-template.mjs) 在建库前校验基础库与模板库，要求库名包含测试标识，拒绝系统库及与 `DATABASE_URL` 或任意 `IAM_*_DATABASE_URL` 匹配的数据库。每轮迁移并封存 `iam_test_template`。[共享 harness](../../packages/test-support/src/postgres-test-harness.ts) 按文件克隆独立库，在第一次重置时缓存业务表与所属序列。重置通过实际行数据和序列状态选择表，执行 `TRUNCATE ... RESTART IDENTITY CASCADE` 并保留迁移日志。文件结束后删除克隆库。迁移专项用例可从 `template0` 克隆空库。
 - **Redis 槽位与清理顺序**。根 runner 预检 `PING` 与 `SELECT 31`，为每个使用 Redis 的任务分配独占 `/1` 至 `/31` 槽位。`/0` 保留。用例结束先完成观察并停止已登记的执行者，再对独占 DB 执行 `FLUSHDB`，最后关闭控制连接。停止失败时跳过重置并报告失败。禁止 `FLUSHALL`。[共享 Redis harness](../../packages/test-support/src/external-test-resources.ts)
 - **Gateway APISIX 预检与重置**。命中真实 APISIX 测试文件时，runner 探活 Admin API 并验证七类资源的空基线。[Gateway fixture](../../apps/gateway/test-integration/support/apisix.fixture.ts) 在用例成功收尾后重置并回读空基线，失败时停止复用。
 - **诊断与恢复**。逐任务输出写入 `test-results/integration/<run-id>/logs/`，终端报告任务耗时与总墙钟。资源由供给环境回收。强制中断后确认任务进程树退出，再重新创建本地专用服务或使用一套干净的外部端点。[运行及恢复命令](commands.md#测试与验证通道)
@@ -150,7 +148,7 @@ Timeout 用于限制悬挂。进程测试等待实际 readiness，同时观察�
 
 ## Full-system E2E
 
-全部 9 个跨服务业务 spec（`admin-custom-sso`、`application-admission`、`directory-custom-attributes`、`dual-entry`、`hr-admin-user-management`、`oidc-pkce`、`wecom-qr-binding`、`wecom-qr-oidc`、`wecom-qr`）统一在生产 Dockerfile 构建的独占 Docker Compose 容器栈上运行，天然覆盖 8 个生产应用镜像、`nginx.conf` 与 `pnpm deploy` 依赖闭包。浏览器经真实 APISIX 双入口（`external.iam.localhost` 与 `internal.iam.localhost`，以及企业微信扫码手机端 HTTPS 入口）观察跨服务业务结果、Cookie 作用域与入口隔离。根命令 `pnpm test:e2e` 直连 Playwright 包装入口，剥离 `--` 前的运行时开关（`--skip-build`、`--keep`），透传文件筛选、`-g`、`-x`、`--last-failed` 和 `--ui` 等参数。[E2E 命令](commands.md#full-system-e2e) · [运行时编排](../../e2e/system/src/runtime/e2e-runtime.ts) · [Compose 配置](../../e2e/system/docker-compose.e2e.yml)
+[e2e/system/specs/](../../e2e/system/specs/) 下的 9 个跨服务业务 spec 统一运行在生产 Dockerfile 构建的独占 Docker Compose 容器栈上，同时覆盖 8 个生产应用镜像与网关配置。浏览器经真实 APISIX 双入口（`external.iam.localhost`、`internal.iam.localhost` 及企业微信扫码手机端 HTTPS 入口）观察跨服务业务结果、Cookie 作用域与入口隔离。运行开关、参数透传与清理方式见[E2E 命令](commands.md#full-system-e2e)。[运行时编排](../../e2e/system/src/runtime/e2e-runtime.ts) · [Compose 配置](../../e2e/system/docker-compose.e2e.yml)
 
 ### 初始化与就绪
 
@@ -166,4 +164,4 @@ Timeout 用于限制悬挂。进程测试等待实际 readiness，同时观察�
 
 ## 验证结果与交付
 
-按改动选择实际需要的验证层级。[核心检查与验证](commands.md#聚合验证)说明本地核心命令组合，[GitHub Actions CI](commands.md#github-actions-ci) 定义远端 `ci-gate` 权威门禁，[工作流](../agents/workflow.md#验证节奏)规定何时执行或复用结果。交付摘要记录候选、实际命令、通过范围及未执行项，缺少必需的检查时标明缺口。环境是否已部署、恢复或可放流，须以目标环境的 runbook 检查为准。
+按改动选择实际需要的验证层级。[核心检查与验证](commands.md#聚合验证)说明本地核心命令组合，[GitHub Actions CI](commands.md#github-actions-ci) 定义远端 `ci-gate` 合入门禁，[工作流](../agents/workflow.md#验证节奏)规定何时执行或复用结果。交付摘要记录候选、实际命令、通过范围及未执行项，缺少必需检查时标明缺口。

@@ -2,9 +2,9 @@
 
 本仓库采用**分析设计与执行交付分离**的工作流：
 
-- **Stage 1：分析与设计（T3 Code）** 负责只读代码调查、需求澄清、原型验证、在候选集成分支落盘 `ADR`/`GLOSSARY.md`/设计文档，以及产出带原生任务图的 Spec 与 tickets。准备标为 `ready-for-agent` 交接或处理 AFK `Needs Attention` 回流时，读[设计与执行交接](sandcastle-afk.md#设计与执行交接)。
-- **Stage 2：执行与交付（Sandcastle AFK）** 承担完整 Spec 的无人值守实施、集中双轴评审、推前轻量验证、`$pr` Pull Request 交付及远端 `ci-gate` 等绿与限次自动修红，详见[AFK 工作流](sandcastle-afk.md)。
-- **Fast Track：轻量直改与异常介入（T3 Code 单会话）** 负责小型明确改动、文档/配置修改、紧急 bugfix、主观 UI/交互微调，以及 AFK 暂停时的人工排障回流，在单会话内完成实施、验证，并按 `$pr` 推送创建 Pull Request 交付（不改动本地 `main`）。
+- **Stage 1：分析与设计（T3 Code）** 负责只读代码调查、需求澄清、原型验证、在候选集成分支落盘设计产物及发布带原生任务图的 Spec/tickets（交接与回流见[设计与执行交接](sandcastle-afk.md#设计与执行交接)）。
+- **Stage 2：执行与交付（Sandcastle AFK）** 负责完整 Spec 的无人值守实施、双轴只读评审、推前轻量验证、PR 交付与远端 `ci-gate` 限次修红闭环（详见[AFK 工作流](sandcastle-afk.md)）。
+- **Fast Track：轻量直改与异常介入（T3 Code 单会话）** 负责小型明确改动、文档/配置修改、紧急 bugfix、UI 微调及 AFK 暂停后的人工排障，在单会话内完成实施、验证与 PR 交付。
 
 小型明确任务在单会话内直接实施并验证；需要额外流程时，由用户显式调用
 [`implement`](../../.agents/skills/implement/SKILL.md)、[`code-review`](../../.agents/skills/code-review/SKILL.md) 或
@@ -18,8 +18,7 @@
 - **候选集成分支复用** 同一 feature 的设计产物（`ADR`、`GLOSSARY.md`、设计文档等）直接提交在候选集成分支中，待实现、评审与验证全部通过后通过 Pull Request 整体合入目标分支。
   首次落盘改动前核对目标分支、工作区和已有分支，优先复用已有或用户指定分支，否则创建引擎无关前缀的 `feat/<feature-slug>`。
 - **跨会话恢复** 文档随相关工作正常提交。跨会话按[议题跟踪](issue-tracker.md#当-skill-要求publish-to-the-issue-tracker)恢复同一分支与基线，保留未知改动并在覆盖前先解决重叠。
-- **交付授权** 手动单会话或异常收尾任务在推送功能分支并创建 Pull Request 前，按[完成与 PR 交付](#完成与-pr-交付)单独确认（若用户在指令中已明确授权提交 PR，则直接执行）；
-  Sandcastle AFK 的交付授权在启动 AFK 时统一授予。两种路径均不改动本地目标分支，最终合入由维护者在 GitHub 完成。
+- **交付授权与只读主分支** 所有交付路径均通过 GitHub Pull Request 合入，保持本地目标分支（如 `main`）只读、不执行本地 `git merge --squash`，也不强推远端分支；合入 PR、手动关票与部署须由维护者另行授权或在 GitHub 完成（维护者明确要求改为本地合入时再按指令执行）。手动单会话与异常收尾在推送并建 PR 前提出一次交付确认（若用户本次指令已明确要求提交 PR，则直接执行）；Sandcastle AFK 的分支推送、建 PR、CI 修红与标签更新授权在启动 AFK 时统一授予。
 
 ## 验证节奏
 
@@ -27,9 +26,9 @@
   显式调用 `implement` 时，完整测试覆盖当前任务的全部受影响范围。
 - **提交时检查** 格式与 lint 修复由[提交 Hook](../engineering/commands.md#commit-前检查)处理暂存文件；核对修复 diff，
   按实际变化重跑失效的类型或行为检查。
-- **门禁分级与远端权威裁判** 合入 `main` 的唯一权威门禁是 GitHub Actions [`ci-gate`](../engineering/commands.md#github-actions-ci)（配合 Branch Protection）：
+- **门禁分级** 合入 `main` 的唯一权威门禁是 GitHub Actions [`ci-gate`](../engineering/commands.md#github-actions-ci)（配合 Branch Protection）：
   - 差异仅属[纯文档验证](../engineering/commands.md#纯文档验证)范围且验收只涉及文档时，本地运行 `pnpm check:docs` 与 `git diff --check`（或完整 `pnpm check`）；推送 PR 后由 CI `detect` 路由至 `doc-check` 并经 `ci-gate` 放行。
-  - 常规代码或配置改动在手动交付前完成 `pnpm check`、`pnpm test:unit` 与受影响范围的 `pnpm test:integration`（或一键运行 `pnpm verify` 覆盖 `check + test:unit + test:integration + build`），涉及跨服务旅程、生产 Dockerfile 或网关链路时按需在本地运行 `pnpm test:e2e`；推送 Ready PR 后由远端 CI 并行运行 `fast`、`integration` 并接续 `e2e`，最终以 `ci-gate` 绿灯为准。
+  - 常规代码或配置改动在手动交付前完成 `pnpm check`、`pnpm test:unit` 与受影响范围的 `pnpm test:integration`（或运行 `pnpm verify` 覆盖上述检查与构建）；涉及跨服务旅程、生产 Dockerfile 或网关链路时，按需在本地补跑 `pnpm test:e2e`。推送 Ready PR 后由远端 CI 并行执行 `fast`、`integration` 并接续 `e2e`，最终以 `ci-gate` 绿灯为准。
   - 设计产物先落候选集成分支交接给 Sandcastle 时，完成文档格式化、`pnpm check:docs` 与 `git diff --check`，实施与权威门禁由 AFK 推前检查与远端 `ci-gate` 覆盖。
 - **同宿主串行验证** 在同一宿主上串行运行 `pnpm verify`、全量 `pnpm test:integration` 和 `pnpm test:e2e`，跨会话、工作树及 Sandcastle AFK 均适用；
   待上一轮命令退出并完成测试资源清理后再启动下一轮。
@@ -45,27 +44,16 @@
 
 ## 完成与 PR 交付
 
-手动单会话（Fast Track）与 AFK 异常介入后的人工收口默认统一通过 **GitHub Pull Request** 交付，**保持本地目标分支（如 `main`）全程只读**，
-不执行本地 `git merge --squash`。关联的 tickets 与父 Spec 在 PR 合并前保持 open，由维护者在 GitHub 审阅合入后自动关票并清理远端分支，
-GitHub 操作见[议题跟踪](issue-tracker.md)。
+手动单会话（Fast Track）与 AFK 异常介入后的人工收尾均通过 **GitHub Pull Request** 交付（只读目标分支与授权规则见[授权与分支](#授权与分支)，GitHub 操作见[议题跟踪](issue-tracker.md)）。关联的 tickets 与父 Spec 在 PR 合并前保持 open，由 PR 正文中的 `Closes #<number>` 在合入时自动关票。
 
-完成适用评审和最终验证后，提出一次交付确认，列明 feature、适用 Spec/tickets（如有）、功能分支、目标分支、固定候选 SHA，以及以下交付范围
-（若用户已在本次指令中明确要求提交 PR，则无需二次询问直接执行；合并 PR 与部署须另行授权）：
+完成适用评审与最终验证后，按[授权与分支](#授权与分支)确认交付范围（列明 feature、适用 Spec/tickets、功能分支、目标分支与固定候选 SHA），随后连续执行：
 
-- 非强制推送功能分支到远端并绑定 upstream；
-- 按 [`$pr`](../../.agents/skills/pr/SKILL.md) 与 [`GLOSSARY.md`](../../GLOSSARY.md) 起草 PR 正文（`## Summary`、`## Evidence`、`## Merge Danger`），
-  有关联 issues 时在正文逐行附加 `Closes #<number>`（同时存在父 Spec 与子票时一并列出），创建以目标分支为 base 的 Ready for Review PR（用户指定时为 Draft）；
-- 有关联 Spec/tickets 时，向相关 issue 评论 PR 链接与验证摘要，并移除 `ready-for-agent` 标签（避免被 Sandcastle AFK 重复调度）。
-
-取得授权后连续完成：
-
-1. 核对本地候选与远端目标分支 tip（`git fetch <remote> <target>`）；若远端目标分支前进并引入冲突或影响验收，先整合最新目标分支、完成适用复审并重跑失效验证。
-2. 非强制推送功能分支（`git push -u <remote> <branch>`；远端已有同名分支且非当前候选祖先时立即停止，绝不强推），确认工作区干净且远端 SHA 精确等于固定候选。
-3. 在 T3 Code 会话中优先使用 `pull_request_create` 按 `$pr` 正文创建 Pull Request（或幂等复用同分支且 `HEAD` 一致的 Open PR；`pull_request_create` 会自动将 PR 关联到当前线程），并核验 PR 状态、base/head 分支与 `headSha`。
-4. 有关联 Spec/tickets 时，写入含 PR 链接与验证摘要的交付评论并移除 `ready-for-agent` 标签。保留本地功能分支 ref 供维护者本地切出验收；若在独立 worktree 开发，待推送与建 PR 核验完成后按需保留或回收该临时 worktree。
+1. **核对基线**：执行 `git fetch <remote> <target>` 检查远端目标分支 tip；若远端目标分支前进并引入冲突或影响验收，先整合最新基线、完成适用复审并重跑失效验证。
+2. **非强制推送**：执行 `git push -u <remote> <branch>` 绑定 upstream（远端已有同名分支且非当前候选祖先时立即停止，绝不强推），确认工作区干净且远端 SHA 精确等于固定候选。
+3. **创建或复用 PR**：在 T3 Code 会话中优先调用 `pull_request_create` 按 [`$pr`](../../.agents/skills/pr/SKILL.md) 与 [`GLOSSARY.md`](../../GLOSSARY.md) 起草正文（`## Summary`、`## Evidence`、`## Merge Danger`），有关联 issues 时逐行附加 `Closes #<number>`（父 Spec 与子票一并列出），创建以目标分支为 base 的 Ready for Review PR（用户指定时为 Draft；同分支且 `HEAD` 一致的 Open PR 幂等复用），并核验 PR 状态、base/head 与 `headSha`。
+4. **更新关联议题与工作区**：有关联 Spec/tickets 时，评论 PR 链接与验证摘要并移除 `ready-for-agent` 标签。保留本地功能分支 ref 供维护者本地切出验收；若在独立 worktree 开发，待推送与建 PR 核验完成后按需保留或回收该临时 worktree。
 
 失败时保留功能分支与实际进度，停止后续收尾并报告恢复点；恢复时先核对 Git、远端分支、已有 Open PR 与 issue 状态再继续。
-若维护者明确要求改为本地合入，再单独按指令执行。
 
 ## 文档与历史
 

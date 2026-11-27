@@ -13,17 +13,13 @@ pnpm --filter @iam/worker typecheck
 
 ## 周期 repair
 
-Worker composition 负责模块选择、队列、consumer、health/readiness 和 Bull Board，未知模块启动失败，关闭时按模块反序执行。
-周期 repair 仅在对应 consumer 与开关同时开启时运行，两类任务各自启动首轮，并在本轮结束后等待配置间隔。
-每轮由当前 Bun 运行时启动 Worker 源码的私有入口，使用显式输入、独立进程、连接和 deadline。跨实例由持久领取、版本与 token 仲裁。
-组织 repair 重新投递到正式队列，发布仍由普通 consumer 完成。
+Worker composition 负责模块选择、队列、consumer、health/readiness 和 Bull Board；配置了未知模块时会启动失败，停机时按模块注册的反序关闭资源。
 
-停机先停止调度，终止并等待所属 repair 子进程，再确认本轮 PostgreSQL invocation 连接已关闭，随后关闭常驻资源。
-父进程持有连接 UUID，强制终止后仍通过该身份精确取消并确认清理。清理失败停止该类后续轮次，并保留原始执行和关闭错误。
-`@iam/db/maintenance` 管理本次 PostgreSQL 连接与取消，`@iam/runtime/maintenance` 管理离线 Redis、deadline 和聚合关闭，
-`@iam/runtime/process` 管理 Linux 上的所属进程树。
+- **触发与隔离执行**：周期 repair 仅在对应 consumer 与开关同时开启时运行。两类任务各自启动首轮，并在本轮结束后等待配置间隔再进入下一轮。每轮通过当前 Bun 运行时拉起私有入口子进程，使用显式输入、独立连接与独立 deadline；多实例并发由持久化任务领取、版本号与处理 token 仲裁。组织文档 repair 仅重新投递到正式队列，实际发布仍由常规 consumer 完成。
+- **优雅停机与清理**：停机时先停止调度，终止并等待所属 repair 子进程退出，再确认本轮 PostgreSQL 连接已关闭，随后关闭常驻资源。父进程持有连接 UUID，即使强制终止子进程也能据此精确取消数据库查询并确认清理；清理失败会停止该类任务的后续轮次，并保留原始执行与关闭错误。
+- **底层职责划分**：`@iam/db/maintenance` 负责单次 PostgreSQL 连接与取消，`@iam/runtime/maintenance` 负责离线 Redis、deadline 与聚合关闭，`@iam/runtime/process` 负责 Linux 上的所属进程树管理。
 
-人工维护由 [@iam/ops](../ops/README.md) 使用独立配置和窄资源装配。人工与自动入口共用各文档 owner 的 `/maintenance` 能力，各自负责信号和资源关闭。
+人工维护由 [@iam/ops](../ops/README.md) 承载，使用独立配置并仅装配所需资源。人工与自动入口共用各文档 owner 的 `/maintenance` 能力，各自负责进程信号和资源关闭。
 [周期恢复装配](src/composition/document-repair-schedule.ts) · [文档发布与恢复](../../packages/documents/README.md#共享发布与恢复) · [配置与监控](../../docs/releases/data-maintenance.md#周期任务与监控)
 
 ## 任职有效期

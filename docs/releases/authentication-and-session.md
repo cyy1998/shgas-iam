@@ -15,14 +15,12 @@
 | 时间与防重放 | `IAM_AUTH_API_LOGIN_CREDENTIAL_MAX_SKEW_MS` 为毫秒，`IAM_AUTH_API_LOGIN_CREDENTIAL_NONCE_TTL_SECONDS` 为秒；逐副本核对配置和时钟 |
 | Cap          | 核对 SSO 的 `IAM_SSO_WEB_CAP_ENDPOINT`、`IAM_SSO_WEB_CAP_SITE_KEY`、`IAM_SSO_WEB_CAP_WASM_URL`、`IAM_SSO_WEB_CAP_PAKO_URL`       |
 
-当前默认偏移 300000 ms、nonce TTL 360 s 尚未覆盖完整接受期，env 没有交叉校验。
-需要完整防重放保证时，先解决并验证[时间窗口缺口](#凭证时间窗口与防重放限制)；
-只调大 TTL 或即时重复请求被拒绝都不足以证明缺口已解决。
+默认时间窗口存在防重放缺口（env 未做交叉校验），需完整防重放保证时先核对[凭证时间窗口与防重放限制](#凭证时间窗口与防重放限制)。
 
 1. **准备与停流** 准备兼容的 Auth API 与 SSO 前端构建与回退配置，关闭密码登录公共入口、直连和自动重试，排空在途认证。
 2. **更新 Auth API** 向全部 Auth API 副本注入私钥映射、active kid 及时间配置，确认配置校验通过；active kid 缺少私钥必须启动失败。
 3. **更新 SSO 前端** 部署以匹配公钥/kid 构建的 SSO，更新 CDN 缓存并确认实际浏览器页面使用新 bundle。
-4. **受控验证与放流** 仅开放受控账号和入口检查下表；通过后关闭临时入口，确认配置一致，再恢复公共密码登录。
+4. **验证与恢复流量** 仅开放受控账号和入口检查下表；通过后关闭临时入口，确认配置一致，再恢复公共密码登录。
 
 | 检查           | 完成标准                                                                                                 |
 | -------------- | -------------------------------------------------------------------------------------------------------- |
@@ -31,8 +29,7 @@
 | 无效凭证       | 未知 kid、解密/完整性失败、过期、已占用 nonce 和旧明文请求按认证契约拒绝                                 |
 | 时间边界       | 隔离环境覆盖未来时间戳、nonce 到期后重放及接受期末端，确认完整接受期内的防重放要求                       |
 
-失败时保持受影响登录关闭，修正 key/kid、时间问题或恢复配对 Auth API 与 SSO 前端构建，刷新缓存后重验。
-Redis 异常先恢复依赖；`login-credential-nonce:<digest>` 不能批量清空，仅可清理明确的演练测试 key。回退不恢复明文入口。
+回退须恢复配对的 Auth API 与 SSO 前端构建并刷新 CDN 缓存，且不恢复明文入口；Redis 异常先恢复依赖，`login-credential-nonce:<digest>` 不可批量清空，仅可清理明确的演练测试 key。
 
 ### 凭证时间窗口与防重放限制
 
@@ -96,20 +93,19 @@ Redis 需要从备份恢复时，关闭扫码入口并等待在途请求到期�
   Secret 通过[授权读取](../features/application-integration.md#查看和轮换凭据)取得，不使用普通详情响应。
 
 按[部署与发布](deployment.md)更新配对配置，再按[网关发布](apisix-gateway-release.md)更新路由。
-公共入口保持关闭，仅开放受限验证；`/health`、`/oidc/health` 检查 Redis，`/ready` 检查 PostgreSQL/Redis，不能代替以下业务检查。
+在公共入口开放前先经受限入口完成以下业务验证（`/health`、`/oidc/health` 仅检查 Redis，`/ready` 仅检查 PostgreSQL/Redis，不足以替代功能验证）：
 
 在每个受影响入口完成 Discovery、授权回调、Code 兑换、UserInfo 和取消/确认退出；接入应用验证 issuer、签名、audience、nonce 与 expiry。
 检查错误 PKCE、Code 重放、错 issuer 拒绝，以及未知 host 拒绝和伪造入口头被覆盖。
 变更 hostname 时用真实浏览器检查 Cookie 隔离和相对导航；同 host 的双端口不能证明域隔离。
-检查失败时关闭受影响入口并恢复兼容配置，修复后重验；通过后再恢复公共流量。
+全部通过后再恢复公共流量。
 
 ## OIDC 签名密钥轮换
 
 当前启动时载入 current 与可选 previous，二者都要求完整 RS256 RSA private JWK，kid 唯一非空；仅 current 签名，无热更新。
 本流程停止旧 signer 并协调更新全部 SSO API 副本，共用进程的其他入口也纳入维护窗口。
 
-**先判断能否轮换：** 设 current 为 A、已有 previous 为 P、新 key 为 B。P 仍需用于接入应用验签或 IAM 退出 hint 时不能开始，
-两槽无法容纳 P/A/B。普通 Token 到期不表示退出 hint 已退役；规则见[密钥兼容边界](#签名密钥兼容边界)。
+**轮换前提：** 设 current 为 A、已有 previous 为 P、新 key 为 B；因系统仅支持两槽且退出 hint 不受 Token 过期限制，仅当 P 确认可退役时才可开始轮换（详见[签名密钥兼容边界](#签名密钥兼容边界)）。
 
 1. **停流与排空** 准备唯一新 kid 的 B、对应公开 JWK 与回退配置，确认所有 SSO API 副本及自动扩容模板。
    关闭 OIDC 授权、兑换、续接、退出及直连/重试入口，停止旧 SSO API signer，排空在途请求。
@@ -143,8 +139,7 @@ Redis 需要从备份恢复时，关闭扫码入口并等待在途请求到期�
 )
 ```
 
-失败时保持维护，核对本轮已实际签名的 key 集合。B 已签发 Token/hint 后，不能直接回退到丢弃 B 的配置。
-若无第三个必须保留的 key，可按 A current、B previous 协调恢复并重新核验；否则先解决兼容集合问题，不能擅自移除所需 key。
+若 B 已签发过 Token 或退出 hint，回退时不得丢弃 B：无第三个必须保留的 key 时，可协调恢复为 A（current）与 B（previous）并重新核验；否则须先解决兼容集合问题，不可擅自移除仍需验签的 key。
 
 ### 签名密钥兼容边界
 
@@ -181,7 +176,7 @@ IAM 允许过期 ID Token 作退出 hint，未用 exp 限制其使用期限。�
 | `oidc`       | `<oidc-namespace>:oidc:*`：Code、Token、续接、退出确认等协议状态   |
 | `all`        | 上述三个 owner，仍只操作指定 namespace                             |
 
-不同前缀的旧布局和其他状态不在范围内；不增加任意 pattern，也不顺带清除 nonce、Subject Access、Facts、队列或 Snapshot。
+清理严格限定在上述前缀内，不影响旧布局及其他键族（如 nonce、Subject Access、Facts、队列和 Snapshot），也不支持自定义 pattern。
 使用 Ops 的显式 `IAM_OPS_REDIS_URL`；脚本默认读取 `apps/ops/.env`，已有进程环境优先。
 清点和核验只需 SCAN，清理还需 UNLINK；连接按部署授权 AUTH/SELECT/CLIENT/QUIT。
 
@@ -198,9 +193,7 @@ IAM 允许过期 ID Token 作退出 hint，未用 exp 限制其使用期限。�
 3. **确认清零并恢复** clear 退出 0 且 `status=completed` 后，还须 verify 完整扫描、退出 0、matching 为零。
    此结果只证明目标范围清零；在重新开放 reader/writer 前完成核验，再检查受影响的新登录或协议流程并恢复入口。
 
-退出 2 表示参数无效；退出 1、timeout、中断或结果未知时保持停流，用原范围重新 inventory，修复原因后 clear、verify。
-跨 owner 不原子，失败可能已部分删除；不能用 matching 减 removed 推断残留，也不能恢复已消费 Code 或过期/撤销的登录状态。
-总 deadline 默认五分钟，`--deadline-ms <1..300000>` 可收紧，未完成扫描不算通过。
+退出码 `2` 表示参数无效；退出码 `1`、超时或中断时，因跨 owner 清理非原子（可能已部分删除），须用原范围重新 `inventory` 确认残留（不可用 `matching - removed` 推算），修复原因后重跑清理与 `verify`。已消费的 Code 及过期或已撤销的登录状态不可恢复。总 deadline 默认 5 分钟（可通过 `--deadline-ms <1..300000>` 收紧），未扫描完毕不视为通过。
 IAM 清理不保证第三方本地会话或离线 ID Token 立即失效。
 
 ## Client Snapshot 修复
@@ -227,12 +220,11 @@ repair 处理 `client-snapshot:v1:{<clientCode>}` 下的 control、payload:clien
 `cache:client:code:*`、`cache:client:secret:*` 和 `cache:client:invalidation-generation`。未知键族保留。
 repair 须退出 0 并报告 `scope=all-client-runtime-caches`。在 reader 回源前独立运行 verify，须完整扫描、退出 0 且 `matching=0`。
 随后受限开放，检查当前配置、Internal API Secret 认证和旧 Secret 被拒绝，并检查 Admin 配置写入后的缓存失效和受影响协议。通过后恢复公共入口。
-失败或未知时重新关闭并排空，修复后重做适用核验。缓存修复独立于数据库写入。定向 deadline 默认十秒，全量默认五分钟，均可收紧。
+缓存修复独立于数据库写入；定向操作 deadline 默认 10 秒，全量默认 5 分钟，均可收紧。
 
 ## 恢复边界
 
-- **账号访问屏障（Subject Access）** 账号与 Subject Access 恢复使用[数据维护](data-maintenance.md)，不能通过清会话或手工写 Redis 把不确定 Barrier 变成 enabled。
-- 精确会话撤销失败时仅重试原捕获集合；集合丢失重新查询发起操作，已终止的根不恢复。
-- **作用后审计未确认** 作用后审计失败不回滚已生效动作，也不为补审计重放 mutation；按[写入结果契约](../engineering/backend-architecture.md#admin-写入结果与失败恢复)处理。
-- Redis 实时登录态以服务端时间为准；主从时钟异常先处理时钟与 failover，不能靠续期或恢复登录态备份补偿。
-- 入口开放失败或状态未知时，停止继续开放，关闭不确定入口并排空，完成该操作所需核验后再恢复。
+- **账号访问屏障（Subject Access）** 账号与 Subject Access 恢复走[数据维护](data-maintenance.md)，不能靠清会话或手工改 Redis 将不确定 Barrier 设为 `enabled`。
+- **精确会话撤销** 失败时仅重试原批次中失败或状态未知的项；批次信息丢失则重新查询后发起，已终止的根会话不可恢复。
+- **审计写入失败** 操作已生效但审计写入失败时，不回滚也不重放写入；按[写入结果契约](../engineering/backend-architecture.md#admin-写入结果与失败恢复)处理。
+- **Redis 时钟基准** 实时登录态以服务端时间为准；主从时钟异常先处理时钟与 failover，不可靠续期或恢复登录态备份补偿。

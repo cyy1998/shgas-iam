@@ -24,16 +24,10 @@ pnpm --filter @iam/ops iam-ops employment verify
 所有分组与操作支持 `--help`，帮助不连接资源。报告、退出语义、停写前提、重试范围和限额沿用各能力的既有契约。
 Client 缓存传播失败时，按[受影响的缓存范围](../../docs/releases/authentication-and-session.md#client-snapshot-修复)选择维护命令。
 
-从 [.env.example](.env.example) 准备私有 `apps/ops/.env`；CLI 只读取自己的文件，已有进程变量优先。
-配置使用 `IAM_OPS_*`，不读取 Worker 的 `.env`，不接受旧维护变量别名。PostgreSQL-only 命令只需数据库，Redis-only 命令只需 `IAM_OPS_REDIS_URL`；日志使用独立 `iam-ops` 身份。
-Redis URL 使用 `redis://[username:password@]host[:port][/db]`，未写端口或 DB 时使用 `6379` 和 `0`，必须显式提供地址。
-认证用户名与密码中的特殊字符须按 URL percent encoding 转义，解析后按原文传递；不把 URL 或凭据写入日志或报告。
-前缀变化不改变目标数据库、队列前缀或 Redis namespace。私有配置不得提交或进入镜像。
+从 [.env.example](.env.example) 准备私有 `apps/ops/.env`；CLI 只读取自己的配置文件，已有进程变量优先。
+配置统一使用 `IAM_OPS_*` 前缀，不读取 Worker 的 `.env`；仅访问 PostgreSQL 的命令只需数据库配置，仅访问 Redis 的命令只需 `IAM_OPS_REDIS_URL`（Redis URL 写法与凭据转义见[一次性 Ops 维护环境](../../docs/releases/deployment.md#一次性-ops-维护环境)）。日志使用独立 `iam-ops` 身份，私有配置不得提交到仓库或进入镜像。
 
-Document backfill／部分 repair 只登记或重新唤醒持久工作，仍需匹配版本的 Worker 收敛，再执行独立完整 gate。
-Subject Access-only 会写 PostgreSQL transition intent，不是 Redis-only 操作。人工强制或定向重试不改变自动尝试预算和版本/token 仲裁。
-
-操作前阅读[Document 与 Subject Access 维护](../../docs/releases/data-maintenance.md)、[会话与 Snapshot 维护](../../docs/releases/authentication-and-session.md)及[历史审计维护](../../docs/releases/README.md#历史审计规范化)。
+操作前请先阅读对应的运维手册（涵盖 backfill/repair 收敛与核验门禁、Subject Access 数据库写入前提及重试预算规则）：[Document 与 Subject Access 维护](../../docs/releases/data-maintenance.md)、[会话与 Snapshot 维护](../../docs/releases/authentication-and-session.md)及[历史审计维护](../../docs/releases/README.md#历史审计规范化)。
 数据库迁移继续通过 `@iam/db db:migrate`，Gateway 发布继续使用 HTTP API。
 空环境的初始化顺序和凭据输入见[新空环境首次初始化](../../docs/releases/initial-installation.md)。
 

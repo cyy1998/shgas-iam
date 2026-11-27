@@ -42,7 +42,7 @@ Loki 默认保留期 30 天（`720h`）；当前 Compose 未透传 `LOKI_RETENTI
 
 **完成检查：** 用同一 Compose 的 `ps` 检查服务稳定运行；Grafana 的 `iam-loki` 数据源和三个 dashboard 加载成功；
 按实际环境、主机和 service 查询新日志，例如 `{env="prod", host="prod-host-01"} | json`，用一条已知请求确认采集到达。
-启用 OIDC 时验证真实登录与 dashboard 权限，生产还要验证通知路由。失败按下文排障，修复后重验。
+启用 OIDC 时验证真实登录与 dashboard 权限，生产还要验证通知路由。
 
 ## Grafana 登录与告警
 
@@ -102,12 +102,12 @@ APISIX access log 应包含 traceId、spanId、traceparent；配置与 Gateway �
 
 ## 采集故障与恢复
 
-| 现象                    | 排查与恢复                                                                    |
-| ----------------------- | ----------------------------------------------------------------------------- |
-| 某主机/service 无新日志 | 核对容器采集标签、Docker 日志、Alloy 状态、env/host 筛选和 Loki 推送连通性    |
-| Grafana 查不到日志      | 检查时间范围、`iam-loki` 地址、实际 Loki 状态；不要把旧日志或空图视为采集正常 |
-| OIDC 登录失败           | 检查同 issuer 三个 URL、容器解析、redirect URI 与 Secret，修正后重建 Grafana  |
-| 无通知或容量告警        | 核对 production contact point 和实际发送；磁盘及 Worker 积压告警另行配置      |
+| 现象                    | 排查与恢复                                                                   |
+| ----------------------- | ---------------------------------------------------------------------------- |
+| 某主机/service 无新日志 | 核对容器采集标签、Docker 日志、Alloy 状态、env/host 筛选和 Loki 推送连通性   |
+| Grafana 查不到日志      | 检查时间范围、`iam-loki` 地址与实际 Loki 状态                                |
+| OIDC 登录失败           | 检查同 issuer 三个 URL、容器解析、redirect URI 与 Secret，修正后重建 Grafana |
+| 无通知或容量告警        | 核对 production contact point 和实际发送；磁盘及 Worker 积压告警另行配置     |
 
 停止日志组件只停止相应处理。开发环境示例：
 
@@ -119,5 +119,4 @@ docker compose --env-file docker/.env -f docker/compose.dev.yaml rm -f loki graf
 生产使用对应 Compose，按本机服务选择目标。IAM 继续写 stdout/stderr，停采期间能否补齐取决于 Docker 日志保留及采集位置。
 更新镜像/配置前准备已知兼容版本和 Loki/Grafana 一致备份。发布失败时停止受影响组件，恢复兼容版本并重建，保留数据卷，不用删卷或 `down -v` 回退。
 若新版已改写数据格式，先确认兼容性；确需恢复数据时停止相关写入，按匹配存储/版本的恢复流程恢复目录并核对数据缺口。
-缩短保留期已删除的日志不能通过调大参数找回。
-恢复后重做新日志查询、适用 Trace 检查、登录和通知检查；失败时保留现场与备份继续修复。
+恢复后重做新日志查询、适用 Trace 检查、登录和通知检查。

@@ -9,15 +9,14 @@ Admin REST 与 tRPC 共用 `*.adapter.ts` 操作，`*.trpc.ts` 负责薄协议�
 
 ## 审计事件与作用后失败
 
-事件字段和 action 由事件构造器定义。会话审计排除 Redis key、原始 Session Origin 和撤销捕获 identity。
-会话操作先作用于 Redis，再写审计。确认有变化或存在 unknown 时，审计失败按作用后失败返回。
-只有 failed，且没有确认变化、也没有 unknown 时，按普通审计失败返回。
+事件字段和 action 由事件构造器统一定义。会话审计会自动排除 Redis key、原始 Session Origin 和撤销阶段捕获的内部会话标识。
+会话管理操作先写入 Redis，再记录审计：只要已有确认生效的变更或存在结果未知（`unknown`）的条目，后续审计失败即按“业务已生效/可能已生效但审计失败”返回；仅当全部目标明确失败（`failed`）、且没有确认变更也没有未知结果时，才按普通审计失败返回。
 [事件构造器](src/services/audit/events/) · [会话审计](src/services/audit/events/session-management.audit.ts) ·
 [行为测试](src/services/session-management/__tests__/session-management.service.test.ts) ·
 [结果与恢复契约](../../docs/engineering/backend-architecture.md#admin-写入结果与失败恢复)
 
 ## SSO Secret 读取与审计
 
-管理员经授权的窄读取取得当前 SSO Secret 原文。先确认独立审计提交，再交付原文。
-审计未确认时拒绝交付，错误响应排除可能含参数的数据库异常。
+管理员仅能通过受权专用接口读取当前 SSO Secret 原文。系统先确认独立审计提交成功，再交付原文；
+若审计提交结果未确认则拒绝交付，且错误响应会过滤可能携带敏感参数的数据库异常。
 [Client SSO service](src/services/client-sso/client-sso.service.ts) · [管理集成测试](test-integration/client/client-sso-management.integration.test.ts)

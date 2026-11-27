@@ -50,7 +50,7 @@ composition，由 composition 创建并接好 repository、UnitOfWork、service�
 
 全局 DB 由 composition 或 repository 实现接入，
 Redis 单例由 composition 或 Redis 基础设施接入，logger 单例由 composition、app 入口或日志基础设施接入。
-App 通过 `@iam/runtime` 显式子路径创建并关闭资源。类型依赖同样遵守边界。
+App 通过 `@iam/runtime` 显式子路径创建并关闭资源。
 
 Integration API 的 composition 为用户查询、组织搜索和委托解析装配并关闭各自的专用连接，数据库语句超时独立于 HTTP 请求超时。
 [查询资源](../../apps/integration-api/src/composition/index.ts)
@@ -116,12 +116,15 @@ Subject Access 消费确认后才能尝试恢复前一屏障。结果未知时�
 Admin PostgreSQL 写入在同一 UnitOfWork 内锁定、重验、比较变化、写入并登记审计与文档 Outbox。
 公共 mutation 模块编排流程，repository 持锁至事务结束，领域负责转换、比较与审计内容。
 
-- 锁定现存目标和完整的选中级联集合。仅用于读取的父对象走普通预检，创建竞争由唯一约束裁决。组织与路径、闭包关系同事务创建，无需锁整棵父树。
-- 先锁 Employment、后锁 Assignment，各表按 ID 升序。直接责任命令只锁 Assignment。Set/Clear Primary 与 Transfer 首次取锁前合并全部目标任职，Transfer 随后锁齐选中责任。
-- **加锁范围与顺序** 账号生命周期先锁 User，再锁精确 transition intent。离职随后锁定选中的 Employment 和 Assignment，锁齐后重验 HR 资格，原子提交事实、审计与 Outbox。
-- 锁后写入零行属于不变量失败。同态命令与已结束的级联对象保留历史时间，新插入或未选中记录在本次集合之外。
-- **幂等与变更判定** 资料编辑只提交变动字段，关联状态以锁后事实为准。同值资料不写审计或 Outbox，合法的显式状态、安全和授权意图保留 no-op 审计。
-- **冲突映射** 数据库基础层统一提取 SQLSTATE 和 constraint，包括包装错误的 cause。已知唯一冲突按领域映射，未知错误原样上报。事务失败后不得继续查询推断冲突、自动重试或扩大锁范围。
+- **加锁范围与顺序**
+  - 锁定现存目标和完整的选中级联集合。仅用于读取的父对象走普通预检，创建竞争由唯一约束裁决；组织与路径、闭包关系同事务创建，无需锁整棵父树。
+  - 先锁 Employment、后锁 Assignment，各表按 ID 升序。直接责任命令只锁 Assignment；Set/Clear Primary 与 Transfer 首次取锁前合并全部目标任职，Transfer 随后锁齐选中责任。
+  - 账号生命周期先锁 User，再锁精确 transition intent。离职随后锁定选中的 Employment 和 Assignment，锁齐后重验 HR 资格，原子提交事实、审计与 Outbox。
+- **幂等与变更判定**
+  - 锁后写入零行属于不变量失败。同态命令与已结束的级联对象保留历史时间，新插入或未选中记录在本次集合之外。
+  - 资料编辑只提交变动字段，关联状态以锁后事实为准。同值资料不写审计或 Outbox，合法的显式状态、安全和授权意图保留 no-op 审计。
+- **冲突映射**
+  - 数据库基础层统一提取 SQLSTATE 和 constraint（含包装错误的 `cause`）。已知唯一冲突按领域映射，未知错误原样上报；事务失败后不得继续查询推断冲突、自动重试或扩大锁范围。
 
 行锁只覆盖已选中的行。父引用、空槽、Primary 唯一性和请求时 HR 范围仍由领域校验及适用的数据库约束负责。
 [ADR-0025](../adr/0025-align-admin-mutation-results-with-committed-facts.md)
@@ -156,7 +159,7 @@ Client 显式删除后可以重试残余会话清理。 [删除应用](../featur
 | COMMIT 结果不确定                             | 尚不能确认成功提交或确定回滚；保留原未知错误及对应模块的保守处理。 | 读取事实并按对应模块的恢复流程处理，不根据错误推断未生效或自动重试。   |
 | `ADMIN_LOGIN_STATE_AUDIT_FAILED_AFTER_EFFECT` | Redis 会话或限制作用已发生或可能发生，审计未确认完成。             | 刷新确认当前状态，保留审计修复提示，不自动重放操作。                   |
 
-读取成功仅确认当前读取结果。缓存传播或审计未确认时保留修复提示。
+即使后续读取成功，只要缓存传播或审计仍未确认，也须保留修复提示。
 生成密码未交付时先修复再主动重置。SSO Secret 生成或轮换只返回安全结果，读取响应丢失可主动重读。
 [SSO Secret 读取与审计](../../apps/admin-api/README.md#sso-secret-读取与审计)
 
@@ -178,7 +181,7 @@ Client 显式删除后可以重试残余会话清理。 [删除应用](../featur
 ### Custom SSO 与 OIDC
 
 协议各自拥有授权、续接、Code、Token 和补偿，单向消费 Kernel、Snapshot、Subject Access 和主体投影。SSO API 的 HTTP adapter 负责 Cookie、错误和重定向，并消费完整协议操作，claims 以及 Code/Token 流程由协议包持有。
-OIDC 与 Custom SSO 分别独立于另一协议的实现，OIDC 也独立于 app、HTTP 和数据库实现。
+OIDC 与 Custom SSO 互不依赖；OIDC 也不依赖 app、HTTP 和数据库实现。
 
 Code 固定原 Client、会话实例、用途和授权事实，只消费一次。业务兑换通过适用认证并可靠定位原 ClientSession 后，失败时只对该实例有界尝试撤销。
 兑换边界覆盖响应构造，适用的 Token 补偿仅处理本次原始 Token。Token 保存协议校验事实、期限和原会话绑定。Code 消费后失败须重新授权。

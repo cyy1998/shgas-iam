@@ -4,32 +4,30 @@ status: accepted
 
 # 将开发、测试与编排运行面收敛为纯 Linux 并退役 Windows 适配层
 
-仓库的全部生产服务（API / Admin API / Worker / Ops / Gateway / PostgreSQL / Redis / APISIX）与 Sandcastle AFK 执行器均运行在 Linux 环境，本地开发机也已全面切换至原生 Linux。决定将本仓库的开发、测试、Sandcastle AFK 编排与运行时工具链**统一收敛为纯 Linux（Linux-only）**，彻底退役全部 Windows（`win32`）以及缺乏真实运行验证的 macOS（`darwin` / Docker Desktop）宿主适配层，并在非 Linux 宿主上显式快速失败（fail-fast）。本决定当年同步修订了原 ADR-0055 与 ADR-0056 中的跨平台与 Windows 条款（两篇旧 ADR 现已由 [ADR-0060](0060-unify-test-architecture-sandbox-and-ci-gate.md) 整体取代）。
+仓库的全部生产服务、基础中间件与 Sandcastle AFK 执行器均运行在 Linux 环境，本地开发机也已切换至原生 Linux。决定将开发、测试、AFK 编排与运行时工具链限定为纯 Linux（Linux-only），移除全部 Windows（`win32`）以及缺乏真实运行验证的 macOS（`darwin` / Docker Desktop）宿主适配层，并在非 Linux 宿主上显式快速失败（fail-fast）。本决定当时同步修订了原 ADR-0055 与 ADR-0056 的跨平台条款（两篇旧 ADR 现已由 [ADR-0060](0060-unify-test-architecture-sandbox-and-ci-gate.md) 取代）。
 
-我们拒绝“保留原生 Windows 支持、仅做局部抽象收口”的渐进路线——在开发、编排与生产均已脱离 Windows 的前提下，继续维护 PowerShell Job Object 包装器、`taskkill.exe`、进程内假 `SIGTERM` 预加载夹具、NTFS `rename` 重试、`cmd.exe` 路径转义与双轨 E2E 网络拓扑只会持续制造维护噪声与测试失真；我们也拒绝“仅删除 Windows、保留 macOS 分支”的折中方案，因为无人实测的 `macOwnedProcesses`（`/bin/ps`）与 Docker Desktop `bridge` 路径终将退化为不可信代码。由此接受的代价是：非 Linux 工作站（Windows / macOS）上的贡献者需通过原生 Linux、WSL2 或 Linux 容器/虚拟机运行本仓库的开发与测试命令；若未来需要重新支持原生 Windows 或 macOS 宿主，须通过新的架构决策并重新设计对应运行面。
+继续保留原生 Windows 支持，意味着为已不再使用的宿主维护 PowerShell Job Object 包装器、`taskkill.exe`、假 `SIGTERM` 预加载夹具、NTFS `rename` 重试与双轨 E2E 网络拓扑；只删 Windows 而保留 macOS 分支，则会留下无人实测的 `/bin/ps` 进程扫描与 Docker Desktop `bridge` 路径。选择 Linux-only 的代价是 Windows 和 macOS 工作站上的贡献者需要通过原生 Linux、WSL2 或 Linux 容器/虚拟机运行本仓库的开发与测试命令。
 
 ## 纯 Linux 宿主边界与进程树所有权
 
-- **入口显式快速失败**。`@iam/runtime/process`（`spawnOwnedProcessTree`、`closeOwnedProcessScope`）、`@iam/test-support/process-smoke-harness`（`terminateProcessTree`）、根测试/验证 runner 与 `pnpm sandcastle` 入口在 `process.platform !== "linux"` 时立即报错退出，不再静默降级或保留不可测分支。
-- **单一进程树回收机制**。删除 `windows-job-supervisor.ps1`、`windows-job-launcher.mjs`、`macOwnedProcesses`、`windowsJob`、`requestGracefulStop`、`runWindowsTreeKill` 及所有 `win32`/`darwin` 分支。Linux 进程树所有权统一由 [owned-process-tree.mjs](../../packages/runtime/src/process/owned-process-tree.mjs) 通过继承 `IAM_OWNED_PROCESS_MARKERS` 与扫描 `/proc/<pid>/environ` 回收 detached/reparented 后代；[process-smoke-harness.ts](../../packages/test-support/src/process-smoke-harness.ts) 同时保留对普通 `detached: true` 子进程的 POSIX `-pid` 进程组终止（供 `apps/sso-api` 需要 `stdin` 管道的 `fixture-process.ts` 使用），并在删除 `process-smoke-windows-job.integration.test.ts` 的同时补齐一条真实 Linux `detached` 后代进程回收集成测试。
+- **入口快速失败**。`@iam/runtime/process`（`spawnOwnedProcessTree`、`closeOwnedProcessScope`）、`@iam/test-support/process-smoke-harness`（`terminateProcessTree`）、根测试/验证 runner 与 `pnpm sandcastle` 入口在 `process.platform !== "linux"` 时直接报错退出，不静默降级。
+- **单一进程树回收机制**。移除全部 `win32`/`darwin` 进程管理适配，由 [owned-process-tree.mjs](../../packages/runtime/src/process/owned-process-tree.mjs) 通过继承 `IAM_OWNED_PROCESS_MARKERS` 并扫描 `/proc/<pid>/environ` 回收 detached/reparented 后代进程；[process-smoke-harness.ts](../../packages/test-support/src/process-smoke-harness.ts) 同时保留对普通 `detached: true` 子进程的 POSIX `-pid` 进程组终止，供 `apps/sso-api` 需要 `stdin` 管道的测试夹具使用。
 
-## 退役 Worker Standalone 与替换假 `SIGTERM` 夹具
+## 退役 Worker Standalone 与回归真实 `SIGTERM`
 
-- **Worker 仅保留源码交付路径**。生产镜像 `apps/worker/Dockerfile` 实际以 `bun run src/index.ts` 运行，不交付 `bun build --compile` 单文件可执行体。彻底移除 `apps/worker/src/composition/document-repair-schedule.ts` 中的 standalone 分支以及 `apps/worker/test-integration/support/standalone-build.ts` 与相关测试，不再维护生产未使用的独立可执行体打包路径。
-- **回归真实 POSIX `SIGTERM` 测试**。删除 `e2e/system/src/host-windows-shutdown.mjs` 以及 `apps/gateway`、`apps/worker`、`apps/ops` 中因 Windows 缺少 POSIX 信号而引入的 3 个假 `SIGTERM` 预加载测试夹具（`shutdown.fixture.ts`、`interrupt-worker.fixture.ts`、`interrupt-command.fixture.ts`），改为由测试向子进程发送真实 OS `SIGTERM`（在需要防启动竞态处通过既有 readiness 或数据库锁证据确保监听器已就绪），彻底消除测试文档中关于“未验证真实 POSIX 信号投递”的豁免。
+- **Worker 仅保留源码运行路径**。生产镜像 `apps/worker/Dockerfile` 以 `bun run src/index.ts` 启动，不交付 `bun build --compile` 单文件可执行体。移除 Worker 中未用于生产的 standalone 打包分支与对应测试路径。
+- **测试发送真实 POSIX `SIGTERM`**。移除此前因 Windows 缺少 POSIX 信号而引入的进程内假 `SIGTERM` 预加载夹具，改为由测试直接向子进程投递真实 OS `SIGTERM`（需要防启动竞态时以既有 readiness 或数据库锁作为监听器就绪依据），取消测试规范中“未验证真实信号投递”的豁免。
 
-## E2E、测试资源与 Sandcastle AFK 宿主收口
+## E2E、测试资源与宿主保留约定
 
-- **Full-system E2E 与内存采样收口（Hybrid 条款已由 [ADR-0060](0060-unify-test-architecture-sandbox-and-ci-gate.md) 取代）**。当年在原 `hybrid-compose.ts` 及相关 E2E 代码中移除了 `bridge` 网络模式、`IAM_E2E_UPSTREAM_HOST`、`host.docker.internal`（含 `vite-dev.mjs` 允许列表）以及 `host-memory.ts` 中的 `windowsMemoryReader()`（`bun:ffi` `kernel32.dll`），统一为 `network_mode: "host"` + `127.0.0.1` 与 `os.freemem()` 采样；随后 [ADR-0060](0060-unify-test-architecture-sandbox-and-ci-gate.md) 整体退役了 Hybrid E2E 与上述文件，改为静态生产容器 Compose 栈。`docker/compose.dev.yaml` 中 Grafana 的 `host.docker.internal:host-gateway` 属 Linux 容器访问宿主机代理的标准写法，保持不变。
-- **过渡裁剪 `@ai-hero/sandcastle` 补丁（已由 [ADR-0059](0059-adopt-native-sandcastle-afk-orchestration.md) 取代）**。当年从 `patches/@ai-hero__sandcastle@0.12.0.patch` 移除了 2 处 Windows 专属 hunk 并暂留 7 处 Linux hunk；随后 [ADR-0059](0059-adopt-native-sandcastle-afk-orchestration.md) 升级至零补丁原生 `@ai-hero/sandcastle@0.14.0` 并删除了整个 `patches/` 目录。
-- **简化 Sandcastle 与测试资源宿主调用（Sandcastle 宿主路径已由 [ADR-0059](0059-adopt-native-sandcastle-afk-orchestration.md) 与 [ADR-0060](0060-unify-test-architecture-sandbox-and-ci-gate.md) 取代）**。
-  - 当年对 `workspace-dependencies.mts`、`scripts/sandcastle/commands.ts`、`scripts/sandcastle/resources.ts` 与 `scripts/sandcastle/docker-smoke.mts` 移除了 Windows 分支、`-c core.longpaths=true` 与容器探测 socket GID；随后 [ADR-0059](0059-adopt-native-sandcastle-afk-orchestration.md) 与 [ADR-0060](0060-unify-test-architecture-sandbox-and-ci-gate.md) 退役了 `scripts/sandcastle/`，收口至 `.sandcastle/` 方案 X 无特权单容器（不再挂载 `/var/run/docker.sock`，也不再需要 Docker Desktop host networking）；
-  - 原资源编排移除了 `win32` 的 20×50ms `rename` 重试与 PowerShell 引号转义。现由 [E2E Compose 运行时](../../e2e/system/src/runtime/compose-runtime.ts) 保留 Compose bridge IP 优先直连策略（失败回退 `127.0.0.1:<port>`，兼容原生 Linux、WSL2 与 AFK）。
+本决定当年对原 Hybrid E2E 网络拓扑、内存采样、`patches/@ai-hero__sandcastle` 补丁以及 `scripts/sandcastle/` 做的 Linux 裁剪（明细见 Git 历史），随后已由 [ADR-0059](0059-adopt-native-sandcastle-afk-orchestration.md)（原生 `.sandcastle/` 编排）与 [ADR-0060](0060-unify-test-architecture-sandbox-and-ci-gate.md)（单容器方案 X 与静态生产容器 E2E）整体取代。仍在生效的两项宿主网络规则如下：
 
-## 零散兼容残留、明确保留项与文档同步
+- `docker/compose.dev.yaml` 中 Grafana 的 `host.docker.internal:host-gateway` 属于 Linux 容器访问宿主机代理的标准写法，保持不变；
+- [E2E Compose 运行时](../../e2e/system/src/runtime/compose-runtime.ts) 优先直连 Compose bridge IP，失败时回退 `127.0.0.1:<port>`，兼容原生 Linux、WSL2 与 AFK 环境。
 
-- **同步清理的残留项**。清理 `AGENTS.md` 中的 PowerShell 7 约定、`docs/agents/code-investigation.md` 的 PowerShell `Select-String`、原 `scripts/playwright-e2e-preflight.mjs` 的非 Linux 跳过分支（该脚本随后随 [ADR-0060](0060-unify-test-architecture-sandbox-and-ci-gate.md) 退役）、`.husky/pre-commit` 的 `--max-arg-length 6000`、全部 `windowsHide: true`、测试环境白名单中的 Windows/macOS 变量、`symlink(..., "junction")`、各处 `win32` 测试分支/跳过与专为 Windows 反斜杠保留的 `.replaceAll("\\", "/")` 及对应单测；[网关管理](../releases/apisix-gateway-release.md) 与 [登录与会话](../releases/authentication-and-session.md) 运维手册中的 PowerShell 7 示例改写为 Linux `bash` + `curl`。
+## 清理范围与明确保留项
+
+- **零散兼容清理**。同步移除仓库文档、运维手册、Git hook、测试环境白名单与脚本中的 PowerShell 示例、`windowsHide`、Windows/macOS 专用分支、`junction` 符号链接及为反斜杠保留的路径替换逻辑。
 - **明确保留项**。保留 `.gitattributes`（`* text=auto eol=lf`）通用换行符护栏、`.sandcastle/` 对 GitHub API 响应体 `\r\n` 的规范化、HTTP/Redis 协议层 `\r\n` 处理，以及业务代码中面向终端用户浏览器的 Windows User-Agent 识别。
-- **文档与词表影响**。实施落地后同步更新 [仓库地图](../engineering/repository-map.md)、[测试与验证](../engineering/testing.md)、`AGENTS.md`、`apps/worker/README.md`、`.sandcastle/README.md` 与对应运维手册；本决策不涉及 IAM 业务领域概念，不修改 `GLOSSARY.md`。
 
 [统一测试与 CI 架构](0060-unify-test-architecture-sandbox-and-ci-gate.md) · [原生 Sandcastle AFK 编排](0059-adopt-native-sandcastle-afk-orchestration.md)

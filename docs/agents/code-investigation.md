@@ -1,7 +1,7 @@
 # 代码调查与双引擎编排
 
-本页统一维护 T3 Code 双引擎角色分工、评审编排，以及项目级只读调查子代理的调用策略与返回契约。
-仓库的 7 个角色契约定义统一维护在 `.codex/agents/*.toml`（供 Codex 原生子代理与 Sandcastle AFK 直接加载）。
+本页定义 T3 Code 双引擎角色分工、评审编排，以及项目级只读调查子代理的调用策略与返回契约。
+仓库的 7 个角色契约位于 `.codex/agents/*.toml`（供 Codex 原生子代理与 Sandcastle AFK 直接加载）。
 
 ## 双引擎角色与评审编排
 
@@ -27,8 +27,7 @@
    `AGENTS.md`、issue/spec 编号、固定 base/candidate SHA 与范围）。经 `delegate_task` 执行的只读角色
    （`deep_researcher`、`ready-for-agent` 轻量门禁、`standards_reviewer`、`spec_reviewer`）在 `task` 中明确限定为只读范围，返回后由主会话核对 `git status` 干净。
 3. **显式双轴评审** 调用 `code-review` 时提供起始基线、固定候选 SHA 和已确认需求来源，评审期间保持候选固定。
-   两轴并发启动两个独立的 Codex `gpt-6.2-astra`（`reasoningEffort: "xhigh"`）`delegate_task`；每轮复审均新建独立
-   `delegate_task`，评审 findings 由主会话直接修复并验证。
+   两轴按上表模型与档位并发启动两个独立的 `delegate_task`；每轮复审均新建独立 `delegate_task`，评审 findings 由主会话直接修复并验证。
 4. **T3 Code 工作树与子任务管理** 主会话需要脱离主目录隔离工作时使用 `t3_worktree_handoff`。
    用户显式要求在 T3 Code 派发独立工作树子任务时，先提交父分支基线，再由父会话通过 `delegate_task(isolation: "worktree")`
    创建隔离 checkout；异步任务等待系统通知推进，需要停止时调用 `task_cancel`。
@@ -71,7 +70,7 @@
 1. 每个调查 agent 只接收一个问题，并明确 included scope、excluded scope 和 completion condition。
 2. 按独立 subsystem 或 concern 拆分调查任务，不按任意文件数量拆分。
    `deep_researcher` 默认只启动一个，负责范围更窄的复杂裁决。
-3. 调查 agent 不修改 production code、测试、文档、tracker 或配置，也不递归委派其他 agent。
+3. 调查 agent 严格只读（不修改任何仓库文件或 tracker），且不得递归委派其他 agent。
 4. 主代理等待所有必要调查完成后再综合，只针对冲突或缺口做聚焦补充调查，不重复已完成的扫描。
 5. 主代理负责最终判断、冲突消解、实现决策和任何需要落盘的调查记录。
 
