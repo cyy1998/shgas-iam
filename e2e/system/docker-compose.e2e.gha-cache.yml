@@ -1,3 +1,11 @@
+x-official-bun-contexts: &official-bun-contexts
+  docker.xuanyuan.run/node:24.22.3-alpine: docker-image://docker.io/library/node:24.22.3-alpine
+  docker.xuanyuan.run/oven/bun:1.4.4-alpine: docker-image://docker.io/oven/bun:1.4.4-alpine
+
+x-official-web-contexts: &official-web-contexts
+  docker.xuanyuan.run/node:24.22.3-alpine: docker-image://docker.io/library/node:24.22.3-alpine
+  docker.xuanyuan.run/nginx:1.31.9-alpine: docker-image://docker.io/library/nginx:1.31.9-alpine
+
 services:
   apisix:
     build:
@@ -9,33 +17,41 @@ services:
       cache_to: ["type=gha,mode=max,scope=e2e-e2e-stubs"]
   auth-api:
     build:
+      additional_contexts: *official-bun-contexts
       cache_from: ["type=gha,scope=e2e-auth-api"]
       cache_to: ["type=gha,mode=max,scope=e2e-auth-api"]
   sso-api:
     build:
+      additional_contexts: *official-bun-contexts
       cache_from: ["type=gha,scope=e2e-sso-api"]
       cache_to: ["type=gha,mode=max,scope=e2e-sso-api"]
   integration-api:
     build:
+      additional_contexts: *official-bun-contexts
       cache_from: ["type=gha,scope=e2e-integration-api"]
       cache_to: ["type=gha,mode=max,scope=e2e-integration-api"]
   admin-api:
     build:
+      additional_contexts: *official-bun-contexts
       cache_from: ["type=gha,scope=e2e-admin-api"]
       cache_to: ["type=gha,mode=max,scope=e2e-admin-api"]
   worker:
     build:
+      additional_contexts: *official-bun-contexts
       cache_from: ["type=gha,scope=e2e-worker"]
       cache_to: ["type=gha,mode=max,scope=e2e-worker"]
   gateway-api:
     build:
+      additional_contexts: *official-bun-contexts
       cache_from: ["type=gha,scope=e2e-gateway-api"]
       cache_to: ["type=gha,mode=max,scope=e2e-gateway-api"]
   admin:
     build:
+      additional_contexts: *official-web-contexts
       cache_from: ["type=gha,scope=e2e-admin"]
       cache_to: ["type=gha,mode=max,scope=e2e-admin"]
   sso:
     build:
+      additional_contexts: *official-web-contexts
       cache_from: ["type=gha,scope=e2e-sso"]
       cache_to: ["type=gha,mode=max,scope=e2e-sso"]

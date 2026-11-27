@@ -104,15 +104,37 @@ test("defines the isolated production-container E2E topology and WeCom stub trus
   });
 });
 
-test("isolates GHA caching to an override for the ten images built per project", () => {
+const officialBunContexts = {
+  "docker.xuanyuan.run/node:24.22.3-alpine": "docker-image://docker.io/library/node:24.22.3-alpine",
+  "docker.xuanyuan.run/oven/bun:1.4.4-alpine": "docker-image://docker.io/oven/bun:1.4.4-alpine",
+};
+const officialWebContexts = {
+  "docker.xuanyuan.run/node:24.22.3-alpine": "docker-image://docker.io/library/node:24.22.3-alpine",
+  "docker.xuanyuan.run/nginx:1.31.9-alpine": "docker-image://docker.io/library/nginx:1.31.9-alpine",
+};
+const officialContextsByService: Record<string, Record<string, string>> = {
+  "auth-api": officialBunContexts,
+  "sso-api": officialBunContexts,
+  "integration-api": officialBunContexts,
+  "admin-api": officialBunContexts,
+  worker: officialBunContexts,
+  "gateway-api": officialBunContexts,
+  admin: officialWebContexts,
+  sso: officialWebContexts,
+};
+
+test("isolates GHA caching and official registry contexts to an override for the ten images built per project", () => {
   expect(Object.keys(cache.services).sort()).toEqual([...buildServices].sort());
   for (const service of buildServices) {
     expect(compose.services[service]?.image).toBe(`iam-e2e-${service}:\${E2E_IMAGE_TAG:-local}`);
     expect(compose.services[service]?.build).toBeDefined();
     expect(compose.services[service]?.build).not.toHaveProperty("cache_from");
     expect(compose.services[service]?.build).not.toHaveProperty("cache_to");
+    expect(compose.services[service]?.build).not.toHaveProperty("additional_contexts");
+    const contexts = officialContextsByService[service];
     expect(cache.services[service]).toEqual({
       build: {
+        ...(contexts ? { additional_contexts: contexts } : {}),
         cache_from: [`type=gha,scope=e2e-${service}`],
         cache_to: [`type=gha,mode=max,scope=e2e-${service}`],
       },
