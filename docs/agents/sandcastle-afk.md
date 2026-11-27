@@ -84,5 +84,5 @@ AFK 启动时拉取 `<remote>/<baseBranch>`（默认 `origin` / `main`，可由 
 
 - **票级并行实施与按需 Merger**：只运行受影响范围的聚焦测试（相关 workspace 的 Unit、typecheck、适用文档检查、受影响包的定向 Integration `pnpm test:integration -- <filter>` 与 `git diff --check`）；禁止在并行票阶段运行全仓 `pnpm verify`、全量 Integration 或全量 Full-system E2E。
 - **Spec 最终验证**：单实例串行的集中修复者以 `mergeBase` 为合入目标，按[验证节奏](workflow.md#验证节奏)执行完整门禁：纯文档差异运行 `pnpm verify:docs --base <merge-base-sha>`，其余改动运行 `pnpm verify` 并按风险与验收补齐所需的 Integration、E2E、Gateway 检查。
-- **Container Smoke 与 E2E Runtime 门禁**：修复提交后在候选工作树分别执行 `pnpm verify:container-smoke --base <merge-base-sha>` 与 `pnpm verify:e2e-runtime --base <merge-base-sha>`（同一最终候选已通过 `pnpm verify:release` 时复用对应结果）。
+- **路径触发门禁（Container Smoke、E2E Runtime 与 OIDC 套件资源）**：修复提交后在候选工作树分别执行 `pnpm verify:container-smoke --base <merge-base-sha>`、`pnpm verify:e2e-runtime --base <merge-base-sha>` 与 `pnpm verify:oidc-suite-resources --base <merge-base-sha>`（同一最终候选已通过 `pnpm verify:release` 时复用对应结果）。
 - 后续修复重跑失效检查，仍有效的通过证据可复用；必需检查未通过或 findings 未解决时不得输出 `<promise>COMPLETE</promise>`。
