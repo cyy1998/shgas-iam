@@ -55,7 +55,7 @@ Loki 默认保留期 30 天（`720h`）；当前 Compose 未透传 `LOKI_RETENTI
   浏览器与 Grafana 容器都须可达该入口，可使用不同 DNS 解析，但请求 authority 必须命中同一 Gateway issuer。
 - **属性映射** 当前 login/name/email attribute path 保持 `preferred_username`、`name`、`preferred_username`，不要假设 IAM 已签发 email claim。
 
-开发默认 localhost 与 host.docker.internal 的 URL 组合不保证双入口 issuer 一致；按实际部署覆盖三项 URL 并配置容器解析。
+开发 Compose 默认将三项 URL 统一指向 `http://iam-sso.internal.localhost:30080/oidc/{auth,token,me}` 并通过 `extra_hosts` 映射 `iam-sso.internal.localhost:host-gateway`；非默认或生产部署应按实际网关覆盖三项 URL 并配置容器解析，确保浏览器与 Grafana 命中同一 Gateway issuer。
 更新后重建 Grafana，例如开发环境：
 
 ```bash

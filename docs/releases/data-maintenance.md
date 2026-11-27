@@ -6,7 +6,7 @@
 
 ## 准备资源与选择操作
 
-命令使用显式 `IAM_OPS_DATABASE_URL`，需要 Redis 的命令还使用 `IAM_OPS_REDIS_*`。
+命令使用显式 `IAM_OPS_DATABASE_URL`，需要 Redis 的命令还使用 `IAM_OPS_REDIS_URL`。
 脚本默认读取 `apps/ops/.env`，进程环境优先；核对实例、DB、queue 和 prefix 与生产者/consumer 一致。
 命令不启动 consumer、业务 HTTP 或 Bull Board，重建必须有启用对应模块的 Worker。
 配置见[Ops 示例](../../apps/ops/.env.example)，恢复机制见[Subject Access 恢复与重新启用](../../packages/subject-access/README.md#恢复与重新启用)。
@@ -111,7 +111,7 @@ repair 的 rebuilds.enqueued 仍按目标用户数报告，不能与 Bull Board 
 用户 backfill、repair 与两类 verify 支持 `--deadline-ms <1..300000>`，默认 30000。参数非法时不创建资源；
 deadline、SIGINT/SIGTERM、查询/投递失败或必需资源关闭失败均非零退出。命令独立拥有带完整 UUID 的 PG 连接，
 取消只作用于本次连接；超时或中断不回滚已经提交的登记，恢复依赖正式 repair/backfill 与完整核验。
-verify-postgres 只需 PG，不连接 Redis；verify-redis 还需显式 `IAM_OPS_REDIS_*`，不创建队列或启动 consumer。
+verify-postgres 只需 PG，不连接 Redis；verify-redis 还需显式 `IAM_OPS_REDIS_URL`，不创建队列或启动 consumer。
 重新启用不能绕过完整 Facts 门禁：直接用户未完成 Outbox、post-publication 未完成或 retained-newer 缓存（包括墓碑）
 均继续阻挡恢复。依赖恢复后运行 repair 并重做完整门禁，不手动启用屏障。
 
@@ -202,7 +202,7 @@ backfill/repair/verify 都支持 `--deadline-ms <1..300000>`，默认 30000；de
 
 适用于首次构建、单版本不兼容升级与全量恢复。
 
-1. **停流与排空** 关闭 `POST /internal/organizations/search-dsl`、`GET /internal/organizations/:orgCode` 和 API/Admin API 全部组织写入口，包括 Internal 注册、资料、状态、删除及同类脚本。
+1. **停流与排空** 关闭 `POST /internal/organizations/search-dsl`、`GET /internal/organizations/:orgCode` 和 Integration API / Admin API 全部组织写入口，包括 Internal 注册、资料、状态、删除及同类脚本。
    关闭直连/重试，排空在途请求、源事务和任务，停止旧 publisher，启用唯一匹配当前 schema 的受控 consumer。
 2. **全量登记并等待收敛** 全量登记并等待两阶段工作完成，按需 repair：
 

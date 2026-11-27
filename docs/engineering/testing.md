@@ -88,7 +88,7 @@ expect(failure).toBeInstanceOf(ExpectedError);
   - 方案 X 无特权只读/可写会话隔离（零 `/var/run/docker.sock`、零 `--network=host`、零额外 `groups`、可写阶段注入专用测试端点）与单向只读 `auth.json`；
   - 远端 `ci-gate` 闭环（严格 `head_sha === finalSha && name === 'ci-gate'` 匹配与分页、失败日志脱敏与尾部截断、最多 2 次自动修红、超限/超时/无前进提交/外部关闭 PR 暂停、`--draft` 立即交付、断线重启续接与取消授权软停止）。
     单实例互斥由根 `package.json` 的外部 `flock -n .sandcastle/runner.lock` 提供。
-- **类型检查**。`pnpm typecheck:root` 通过 [Sandcastle tsconfig](../../.sandcastle/tsconfig.json) 与 [scripts tsconfig](../../scripts/tsconfig.json) 检查 `.sandcastle/` 及 `scripts/` 全部代码与测试。
+- **类型检查**。`pnpm typecheck:root` 通过 [Sandcastle tsconfig](../../.sandcastle/tsconfig.json) 与 [scripts tsconfig](../../scripts/tsconfig.json) 检查 `.sandcastle/` 全部代码与测试，以及 `scripts/tsconfig.json` 纳入的根脚本 TypeScript 与声明目标。
 - **方案 X 真实 Docker 冒烟**。`pnpm sandcastle:smoke`（经 `node .sandcastle/run.mts --smoke` 调用 [`.sandcastle/smoke.mts`](../../.sandcastle/smoke.mts)）在临时克隆仓库上用本地探测 Provider 串行验证两类无特权沙箱：
   - linked worktree 自洽只读评审沙箱（工作树与 `.git` 不可写、`auth.json` 单向只读、无 `/var/run/docker.sock` 与 `docker` CLI、无法访问宿主 loopback、无 `pnpm-store` / Turbo 缓存 / Docker registry / GitHub 凭据，且未设 `DOCKER_HOST`，未注入专用测试端点）；
   - 可写方案 X 实施沙箱（宿主独占 worktree + `head` 模式、零 `/var/run/docker.sock` / `docker` CLI / `--network=host`、`onSandboxReady` 安装依赖并启动专用测试服务、Turbo 跨次缓存落盘宿主、经 `core.hooksPath=.husky` 直接启用 `.husky/pre-commit` 且不改宿主 `.git/config`、容器内实跑原生 PostgreSQL + Redis + etcd + APISIX 集成测试并确认测试命令退出后服务仍可用）。准备、诊断与恢复见[运维手册](../../.sandcastle/README.md#启动与诊断)。
@@ -136,7 +136,7 @@ Admin 与 SSO 的页面和路由行为在 L1 中通过 Vitest 的 jsdom project�
 | 包级 Integration 用例 | Bun 以 `--max-concurrency=1` 运行用例并启用首错停止。达到失败上限时停止调度，已启动的用例仍需收尾。[根 runner](../../scripts/run-test-integration.mjs)                                                                           |
 | Full-system E2E       | 一次 Playwright 运行固定单个 worker（本地 0 重试、CI 1 次重试），跑完全部选中用例。每个 spec 文件边界（含 `retry` 与 `repeatEachIndex`）自动复位，按需用 `-x` 首错停止。[Playwright 配置](../../e2e/system/playwright.config.ts) |
 
-Timeout 用于限制悬挂。进程测试等待实际 readiness，同时观察启动错误与退出。成功、失败、超时或可捕获中断后均须尝试停止并等待所属进程树，再释放端口、连接及目录。清理有独立预算，失败时报告原因并保留原始错误。Linux 通过 `/proc` 中继承的进程归属标记回收后代。需要管道 stdin 的直接子进程由测试夹具单独创建进程组后按组回收。[进程生命周期](../../packages/runtime/src/process/owned-process-tree.mjs) · [进程 smoke harness](../../packages/test-support/src/process-smoke-harness.ts)
+Timeout 用于限制悬挂。进程测试等待实际 readiness，同时观察启动错误与退出。成功、失败、超时或可捕获中断后均须尝试停止并等待所属进程树，再释放端口、连接及目录。清理有独立预算，失败时报告原因并保留原始错误。Linux 通过 `/proc` 中继承的进程归属标记回收后代；独立创建的 `detached` 进程组由进程 smoke harness 按 POSIX `-pid` 回收。[进程生命周期](../../packages/runtime/src/process/owned-process-tree.mjs) · [进程 smoke harness](../../packages/test-support/src/process-smoke-harness.ts)
 
 ### 专用资源与隔离
 

@@ -97,14 +97,14 @@ protocol entry
 
 ## 返回契约与外置记忆
 
-调查结果必须包含：
+调查结果必须包含（`code_researcher` 使用 `Conclusion` + `Inferences`；`deep_researcher` 对应使用 `Verdict`、`Invariants and failure modes` 与 `Counterevidence`，详见对应 `.codex/agents/*.toml`）：
 
-1. `Conclusion`：直接结论与置信度；
+1. `Conclusion`（`deep_researcher` 为 `Verdict`）：直接结论与置信度；
 2. `Execution or data flow`：有序的符号与边界；
 3. `Evidence`：仓库相对路径、符号名称以及每条证据证明的内容；
-4. `Inferences`：有依据但未被直接证明的判断；
+4. `Inferences`（`code_researcher`）：有依据但未被直接证明的判断；
 5. `Unknowns`：未确认项与下一步最小调查动作。
 
-`deep_researcher` 还必须返回关键 `Invariants and failure modes`，以及用于挑战主假设的 `Counterevidence`。
+`deep_researcher` 另须返回关键 `Invariants and failure modes`，以及用于挑战主假设的 `Counterevidence`。
 
 结果只返回压缩后的证据摘要，不返回原始搜索日志或大段源码。需要跨上下文恢复时，由主代理把摘要、已排除假设、已覆盖文件和下一步动作写入当前 GitHub issue 的评论，或用户明确指定的调查报告路径；恢复后优先沿该记录继续。

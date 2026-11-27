@@ -28,8 +28,8 @@ Worker composition 负责模块选择、队列、consumer、health/readiness 和
 
 ## 任职有效期
 
-选择 `user-document` 模块的 Worker 启动时补扫，并在 `Asia/Shanghai` 每日 00:00 执行下一轮。开发、生产和全系统测试的 User Document Worker
-均选择该模块，Organization Document 和 dashboard-only 服务各自独立运行。任职调度随模块启用，User Document repair 仍由自己的开关控制。
+选择 `user-document` 模块的 Worker 启动时补扫，并在 `Asia/Shanghai` 每日 00:00 执行下一轮。开发与生产编排中
+`worker-user-document`、`worker-organization-document` 与 dashboard-only 服务各自独立运行；全系统 E2E（`e2e/system/docker-compose.e2e.yml`）使用单个 `worker` 容器同时启用 `user-document,organization-document` 并关闭 Bull Board。任职调度随 `user-document` 模块启用，User Document repair 仍由自己的开关控制。
 
 每轮先扫描到期任职，再扫描可启用的未启用任职。每条候选在 PostgreSQL 事务中锁定并重验，结束任职时按 ID 顺序锁定关联责任。
 任职、责任、system 审计及 User Document Outbox 一同提交。Worker 停机时取消后续调度，等待当前数据库工作与有界的提交后唤醒，然后关闭连接。

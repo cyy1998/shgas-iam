@@ -10,7 +10,7 @@ status: accepted
 
 ## 收集分层与根工具链
 
-- **三层最小依赖集合与单一公开命令面**。全仓测试严格按外部依赖归类为 **Unit**（L1，纯内存，由 Turbo 编排并缓存）、**Integration**（L2，真实 PostgreSQL / Redis / APISIX / 进程 / 浏览器，100% 收归 `pnpm test:integration`，不再保留孤立的 Docker 专项特例）与 **Full-system E2E**（L3，生产容器栈 + 9 个跨服务业务旅程，`pnpm test:e2e`）。面向使用者的根命令面收敛为 6 个核心入口：`pnpm check`（全部静态检查、`typecheck`、`@iam/db db:check` 与守卫）、`pnpm fix`、`pnpm test:unit`、`pnpm test:integration`、`pnpm test:e2e` 与 `pnpm verify`（本地一键全量 L1+L2：`check + test:unit + test:integration + build`），退役全部旧 `verify:*` 路径门禁包装脚本。
+- **三层最小依赖集合与单一公开命令面**。全仓测试严格按外部依赖归类为 **Unit**（L1，纯内存，含前端 Vitest `node` / `dom` 与 Vite 代理单测，由 Turbo 编排并缓存）、**Integration**（L2，真实 PostgreSQL / Redis / APISIX / HTTP 服务或应用子进程，100% 收归 `pnpm test:integration`，不再保留孤立的 Docker 专项特例）与 **Full-system E2E**（L3，生产容器栈 + 9 个跨服务业务旅程，`pnpm test:e2e`）。面向使用者的根命令面收敛为 6 个核心入口：`pnpm check`（全部静态检查、`typecheck`、`@iam/db db:check` 与守卫）、`pnpm fix`、`pnpm test:unit`、`pnpm test:integration`、`pnpm test:e2e` 与 `pnpm verify`（本地一键全量 L1+L2：`check + test:unit + test:integration + build`），退役全部旧 `verify:*` 路径门禁包装脚本。
 - **精简收集守卫与 Root 工具链一次性验证**。不维护独立 Collection Guard（唯一归属与根可达性由配置评审与实际运行核对）；根工具链、资源管理、Git hook 与静态守卫默认采用一次性行为验证，仅在 [ADR-0059](0059-adopt-native-sandcastle-afk-orchestration.md) 中为 `.sandcastle/__tests__/boundaries.test.ts` 保留窄范围常驻边界单测。
 
 ## L2 集成测试：专用端点、直接调度与前端解耦
@@ -18,7 +18,7 @@ status: accepted
 - **基础设施供给与测试执行分离**。本地 Compose、AFK 沙箱和 CI 提前启动各自独占的测试服务。根 runner 统一通过端点环境变量消费资源，在 L2 的并发执行窗口内保持容器和网络稳定，避免宿主 `NETLINK_ROUTE` 广播中断 Chromium 请求。端点与恢复约定见[专用资源与隔离](../engineering/testing.md#专用资源与隔离)。
 - **PG 模板克隆与 Redis 32 DB 槽位**。每条顶层命令仍独占所用端点。PostgreSQL 按轮建模板并按文件克隆，重置用例时只截断含数据或需重置序列的业务表。Redis 预检 `SELECT 31` 后为各并发任务注入独占 `/1`–`/31` 槽位，fixture 先停止执行者再清理。根 runner 直接启动执行器并保留有界并发、首错取消和任务日志。
 - **25 变量收敛为 2 个标准变量与建模板前双保险守卫**。全仓 workspace 分散声明的 25 个 `IAM_<PKG>_TEST_(DATABASE|REDIS)_URL` 统一收敛为 `IAM_TEST_POSTGRES_URL` 与 `IAM_TEST_REDIS_URL`（各包 `iamTest.integration` 简化为布尔声明）。`requireDedicatedPostgresTestUrl()` 必须在执行 `CREATE DATABASE` 准备模板库**之前**完成双保险校验：拒绝系统库（`postgres`/`template0`/`template1`）、拒绝匹配 `DATABASE_URL` 及当前环境任意 `IAM_*_DATABASE_URL` 开发库，且要求数据库名显式包含测试标识（如 `iam_test` / `*_test`）。
-- **前端 L2 去手写缓存与零反向依赖**。退役 `e2e/system/src/frontend/` 的手写文件哈希缓存与自建静态服务。`@iam/admin` 与 `@iam/sso` 新增独立的 Turbo 缓存任务 `build:test`（输出至 `dist-test/`，不污染生产 `dist/`；`@iam/sso` 在脚本内固化测试登录公钥，`turbo.json` 纳入 `IAM_*_WEB_*` 缓存键），Playwright `webServer` 改用 `vite preview --outDir dist-test --host 127.0.0.1 --port <动态端口>`（`@iam/sso` 同步补齐 `configurePreviewServer` 重定向并保留 `IAM_PW_DEV_SERVER=1` 调试开关），彻底切断前端 L2 对 `e2e/system` 的反向依赖并消除固定端口冲突。
+- **前端测试解耦与 L1 收敛（已修订）**。本决定最初规划退役 `e2e/system/src/frontend/` 的手写文件哈希缓存与自建静态服务，改用前端 `build:test` + `vite preview` + Playwright；后续已进一步彻底移除前端 L2 Playwright（不再保留 `build:test`、`dist-test/` 与 `IAM_PW_DEV_SERVER`），`@iam/admin` 与 `@iam/sso` 的页面与路由行为统一收敛至 L1 Vitest（`node` + `dom` jsdom/RTL/MSW，及 SSO Vite 代理单测），跨服务浏览器与 Cookie 隔离统一由 L3 Full-system E2E 覆盖，见[测试与验证](../engineering/testing.md#收集与编排)。
 
 ## 方案 X：单容器预装四件套与非 root 启动
 
@@ -32,7 +32,7 @@ status: accepted
 
 ## GitHub Actions CI 权威合入门禁
 
-- **公开仓库安全默认与严格真值表 `ci-gate`**。`.github/workflows/ci.yml` 运行于 GitHub-hosted `ubuntu-latest`（避免公开 PR 触达持久自建机），顶层锁定 `permissions: { contents: read }`、`pnpm install --frozen-lockfile`、PR CI 零真实外部 Secret 与脱敏产物白名单（`retention-days: 7`），按 PR 编号 `cancel-in-progress: true`。流程分为 `detect` → 纯文档走 `doc-check`，代码/配置变更并行走 `fast`（`check + test:unit + build`）与 `integration`（原生 `services:` PG 18.4 + Redis 8.8 `--databases 32` + 前置 step 从 `scripts/test-resources/compose.yaml` 启动 APISIX 与 etcd 配 `if: always()` 拆除，全量 197 文件）→ Ready PR 与 `main` 接续 `e2e`（生产容器栈 + 9 个业务旅程）→ 最终由 `ci-gate`（`if: always()`，`needs` 全部上游 Job）按严格真值表汇总唯一 Required Check（Draft PR 跳过 `e2e` 时不得绿灯），配合 Branch Protection 的 `Require branches to be up to date before merging` 成为合入 `main` 的唯一权威裁判。
+- **公开仓库安全默认与严格真值表 `ci-gate`**。`.github/workflows/ci.yml` 运行于 GitHub-hosted `ubuntu-latest`（避免公开 PR 触达持久自建机），顶层锁定 `permissions: { contents: read }`、`pnpm install --frozen-lockfile`、PR CI 零真实外部 Secret 与脱敏产物白名单（`retention-days: 7`），按 PR 编号 `cancel-in-progress: true`。流程分为 `detect` → 纯文档走 `doc-check`，代码/配置变更并行走 `fast`（`check + test:unit + build`）与 `integration`（通过 `pnpm test:infra:up` 从 `scripts/test-resources/compose.yaml` 启动 PG 18.4、Redis 8.8 `--databases 32`、etcd 3.5.11 与 APISIX 3.16.0，配 `if: always()` `pnpm test:infra:down` 拆除，以并发上限 `2` 运行全量 `pnpm test:integration`）→ Ready PR 与 `main` 接续 `e2e`（生产容器栈 + 9 个业务旅程）→ 最终由 `ci-gate`（`if: always()`，`needs` 全部上游 Job）按严格真值表汇总唯一 Required Check（Draft PR 跳过 `e2e` 时不得绿灯），配合 Branch Protection 的 `Require branches to be up to date before merging` 成为合入 `main` 的唯一权威裁判。
 
 本决定属工程测试与 CI 基础设施架构，不涉及 IAM 业务领域概念，不修改 [`GLOSSARY.md`](../../GLOSSARY.md)。
 

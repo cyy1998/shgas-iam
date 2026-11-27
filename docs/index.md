@@ -114,7 +114,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [ADR-0038](adr/0038-derive-managed-sso-callback-from-redirect-origin.md)                | decision | Current    | 2026-11-16    | 2026-12-16  | 显式回调类型与 managed origin 信任。                                                                                                                                                                                                                                                                                                                        |
 | [ADR-0039](adr/0039-tighten-admin-reference-integrity-and-preserve-history.md)          | decision | Current    | 2026-10-21    | 2026-11-21  | 管理引用完整性、输入规范化与软删除历史；详情按 ADR-0045 收缩。                                                                                                                                                                                                                                                                                              |
 | [ADR-0040](adr/0040-retire-orcas-custom-sso-integration.md)                             | decision | Historical | 2026-10-10    | n/a         | ORCAS 退役历史。保留全量清理、维护窗口与外部会话责任的决策依据。                                                                                                                                                                                                                                                                                            |
-| [ADR-0041](adr/0041-unify-format-and-lint-with-biome.md)                                | decision | Current    | 2026-11-16    | 2026-12-16  | 已接受：Biome 与提交时修复；YAML 仅排版并保留专属验证，最终只读检查；实施与验收见 Spec #217。                                                                                                                                                                                                                                                               |
+| [ADR-0041](adr/0041-unify-format-and-lint-with-biome.md)                                | decision | Current    | 2026-11-27    | 2026-12-27  | 已接受：Biome 与提交时修复；YAML 仅排版并保留专属验证，最终只读检查，Sandcastle 通过 `GIT_CONFIG_*` 复用 `.husky/pre-commit`；实施与验收见 Spec #217。                                                                                                                                                                                                      |
 | [ADR-0043](adr/0043-retire-public-and-legacy-internal-directory-search.md)              | decision | Historical | 2026-10-26    | n/a         | 旧目录搜索入口退役历史。现行搜索决定由 ADR-0046 维护。                                                                                                                                                                                                                                                                                                      |
 | [ADR-0044](adr/0044-publish-gateway-configurations-through-a-stateless-api.md)          | decision | Current    | 2026-11-16    | 2026-12-16  | 无状态 Gateway API、Client 凭据校验、补偿恢复与实例内串行的已接受取舍。                                                                                                                                                                                                                                                                                     |
 | [ADR-0045](adr/0045-retire-privilege-permission-points.md)                              | decision | Current    | 2026-10-21    | 2026-11-21  | IAM 交付角色事实，应用解释业务权限；保留权限点退役与有效登录态的取舍。                                                                                                                                                                                                                                                                                      |
@@ -127,10 +127,10 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | [ADR-0052](adr/0052-complete-wecom-qr-login-at-the-originating-browser.md)              | decision | Current    | 2026-11-14    | 2026-12-14  | 已确认的设计：跨设备完成企业微信登录、绑定与手机号唯一性。                                                                                                                                                                                                                                                                                                  |
 | [ADR-0053](adr/0053-bind-wecom-identities-through-one-qr-flow.md)                       | decision | Current    | 2026-11-17    | 2026-12-17  | 已确认的设计：统一扫码流程、多身份绑定与旧接口兼容。                                                                                                                                                                                                                                                                                                        |
 | [ADR-0054](adr/0054-disclose-directory-custom-attributes-to-all-eligible-clients.md)    | decision | Current    | 2026-11-22    | 2026-12-22  | 已确认的设计：目录自定义属性向具备入口调用资格的应用统一披露。                                                                                                                                                                                                                                                                                              |
-| [ADR-0057](adr/0057-split-public-api-by-trust-and-traffic-boundaries.md)                | decision | Current    | 2026-11-25    | 2026-12-25  | 已确认的设计：将公共 `apps/api` 拆分为 `auth-api`、`sso-api`、`integration-api` 三服务、规范前缀与 APISIX 双轨兼容、无同步 RPC 与整体交付。                                                                                                                                                                                                                 |
-| [ADR-0058](adr/0058-standardize-development-and-runtime-tooling-on-linux.md)            | decision | Current    | 2026-11-27    | 2026-12-27  | 已确认的设计：将开发、测试、AFK 编排与运行时工具链收敛为纯 Linux，退役 Windows/macOS 适配层、Worker standalone 与假 `SIGTERM` 夹具；过渡 Sandcastle 补丁条款由 ADR-0059 取代，原 ADR-0055/0056 已由 ADR-0060 取代。                                                                                                                                         |
+| [ADR-0057](adr/0057-split-public-api-by-trust-and-traffic-boundaries.md)                | decision | Current    | 2026-11-27    | 2026-12-27  | 已确认的设计：将公共 `apps/api` 拆分为 `auth-api`、`sso-api`、`integration-api` 三服务、规范前缀与 APISIX 双轨兼容、无同步 RPC 与整体交付（原验证设施已由 ADR-0060 取代）。                                                                                                                                                                                 |
+| [ADR-0058](adr/0058-standardize-development-and-runtime-tooling-on-linux.md)            | decision | Current    | 2026-11-27    | 2026-12-27  | 已确认的设计：将开发、测试、AFK 编排与运行时工具链收敛为纯 Linux，退役 Windows/macOS 适配层、Worker standalone 与假 `SIGTERM` 夹具；过渡 Sandcastle 补丁、`docker.sock`/host networking 与 Hybrid E2E 条款已分别由 ADR-0059 与 ADR-0060 取代。                                                                                                              |
 | [ADR-0059](adr/0059-adopt-native-sandcastle-afk-orchestration.md)                       | decision | Current    | 2026-11-27    | 2026-12-27  | 已确认的设计：基于零补丁 `@ai-hero/sandcastle@0.14.0` 与原生 `docker()` 在 `.sandcastle/` 构建单目录 AFK 编排，采用方案 X 无特权单容器（零 `docker.sock`/`--network=host`）、原生 `linkedBranches`、宿主独占 worktree 与按需 Merger、单向 `auth.json`、`captureSessions: false`、轻推前 `pnpm check` 与远端 `ci-gate` 等绿限次修红闭环，同步配合 ADR-0060。 |
-| [ADR-0060](adr/0060-unify-test-architecture-sandbox-and-ci-gate.md)                     | decision | Current    | 2026-11-27    | 2026-12-27  | 已确认的设计：统一测试分层与 6 核心根命令面、L2 窄 Provider 与 2 变量收敛、前端测试架构的原始决定（当前入口见 [测试与验证](engineering/testing.md#收集与编排)）、方案 X 单容器无特权沙箱、生产容器全量 9-spec E2E（四合一 `e2e-stubs`）与 GitHub Actions `ci-gate` 权威门禁；合并并取代原 ADR-0009、ADR-0055 与 ADR-0056。                                  |
+| [ADR-0060](adr/0060-unify-test-architecture-sandbox-and-ci-gate.md)                     | decision | Current    | 2026-11-27    | 2026-12-27  | 已确认的设计：统一测试分层与 6 核心根命令面、L2 专用端点供给与 2 变量收敛、前端测试收敛至 L1 Vitest（详见 [测试与验证](engineering/testing.md#收集与编排)）、方案 X 单容器无特权沙箱、生产容器全量 9-spec E2E（四合一 `e2e-stubs`）与 GitHub Actions `ci-gate` 权威门禁；合并并取代原 ADR-0009、ADR-0055 与 ADR-0056。                                      |
 
 </details>
 
@@ -143,9 +143,9 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | ---------------------------------------------------- | ------------ | ------- | ------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [代码调查与双引擎编排](agents/code-investigation.md) | agent-config | Current | 2026-11-27    | 2026-12-27  | T3 双引擎角色与评审编排、只读调查调用策略、升级条件、返回契约与外置记忆。                                                                                                                                                                                |
 | [领域文档规则](agents/domain.md)                     | agent-config | Current | 2026-11-25    | 2026-12-25  | 工程 skills 的领域入口、术语一致性与 ADR 冲突上报规则。                                                                                                                                                                                                  |
-| [GitHub 议题跟踪](agents/issue-tracker.md)           | agent-config | Current | 2026-11-26    | 2026-12-26  | GitHub spec、ticket 类型、原生任务图、`linkedBranches` 与 `needs-attention` 暂停、T3 绑定、PR 自动关票与交接。                                                                                                                                           |
+| [GitHub 议题跟踪](agents/issue-tracker.md)           | agent-config | Current | 2026-11-27    | 2026-12-27  | GitHub spec、ticket 类型、原生任务图、`linkedBranches` 与 `needs-attention` 暂停、T3 绑定、PR 自动关票与交接。                                                                                                                                           |
 | [Sandcastle AFK 工作流](agents/sandcastle-afk.md)    | agent-config | Current | 2026-11-27    | 2026-12-27  | `.sandcastle/` 方案 X 无特权单容器编排、`linkedBranches`、`origin/main` + `merge-base`、并行实施与按需 Merger、双轴只读评审、推前 `pnpm check`、PR 交付与远端 `ci-gate` 限次修红闭环。配置与诊断见 [AFK 运维手册](../.sandcastle/README.md#启动与诊断)。 |
-| [Triage Labels](agents/triage-labels.md)             | agent-config | Current | 2026-11-26    | 2026-12-26  | 默认 canonical triage labels、Spec/ticket 互斥类型与 AFK `agent:light`/`agent:deep`/`needs-attention` 标签字典。                                                                                                                                         |
+| [Triage Labels](agents/triage-labels.md)             | agent-config | Current | 2026-11-27    | 2026-12-27  | 默认 canonical triage labels、Spec/ticket 互斥类型与 AFK `agent:light`/`agent:deep`/`needs-attention` 标签字典。                                                                                                                                         |
 | [工作流补充](agents/workflow.md)                     | agent-config | Current | 2026-11-27    | 2026-12-27  | 三轨开发流、授权与分支、分级验证节奏（本地 `pnpm check` / `pnpm verify` 与 GitHub Actions `ci-gate` 权威门禁）与 Fast Track `$pr` PR 交付。                                                                                                              |
 
 </details>
@@ -157,18 +157,18 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 
 #### 定位代码与理解系统
 
-| Document                                           | Type         | Status  | Last verified | Next review | Notes                                                                                                                        |
-| -------------------------------------------------- | ------------ | ------- | ------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| [仓库地图](engineering/repository-map.md)          | architecture | Current | 2026-11-27    | 2026-12-27  | 代码、基础设施、`.github/workflows/ci.yml`、`scripts/test-resources/` 三模式供给、`.sandcastle/` 方案 X 编排与生成目录定位。 |
-| [系统架构视图](engineering/system-architecture.md) | architecture | Current | 2026-11-25    | 2026-12-25  | 拓扑、信任边界、数据权威与恢复分工。                                                                                         |
+| Document                                           | Type         | Status  | Last verified | Next review | Notes                                                                                                                                    |
+| -------------------------------------------------- | ------------ | ------- | ------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| [仓库地图](engineering/repository-map.md)          | architecture | Current | 2026-11-27    | 2026-12-27  | 代码、基础设施、`.github/workflows/ci.yml`、`scripts/test-resources/` 本地测试服务与端点预检、`.sandcastle/` 方案 X 编排与生成目录定位。 |
+| [系统架构视图](engineering/system-architecture.md) | architecture | Current | 2026-11-25    | 2026-12-25  | 拓扑、信任边界、数据权威与恢复分工。                                                                                                     |
 
 #### 修改应用或共享契约
 
 | Document                                                  | Type         | Status  | Last verified | Next review | Notes                                              |
 | --------------------------------------------------------- | ------------ | ------- | ------------- | ----------- | -------------------------------------------------- |
 | [后端架构与实现约定](engineering/backend-architecture.md) | architecture | Current | 2026-11-25    | 2026-12-25  | 依赖与装配、接口响应、事务与恢复、审计与后台协作。 |
-| [前端架构](engineering/frontend-architecture.md)          | architecture | Current | 2026-10-25    | 2026-11-25  | 页面、请求、权限、状态与失败恢复的职责。           |
-| [共享契约与数据库](engineering/contracts-and-database.md) | architecture | Current | 2026-11-25    | 2026-12-25  | 代码选址、包出口、运行环境、DTO 演进与持久化边界。 |
+| [前端架构](engineering/frontend-architecture.md)          | architecture | Current | 2026-11-27    | 2026-12-27  | 页面、请求、权限、状态与失败恢复的职责。           |
+| [共享契约与数据库](engineering/contracts-and-database.md) | architecture | Current | 2026-11-27    | 2026-12-27  | 代码选址、包出口、运行环境、DTO 演进与持久化边界。 |
 
 #### 编写、运行或排查测试
 
@@ -181,7 +181,7 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 
 | Document                                          | Type        | Status  | Last verified | Next review | Notes                                           |
 | ------------------------------------------------- | ----------- | ------- | ------------- | ----------- | ----------------------------------------------- |
-| [编码风格与命名约定](engineering/coding-style.md) | development | Current | 2026-10-25    | 2026-11-25  | TypeScript、formatter、文件命名与 import 风格。 |
+| [编码风格与命名约定](engineering/coding-style.md) | development | Current | 2026-11-27    | 2026-12-27  | TypeScript、formatter、文件命名与 import 风格。 |
 
 </details>
 
@@ -194,12 +194,12 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 
 | Document                                                    | Type    | Status  | Last verified | Next review | Notes                                                |
 | ----------------------------------------------------------- | ------- | ------- | ------------- | ----------- | ---------------------------------------------------- |
-| [功能与业务规则入口](features/README.md)                    | feature | Current | 2026-10-26    | 2026-11-26  | 按业务功能定位规则与操作指南。                       |
+| [功能与业务规则入口](features/README.md)                    | feature | Current | 2026-11-27    | 2026-12-27  | 按业务功能定位规则与操作指南。                       |
 | [用户、组织与任职](features/directory-management.md)        | feature | Current | 2026-11-13    | 2026-12-13  | 用户档案、按日任职有效期、离职、组织责任与目录搜索。 |
-| [角色、管理授权与审计](features/roles-and-authorization.md) | feature | Current | 2026-10-25    | 2026-11-25  | 角色授予与披露、Admin 授权、HR 范围和审计。          |
-| [登录与会话](features/login-and-session.md)                 | feature | Current | 2026-10-25    | 2026-11-25  | 身份验证、找回密码、改密、登录限制与会话撤销。       |
+| [角色、管理授权与审计](features/roles-and-authorization.md) | feature | Current | 2026-11-27    | 2026-12-27  | 角色授予与披露、Admin 授权、HR 范围和审计。          |
+| [登录与会话](features/login-and-session.md)                 | feature | Current | 2026-11-27    | 2026-12-27  | 身份验证、找回密码、改密、登录限制与会话撤销。       |
 | [应用接入](features/application-integration.md)             | feature | Current | 2026-11-13    | 2026-12-13  | 应用配置与凭据、准入、单点登录、资料披露与网关发布。 |
-| [应用委托](features/client-delegation.md)                   | feature | Current | 2026-10-25    | 2026-11-25  | 委托范围、期间冲突、生命周期与直接代办人解析。       |
+| [应用委托](features/client-delegation.md)                   | feature | Current | 2026-11-27    | 2026-12-27  | 委托范围、期间冲突、生命周期与直接代办人解析。       |
 
 </details>
 
@@ -242,8 +242,8 @@ releases 维护当前代操作；一次性迁移与更早版本从[运维入口]
 | ----------------------------------------------------------------------------------------------------- | ------- | ------- | ------------- | ----------- | --------------------------------------------------------------- |
 | [运维操作入口](releases/README.md)<a name="runbook-operations"></a>                                   | runbook | Current | 2026-11-25    | 2026-12-25  | 任务导航、简短通用约定、独立迁移与历史版本入口。                |
 | [网关管理](releases/apisix-gateway-release.md)<a name="runbook-gateway"></a>                          | runbook | Current | 2026-11-26    | 2026-12-26  | 首次配置、HTTP 发布、数据面检查和失败恢复。                     |
-| [登录与会话](releases/authentication-and-session.md)<a name="runbook-authentication-and-session"></a> | runbook | Current | 2026-11-26    | 2026-12-26  | 密码配置、OIDC 双入口与密钥、会话清理和 Snapshot 恢复。         |
-| [数据维护](releases/data-maintenance.md)<a name="runbook-data-maintenance"></a>                       | runbook | Current | 2026-11-26    | 2026-12-26  | Document、Subject Access 的两阶段修复、全量重建及完整核验。     |
-| [部署与发布](releases/deployment.md)<a name="runbook-deployment"></a>                                 | runbook | Current | 2026-11-25    | 2026-12-25  | 首次部署、常规更新、任职有效期协调发布、一次性 Ops 制品与回退。 |
+| [登录与会话](releases/authentication-and-session.md)<a name="runbook-authentication-and-session"></a> | runbook | Current | 2026-11-27    | 2026-12-27  | 密码配置、OIDC 双入口与密钥、会话清理和 Snapshot 恢复。         |
+| [数据维护](releases/data-maintenance.md)<a name="runbook-data-maintenance"></a>                       | runbook | Current | 2026-11-27    | 2026-12-27  | Document、Subject Access 的两阶段修复、全量重建及完整核验。     |
+| [部署与发布](releases/deployment.md)<a name="runbook-deployment"></a>                                 | runbook | Current | 2026-11-27    | 2026-12-27  | 首次部署、常规更新、任职有效期协调发布、一次性 Ops 制品与回退。 |
 | [新空环境首次初始化](releases/initial-installation.md)                                                | runbook | Current | 2026-11-23    | 2026-12-23  | Ops 初始化、发布核验与托管环境验收。                            |
-| [日志与排障](releases/observability-system-logs.md)<a name="runbook-observability"></a>               | runbook | Current | 2026-11-25    | 2026-12-25  | 日志栈、Grafana、Trace 关联、告警与采集恢复。                   |
+| [日志与排障](releases/observability-system-logs.md)<a name="runbook-observability"></a>               | runbook | Current | 2026-11-27    | 2026-12-27  | 日志栈、Grafana、Trace 关联、告警与采集恢复。                   |

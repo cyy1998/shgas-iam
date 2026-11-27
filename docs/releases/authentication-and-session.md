@@ -111,7 +111,7 @@ Redis 需要从备份恢复时，关闭扫码入口并等待在途请求到期�
 **先判断能否轮换：** 设 current 为 A、已有 previous 为 P、新 key 为 B。P 仍需用于接入应用验签或 IAM 退出 hint 时不能开始，
 两槽无法容纳 P/A/B。普通 Token 到期不表示退出 hint 已退役；规则见[密钥兼容边界](#签名密钥兼容边界)。
 
-1. **停流与排空** 准备唯一新 kid 的 B、对应公开 JWK 与回退配置，确认所有 API 副本及自动扩容模板。
+1. **停流与排空** 准备唯一新 kid 的 B、对应公开 JWK 与回退配置，确认所有 SSO API 副本及自动扩容模板。
    关闭 OIDC 授权、兑换、续接、退出及直连/重试入口，停止旧 SSO API signer，排空在途请求。
    保留最后可能由 A 签名的时点上界，用于计算旧 Token 接受期。
 2. 仅在 P 已可退役时，将 A 设为 `IAM_SSO_API_OIDC_PREVIOUS_JWK_JSON`、B 设为 current，启动全部目标副本。
@@ -182,7 +182,7 @@ IAM 允许过期 ID Token 作退出 hint，未用 exp 限制其使用期限。�
 | `all`        | 上述三个 owner，仍只操作指定 namespace                             |
 
 不同前缀的旧布局和其他状态不在范围内；不增加任意 pattern，也不顺带清除 nonce、Subject Access、Facts、队列或 Snapshot。
-使用 Ops 的显式 `IAM_OPS_REDIS_*`；脚本默认读取 `apps/ops/.env`，已有进程环境优先。
+使用 Ops 的显式 `IAM_OPS_REDIS_URL`；脚本默认读取 `apps/ops/.env`，已有进程环境优先。
 清点和核验只需 SCAN，清理还需 UNLINK；连接按部署授权 AUTH/SELECT/CLIENT/QUIT。
 
 1. 关闭受影响登录、在线协议、个人委托和 Admin 会话入口及直连/重试，停止相关 reader/writer、后台及 one-shot 工作并排空。

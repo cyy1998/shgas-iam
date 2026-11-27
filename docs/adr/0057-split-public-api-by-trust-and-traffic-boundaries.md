@@ -53,6 +53,6 @@ status: accepted
 - 审计日志持久化 writer 下沉至 `@iam/db/audit`；
 - 纯 SMS 签名与 HTTP 发送客户端（不含业务文案）抽为极薄共享包 `@iam/sms`，供 `auth-api` 与 `integration-api` 按需装配，也便于未来 `apps/worker` 复用。
 
-本次拆分按**单次整体交付**实施：在单一父 Spec 与候选集成分支内按清晰切片完成共享下沉、3 个新服务搭建、测试迁移、`apps/sso` 规范路径切换、`apps/api` 退役删除、Architecture Guard 与 Verification Gate 闭包更新、Docker Compose / APISIX manifest / Hybrid E2E / Container Smoke 全链路适配，并一次性通过完整发布门禁。实施落地后同步更新[仓库地图](../engineering/repository-map.md)、[系统架构视图](../engineering/system-architecture.md)、[后端架构与实现约定](../engineering/backend-architecture.md)及对应接入与部署手册；本决策不引入新业务领域概念，不修改 `GLOSSARY.md`。
+本次拆分按**单次整体交付**实施：在单一父 Spec 与候选集成分支内按清晰切片完成共享下沉、3 个新服务搭建、测试迁移、`apps/sso` 规范路径切换、`apps/api` 退役删除、Architecture Guard 与当年 Verification Gate 闭包更新、Docker Compose / APISIX manifest / 当年 Hybrid E2E / Container Smoke 全链路适配（上述历史验证设施随后已由 [ADR-0060](0060-unify-test-architecture-sandbox-and-ci-gate.md) 统一收口为生产容器 `pnpm test:e2e` 与 CI `ci-gate`），并一次性通过完整发布门禁。实施落地后同步更新[仓库地图](../engineering/repository-map.md)、[系统架构视图](../engineering/system-architecture.md)、[后端架构与实现约定](../engineering/backend-architecture.md)及对应接入与部署手册；本决策不引入新业务领域概念，不修改 `GLOSSARY.md`。
 
 [会话与协议边界](0028-extract-session-and-grant-state.md) · [OIDC 双入口](0036-bind-oidc-to-internal-and-external-issuers.md) · [托管回调来源](0038-derive-managed-sso-callback-from-redirect-origin.md) · [分离 Ops CLI](0047-separate-operations-cli-from-worker.md)

@@ -1,8 +1,8 @@
 # GitHub 议题跟踪
 
 本仓库新建的 spec、implementation ticket 和 wayfinding 记录统一存放在
-[`cyy1998/shgas-iam`](https://github.com/cyy1998/shgas-iam) 的 GitHub Issues 中。仓库统一使用 GitHub，远端
-remote 通常命名为 `github`；所有 `gh` 命令显式传入 `--repo cyy1998/shgas-iam`。
+[`cyy1998/shgas-iam`](https://github.com/cyy1998/shgas-iam) 的 GitHub Issues 中。仓库统一使用 GitHub，默认远端
+remote 为 `origin`（若本地另行命名为 `github` 则按实际名称传递）；所有 `gh` 命令显式传入 `--repo cyy1998/shgas-iam`。
 
 ## T3 Code 工具与 Remote 约定
 
@@ -10,8 +10,8 @@ remote 通常命名为 `github`；所有 `gh` 命令显式传入 `--repo cyy1998
 - **T3 线程绑定** 在 T3 Code 会话中接手或新建 issue 后（包括经 `gh` CLI 操作），补调 `link_issue` 将其关联到当前线程。
 - **PR 操作** 涉及 PR 读取、创建、评审、评论、合入或 CI 日志排查时，在 T3 Code 环境下优先使用 `pull_request_*`、`ci_logs`、
   `ci_rerun` 等内置工具。
-- **Worktree Remote 基线** 调用 `t3_worktree_handoff` 或 `t3_thread_launch` 创建 worktree 时，显式传入
-  `baseRef: "github/main"`，或基于本地分支设 `startFromOrigin: false`。
+- **Worktree Remote 基线** 调用 `t3_worktree_handoff` 或 `t3_thread_launch` 创建 worktree 时，默认使用远端基线
+  `baseRef: "origin/main"`（若本地 remote 名为 `github` 则传 `"github/main"`），或基于本地分支设 `startFromOrigin: false`。
 
 ## 常用操作
 
@@ -63,7 +63,7 @@ GitHub Issues 与 PR 共用编号空间。遇到裸 `#42` 时，先运行
 - 评论只追加重要决策、验证摘要、评审结果和下一安全动作，并链接正式来源，不复制整份 spec 或 ticket。
 
 手动工作流与 Sandcastle AFK 均通过 Pull Request 交付（规则见[完成与 PR 交付](workflow.md#完成与-pr-交付)与[Spec 交付与清理](sandcastle-afk.md#spec-交付与清理)）：
-交付时保持关联 tickets 与父 Spec 为 open，PR 正文逐行附加 `Closes #<number>` 并在创建 PR 后移除 `ready-for-agent` 标签，待维护者在 GitHub 合并 PR 时自动关票。
+交付时保持关联 tickets 与父 Spec 为 open，PR 正文逐行附加 `Closes #<number>`，待维护者在 GitHub 合并 PR 时自动关票。其中手动 Fast Track 与 AFK `--draft` 模式在创建 PR 后立即移除 `ready-for-agent` 标签；AFK Ready PR 则在远端 `ci-gate` 绿灯通过后再移除。
 
 ### Spec 任务图
 

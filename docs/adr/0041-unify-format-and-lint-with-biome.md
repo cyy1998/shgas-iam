@@ -20,8 +20,7 @@ status: accepted
   最终 verify/CI 继续只读检查候选，覆盖 Hook 可被绕过及合并后组合变化。typecheck、测试和发布专属验证仍使用既有入口。
   [命令与提交检查](../engineering/commands.md#commit-前检查)
 
-- **宿主机与沙箱隔离** Sandcastle 和宿主采用同一版本化 Hook。容器安装阶段避免改写宿主 Git 配置，执行时使用容器私有入口。
-  接受薄启动器维护成本，以兼顾一致的检查行为和宿主配置隔离。真实提交验证各自运行及失败阻断。
+- **宿主机与沙箱隔离** Sandcastle 和宿主采用同一版本化 Hook。容器安装阶段通过 `HUSKY=0` 避免改写宿主 Git 配置，运行阶段通过环境变量 `GIT_CONFIG_*` 注入 `core.hooksPath=.husky` 直接复用 `.husky/pre-commit`（无需额外容器私有薄启动器），兼顾一致的检查行为和宿主配置隔离。真实提交验证各自运行及失败阻断。
   [AFK 工作流](../agents/sandcastle-afk.md)
 
 固定历史版本：[整理前 ADR-0041](https://github.com/cyy1998/shgas-iam/blob/cbfd4aa60fd6000662026b68576f1aa1409b6ce4/docs/adr/0041-unify-format-and-lint-with-biome.md)。

@@ -152,10 +152,10 @@ backfill、部分 repair 只登记或唤醒工作，仍须匹配版本的 consum
 
 ### 启用手机号和企业微信身份唯一性
 
-按[常规更新](#常规更新)准备 PostgreSQL 备份和同一候选的 API、Admin API、Admin、SSO 与 User Document Worker。
+按[常规更新](#常规更新)准备 PostgreSQL 备份和同一候选的三个公共后端（Auth API、SSO API、Integration API；旧版为单公共 API）、Admin API、Admin、SSO 与 User Document Worker。
 迁移会规范化未删除账号的登记值，并登记受影响用户的文档更新。停用账号保留占用，软删除记录保留原值。
 
-1. 关闭用户资料写入入口并排空在途请求，停止旧版 API、Admin API 和可能写入用户档案的维护任务。
+1. 关闭用户资料写入入口并排空在途请求，停止旧版公共后端、Admin API 和可能写入用户档案的维护任务。
 2. 用候选执行正式 `pnpm --filter @iam/db db:migrate`。如果规范化后出现重复登记值，本次迁移整体回滚。
    保持写入关闭，核对冲突值的归属，修正后再执行迁移。
 3. 启动候选应用和 Worker。发布收敛后，通过受限入口核对手机号查询、旧企业微信回调和用户资料写入，再恢复流量。
@@ -181,7 +181,7 @@ docker compose --env-file docker/.env -f docker/compose.prod.apps.yaml up -d --n
 ### 启用全局角色
 
 按[全局角色决策](../adr/0048-model-global-roles-without-client-ownership.md)协调升级。准备同一候选的 Admin、Admin API、
-API、User Document Worker 及适用的 Ops 制品，并在停流前确认数据库备份可恢复。
+三个公共后端（Auth API、SSO API、Integration API）、User Document Worker 及适用的 Ops 制品，并在停流前确认数据库备份可恢复。
 
 1. 关闭受影响入口和 User Document 消费，排空在途请求、发布任务及相关 Ops 操作。
 2. 停止旧版写入与发布进程，用候选源码执行正式 `db:migrate`。重建受影响服务，并在受限入口检查新版可读取既有
@@ -233,7 +233,7 @@ Internal API、Worker 及涉及任职诊断、构建或修复的 Ops 制品使�
 新增可选属性对象。新制品可读取省略这些属性的存量记录。旧 reader 的严格解析可能拒绝带属性的文档和 Facts，
 旧 Worker 也无法处理新增的 Outbox 事件类型。Custom SSO 主体响应统一使用 Wire v5，严格 v4 调用方需要协调切换。
 
-1. **固定配套制品并停流** 准备 PostgreSQL 与 Redis 的一致备份、同一候选的 API、Admin API、两类 Document Worker、Ops、
+1. **固定配套制品并停流** 准备 PostgreSQL 与 Redis 的一致备份、同一候选的三个公共后端（Auth API、SSO API、Integration API）、Admin API、两类 Document Worker、Ops、
    Admin 与 SSO Portal，并协调第三方 UserInfo 和业务兑换解析器。关闭受影响的目录、属性写入及主体交付入口和直连重试，
    排空请求、源写入、文档发布与回填，停用旧 Worker 和旧版人工或定时维护。
 2. **迁移并验证存量** 用候选运行正式 `db:migrate`，启动匹配的服务和 Worker，继续关闭公共流量和属性写入。
@@ -253,7 +253,7 @@ Internal API、Worker 及涉及任职诊断、构建或修复的 Ops 制品使�
 
 ### 发布 Custom SSO 责任目标的自定义属性
 
-Wire v5 的责任目标新增可选的 `customAttributes`。启用新版 API 和 User Document Worker 前，先更新使用旧版严格 Wire v5 Schema 的调用方。
+Wire v5 的责任目标新增可选的 `customAttributes`。启用新版 SSO API 和 User Document Worker 前，先更新使用旧版严格 Wire v5 Schema 的调用方。
 新版可读取存量用户文档及 Redis Facts。已有责任目标的属性随用户文档重新发布生效，升级时按
 [User Document 全量重建](data-maintenance.md#user-document-全量重建)回填并核验存量。
 
