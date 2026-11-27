@@ -1,15 +1,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
 import { EmploymentStatus, OrganizationStatus, PositionStatus } from "@iam/contracts";
-import {
-  PROCESS_SMOKE_TEST_TIMEOUT_MS,
-  runProcessCommandSmoke,
-  spawnOwnedProcessTree,
-} from "@iam/test-support/process-smoke-harness";
+import { PROCESS_SMOKE_TEST_TIMEOUT_MS } from "@iam/test-support/process-smoke-harness";
 import { createOpsPostgresTestHarness } from "../support/postgres-test-harness";
-
-const opsRoot = fileURLToPath(new URL("../../", import.meta.url));
+import { runOpsCommand } from "../support/run-ops-command";
 
 describe("Employment verifier production command", () => {
   let harness: Awaited<ReturnType<typeof createOpsPostgresTestHarness>>;
@@ -76,28 +70,18 @@ describe("Employment verifier production command", () => {
   );
 
   async function runCommand(expectedExitCode: number) {
-    return await runProcessCommandSmoke({
-      label: "Ops Employment verification command",
-      start() {
-        return spawnOwnedProcessTree({
-          executable: process.execPath,
-          args: ["--no-env-file", "run", "iam-ops", "employment", "verify"],
-          cwd: opsRoot,
-          env: {
-            ...process.env,
-            NODE_ENV: "test",
-            IAM_OPS_DATABASE_URL: harness.databaseUrl,
-            IAM_OPS_LOG_LEVEL: "info",
-            IAM_OPS_LOG_FORMAT: "json",
-            FORCE_COLOR: "0",
-            NO_COLOR: "1",
-          },
-        });
+    return await runOpsCommand({
+      args: ["employment", "verify"],
+      env: {
+        ...process.env,
+        NODE_ENV: "test",
+        IAM_OPS_DATABASE_URL: harness.databaseUrl,
+        IAM_OPS_LOG_LEVEL: "info",
+        IAM_OPS_LOG_FORMAT: "json",
+        FORCE_COLOR: "0",
+        NO_COLOR: "1",
       },
-      completionTimeoutMs: 15_000,
-      cleanupTimeoutMs: 5_000,
       expectedExitCode,
-      maxOutputBytes: 64 * 1024,
     });
   }
 });

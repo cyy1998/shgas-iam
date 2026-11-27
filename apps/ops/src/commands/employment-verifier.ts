@@ -1,5 +1,6 @@
 import { parseArgs } from "node:util";
 import { closeMaintenanceResources } from "@iam/runtime/maintenance";
+import { type CommandContext, createCommandLogger } from "@ops/command-context";
 
 export interface EmploymentVerifyCommandReport {
   version: 1;
@@ -33,12 +34,12 @@ export async function runEmploymentVerifyCommand(deps: EmploymentVerifyCommandDe
   return report;
 }
 
-async function main(args: string[]) {
+async function main(args: string[], context: CommandContext) {
   parseArgs({ args, strict: true, allowPositionals: false, options: {} });
   const { parseEmploymentCommandEnv } = await import("@ops/env");
-  const env = parseEmploymentCommandEnv(process.env);
-  const { createLogger, LoggerSourceApp } = await import("@iam/runtime/logger");
-  const logger = createLogger({
+  const env = parseEmploymentCommandEnv(context.env, context.stderr);
+  const { LoggerSourceApp } = await import("@iam/runtime/logger");
+  const logger = createCommandLogger(context, {
     nodeEnv: env.nodeEnv,
     logLevel: env.log.level,
     logFormat: env.log.format,
@@ -51,18 +52,18 @@ async function main(args: string[]) {
       verifier: composition.employment.verifier,
       logger: composition.logger,
     });
-    if (report.status === "failed") process.exitCode = 1;
+    if (report.status === "failed") context.exitCode = 1;
   } catch (error) {
     await closeMaintenanceResources([Promise.reject(error), composition.shutdown()]);
   }
   await composition.shutdown();
 }
 
-export async function run(args: string[]) {
+export async function run(args: string[], context: CommandContext = process) {
   try {
-    await main(args);
+    await main(args, context);
   } catch {
-    process.exitCode = 1;
-    process.stderr.write("Employment verification failed; inspect structured logs for the report.\n");
+    context.exitCode = 1;
+    context.stderr.write("Employment verification failed; inspect structured logs for the report.\n");
   }
 }

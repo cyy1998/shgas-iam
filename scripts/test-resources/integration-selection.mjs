@@ -1,22 +1,21 @@
 import { existsSync, globSync, readdirSync, readFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 
-export const integrationExecutors = ["bun", "vitest", "playwright"];
+export const integrationExecutors = ["bun"];
 // The root Compose Redis enables 32 logical databases. Slot 0 is reserved.
 export const integrationRedisSlotLimit = 31;
+export const testPostgresUrlEnv = "IAM_TEST_POSTGRES_URL";
+export const testRedisUrlEnv = "IAM_TEST_REDIS_URL";
+export const integrationResourceEnvNames = {
+  postgres: testPostgresUrlEnv,
+  redis: testRedisUrlEnv,
+};
 export const gatewayApisixWorkspace = "@iam/gateway-apisix";
 export const gatewayApisixIntegrationFiles = new Set([
   "test-integration/preview/preview.integration.test.ts",
-  "test-integration/publication/process-publication.integration.test.ts",
   "test-integration/publication/publication.integration.test.ts",
   "test-integration/publication/seven-kinds.integration.test.ts",
   "test-integration/runtime/publication-lifecycle.integration.test.ts",
-]);
-export const excludedIntegrationFiles = new Map([
-  [
-    "apps/sso-api/test-integration/oidc/oidc-suite-resources.integration.test.ts",
-    "pnpm --filter @iam/sso-api test:oidc-suite-resources",
-  ],
 ]);
 
 export function taskRequiresGatewayApisix(task) {
@@ -25,26 +24,6 @@ export function taskRequiresGatewayApisix(task) {
     task.executor === "bun" &&
     task.files.some((file) => gatewayApisixIntegrationFiles.has(file))
   );
-}
-
-function findExcludedIntegrationFile(root, file, candidateOwners) {
-  const paths = isAbsolute(file)
-    ? [resolve(file)]
-    : [resolve(root, file), ...candidateOwners.map((owner) => resolve(root, owner.directory, file))];
-  for (const candidatePath of paths) {
-    const repoRelative = relative(root, candidatePath);
-    const replacement = excludedIntegrationFiles.get(repoRelative);
-    if (replacement) return { file: repoRelative, replacement };
-  }
-  return undefined;
-}
-
-export function parseBrowserWorkers(value, option) {
-  const workers = Number(value);
-  if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(workers) || workers > 16) {
-    throw new Error(`${option} requires an integer from 1 to 16`);
-  }
-  return workers;
 }
 
 export function parseIntegrationConcurrency(value, option) {
@@ -59,40 +38,30 @@ export function integrationDeclarations(manifest) {
   const declarations = manifest.iamTest?.integration ?? {};
   if (!declarations || typeof declarations !== "object" || Array.isArray(declarations))
     throw new Error(`Invalid Integration declaration for ${manifest.name}`);
-  if (declarations.bun && declarations.vitest)
-    throw new Error(`${manifest.name} must choose one executor for non-browser Integration tests`);
   return Object.entries(declarations).map(([executor, resources]) => {
     if (!integrationExecutors.includes(executor)) throw new Error(`Unknown Integration executor: ${executor}`);
     if (!resources || typeof resources !== "object" || Array.isArray(resources))
       throw new Error(`Invalid resources for ${manifest.name}:${executor}`);
-    for (const [service, name] of Object.entries(resources)) {
-      const suffix = { postgres: "DATABASE", redis: "REDIS" }[service];
-      if (!suffix || typeof name !== "string" || !new RegExp(`^IAM_[A-Z_]+_TEST_${suffix}_URL$`).test(name))
-        throw new Error(`Invalid ${service} environment mapping for ${manifest.name}:${executor}`);
+    const enabledResources = {};
+    for (const [service, enabled] of Object.entries(resources)) {
+      if (!Object.hasOwn(integrationResourceEnvNames, service) || typeof enabled !== "boolean")
+        throw new Error(`Invalid ${service} resource declaration for ${manifest.name}:${executor}`);
+      if (enabled) enabledResources[service] = true;
     }
-    const task = `test:integration:${executor}`;
-    if (!manifest.scripts?.[task]) throw new Error(`Missing declared Integration task ${manifest.name}#${task}`);
-    return { executor, resources, task, environmentNames: Object.values(resources) };
+    return { executor, resources: enabledResources };
   });
 }
 
 export function parseIntegrationArguments(args) {
-  const options = { workspaces: [], files: [], keep: false, timeoutMs: 30 * 60_000, cleanupTimeoutMs: 30_000 };
+  const options = { workspaces: [], files: [], timeoutMs: 30 * 60_000, cleanupTimeoutMs: 30_000 };
   for (let index = 0; index < args.length; index++) {
     const argument = args[index];
     if (argument === "--") continue;
-    if (argument === "--keep-resources") {
-      options.keep = true;
-      continue;
-    }
     const fields = { "--workspace": "workspaces", "--file": "files" };
     if (fields[argument]) {
       const value = args[++index];
       if (!value || value.startsWith("--")) throw new Error(`${argument} requires a value`);
       options[fields[argument]].push(value);
-    } else if (argument === "--browser-workers") {
-      if (options.browserWorkers !== undefined) throw new Error(`${argument} may be supplied once`);
-      options.browserWorkers = parseBrowserWorkers(args[++index], argument);
     } else if (argument === "--concurrency") {
       if (options.concurrency !== undefined) throw new Error(`${argument} may be supplied once`);
       options.concurrency = parseIntegrationConcurrency(args[++index], argument);
@@ -131,21 +100,11 @@ export function selectIntegrationTasks(root, options) {
           options.workspaces.some((workspace) => workspace === owner.name || workspace === owner.directory),
         )
       : owners;
-  for (const file of options.files) {
-    const excluded = findExcludedIntegrationFile(root, file, selectedOwners);
-    if (excluded) {
-      throw new Error(
-        `${excluded.file} is excluded from pnpm test:integration because it manages its own Docker Compose lifecycle; run \`${excluded.replacement}\` instead`,
-      );
-    }
-  }
   const tasks = [];
   for (const owner of selectedOwners) {
-    const candidates = globSync("test-integration/**/*.{integration.test.ts,integration.test.tsx,spec.ts}", {
+    const candidates = globSync("test-integration/**/*.integration.test.{ts,tsx}", {
       cwd: join(root, owner.directory),
-    })
-      .filter((file) => !excludedIntegrationFiles.has(`${owner.directory}/${file}`))
-      .sort();
+    }).sort();
     if (
       options.files.length > 0 &&
       !options.files.some((file) => {
@@ -156,20 +115,13 @@ export function selectIntegrationTasks(root, options) {
     )
       continue;
     const declarations = integrationDeclarations(owner.manifest);
-    for (const file of candidates)
-      if (
-        !declarations.some(({ executor }) =>
-          executor === "playwright" ? file.endsWith(".spec.ts") : !file.endsWith(".spec.ts"),
-        )
-      )
-        throw new Error(`Integration tests have no declared executor in ${owner.name}: ${file}`);
+    if (candidates.length > 0 && declarations.length === 0) {
+      throw new Error(`Integration tests have no declared executor in ${owner.name}: ${candidates[0]}`);
+    }
     for (const declaration of declarations) {
-      const files = candidates.filter((file) =>
-        declaration.executor === "playwright" ? file.endsWith(".spec.ts") : !file.endsWith(".spec.ts"),
-      );
-      if (files.length === 0)
+      if (candidates.length === 0)
         throw new Error(`No Integration tests for declared executor ${owner.name}:${declaration.executor}`);
-      tasks.push({ ...owner, ...declaration, files });
+      tasks.push({ ...owner, ...declaration, files: candidates });
     }
   }
   if (options.files.length > 0) {

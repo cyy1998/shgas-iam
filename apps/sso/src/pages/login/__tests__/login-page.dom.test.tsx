@@ -163,6 +163,8 @@ describe("LoginPage", () => {
     render(<LoginPage />, { withSso: true });
 
     expect(await screen.findByText("登录请求已失效，请返回应用重新发起登录")).toBeInTheDocument();
+    expect(screen.queryByText("统一身份认证服务暂时不可用，请稍后重试")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /重\s*试/ })).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText("请输入您的工号")).not.toBeInTheDocument();
   });
 
@@ -186,6 +188,15 @@ describe("LoginPage", () => {
 
     expect(await screen.findByText("统一身份认证服务暂时不可用，请稍后重试")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("请输入您的工号")).not.toBeInTheDocument();
+    vi.useFakeTimers();
+    try {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000);
+      });
+      expect(attempts).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
     fireEvent.click(screen.getByRole("button", { name: /重\s*试/ }));
     await screen.findByPlaceholderText("请输入您的工号");
     expect(attempts).toBe(2);

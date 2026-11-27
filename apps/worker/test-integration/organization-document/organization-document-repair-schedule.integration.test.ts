@@ -1,7 +1,5 @@
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import process from "node:process";
-import { fileURLToPath } from "node:url";
 import { OrganizationLevel, OrganizationType, UserStatus } from "@iam/contracts";
 import { organizationClosures, organizations, users } from "@iam/db/schema";
 import { createOrganizationDocumentInvalidation } from "@iam/documents/organization/producer";
@@ -9,27 +7,21 @@ import { createSubjectFactsRedisCache, DocumentFactsCacheRecordSchema } from "@i
 import { createUserDocumentInvalidation } from "@iam/documents/user/producer";
 import { createSubjectAccessBootstrap } from "@iam/subject-access/redis";
 import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
-import {
-  createBoundedProcessLogCapture,
-  runProcessSmoke,
-  spawnOwnedProcessTree,
-  withOwnedTemporaryDirectory,
-} from "@iam/test-support/process-smoke-harness";
 import { createUnitOfWork } from "@iam/unit-of-work";
 import { useWorkerPostgresTestHarness } from "../support/postgres-test-harness";
 import { createWorkerRedisTestHarness, resetWorkerRedisTestDatabase } from "../support/redis-test-harness";
+import { observeWorker, startWorker } from "../support/worker-composition.fixture";
 
-const workerRoot = fileURLToPath(new URL("../../", import.meta.url));
 const logger = { warn() {}, error() {} };
 
 test("the production Worker automatically repairs a lost Organization Outbox wake", async () => {
   await withFixture(async (fixture) => {
-    const result = await runProcessSmoke({
+    const result = await observeWorker({
       label: "scheduled Organization Document repair production entry",
       start: () => fixture.startEntry(),
-      childReadinessEvidence: "worker started",
-      readinessTimeoutMs: 15_000,
-      cleanupTimeoutMs: 5_000,
+
+      timeoutMs: 15_000,
+
       probe: async () => {
         const document = await fixture.published();
         return document?.name === "Scheduled organization" && document.status === "processed" ? document : undefined;
@@ -48,38 +40,32 @@ for (const selection of [
 ]) {
   test(`the production ${selection.name} Worker leaves Organization repair disabled`, async () => {
     await withFixture(async (fixture) => {
-      let logs: ReturnType<typeof createBoundedProcessLogCapture> | undefined;
       let observingSince: number | undefined;
-      try {
-        const result = await runProcessSmoke({
-          label: `${selection.name} Worker Organization repair gate`,
-          start() {
-            const child = fixture.startEntry({
-              IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_ENABLED: selection.enabled,
-              IAM_WORKER_ENABLED_MODULES: selection.modules,
-              IAM_WORKER_BULL_BOARD_ENABLED: selection.dashboard,
-            });
-            logs = createBoundedProcessLogCapture(child, { maxBytes: 32_768 });
-            return child;
-          },
-          childReadinessEvidence: "worker started",
-          readinessTimeoutMs: 10_000,
-          cleanupTimeoutMs: 5_000,
-          probe: async () => {
-            if (!logs?.snapshot().includes("worker started")) return;
-            observingSince ??= performance.now();
-            const [outbox] = await fixture.pg.sql`SELECT status FROM organization_document_outbox`;
-            const document = await fixture.published();
-            if (outbox?.status !== "pending" || document !== undefined)
-              throw new Error("A disabled Organization repair scheduler processed durable work");
-            return performance.now() - observingSince > 350 ? outbox : undefined;
-          },
-        });
-        expect(result.status).toBe("pending");
-        expect(logs?.snapshot()).not.toContain('"event":"organization_document.repair.started"');
-      } finally {
-        logs?.dispose();
-      }
+      let scheduleOutput = "";
+      const result = await observeWorker({
+        label: `${selection.name} Worker Organization repair gate`,
+        start() {
+          return fixture.startEntry({
+            IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_ENABLED: selection.enabled,
+            IAM_WORKER_ENABLED_MODULES: selection.modules,
+            IAM_WORKER_BULL_BOARD_ENABLED: selection.dashboard,
+          });
+        },
+
+        timeoutMs: 10_000,
+
+        probe: async (output) => {
+          scheduleOutput = output;
+          observingSince ??= performance.now();
+          const [outbox] = await fixture.pg.sql`SELECT status FROM organization_document_outbox`;
+          const document = await fixture.published();
+          if (outbox?.status !== "pending" || document !== undefined)
+            throw new Error("A disabled Organization repair scheduler processed durable work");
+          return performance.now() - observingSince > 350 ? outbox : undefined;
+        },
+      });
+      expect(result.status).toBe("pending");
+      expect(scheduleOutput).not.toContain('"event":"organization_document.repair.started"');
     });
   }, 20_000);
 }
@@ -110,13 +96,13 @@ test("an Organization repair deadline does not block User repair and a later Org
       if (failure !== undefined) throw failure;
     });
     await lockAcquired;
-    let logs: ReturnType<typeof createBoundedProcessLogCapture> | undefined;
+
     let sawIndependentUserPublication = false;
     try {
-      const organization = await runProcessSmoke({
+      const organization = await observeWorker({
         label: "independent User and Organization repair schedules",
         start() {
-          const child = fixture.startEntry({
+          return fixture.startEntry({
             IAM_WORKER_ENABLED_MODULES: "user-document,organization-document",
             IAM_WORKER_USER_DOCUMENT_REPAIR_ENABLED: "true",
             IAM_WORKER_USER_DOCUMENT_REPAIR_INTERVAL_MS: "100",
@@ -124,18 +110,16 @@ test("an Organization repair deadline does not block User repair and a later Org
             IAM_WORKER_USER_DOCUMENT_REPAIR_DEADLINE_MS: "5000",
             IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_DEADLINE_MS: "1000",
           });
-          logs = createBoundedProcessLogCapture(child, { maxBytes: 65_536 });
-          return child;
         },
-        childReadinessEvidence: "worker started",
-        readinessTimeoutMs: 15_000,
-        cleanupTimeoutMs: 5_000,
-        probe: async () => {
+
+        timeoutMs: 15_000,
+
+        probe: async (output) => {
           if (!sawIndependentUserPublication) {
             const [user] = await fixture.pg.sql`SELECT document->>'name' AS name,post_publication_status
               FROM user_document JOIN user_document_rebuild_state USING (user_id) WHERE user_id=1`;
             if (user?.name !== "Scheduled user" || user.post_publication_status !== "processed") return;
-            if (!logs?.snapshot().includes('"event":"organization_document.repair.failed"')) return;
+            if (!output.includes('"event":"organization_document.repair.failed"')) return;
             const facts = await createSubjectFactsRedisCache(fixture.redis.observer).read(subject);
             if (facts === null) return;
             expect(DocumentFactsCacheRecordSchema.parse(JSON.parse(facts))).toMatchObject({
@@ -157,7 +141,6 @@ test("an Organization repair deadline does not block User repair and a later Org
       expect(organization.name).toBe("Scheduled organization");
     } finally {
       release();
-      logs?.dispose();
     }
   });
 }, 30_000);
@@ -174,7 +157,7 @@ test("a real repair cleanup failure stops only that schedule and leaves the othe
       await fixture.pg.sql.unsafe(`CREATE ROLE "${role}" LOGIN PASSWORD '${password}'`);
       let lock: Promise<unknown> | undefined;
       let release = () => {};
-      let logs: ReturnType<typeof createBoundedProcessLogCapture> | undefined;
+
       registerCleanup(async () => {
         await fixture.pg.sql.unsafe(`DROP ROLE "${role}"`);
       });
@@ -184,7 +167,6 @@ test("a real repair cleanup failure stops only that schedule and leaves the othe
       registerCleanup(async () => {
         await fixture.pg.sql`GRANT EXECUTE ON FUNCTION pg_catalog.pg_cancel_backend(integer) TO PUBLIC`;
       });
-      registerCleanup(() => logs?.dispose());
       registerCleanup(async () => {
         release();
         if (lock) {
@@ -212,10 +194,11 @@ test("a real repair cleanup failure stops only that schedule and leaves the othe
         );
       await acquired.promise;
       let cleanupObservedAt: number | undefined;
-      const result = await runProcessSmoke({
+      const result = await observeWorker({
         label: "required cleanup failure stops one production schedule",
+        allowShutdownFailure: true,
         start() {
-          const child = fixture.startEntry({
+          return fixture.startEntry({
             IAM_WORKER_DATABASE_URL: databaseUrl.toString(),
             IAM_WORKER_ENABLED_MODULES: "user-document,organization-document",
             IAM_WORKER_USER_DOCUMENT_REPAIR_ENABLED: "true",
@@ -224,14 +207,11 @@ test("a real repair cleanup failure stops only that schedule and leaves the othe
             IAM_WORKER_USER_DOCUMENT_REPAIR_DEADLINE_MS: "5000",
             IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_DEADLINE_MS: "1000",
           });
-          logs = createBoundedProcessLogCapture(child, { maxBytes: 131072 });
-          return child;
         },
-        childReadinessEvidence: "worker started",
-        readinessTimeoutMs: 15000,
-        cleanupTimeoutMs: 5000,
-        probe: async () => {
-          const output = logs?.snapshot() ?? "";
+
+        timeoutMs: 15000,
+
+        probe: async (output) => {
           if (!output.includes('"event":"organization_document.repair.cleanup-failed"')) return;
           cleanupObservedAt ??= performance.now();
           release();
@@ -260,22 +240,16 @@ test("a real repair cleanup failure stops only that schedule and leaves the othe
 const getPostgres = useWorkerPostgresTestHarness();
 
 async function withFixture(work: (fixture: Awaited<ReturnType<typeof createFixture>>) => Promise<void>) {
-  await withOwnedTemporaryDirectory({
-    prefix: "iam-organization-document-repair-schedule-",
-    cleanupTimeoutMs: 5_000,
-    async run(temporaryDirectory) {
-      const stopExecutors: Array<() => Promise<void> | void> = [];
-      await runWithOwnedTestResources(async ({ registerCleanup }) => {
-        registerCleanup(async () => {
-          if (stopExecutors.length) await resetWorkerRedisTestDatabase(stopExecutors);
-        });
-        await work(await createFixture(temporaryDirectory, stopExecutors));
-      });
-    },
+  const stopExecutors: Array<() => Promise<void> | void> = [];
+  await runWithOwnedTestResources(async ({ registerCleanup }) => {
+    registerCleanup(async () => {
+      if (stopExecutors.length) await resetWorkerRedisTestDatabase(stopExecutors);
+    });
+    await work(await createFixture(stopExecutors));
   });
 }
 
-async function createFixture(temporaryDirectory: string, stopExecutors: Array<() => Promise<void> | void>) {
+async function createFixture(stopExecutors: Array<() => Promise<void> | void>) {
   const pg = getPostgres();
   const redis = await createWorkerRedisTestHarness();
   stopExecutors.push(redis.close);
@@ -330,25 +304,20 @@ async function createFixture(temporaryDirectory: string, stopExecutors: Array<()
       return subject;
     },
     startEntry(overrides: NodeJS.ProcessEnv = {}) {
-      return spawnOwnedProcessTree({
-        executable: process.execPath,
-        args: ["--no-env-file", "run", "src/index.ts"],
-        cwd: workerRoot,
-        env: {
-          ...redis.commandEnvironment(temporaryDirectory),
-          IAM_WORKER_DATABASE_URL: pg.databaseUrl,
-          IAM_WORKER_ENABLED_MODULES: "organization-document",
-          IAM_WORKER_HTTP_ENABLED: "false",
-          IAM_WORKER_BULL_BOARD_ENABLED: "false",
-          IAM_WORKER_BULL_BOARD_AUTH_ENABLED: "false",
-          IAM_WORKER_LOG_LEVEL: "info",
-          IAM_WORKER_USER_DOCUMENT_REPAIR_ENABLED: "false",
-          IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_ENABLED: "true",
-          IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_INTERVAL_MS: "100",
-          IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_LIMIT: "10",
-          IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_DEADLINE_MS: "5000",
-          ...overrides,
-        },
+      return startWorker({
+        ...redis.commandEnvironment(),
+        IAM_WORKER_DATABASE_URL: pg.databaseUrl,
+        IAM_WORKER_ENABLED_MODULES: "organization-document",
+        IAM_WORKER_HTTP_ENABLED: "false",
+        IAM_WORKER_BULL_BOARD_ENABLED: "false",
+        IAM_WORKER_BULL_BOARD_AUTH_ENABLED: "false",
+        IAM_WORKER_LOG_LEVEL: "info",
+        IAM_WORKER_USER_DOCUMENT_REPAIR_ENABLED: "false",
+        IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_ENABLED: "true",
+        IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_INTERVAL_MS: "100",
+        IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_LIMIT: "10",
+        IAM_WORKER_ORGANIZATION_DOCUMENT_REPAIR_DEADLINE_MS: "5000",
+        ...overrides,
       });
     },
     async published() {

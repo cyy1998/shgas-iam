@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readRecords, readUsernames } from "../user-document-search-journey.ts";
+import { readRecords, readUsernames } from "../journeys/user-document-search-journey.ts";
 
 describe("journey search and delegation response arrays", () => {
   test("accepts legitimate empty search and delegation arrays", () => {

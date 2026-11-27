@@ -16,5 +16,5 @@
       "~admin-api/*": ["../admin-api/*"]
     }
   },
-  "include": ["src", "test", "test-integration", "scripts", "*.ts"]
+  "include": ["src", "test", "scripts", "*.ts"]
 }

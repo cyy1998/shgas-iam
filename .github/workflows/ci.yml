@@ -1,0 +1,195 @@
+name: CI
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  detect:
+    name: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+      base_sha: ${{ steps.classify.outputs.base_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: classify
+        name: Classify change scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          ZERO_SHA="0000000000000000000000000000000000000000"
+          BASE_SHA=""
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            if git rev-parse --verify -q HEAD^2 >/dev/null 2>&1; then
+              BASE_SHA="$(git rev-parse HEAD^1)"
+            elif [ -n "$PR_BASE_SHA" ] && [ "$PR_BASE_SHA" != "$ZERO_SHA" ]; then
+              BASE_SHA="$(git merge-base "$PR_BASE_SHA" HEAD || true)"
+            fi
+          elif [ "$EVENT_NAME" = "push" ] && [ -n "$PUSH_BEFORE_SHA" ] && [ "$PUSH_BEFORE_SHA" != "$ZERO_SHA" ]; then
+            if git cat-file -e "${PUSH_BEFORE_SHA}^{commit}" 2>/dev/null && [ "$(git merge-base "$PUSH_BEFORE_SHA" HEAD || true)" = "$PUSH_BEFORE_SHA" ]; then
+              BASE_SHA="$PUSH_BEFORE_SHA"
+            fi
+          fi
+          if [ -z "$BASE_SHA" ]; then
+            printf 'base_sha=\ndocs_only=false\n' >> "$GITHUB_OUTPUT"
+            echo "[detect] Base SHA unavailable or unexpected; defaulting docs_only=false"
+            exit 0
+          fi
+          DOCS_ONLY="$(node scripts/verify-docs.mjs --classify --base "$BASE_SHA")"
+          [ "$DOCS_ONLY" = "true" ] || DOCS_ONLY="false"
+          printf 'base_sha=%s\ndocs_only=%s\n' "$BASE_SHA" "$DOCS_ONLY" >> "$GITHUB_OUTPUT"
+          echo "[detect] base_sha=${BASE_SHA} docs_only=${DOCS_ONLY}"
+
+  doc-check:
+    name: doc-check
+    needs: [detect]
+    if: success() && needs.detect.outputs.docs_only == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-workspace
+      - name: Verify documentation-only changes
+        env:
+          BASE_SHA: ${{ needs.detect.outputs.base_sha }}
+        run: node scripts/verify-docs.mjs --base "$BASE_SHA"
+
+  fast:
+    name: fast
+    needs: [detect]
+    if: success() && needs.detect.outputs.docs_only == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-workspace
+        with:
+          turbo-cache-scope: fast
+      - name: Run static checks
+        run: pnpm check
+      - name: Run unit tests
+        run: pnpm test:unit
+      - name: Build workspaces
+        run: pnpm build
+
+  integration:
+    name: integration
+    needs: [detect]
+    if: success() && needs.detect.outputs.docs_only == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      IAM_GATEWAY_TEST_ETCD_IMAGE: bitnamilegacy/etcd:3.5.11
+      IAM_GATEWAY_TEST_APISIX_BASE_IMAGE: apache/apisix:3.16.0-debian
+      IAM_GATEWAY_TEST_APISIX_IMAGE: iam-gateway-apisix:ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-workspace
+      - name: Start integration test infrastructure
+        run: pnpm test:infra:up
+      - name: Run full integration suite
+        env:
+          IAM_TEST_INTEGRATION_CONCURRENCY: "2"
+        run: pnpm test:integration
+      - name: Upload integration task logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-logs-${{ github.run_attempt }}
+          path: test-results/integration/**/logs/*.log
+          retention-days: 7
+          if-no-files-found: ignore
+      - name: Teardown
+        if: always()
+        run: pnpm test:infra:down || true
+
+  e2e:
+    name: e2e
+    needs: [detect, fast, integration]
+    if: >-
+      success() &&
+      needs.detect.outputs.docs_only == 'false' &&
+      (github.event_name == 'push' || github.event.pull_request.draft == false)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-workspace
+        with:
+          playwright-filter: "@iam/e2e-system"
+      - uses: docker/setup-buildx-action@v3
+      - uses: crazy-max/ghaction-github-runtime@v3
+      - name: Run full-system E2E suite
+        env:
+          IAM_E2E_BUILDX_CACHE: gha
+          IAM_E2E_POSTGRES_IMAGE: postgres:18.4
+          IAM_E2E_REDIS_IMAGE: redis:8.8.0
+          IAM_E2E_ETCD_IMAGE: bitnamilegacy/etcd:3.5.11
+          IAM_E2E_APISIX_BASE_IMAGE: apache/apisix:3.16.0-debian
+          IAM_E2E_BUN_IMAGE: oven/bun:1.4.4-alpine
+        run: pnpm test:e2e
+      - name: Upload E2E logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-logs-${{ github.run_attempt }}
+          path: test-results/e2e/**/*.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+  ci-gate:
+    name: ci-gate
+    needs: [detect, doc-check, fast, integration, e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Evaluate CI gate truth table
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          DOCS_ONLY: ${{ needs.detect.outputs.docs_only }}
+          RESULT_DETECT: ${{ needs.detect.result }}
+          RESULT_DOC_CHECK: ${{ needs.doc-check.result }}
+          RESULT_FAST: ${{ needs.fast.result }}
+          RESULT_INTEGRATION: ${{ needs.integration.result }}
+          RESULT_E2E: ${{ needs.e2e.result }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::ci-gate failed: $1"; exit 1; }
+          echo "[ci-gate] event=${EVENT_NAME} draft=${PR_DRAFT:-false} docs_only=${DOCS_ONLY:-<unset>}"
+          echo "[ci-gate] results: detect=${RESULT_DETECT} doc-check=${RESULT_DOC_CHECK} fast=${RESULT_FAST} integration=${RESULT_INTEGRATION} e2e=${RESULT_E2E}"
+          [ "$RESULT_DETECT" = "success" ] || fail "detect job result is '${RESULT_DETECT}' (expected 'success')."
+          if [ "$DOCS_ONLY" = "true" ]; then
+            [ "$RESULT_DOC_CHECK" = "success" ] || fail "docs-only change requires doc-check='success' (got '${RESULT_DOC_CHECK}')."
+            [ "$RESULT_FAST" = "skipped" ] && [ "$RESULT_INTEGRATION" = "skipped" ] && [ "$RESULT_E2E" = "skipped" ] || \
+              fail "docs-only change requires fast/integration/e2e='skipped' (got fast='${RESULT_FAST}', integration='${RESULT_INTEGRATION}', e2e='${RESULT_E2E}')."
+            echo "[ci-gate] passed (docs-only path)."
+            exit 0
+          fi
+          [ "$DOCS_ONLY" = "false" ] || fail "unexpected docs_only output '${DOCS_ONLY}' (expected 'true' or 'false')."
+          if [ "$EVENT_NAME" = "pull_request" ] && [ "${PR_DRAFT:-false}" = "true" ]; then
+            fail "Draft code PRs skip e2e and cannot pass ci-gate. Mark the PR Ready for Review to run e2e."
+          fi
+          [ "$RESULT_DOC_CHECK" = "skipped" ] || fail "code change requires doc-check='skipped' (got '${RESULT_DOC_CHECK}')."
+          [ "$RESULT_FAST" = "success" ] && [ "$RESULT_INTEGRATION" = "success" ] && [ "$RESULT_E2E" = "success" ] || \
+            fail "code change requires fast, integration, and e2e to all succeed (got fast='${RESULT_FAST}', integration='${RESULT_INTEGRATION}', e2e='${RESULT_E2E}')."
+          echo "[ci-gate] passed (full code path)."

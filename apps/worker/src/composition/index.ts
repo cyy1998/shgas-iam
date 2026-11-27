@@ -1,4 +1,4 @@
-import db, { closeDb } from "@iam/db";
+import type { DbClient, db as defaultDb } from "@iam/db";
 import { createSubjectFactsRedisPublisher } from "@iam/documents/user";
 import {
   createSubjectAccessTransitionRecoveryAuthority,
@@ -27,9 +27,11 @@ import { createWorkerSubjectAccess } from "./subject-access";
 export interface CreateWorkerCompositionOptions {
   env: WorkerEnv;
   logger: WorkerLogger;
+  database: { db: typeof defaultDb; close: () => Promise<void> };
+  clock?: ReturnType<typeof createWorkerRuntime>["clock"];
 }
 
-function createWorkerSubjectAccessRepair(runtime: ReturnType<typeof createWorkerRuntime>) {
+function createWorkerSubjectAccessRepair(db: DbClient, runtime: ReturnType<typeof createWorkerRuntime>) {
   const {
     barrier: subjectAccessBarrier,
     bootstrap: subjectAccessBootstrap,
@@ -65,8 +67,9 @@ function createWorkerSubjectAccessRepair(runtime: ReturnType<typeof createWorker
 }
 
 export async function createWorkerComposition(options: CreateWorkerCompositionOptions) {
-  const runtime = createWorkerRuntime({ env: options.env, logger: options.logger });
-  const subjectAccess = createWorkerSubjectAccessRepair(runtime);
+  const { db, close } = options.database;
+  const runtime = createWorkerRuntime({ env: options.env, logger: options.logger, clock: options.clock });
+  const subjectAccess = createWorkerSubjectAccessRepair(db, runtime);
   const userDocumentModule = createUserDocumentWorkerModule({
     db,
     redis: runtime.config.redis,
@@ -146,7 +149,7 @@ export async function createWorkerComposition(options: CreateWorkerCompositionOp
           closeWorkerModules(knownModules),
           Promise.resolve(httpServer?.stop(true)),
           runtime.redis.quit(),
-          closeDb(),
+          close(),
         ]);
       }
     })();

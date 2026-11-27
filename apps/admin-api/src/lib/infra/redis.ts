@@ -1,4 +1,4 @@
-import env from "@admin-api/env";
+import env from "@admin-api/runtime-env";
 import { createRedisClient } from "@iam/runtime/redis/connection";
 
 const redis = createRedisClient(env.redis);

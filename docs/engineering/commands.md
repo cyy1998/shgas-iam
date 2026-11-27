@@ -1,7 +1,19 @@
 # 构建、测试与开发命令
 
-从仓库根目录执行命令。使用 Node.js 24 与根 [package.json](../../package.json) 的 `packageManager` 版本，
-先显式执行 `pnpm install`。检查命令遇依赖未就绪会失败。
+从仓库根目录执行命令。使用 Linux 环境、Node.js 24、Bun 1.4.4 与根 [package.json](../../package.json) 的 `packageManager` 版本，先显式执行 `pnpm install`。检查命令遇依赖未就绪会失败。
+
+## 核心根命令
+
+面向日常开发与本地验证的根命令收敛为 6 个核心入口：
+
+| 命令                    | 作用                                                                                                                                         |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm check`            | 7 步只读静态与契约检查：`format:check` → `lint` → `typecheck` → `@iam/db db:check` → `check:architecture` → `check:docs` → `check:env-names` |
+| `pnpm fix`              | 自动排版与安全 lint 修复（`pnpm format && pnpm lint:fix`）                                                                                   |
+| `pnpm test:unit`        | L1 进程内单测（`pnpm test` 别名）：先跑 `pnpm test:unit:sandcastle`，再用 Turbo 跑全仓 Unit（`--concurrency=2`）                             |
+| `pnpm test:integration` | L2 全仓集成测试（消费专用端点，支持定向筛选）                                                                                                |
+| `pnpm test:e2e`         | L3 生产容器 Full-system E2E（独占 Docker Compose 生产容器栈 + 9 个跨服务业务旅程，支持 `--skip-build` / `--keep`）                           |
+| `pnpm verify`           | 本地一键全量 L1 + L2 验证：`check` → `test:unit` → `test:integration` → `build`                                                              |
 
 ## Workspace 命令
 
@@ -26,12 +38,15 @@ Admin 和 SSO 各自按 app 的 `.env.example` 准备 `.env.local`。默认入�
 - **数据库迁移与 schema** 使用 `pnpm --filter @iam/db <script>`。常用入口为 `db:generate`、`db:check`、`db:migrate` 和 `db:push`。
   目标环境的迁移与回退见[部署手册](../releases/deployment.md)。
 - **人工维护 CLI** 人工维护命令见 [Ops README](../../apps/ops/README.md)，按目标选择[运维手册](../releases/README.md)。
-- **Sandcastle AFK** 用 `pnpm sandcastle --help` 查看 CLI，`pnpm sandcastle:build` 构建沙箱镜像，`pnpm sandcastle:check` 预检，`pnpm sandcastle:smoke` 运行真实 Docker 冒烟，`pnpm sandcastle` 启动（外层由 `flock -n .sandcastle/runner.lock` 保证单实例互斥）。配置、凭据和恢复见 [AFK 运维与启动手册](../../.sandcastle/README.md#启动与诊断)。
+- **Sandcastle AFK** 用 `pnpm sandcastle --help` 查看 CLI，`pnpm sandcastle:build` 构建方案 X 沙箱镜像，`pnpm sandcastle:check` 预检，`pnpm sandcastle:smoke` 运行真实 Docker 无特权冒烟，`pnpm sandcastle` 启动（外层由 `flock -n .sandcastle/runner.lock` 保证单实例互斥）。配置、凭据和恢复见 [AFK 运维与启动手册](../../.sandcastle/README.md#启动与诊断)。
 
 ## 日常检查
 
 ```bash
+pnpm check
+pnpm fix
 pnpm --filter <workspace> typecheck
+pnpm typecheck:root
 pnpm check:architecture
 pnpm check:docs
 pnpm check:env-names
@@ -56,21 +71,21 @@ git diff --check
 真实资源测试通过根入口选择 owner，收集和资源契约见[测试编排](testing.md#收集与编排)。
 
 Sandcastle 编排回归可独立执行 `pnpm test:unit:sandcastle`，根 `pnpm test:unit` 已包含此集合。
-沙箱接线用 `pnpm sandcastle:smoke` 验证。各入口覆盖范围见 [Sandcastle 验证](testing.md#sandcastle-验证)。
+无特权沙箱接线用 `pnpm sandcastle:smoke` 验证。各入口覆盖范围见 [Sandcastle 验证](testing.md#sandcastle-验证)。
 
 ```bash
 pnpm test:unit
 pnpm --filter @iam/api-core test:unit
+pnpm test:infra:up
 pnpm test:integration
+pnpm test:infra:down
 ```
 
 `--workspace` 接受 package name 或仓库相对 workspace 目录。`--workspace` 与 `--file` 均可重复。
 `--file` 接受绝对路径、仓库相对路径或 owner 相对路径，须属于所选 owner 的 collection。
 无匹配、越界文件或未知参数均失败。根 `iam-monorepo` 负责聚合，测试 owner 是实际 workspace。
 
-同一候选的同一轮 Integration 检查按所需范围合并。根入口在所有并发任务开始前为整轮准备所需的 PostgreSQL 模板库、Redis
-及按最终选中文件按需启动的 Gateway APISIX/etcd（仅当命中 Gateway 五个真实 APISIX 文件时启动），按 `workspace:executor` 分配 Redis DB，
-并以同一并发池调度所选任务；所有任务进程树退出后再由根入口按 `children.jsonl` 逆序统一回收，确保并发执行期间 Docker 网络完全静止。
+本地使用 `pnpm test:infra:up` 启动专用 PostgreSQL、Redis 和 APISIX/etcd。服务可供后续命令复用，结束后执行 `pnpm test:infra:down` 回收容器、网络和数据卷。自备服务时设置所需端点。默认端口为 PostgreSQL `55432`、Redis `56379`、APISIX Admin `59180`，均绑定 `127.0.0.1`。同一套端点上的顶层 Integration 命令须串行执行。
 默认并发上限为 3，首个失败会取消其他在途任务。`--concurrency <n>` 或 `IAM_TEST_INTEGRATION_CONCURRENCY` 可调整上限，两者接受正整数，命令行参数优先。
 
 - **多个文件**。重复传 `--file`，使用仓库相对路径区分不同 workspace 的文件。
@@ -94,43 +109,22 @@ pnpm test:integration
   pnpm test:integration --workspace @iam/ops --file test-integration/session-clear/session-clear-command.integration.test.ts
   ```
 
+- **使用自备专用服务**。设置 `IAM_TEST_POSTGRES_URL` 和 `IAM_TEST_REDIS_URL`。真实 Gateway APISIX 测试需要配对设置 `IAM_TEST_APISIX_ADMIN_URL` 与 `IAM_TEST_APISIX_ADMIN_KEY`。
+
+  ```bash
+  IAM_TEST_POSTGRES_URL=postgresql://iam_test:iam_test@127.0.0.1:5432/iam_test \
+    IAM_TEST_REDIS_URL=redis://127.0.0.1:6379/0 \
+    pnpm test:integration --workspace @iam/auth-api
+  ```
+
 Integration 的 `--timeout-ms` 默认 30 分钟，`--cleanup-timeout-ms` 默认 30 秒。
-Admin 和 SSO 的浏览器集成测试默认使用 `.cache/integration-frontend/` 中的静态构建。源码、workspace 传递依赖、锁定文件或公开构建环境变更时重新构建。
-设置 `IAM_PW_DEV_SERVER=1` 可切换到 Vite dev server。无资源的 Playwright 集合可通过 `--browser-workers <1–16>` 或 `IAM_TEST_BROWSER_WORKERS` 调整并发，命令行参数优先。
-选择带资源的 Playwright 集合时须省略这两个覆盖项。
+L2 runner 使用 Bun。Admin 与 SSO 的前端行为测试随 `pnpm test:unit` 运行，也可通过 `pnpm --filter @iam/admin test:unit` 或 `pnpm --filter @iam/sso test:unit` 单独执行。
 
-`--keep-resources` 显式保留本次环境并采集容器诊断。准确 project、配置与产物登记在 `test-results/integration/<run-id>/run.json`。
-同目录的 `logs/<package>-<executor>.log` 保存各任务的完整输出。终端列出逐任务耗时、日志路径和总墙钟。
-清理失败、进程被强制结束或用完保留环境后，按记录清理：
-
-```bash
-pnpm test:resources:cleanup --record test-results/integration/<run-id>/run.json
-```
+各任务的完整输出位于 `test-results/integration/<run-id>/logs/<package>-<executor>.log`。终端显示逐任务耗时、日志路径和总墙钟。若命令被强制结束或资源预检发现 APISIX 有残留，确认任务进程树已退出后，用 `pnpm test:infra:down` 再执行 `pnpm test:infra:up` 清理本地专用服务。外置环境由对应调用方恢复。
 
 ### Full-system E2E
 
-E2E 编排器的 Integration 集合独立于日常 `pnpm test:integration` 与 `pnpm verify:ci`。它验证临时中间件、数据库模板、宿主进程、前端托管和恢复，按单并发执行并在首个失败后停止。
-
-```bash
-pnpm --filter @iam/e2e-system test:integration
-pnpm verify:e2e-runtime --base <target-commit-sha>
-```
-
-路径门禁分别读取固定基线与候选 HEAD 的 [`pnpm-workspace.yaml`](../../pnpm-workspace.yaml) 和清单，
-按 `packages` 列表发现 workspace，再根据 `iamWorkspace.gates` 和 `iamWorkspace.kind` 确定前端和后端依赖闭包。
-声明参与 `e2e-runtime` 的 E2E 编排器及其 workspace 依赖也纳入后端闭包。
-
-差异命中 `e2e/system/**`、`packages/runtime/**`、`scripts/test-resources/**`、`docker/gateway/iam.dev.example.yaml`、
-门禁脚本（含[共享 workspace 图](../../scripts/workspace-graph.mjs)）、
-`pnpm-lock.yaml`、`pnpm-workspace.yaml`、`.npmrc`、`turbo.json` 或 `**/vite.config.*` 时，门禁运行一次编排器 Integration。
-闭包内及根目录的 `package.json` 仅比较运行时和构建敏感字段。前端闭包另含 `devDependencies`、`scripts.build` 与 `scripts.dev`，
-后端闭包另含 `scripts.db:migrate`，根清单另含 `test:e2e*` 与 `verify:e2e-runtime`。同时命中多个闭包的清单按字段并集比较。
-清单在任一侧命中闭包时检查删除，清单的门禁归属变化也会触发。
-普通应用或共享包仅变更测试脚本或 `iamTest` 时跳过。
-无匹配时打印跳过信息，基线非法或 Git 比较失败时以非零状态退出。
-
-完整系统入口为 `pnpm test:e2e`。需要 Chromium 时按环境选择 `pnpm e2e:install`（含系统依赖）或
-`pnpm e2e:install:browsers`。就绪、文件复位和报告目录见[完整系统测试](testing.md#full-system-e2e)。
+完整系统入口为 `pnpm test:e2e`，在独占生产容器 Docker Compose 栈上运行全部 9 个跨服务业务旅程，同步覆盖生产 Dockerfile、Nginx 与 `pnpm deploy` 依赖闭包。需要本机 Chromium 时按环境选择 `pnpm e2e:install`（含系统依赖）或 `pnpm e2e:install:browsers`。就绪、快照复位、四合一 `e2e-stubs` 与诊断目录见[完整系统测试](testing.md#full-system-e2e)。
 
 ```bash
 pnpm test:e2e
@@ -138,64 +132,53 @@ pnpm test:e2e hr-admin-user-management.spec.ts
 pnpm test:e2e dual-entry.spec.ts -g "Discovery" -x
 pnpm test:e2e --last-failed
 pnpm test:e2e --ui
-pnpm test:e2e --dev-frontend
-pnpm test:e2e --fresh --keep
-pnpm test:e2e:down
+pnpm test:e2e --skip-build hr-admin-user-management.spec.ts
+pnpm test:e2e --keep dual-entry.spec.ts
 ```
 
-`--fresh`、`--dev-frontend`、`--keep` 由运行时入口解析，可和 Playwright 参数一起传入。遇到 `--` 后，余下参数直接交给 Playwright。CI 和 AFK 默认走独占模式。在 AFK 验证常驻模式，可设置 `IAM_E2E_LIFECYCLE=resident`，并在运行和 `test:e2e:down` 时使用同一个 `IAM_E2E_RESIDENT_DIRECTORY`。托管环境另走[托管验收入口](../releases/initial-installation.md#托管环境验收)。
+`--skip-build` 与 `--keep` 由运行时入口在 `--` 前解析，可和 Playwright 参数一起传入；遇到 `--` 后余下参数直接交给 Playwright：
 
-保留现场或异常中断后，按输出的资源记录或准确 project 清理。既有 E2E descriptor 也可用于恢复。
+- `--skip-build`：校验并复用本地已构建的 `iam-e2e-*:local` 镜像（适合仅修改 `.spec.ts` 时零构建直跑；若缺少任意镜像会显式报错提示先不带开关构建一次）。
+- `--keep`：测试结束后保留容器栈并输出精确清理命令，便于排障。
+- `IAM_E2E_BUILD_CONCURRENCY` 设置 Compose 构建并发上限（默认 `2`，允许 `1`–`4`）。`IAM_E2E_BUILDX_CACHE` 可设为 `gha` / `none` / `off`。变量未设置时，仅当 `CI=true` 且提供 `ACTIONS_CACHE_URL` 或 `ACTIONS_RESULTS_URL` 才会启用 GHA 缓存。
+
+针对已完成初始化和网关发布的独立托管环境，使用 `pnpm test:e2e:managed`，配置见[托管环境验收](../releases/initial-installation.md#托管环境验收)。
+
+保留现场或异常中断后，可用准确的 project 名称清理。清理失败时保留记录，可用同一命令重试。
 
 ```bash
-pnpm test:resources:cleanup --record test-results/integration/<resource-id>/run.json
-pnpm --filter @iam/e2e-system runtime:cleanup --project iam-e2e-<resource-id>
-pnpm --filter @iam/e2e-system runtime:cleanup --descriptor test-results/<run-id>/run-descriptor.json
+pnpm --filter @iam/e2e-system runtime:cleanup -- --project iam-e2e-<resource-id>
 ```
-
-相对 descriptor 从 `e2e/system/` 解析，也可提供绝对路径。显式恢复使用 120 秒清理预算。清理失败时保留记录，可对同一目标重试。
-
-### Container Smoke
-
-```bash
-pnpm test:e2e:container-smoke
-pnpm verify:container-smoke --base <target-commit-sha>
-```
-
-第一条命令需 Docker、Compose 和本机 Chromium，可独立验证八个生产 Dockerfile、Nginx、`pnpm deploy` 依赖闭包和真实 APISIX 浏览器链路。镜像构建默认使用 2 路有界并发，可通过 `IAM_CONTAINER_SMOKE_BUILD_CONCURRENCY`（1–4）调整；各镜像完整构建日志保存在运行目录的 `build-<service>.log`。诊断目录和资源记录路径由命令输出。异常终止后可通过上方的 `test:resources:cleanup --record` 命令清理这一个 project。
-
-第二条命令对比固定合入基线与候选 HEAD。门禁分别按两侧的 `iamWorkspace.gates` 发现参与冒烟的 workspace。
-应用目录的 `Dockerfile` 变更在任一侧的应用参与冒烟且 `iamWorkspace.kind` 为非 CLI 时触发。
-差异命中任意目录的 `nginx.conf`、`pnpm-lock.yaml`，或命中 `pnpm-workspace.yaml`、`.npmrc`、`.husky/install.mjs`、
-`patches/`、`e2e/system/docker/`、`docker/gateway/iam.dev.example.yaml`、Container Smoke 编排/spec 或门禁脚本（含共享 workspace 图）时也触发。
-
-生产镜像、宿主初始化 CLI（`@iam/ops`）的依赖闭包及根目录内的 `package.json` 按打包敏感字段比较。
-CLI 闭包采用后端打包字段，并检查 `scripts.iam-ops`。同时命中多个闭包时取字段并集。
-清单在任一侧命中闭包时检查删除，清单的门禁归属变化也会触发。
-仅修改普通应用或共享包的测试脚本、`iamTest`，或者只修改纯后端闭包清单的 `devDependencies` 时跳过。
-手动交付和 AFK 最终验证使用该入口，`pnpm verify:release` 每次运行冒烟。日常 `pnpm test:e2e` 只运行 Hybrid 业务 spec。
-[容器冒烟契约](testing.md#container-smoke)
 
 ### 聚合验证
 
-| 命令                  | 顺序                                                                                       |
-| --------------------- | ------------------------------------------------------------------------------------------ |
-| `pnpm verify:static`  | `format:check`、`lint`、`check:docs`、`check:env-names`、`check:architecture`              |
-| `pnpm verify`         | 静态检查 → typecheck → Unit → build                                                        |
-| `pnpm verify:ci`      | verify → Integration                                                                       |
-| `pnpm verify:release` | verify:ci → OIDC 套件资源编排 → E2E 编排器 Integration → Full-system E2E → Container Smoke |
+| 命令          | 顺序                                                                                                                 |
+| ------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `pnpm check`  | `format:check` → `lint` → `typecheck` → `@iam/db db:check` → `check:architecture` → `check:docs` → `check:env-names` |
+| `pnpm verify` | `check` → `test:unit` → `test:integration` → `build`                                                                 |
 
-组合入口首错停止。何时执行见[验证节奏](../agents/workflow.md#验证节奏)，结果能证明的范围见[验证结果与交付](testing.md#验证结果与交付)。
+组合入口首错停止。本地运行 `pnpm verify` 前先执行 `pnpm test:infra:up`。何时执行见[验证节奏](../agents/workflow.md#验证节奏)，结果能证明的范围见[验证结果与交付](testing.md#验证结果与交付)。
+
+## GitHub Actions CI
+
+仓库在 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) 运行权威合入门禁，覆盖 `pull_request`（`opened`、`reopened`、`synchronize`、`ready_for_review`）与 `push` 到 `main`。全部 Job 运行于 GitHub-hosted `ubuntu-latest`，顶层锁定 `permissions: { contents: read }`、固定 `pnpm install --frozen-lockfile`、PR 零外部 Secret、失败日志保留 7 天，并按 PR 编号开启 `cancel-in-progress: true`。
+
+| Job           | 触发条件                                                                        | 职责与关键配置                                                                                                                                                                                                       |
+| ------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `detect`      | 每次触发                                                                        | 计算 `base_sha` 并运行 `node scripts/verify-docs.mjs --classify --base "$BASE_SHA"`，输出 `docs_only`（异常时默认 `false`）。                                                                                        |
+| `doc-check`   | `docs_only == 'true'`                                                           | 运行 `node scripts/verify-docs.mjs --base "$BASE_SHA"`，校验 `git diff --check`、变动文档 Prettier 排版与 `pnpm check:docs`。                                                                                        |
+| `fast`        | `docs_only == 'false'`                                                          | 启用 `.turbo/cache`，顺序执行 `pnpm check`、`pnpm test:unit`、`pnpm build`。                                                                                                                                         |
+| `integration` | `docs_only == 'false'`（与 `fast` 并行）                                        | 用 `pnpm test:infra:up` 启动 PostgreSQL、Redis 和 APISIX/etcd，使用默认端点及并发上限 2 运行全量 `pnpm test:integration`，失败时上传 `test-results/integration/**/logs/*.log`，始终尝试执行 `pnpm test:infra:down`。 |
+| `e2e`         | `docs_only == 'false'` 且 `fast`、`integration` 通过，且为 `push` 或非 Draft PR | 启用 Docker Buildx + `IAM_E2E_BUILDX_CACHE=gha`，运行 `pnpm test:e2e`（生产容器栈 + 9 specs），失败时上传 `test-results/e2e/**/*.log`。                                                                              |
+| `ci-gate`     | `if: always()`，`needs` 全部 5 个上游 Job                                       | 唯一 Required Check，按严格真值表汇总：纯文档须 `doc-check=success` 且其余 3 项 `skipped`；代码变更拒绝 Draft PR，且须 `doc-check=skipped` 与 `fast`/`integration`/`e2e` 全部 `success`。                            |
 
 ### 纯文档验证
 
 ```bash
-pnpm verify:docs --base <target-commit>
+node scripts/verify-docs.mjs --base <target-commit>
 ```
 
-在干净的候选工作树中执行，传入本次合入目标的固定提交。候选须包含目标提交，且差异仅限 `docs/` 下的普通 Markdown 文件（含 `docs/agents/`）以及根目录 `README.md`、`AGENTS.md`、`GLOSSARY.md`。
-文件类型或权限变化以及范围外的改动（如 `.agents/`、`.codex/`、脚本或源码）走 `pnpm verify`。轻量入口检查提交范围的
-`git diff --check`、变动后仍存在的 Markdown 排版和整个文档索引。范围不符或任一检查失败时非零退出。
+供 CI `detect`（加 `--classify`）与 `doc-check` 使用的底层脚本，也可在本地干净工作树中手动调用。传入本次合入目标的固定提交：候选须包含目标提交，且差异仅限 `docs/` 下的普通 Markdown 文件（含 `docs/agents/`）以及根目录 `README.md`、`AGENTS.md`、`GLOSSARY.md`。文件类型或权限变化以及范围外的改动（如 `.agents/`、`.codex/`、`.sandcastle/`、脚本或源码）都会被归类为非纯文档，须走完整代码路径。日常本地仅修改文档时运行 `pnpm check:docs` 与 `git diff --check`（或 `pnpm check`）即可。
 
 ## 工具链排查
 
@@ -229,72 +212,3 @@ lint-staged 会尝试还原原始状态。若自动恢复失败，保留其输�
 Hook 可以被本地绕过，自动 merge commit 也不保证触发 pre-commit。最终候选仍按[验证节奏](../agents/workflow.md#验证节奏)执行只读检查。
 提交工具链变化时，在独立临时 Git 仓库中按[一次性验证约定](testing.md#root-工具链的一次性验证)
 检查涉及的真实提交、部分暂存和失败恢复行为。
-
-## OIDC 协议套件
-
-正式 fixture 位于 [oidc-suite.fixture.ts](../../apps/sso-api/test-integration/oidc/oidc-suite.fixture.ts)，
-独立 RP 位于 [oidc-rp.integration.test.ts](../../apps/sso-api/test-integration/oidc/oidc-rp.integration.test.ts)。
-它们不是普通浏览器旅程，也不由基础 verify 自动运行。
-
-独立套件自管 Docker Compose 资源编排验证（[oidc-suite-resources.integration.test.ts](../../apps/sso-api/test-integration/oidc/oidc-suite-resources.integration.test.ts)）
-已剥离出日常并发 `pnpm test:integration`（保留 `oidc-rp.integration.test.ts` 与全部其余业务 OIDC 用例），通过独立入口和路径门禁执行，并无条件纳入 `pnpm verify:release`：
-
-```bash
-pnpm --filter @iam/sso-api test:oidc-suite-resources
-pnpm verify:oidc-suite-resources --base <target-commit-sha>
-```
-
-独立入口以单并发、首错停止运行专项测试，外层持有运行记录并在异常或中断后按 `children.jsonl` 回收未清理的子 Compose project。
-差异命中专项自身与 runner、OIDC 套件 fixture/driver、`apps/sso-api/test-integration/support/**`、`packages/runtime/**`、
-`packages/test-support/**`、`scripts/test-resources/**`、PG 模板脚本、门禁脚本、`pnpm-lock.yaml`、`pnpm-workspace.yaml`、`.npmrc`，
-或命中 `@iam/sso-api` 依赖闭包及根 `package.json` 的相关依赖/脚本字段（含 `test:oidc-suite-resources`、`test:postgres:prepare-template`、`verify:oidc-suite-resources`）时，路径门禁运行该专项。
-
-### 固定套件与运行配置
-
-复现使用 OpenID conformance-suite release-v5.2.4，固定提交
-`ab35a8df4864da35b49eff11483e204e01aa7961`。在对应源码目录应用
-[S256 补丁](../../apps/sso-api/test-integration/oidc/patches/conformance-suite-s256.patch)，以 Java 21.0.4、Maven 3.9.11 构建。
-补丁作为 API OIDC Integration 的测试资产，与 fixture、runner 一同维护：
-
-```bash
-git apply --unidiff-zero <iam-checkout>/apps/sso-api/test-integration/oidc/patches/conformance-suite-s256.patch
-mvn -B -Dmaven.test.skip -Dpmd.skip clean package
-```
-
-这些参数跳过套件自身构建测试/PMD，不表示已执行 IAM 协议验证。
-补丁仅在 Code Flow 且 iam_s256_required=true 时增加 S256 sequence/verifier，默认关闭；
-仓库 suite runner 为本用途显式启用，专用 PKCE 正负用例仍保持原构造，不修改官方断言。
-
-独立 fixture 自动创建并销毁本次 PostgreSQL/Redis，与根资源入口复用同一 owner、运行记录和恢复能力。
-调用方准备固定套件及其 MongoDB 6.0.13、Java 原生 HTTPS 与合成 PKCS12、loopback 端口和
-fintechlabs.devmode=true。Node/tsx/Playwright 使用仓库锁定依赖。
-fixture 启动 SSO API 候选，经 loopback TLS 代理转发协议请求。测试代理仅为本次生成的合成用户准备根会话。
-`NODE_EXTRA_CA_CERTS` 只传给任务 Node 子进程。
-
-config.json 示例（填写本次真实路径与候选 SHA）：
-
-```json
-{
-  "suiteOrigin": "https://localhost:<suite-port>",
-  "outputDirectory": "<absolute-task-evidence-directory>",
-  "candidate": "<candidate-sha>",
-  "issuerMode": "dual",
-  "tls": { "keyPath": "<key.pem>", "certPath": "<cert.pem>" }
-}
-```
-
-issuerMode 默认 dual；需要指定主机时使用 fixture 的 hostnames 配置。
-可选 plans/modules 仅用于聚焦重跑，未选择项必须作为未执行记录。
-outputDirectory 使用独立任务目录，不放在会被 API Browser 清理的默认产物根。
-
-```bash
-pnpm --filter @iam/sso-api exec bun run test-integration/oidc/oidc-suite.fixture.ts <config.json>
-pnpm test:integration --workspace @iam/sso-api
-```
-
-需要调试保留时，在独立 fixture 命令的配置路径后增加 `--keep`；结束时按打印的准确记录清理，内部 marker 不作为公开运行模式。
-独立入口先迁移并封存本次 PostgreSQL 模板库。fixture 负责候选 API、TLS 代理、独立 PostgreSQL 克隆库、Redis 和 Node 进程树，driver 负责浏览器与官方模块。
-信号/失败仍逐项尝试收尾，再以独立预算清理准确 project；超时不冒称清理完成，原始失败与清理失败均保留。
-官方 REVIEW 使自动 driver 非零，必须独立完成图像判读并保留官方结果，不把它改写为套件 PASSED。
-不同 loopback 端口只证明两 issuer 协议；hostname/Cookie 隔离须由真实 APISIX/browser 验证，
-见[验证选择](testing.md#验证选择)。

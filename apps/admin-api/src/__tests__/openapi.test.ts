@@ -3,9 +3,9 @@ import createApp from "@iam/api-core/core/create-app";
 import pino from "pino";
 import appConfig from "../../app.config";
 
-function createDocsApp() {
+function createDocsApp(nodeEnv = "development") {
   return createApp(appConfig, {
-    env: { NODE_ENV: "test" },
+    env: { nodeEnv },
     logger: pino({ enabled: false }),
     routes: {},
     middlewares: {},
@@ -13,6 +13,14 @@ function createDocsApp() {
 }
 
 describe("Admin API reference in-memory HTTP integration", () => {
+  test("does not register Scalar or either schema in production", async () => {
+    const app = createDocsApp("production");
+    for (const path of ["/", "/admin/doc", "/rpc/doc"]) {
+      const response = await app.fetch(new Request(`http://localhost${path}`));
+      expect(response.status).toBe(404);
+    }
+  });
+
   test("serves the Scalar page, admin schema, and local browser bundle", async () => {
     const app = createDocsApp();
 

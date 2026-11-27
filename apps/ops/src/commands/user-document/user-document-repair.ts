@@ -1,6 +1,7 @@
 import { parseArgs } from "node:util";
 import type { UserDocumentRepairOptions } from "@iam/documents/user/maintenance";
 import { runMaintenanceCommandWithLifecycle } from "@iam/runtime/maintenance";
+import { type CommandContext, createCommandLogger } from "@ops/command-context";
 import { parseDocumentCommandDeadline } from "../document-command-lifecycle";
 
 interface UserDocumentRepairCliOptions extends UserDocumentRepairOptions {
@@ -55,12 +56,12 @@ export function parseUserDocumentRepairArgs(argv: string[]): UserDocumentRepairC
   };
 }
 
-async function main(args: string[]) {
+async function main(args: string[], context: CommandContext) {
   const options = parseUserDocumentRepairArgs(args);
   const { parseUserDocumentCommandEnv } = await import("@ops/env");
-  const env = parseUserDocumentCommandEnv(process.env);
-  const { createLogger, LoggerSourceApp } = await import("@iam/runtime/logger");
-  const logger = createLogger({
+  const env = parseUserDocumentCommandEnv(context.env, context.stderr);
+  const { LoggerSourceApp } = await import("@iam/runtime/logger");
+  const logger = createCommandLogger(context, {
     nodeEnv: env.nodeEnv,
     logLevel: env.log.level,
     logFormat: env.log.format,
@@ -74,7 +75,7 @@ async function main(args: string[]) {
     subjectAccessOnly: options.subjectAccessOnly,
   });
   const report = await runMaintenanceCommandWithLifecycle({
-    signals: process,
+    signals: context,
     deadlineMs: options.deadlineMs,
     shutdown: composition.shutdown,
     run: async (signal) => {
@@ -83,13 +84,13 @@ async function main(args: string[]) {
       return await composition.repair({ ...options, signal });
     },
   });
-  if (report.subjectAccess.failed || report.transitionRecovery.failed) process.exitCode = 1;
+  if (report.subjectAccess.failed || report.transitionRecovery.failed) context.exitCode = 1;
 }
-export async function run(args: string[]) {
+export async function run(args: string[], context: CommandContext = process) {
   try {
-    await main(args);
+    await main(args, context);
   } catch {
-    process.exitCode = process.exitCode || 1;
-    process.stderr.write("User Document repair failed; durable work remains for retry.\n");
+    context.exitCode = context.exitCode || 1;
+    context.stderr.write("User Document repair failed; durable work remains for retry.\n");
   }
 }

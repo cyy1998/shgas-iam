@@ -12,16 +12,17 @@ APISIX 和可观测性配置属于仓库级运行和运维资产，不是 worksp
 
 ```text
 .
-├── apps/             # 可部署的后端、前端和 worker
-├── packages/         # 跨 app 复用的 workspace packages
-├── e2e/system/       # root-owned Full-system E2E workspace
-├── docker/           # dev/prod Compose、APISIX 与可观测性配置
-├── scripts/          # 仓库级检查、canonical test collection/Integration 编排和辅助脚本
-├── docs/             # 当前架构、功能、runbook、ADR 与历史记录
-├── GLOSSARY.md       # 稳定领域语言
-├── .sandcastle/      # AFK 编排核心、本仓装配、prompts、Dockerfile、环境模板与运维手册
-├── .scratch/         # 已退役本地 tracker 的只读历史归档
-└── openspec/         # 冻结的历史需求与设计记录
+├── .github/workflows/ # GitHub Actions CI（ci.yml 与权威 ci-gate 门禁）
+├── apps/              # 可部署的后端、前端和 worker
+├── packages/          # 跨 app 复用的 workspace packages
+├── e2e/system/        # root-owned 生产容器 Full-system E2E workspace
+├── docker/            # dev/prod Compose、APISIX 与可观测性配置
+├── scripts/           # 仓库级守卫、verify 入口、Integration 编排与三模式 ResourceProvider
+├── docs/              # 当前架构、功能、runbook、ADR 与历史记录
+├── GLOSSARY.md        # 稳定领域语言
+├── .sandcastle/       # 方案 X 无特权 AFK 编排、本仓装配、prompts、Dockerfile、环境模板与运维手册
+├── .scratch/          # 已退役本地 tracker 的只读历史归档
+└── openspec/          # 冻结的历史需求与设计记录
 ```
 
 根目录的 `package.json`、`pnpm-workspace.yaml` 和 `turbo.json` 分别提供仓库命令、workspace 清单与任务编排。
@@ -53,7 +54,7 @@ Use case 由 root 的 `useCases` 交给路由。Admin API 的入口与审计实�
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `packages/sms/src`                       | 短信网关协议签名与 HTTP 发送。验证码、冷却状态和业务文案由调用方持有。                                                |
 | `packages/runtime/src`                   | 后端共享日志、观测上下文、Redis 配置与连接、环境解析、通用错误、维护生命周期和 Linux 进程树所有权。                   |
-| `packages/test-support/src`              | 测试专用外部资源地址、连接、清理与进程 smoke harness。                                                                |
+| `packages/test-support/src`              | 测试专用外部资源地址守卫、共享 Drizzle PG 模板 harness、Redis 生命周期清理与进程 smoke harness。                      |
 | `packages/api-core/src`                  | Hono、OpenAPI 和 tRPC 装配，HTTP 请求上下文、响应、错误映射、分页与 adapter。                                         |
 | `packages/unit-of-work/src`              | 事务边界、提交后任务与回滚确认。                                                                                      |
 | `packages/client-snapshot/src`           | Client 普通配置、敏感凭据认证、统一缓存失效与维护。                                                                   |
@@ -79,23 +80,27 @@ Use case 由 root 的 `useCases` 交给路由。Admin API 的入口与审计实�
 
 ## Root-owned Full-system E2E Workspace
 
-`e2e/system` 拥有完整系统测试的 Compose、镜像、seed、旅程和恢复工具。生成产物位于 `test-results/`，不提交。
-资源生命周期见[测试架构](testing.md#full-system-e2e)，命令见[开发命令](commands.md#full-system-e2e)。
+Admin 与 SSO 的 L1 测试位于应用的 `src/**/__tests__/`，路由 harness 与 MSW 夹具位于应用的 `test/`。SSO 的 Vite 代理用例由 Vitest Node project 收集。
+
+后端 L2 业务测试位于各 workspace 的 `test-integration/`，由根 runner 注入专用 PostgreSQL、Redis 与按需的 APISIX 端点。进程入口 smoke 使用共享 [进程测试辅助](../../packages/test-support/src/process-smoke-harness.ts)，SSO API 的独立 RP 场景由 [双入口 fixture](../../apps/sso-api/test-integration/oidc/oidc-rp.fixture.ts) 提供 HTTP 端点。
+
+`e2e/system` 拥有 Full-system E2E 的 [静态 Compose 拓扑](../../e2e/system/docker-compose.e2e.yml) 与 [GHA 构建缓存覆盖](../../e2e/system/docker-compose.e2e.gha-cache.yml)。[specs/](../../e2e/system/specs/) 包含 9 个生产容器业务 spec 和 1 个托管环境验收 spec。[src/runtime/](../../e2e/system/src/runtime/) 负责容器编排、快照与 spec 边界复位，`src/runtime/cli.ts` 提供运行和清理入口。[src/seed/](../../e2e/system/src/seed/) 维护场景数据，[src/journeys/](../../e2e/system/src/journeys/) 提供业务旅程与托管验收辅助代码。[src/stubs/](../../e2e/system/src/stubs/) 和 `docker/e2e-stubs/` 提供外部桩服务，`docker/apisix/` 提供测试网关镜像。Unit 测试位于 `src/__tests__/`。生产容器测试的快照、Playwright 留证和日志写入仓库根目录的 `test-results/e2e/`。
 
 ## 基础设施与仓库工具
 
-| 路径                         | 职责                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `apps/gateway/`              | 独立 Gateway 配置 API 与应用镜像构建；常规配置发布经 HTTP。                                                                                                                                                                                                                                                                                                                                                                                            |
-| `docker/`                    | 统一开发入口 `compose.dev.yaml`；生产按 data、apps、gateway、observability 与独立一次性 ops 编排，其中 apps 包含 Gateway API。                                                                                                                                                                                                                                                                                                                         |
-| `tmp/gateway-config/apisix/` | APISIX dev/prod config template 与 `manifests/<env>/<app>.yaml`；manifest 是调用方持有的 HTTP 发布输入。                                                                                                                                                                                                                                                                                                                                               |
-| `docker/observability/`      | Alloy 日志/OTLP pipeline、Loki 配置、Grafana datasource/dashboard/alert provisioning，以及版本化 dashboards。                                                                                                                                                                                                                                                                                                                                          |
-| `scripts/`                   | 文档和架构守卫、测试编排、验证入口及 tooling performance helpers。                                                                                                                                                                                                                                                                                                                                                                                     |
-| `.sandcastle/`               | AFK 流程编排与本仓装配（[`afk.ts`](../../.sandcastle/afk.ts)、[`github.ts`](../../.sandcastle/github.ts)、[`git.ts`](../../.sandcastle/git.ts)、[`session.ts`](../../.sandcastle/session.ts)、[`run.mts`](../../.sandcastle/run.mts)、[`smoke.mts`](../../.sandcastle/smoke.mts)、`prompts/`）、Dockerfile、环境模板和[运维手册](../../.sandcastle/README.md#启动与诊断)。本地 `worktrees/`、`cache/`、`logs/`、`resources/` 与 `runner.lock` 不入库。 |
-| `.codex/agents/`             | 仓库 7 个角色契约定义（调查角色、手动与 AFK 共用的三档实施者、Standards/Spec 只读评审角色）；供 Codex 原生子代理、T3 跨引擎委派与 AFK runner 复用。                                                                                                                                                                                                                                                                                                    |
-| `.husky/`                    | Git hooks 与安装脚本。                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| 路径                         | 职责                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.github/workflows/ci.yml`   | GitHub Actions 权威 CI 流水线（`detect`、`doc-check`、`fast`、`integration`、`e2e` 与唯一 Required Check `ci-gate`）。                                                                                                                                                                                                                                                                                                                                                                                  |
+| `apps/gateway/`              | 独立 Gateway 配置 API 与应用镜像构建；常规配置发布经 HTTP。                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `docker/`                    | 统一开发入口 `compose.dev.yaml`；生产按 data、apps、gateway、observability 与独立一次性 ops 编排，其中 apps 包含 Gateway API。                                                                                                                                                                                                                                                                                                                                                                          |
+| `tmp/gateway-config/apisix/` | APISIX dev/prod config template 与 `manifests/<env>/<app>.yaml`；manifest 是调用方持有的 HTTP 发布输入。                                                                                                                                                                                                                                                                                                                                                                                                |
+| `docker/observability/`      | Alloy 日志/OTLP pipeline、Loki 配置、Grafana datasource/dashboard/alert provisioning，以及版本化 dashboards。                                                                                                                                                                                                                                                                                                                                                                                           |
+| `scripts/`                   | 架构/文档/环境变量守卫（`check-*.ts`）、根统一检查与验证入口（`verify.mjs`、`verify-docs.mjs`）、全仓 Integration 调度器（`run-test-integration.mjs`），以及本地测试服务、模板迁移和端点预检（`test-resources/`）。                                                                                                                                                                                                                                                                                     |
+| `.sandcastle/`               | 方案 X 无特权单容器 AFK 编排与本仓装配（[`afk.ts`](../../.sandcastle/afk.ts)、[`github.ts`](../../.sandcastle/github.ts)、[`git.ts`](../../.sandcastle/git.ts)、[`session.ts`](../../.sandcastle/session.ts)、[`run.mts`](../../.sandcastle/run.mts)、[`smoke.mts`](../../.sandcastle/smoke.mts)、6 阶段 `prompts/` 含 `repair-ci.md`）、预装四件套的 `Dockerfile`、`.env.example` 与[运维手册](../../.sandcastle/README.md#启动与诊断)。本地 `worktrees/`、`cache/`、`logs/` 与 `runner.lock` 不入库。 |
+| `.codex/agents/`             | 仓库 7 个角色契约定义（调查角色、手动与 AFK 共用的三档实施者、Standards/Spec 只读评审角色）；供 Codex 原生子代理、T3 跨引擎委派与 AFK runner 复用。                                                                                                                                                                                                                                                                                                                                                     |
+| `.husky/`                    | Git hooks 与安装脚本。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
-Sandcastle 通过根脚本外层 `flock -n .sandcastle/runner.lock` 保证单实例互斥，在 `.sandcastle/resources/` 登记各执行器的测试资源并在确认容器停止回收后删除空的 `run-*` 目录。
+Sandcastle 通过根脚本外层 `flock -n .sandcastle/runner.lock` 保证单实例互斥；可写沙箱通过 [启动脚本](../../.sandcastle/start-test-infra.sh) 在 `/tmp/iam-test-infra` 启动非 root 测试服务，注入专用 loopback 端点。服务随沙箱回收。
 
 ## 文档与 Agent 工作流
 

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import dns from "node:dns";
-import { installGatewayDns } from "../gateway-dns.ts";
+import { installGatewayDns } from "../runtime/gateway-dns.ts";
 
 test("gateway DNS maps only the three test authorities and restores the worker resolver", async () => {
   const original = dns.promises.lookup;

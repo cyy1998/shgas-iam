@@ -1,5 +1,6 @@
 import { parseArgs } from "node:util";
 import { runMaintenanceCommandWithLifecycle } from "@iam/runtime/maintenance";
+import { type CommandContext, createCommandLogger } from "@ops/command-context";
 import { parseDocumentCommandDeadline } from "../document-command-lifecycle";
 
 export interface UserDocumentBackfillCommandDeps {
@@ -26,7 +27,7 @@ export async function runUserDocumentBackfillCommand(deps: UserDocumentBackfillC
   );
   return result;
 }
-async function main(args: string[]) {
+async function main(args: string[], context: CommandContext) {
   const { values } = parseArgs({
     args: args,
     strict: true,
@@ -34,13 +35,13 @@ async function main(args: string[]) {
   });
   const deadlineMs = parseDocumentCommandDeadline(values["deadline-ms"]);
   const { parseUserDocumentCommandEnv } = await import("@ops/env");
-  const env = parseUserDocumentCommandEnv(process.env);
+  const env = parseUserDocumentCommandEnv(context.env, context.stderr);
   const batchSize =
     values["batch-size"] === undefined ? env.userDocument.backfillBatchSize : Number(values["batch-size"]);
   if (!Number.isSafeInteger(batchSize) || batchSize < 1)
     throw new RangeError("batchSize must be a positive safe integer");
-  const { createLogger, LoggerSourceApp } = await import("@iam/runtime/logger");
-  const logger = createLogger({
+  const { LoggerSourceApp } = await import("@iam/runtime/logger");
+  const logger = createCommandLogger(context, {
     nodeEnv: env.nodeEnv,
     logLevel: env.log.level,
     logFormat: env.log.format,
@@ -51,17 +52,17 @@ async function main(args: string[]) {
   const maintenance = composition.maintenance;
   if (!maintenance) throw new Error("User Document maintenance is required");
   await runMaintenanceCommandWithLifecycle({
-    signals: process,
+    signals: context,
     deadlineMs,
     shutdown: composition.shutdown,
     run: (signal) => runUserDocumentBackfillCommand({ maintenance, logger, config: { batchSize } }, signal),
   });
 }
-export async function run(args: string[]) {
+export async function run(args: string[], context: CommandContext = process) {
   try {
-    await main(args);
+    await main(args, context);
   } catch {
-    process.exitCode = process.exitCode || 1;
-    process.stderr.write("User Document backfill failed; durable work remains for retry.\n");
+    context.exitCode = context.exitCode || 1;
+    context.stderr.write("User Document backfill failed; durable work remains for retry.\n");
   }
 }

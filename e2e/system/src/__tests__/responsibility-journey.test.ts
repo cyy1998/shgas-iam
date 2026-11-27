@@ -4,7 +4,7 @@ import {
   internalDetailHasResponsibility,
   oidcUserInfoHasResponsibility,
   parseInternalResponsibilityResponse,
-} from "../responsibility-journey.ts";
+} from "../journeys/responsibility-journey.ts";
 
 const expectation = {
   positionCode: "responsibility-position",

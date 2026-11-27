@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import react from "@vitejs/plugin-react";
-import { defineConfig, loadEnv, type Plugin } from "vite";
+import { defineConfig, loadEnv, type Plugin, type PreviewServer, type ViteDevServer } from "vite";
 import { portalBase } from "./src/constants/paths";
 
 const publicEnvKeys = [
@@ -20,15 +20,18 @@ const ssoApi = { target: "http://localhost:30002", changeOrigin: true };
 const integrationApi = { target: "http://localhost:30005", changeOrigin: true };
 const stripApiPrefix = (path: string) => path.replace(/^\/api\/iam/, "");
 
+function registerPortalBaseRedirect(server: ViteDevServer | PreviewServer) {
+  server.middlewares.use((request, response, next) => {
+    if (request.url?.split("?", 1)[0] !== portalBase) return next();
+    response.writeHead(301, { Location: `${portalBase}/` });
+    response.end();
+  });
+}
+
 const redirectPortalBase: Plugin = {
   name: "sso-portal-redirect",
-  configureServer(server) {
-    server.middlewares.use((request, response, next) => {
-      if (request.url?.split("?", 1)[0] !== portalBase) return next();
-      response.writeHead(301, { Location: `${portalBase}/` });
-      response.end();
-    });
-  },
+  configureServer: registerPortalBaseRedirect,
+  configurePreviewServer: registerPortalBaseRedirect,
 };
 
 export default defineConfig(({ mode }) => {

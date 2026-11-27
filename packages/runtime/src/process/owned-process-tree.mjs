@@ -1,32 +1,14 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
-import { isAbsolute } from "node:path";
 import process from "node:process";
 
 const processMarkersEnvironmentKey = "IAM_OWNED_PROCESS_MARKERS";
-const scopeIdKey = "IAM_OWNED_PROCESS_SCOPE_ID";
-const scopeFileKey = "IAM_OWNED_PROCESS_SCOPE_FILE";
-const scopeIdPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
 
 function requireLinux() {
   if (process.platform !== "linux") {
     throw new Error(`Owned process trees require Linux or WSL2 (current platform: ${process.platform})`);
   }
-}
-
-export function ownedProcessScopeEnvironment(scope, env = process.env) {
-  if (!scopeIdPattern.test(scope.id) || typeof scope.activeFile !== "string" || !isAbsolute(scope.activeFile)) {
-    throw new Error("Invalid owned process scope");
-  }
-  return { ...env, [scopeIdKey]: scope.id, [scopeFileKey]: scope.activeFile };
-}
-
-/** Join only the previous scope after its launch permit has been revoked. */
-export async function closeOwnedProcessScope(id, options) {
-  requireLinux();
-  if (!scopeIdPattern.test(id)) throw new Error("Invalid owned process scope identity");
-  await closeLinuxOwnedProcesses(() => linuxOwnedProcesses(id, scopeIdKey), options, true);
 }
 
 function inheritedMarkers(value) {
@@ -37,7 +19,7 @@ function inheritedMarkers(value) {
   return markers;
 }
 
-async function linuxOwnedProcesses(marker, key = processMarkersEnvironmentKey) {
+async function linuxOwnedProcesses(marker) {
   const entries = await readdir("/proc");
   const processes = await Promise.all(
     entries
@@ -50,10 +32,9 @@ async function linuxOwnedProcesses(marker, key = processMarkersEnvironmentKey) {
           if (["ENOENT", "ESRCH", "EACCES", "EPERM"].includes(error.code)) return undefined;
           throw error;
         }
-        const variable = environment.split("\0").find((value) => value.startsWith(`${key}=`));
+        const variable = environment.split("\0").find((value) => value.startsWith(`${processMarkersEnvironmentKey}=`));
         if (!variable) return undefined;
-        const value = variable.slice(key.length + 1);
-        if (key === scopeIdKey) return value === marker ? Number(entry) : undefined;
+        const value = variable.slice(processMarkersEnvironmentKey.length + 1);
         let markers;
         try {
           markers = JSON.parse(value);
@@ -66,18 +47,16 @@ async function linuxOwnedProcesses(marker, key = processMarkersEnvironmentKey) {
   return processes.filter((pid) => pid !== undefined && pid !== process.pid);
 }
 
-async function closeLinuxOwnedProcesses(findProcesses, options, confirmEmpty = false) {
+async function closeLinuxOwnedProcesses(marker, options) {
   const started = performance.now();
   const forceAfterMs =
     options.forceAfterMs === undefined
       ? Math.min(250, options.timeoutMs / 2)
       : Math.min(options.forceAfterMs, options.timeoutMs * 0.8);
   const signaled = new Set();
-  let empty = false;
   while (true) {
-    const processes = await findProcesses();
-    if (processes.length === 0 && (!confirmEmpty || empty)) return;
-    empty = processes.length === 0;
+    const processes = await linuxOwnedProcesses(marker);
+    if (processes.length === 0) return;
     const elapsed = performance.now() - started;
     const signal = elapsed >= forceAfterMs ? "SIGKILL" : "SIGTERM";
     for (const pid of processes) {
@@ -97,12 +76,6 @@ async function closeLinuxOwnedProcesses(findProcesses, options, confirmEmpty = f
 /** Owns Linux descendants, including those that leave the original process group. */
 export function spawnOwnedProcessTree(options) {
   requireLinux();
-  const scopeId = options.env[scopeIdKey] ?? process.env[scopeIdKey];
-  const scopeFile = options.env[scopeFileKey] ?? process.env[scopeFileKey];
-  const scopedEnv =
-    scopeId === undefined
-      ? options.env
-      : ownedProcessScopeEnvironment({ id: scopeId, activeFile: scopeFile }, options.env);
   const marker = randomUUID();
   const ancestry = [
     ...new Set([
@@ -111,28 +84,14 @@ export function spawnOwnedProcessTree(options) {
     ]),
     marker,
   ];
-  const gated = scopeId !== undefined;
-  const child = spawn(
-    gated ? "/bin/sh" : options.executable,
-    gated
-      ? [
-          "-c",
-          'test -f "$1" || exit 125; shift; exec "$@"',
-          "iam-owned-scope",
-          scopeFile,
-          options.executable,
-          ...options.args,
-        ]
-      : options.args,
-    {
-      cwd: options.cwd,
-      env: { ...scopedEnv, [processMarkersEnvironmentKey]: JSON.stringify(ancestry) },
-      detached: true,
-      stdio: ["ignore", "pipe", "pipe"],
-    },
-  );
+  const child = spawn(options.executable, options.args, {
+    cwd: options.cwd,
+    env: { ...options.env, [processMarkersEnvironmentKey]: JSON.stringify(ancestry) },
+    detached: true,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
   Object.defineProperty(child, "closeOwnedProcessTree", {
-    value: (cleanupOptions) => closeLinuxOwnedProcesses(() => linuxOwnedProcesses(marker), cleanupOptions),
+    value: (cleanupOptions) => closeLinuxOwnedProcesses(marker, cleanupOptions),
   });
   return child;
 }

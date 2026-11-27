@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { fileURLToPath } from "node:url";
 import { OrganizationStatus, OrganizationType } from "@iam/contracts";
 import {
   createOrganizationDocumentQueryRepository,
@@ -14,13 +13,12 @@ import { createJobQueue, DEFAULT_QUEUE_PREFIX } from "@iam/jobs";
 import { createOrganizationDocumentWorkerModule } from "@iam/jobs/documents/organization";
 import { createLogger, LoggerSourceApp } from "@iam/runtime/logger";
 import { redisUrlString } from "@iam/runtime/redis/config";
-import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
 import Redis from "ioredis";
 import { createOpsPostgresTestHarness } from "../support/postgres-test-harness";
 import { resetOpsRedisTestDatabase, resolveOpsRedisTestUrl } from "../support/redis-test-harness";
+import { runOpsCommand } from "../support/run-ops-command";
 import { createOrganizationFixtureRuntime } from "./organization-worker-runtime";
 
-const opsRoot = fileURLToPath(new URL("../../", import.meta.url));
 let stopExecutors: Array<() => Promise<void> | void>;
 beforeEach(() => {
   stopExecutors = [];
@@ -178,29 +176,20 @@ test("first build and incompatible schema recovery require a fresh full verifica
     throw new Error("Organization maintenance did not pass complete verification");
   }
   async function command(operation: "backfill" | "repair" | "verify", expectedExitCode: number, args: string[] = []) {
-    const pending = runProcessCommandSmoke({
-      label: `Organization Search maintenance ${operation}`,
-      start: () =>
-        spawnOwnedProcessTree({
-          executable: process.execPath,
-          args: ["--no-env-file", "run", "src/index.ts", "organization-document", operation, ...args],
-          cwd: opsRoot,
-          env: {
-            ...process.env,
-            NODE_ENV: "test",
-            IAM_OPS_DATABASE_URL: harness.databaseUrl,
-            IAM_OPS_REDIS_URL: resolveOpsRedisTestUrl(process.env),
-            IAM_OPS_ORGANIZATION_DOCUMENT_QUEUE_PREFIX: prefix,
-            IAM_OPS_LOG_LEVEL: "info",
-            IAM_OPS_LOG_FORMAT: "json",
-            FORCE_COLOR: "0",
-            NO_COLOR: "1",
-          },
-        }),
-      completionTimeoutMs: 15_000,
-      cleanupTimeoutMs: 5000,
+    const pending = runOpsCommand({
+      args: ["organization-document", operation, ...args],
+      env: {
+        ...process.env,
+        NODE_ENV: "test",
+        IAM_OPS_DATABASE_URL: harness.databaseUrl,
+        IAM_OPS_REDIS_URL: resolveOpsRedisTestUrl(process.env),
+        IAM_OPS_ORGANIZATION_DOCUMENT_QUEUE_PREFIX: prefix,
+        IAM_OPS_LOG_LEVEL: "info",
+        IAM_OPS_LOG_FORMAT: "json",
+        FORCE_COLOR: "0",
+        NO_COLOR: "1",
+      },
       expectedExitCode,
-      maxOutputBytes: 128 * 1024,
     });
     stopExecutors.push(async () => {
       await pending;

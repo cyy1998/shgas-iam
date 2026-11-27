@@ -1,11 +1,11 @@
-import type { ProcessSmokeAttemptContext } from "@iam/test-support/process-smoke-harness";
+import type { ProcessContext } from "@iam/test-support/process-smoke-harness";
 import { createProcessSmokeEnvironment } from "@iam/test-support/process-smoke-harness";
 import { signingKeys } from "../../src/testing/oidc-signing.fixture";
 
 const current = signingKeys("sso-process");
 const previous = signingKeys("sso-previous");
 
-export function createEntryEnvironment(context: ProcessSmokeAttemptContext, overrides: NodeJS.ProcessEnv = {}) {
+export function createEntryEnvironment(context: ProcessContext, overrides: NodeJS.ProcessEnv = {}) {
   const origin = `http://${context.hostname}:${context.port}`;
   return createProcessSmokeEnvironment({
     source: process.env,

@@ -4,6 +4,7 @@ import type {
   OrganizationDocumentRepairReport,
 } from "@iam/documents/organization/maintenance";
 import { runMaintenanceCommandWithLifecycle } from "@iam/runtime/maintenance";
+import { type CommandContext, createCommandLogger } from "@ops/command-context";
 import { parseDocumentCommandDeadline } from "../document-command-lifecycle";
 
 export async function runOrganizationDocumentRepairCommand(
@@ -22,7 +23,7 @@ export async function runOrganizationDocumentRepairCommand(
   return report;
 }
 
-async function main(args: string[]) {
+async function main(args: string[], context: CommandContext) {
   const { values } = parseArgs({
     args: args,
     strict: true,
@@ -30,7 +31,7 @@ async function main(args: string[]) {
   });
   const deadlineMs = parseDocumentCommandDeadline(values["deadline-ms"]);
   const { parseOrganizationDocumentBackfillCommandEnv } = await import("@ops/env");
-  const env = parseOrganizationDocumentBackfillCommandEnv(process.env);
+  const env = parseOrganizationDocumentBackfillCommandEnv(context.env, context.stderr);
   const limit = values.limit === undefined ? env.organizationDocument.backfillBatchSize : Number(values.limit);
   const staleBefore =
     values["stale-before"] === undefined
@@ -38,8 +39,8 @@ async function main(args: string[]) {
       : new Date(values["stale-before"]);
   if (!Number.isSafeInteger(limit) || limit <= 0 || !Number.isFinite(staleBefore.getTime()))
     throw new RangeError("repair requires a positive safe limit and valid stale-before");
-  const { createLogger, LoggerSourceApp } = await import("@iam/runtime/logger");
-  const logger = createLogger({
+  const { LoggerSourceApp } = await import("@iam/runtime/logger");
+  const logger = createCommandLogger(context, {
     nodeEnv: env.nodeEnv,
     logLevel: env.log.level,
     logFormat: env.log.format,
@@ -50,7 +51,7 @@ async function main(args: string[]) {
   );
   const composition = createOrganizationDocumentCommandComposition({ env, logger, deadlineMs });
   const report = await runMaintenanceCommandWithLifecycle({
-    signals: process,
+    signals: context,
     deadlineMs,
     shutdown: composition.shutdown,
     run: (signal) =>
@@ -59,14 +60,14 @@ async function main(args: string[]) {
         { staleBefore, limit, signal },
       ),
   });
-  if (report.failed) process.exitCode = 1;
+  if (report.failed) context.exitCode = 1;
 }
 
-export async function run(args: string[]) {
+export async function run(args: string[], context: CommandContext = process) {
   try {
-    await main(args);
+    await main(args, context);
   } catch {
-    process.exitCode = process.exitCode || 1;
-    process.stderr.write("Organization document repair failed; persistent work remains for retry.\n");
+    context.exitCode = context.exitCode || 1;
+    context.stderr.write("Organization document repair failed; persistent work remains for retry.\n");
   }
 }

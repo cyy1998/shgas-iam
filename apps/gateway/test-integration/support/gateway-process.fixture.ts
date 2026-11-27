@@ -1,15 +1,14 @@
 import { mkdtemp, rm } from "node:fs/promises";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import path from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnOwnedProcessTree } from "@iam/runtime/process";
 import type { OwnedTestResourceLifecycle } from "@iam/test-support/external-test-resources";
 import {
-  createBoundedProcessLogCapture,
+  allocateLoopbackPort,
   createProcessSmokeEnvironment,
-  terminateProcessTree,
+  spawnOwnedProcessTree,
+  startProcess,
+  waitForReadiness,
 } from "@iam/test-support/process-smoke-harness";
 import { bounded } from "./lifecycle-sync.fixture";
 
@@ -24,29 +23,9 @@ export async function createGatewayProcessFixture(input: {
   requestTimeoutMs?: number;
   lifecycle: OwnedTestResourceLifecycle;
 }) {
-  const temporaryDirectory = await mkdtemp(path.join(tmpdir(), "iam-gateway-process-"));
-  input.lifecycle.registerCleanup(async () => {
-    const resolved = path.resolve(temporaryDirectory);
-    if (
-      !resolved.startsWith(path.resolve(tmpdir()) + path.sep) ||
-      !path.basename(resolved).startsWith("iam-gateway-process-")
-    )
-      throw new Error("Unsafe test-owned temporary directory");
-    await rm(resolved, { recursive: true, force: true });
-  });
-  const reservation = createServer();
-  input.lifecycle.registerCleanup(async () => {
-    if (reservation.listening)
-      await new Promise<void>((resolve, reject) => reservation.close((error) => (error ? reject(error) : resolve())));
-  });
-  await new Promise<void>((resolve, reject) => {
-    reservation.once("error", reject);
-    reservation.listen(0, "127.0.0.1", resolve);
-  });
-  const address = reservation.address();
-  if (!address || typeof address === "string") throw new Error("Gateway port reservation failed");
-  const port = address.port;
-  await new Promise<void>((resolve, reject) => reservation.close((error) => (error ? reject(error) : resolve())));
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), "iam-gateway-process-"));
+  input.lifecycle.registerCleanup(() => rm(temporaryDirectory, { recursive: true, force: true }));
+  const port = await allocateLoopbackPort("127.0.0.1");
   const origin = `http://127.0.0.1:${port}`;
   const child = spawnOwnedProcessTree({
     executable: process.execPath,
@@ -69,29 +48,8 @@ export async function createGatewayProcessFixture(input: {
       },
     }),
   });
-  input.lifecycle.registerCleanup(() => terminateProcessTree(child, { timeoutMs: 5000 }));
-  const capture = createBoundedProcessLogCapture(child, { maxBytes: 32_768 });
-  input.lifecycle.registerCleanup(() => capture.dispose());
-  let ended = false;
-  const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
-    child.once("exit", (code, signal) => {
-      ended = true;
-      resolve({ code, signal });
-    });
-    child.once("error", () => {
-      ended = true;
-      resolve({ code: -1, signal: null });
-    });
-  });
-  const events = new Map<string, ReturnType<typeof Promise.withResolvers<void>>>();
-  for (const event of ["gateway_started", "gateway_stopping", "gateway_stopped"])
-    events.set(event, Promise.withResolvers<void>());
-  let tail = "";
-  const onOutput = (chunk: Buffer) => {
-    tail = (tail + chunk.toString("utf8")).slice(-4096);
-    for (const [event, notification] of events) if (tail.includes(`"event":"${event}"`)) notification.resolve();
-  };
-  child.stdout.on("data", onOutput);
+  const running = startProcess(child);
+  input.lifecycle.registerCleanup(running.stop);
   let ready = false;
   let shutdownSent = false;
   let closing: Promise<void> | undefined;
@@ -109,58 +67,49 @@ export async function createGatewayProcessFixture(input: {
       return { status: response.status, body: await response.json() };
     },
     waitForEvent(event: string) {
-      const notification = events.get(event);
-      if (!notification) throw new Error("Unknown lifecycle event");
-      return bounded(notification.promise, event);
+      const evidence = `"event":"${event}"`;
+      if (running.output().includes(evidence)) return Promise.resolve();
+      return waitForReadiness(running, async () => true, evidence, 10_000).then(() => {});
     },
     shutdown() {
       if (!shutdownSent) {
-        if (!child.kill("SIGTERM")) throw new Error(`Could not signal Gateway\n${capture.snapshot()}`);
+        if (!child.kill("SIGTERM")) throw new Error(`Could not signal Gateway\n${running.output()}`);
         shutdownSent = true;
       }
     },
     waitForExit() {
-      return bounded(exited, "Gateway normal exit", 10_000);
+      return bounded(running.completed, "Gateway normal exit", 10_000).then(({ outcome, cleanupFailure }) => {
+        if (cleanupFailure) throw cleanupFailure;
+        if (!outcome)
+          throw new Error(`Gateway exited without status
+${running.output()}`);
+        return { code: outcome.exitCode, signal: outcome.signal };
+      });
     },
     close() {
       closing ??= (async () => {
-        const failures: unknown[] = [];
         try {
-          if (ready && !ended) {
+          if (ready && child.exitCode === null && child.signalCode === null) {
             fixture.shutdown();
             await fixture.waitForExit();
           }
-        } catch (error) {
-          failures.push(error);
         } finally {
-          try {
-            await terminateProcessTree(child, { timeoutMs: 5000 });
-          } catch (error) {
-            failures.push(error);
-          }
-          capture.dispose();
-          child.stdout.off("data", onOutput);
+          await running.stop();
         }
-        if (failures.length) throw new AggregateError(failures, "Gateway process cleanup failed");
       })();
       return closing;
     },
   };
   try {
-    const deadline = AbortSignal.timeout(10_000);
-    while (true) {
-      deadline.throwIfAborted();
-      if (ended) throw new Error(`Gateway exited before readiness: ${capture.snapshot()}`);
-      try {
-        const health = await fetch(`${origin}/health`, { signal: deadline });
+    await waitForReadiness(
+      running,
+      async (signal) => {
+        const health = await fetch(`${origin}/health`, { signal });
         await health.arrayBuffer();
-        if (health.status === 200) break;
-      } catch {
-        deadline.throwIfAborted();
-      }
-      await delay(50, undefined, { signal: deadline });
-    }
-    await fixture.waitForEvent("gateway_started");
+        return health.ok ? true : undefined;
+      },
+      '"event":"gateway_started"',
+    );
     ready = true;
     return fixture;
   } catch (error) {

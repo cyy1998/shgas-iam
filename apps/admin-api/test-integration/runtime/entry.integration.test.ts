@@ -1,28 +1,27 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
+import { once } from "node:events";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import type { ProcessSmokeAttemptContext } from "@iam/test-support/process-smoke-harness";
+import type { ProcessContext } from "@iam/test-support/process-smoke-harness";
 import {
   createProcessSmokeEnvironment,
-  createProcessSmokeSuite,
   PROCESS_SMOKE_TEST_TIMEOUT_MS,
   spawnOwnedProcessTree,
+  withReadyProcess,
 } from "@iam/test-support/process-smoke-harness";
 
 const adminApiRoot = fileURLToPath(new URL("../../", import.meta.url));
-const entrySmoke = createProcessSmokeSuite({
+const entryOptions = {
   label: "Admin API entry",
   temporaryDirectoryPrefix: "iam-admin-api-entry-smoke-",
   hostname: "localhost",
-});
+};
 
-afterEach(entrySmoke.cleanup);
-
-function entryOrigin(context: ProcessSmokeAttemptContext) {
+function entryOrigin(context: ProcessContext) {
   return `http://${context.hostname}:${context.port}`;
 }
 
-function createEntryEnvironment(context: ProcessSmokeAttemptContext, nodeEnv: "development" | "production") {
+function createEntryEnvironment(context: ProcessContext, nodeEnv: "development" | "production") {
   return createProcessSmokeEnvironment({
     source: process.env,
     temporaryDirectory: context.temporaryDirectory,
@@ -43,69 +42,32 @@ function createEntryEnvironment(context: ProcessSmokeAttemptContext, nodeEnv: "d
   });
 }
 
-function runEntry<T>(
-  nodeEnv: "development" | "production",
-  probe: (origin: string, signal: AbortSignal) => Promise<T>,
-) {
-  return entrySmoke.run({
-    start: (context) =>
-      spawnOwnedProcessTree({
-        executable: process.execPath,
-        args: ["--no-env-file", "run", "src/index.ts"],
-        cwd: adminApiRoot,
-        env: createEntryEnvironment(context, nodeEnv),
-      }),
-    probe: (context, signal) => probe(entryOrigin(context), signal),
-    childReadinessEvidence: (context) => `server: ${entryOrigin(context)}`,
-  });
-}
-
-describe("Admin API entry", () => {
-  test(
-    "keeps Scalar and OpenAPI endpoints closed in production",
-    async () => {
-      const statuses = await runEntry("production", async (origin, signal) => {
-        const paths = ["/", "/admin/doc", "/rpc/doc"];
-        return Object.fromEntries(
-          await Promise.all(
-            paths.map(async (path) => {
-              const response = await fetch(`${origin}${path}`, { signal });
-              await response.body?.cancel();
-              return [path, response.status] as const;
-            }),
-          ),
-        );
-      });
-
-      // Ordinary Admin and RPC authentication still applies when the schema routes are absent.
-      expect(statuses).toEqual({ "/": 404, "/admin/doc": 403, "/rpc/doc": 403 });
-    },
-    PROCESS_SMOKE_TEST_TIMEOUT_MS,
-  );
-
-  test(
-    "serves Scalar and the Admin OpenAPI schema in development",
-    async () => {
-      const result = await runEntry("development", async (origin, signal) => {
-        const [page, schema] = await Promise.all([
-          fetch(`${origin}/`, { signal }),
-          fetch(`${origin}/admin/doc`, { signal }),
-        ]);
-        return {
-          scalar: { status: page.status, html: await page.text() },
-          status: schema.status,
-          document: await schema.json(),
-        };
-      });
-
-      expect(result.scalar.status).toBe(200);
-      expect(result.scalar.html).toContain("/admin/doc");
-      expect(result.status).toBe(200);
-      expect(result.document).toMatchObject({
-        openapi: "3.1.0",
-        info: { title: "管理端API", version: "1.0.0" },
-      });
-    },
-    PROCESS_SMOKE_TEST_TIMEOUT_MS,
-  );
-});
+test(
+  "Admin API binds its Bun listener and exits on SIGTERM",
+  async () => {
+    const result = await withReadyProcess({
+      ...entryOptions,
+      start: (context) =>
+        spawnOwnedProcessTree({
+          executable: process.execPath,
+          args: ["--no-env-file", "run", "src/index.ts"],
+          cwd: adminApiRoot,
+          env: createEntryEnvironment(context, "production"),
+        }),
+      childReadinessEvidence: (context) => `server: ${entryOrigin(context)}`,
+      async probe(context, signal) {
+        const response = await fetch(`${entryOrigin(context)}/admin/doc`, { signal });
+        await response.body?.cancel();
+        return response.status;
+      },
+      async stop(child) {
+        const exited = once(child, "exit", { signal: AbortSignal.timeout(5000) });
+        child.kill("SIGTERM");
+        const [code, signal] = await exited;
+        expect(code === 0 || code === 143 || signal === "SIGTERM").toBe(true);
+      },
+    });
+    expect(result).toBe(403);
+  },
+  PROCESS_SMOKE_TEST_TIMEOUT_MS,
+);

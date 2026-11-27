@@ -1,10 +1,8 @@
 export type WorkspaceKind = "backend" | "frontend" | "cli" | "test-support" | "e2e";
-export type WorkspaceGate = "container-smoke" | "e2e-runtime";
 export type WorkspaceTier = "public-api" | "layered-backend";
 
 export type WorkspaceMetadata = {
   readonly kind: WorkspaceKind;
-  readonly gates?: readonly WorkspaceGate[];
   readonly architecture?: { readonly tier: WorkspaceTier };
 };
 
@@ -54,7 +52,7 @@ export function resolveWorkspaceDependency(
 
 export function selectWorkspaces(
   graph: WorkspaceGraph,
-  criteria: { readonly kind?: WorkspaceKind; readonly gate?: WorkspaceGate; readonly tier?: WorkspaceTier },
+  criteria: { readonly kind?: WorkspaceKind; readonly tier?: WorkspaceTier },
 ): WorkspaceNode[];
 
 export function expandWorkspaceClosure(

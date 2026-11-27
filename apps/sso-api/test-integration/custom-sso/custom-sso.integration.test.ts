@@ -459,7 +459,7 @@ test("candidate sub-only delivery avoids Facts, never falls back from a cookie, 
       headers: { Client: "iam", Cookie: "global_session=invalid", Authorization: token },
     });
     expect(invalidCookie.status).toBe(401);
-    const legacyRedis = new Redis(process.env.IAM_SSO_API_TEST_REDIS_URL!);
+    const legacyRedis = new Redis(process.env.IAM_TEST_REDIS_URL!);
     const closeLegacy = ownApiTestExecutor(() => closeApiRedisConnection(legacyRedis));
     const legacyToken = `iam_ps_legacy_${randomUUID()}`;
     const legacyKey = `global_session:${legacyToken}`;
@@ -777,7 +777,7 @@ test("managed unknown Token save with failed compensation leaves explicit residu
 });
 
 test("managed Gateway consumes real published old Facts without SQL", async () => {
-  const f = await businessFixture(30, process.env.IAM_SSO_API_TEST_REDIS_URL);
+  const f = await businessFixture(30, process.env.IAM_TEST_REDIS_URL);
   try {
     f.setClient({
       ...f.getClient(),
@@ -1117,8 +1117,8 @@ test("Custom SSO delivers published custom attributes and nested Roles through W
     },
   ];
   const secondaryEmployment = { ...employment, isPrimary: false, position: { code: "secondary", name: "副岗" } };
-  const redisUrl = process.env.IAM_SSO_API_TEST_REDIS_URL;
-  if (!redisUrl) throw new Error("IAM_SSO_API_TEST_REDIS_URL is required");
+  const redisUrl = process.env.IAM_TEST_REDIS_URL;
+  if (!redisUrl) throw new Error("IAM_TEST_REDIS_URL is required");
   const resources: Array<() => unknown | Promise<unknown>> = [];
   const close = ownApiTestExecutor(() => closeFixtureResources(resources));
   try {
@@ -1659,7 +1659,7 @@ test("owner maintenance clears Tokens, a legacy index and malformed Code while p
 });
 
 test("candidate complete warm HTTP endpoints reuse cached sources and record socket chunk samples", async () => {
-  const upstreamUrl = new URL(process.env.IAM_SSO_API_TEST_REDIS_URL!);
+  const upstreamUrl = new URL(process.env.IAM_TEST_REDIS_URL!);
   const upstreamAddress = { host: upstreamUrl.hostname, port: Number(upstreamUrl.port) };
   let requestChunks = 0;
   let responseChunks = 0;
@@ -2088,6 +2088,79 @@ test.each([
     const body = await guard.json();
     expect(body).toMatchObject({ data: decision });
     expect(body.data.wechatQr).toBe("wechatQr" in decision ? true : undefined);
+  } finally {
+    await f.close();
+  }
+});
+
+test("managed callbacks deliver host-only sessions to two business hosts", async () => {
+  const f = await fixture();
+  try {
+    const iamOrigin = "https://internal.example";
+    const businessOrigins = ["https://first.example", "https://second.example"];
+    const jar = new Map<string, Map<string, string>>();
+    jar.set(new URL(iamOrigin).hostname, new Map([["global_session", await f.login()]]));
+    function cookiesFor(url: URL) {
+      let cookies = jar.get(url.hostname);
+      if (!cookies) {
+        cookies = new Map();
+        jar.set(url.hostname, cookies);
+      }
+      return cookies;
+    }
+    async function navigate(url: URL) {
+      const cookies = cookiesFor(url);
+      const response = await f.app.fetch(
+        new Request(url, {
+          redirect: "manual",
+          headers: { Cookie: Array.from(cookies, ([name, value]) => `${name}=${value}`).join("; ") },
+        }),
+      );
+      for (const header of response.headers.getSetCookie()) {
+        expect(header).not.toMatch(/;\s*Domain=/iu);
+        const [pair] = header.split(";");
+        const separator = pair!.indexOf("=");
+        cookies.set(pair!.slice(0, separator), pair!.slice(separator + 1));
+      }
+      return response;
+    }
+    f.setClient({
+      ...f.getClient(),
+      ssoConfig: {
+        protocol: ClientSsoProtocol.CustomSso,
+        callbackType: ClientSsoCallbackType.Managed,
+        validRedirectUrls: businessOrigins.map((origin) => `${origin}/work/*`),
+        subjectClaims: [SubjectClaim.SubjectIdentifier],
+      },
+    });
+    for (const [index, origin] of businessOrigins.entries()) {
+      const redirectUrl = `${origin}/work/done?order=123`;
+      const query = new URLSearchParams({ client: "iam", redirectUrl, state: "original-state" });
+      const authorize = await navigate(new URL(`/sso/authorize?${query}`, iamOrigin));
+      expect(authorize.status).toBe(302);
+      const callback = new URL(authorize.headers.get("location")!);
+      expect(callback.origin + callback.pathname).toBe(`${origin}/sso/callback`);
+      expect(callback.searchParams.get("redirectUrl")).toBe(redirectUrl);
+      expect(callback.searchParams.has("state")).toBe(false);
+      expect(callback.searchParams.has("tenant")).toBe(false);
+      expect(cookiesFor(callback).has("global_session")).toBe(false);
+      const result = await navigate(callback);
+      const destination = new URL(result.headers.get("location")!);
+      expect(destination.origin + destination.pathname).toBe(`${origin}/work/done`);
+      expect(destination.searchParams.get("state")).toBe("original-state");
+      expect(destination.searchParams.get("order")).toBe("123");
+      const token = destination.searchParams.get("token");
+      expect(token).toBeTruthy();
+      const cookie = result.headers.getSetCookie().find((header) => header.startsWith("local_iam_session="));
+      expect(cookie).toContain(`local_iam_session=${token}`);
+      expect(cookie).toMatch(/;\s*Path=\/(?:;|$)/iu);
+      expect(cookie).toMatch(/;\s*HttpOnly/iu);
+      expect(cookie).toMatch(/;\s*SameSite=Lax/iu);
+      expect(cookiesFor(destination).get("local_iam_session")).toBe(token!);
+      expect(cookiesFor(destination).has("global_session")).toBe(false);
+      expect(cookiesFor(new URL(businessOrigins[1 - index]!)).get("local_iam_session")).not.toBe(token!);
+    }
+    expect(cookiesFor(new URL(iamOrigin)).has("local_iam_session")).toBe(false);
   } finally {
     await f.close();
   }

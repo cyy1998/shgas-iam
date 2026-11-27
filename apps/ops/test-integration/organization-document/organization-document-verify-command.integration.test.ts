@@ -1,18 +1,15 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
-import { fileURLToPath } from "node:url";
 import { OrganizationType } from "@iam/contracts";
 import {
   createOrganizationDocumentProcessor,
   type OrganizationOutboxJobPayload,
   type OrganizationRebuildJobPayload,
 } from "@iam/documents/organization/worker";
-import { spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
-import { runOpsCommandSmoke } from "../support/ops-command-smoke";
 import { createOpsPostgresTestHarness, waitForOpsPostgresLock } from "../support/postgres-test-harness";
+import { runOpsCommand } from "../support/run-ops-command";
 
-const opsRoot = fileURLToPath(new URL("../../", import.meta.url));
 let harness: Awaited<ReturnType<typeof createOpsPostgresTestHarness>>;
-let commands: ReturnType<typeof runOpsCommandSmoke>[];
+let commands: ReturnType<typeof runOpsCommand>[];
 beforeAll(async () => {
   harness = await createOpsPostgresTestHarness();
 });
@@ -153,29 +150,20 @@ async function runVerify(
 ) {
   const url = new URL(harness.databaseUrl);
   url.searchParams.set("options", "-cdefault_transaction_read_only=on");
-  const pending = runOpsCommandSmoke(
+  const pending = runOpsCommand(
     {
-      label: "Organization Search PostgreSQL verification",
-      start: () =>
-        spawnOwnedProcessTree({
-          executable: process.execPath,
-          args: ["--no-env-file", "run", "src/index.ts", "organization-document", "verify", ...args],
-          cwd: opsRoot,
-          env: {
-            ...process.env,
-            NODE_ENV: "test",
-            IAM_OPS_DATABASE_URL: url.toString(),
-            IAM_OPS_LOG_LEVEL: "info",
-            IAM_OPS_LOG_FORMAT: "json",
-            IAM_OPS_REDIS_URL: "invalid-unused-redis-url",
-            FORCE_COLOR: "0",
-            NO_COLOR: "1",
-          },
-        }),
-      completionTimeoutMs: 15_000,
-      cleanupTimeoutMs: 5000,
+      args: ["organization-document", "verify", ...args],
+      env: {
+        ...process.env,
+        NODE_ENV: "test",
+        IAM_OPS_DATABASE_URL: url.toString(),
+        IAM_OPS_LOG_LEVEL: "info",
+        IAM_OPS_LOG_FORMAT: "json",
+        IAM_OPS_REDIS_URL: "invalid-unused-redis-url",
+        FORCE_COLOR: "0",
+        NO_COLOR: "1",
+      },
       expectedExitCode,
-      maxOutputBytes: 64 * 1024,
     },
     interruptWhen,
   );

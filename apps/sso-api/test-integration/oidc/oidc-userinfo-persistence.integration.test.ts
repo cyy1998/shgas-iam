@@ -41,8 +41,8 @@ const getDatabase = useApiPostgresTestHarness();
 afterEach(resetApiRedisTestDatabase);
 
 test("UserInfo HTTP uses real published Facts cache, canonical PostgreSQL fallback and transient I/O boundaries", async () => {
-  const redisUrl = process.env.IAM_SSO_API_TEST_REDIS_URL;
-  if (!redisUrl) throw new Error("IAM_SSO_API_TEST_REDIS_URL is required");
+  const redisUrl = process.env.IAM_TEST_REDIS_URL;
+  if (!redisUrl) throw new Error("IAM_TEST_REDIS_URL is required");
   const resources: Array<() => unknown | Promise<unknown>> = [];
   const close = ownApiTestExecutor(() => closeFixtureResources(resources));
   try {

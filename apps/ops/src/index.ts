@@ -1,3 +1,4 @@
+import type { CommandContext } from "./command-context";
 import { loadOpsEnvironment } from "./env";
 
 const commands = {
@@ -39,7 +40,10 @@ const commands = {
   },
 } satisfies Record<
   string,
-  Record<string, { load: () => Promise<{ run: (args: string[]) => Promise<void> }>; prefix: string[] }>
+  Record<
+    string,
+    { load: () => Promise<{ run: (args: string[], context?: CommandContext) => Promise<void> }>; prefix: string[] }
+  >
 >;
 
 function help(group?: keyof typeof commands, operation?: string) {
@@ -64,8 +68,8 @@ function help(group?: keyof typeof commands, operation?: string) {
   console.log("Use --help at any command. Connection settings use IAM_OPS_*; source configuration is apps/ops/.env.");
 }
 
-async function main() {
-  const args = process.argv.slice(2).filter((argument) => argument !== "--");
+export async function runOps(args: string[], context: CommandContext = process, loadEnvironment = loadOpsEnvironment) {
+  args = args.filter((argument) => argument !== "--");
   const [group, operation, ...options] = args;
   if (!group || group === "--help" || group === "-h" || group === "help") return help();
   if (!Object.hasOwn(commands, group)) throw new Error("Unknown Ops command");
@@ -75,24 +79,25 @@ async function main() {
   const entry = (
     commands[selectedGroup] as Record<
       string,
-      { load: () => Promise<{ run: (args: string[]) => Promise<void> }>; prefix: string[] }
+      { load: () => Promise<{ run: (args: string[], context?: CommandContext) => Promise<void> }>; prefix: string[] }
     >
   )[operation];
   if (!entry) throw new Error("Unknown Ops command");
   if (options.includes("--help") || options.includes("-h")) return help(selectedGroup, operation);
-  loadOpsEnvironment();
+  loadEnvironment();
   const command = await entry.load();
-  await command.run([...entry.prefix, ...options]);
+  await command.run([...entry.prefix, ...options], context);
 }
 
-try {
-  await main();
-} catch (error) {
-  const unknown = error instanceof Error && error.message === "Unknown Ops command";
-  process.exitCode = unknown ? 2 : process.exitCode || 1;
-  process.stderr.write(
-    unknown
-      ? "Unknown Ops command; use iam-ops --help.\n"
-      : "Ops command failed; inspect the command configuration and arguments.\n",
-  );
-}
+if (import.meta.main)
+  try {
+    await runOps(process.argv.slice(2));
+  } catch (error) {
+    const unknown = error instanceof Error && error.message === "Unknown Ops command";
+    process.exitCode = unknown ? 2 : process.exitCode || 1;
+    process.stderr.write(
+      unknown
+        ? "Unknown Ops command; use iam-ops --help.\n"
+        : "Ops command failed; inspect the command configuration and arguments.\n",
+    );
+  }

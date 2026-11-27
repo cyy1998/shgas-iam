@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { managedIamFailure, parseManagedIamInput } from "../managed-iam-input";
+import { managedIamFailure, parseManagedIamInput } from "../journeys/managed-iam-input";
 
 function fixture() {
   return {

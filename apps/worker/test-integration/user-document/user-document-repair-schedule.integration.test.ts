@@ -1,7 +1,5 @@
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import process from "node:process";
-import { fileURLToPath } from "node:url";
 import { UserStatus } from "@iam/contracts";
 import { closeMaintenancePostgresInvocation, createMaintenancePostgresResources } from "@iam/db/maintenance";
 import { users } from "@iam/db/schema";
@@ -12,20 +10,12 @@ import { createLogger, LoggerSourceApp } from "@iam/runtime/logger";
 import { createSubjectAccessBarrier } from "@iam/subject-access";
 import { createRedisSubjectAccessStore, createSubjectAccessBootstrap } from "@iam/subject-access/redis";
 import { runWithOwnedTestResources } from "@iam/test-support/external-test-resources";
-import {
-  createBoundedProcessLogCapture,
-  runProcessCommandSmoke,
-  runProcessSmoke,
-  spawnOwnedProcessTree,
-  withOwnedTemporaryDirectory,
-} from "@iam/test-support/process-smoke-harness";
 import { createUnitOfWork } from "@iam/unit-of-work";
 import { startDocumentRepairSchedule } from "@worker/composition/document-repair-schedule";
-import { parseWorkerEnv } from "@worker/env";
 import { useWorkerPostgresTestHarness } from "../support/postgres-test-harness";
 import { createWorkerRedisTestHarness, resetWorkerRedisTestDatabase } from "../support/redis-test-harness";
+import { observeWorker, parseFixtureWorkerEnv, startWorker } from "../support/worker-composition.fixture";
 
-const workerRoot = fileURLToPath(new URL("../../", import.meta.url));
 const logger = createLogger({
   sourceApp: LoggerSourceApp.Worker,
   nodeEnv: "test",
@@ -46,12 +36,12 @@ test("the production Worker repairs a lost Outbox wake, publishes Document and F
       redis: fixture.redis.observer,
       random: { uuid: randomUUID },
     });
-    const result = await runProcessSmoke({
+    const result = await observeWorker({
       label: "scheduled User Document repair production entry",
       start: () => fixture.startEntry(),
-      childReadinessEvidence: "worker started",
-      readinessTimeoutMs: 15_000,
-      cleanupTimeoutMs: 5_000,
+
+      timeoutMs: 15_000,
+
       probe: async () => {
         const document = await fixture.published();
         if (document?.document_name !== "Scheduled user" || document.post_publication_status !== "processed") return;
@@ -93,39 +83,33 @@ for (const selection of [
 ]) {
   test(`the production ${selection.name} Worker leaves User repair disabled`, async () => {
     await withFixture(async (fixture) => {
-      let logs: ReturnType<typeof createBoundedProcessLogCapture> | undefined;
       let observingSince: number | undefined;
-      try {
-        const result = await runProcessSmoke({
-          label: `${selection.name} Worker repair gate`,
-          start() {
-            const child = fixture.startEntry({
-              IAM_WORKER_USER_DOCUMENT_REPAIR_ENABLED: selection.enabled,
-              IAM_WORKER_ENABLED_MODULES: selection.modules,
-              IAM_WORKER_BULL_BOARD_ENABLED: selection.dashboard,
-            });
-            logs = createBoundedProcessLogCapture(child, { maxBytes: 32_768 });
-            return child;
-          },
-          childReadinessEvidence: "worker started",
-          readinessTimeoutMs: 10_000,
-          cleanupTimeoutMs: 5_000,
-          probe: async () => {
-            if (!logs?.snapshot().includes("worker started")) return;
-            observingSince ??= performance.now();
-            const [outbox] = await fixture.pg.sql`SELECT status FROM user_document_outbox`;
-            const published = await fixture.published();
-            if (outbox?.status !== "pending" || published !== undefined)
-              throw new Error("A disabled User repair scheduler processed durable work");
-            // More than three configured intervals after the real Worker has started.
-            return performance.now() - observingSince > 350 ? outbox : undefined;
-          },
-        });
-        expect(result.status).toBe("pending");
-        expect(logs?.snapshot()).not.toContain('"event":"user_document.repair.started"');
-      } finally {
-        logs?.dispose();
-      }
+      let scheduleOutput = "";
+      const result = await observeWorker({
+        label: `${selection.name} Worker repair gate`,
+        start() {
+          return fixture.startEntry({
+            IAM_WORKER_USER_DOCUMENT_REPAIR_ENABLED: selection.enabled,
+            IAM_WORKER_ENABLED_MODULES: selection.modules,
+            IAM_WORKER_BULL_BOARD_ENABLED: selection.dashboard,
+          });
+        },
+
+        timeoutMs: 10_000,
+
+        probe: async (output) => {
+          scheduleOutput = output;
+          observingSince ??= performance.now();
+          const [outbox] = await fixture.pg.sql`SELECT status FROM user_document_outbox`;
+          const published = await fixture.published();
+          if (outbox?.status !== "pending" || published !== undefined)
+            throw new Error("A disabled User repair scheduler processed durable work");
+          // More than three configured intervals after the real Worker has started.
+          return performance.now() - observingSince > 350 ? outbox : undefined;
+        },
+      });
+      expect(result.status).toBe("pending");
+      expect(scheduleOutput).not.toContain('"event":"user_document.repair.started"');
     });
   }, 20_000);
 }
@@ -205,7 +189,7 @@ test("stopping a blocked repair child is bounded and preserves the active consum
   });
 }, 25_000);
 
-test("the production Worker's shutdown listener waits for its blocked repair database owner and preserves a peer", async () => {
+test("Worker shutdown waits for its blocked repair database owner and preserves a peer", async () => {
   await withFixture(async (fixture) => {
     const peer = createMaintenancePostgresResources({
       databaseUrl: fixture.pg.databaseUrl,
@@ -225,7 +209,7 @@ test("the production Worker's shutdown listener waits for its blocked repair dat
         return rows.length === 1;
       });
       let owner: string | undefined;
-      const { result, shutdownMs } = await stopWorkerDuringRepair(
+      const { output, shutdownMs, failure } = await stopWorkerDuringRepair(
         fixture.startEntry({ IAM_WORKER_USER_DOCUMENT_REPAIR_DEADLINE_MS: "60000" }),
         async () => {
           const [row] = await fixture.pg.sql<
@@ -242,9 +226,10 @@ test("the production Worker's shutdown listener waits for its blocked repair dat
       const peers = await fixture.pg.sql`SELECT state,wait_event_type FROM pg_stat_activity
           WHERE application_name=${peer.applicationName}`;
       expect(shutdownMs).toBeLessThan(6000);
-      expect(result.output).toContain('"signal":"SIGTERM"');
-      expect(result.output).toContain("worker shutting down");
-      expect(result.output).toContain('"event":"user_document.repair.stopped"');
+      expect(failure).toBeUndefined();
+      expect(output).toContain('"signal":"SIGTERM"');
+      expect(output).toContain("worker shutting down");
+      expect(output).toContain('"event":"user_document.repair.stopped"');
       expect([...sessions]).toEqual([]);
       expect([...peers]).toMatchObject([{ state: "active", wait_event_type: "Lock" }]);
       await peer.close("fixture-cleanup");
@@ -254,7 +239,7 @@ test("the production Worker's shutdown listener waits for its blocked repair dat
   });
 }, 25000);
 
-test("the production Worker exits unsuccessfully when shutdown cannot cancel its stopped child's database invocation", async () => {
+test("Worker shutdown reports a failure when it cannot cancel the repair database invocation", async () => {
   await withFixture(async (fixture) => {
     await runWithOwnedTestResources(async ({ registerCleanup }) => {
       const role = `iam_shutdown_${randomUUID().replaceAll("-", "")}`;
@@ -287,7 +272,7 @@ test("the production Worker exits unsuccessfully when shutdown cannot cancel its
       await fixture.pg.sql`REVOKE EXECUTE ON FUNCTION pg_catalog.pg_cancel_backend(integer) FROM PUBLIC`;
       await fixture.pg.sql.begin(async (tx) => {
         await tx`LOCK TABLE user_document_outbox IN ACCESS EXCLUSIVE MODE`;
-        const { result } = await stopWorkerDuringRepair(
+        const { output, failure } = await stopWorkerDuringRepair(
           fixture.startEntry({
             IAM_WORKER_DATABASE_URL: target.toString(),
             IAM_WORKER_USER_DOCUMENT_REPAIR_DEADLINE_MS: "60000",
@@ -300,11 +285,11 @@ test("the production Worker exits unsuccessfully when shutdown cannot cancel its
             owner = row?.application_name;
             return owner !== undefined;
           },
-          1,
         );
-        expect(result.exitCode).toBe(1);
-        expect(result.output).toContain('"signal":"SIGTERM"');
-        expect(result.output).toContain("worker shutting down");
+        expect(failure).toBeInstanceOf(AggregateError);
+        expect(String(failure)).toContain("Worker schedules failed to close");
+        expect(output).toContain('"signal":"SIGTERM"');
+        expect(output).toContain("worker shutting down");
         if (!owner) throw new Error("Did not observe the blocked repair PostgreSQL owner");
         const unconfirmed = await fixture.pg.sql`SELECT state,wait_event_type FROM pg_stat_activity
             WHERE application_name=${owner}`;
@@ -320,23 +305,16 @@ async function withFixture(
   work: (fixture: Awaited<ReturnType<typeof createFixture>>) => Promise<void>,
   initialAccessState: "enabled" | "disabled" = "enabled",
 ) {
-  await withOwnedTemporaryDirectory({
-    prefix: "iam-user-document-repair-schedule-",
-    cleanupTimeoutMs: 5_000,
-    async run(temporaryDirectory) {
-      const stopExecutors: Array<() => Promise<void> | void> = [];
-      await runWithOwnedTestResources(async ({ registerCleanup }) => {
-        registerCleanup(async () => {
-          if (stopExecutors.length) await resetWorkerRedisTestDatabase(stopExecutors);
-        });
-        await work(await createFixture(temporaryDirectory, stopExecutors, initialAccessState));
-      });
-    },
+  const stopExecutors: Array<() => Promise<void> | void> = [];
+  await runWithOwnedTestResources(async ({ registerCleanup }) => {
+    registerCleanup(async () => {
+      if (stopExecutors.length) await resetWorkerRedisTestDatabase(stopExecutors);
+    });
+    await work(await createFixture(stopExecutors, initialAccessState));
   });
 }
 
 async function createFixture(
-  temporaryDirectory: string,
   stopExecutors: Array<() => Promise<void> | void>,
   initialAccessState: "enabled" | "disabled",
 ) {
@@ -378,7 +356,7 @@ async function createFixture(
   );
   function environment(overrides: NodeJS.ProcessEnv = {}) {
     return {
-      ...redis.commandEnvironment(temporaryDirectory),
+      ...redis.commandEnvironment(),
       IAM_WORKER_DATABASE_URL: pg.databaseUrl,
       IAM_WORKER_ENABLED_MODULES: "user-document",
       IAM_WORKER_HTTP_ENABLED: "false",
@@ -398,21 +376,10 @@ async function createFixture(
     subject,
     stopExecutors,
     startEntry(overrides: NodeJS.ProcessEnv = {}) {
-      return spawnOwnedProcessTree({
-        executable: process.execPath,
-        args: ["--no-env-file", "run", "src/index.ts"],
-        cwd: workerRoot,
-        env: environment(overrides),
-      });
+      return startWorker(environment(overrides));
     },
     parsedEnv(overrides: NodeJS.ProcessEnv = {}) {
-      const previous = process.env.DATABASE_URL;
-      try {
-        return parseWorkerEnv(environment(overrides));
-      } finally {
-        if (previous === undefined) delete process.env.DATABASE_URL;
-        else process.env.DATABASE_URL = previous;
-      }
+      return parseFixtureWorkerEnv(environment(overrides));
     },
     async published() {
       const [row] = await pg.sql<{ document_name: string; source_version: string; post_publication_status: string }[]>`
@@ -424,44 +391,23 @@ async function createFixture(
 }
 
 async function stopWorkerDuringRepair(
-  child: ReturnType<typeof spawnOwnedProcessTree>,
+  pending: ReturnType<typeof startWorker>,
   repairIsBlocked: () => Promise<boolean>,
-  expectedExitCode = 0,
 ) {
-  const logs = createBoundedProcessLogCapture(child, { maxBytes: 32_768 });
-  const completion = runProcessCommandSmoke({
-    label: "production Worker shutdown during repair",
-    completionTimeoutMs: 15_000,
-    cleanupTimeoutMs: 5_000,
-    expectedExitCode,
-    start: () => child,
-  });
-  const observer = new AbortController();
-  const blocked = waitUntil(
-    async () => logs.snapshot().includes("worker started") && (await repairIsBlocked()),
-    AbortSignal.any([observer.signal, AbortSignal.timeout(10_000)]),
-  );
+  const worker = await pending;
+  let failure: unknown;
+  let started = performance.now();
   try {
-    await Promise.race([
-      blocked,
-      completion.then(() => {
-        throw new Error("Worker finished before readiness and the PostgreSQL lock wait");
-      }),
-    ]);
-    const started = performance.now();
-    if (!child.kill("SIGTERM")) throw new Error(`Could not signal Worker\n${logs.snapshot()}`);
-    const result = await completion;
-    return { result, shutdownMs: performance.now() - started };
-  } catch (error) {
-    observer.abort();
-    const [, command] = await Promise.allSettled([blocked, completion]);
-    if (command.status === "rejected" && command.reason !== error) {
-      throw new AggregateError([error, command.reason], "Worker interruption and command both failed");
-    }
-    throw error;
+    await waitUntil(repairIsBlocked);
+    started = performance.now();
   } finally {
-    logs.dispose();
+    try {
+      await worker.stop();
+    } catch (error) {
+      failure = error;
+    }
   }
+  return { output: worker.output(), shutdownMs: performance.now() - started, failure };
 }
 
 async function waitUntil(predicate: () => Promise<boolean>, signal = AbortSignal.timeout(10_000)) {

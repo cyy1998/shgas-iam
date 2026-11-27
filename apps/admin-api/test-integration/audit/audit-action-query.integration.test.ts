@@ -1,10 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import process from "node:process";
-import { fileURLToPath } from "node:url";
 import { createAuditRepository } from "@admin-api/services/audit/audit.repository";
 import { AuditLogPaginationQueryDtoSchema } from "@admin-api/services/audit/audit.schema";
 import { createAdminAuditService } from "@admin-api/services/audit/audit.service";
-import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
+import { runAuditActionMaintenance } from "@iam/db/audit";
 import { createAdminApiPostgresTestHarness } from "../support/postgres-test-harness";
 
 describe("Admin audit queries after historical action normalization", () => {
@@ -18,29 +16,6 @@ describe("Admin audit queries after historical action normalization", () => {
   afterAll(async () => {
     if (harness) await harness.close();
   });
-
-  async function command(args: string[]) {
-    const result = await runProcessCommandSmoke({
-      label: "audit normalization before Admin query",
-      start: () =>
-        spawnOwnedProcessTree({
-          executable: process.execPath,
-          args: ["--no-env-file", "run", "iam-ops", "audit-action", ...args],
-          cwd: fileURLToPath(new URL("../../../ops/", import.meta.url)),
-          env: { ...process.env, IAM_OPS_DATABASE_URL: harness.databaseUrl, NO_COLOR: "1" },
-        }),
-      completionTimeoutMs: 15_000,
-      cleanupTimeoutMs: 5_000,
-      maxOutputBytes: 64 * 1024,
-      expectedExitCode: 0,
-    });
-    const report = result.output
-      .replaceAll("[stdout] ", "")
-      .split(/\r?\n/u)
-      .find((line) => line.startsWith('{"version":1'));
-    if (!report) throw new Error("audit command did not emit its versioned report");
-    return JSON.parse(report);
-  }
 
   test("searches targets by exact numeric ID or fuzzy code before counting and pagination", async () => {
     const service = createAdminAuditService({ auditRepository: createAuditRepository(harness.db) });
@@ -120,13 +95,13 @@ describe("Admin audit queries after historical action normalization", () => {
     }
     const before = await search();
     expect(before).toMatchObject({ total: 11, pageNum: 1, pageSize: 20, pages: 1 });
-    const inventory = await command(["inventory"]);
+    const inventory = await runAuditActionMaintenance(harness.sql, "inventory");
     expect(inventory).toMatchObject({ version: 1, totalRows: "11", legacyRows: "8" });
-    const applied = await command(["apply", "--writers-stopped"]);
+    const applied = await runAuditActionMaintenance(harness.sql, "apply");
     expect(applied).toMatchObject({ updatedRows: "8" });
-    const repeated = await command(["apply", "--writers-stopped"]);
+    const repeated = await runAuditActionMaintenance(harness.sql, "apply");
     expect(repeated).toMatchObject({ updatedRows: "0" });
-    const verified = await command(["verify"]);
+    const verified = await runAuditActionMaintenance(harness.sql, "verify");
     expect(verified).toMatchObject({ status: "completed", legacyRows: "0", totalRows: "11" });
     const after = await search();
     expect(after.total).toBe(11);

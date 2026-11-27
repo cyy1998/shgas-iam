@@ -129,5 +129,16 @@ test("formal authenticated publication writes all seven resource kinds to real A
       body: JSON.stringify({ ...input, yaml: "service: {}", prune: true }),
     });
     expect(next.status).toBe(200);
+    expect((await next.json()).data).toMatchObject({ outcome: "applied", written: true });
+    const afterPrune = await remote.read();
+    expect(afterPrune.consumers).toEqual([]);
+    expect(afterPrune.ssls).toEqual([]);
+    const unchanged = await app.request("/apply", {
+      method: "POST",
+      headers: { "content-type": "application/json", apikey: "client-secret" },
+      body: JSON.stringify({ ...input, yaml: "service: {}", prune: true }),
+    });
+    expect(unchanged.status).toBe(200);
+    expect((await unchanged.json()).data).toMatchObject({ outcome: "no_change", written: false });
   });
 }, 180_000);

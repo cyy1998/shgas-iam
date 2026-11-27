@@ -1,131 +1,21 @@
-import { randomUUID } from "node:crypto";
-import process from "node:process";
-import type { DedicatedRedisTestConfig } from "@iam/test-support/external-test-resources";
 import {
+  createExclusiveRedisTestHarness,
   parseDedicatedRedisTestUrl,
-  requireExternalTestUrl,
-  resetExclusiveRedisTestDatabase,
-  runWithOwnedTestResources,
+  TEST_REDIS_URL_ENV,
 } from "@iam/test-support/external-test-resources";
-import Redis from "ioredis";
 
-const TEST_REDIS_URL_ENV = "IAM_ADMIN_API_TEST_REDIS_URL";
+export type AdminApiRedisTestHarness = Awaited<ReturnType<typeof createAdminApiRedisTestHarness>>;
+export type AdminApiRedisTestScope = Awaited<ReturnType<AdminApiRedisTestHarness["createScope"]>>;
 
-export interface AdminApiRedisTestScope {
-  readonly redis: Redis;
-  readonly observer: Redis;
-  readonly clientCode: (label: string) => string;
-  readonly close: () => Promise<void>;
-}
-
-export interface AdminApiRedisTestHarness {
-  readonly redisUrl: string;
-  readonly createScope: () => Promise<AdminApiRedisTestScope>;
-  readonly close: () => Promise<void>;
-  readonly reset: () => Promise<void>;
-  readonly registerStopExecutor: (stop: () => Promise<void>) => () => Promise<void>;
-  readonly redisConfig: DedicatedRedisTestConfig;
-}
-
-export async function createAdminApiRedisTestHarness(): Promise<AdminApiRedisTestHarness> {
-  const redisUrl = requireExternalTestUrl({
-    environment: process.env,
-    lane: "Admin API Redis Integration",
-    name: TEST_REDIS_URL_ENV,
-  });
-  const redisConfig = parseDedicatedRedisTestUrl({
-    name: TEST_REDIS_URL_ENV,
-    value: redisUrl,
-  });
-  const stopExecutors: Array<() => Promise<void>> = [];
-  function registerStopExecutor(stop: () => Promise<void>) {
-    let closing: Promise<void> | undefined;
-    const close = () => {
-      closing ??= Promise.resolve().then(stop);
-      return closing;
-    };
-    stopExecutors.push(close);
-    return close;
-  }
-
+export async function createAdminApiRedisTestHarness() {
+  const harness = createExclusiveRedisTestHarness();
   return {
-    redisUrl,
-    redisConfig,
-    registerStopExecutor,
+    ...harness,
+    redisUrl: harness.url,
+    redisConfig: parseDedicatedRedisTestUrl({ name: TEST_REDIS_URL_ENV, value: harness.url }),
     async createScope() {
-      const caseId = `admin-api-${randomUUID().replaceAll("-", "")}`;
-      const redis = createRedisClient(redisUrl);
-      const observer = createRedisClient(redisUrl);
-      const close = registerStopExecutor(() =>
-        runWithOwnedTestResources(async (lifecycle) => {
-          lifecycle.registerCleanup(() => closeRedis(redis));
-          lifecycle.registerCleanup(() => closeRedis(observer));
-        }),
-      );
-      try {
-        const connections = await Promise.allSettled([connectRedis(redis), connectRedis(observer)]);
-        const failures = connections.flatMap((result) => (result.status === "rejected" ? [result.reason] : []));
-        if (failures.length > 0) throw new AggregateError(failures, "Admin API Redis scope setup failed");
-      } catch (error) {
-        return await runWithOwnedTestResources(async (lifecycle) => {
-          lifecycle.registerCleanup(close);
-          throw error;
-        });
-      }
-
-      let sequence = 0;
-      return {
-        redis,
-        observer,
-        clientCode(label) {
-          sequence += 1;
-          return `${caseId}-${label}-${sequence}`;
-        },
-        close,
-      };
-    },
-    async reset() {
-      const control = createRedisClient(redisUrl);
-      await runWithOwnedTestResources(async (lifecycle) => {
-        lifecycle.registerCleanup(() => closeRedis(control));
-        await resetExclusiveRedisTestDatabase({
-          redis: {
-            async flushdb() {
-              await connectRedis(control);
-              return await control.flushdb();
-            },
-          },
-          stopExecutors,
-        });
-      });
-      stopExecutors.length = 0;
-    },
-    async close() {
-      await runWithOwnedTestResources(async (lifecycle) => {
-        for (const stop of stopExecutors) lifecycle.registerCleanup(stop);
-      });
+      const { clients, clientCode, close } = await harness.openScope("admin-api", ["redis", "observer"]);
+      return { ...clients, clientCode, close };
     },
   };
-}
-
-function createRedisClient(redisUrl: string) {
-  return new Redis(redisUrl, {
-    connectTimeout: 2_000,
-    enableOfflineQueue: false,
-    lazyConnect: true,
-    maxRetriesPerRequest: 0,
-  });
-}
-
-async function connectRedis(redis: Redis) {
-  await redis.connect();
-  await redis.ping();
-}
-
-async function closeRedis(redis: Redis) {
-  try {
-    if (redis.status === "ready") await redis.quit();
-  } finally {
-    redis.disconnect();
-  }
 }

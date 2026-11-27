@@ -3,7 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  runProcessCommandSmoke,
+  runCommand,
   spawnOwnedProcessTree,
   withOwnedTemporaryDirectory,
 } from "@iam/test-support/process-smoke-harness";
@@ -20,10 +20,10 @@ afterAll(async () => {
 test("the formal PostgreSQL-only CLI accepts a standard URI with an uppercase scheme", async () => {
   const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("IAM_OPS_")));
   const uri = harness.databaseUrl.replace(/^[^:]+:/u, "POSTGRESQL:");
-  const result = await runProcessCommandSmoke({
+  const result = await runCommand({
     label: "Ops uppercase PostgreSQL scheme",
     completionTimeoutMs: 10000,
-    cleanupTimeoutMs: 5000,
+
     start: () =>
       spawnOwnedProcessTree({
         executable: process.execPath,
@@ -42,7 +42,7 @@ test("the formal PostgreSQL-only CLI accepts a standard URI with an uppercase sc
 test("source artifact loads only its own private env and inherited process values take precedence", async () => {
   await withOwnedTemporaryDirectory({
     prefix: "iam-ops-env-",
-    cleanupTimeoutMs: 5000,
+
     async run(directory) {
       const output = join(directory, "src");
       await mkdir(output);
@@ -68,11 +68,11 @@ test("source artifact loads only its own private env and inherited process value
         Object.entries(process.env).filter(([key]) => !key.startsWith("IAM_OPS_")),
       );
       async function run(expectedExitCode: number, overrides: NodeJS.ProcessEnv) {
-        return await runProcessCommandSmoke({
+        return await runCommand({
           label: "Ops own env",
           expectedExitCode,
           completionTimeoutMs: 10_000,
-          cleanupTimeoutMs: 5000,
+
           start: () =>
             spawnOwnedProcessTree({
               executable: process.execPath,
@@ -88,11 +88,11 @@ test("source artifact loads only its own private env and inherited process value
       const inherited = await run(1, { IAM_OPS_DATABASE_URL: "" });
       expect(inherited.output).toContain("IAM_OPS_DATABASE_URL");
       expect(inherited.output).not.toContain("verification completed");
-      const invalid = await runProcessCommandSmoke({
+      const invalid = await runCommand({
         label: "Ops rejects argv before maintenance",
         expectedExitCode: 1,
         completionTimeoutMs: 10_000,
-        cleanupTimeoutMs: 5000,
+
         start: () =>
           spawnOwnedProcessTree({
             executable: process.execPath,

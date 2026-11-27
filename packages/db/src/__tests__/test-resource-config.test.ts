@@ -3,10 +3,9 @@ import process from "node:process";
 import { createPostgresTestHarness } from "../../test-integration/support/postgres-harness";
 
 // These failure paths stop before resource creation; real isolation stays in resource contracts.
-test.each([{ name: "IAM_DB_TEST_DATABASE_URL", create: createPostgresTestHarness }])(
+test.each([{ name: "IAM_TEST_POSTGRES_URL", runtimePrefix: "IAM_DB", create: createPostgresTestHarness }])(
   "$name is required even when runtime configuration is present",
-  async ({ name, create }) => {
-    const runtimePrefix = name.replace(/_TEST_(DATABASE|REDIS)_URL$/u, "");
+  async ({ name, runtimePrefix, create }) => {
     const overrides: Record<string, string | undefined> = {
       [name]: undefined,
       DATABASE_URL: "postgres://127.0.0.1:1/runtime-sentinel",

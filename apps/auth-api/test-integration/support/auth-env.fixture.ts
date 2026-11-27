@@ -12,7 +12,7 @@ export function authTestEnv(databaseUrl: string, overrides: NodeJS.ProcessEnv = 
     IAM_AUTH_API_REDIS_URL: requireExternalTestUrl({
       environment: process.env,
       lane: "Auth API Integration",
-      name: "IAM_AUTH_API_TEST_REDIS_URL",
+      name: "IAM_TEST_REDIS_URL",
     }),
     IAM_AUTH_API_SMS_URL: "https://sms.example.test/send",
     IAM_AUTH_API_SMS_SIGNATURE_KEY: "fixture",

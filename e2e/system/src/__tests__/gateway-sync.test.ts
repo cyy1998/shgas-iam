@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
-import { iamGatewayManifest, publishGateway } from "../gateway-sync";
+import { iamGatewayManifest, publishGateway } from "../runtime/gateway-sync";
 
-test("publishes the existing E2E topology through authenticated HTTP and verifies APISIX", async () => {
+test("publishes the E2E topology with RP terminals routed to e2e-stubs and verifies APISIX", async () => {
   const requests: Array<{ url: string; init?: RequestInit }> = [];
   const result = await publishGateway(
     {
@@ -26,10 +26,33 @@ test("publishes the existing E2E topology through authenticated HTTP and verifie
   expect(body).toMatchObject({
     scope: "e2e:iam",
     prune: true,
-    variables: { IAM_SSO_INTERNAL_HOST: "internal.test:1234" },
+    variables: {
+      IAM_SSO_INTERNAL_HOST: "internal.test:1234",
+      E2E_STUBS_UPSTREAM_HOST: "e2e-stubs",
+      E2E_STUBS_UPSTREAM_PORT: "8080",
+    },
   });
   expect(Bun.YAML.parse(body.yaml)).toMatchObject({
-    upstreams: [{ key: "sso-api", pass_host: "rewrite", upstream_host: "sso-api.e2e.internal" }],
+    upstreams: [
+      { key: "sso-api", pass_host: "rewrite", upstream_host: "sso-api.e2e.internal" },
+      {
+        key: "e2e-stubs",
+        type: "roundrobin",
+        nodes: { "${E2E_STUBS_UPSTREAM_HOST}:${E2E_STUBS_UPSTREAM_PORT}": 1 },
+      },
+    ],
+    routes: expect.arrayContaining([
+      expect.objectContaining({
+        key: "e2e-rp-internal",
+        upstream: "e2e-stubs",
+        plugins: expect.objectContaining({ "proxy-rewrite": { uri: "/portal/e2e-rp.html" } }),
+      }),
+      expect.objectContaining({
+        key: "e2e-rp-external",
+        upstream: "e2e-stubs",
+        plugins: expect.objectContaining({ "proxy-rewrite": { uri: "/portal/e2e-rp.html" } }),
+      }),
+    ]),
   });
   expect(JSON.stringify(result)).not.toMatch(/synthetic-/);
 });

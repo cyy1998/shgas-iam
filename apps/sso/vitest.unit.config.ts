@@ -7,7 +7,6 @@ export default defineConfig({
   ...baseConfig,
   test: {
     ...baseConfig.test,
-    maxWorkers: 4,
     projects: [
       {
         resolve: baseConfig.resolve,

@@ -5,7 +5,7 @@ import { runWithOwnedTestResources } from "@iam/test-support/external-test-resou
 import { createEmptyPostgresTestHarness, createPostgresTestHarness } from "@iam/test-support/postgres-test-harness";
 import postgres from "postgres";
 
-const options = { environment: process.env, name: "IAM_TEST_SUPPORT_TEST_DATABASE_URL" };
+const options = { environment: process.env, name: "IAM_TEST_POSTGRES_URL" };
 const databaseUrl = options.environment[options.name];
 if (!databaseUrl) throw new Error("Use the root Integration entry to supply PostgreSQL");
 
@@ -16,10 +16,16 @@ test("root Integration publishes a sealed PostgreSQL template beside the legacy 
       SELECT datname, datistemplate, datallowconn FROM pg_database
       WHERE datname IN (current_database(), 'iam_test_template') ORDER BY datname
     `;
-    expect([...databases]).toEqual([
-      { datname: "iam_test", datistemplate: false, datallowconn: true },
-      { datname: "iam_test_template", datistemplate: true, datallowconn: false },
-    ]);
+    expect([...databases]).toEqual(
+      expect.arrayContaining([
+        {
+          datname: decodeURIComponent(new URL(databaseUrl).pathname.slice(1)),
+          datistemplate: false,
+          datallowconn: true,
+        },
+        { datname: "iam_test_template", datistemplate: true, datallowconn: false },
+      ]),
+    );
     expect(process.env.IAM_TEST_POSTGRES_TEMPLATE).toBe("iam_test_template");
   } finally {
     await sql.end({ timeout: 1 });
@@ -52,7 +58,7 @@ test("concurrent clones contain the migrated baseline and isolate their data", a
   });
 });
 
-test("reset discovers new tables, restarts identities and preserves migration journals", async () => {
+test("reset discovers fixture tables, restarts identities on empty tables and preserves migration journals", async () => {
   await runWithOwnedTestResources(async ({ registerCleanup }) => {
     const clone = await createPostgresTestHarness(options);
     registerCleanup(clone.close);
@@ -60,6 +66,7 @@ test("reset discovers new tables, restarts identities and preserves migration jo
     await clone.sql`CREATE TABLE new_accounts (name text)`;
     await clone.sql`CREATE TABLE public.__drizzle_migrations (marker text)`;
     await clone.sql`INSERT INTO "new.events" (label) VALUES ('previous case')`;
+    await clone.sql`DELETE FROM "new.events"`;
     await clone.sql`INSERT INTO new_accounts VALUES ('previous account')`;
     await clone.sql`INSERT INTO public.__drizzle_migrations VALUES ('keep this journal')`;
     const journal = await clone.sql`SELECT id, hash FROM drizzle.__drizzle_migrations ORDER BY id`;
@@ -76,6 +83,12 @@ test("reset discovers new tables, restarts identities and preserves migration jo
     expect([...publicJournal]).toEqual([{ marker: "keep this journal" }]);
     expect([...result]).toEqual([{ id: 1 }]);
     expect([...preservedJournal]).toEqual([...journal]);
+
+    await clone.sql`DELETE FROM "new.events"`;
+    await clone.sql`SELECT setval(pg_get_serial_sequence('"new.events"', 'id'), 10, false)`;
+    await clone.reset();
+    const next = await clone.sql`INSERT INTO "new.events" (label) VALUES ('last case') RETURNING id`;
+    expect([...next]).toEqual([{ id: 1 }]);
   });
 });
 

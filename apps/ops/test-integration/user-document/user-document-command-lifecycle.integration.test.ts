@@ -1,13 +1,10 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { fileURLToPath } from "node:url";
 import { UserStatus } from "@iam/contracts";
 import { createCurrentUserDocumentProjectionBundle } from "@iam/documents/user/worker";
-import { spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
-import { runOpsCommandSmoke } from "../support/ops-command-smoke";
 import { createOpsPostgresTestHarness, waitForOpsPostgresLock } from "../support/postgres-test-harness";
 import { resolveOpsRedisTestUrl } from "../support/redis-test-harness";
+import { runOpsCommand } from "../support/run-ops-command";
 
-const opsRoot = fileURLToPath(new URL("../../", import.meta.url));
 let harness: Awaited<ReturnType<typeof createOpsPostgresTestHarness>>;
 beforeAll(async () => {
   harness = await createOpsPostgresTestHarness();
@@ -108,29 +105,41 @@ async function runVerify(
 ) {
   const readiness = operation.startsWith("verify-");
   const redisUrl = resolveOpsRedisTestUrl(process.env);
-  return await runOpsCommandSmoke(
+  return await runOpsCommand(
     {
-      label: "User Document verification lifecycle",
+      args: ["user-document", operation, ...args],
+      env: {
+        ...process.env,
+        NODE_ENV: "test",
+        IAM_OPS_DATABASE_URL: harness.databaseUrl,
+        IAM_OPS_REDIS_URL: readiness ? "redis://127.0.0.1:1/0" : redisUrl,
+        IAM_OPS_LOG_LEVEL: "info",
+        IAM_OPS_LOG_FORMAT: "json",
+        FORCE_COLOR: "0",
+        NO_COLOR: "1",
+      },
       expectedExitCode,
-      completionTimeoutMs: 10_000,
-      cleanupTimeoutMs: 5_000,
-      start: () =>
-        spawnOwnedProcessTree({
-          executable: process.execPath,
-          args: ["--no-env-file", "run", "src/index.ts", "user-document", operation, ...args],
-          cwd: opsRoot,
-          env: {
-            ...process.env,
-            NODE_ENV: "test",
-            IAM_OPS_DATABASE_URL: harness.databaseUrl,
-            IAM_OPS_REDIS_URL: readiness ? "redis://127.0.0.1:1/0" : redisUrl,
-            IAM_OPS_LOG_LEVEL: "info",
-            IAM_OPS_LOG_FORMAT: "json",
-            FORCE_COLOR: "0",
-            NO_COLOR: "1",
-          },
-        }),
     },
     interruptWhen,
   );
 }
+
+test.each([
+  { args: ["verify-postgres"], shutdown: "User Document PostgreSQL readiness command shutting down" },
+  { args: ["verify-redis"], shutdown: "User Document Redis readiness command shutting down" },
+  { args: ["repair", "--subject-access-only", "--limit", "5"], shutdown: "Ops Subject Access repair shutting down" },
+])("cleans up unavailable storage for $args without a completion report", async ({ args, shutdown }) => {
+  const result = await runOpsCommand({
+    args: ["user-document", ...args],
+    env: {
+      NODE_ENV: "test",
+      IAM_OPS_DATABASE_URL: "postgres://iam:private-command-secret@127.0.0.1:1/iam_test",
+      IAM_OPS_REDIS_URL: "redis://127.0.0.1:1/15",
+      IAM_OPS_LOG_LEVEL: "info",
+    },
+    expectedExitCode: 1,
+  });
+  expect(result.output).toContain(shutdown);
+  expect(result.output).toMatch(/User Document (?:readiness|repair) failed;/u);
+  expect(result.output).not.toMatch(/gate completed|backlog processed|rebuild job processed|private-command-secret/u);
+});

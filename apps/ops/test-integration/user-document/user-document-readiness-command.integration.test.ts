@@ -1,14 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import process from "node:process";
-import { fileURLToPath } from "node:url";
-import {
-  PROCESS_SMOKE_TEST_TIMEOUT_MS,
-  runProcessCommandSmoke,
-  spawnOwnedProcessTree,
-} from "@iam/test-support/process-smoke-harness";
+import { PROCESS_SMOKE_TEST_TIMEOUT_MS } from "@iam/test-support/process-smoke-harness";
 import { createOpsPostgresTestHarness } from "../support/postgres-test-harness";
-
-const opsRoot = fileURLToPath(new URL("../../", import.meta.url));
+import { runOpsCommand } from "../support/run-ops-command";
 
 describe("User Document PostgreSQL readiness production command", () => {
   let harness: Awaited<ReturnType<typeof createOpsPostgresTestHarness>>;
@@ -28,28 +22,18 @@ describe("User Document PostgreSQL readiness production command", () => {
   test(
     "passes an empty complete inventory without connecting to unavailable Redis",
     async () => {
-      const result = await runProcessCommandSmoke({
-        label: "Ops User Document PostgreSQL readiness command",
-        start() {
-          return spawnOwnedProcessTree({
-            executable: process.execPath,
-            args: ["--no-env-file", "run", "src/index.ts", "user-document", "verify-postgres"],
-            cwd: opsRoot,
-            env: {
-              ...process.env,
-              NODE_ENV: "test",
-              IAM_OPS_DATABASE_URL: harness.databaseUrl,
-              IAM_OPS_LOG_LEVEL: "info",
-              IAM_OPS_LOG_FORMAT: "json",
-              FORCE_COLOR: "0",
-              NO_COLOR: "1",
-            },
-          });
+      const result = await runOpsCommand({
+        args: ["user-document", "verify-postgres"],
+        env: {
+          ...process.env,
+          NODE_ENV: "test",
+          IAM_OPS_DATABASE_URL: harness.databaseUrl,
+          IAM_OPS_LOG_LEVEL: "info",
+          IAM_OPS_LOG_FORMAT: "json",
+          FORCE_COLOR: "0",
+          NO_COLOR: "1",
         },
-        completionTimeoutMs: 15_000,
-        cleanupTimeoutMs: 5_000,
         expectedExitCode: 0,
-        maxOutputBytes: 64 * 1024,
       });
 
       expect(result.output).toContain("User Document PostgreSQL gate completed");

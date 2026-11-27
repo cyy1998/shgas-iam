@@ -1,12 +1,18 @@
+import { createHash, X509Certificate } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
-import { createFailureReporters } from "./src/failure-report/reporter-config.ts";
-import type { HybridRunContext } from "./src/hybrid-context.ts";
-import { wecomMobileCertificatePin } from "./src/wecom-mobile-tls.ts";
+import type { E2ERunContext } from "./src/runtime/e2e-context.ts";
 
 const contextPath = process.env.IAM_E2E_CONTEXT_PATH;
-const context: HybridRunContext | undefined = contextPath ? JSON.parse(readFileSync(contextPath, "utf8")) : undefined;
+const context: E2ERunContext | undefined = contextPath ? JSON.parse(readFileSync(contextPath, "utf8")) : undefined;
+
+const mobileCertificate = new X509Certificate(
+  readFileSync(new URL("./test-assets/wecom-mobile-cert.pem", import.meta.url)),
+);
+const mobileCertificatePin = createHash("sha256")
+  .update(mobileCertificate.publicKey.export({ type: "spki", format: "der" }))
+  .digest("base64");
 
 export default defineConfig({
   expect: { timeout: 30_000 },
@@ -14,20 +20,9 @@ export default defineConfig({
   fullyParallel: false,
   outputDir: contextPath ? join(dirname(contextPath), "playwright") : "test-results/playwright",
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
-  reporter: createFailureReporters(
-    context && {
-      logFiles: Object.fromEntries(
-        Object.keys(context.backendOrigins).map((service) => [
-          service,
-          ["stdout", "stderr"].map((stream) => join(context.logDirectory, `${service}.${stream}.log`)),
-        ]),
-      ),
-      apisix: { project: context.project, composeFile: context.apisixComposeFile },
-    },
-    process.env.IAM_E2E_INTERACTIVE === undefined ? process.stdout.isTTY : process.env.IAM_E2E_INTERACTIVE === "1",
-  ),
-  retries: 0,
-  testDir: ".",
+  reporter: "list",
+  retries: process.env.CI ? 1 : 0,
+  testDir: "./specs",
   testMatch: [
     "admin-custom-sso.spec.ts",
     "application-admission.spec.ts",
@@ -46,7 +41,7 @@ export default defineConfig({
     launchOptions: {
       args: [
         "--host-resolver-rules=MAP internal.iam.localhost 127.0.0.1, MAP external.iam.localhost 127.0.0.1",
-        `--ignore-certificate-errors-spki-list=${wecomMobileCertificatePin()}`,
+        `--ignore-certificate-errors-spki-list=${mobileCertificatePin}`,
       ],
     },
     screenshot: "only-on-failure",

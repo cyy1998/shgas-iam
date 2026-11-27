@@ -77,16 +77,12 @@ function toAdminApiEnv(raw: RawEnv): Env {
   };
 }
 
-function exposeDatabaseUrlForDbPackage(databaseUrl: string) {
-  process.env.DATABASE_URL = databaseUrl;
+export function readAdminApiEnv(source: NodeJS.ProcessEnv): Env {
+  return toAdminApiEnv(RawEnvSchema.parse(source));
 }
 
 export function parseAdminApiEnv(source: NodeJS.ProcessEnv): Env {
-  const env = toAdminApiEnv(RawEnvSchema.parse(source));
-  exposeDatabaseUrlForDbPackage(env.databaseUrl);
+  const env = readAdminApiEnv(source);
+  process.env.DATABASE_URL = env.databaseUrl;
   return env;
 }
-
-const env = parseAdminApiEnv(process.env);
-
-export default env;

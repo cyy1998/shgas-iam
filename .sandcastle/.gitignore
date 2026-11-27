@@ -2,6 +2,5 @@
 cache/
 logs/
 worktrees/
-resources/
 # External flock file for single-instance runs.
 runner.lock

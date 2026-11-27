@@ -4,34 +4,51 @@ import process from "node:process";
 import { runPnpmCommand } from "./run-pnpm-command.mjs";
 
 const args = process.argv.slice(2);
-if (args.length > 1 || (args.length === 1 && args[0] !== "--static")) {
-  console.error("Usage: pnpm verify [--static]");
+if (args.length > 1 || (args.length === 1 && args[0] !== "--check")) {
+  console.error("Usage: pnpm check | pnpm verify");
   process.exit(1);
 }
 
-const stages = [
-  {
-    name: "static",
-    commands: ["format:check", "lint", "check:docs", "check:env-names", "check:architecture"],
-  },
-  { name: "typecheck", commands: ["typecheck"] },
-  { name: "test:unit", commands: ["test:unit"] },
-  { name: "build", commands: ["build"] },
-];
+const isCheckOnly = args[0] === "--check";
+const checkStage = {
+  name: "check",
+  commands: [
+    ["format:check"],
+    ["lint"],
+    ["typecheck"],
+    ["--filter", "@iam/db", "db:check"],
+    ["check:architecture"],
+    ["check:docs"],
+    ["check:env-names"],
+  ],
+};
+
+const stages = isCheckOnly
+  ? [checkStage]
+  : [
+      checkStage,
+      { name: "test:unit", commands: [["test:unit"]] },
+      { name: "test:integration", commands: [["test:integration"]] },
+      { name: "build", commands: [["build"]] },
+    ];
 
 const pnpmCli = process.env.npm_execpath;
 if (!pnpmCli) {
-  console.error("pnpm verify must be launched through a pnpm lifecycle script.");
+  console.error("pnpm check / pnpm verify must be launched through a pnpm lifecycle script.");
   process.exit(1);
 }
 
-const selectedStages = args[0] === "--static" ? stages.slice(0, 1) : stages;
-for (const stage of selectedStages) {
-  console.log(`\n[verify] ${stage.name}`);
+const label = isCheckOnly ? "check" : "verify";
+for (const stage of stages) {
+  console.log(`\n[${label}] ${stage.name}`);
   for (const command of stage.commands) {
-    const result = runPnpmCommand(pnpmCli, [command]);
+    const result = runPnpmCommand(pnpmCli, command);
     if (result.error) {
-      console.error(`[verify] failed to launch pnpm ${command}: ${result.error.message}`);
+      console.error(`[${label}] failed to launch pnpm ${command.join(" ")}: ${result.error.message}`);
+      process.exit(1);
+    }
+    if (result.signal) {
+      process.kill(process.pid, result.signal);
       process.exit(1);
     }
     if (result.status !== 0) process.exit(result.status ?? 1);

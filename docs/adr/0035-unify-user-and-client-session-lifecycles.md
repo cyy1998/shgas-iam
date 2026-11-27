@@ -50,7 +50,7 @@ Kernel 持有关系、期限与精确撤销，协议持有 Code、Token 和续�
 
 使用随机 bearer 的摘要直接定位 Token 状态，内部 Token ID 与 bearer 分开。
 这省去正向 lookup，接受随机唯一性和活跃记录防覆盖的边界。未知结果按原签发处理，避免换身份重放。
-[Custom SSO](../guides/custom-sso.md) · [OIDC](../guides/oidc.md) · [协议验证入口](../engineering/commands.md#oidc-协议套件)
+[Custom SSO](../guides/custom-sso.md) · [OIDC](../guides/oidc.md) · [协议验证入口](../engineering/testing.md#收集与编排)
 
 历史来源：[ADR-0007 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0007-separate-versioned-custom-sso-client-configuration.md)、[ADR-0010 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0010-narrow-client-binding-to-oidc-lifecycle.md)、[ADR-0030 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0030-separate-protocol-validation-from-kernel-lifecycle.md)、[ADR-0031 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0031-consume-custom-sso-grants-before-issuance.md)、[ADR-0033 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0033-trust-issued-credentials-without-principal-session-revalidation.md)、[ADR-0034 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0034-locate-token-state-records-directly.md)、[ADR-0035 原文](https://github.com/cyy1998/shgas-iam/blob/73315e4cef6f96dd79b29e18f74d68af30e559ec/docs/adr/0035-unify-user-and-client-session-lifecycles.md)。原始决定与后续修订按各版本追溯。
 

@@ -1,41 +1,42 @@
 #!/usr/bin/env node
 import "./require-linux.mjs";
+import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import process from "node:process";
-import { prepareManagedGatewayApisix } from "../apps/gateway/test-integration/support/apisix-provider.mjs";
+import { formatResourceFailure, runOwnedCommand } from "./owned-command.mjs";
+import {
+  parseApisixAdminConfig,
+  testApisixAdminKeyEnv,
+  testApisixAdminUrlEnv,
+  verifyApisixAdminBaseline,
+} from "./test-resources/apisix-admin.mjs";
 import {
   integrationRedisSlotLimit,
   parseIntegrationArguments,
   parseIntegrationConcurrency,
   selectIntegrationTasks,
-  taskRequiresGatewayApisix,
+  testPostgresUrlEnv,
+  testRedisUrlEnv,
 } from "./test-resources/integration-selection.mjs";
-import {
-  createManagedResourceRun,
-  finishManagedResourceRun,
-  formatResourceFailure,
-  managedServiceEndpoint,
-  readManagedResourceRegistry,
-  readManagedResourceRun,
-  saveManagedResourceRun,
-  startManagedResources,
-  writeAtomicResourceRecord,
-} from "./test-resources/managed-resources.mjs";
-import { pnpmCommand, runOwnedCommand } from "./test-resources/owned-command.mjs";
-import { prepareManagedPostgresTemplate } from "./test-resources/postgres-template.mjs";
+import { preparePostgresTemplate } from "./test-resources/postgres-template.mjs";
+import { formatRedisSlotUrl, verifyRedisDatabaseSlotSupport } from "./test-resources/redis-preflight.mjs";
+
+const localEndpoints = {
+  [testPostgresUrlEnv]: "postgresql://iam_test:iam_test@127.0.0.1:55432/iam_test",
+  [testRedisUrlEnv]: "redis://127.0.0.1:56379/0",
+  [testApisixAdminUrlEnv]: "http://127.0.0.1:59180/apisix/admin",
+  [testApisixAdminKeyEnv]: "iam-gateway-integration-admin-key",
+};
 
 const taskPriority = [
   "@iam/auth-api:bun",
   "@iam/sso-api:bun",
   "@iam/integration-api:bun",
-  "@iam/sso-api:playwright",
-  "@iam/admin:playwright",
   "@iam/admin-api:bun",
   "@iam/ops:bun",
   "@iam/documents:bun",
   "@iam/worker:bun",
-  "@iam/sso:playwright",
   "@iam/gateway-apisix:bun",
   "@iam/db:bun",
 ];
@@ -44,52 +45,74 @@ const priority = (task) => {
   return rank === -1 ? taskPriority.length : rank;
 };
 
-async function prepareTaskEnvironments(run, tasks, environment, commandOptions) {
-  const { root, record } = run;
-  if (record.services.length > 0) await startManagedResources(run, commandOptions);
-
-  const postgres = record.services.includes("postgres")
-    ? await prepareManagedPostgresTemplate(run, { ...commandOptions, env: environment })
-    : undefined;
-
-  const redis = record.services.includes("redis")
-    ? await managedServiceEndpoint(run, "redis", 6379, commandOptions)
-    : undefined;
-  const gatewayApisix = tasks.some(taskRequiresGatewayApisix)
-    ? await prepareManagedGatewayApisix({
-        parentRun: run,
-        registryFile: process.env.IAM_TEST_RESOURCE_REGISTRY,
-        ...commandOptions,
-      })
-    : undefined;
-  let redisSlot = 0;
-  const taskEnvironments = Object.fromEntries(
-    tasks.map((task) => {
-      const variables = {};
-      if (task.resources.postgres) {
-        variables[task.resources.postgres] = postgres.databaseUrl;
-        variables.IAM_TEST_POSTGRES_TEMPLATE = postgres.templateName;
-      }
-      if (task.resources.redis) variables[task.resources.redis] = `redis://${redis.host}:${redis.port}/${++redisSlot}`;
-      if (taskRequiresGatewayApisix(task)) {
-        variables.IAM_TEST_APISIX_ADMIN_URL = gatewayApisix.adminUrl;
-        variables.IAM_TEST_APISIX_ADMIN_KEY = gatewayApisix.adminKey;
-        variables.IAM_GATEWAY_TEST_APISIX_RECORD = gatewayApisix.recordPath;
-      }
-      return [`${task.name}:${task.executor}`, variables];
-    }),
-  );
-
-  commandOptions.signal.throwIfAborted();
-  await writeAtomicResourceRecord(join(root, record.testEnvironmentFile), { tasks: taskEnvironments });
-  record.status = "running";
-  await saveManagedResourceRun(run);
-  return taskEnvironments;
+async function preflight(service, variables, check) {
+  try {
+    return await check();
+  } catch (error) {
+    throw new Error(
+      `${service} test infrastructure is unavailable or invalid. Run pnpm test:infra:up locally or check ${variables}.`,
+      { cause: error },
+    );
+  }
 }
 
-async function executeTasks({ run, tasks, taskEnvironments, environment, pnpmCli, options, controller }) {
-  const logDirectory = join(run.record.artifactDirectory, "logs");
-  await mkdir(join(run.root, logDirectory), { recursive: true });
+async function prepareTaskEnvironments(root, logDirectory, tasks, signal) {
+  const endpoints = { ...localEndpoints };
+  const environment = { ...process.env };
+  for (const name of Object.keys(localEndpoints)) {
+    endpoints[name] = environment[name]?.trim() ?? localEndpoints[name];
+    delete environment[name];
+  }
+  delete environment.IAM_TEST_POSTGRES_TEMPLATE;
+
+  const postgresUrl = endpoints[testPostgresUrlEnv];
+  const redisUrl = endpoints[testRedisUrlEnv];
+  let templateName;
+  let apisix;
+  if (tasks.some(({ resources }) => resources.postgres)) {
+    templateName = await preflight("PostgreSQL", testPostgresUrlEnv, () =>
+      preparePostgresTemplate({
+        databaseUrl: postgresUrl,
+        root,
+        signal,
+        logFile: join(logDirectory, "template-migration.log"),
+      }),
+    );
+  }
+  if (tasks.some(({ resources }) => resources.redis)) {
+    await preflight("Redis", testRedisUrlEnv, () => verifyRedisDatabaseSlotSupport(redisUrl));
+  }
+  if (tasks.some(({ requiresApisix }) => requiresApisix)) {
+    apisix = await preflight("APISIX", `${testApisixAdminUrlEnv} and ${testApisixAdminKeyEnv}`, async () => {
+      const external =
+        process.env[testApisixAdminUrlEnv] !== undefined || process.env[testApisixAdminKeyEnv] !== undefined;
+      const config = parseApisixAdminConfig(external ? process.env : localEndpoints);
+      await verifyApisixAdminBaseline(config, { signal, timeoutMs: 2000, requestTimeoutMs: 1000 });
+      return config;
+    });
+  }
+
+  let redisSlot = 0;
+  return new Map(
+    tasks.map((task) => [
+      task,
+      {
+        ...environment,
+        ...(task.resources.postgres && {
+          [testPostgresUrlEnv]: postgresUrl,
+          IAM_TEST_POSTGRES_TEMPLATE: templateName,
+        }),
+        ...(task.resources.redis && { [testRedisUrlEnv]: formatRedisSlotUrl(redisUrl, ++redisSlot) }),
+        ...(task.requiresApisix && {
+          [testApisixAdminUrlEnv]: apisix.adminUrl,
+          [testApisixAdminKeyEnv]: apisix.adminKey,
+        }),
+      },
+    ]),
+  );
+}
+
+async function executeTasks({ root, logDirectory, tasks, taskEnvironments, options, controller }) {
   const outcomes = new Map();
   const canceledAfterFailure = new Error("Integration canceled after a task failed");
   const cancelRemaining = () => controller.abort(canceledAfterFailure);
@@ -106,19 +129,17 @@ async function executeTasks({ run, tasks, taskEnvironments, environment, pnpmCli
       let exitCode;
       let failure;
       try {
+        const cwd = join(root, task.directory);
         const result = await runOwnedCommand({
-          ...pnpmCommand(pnpmCli, ["run", task.task]),
-          cwd: join(run.root, task.directory),
-          env: {
-            ...environment,
-            ...taskEnvironments[key],
-            IAM_TEST_INTEGRATION_SELECTION: JSON.stringify({ [key]: task.files }),
-          },
+          cwd,
+          env: taskEnvironments.get(task),
           signal: controller.signal,
           timeoutMs: options.timeoutMs,
           cleanupTimeoutMs: options.cleanupTimeoutMs,
-          fullLogFile: join(run.root, logPath),
           onExecutionFailure: cancelRemaining,
+          executable: "bun",
+          args: ["--no-env-file", "test", "--max-concurrency=1", "--bail", ...task.files.map((file) => `./${file}`)],
+          fullLogFile: logPath,
         });
         if (result.exitCode !== 0) {
           exitCode = result.exitCode;
@@ -158,39 +179,6 @@ async function executeTasks({ run, tasks, taskEnvironments, environment, pnpmCli
   return failures;
 }
 
-async function finishIntegrationRun(run, cleanupTimeoutMs, failures, signal) {
-  // All package trees are joined before the root takes over their registered resources.
-  const finish = async (resource) => {
-    if (resource.record.status === "created" || resource.record.services.length === 0) {
-      resource.record.status = "cleaned";
-      await saveManagedResourceRun(resource);
-    } else {
-      await finishManagedResourceRun(resource, {
-        cleanupTimeoutMs,
-        diagnostics: failures.length > 0 || signal.aborted,
-      });
-    }
-  };
-  try {
-    const children = await readManagedResourceRegistry(run.root, `${run.record.artifactDirectory}/children.jsonl`);
-    for (const path of children.reverse()) {
-      try {
-        const child = await readManagedResourceRun(run.root, path);
-        if (child.record.status !== "cleaned" && child.record.status !== "kept") await finish(child);
-      } catch (error) {
-        failures.push(error);
-      }
-    }
-  } catch (error) {
-    failures.push(error);
-  }
-  try {
-    await finish(run);
-  } catch (error) {
-    failures.push(error);
-  }
-}
-
 const controller = new AbortController();
 const onInterrupt = () => controller.abort(new Error("Integration interrupted by SIGINT"));
 const onTerminate = () => controller.abort(new Error("Integration interrupted by SIGTERM"));
@@ -198,12 +186,9 @@ process.on("SIGINT", onInterrupt);
 process.on("SIGTERM", onTerminate);
 const started = performance.now();
 let timer;
-let run;
-let options;
-let executionStart;
 const failures = [];
 try {
-  options = parseIntegrationArguments(process.argv.slice(2));
+  const options = parseIntegrationArguments(process.argv.slice(2));
   options.concurrency ??= parseIntegrationConcurrency(
     process.env.IAM_TEST_INTEGRATION_CONCURRENCY ?? "3",
     "IAM_TEST_INTEGRATION_CONCURRENCY",
@@ -213,58 +198,19 @@ try {
   if (tasks.filter((task) => task.resources.redis).length > integrationRedisSlotLimit) {
     throw new Error(`Integration Redis supports at most ${integrationRedisSlotLimit} task slots`);
   }
-  const playwrightTasks = tasks.filter((task) => task.executor === "playwright");
-  const browserWorkers = options.browserWorkers ?? process.env.IAM_TEST_BROWSER_WORKERS;
-  if (options.browserWorkers !== undefined && playwrightTasks.length === 0) {
-    throw new Error("--browser-workers requires a Playwright collection");
-  }
-  if (browserWorkers !== undefined && playwrightTasks.some((task) => task.environmentNames.length > 0)) {
-    throw new Error("--browser-workers and IAM_TEST_BROWSER_WORKERS require resource-free Playwright collections");
-  }
-  const pnpmCli = process.env.npm_execpath;
-  if (!pnpmCli) throw new Error("Integration must be launched through a pnpm lifecycle script.");
   timer = setTimeout(
     () => controller.abort(new Error(`Integration deadline exceeded after ${options.timeoutMs}ms`)),
     options.timeoutMs,
   );
-  const environment = { ...process.env };
-  if (browserWorkers !== undefined) environment.IAM_TEST_BROWSER_WORKERS = String(browserWorkers);
-  for (const name of Object.keys(environment)) {
-    if (/^IAM_.*_TEST_(DATABASE|REDIS)_URL$/.test(name)) delete environment[name];
-  }
-  delete environment.IAM_TEST_INTEGRATION_SELECTION;
-  delete environment.IAM_TEST_POSTGRES_TEMPLATE;
-  delete environment.IAM_TEST_APISIX_ADMIN_URL;
-  delete environment.IAM_TEST_APISIX_ADMIN_KEY;
-  delete environment.IAM_GATEWAY_TEST_APISIX_RECORD;
-  const services = ["postgres", "redis"].filter((service) => tasks.some((task) => task.resources[service]));
-  // Even workspaces without shared data services may create child Compose projects.
-  run = await createManagedResourceRun({
-    root,
-    composeFile: "scripts/test-resources/compose.yaml",
-    services,
-    keep: options.keep,
-    registryFile: process.env.IAM_TEST_RESOURCE_REGISTRY,
-  });
-  environment.IAM_TEST_RESOURCE_RUN_ID = run.record.runId;
-  environment.IAM_TEST_RESOURCE_RECORD = run.recordPath;
-  const taskEnvironments = await prepareTaskEnvironments(run, tasks, environment, {
-    signal: controller.signal,
-    timeoutMs: options.timeoutMs,
-    cleanupTimeoutMs: options.cleanupTimeoutMs,
-  });
-  executionStart = performance.now();
-  failures.push(...(await executeTasks({ run, tasks, taskEnvironments, environment, pnpmCli, options, controller })));
+  const logDirectory = join("test-results", "integration", randomUUID(), "logs");
+  await mkdir(logDirectory, { recursive: true });
+  const taskEnvironments = await prepareTaskEnvironments(root, logDirectory, tasks, controller.signal);
+  failures.push(...(await executeTasks({ root, logDirectory, tasks, taskEnvironments, options, controller })));
 } catch (error) {
   failures.push(error);
 } finally {
   clearTimeout(timer);
-  if (run) {
-    if (executionStart !== undefined) run.record.durations.executeMs = Math.round(performance.now() - executionStart);
-    await finishIntegrationRun(run, options.cleanupTimeoutMs, failures, controller.signal);
-    console.log(`[test-resources] timings ${JSON.stringify(run.record.durations)}`);
-    console.log(`[integration] Total wall time ${Math.round(performance.now() - started)} ms`);
-  }
+  console.log(`[integration] Total wall time ${Math.round(performance.now() - started)} ms`);
   process.off("SIGINT", onInterrupt);
   process.off("SIGTERM", onTerminate);
 }

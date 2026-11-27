@@ -34,7 +34,7 @@ import {
   type OrganizationRebuildJobPayload,
 } from "@iam/documents/organization/worker";
 import type { GenericClientRuntimeDto } from "@iam/domain/client";
-import { runProcessCommandSmoke, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
+import { runCommand, spawnOwnedProcessTree } from "@iam/test-support/process-smoke-harness";
 import { mapUnitOfWork } from "@iam/unit-of-work";
 import { createIntegrationRepositories } from "@integration-api/composition/repositories";
 import { createIntegrationUnitOfWork } from "@integration-api/composition/tx";
@@ -277,18 +277,17 @@ async function publishOrganizationChanges(mode: "ordinary" | "repair" = "ordinar
 }
 
 async function reassignCodeWithAdmin(mode: "replace" | "rename-only") {
-  return await runProcessCommandSmoke({
+  return await runCommand({
     label: "Admin organization code reassignment",
     start: () =>
       spawnOwnedProcessTree({
         executable: process.execPath,
         args: ["--no-env-file", "run", "test-integration/organization/organization-code-reassignment.fixture.ts", mode],
         cwd: adminRoot,
-        env: { ...process.env, NODE_ENV: "test", IAM_ADMIN_API_TEST_DATABASE_URL: harness.databaseUrl },
+        env: { ...process.env, NODE_ENV: "test", IAM_TEST_POSTGRES_URL: harness.databaseUrl },
       }),
     expectedExitCode: 0,
     completionTimeoutMs: 10_000,
-    cleanupTimeoutMs: 5_000,
   });
 }
 

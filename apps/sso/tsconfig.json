@@ -15,5 +15,5 @@
       "~sso/*": ["./*"]
     }
   },
-  "include": ["src", "test", "test-integration", "*.ts"]
+  "include": ["src", "test", "*.ts"]
 }

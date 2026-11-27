@@ -7,7 +7,7 @@ import Redis from "ioredis";
 import { destroySingleton, getSingletonKeys } from "../../src/redis/singleton";
 
 test("URL credentials select distinct cached HTTP clients and retain the maintenance connection policy", async () => {
-  const value = process.env.IAM_RUNTIME_TEST_REDIS_URL;
+  const value = process.env.IAM_TEST_REDIS_URL;
   if (!value) throw new Error("Root-managed Redis test resource is required");
   const baseUrl = new URL(value);
   await using cleanup = new AsyncDisposableStack();

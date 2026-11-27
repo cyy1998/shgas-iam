@@ -2,20 +2,12 @@
   "name": "@iam/sso",
   "private": true,
   "iamWorkspace": {
-    "kind": "frontend",
-    "gates": [
-      "container-smoke",
-      "e2e-runtime"
-    ]
+    "kind": "frontend"
   },
   "author": "cyy",
   "scripts": {
     "build": "vite build",
     "dev": "vite",
-    "dev:e2e": "cross-env IAM_SSO_WEB_LOGIN_CREDENTIAL_KID=2026-05-primary IAM_SSO_WEB_LOGIN_CREDENTIAL_PUBLIC_KEY=04112ddd8854e8262db2520bba112535844884c03348a45fcf4ee0f9a967979be52bd46caf43be697ae557ed2e4fa5b4dca8d2dbfa08c0f2f710c0f61591bb17dc vite --host 127.0.0.1 --port 8000 --strictPort",
-    "e2e:install": "playwright install --with-deps chromium",
-    "e2e:install:browsers": "playwright install chromium",
-    "e2e:ui": "playwright test --ui",
     "format": "biome format --write . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --write",
     "lint": "biome check --formatter-enabled=false . && stylelint \"**/*.less\" --allow-empty-input",
     "format:check": "biome format . && prettier \"**/*.{less,md,yaml,yml}\" --ignore-path ../../.gitignore --ignore-path ../../.prettierignore --no-error-on-unmatched-pattern --check",
@@ -24,14 +16,8 @@
     "start": "npm run dev",
     "test": "pnpm test:unit",
     "test:coverage": "vitest run --config vitest.unit.config.ts --coverage",
-    "test:integration:playwright": "node ../../scripts/run-package-integration.mjs playwright --preflight ../../scripts/playwright-e2e-preflight.mjs -- playwright test",
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:watch": "vitest --config vitest.unit.config.ts"
-  },
-  "iamTest": {
-    "integration": {
-      "playwright": {}
-    }
   },
   "dependencies": {
     "@ant-design/cssinjs": "^2.2.0",
@@ -47,7 +33,6 @@
     "react-router": "7.18.5"
   },
   "devDependencies": {
-    "@playwright/test": "^1.65.1",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
