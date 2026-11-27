@@ -3,7 +3,6 @@ import { setTimeout as delay } from "node:timers/promises";
 
 export const testApisixAdminUrlEnv = "IAM_TEST_APISIX_ADMIN_URL";
 export const testApisixAdminKeyEnv = "IAM_TEST_APISIX_ADMIN_KEY";
-
 export const apisixResourceEndpoints = [
   "upstreams",
   "plugin_metadata",
@@ -14,18 +13,13 @@ export const apisixResourceEndpoints = [
   "routes",
 ];
 
-function isEmptyApisixList(list) {
-  if (Array.isArray(list)) return list.length === 0;
-  return Boolean(list) && typeof list === "object" && Object.keys(list).length === 0;
-}
-
-function requestSignal(signal, timeoutMs) {
-  return signal ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs);
-}
+const isEmptyList = (list) =>
+  Array.isArray(list) ? !list.length : Boolean(list) && typeof list === "object" && !Object.keys(list).length;
+const reqSignal = (signal, ms) =>
+  signal ? AbortSignal.any([signal, AbortSignal.timeout(ms)]) : AbortSignal.timeout(ms);
 
 export function parseApisixAdminConfig(environment = process.env) {
-  const rawUrl = environment[testApisixAdminUrlEnv]?.trim();
-  const adminKey = environment[testApisixAdminKeyEnv]?.trim();
+  const [rawUrl, adminKey] = [environment[testApisixAdminUrlEnv]?.trim(), environment[testApisixAdminKeyEnv]?.trim()];
   if (!rawUrl || !adminKey) {
     throw new Error(
       `Gateway APISIX integration tests require ${testApisixAdminUrlEnv} and ${testApisixAdminKeyEnv} from the root Integration runner`,
@@ -41,14 +35,10 @@ export function parseApisixAdminConfig(environment = process.env) {
   ) {
     throw new Error(`Invalid ${testApisixAdminUrlEnv}: ${rawUrl}`);
   }
-  const normalizedPathname = parsed.pathname.replace(/\/+$/u, "");
-  if (!normalizedPathname.endsWith("/apisix/admin")) {
+  const path = parsed.pathname.replace(/\/+$/u, "");
+  if (!path.endsWith("/apisix/admin"))
     throw new Error(`${testApisixAdminUrlEnv} must end with /apisix/admin: ${rawUrl}`);
-  }
-  return {
-    adminUrl: `${parsed.origin}${normalizedPathname}`,
-    adminKey,
-  };
+  return { adminUrl: `${parsed.origin}${path}`, adminKey };
 }
 
 class ApisixAdminAuthError extends Error {}
@@ -61,22 +51,21 @@ export async function waitForApisixAdmin(adminUrl, adminKey, options = {}) {
     pollIntervalMs = 100,
     fetch: fetchImpl = globalThis.fetch,
   } = options;
-  const normalizedAdminUrl = adminUrl.replace(/\/+$/u, "");
+  const baseUrl = adminUrl.replace(/\/+$/u, "");
   const deadline = performance.now() + timeoutMs;
   let failure;
   while (performance.now() < deadline) {
     signal?.throwIfAborted();
     try {
-      const response = await fetchImpl(`${normalizedAdminUrl}/routes`, {
+      const res = await fetchImpl(`${baseUrl}/routes`, {
         headers: { "X-API-KEY": adminKey },
-        signal: requestSignal(signal, requestTimeoutMs),
+        signal: reqSignal(signal, requestTimeoutMs),
       });
-      await response.arrayBuffer();
-      if (response.ok) return;
-      if (response.status === 401 || response.status === 403) {
-        throw new ApisixAdminAuthError(`APISIX Admin rejected credentials with HTTP ${response.status}`);
-      }
-      failure = new Error(`APISIX Admin readiness returned HTTP ${response.status}`);
+      await res.arrayBuffer();
+      if (res.ok) return;
+      if (res.status === 401 || res.status === 403)
+        throw new ApisixAdminAuthError(`APISIX Admin rejected credentials with HTTP ${res.status}`);
+      failure = new Error(`APISIX Admin readiness returned HTTP ${res.status}`);
     } catch (error) {
       if (error instanceof ApisixAdminAuthError) throw error;
       if (signal?.aborted) throw signal.reason;
@@ -91,19 +80,17 @@ export async function waitForApisixAdmin(adminUrl, adminKey, options = {}) {
 
 export async function assertApisixAdminEmpty(adminUrl, adminKey, options = {}) {
   const { signal, requestTimeoutMs = 5000, fetch: fetchImpl = globalThis.fetch } = options;
-  const normalizedAdminUrl = adminUrl.replace(/\/+$/u, "");
+  const baseUrl = adminUrl.replace(/\/+$/u, "");
   for (const endpoint of apisixResourceEndpoints) {
     signal?.throwIfAborted();
-    const response = await fetchImpl(`${normalizedAdminUrl}/${endpoint}?page=1&page_size=10`, {
+    const res = await fetchImpl(`${baseUrl}/${endpoint}?page=1&page_size=10`, {
       headers: { Accept: "application/json", "X-API-KEY": adminKey },
-      signal: requestSignal(signal, requestTimeoutMs),
+      signal: reqSignal(signal, requestTimeoutMs),
     });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`APISIX Admin baseline check failed for ${endpoint}: HTTP ${response.status} ${text}`);
-    }
-    const body = await response.json();
-    if (!body || typeof body !== "object" || body.total !== 0 || !isEmptyApisixList(body.list)) {
+    if (!res.ok)
+      throw new Error(`APISIX Admin baseline check failed for ${endpoint}: HTTP ${res.status} ${await res.text()}`);
+    const body = await res.json();
+    if (!body || typeof body !== "object" || body.total !== 0 || !isEmptyList(body.list)) {
       const count = typeof body?.total === "number" ? ` (total=${body.total})` : "";
       throw new Error(
         `APISIX Admin baseline is not empty for ${endpoint}${count}; refusing to use a non-empty or unknown-ownership APISIX endpoint`,

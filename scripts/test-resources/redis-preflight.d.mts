@@ -7,12 +7,7 @@ export type ParsedTestRedisUrl = {
   username?: string;
   password?: string;
 };
-
-export type RedisPreflightOptions = {
-  requiredSlot?: number;
-  signal?: AbortSignal;
-  timeoutMs?: number;
-};
+export type RedisPreflightOptions = { requiredSlot?: number; signal?: AbortSignal; timeoutMs?: number };
 
 export function parseTestRedisUrl(rawUrl: string, envName?: string): ParsedTestRedisUrl;
 export function formatRedisSlotUrl(rawUrl: string, slot: number, envName?: string): string;
