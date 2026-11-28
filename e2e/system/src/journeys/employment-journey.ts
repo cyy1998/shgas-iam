@@ -113,11 +113,13 @@ async function createEmployment(input: JourneyInput, startTime: string, endTime:
   await pickOption("用户", input.adminUsername);
   const organization = field("任职组织");
   const organizationOption = new RegExp(`\\(${input.organizationCode}\\)$`, "u");
+  const organizationDropdown = page.locator(".ant-tree-select-dropdown:visible");
   await organization.getByRole("combobox").fill(input.organizationCode);
   await expect(async () => {
-    await dropdown.getByText(organizationOption).click({ timeout: 2_000 });
+    await organizationDropdown.getByText(organizationOption).click({ timeout: 2_000 });
     await expect(organization.getByTitle(organizationOption)).toBeVisible({ timeout: 1_000 });
   }).toPass({ timeout: 10_000 });
+  await expect(organizationDropdown).toHaveCount(0);
   await pickOption("岗位", input.positionCode);
   await dialog.getByPlaceholder("开始日").click();
   await chooseCalendarDay(page, startTime);
