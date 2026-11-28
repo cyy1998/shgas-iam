@@ -20,7 +20,7 @@ status: accepted
 
 ## E2E、测试资源与宿主保留约定
 
-本决定当年对原 Hybrid E2E 网络拓扑、内存采样、`patches/@ai-hero__sandcastle` 补丁以及 `scripts/sandcastle/` 做的 Linux 裁剪（明细见 Git 历史），随后已由 [ADR-0059](0059-adopt-native-sandcastle-afk-orchestration.md)（原生 `.sandcastle/` 编排）与 [ADR-0060](0060-unify-test-architecture-sandbox-and-ci-gate.md)（单容器方案 X 与静态生产容器 E2E）整体取代。仍在生效的两项宿主网络规则如下：
+本决定当年对原 Hybrid E2E 网络拓扑、内存采样、`patches/@ai-hero__sandcastle` 补丁以及 `scripts/sandcastle/` 做的 Linux 裁剪（明细见 Git 历史），随后已由 [ADR-0059](0059-adopt-native-sandcastle-afk-orchestration.md)（原生 `.sandcastle/` 编排）与 [ADR-0060](0060-unify-test-architecture-sandbox-and-ci-gate.md)（无特权单容器沙箱与静态生产容器 E2E）整体取代。仍在生效的两项宿主网络规则如下：
 
 - `docker/compose.dev.yaml` 中 Grafana 的 `host.docker.internal:host-gateway` 属于 Linux 容器访问宿主机代理的标准写法，保持不变；
 - [E2E Compose 运行时](../../e2e/system/src/runtime/compose-runtime.ts) 优先直连 Compose bridge IP，失败时回退 `127.0.0.1:<port>`，兼容原生 Linux、WSL2 与 AFK 环境。

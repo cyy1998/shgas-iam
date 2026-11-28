@@ -14,7 +14,7 @@ RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.4" \
     && install -m 0755 /root/.bun/bin/bun /usr/local/bin/bun \
     && rm -rf /root/.bun
 
-# Plan X native integration stack (no Docker CLI/Compose; no resident services):
+# Unprivileged single-container native integration stack (no Docker CLI/Compose; no resident services):
 # PostgreSQL 18.4 (PGDG archive), Redis 8.8.0 (official Redis repo),
 # Apache APISIX 3.16.0 (official APISIX repo), and etcd 3.5.11 (official release binary).
 RUN set -eux; \

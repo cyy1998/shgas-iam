@@ -134,7 +134,7 @@ async function runPhase(
       ? ["- 严格只读。禁止修改文件、Git 或 GitHub 状态，也禁止派生子代理。"]
       : [
           "- 保留提交 Hook，禁止使用 `--no-verify`。核对 Hook 改动并重跑失效的检查。",
-          "- 无特权方案 X 在会话就绪后提供专用 PostgreSQL、Redis 和 APISIX 测试端点。沙箱无 `docker.sock`，禁止运行 `pnpm test:e2e`。",
+          "- 无特权单容器沙箱在会话就绪后提供专用 PostgreSQL、Redis 和 APISIX 测试端点。沙箱无 `docker.sock`，禁止运行 `pnpm test:e2e`。",
           "- Bun 真实 I/O 先用普通 `await`（失败时先捕获 rejection），再做同步断言。禁止使用 `.resolves`、`.rejects` 或 async `toThrow`。",
         ]),
     `- 完成阶段任务并通过必需检查${readonly ? "" : "、确认工作树干净"}后，在最后一行单独输出 \`${COMPLETE}\`。受阻时报告原因与安全恢复点，省略完成标记。`,

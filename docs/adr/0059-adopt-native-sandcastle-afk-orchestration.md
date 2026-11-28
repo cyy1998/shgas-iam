@@ -15,7 +15,7 @@ status: accepted
 ## 核心架构与取舍
 
 - **单目录分层**。编排代码按“流程编排（`afk.ts`）+ 仓库无关的 GitHub/Git 模块（`github.ts`、`git.ts`）+ 本仓会话与 CLI 装配（`session.ts`、`run.mts`、`smoke.mts`）”组织在 `.sandcastle/` 内（各文件职责见[AFK 运维手册](../../.sandcastle/README.md)）。相比抽成独立 workspace package，单目录免去了额外的构建步骤、贴近上游布局，且流程与 Git/GitHub 模块不依赖仓库业务代码。
-- **无特权单容器与安全边界**。可写沙箱采用 [ADR-0060](0060-unify-test-architecture-sandbox-and-ci-gate.md#方案-x单容器预装四件套与非-root-启动) 的方案 X 单容器，在 `onSandboxReady` 完成离线 pnpm store 依赖安装与非 root 测试服务启动；同时挂载 `.sandcastle/cache/turbo`，经 `GIT_CONFIG_VALUE_0=.husky` 复用 `.husky/pre-commit`。关键隔离边界如下：
+- **无特权单容器与安全边界**。可写沙箱采用 [ADR-0060](0060-unify-test-architecture-sandbox-and-ci-gate.md#无特权单容器沙箱预装四件套与非-root-启动) 定义的无特权单容器，在 `onSandboxReady` 完成离线 pnpm store 依赖安装与非 root 测试服务启动；同时挂载 `.sandcastle/cache/turbo`，经 `GIT_CONFIG_VALUE_0=.husky` 复用 `.husky/pre-commit`。关键隔离边界如下：
   - 仅非强制推送精确 `<finalSha>:refs/heads/<specBranch>` 并创建或复用 PR，禁止推送 `main` 或基线分支；启动前校验远端 push/fetch URL 全部指向 `github.com/<repo>`。
   - GitHub 写凭据仅保留在宿主 `gh auth login`，启动沙箱前检查仓库根与目标工作树的 `.sandcastle/.env`（拒绝声明含空值在内的 `GH_TOKEN`/`GITHUB_TOKEN`）与 `.git/config`。
   - 只读双轴评审由 `createSession({ readonly: true })` 构造独立的只读沙箱，工作树与 `.git` 均以只读挂载，仅挂载单向只读认证文件，不挂 `pnpm-store` 与 Turbo 缓存。
@@ -24,7 +24,7 @@ status: accepted
 - **串行合并与按需 Merger**。就绪子票并行实施并只运行受影响范围的聚焦验证；主循环串行执行 `git merge --no-ff <ticketTip>` 并写入 `Sandcastle-Ticket: #<N>` trailer。仅遇到真实合并冲突时中止合并，在 Spec 工作树中启动至多 1 次 Merger Agent（`.sandcastle/prompts/merge.md`）解冲突、重跑聚焦验证并提交，随后核验 `--first-parent --merges` 历史中的合并提交与 trailer（兼容合并后的小修提交）。相比纯串行单沙箱，代价是维护票级工作树与按需 Merger，换取独立切片的并行吞吐与基于 Git 合并历史的断点恢复。
 - **GitHub 原生元数据**。流程固定使用 `type:spec`、`type:ticket`、`ready-for-agent`、`agent:light`、`agent:deep`、`needs-attention` 标签与原生 `subIssues`/`blockedBy`/`linkedBranches`（经有界懒加载 GraphQL 读取并检测分页溢出）；集成分支取自 `linkedBranches`，未关联时默认 `sandcastle/spec-<N>`。
 - **推前评审与轻量门禁**。全部 `OPEN` 子票集成后，并发运行双轴只读评审并执行一次可写 `repair-and-verify`，在干净候选上完成 `pnpm check`、适用的定向测试与 `git diff --check`。
-- **PR 交付与远端验证**。采用 [#457](https://github.com/cyy1998/shgas-iam/issues/457) 方案 A，下线 AFK 侧的远端 `ci-gate` 自动修红闭环。Ready 与 Draft 共用交付路径：复核已有同仓库 PR 的状态与提交历史，非强制推送精确 SHA，幂等复用或创建 PR 并补齐 `Closes #<N>`，再依次摘除子票的 `ready-for-agent`、非强制清理 Spec 工作树、摘除父 Spec 标签。GitHub Actions 与 Branch Protection 判定合入资格，CI 失败由维护者或 T3 Code 交互处理。操作顺序与恢复见 [Sandcastle AFK 工作流](../agents/sandcastle-afk.md#spec-交付与清理)。
+- **PR 交付与远端验证**。下线 AFK 侧的远端 `ci-gate` 自动修红闭环（详见 [#457](https://github.com/cyy1998/shgas-iam/issues/457)）。Ready 与 Draft 共用交付路径：复核已有同仓库 PR 的状态与提交历史，非强制推送精确 SHA，幂等复用或创建 PR 并补齐 `Closes #<N>`，再依次摘除子票的 `ready-for-agent`、非强制清理 Spec 工作树、摘除父 Spec 标签。GitHub Actions 与 Branch Protection 判定合入资格，CI 失败由维护者或 T3 Code 交互处理。操作顺序与恢复见 [Sandcastle AFK 工作流](../agents/sandcastle-afk.md#spec-交付与清理)。
 - **外部互斥**。根脚本经 `flock -n .sandcastle/runner.lock` 保证单实例运行；容器退出后临时进程随单容器回收，无需跨进程宿主容器清理。
 
 ## 验证边界

@@ -26,7 +26,7 @@ status: accepted
 - **统一测试环境变量与建模板前守卫**。全仓原 25 个 `IAM_<PKG>_TEST_(DATABASE|REDIS)_URL` 合并为 `IAM_TEST_POSTGRES_URL` 与 `IAM_TEST_REDIS_URL`，各包 `iamTest.integration` 简化为布尔声明。`requireDedicatedPostgresTestUrl()` 在执行 `CREATE DATABASE` 准备模板库之前先校验：拒绝系统库（`postgres`/`template0`/`template1`）、拒绝匹配 `DATABASE_URL` 或任意 `IAM_*_DATABASE_URL` 开发库，并要求库名显式包含测试标识（如 `iam_test` 或 `*_test`）。
 - **前端测试归入 L1**。退役前端 L2 Playwright、手写构建指纹缓存与自建静态服务（不保留 `build:test`、`dist-test/` 与 `IAM_PW_DEV_SERVER`）。`@iam/admin` 与 `@iam/sso` 的页面和路由行为由 L1 Vitest（`node` + `dom` jsdom/RTL/MSW 及 SSO Vite 代理单测）覆盖，跨服务浏览器与 Cookie 隔离由 L3 Full-system E2E 覆盖，见[测试与验证](../engineering/testing.md#收集与编排)。
 
-## 方案 X：单容器预装四件套与非 root 启动
+## 无特权单容器沙箱：预装四件套与非 root 启动
 
 - **无特权单容器供给测试服务**。沙箱镜像预装 PostgreSQL、Redis、etcd 与 APISIX，不再挂载宿主 `docker.sock`、不使用 `--network=host`，也不引入编排器 Sidecar。容器适配宿主动态 `AGENT_UID` / `AGENT_GID`，可写会话就绪时运行[启动脚本](../../.sandcastle/start-test-infra.sh)以非 root 用户在容器内拉起服务，退出随容器回收；只读会话保留独立的挂载、凭据和网络边界。代价是沙箱镜像体积增大，且基础设施与测试进程共享同一容器。
 
