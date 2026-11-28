@@ -1,0 +1,56 @@
+version: 1
+
+image:
+  dockerfile: .sandcastle/Dockerfile
+  context: .sandcastle
+  tag: iam-sandcastle:local
+
+conventions:
+  branchPrefix: sandcastle/
+  ticketTrailer: Sandcastle-Ticket
+  labels:
+    spec: type:spec
+    ticket: type:ticket
+    ready: ready-for-agent
+    needsAttention: needs-attention
+    agentLight: agent:light
+    agentDeep: agent:deep
+
+agents:
+  source: codex-toml-dir
+  dir: .codex/agents
+
+prompts:
+  dir: .sandcastle/prompts
+  writableBoundaries:
+    - 保留提交 Hook，禁止使用 `--no-verify`。核对 Hook 改动并重跑失效的检查。
+    - 无特权单容器沙箱在会话就绪后提供专用 PostgreSQL、Redis 和 APISIX 测试端点。沙箱无 `docker.sock`，禁止运行 `pnpm test:e2e`。
+    - Bun 真实 I/O 先用普通 `await`（失败时先捕获 rejection），再做同步断言。禁止使用 `.resolves`、`.rejects` 或 async `toThrow`。
+
+sandbox:
+  env:
+    IAM_TEST_POSTGRES_URL: postgresql://iam_test:iam_test@127.0.0.1:55432/iam_test
+    IAM_TEST_REDIS_URL: redis://127.0.0.1:56379/0
+    IAM_TEST_APISIX_ADMIN_URL: http://127.0.0.1:59180/apisix/admin
+    IAM_TEST_APISIX_ADMIN_KEY: iam-gateway-integration-admin-key
+    GIT_CONFIG_COUNT: "1"
+    GIT_CONFIG_KEY_0: core.hooksPath
+    GIT_CONFIG_VALUE_0: .husky
+  caches:
+    - name: pnpm-store
+      scope: shared
+      sandboxPath: /home/agent/.pnpm-store
+    - name: turbo
+      scope: repo
+      sandboxPath: /home/agent/.turbo-cache
+      envVar: TURBO_CACHE_DIR
+  onSandboxReady:
+    - command: HUSKY=0 pnpm install --frozen-lockfile --prefer-offline --store-dir /home/agent/.pnpm-store
+      timeoutMs: 1200000
+    - command: bash .sandcastle/start-test-infra.sh
+      timeoutMs: 120000
+  smokeCommand: >-
+    pnpm test:integration --
+    --file apps/admin-api/test-integration/resources/redis-resource-lifecycle.integration.test.ts
+    --file apps/gateway/test-integration/preview/preview.integration.test.ts
+    && test "$(redis-cli -p 56379 -n 31 PING)" = PONG
