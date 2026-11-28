@@ -20,8 +20,7 @@ function probeAgent(script: string): AgentProvider {
   };
 }
 
-export async function smoke(cwd: string): Promise<void> {
-  const imageName = process.env.SANDCASTLE_IMAGE?.trim() || "iam-sandcastle:local";
+export async function smoke(cwd: string, imageName: string): Promise<void> {
   await runCommand("docker", ["image", "inspect", imageName, "--format", "{{.Id}}"], cwd);
 
   const hostStore = resolveHostPnpmStore(cwd, process.env);
@@ -37,7 +36,6 @@ export async function smoke(cwd: string): Promise<void> {
 
   // Local host loopback listener used to verify containers do NOT run with --network=host.
   const hostLoopbackProbe = createServer((_req, res) => res.end(probeToken));
-  let activeCleanup: (() => Promise<void>) | undefined;
   try {
     await git("init", "--quiet");
     await git("fetch", "--quiet", "--depth=1", cwd, "HEAD");
@@ -70,8 +68,7 @@ export async function smoke(cwd: string): Promise<void> {
     // worktree RO, auth RO, no docker.sock, no docker CLI, no --network=host, no pnpm-store, no turbo cache.
     const roWorktreeDir = join(root, ".sandcastle", "worktrees", "smoke-ro");
     await git("worktree", "add", "-b", "smoke-ro", roWorktreeDir, "smoke-base");
-    const ro = await createSession({ worktree: roWorktreeDir, readonly: true, runId: "smoke-ro" });
-    activeCleanup = ro.cleanup;
+    const ro = await createSession({ readonly: true });
     try {
       const roResult = await run({
         cwd: roWorktreeDir,
@@ -100,7 +97,6 @@ printf '%s\\n' '${COMPLETE}'`),
       assert.equal(roResult.completionSignal, COMPLETE);
     } finally {
       await ro.cleanup?.();
-      activeCleanup = undefined;
     }
     await git("worktree", "remove", roWorktreeDir);
     assert.equal(await readFile(authPath, "utf8"), authContent);
@@ -110,8 +106,7 @@ printf '%s\\n' '${COMPLETE}'`),
     // offline pnpm install, Turbo cache, .husky/pre-commit, and real native PG+Redis+etcd+APISIX integration.
     const worktreeDir = join(root, ".sandcastle", "worktrees", "smoke");
     await git("worktree", "add", "-b", "smoke", worktreeDir, "smoke-base");
-    const rw = await createSession({ worktree: worktreeDir, readonly: false, runId: "smoke-rw" });
-    activeCleanup = rw.cleanup;
+    const rw = await createSession({ readonly: false });
     try {
       const rwResult = await run({
         cwd: worktreeDir,
@@ -151,7 +146,6 @@ printf '%s\\n' '${COMPLETE}'`),
       assert.equal(rwResult.completionSignal, COMPLETE);
     } finally {
       await rw.cleanup?.();
-      activeCleanup = undefined;
     }
 
     assert.equal(await git("show", "smoke:sandcastle-smoke.md"), "# Sandcastle smoke");
@@ -162,7 +156,6 @@ printf '%s\\n' '${COMPLETE}'`),
     console.log("Sandcastle Plan X unprivileged Docker smoke passed.");
   } finally {
     await new Promise<void>((ok) => hostLoopbackProbe.close(() => ok()));
-    await activeCleanup?.().catch(() => {});
     await rm(root, { recursive: true, force: true });
   }
 }

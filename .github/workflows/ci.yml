@@ -133,8 +133,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-workspace
-        with:
-          playwright-filter: "@iam/e2e-system"
+      - name: Install Playwright Chromium
+        run: pnpm --filter @iam/e2e-system exec playwright install --with-deps chromium
       - uses: docker/setup-buildx-action@v3
       - uses: crazy-max/ghaction-github-runtime@v3
       - name: Run full-system E2E suite

@@ -81,7 +81,7 @@ expect(failure).toBeInstanceOf(ExpectedError);
 
 ### Sandcastle 验证
 
-- **常驻边界单测**（`pnpm test:unit:sandcastle`，已纳入根 `pnpm test:unit`）：运行 [`.sandcastle/__tests__/boundaries.test.ts`](../../.sandcastle/__tests__/boundaries.test.ts)，覆盖 GitHub 议题与分支解析、凭据/Git/CLI 预检、无特权单容器沙箱隔离（只读/可写边界与单向 `auth.json`），以及远端 `ci-gate` 自动修红流程与暂停恢复逻辑。单实例互斥由根脚本外层的 `flock -n .sandcastle/runner.lock` 保证。
+- **常驻边界单测**（`pnpm test:unit:sandcastle`，已纳入根 `pnpm test:unit`）：运行 [`.sandcastle/__tests__/boundaries.test.ts`](../../.sandcastle/__tests__/boundaries.test.ts)，覆盖 GitHub 议题与分支解析、凭据/Git/CLI 预检、无特权单容器沙箱隔离（只读/可写边界与单向 `auth.json`），以及票级并发与阻塞解锁、失败排空与软停止、真实 Git 合并和 PR 交付边界。单实例互斥由根脚本外层的 `flock -n .sandcastle/runner.lock` 保证。
 - **类型检查**（`pnpm typecheck:root`）：通过 [Sandcastle tsconfig](../../.sandcastle/tsconfig.json) 与 [scripts tsconfig](../../scripts/tsconfig.json) 检查 `.sandcastle/` 及纳入检查的根脚本。
 - **无特权单容器沙箱真实 Docker 冒烟**（`pnpm sandcastle:smoke`）：经 `node .sandcastle/run.mts --smoke` 调用 [`.sandcastle/smoke.mts`](../../.sandcastle/smoke.mts)，在临时克隆仓库上串行验证两类无特权沙箱——只读评审沙箱（工作树与 `.git` 不可写、无 Docker 权限与宿主机凭据/网络访问）与可写实施沙箱（独占 worktree、无特权容器内启动本地测试服务并实跑原生集成测试、复用 `.husky/pre-commit` 与 Turbo 缓存）。准备、诊断与恢复见[运维手册](../../.sandcastle/README.md#启动与诊断)。
 

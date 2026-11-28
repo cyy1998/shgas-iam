@@ -105,7 +105,7 @@ git diff --check
 | [ADR-0054](adr/0054-disclose-directory-custom-attributes-to-all-eligible-clients.md)    | decision | Current    | 2026-11-22    | 2026-12-22  | 目录自定义属性向具备入口调用资格的应用统一披露。                                                                                                                            |
 | [ADR-0057](adr/0057-split-public-api-by-trust-and-traffic-boundaries.md)                | decision | Current    | 2026-11-27    | 2026-12-27  | 将公共 `apps/api` 拆分为 `auth-api`、`sso-api`、`integration-api`，规范前缀与 APISIX 双轨兼容，无同步 RPC（原验证设施由 ADR-0060 取代）。                                   |
 | [ADR-0058](adr/0058-standardize-development-and-runtime-tooling-on-linux.md)            | decision | Current    | 2026-11-27    | 2026-12-27  | 开发、测试、AFK 编排与运行时统一基于纯 Linux，退役跨平台适配与假 `SIGTERM` 夹具（过渡条款由 ADR-0059、ADR-0060 取代）。                                                     |
-| [ADR-0059](adr/0059-adopt-native-sandcastle-afk-orchestration.md)                       | decision | Current    | 2026-11-27    | 2026-12-27  | 基于零补丁 `@ai-hero/sandcastle@0.14.0` 在 `.sandcastle/` 构建无特权单容器 AFK 编排、按需 Merger、PR 交付与远端 `ci-gate` 限次自动修红。                                    |
+| [ADR-0059](adr/0059-adopt-native-sandcastle-afk-orchestration.md)                       | decision | Current    | 2026-11-28    | 2026-12-28  | 基于零补丁 `@ai-hero/sandcastle@0.14.0` 在 `.sandcastle/` 构建无特权单容器 AFK 编排、按需 Merger、PR 交付与收尾。                                                           |
 | [ADR-0060](adr/0060-unify-test-architecture-sandbox-and-ci-gate.md)                     | decision | Current    | 2026-11-27    | 2026-12-27  | 统一 L1/L2/L3 测试分层与 6 个核心根命令、专用测试端点、前端 Vitest、无特权单容器沙箱、生产容器 E2E 与 `ci-gate` 合入门禁（取代 ADR-0009、0055、0056）。                     |
 
 </details>
@@ -115,14 +115,14 @@ git diff --check
 <details>
 <summary>展开Agent 工作流</summary>
 
-| Document                                             | Type         | Status  | Last verified | Next review | Notes                                                                                                                                                                              |
-| ---------------------------------------------------- | ------------ | ------- | ------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [代码调查与双引擎编排](agents/code-investigation.md) | agent-config | Current | 2026-11-27    | 2026-12-27  | T3 双引擎角色与评审编排、只读调查调用策略、升级条件、返回契约与外置记忆。                                                                                                          |
-| [领域文档规则](agents/domain.md)                     | agent-config | Current | 2026-11-25    | 2026-12-25  | 工程 skills 的领域入口、术语一致性与 ADR 冲突上报规则。                                                                                                                            |
-| [GitHub 议题跟踪](agents/issue-tracker.md)           | agent-config | Current | 2026-11-27    | 2026-12-27  | GitHub spec、ticket 类型、原生任务图、`linkedBranches` 与 `needs-attention` 暂停、T3 绑定、PR 自动关票与交接。                                                                     |
-| [Sandcastle AFK 工作流](agents/sandcastle-afk.md)    | agent-config | Current | 2026-11-27    | 2026-12-27  | `.sandcastle/` 无特权单容器 AFK 编排、并行实施与按需 Merger、只读双轴评审、PR 交付与远端 `ci-gate` 限次自动修红；配置与诊断见[AFK 运维手册](../.sandcastle/README.md#启动与诊断)。 |
-| [Triage Labels](agents/triage-labels.md)             | agent-config | Current | 2026-11-27    | 2026-12-27  | 默认 canonical triage labels、Spec/ticket 互斥类型与 AFK `agent:light`/`agent:deep`/`needs-attention` 标签字典。                                                                   |
-| [工作流补充](agents/workflow.md)                     | agent-config | Current | 2026-11-27    | 2026-12-27  | 三轨开发流、授权与分支、分级验证节奏（本地 `pnpm check` / `pnpm verify` 与远端 `ci-gate` 合入门禁）及 Fast Track `$pr` 交付。                                                      |
+| Document                                             | Type         | Status  | Last verified | Next review | Notes                                                                                                                                                       |
+| ---------------------------------------------------- | ------------ | ------- | ------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [代码调查与双引擎编排](agents/code-investigation.md) | agent-config | Current | 2026-11-27    | 2026-12-27  | T3 双引擎角色与评审编排、只读调查调用策略、升级条件、返回契约与外置记忆。                                                                                   |
+| [领域文档规则](agents/domain.md)                     | agent-config | Current | 2026-11-25    | 2026-12-25  | 工程 skills 的领域入口、术语一致性与 ADR 冲突上报规则。                                                                                                     |
+| [GitHub 议题跟踪](agents/issue-tracker.md)           | agent-config | Current | 2026-11-27    | 2026-12-27  | GitHub spec、ticket 类型、原生任务图、`linkedBranches` 与 `needs-attention` 暂停、T3 绑定、PR 自动关票与交接。                                              |
+| [Sandcastle AFK 工作流](agents/sandcastle-afk.md)    | agent-config | Current | 2026-11-28    | 2026-12-28  | `.sandcastle/` 无特权单容器 AFK 编排、并行实施与按需 Merger、只读双轴评审、PR 交付与收尾；配置与诊断见[AFK 运维手册](../.sandcastle/README.md#启动与诊断)。 |
+| [Triage Labels](agents/triage-labels.md)             | agent-config | Current | 2026-11-27    | 2026-12-27  | 默认 canonical triage labels、Spec/ticket 互斥类型与 AFK `agent:light`/`agent:deep`/`needs-attention` 标签字典。                                            |
+| [工作流补充](agents/workflow.md)                     | agent-config | Current | 2026-11-27    | 2026-12-27  | 三轨开发流、授权与分支、分级验证节奏（本地 `pnpm check` / `pnpm verify` 与远端 `ci-gate` 合入门禁）及 Fast Track `$pr` 交付。                               |
 
 </details>
 

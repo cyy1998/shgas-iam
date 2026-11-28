@@ -16,41 +16,18 @@ import {
   verifyMergeCommit,
 } from "./git.ts";
 import {
-  assertDraftPrReusable,
-  commentOnSpec,
-  DEFAULT_CI_LOG_TAIL_LINES,
-  ensureClosesLines,
-  ensurePrClosesLines,
-  fetchSanitizedCiFailureLogs,
+  createGitHubClient,
   findBlockingOpenTickets,
-  findOpenPullRequest,
   formatIssue,
   isOpenTicket,
-  isSpecAuthorized,
   isSpecReady,
-  listCommitCheckRuns,
-  listCommitWorkflowRuns,
-  listReadySpecNumbers,
-  pauseSpec,
-  readPullRequestState,
-  readSpec,
-  removeReadyLabel,
   resolveSpecBranch,
   type SpecIssue,
-  selectLatestCiGateCheckRun,
   type TicketIssue,
-  upsertPullRequest,
 } from "./github.ts";
 
 const COMPLETE = "<promise>COMPLETE</promise>";
-const CI_REPAIR_COMMENT_PREFIX = "Sandcastle AFK 自动修红（attempt ";
-export const DEFAULT_CI_POLL_INTERVAL_MS = 30_000;
-export const DEFAULT_CI_TIMEOUT_MS = 45 * 60_000;
-export const DEFAULT_CI_RUN_APPEARANCE_TIMEOUT_MS = 5 * 60_000;
-export const DEFAULT_CI_MAX_REPAIRS = 2;
-
-export type AgentSlot = { provider: AgentProvider; instructions: string };
-export type SessionConfig = { sandbox: BindMountSandboxProvider; hooks?: SandboxHooks; cleanup?: () => Promise<void> };
+type SessionConfig = { sandbox: BindMountSandboxProvider; hooks?: SandboxHooks; cleanup?: () => Promise<void> };
 export type AfkOptions = {
   repo: string;
   cwd?: string;
@@ -60,27 +37,20 @@ export type AfkOptions = {
   maxSpecs?: number;
   maxParallel?: number;
   draft?: boolean;
-  ciPollIntervalMs?: number;
-  ciTimeoutMs?: number;
-  ciRunAppearanceTimeoutMs?: number;
-  ciMaxRepairs?: number;
-  ciLogTailLines?: number;
   agents: {
-    light: AgentSlot;
-    standard: AgentSlot;
-    deep: AgentSlot;
-    reviewStandards: AgentSlot;
-    reviewSpec: AgentSlot;
-    repair: AgentSlot;
+    light: AgentProvider;
+    standard: AgentProvider;
+    deep: AgentProvider;
+    reviewStandards: AgentProvider;
+    reviewSpec: AgentProvider;
+    repair: AgentProvider;
   };
-  createSession: (ctx: { worktree: string; readonly: boolean; runId: string }) => Promise<SessionConfig>;
+  createSession: (ctx: { readonly: boolean }) => Promise<SessionConfig>;
   promptsDir: string;
   ghExec?: ExecFn;
-  gitExec?: ExecFn;
-  sleep?: (ms: number) => Promise<void>;
-  now?: () => number;
+  gitRemoteExec?: ExecFn;
 };
-export type AfkResult = {
+type AfkResult = {
   delivered: { spec: number; branch: string; prUrl: string; tickets: number[] }[];
   paused: { spec: number; reason: string }[];
   stopped: number[];
@@ -92,23 +62,12 @@ type RuntimeCtx = {
   remote: string;
   baseBranch: string;
   maxParallel: number;
-  ghExec: ExecFn;
-  sleep: (ms: number) => Promise<void>;
-  now: () => number;
-  ci: {
-    pollIntervalMs: number;
-    timeoutMs: number;
-    runAppearanceTimeoutMs: number;
-    maxRepairs: number;
-    logTailLines: number;
-  };
+  github: ReturnType<typeof createGitHubClient>;
 };
 
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
-const defaultSleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 const git = (dir: string, ...args: string[]): Promise<string> => runCommand("git", args, dir);
 const headSha = (dir: string): Promise<string> => git(dir, "rev-parse", "HEAD");
-const authorized = (ctx: RuntimeCtx, specNum: number) => isSpecAuthorized(ctx.afk.repo, specNum, ctx.cwd, ctx.ghExec);
 const isReadyTicket = (t: TicketIssue): boolean =>
   isOpenTicket(t) && t.labels.includes("ready-for-agent") && !t.labels.includes("needs-attention");
 const blockersMet = (t: TicketIssue, ids: ReadonlySet<number>, done: ReadonlyMap<number, string>): boolean =>
@@ -120,7 +79,7 @@ export const extractTag = (text: string, tag: string): string | undefined =>
 export const hasStandaloneCompletion = (stdout: string): boolean =>
   stdout.split(/\r?\n/).some((line) => line.trim() === COMPLETE);
 
-function selectSlot(ticket: TicketIssue, agents: AfkOptions["agents"]): AgentSlot {
+function selectSlot(ticket: TicketIssue, agents: AfkOptions["agents"]): AgentProvider {
   const [light, deep] = [ticket.labels.includes("agent:light"), ticket.labels.includes("agent:deep")];
   if (light && deep) throw new Error(`Ticket #${ticket.number} 同时带有 agent:light 与 agent:deep 标签。`);
   return light ? agents.light : deep ? agents.deep : agents.standard;
@@ -148,32 +107,10 @@ async function remoteMatchesSha(remote: string, branch: string, sha: string, cwd
   return (await git(cwd, "ls-remote", "--heads", remote, ref)).trim() === `${sha}\t${ref}`;
 }
 
-async function pushExactSha(ctx: RuntimeCtx, branch: string, sha: string, label: string): Promise<void> {
+async function pushExactSha(ctx: RuntimeCtx, branch: string, sha: string): Promise<void> {
   await git(ctx.cwd, "push", "-u", ctx.remote, `${sha}:refs/heads/${branch}`);
   if (!(await remoteMatchesSha(ctx.remote, branch, sha, ctx.cwd))) {
-    throw new Error(`远端分支 ${branch} SHA 与${label} ${sha} 不一致。`);
-  }
-}
-
-async function assertPrOpenReady(
-  ctx: RuntimeCtx,
-  prUrl: string,
-  expectedSha: string,
-  duringRepair = false,
-): Promise<void> {
-  const pr = await readPullRequestState(ctx.afk.repo, prUrl, ctx.cwd, ctx.ghExec);
-  if (duringRepair && (pr.state !== "OPEN" || pr.isDraft)) {
-    throw new Error(
-      `PR #${pr.number}（${pr.url}）在 CI 修红期间状态已变为 ${pr.state}${pr.isDraft ? " (Draft)" : ""}，拒绝推送。`,
-    );
-  }
-  if (pr.state !== "OPEN")
-    throw new Error(`PR #${pr.number}（${pr.url}）状态已变为 ${pr.state}，停止等待远端 ci-gate。`);
-  if (pr.isDraft) throw new Error(`PR #${pr.number}（${pr.url}）当前为 Draft 状态，无法通过远端 ci-gate。`);
-  if (pr.headRefOid !== expectedSha) {
-    throw new Error(
-      `PR #${pr.number}（${pr.url}）headRefOid 已变为 ${pr.headRefOid}，预期为 ${expectedSha}，${duringRepair ? "拒绝推送 CI 修红提交" : "停止等待远端 ci-gate"}。`,
-    );
+    throw new Error(`远端分支 ${branch} SHA 与最终候选 ${sha} 不一致。`);
   }
 }
 
@@ -182,23 +119,35 @@ async function runPhase(
   worktree: string,
   readonly: boolean,
   runId: string,
-  slot: AgentSlot,
+  agent: AgentProvider,
   promptFile: string,
   promptArgs: Record<string, string>,
 ): Promise<string> {
   await preflightCredentials(ctx.cwd, [worktree]);
   const logsDir = join(ctx.cwd, ".sandcastle", "logs");
   await mkdir(logsDir, { recursive: true });
-  const session = await ctx.afk.createSession({ worktree, readonly, runId });
+  const session = await ctx.afk.createSession({ readonly });
+  const phaseBoundaries = [
+    "## AFK 沙箱约束",
+    "- GitHub API 与远端 Git 操作由宿主执行。禁止在沙箱内调用 GitHub API、推送分支或变更 GitHub 状态。",
+    ...(readonly
+      ? ["- 严格只读。禁止修改文件、Git 或 GitHub 状态，也禁止派生子代理。"]
+      : [
+          "- 保留提交 Hook，禁止使用 `--no-verify`。核对 Hook 改动并重跑失效的检查。",
+          "- 无特权方案 X 在会话就绪后提供专用 PostgreSQL、Redis 和 APISIX 测试端点。沙箱无 `docker.sock`，禁止运行 `pnpm test:e2e`。",
+          "- Bun 真实 I/O 先用普通 `await`（失败时先捕获 rejection），再做同步断言。禁止使用 `.resolves`、`.rejects` 或 async `toThrow`。",
+        ]),
+    `- 完成阶段任务并通过必需检查${readonly ? "" : "、确认工作树干净"}后，在最后一行单独输出 \`${COMPLETE}\`。受阻时报告原因与安全恢复点，省略完成标记。`,
+  ].join("\n");
   try {
     const res = await run({
       cwd: worktree,
-      agent: slot.provider,
+      agent,
       sandbox: session.sandbox,
       hooks: readonly ? undefined : session.hooks,
       branchStrategy: { type: "head" },
       promptFile: join(ctx.afk.promptsDir, promptFile),
-      promptArgs: { ROLE_INSTRUCTIONS: slot.instructions, ...promptArgs },
+      promptArgs: { PHASE_BOUNDARIES: phaseBoundaries, ...promptArgs },
       completionSignal: COMPLETE,
       maxIterations: 1,
       name: runId,
@@ -257,7 +206,9 @@ async function mergeTicket(
       `Merge #${ticket.number}: ${ticket.title}\n\n${TRAILER_PREFIX}${ticket.number}`,
       ticketTip,
     );
-    return await verifyMergeCommit(specWorktree, specTipBefore, ticketTip, ticket.number);
+    const mergedSha = await headSha(specWorktree);
+    if (mergedSha === specTipBefore) throw new Error(`合并 #${ticket.number} 未产生新提交。`);
+    return mergedSha;
   } catch (mergeError) {
     const hasMergeHead = await git(specWorktree, "rev-parse", "--verify", "--quiet", "MERGE_HEAD").then(
       () => true,
@@ -277,7 +228,7 @@ async function mergeTicket(
     ctx,
     specWorktree,
     false,
-    `spec-${spec.number}-merge-${ticket.number}-${ctx.now()}`,
+    `spec-${spec.number}-merge-${ticket.number}-${Date.now()}`,
     ctx.afk.agents.standard,
     "merge.md",
     {
@@ -298,7 +249,7 @@ async function runTicketLoop(ctx: RuntimeCtx, initialSpec: SpecIssue, specWorktr
   let spec = initialSpec;
   const inFlight = new Map<number, Promise<TicketOutcome>>();
   const failed: string[] = [];
-  let [softStopped, authFresh, ticketsMerged] = [false, true, 0];
+  let [softStopped, authFresh] = [false, true];
 
   while (true) {
     if (!softStopped && !failed.length && inFlight.size < ctx.maxParallel) {
@@ -307,7 +258,7 @@ async function runTicketLoop(ctx: RuntimeCtx, initialSpec: SpecIssue, specWorktr
         .filter((t) => isReadyTicket(t) && !done.has(t.number) && !inFlight.has(t.number) && blockersMet(t, ids, done))
         .sort((a, b) => a.number - b.number);
       if (ready.length && !authFresh) {
-        if (!(await authorized(ctx, spec.number))) softStopped = true;
+        if (!(await ctx.github.isSpecAuthorized(spec.number))) softStopped = true;
         authFresh = true;
       }
       if (!softStopped) {
@@ -340,7 +291,7 @@ async function runTicketLoop(ctx: RuntimeCtx, initialSpec: SpecIssue, specWorktr
                 ctx,
                 wt,
                 false,
-                `spec-${spec.number}-ticket-${ticket.number}-${ctx.now()}`,
+                `spec-${spec.number}-ticket-${ticket.number}-${Date.now()}`,
                 slot,
                 "implement.md",
                 args,
@@ -359,7 +310,7 @@ async function runTicketLoop(ctx: RuntimeCtx, initialSpec: SpecIssue, specWorktr
 
     if (!inFlight.size) {
       if (softStopped || failed.length) break;
-      spec = await readSpec(ctx.afk.repo, spec.number, ctx.cwd, ctx.ghExec);
+      spec = await ctx.github.readSpec(spec.number);
       authFresh = true;
       if (!isSpecReady(spec.state, spec.labels)) {
         softStopped = true;
@@ -391,7 +342,6 @@ async function runTicketLoop(ctx: RuntimeCtx, initialSpec: SpecIssue, specWorktr
       const tip = await headSha(fin.worktree);
       await git(fin.worktree, "merge-base", "--is-ancestor", fin.baseSha, tip);
       done.set(fin.ticket.number, await mergeTicket(ctx, spec, specWorktree, fin.ticket, fin.branch, tip));
-      ticketsMerged += 1;
       await removeWorktreeIfClean(ctx.cwd, fin.worktree);
       await deleteBranchCas(ctx.cwd, fin.branch, tip);
     } catch (err) {
@@ -400,7 +350,7 @@ async function runTicketLoop(ctx: RuntimeCtx, initialSpec: SpecIssue, specWorktr
   }
 
   if (failed.length) throw new Error(`子票执行或合并失败：${failed.join("；")}`);
-  return { spec, ticketsMerged, stopped: softStopped || (!authFresh && !(await authorized(ctx, spec.number))) };
+  return { spec, stopped: softStopped || (!authFresh && !(await ctx.github.isSpecAuthorized(spec.number))) };
 }
 
 async function reviewAndOpenPr(
@@ -412,7 +362,7 @@ async function reviewAndOpenPr(
   candidateSha: string,
   ticketNums: number[],
   ticketsSummary: string,
-): Promise<{ prUrl: string; sha: string } | { stopped: true }> {
+): Promise<string | undefined> {
   const reviewArgs = {
     BASE_SHA: mergeBase,
     CANDIDATE_SHA: candidateSha,
@@ -424,7 +374,7 @@ async function reviewAndOpenPr(
       ctx,
       specWorktree,
       true,
-      `spec-${spec.number}-review-standards-${ctx.now()}`,
+      `spec-${spec.number}-review-standards-${Date.now()}`,
       ctx.afk.agents.reviewStandards,
       "review-standards.md",
       reviewArgs,
@@ -433,7 +383,7 @@ async function reviewAndOpenPr(
       ctx,
       specWorktree,
       true,
-      `spec-${spec.number}-review-spec-${ctx.now()}`,
+      `spec-${spec.number}-review-spec-${Date.now()}`,
       ctx.afk.agents.reviewSpec,
       "review-spec.md",
       reviewArgs,
@@ -448,7 +398,7 @@ async function reviewAndOpenPr(
     ctx,
     specWorktree,
     false,
-    `spec-${spec.number}-repair-${ctx.now()}`,
+    `spec-${spec.number}-repair-${Date.now()}`,
     ctx.afk.agents.repair,
     "repair-and-verify.md",
     {
@@ -459,158 +409,45 @@ async function reviewAndOpenPr(
   await assertClean(specWorktree, `Repair 工作树（Spec #${spec.number}）`);
   const finalSha = await headSha(specWorktree);
   await git(specWorktree, "merge-base", "--is-ancestor", candidateSha, finalSha);
-  if (!(await authorized(ctx, spec.number))) return { stopped: true };
-  await pushExactSha(ctx, specBranch, finalSha, "最终候选");
+  if (!(await ctx.github.isSpecAuthorized(spec.number))) return undefined;
+  const existing = await ctx.github.findOpenPullRequest(specBranch, ctx.baseBranch);
+  if (existing) {
+    if (existing.state !== "OPEN") throw new Error(`PR #${existing.number} 状态为 ${existing.state}，拒绝推送。`);
+    await assertAncestor(
+      specWorktree,
+      existing.headRefOid,
+      finalSha,
+      `PR #${existing.number} 当前提交 ${existing.headRefOid} 不在最终候选 ${finalSha} 的历史中，拒绝推送。`,
+    );
+  }
+  await pushExactSha(ctx, specBranch, finalSha);
 
   const closeNums = [spec.number, ...ticketNums];
   const fallbackBody = `## Summary\n\n完成 Spec #${spec.number}（${spec.title}）。\n\n## Evidence\n\n- Branch: \`${specBranch}\` @ \`${finalSha}\`\n- Base: \`${mergeBase}\`\n- Tickets: ${ticketNums.map((n) => `#${n}`).join(", ") || "(none)"}`;
-  const prUrl = await upsertPullRequest({
-    repo: ctx.afk.repo,
-    cwd: ctx.cwd,
+  return ctx.github.upsertPullRequest({
     specBranch,
     baseBranch: ctx.baseBranch,
     title: spec.title,
-    body: ensureClosesLines(extractTag(repairOut, "pr-body") ?? fallbackBody, closeNums),
+    body: extractTag(repairOut, "pr-body") ?? fallbackBody,
     closeNums,
-    specNumber: spec.number,
     draft: ctx.afk.draft,
-    execFn: ctx.ghExec,
   });
-  return { prUrl, sha: finalSha };
 }
 
-async function waitAndRepairCiGate(
-  ctx: RuntimeCtx,
-  opts: {
-    spec: SpecIssue;
-    specBranch: string;
-    specWorktree: string;
-    mergeBase: string;
-    ticketsSummary: string;
-    prUrl: string;
-    initialSha: string;
-  },
-): Promise<"passed" | "stopped"> {
-  let [currentSha, pushAt] = [opts.initialSha, ctx.now()];
-  let repairs = opts.spec.comments.filter(({ body }) => body.startsWith(CI_REPAIR_COMMENT_PREFIX)).length;
-  let missingSince: number | undefined;
-
-  while (true) {
-    if (!(await authorized(ctx, opts.spec.number))) return "stopped";
-    await assertPrOpenReady(ctx, opts.prUrl, currentSha);
-    const checkRuns = await listCommitCheckRuns(ctx.afk.repo, currentSha, ctx.cwd, ctx.ghExec);
-    const ciGate = selectLatestCiGateCheckRun(checkRuns, currentSha);
-
-    if (ciGate?.status === "completed") {
-      if (ciGate.conclusion === "success") {
-        await assertPrOpenReady(ctx, opts.prUrl, currentSha);
-        return "passed";
-      }
-      if (repairs >= ctx.ci.maxRepairs) {
-        throw new Error(
-          `远端 ci-gate（${currentSha.slice(0, 8)}）失败（conclusion=${ciGate.conclusion ?? "unknown"}），已达到自动修红上限（${ctx.ci.maxRepairs} 次）。`,
-        );
-      }
-      const failureLogs = await fetchSanitizedCiFailureLogs({
-        repo: ctx.afk.repo,
-        headSha: currentSha,
-        cwd: ctx.cwd,
-        ciGate,
-        maxLines: ctx.ci.logTailLines,
-        execFn: ctx.ghExec,
-      });
-      await assertClean(opts.specWorktree, `CI 修红前 Spec 工作树（Spec #${opts.spec.number}）`);
-      const headBefore = await headSha(opts.specWorktree);
-      if (headBefore !== currentSha)
-        throw new Error(
-          `CI 修红前 Spec 工作树 HEAD（${headBefore.slice(0, 8)}）与远端候选 ${currentSha.slice(0, 8)} 不一致。`,
-        );
-
-      const attempt = repairs + 1;
-      await assertPrOpenReady(ctx, opts.prUrl, currentSha, true);
-      await commentOnSpec(
-        ctx.afk.repo,
-        opts.spec.number,
-        `${CI_REPAIR_COMMENT_PREFIX}${attempt}/${ctx.ci.maxRepairs}，head=${currentSha.slice(0, 8)}）`,
-        ctx.cwd,
-        ctx.ghExec,
-      );
-      await runPhase(
-        ctx,
-        opts.specWorktree,
-        false,
-        `spec-${opts.spec.number}-repair-ci-${attempt}-${ctx.now()}`,
-        ctx.afk.agents.repair,
-        "repair-ci.md",
-        {
-          BASE_SHA: opts.mergeBase,
-          FAILED_SHA: currentSha,
-          PR_URL: opts.prUrl,
-          REPAIR_ATTEMPT: String(attempt),
-          MAX_REPAIRS: String(ctx.ci.maxRepairs),
-          CI_CONCLUSION: ciGate.conclusion ?? "unknown",
-          CI_CHECK_URL: ciGate.html_url ?? ciGate.details_url ?? opts.prUrl,
-          CI_FAILURE_LOGS: failureLogs,
-          SPEC: formatIssue(opts.spec),
-          TICKETS: opts.ticketsSummary,
-        },
-      );
-      await assertClean(opts.specWorktree, `CI 修红后工作树（Spec #${opts.spec.number}，第 ${attempt} 次）`);
-      const newSha = await headSha(opts.specWorktree);
-      if (newSha === currentSha)
-        throw new Error(
-          `CI 自动修红（第 ${attempt}/${ctx.ci.maxRepairs} 次）未产生新提交（HEAD 仍为 ${currentSha.slice(0, 8)}）。`,
-        );
-      await assertAncestor(
-        opts.specWorktree,
-        currentSha,
-        newSha,
-        `CI 自动修红后 HEAD（${newSha.slice(0, 8)}）未包含原失败提交 ${currentSha.slice(0, 8)}，拒绝推送。`,
-      );
-      if (!(await authorized(ctx, opts.spec.number))) return "stopped";
-      await assertPrOpenReady(ctx, opts.prUrl, currentSha, true);
-      await pushExactSha(ctx, opts.specBranch, newSha, "CI 修红提交");
-      [repairs, currentSha, pushAt, missingSince] = [attempt, newSha, ctx.now(), undefined];
-      continue;
-    }
-
-    const active =
-      Boolean(ciGate) ||
-      checkRuns.some((r) => r.status !== "completed") ||
-      (await listCommitWorkflowRuns(ctx.afk.repo, currentSha, ctx.cwd, ctx.ghExec)).some(
-        (r) => r.status !== "completed",
-      );
-    if (active) missingSince = undefined;
-    else {
-      missingSince ??= ctx.now();
-      if (ctx.now() - missingSince >= ctx.ci.runAppearanceTimeoutMs) {
-        throw new Error(
-          `等待 ${currentSha.slice(0, 8)} 触发远端 ci-gate 超时（已等待 ${ctx.ci.runAppearanceTimeoutMs}ms），未检测到运行中的 workflow 或 ci-gate 检查。`,
-        );
-      }
-    }
-    if (ctx.now() - pushAt >= ctx.ci.timeoutMs)
-      throw new Error(`等待远端 ci-gate（${currentSha.slice(0, 8)}）完成超时（已等待 ${ctx.ci.timeoutMs}ms）。`);
-    await ctx.sleep(ctx.ci.pollIntervalMs);
-  }
-}
-
-export async function checkAfk(
-  opts: Pick<AfkOptions, "repo" | "cwd" | "remote" | "baseBranch" | "ghExec" | "gitExec">,
-) {
+export async function checkAfk(opts: Pick<AfkOptions, "repo" | "cwd" | "remote" | "baseBranch">) {
   const [cwd, remote, baseBranch] = [
     resolve(opts.cwd ?? process.cwd()),
     opts.remote ?? "origin",
     opts.baseBranch ?? "main",
   ];
   await preflightCredentials(cwd);
-  await verifyGitRemote(cwd, remote, opts.repo, opts.gitExec ?? runCommand);
+  await verifyGitRemote(cwd, remote, opts.repo);
   await git(cwd, "fetch", remote, baseBranch);
   return {
     repo: opts.repo,
     remote,
     baseBranch,
-    readySpecs: await listReadySpecNumbers(opts.repo, cwd, opts.ghExec ?? runCommand),
+    readySpecs: await createGitHubClient({ repo: opts.repo, cwd }).listReadySpecNumbers(),
   };
 }
 
@@ -621,23 +458,8 @@ export async function runAfk(options: AfkOptions): Promise<AfkResult> {
     options.baseBranch ?? "main",
   ];
   const [maxSpecs, maxParallel] = [options.maxSpecs ?? 1, options.maxParallel ?? 4];
-  const ci = {
-    pollIntervalMs: options.ciPollIntervalMs ?? DEFAULT_CI_POLL_INTERVAL_MS,
-    timeoutMs: options.ciTimeoutMs ?? DEFAULT_CI_TIMEOUT_MS,
-    runAppearanceTimeoutMs: options.ciRunAppearanceTimeoutMs ?? DEFAULT_CI_RUN_APPEARANCE_TIMEOUT_MS,
-    maxRepairs: options.ciMaxRepairs ?? DEFAULT_CI_MAX_REPAIRS,
-    logTailLines: options.ciLogTailLines ?? DEFAULT_CI_LOG_TAIL_LINES,
-  };
-  for (const [k, v, min] of [
-    ["maxSpecs", maxSpecs, 1],
-    ["maxParallel", maxParallel, 1],
-    ["ciPollIntervalMs", ci.pollIntervalMs, 1],
-    ["ciTimeoutMs", ci.timeoutMs, 1],
-    ["ciRunAppearanceTimeoutMs", ci.runAppearanceTimeoutMs, 1],
-    ["ciMaxRepairs", ci.maxRepairs, 0],
-    ["ciLogTailLines", ci.logTailLines, 1],
-  ] as const) {
-    if (!Number.isSafeInteger(v) || v < min) throw new Error(`无效的 ${k}：${v}`);
+  for (const [key, value] of Object.entries({ maxSpecs, maxParallel })) {
+    if (!Number.isSafeInteger(value) || value < 1) throw new Error(`无效的 ${key}：${value}`);
   }
 
   const ctx: RuntimeCtx = {
@@ -646,28 +468,25 @@ export async function runAfk(options: AfkOptions): Promise<AfkResult> {
     remote,
     baseBranch,
     maxParallel,
-    ghExec: options.ghExec ?? runCommand,
-    sleep: options.sleep ?? defaultSleep,
-    now: options.now ?? Date.now,
-    ci,
+    github: createGitHubClient({ repo: options.repo, cwd, execFn: options.ghExec }),
   };
   const result: AfkResult = { delivered: [], paused: [], stopped: [] };
   await preflightCredentials(cwd);
-  await verifyGitRemote(cwd, remote, options.repo, options.gitExec ?? runCommand);
+  await verifyGitRemote(cwd, remote, options.repo, options.gitRemoteExec);
   await git(cwd, "fetch", remote, baseBranch);
 
   const candidates =
     options.specNumber !== undefined
       ? [options.specNumber]
-      : (await listReadySpecNumbers(options.repo, cwd, ctx.ghExec)).slice(0, maxSpecs);
+      : (await ctx.github.listReadySpecNumbers()).slice(0, maxSpecs);
   for (const specNumber of candidates) {
     let spec: SpecIssue;
     try {
-      spec = await readSpec(options.repo, specNumber, cwd, ctx.ghExec);
+      spec = await ctx.github.readSpec(specNumber);
     } catch (error) {
       if (options.specNumber !== undefined) throw error;
       const reason = errMsg(error);
-      await pauseSpec(options.repo, specNumber, reason, cwd, ctx.ghExec);
+      await ctx.github.pauseSpec(specNumber, reason);
       result.paused.push({ spec: specNumber, reason });
       continue;
     }
@@ -679,16 +498,6 @@ export async function runAfk(options: AfkOptions): Promise<AfkResult> {
 
     try {
       const specBranch = resolveSpecBranch(spec, baseBranch);
-      if (options.draft) {
-        const existing = await findOpenPullRequest({
-          repo: options.repo,
-          cwd,
-          specBranch,
-          baseBranch,
-          execFn: ctx.ghExec,
-        });
-        assertDraftPrReusable(specNumber, options.draft, existing);
-      }
       const { specWorktree, mergeBase, done } = await prepareSpecWorktree(ctx, spec, specBranch);
       const loop = await runTicketLoop(ctx, spec, specWorktree, done);
       if (loop.stopped) {
@@ -706,62 +515,27 @@ export async function runAfk(options: AfkOptions): Promise<AfkResult> {
           .map(formatIssue)
           .join("\n\n---\n\n") || "(none)";
 
-      let prUrl: string | undefined;
-      let currentSha = candidateSha;
-      if (!options.draft && loop.ticketsMerged === 0) {
-        const existing = await findOpenPullRequest({
-          repo: options.repo,
-          cwd,
-          specBranch,
-          baseBranch,
-          execFn: ctx.ghExec,
-        });
-        if (existing && !existing.isDraft && (await remoteMatchesSha(remote, specBranch, candidateSha, cwd))) {
-          await ensurePrClosesLines(options.repo, existing, [specNumber, ...ticketNums], cwd, ctx.ghExec);
-          prUrl = existing.url;
-        }
-      }
+      const prUrl = await reviewAndOpenPr(
+        ctx,
+        spec,
+        specBranch,
+        specWorktree,
+        mergeBase,
+        candidateSha,
+        ticketNums,
+        ticketsSummary,
+      );
       if (!prUrl) {
-        const opened = await reviewAndOpenPr(
-          ctx,
-          spec,
-          specBranch,
-          specWorktree,
-          mergeBase,
-          candidateSha,
-          ticketNums,
-          ticketsSummary,
-        );
-        if ("stopped" in opened) {
-          result.stopped.push(specNumber);
-          continue;
-        }
-        [prUrl, currentSha] = [opened.prUrl, opened.sha];
-      }
-
-      if (!prUrl) throw new Error(`Spec #${specNumber} 未能确定 Pull Request URL。`);
-      if (
-        !options.draft &&
-        (await waitAndRepairCiGate(ctx, {
-          spec,
-          specBranch,
-          specWorktree,
-          mergeBase,
-          ticketsSummary,
-          prUrl,
-          initialSha: currentSha,
-        })) === "stopped"
-      ) {
         result.stopped.push(specNumber);
         continue;
       }
-      for (const n of ticketNums) await removeReadyLabel(options.repo, n, cwd, ctx.ghExec);
+      for (const n of ticketNums) await ctx.github.removeReadyLabel(n);
       await removeWorktreeIfClean(cwd, specWorktree);
-      await removeReadyLabel(options.repo, specNumber, cwd, ctx.ghExec);
+      await ctx.github.removeReadyLabel(specNumber);
       result.delivered.push({ spec: specNumber, branch: specBranch, prUrl, tickets: ticketNums });
     } catch (error) {
       const reason = errMsg(error);
-      await pauseSpec(options.repo, specNumber, reason, cwd, ctx.ghExec);
+      await ctx.github.pauseSpec(specNumber, reason);
       result.paused.push({ spec: specNumber, reason });
     }
   }

@@ -81,16 +81,16 @@ export async function verifyGitRemote(
   }
 }
 
-export async function branchExists(cwd: string, branch: string, execFn: ExecFn = runCommand): Promise<boolean> {
+export async function branchExists(cwd: string, branch: string): Promise<boolean> {
   try {
-    await execFn("git", ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`], cwd);
+    await runCommand("git", ["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`], cwd);
     return true;
   } catch {
     return false;
   }
 }
 
-export async function listWorktrees(cwd: string): Promise<{ path: string; branch?: string }[]> {
+async function listWorktrees(cwd: string): Promise<{ path: string; branch?: string }[]> {
   const out = await runCommand("git", ["worktree", "list", "--porcelain"], cwd);
   const items: { path: string; branch?: string }[] = [];
   let current: { path: string; branch?: string } | undefined;

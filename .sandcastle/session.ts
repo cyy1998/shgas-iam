@@ -3,9 +3,9 @@ import { access, lstat, mkdtemp, readFile, rm, writeFile } from "node:fs/promise
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
+  type AgentProvider,
   type BindMountSandboxProvider,
   type BindMountSandboxProviderConfig,
-  type CodexOptions,
   codex,
   createBindMountSandboxProvider,
   type MountConfig,
@@ -14,7 +14,7 @@ import {
 } from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 import { parse } from "smol-toml";
-import type { AfkOptions, AgentSlot } from "./afk.ts";
+import type { AfkOptions } from "./afk.ts";
 
 const SANDBOX_HOME = "/home/agent";
 const SANDBOX_STORE = `${SANDBOX_HOME}/.pnpm-store`;
@@ -33,7 +33,6 @@ const WRITABLE_HOOKS: SandboxHooks = {
   },
 };
 
-type CodexEffort = NonNullable<CodexOptions["effort"]>;
 type RuntimeBindMount = BindMountSandboxProvider & {
   readonly tag: "bind-mount";
   readonly create: BindMountSandboxProviderConfig["create"];
@@ -123,26 +122,22 @@ export async function loadCodexAgents(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<AfkOptions["agents"]> {
   const { mode, apiKey } = resolveCodexAuth(cwd, env);
-  const loadSlot = async (name: (typeof ROLE_NAMES)[number]): Promise<AgentSlot> => {
+  const loadSlot = async (name: (typeof ROLE_NAMES)[number]): Promise<AgentProvider> => {
     const raw = await readFile(join(cwd, ".codex", "agents", `${name.replaceAll("_", "-")}.toml`), "utf8");
     const role = parse(raw);
     const effort = role.model_reasoning_effort;
     if (
-      role.name !== name ||
       typeof role.model !== "string" ||
       !role.model.trim() ||
-      typeof role.developer_instructions !== "string" ||
-      !role.developer_instructions.trim() ||
       (effort !== "low" && effort !== "medium" && effort !== "high" && effort !== "xhigh")
     ) {
       throw new Error(`无效的 AFK 角色配置：${name}`);
     }
-    const provider = codex(role.model, {
-      effort: effort as CodexEffort,
+    return codex(role.model, {
+      effort,
       captureSessions: false,
       env: mode === "api-key" && apiKey ? { CODEX_API_KEY: apiKey } : {},
     });
-    return { provider, instructions: role.developer_instructions };
   };
 
   const [light, standard, deep, reviewStandards, reviewSpec] = await Promise.all(ROLE_NAMES.map(loadSlot));
@@ -159,7 +154,7 @@ export function resolveHostPnpmStore(cwd: string, env: NodeJS.ProcessEnv = proce
   return join(xdgDataHome, "pnpm", "store");
 }
 
-export type RepoSessionFactoryOptions = {
+type RepoSessionFactoryOptions = {
   cwd: string;
   env: NodeJS.ProcessEnv;
   imageName: string;
