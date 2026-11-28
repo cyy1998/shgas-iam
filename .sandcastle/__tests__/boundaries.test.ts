@@ -286,7 +286,7 @@ describe("Credential preflight, remote URLs, Git refs/merges, completion/tag ext
   });
 });
 
-describe("Plan X unprivileged session isolation and one-way auth staging", () => {
+describe("unprivileged session isolation and one-way auth staging", () => {
   test("creates readonly and writable sessions with zero docker.sock/network:host/groups and dedicated test endpoints", async () => {
     const [root, wt] = [await makeTempDir("afk-session-"), await makeTempDir("afk-session-wt-")];
     const [authFile, original] = [join(root, "auth.json"), '{"token":"secret"}\n'];

@@ -104,9 +104,9 @@ git diff --check
 | [ADR-0053](adr/0053-bind-wecom-identities-through-one-qr-flow.md)                       | decision | Current    | 2026-11-17    | 2026-12-17  | 统一扫码流程、多身份绑定与旧接口兼容。                                                                                                                                      |
 | [ADR-0054](adr/0054-disclose-directory-custom-attributes-to-all-eligible-clients.md)    | decision | Current    | 2026-11-22    | 2026-12-22  | 目录自定义属性向具备入口调用资格的应用统一披露。                                                                                                                            |
 | [ADR-0057](adr/0057-split-public-api-by-trust-and-traffic-boundaries.md)                | decision | Current    | 2026-11-27    | 2026-12-27  | 将公共 `apps/api` 拆分为 `auth-api`、`sso-api`、`integration-api`，规范前缀与 APISIX 双轨兼容，无同步 RPC（原验证设施由 ADR-0060 取代）。                                   |
-| [ADR-0058](adr/0058-standardize-development-and-runtime-tooling-on-linux.md)            | decision | Current    | 2026-11-27    | 2026-12-27  | 开发、测试、AFK 编排与运行时统一基于纯 Linux，退役跨平台适配与假 `SIGTERM` 夹具（过渡条款由 ADR-0059、ADR-0060 取代）。                                                     |
+| [ADR-0058](adr/0058-standardize-development-and-runtime-tooling-on-linux.md)            | decision | Current    | 2026-11-28    | 2026-12-28  | 开发、测试、AFK 编排与运行时统一基于纯 Linux，退役跨平台适配与假 `SIGTERM` 夹具（过渡条款由 ADR-0059、ADR-0060 取代）。                                                     |
 | [ADR-0059](adr/0059-adopt-native-sandcastle-afk-orchestration.md)                       | decision | Current    | 2026-11-28    | 2026-12-28  | 基于零补丁 `@ai-hero/sandcastle@0.14.0` 在 `.sandcastle/` 构建无特权单容器 AFK 编排、按需 Merger、PR 交付与收尾。                                                           |
-| [ADR-0060](adr/0060-unify-test-architecture-sandbox-and-ci-gate.md)                     | decision | Current    | 2026-11-27    | 2026-12-27  | 统一 L1/L2/L3 测试分层与 6 个核心根命令、专用测试端点、前端 Vitest、无特权单容器沙箱、生产容器 E2E 与 `ci-gate` 合入门禁（取代 ADR-0009、0055、0056）。                     |
+| [ADR-0060](adr/0060-unify-test-architecture-sandbox-and-ci-gate.md)                     | decision | Current    | 2026-11-28    | 2026-12-28  | 统一 L1/L2/L3 测试分层与 6 个核心根命令、专用测试端点、前端 Vitest、无特权单容器沙箱、生产容器 E2E 与 `ci-gate` 合入门禁（取代 ADR-0009、0055、0056）。                     |
 
 </details>
 

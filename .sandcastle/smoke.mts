@@ -32,7 +32,7 @@ export async function smoke(cwd: string, imageName: string): Promise<void> {
   const authContent = '{"token":"smoke-fixture"}\n';
   const probeToken = `sandcastle-smoke-${randomUUID()}`;
   const git = (...args: string[]) => runCommand("git", args, root);
-  console.log(`Sandcastle Plan X smoke fixture ${root}`);
+  console.log(`Sandcastle unprivileged smoke fixture ${root}`);
 
   // Local host loopback listener used to verify containers do NOT run with --network=host.
   const hostLoopbackProbe = createServer((_req, res) => res.end(probeToken));
@@ -89,7 +89,7 @@ if [ "$(curl --noproxy '*' --silent --max-time 2 http://127.0.0.1:${address.port
 printf '%s\\n' '${COMPLETE}'`),
         sandbox: ro.sandbox,
         branchStrategy: { type: "head" },
-        prompt: "Read-only Plan X Docker smoke probe.",
+        prompt: "Read-only unprivileged Docker smoke probe.",
         logging: { type: "file", path: join(logsDir, "smoke-ro.log") },
         completionSignal: COMPLETE,
         maxIterations: 1,
@@ -101,7 +101,7 @@ printf '%s\\n' '${COMPLETE}'`),
     await git("worktree", "remove", roWorktreeDir);
     assert.equal(await readFile(authPath, "utf8"), authContent);
 
-    // 2. Writable Plan X unprivileged session on host-owned worktree (head mode):
+    // 2. Writable unprivileged session on host-owned worktree (head mode):
     // zero docker.sock / docker CLI / --network=host, dedicated loopback endpoints,
     // offline pnpm install, Turbo cache, .husky/pre-commit, and real native PG+Redis+etcd+APISIX integration.
     const worktreeDir = join(root, ".sandcastle", "worktrees", "smoke");
@@ -138,7 +138,7 @@ printf '%s\\n' '${COMPLETE}'`),
         sandbox: rw.sandbox,
         hooks: rw.hooks,
         branchStrategy: { type: "head" },
-        prompt: "Writable Plan X Docker smoke probe.",
+        prompt: "Writable unprivileged Docker smoke probe.",
         logging: { type: "file", path: join(logsDir, "smoke-rw.log") },
         completionSignal: COMPLETE,
         maxIterations: 1,
@@ -153,7 +153,7 @@ printf '%s\\n' '${COMPLETE}'`),
     await git("worktree", "remove", worktreeDir);
     assert.equal((await git("worktree", "list", "--porcelain")).match(/^worktree /gm)?.length, 1);
     assert.equal(await readFile(join(root, ".git", "config"), "utf8"), hostConfig);
-    console.log("Sandcastle Plan X unprivileged Docker smoke passed.");
+    console.log("Sandcastle unprivileged Docker smoke passed.");
   } finally {
     await new Promise<void>((ok) => hostLoopbackProbe.close(() => ok()));
     await rm(root, { recursive: true, force: true });
