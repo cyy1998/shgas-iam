@@ -40,20 +40,33 @@ test("HR Admin manages cross-root responsibilities without widening either endpo
   await page.goto("/iam-admin/organization-responsibilities/assignments");
   await page.getByRole("button", { name: /新建责任任命/u }).click();
   const createDialog = page.getByRole("dialog", { name: "新建责任任命" });
+  await expect(createDialog).toBeVisible();
+  await expect(createDialog).not.toHaveClass(/ant-zoom-(?:appear|enter)/u);
+  await expect(createDialog).toHaveCSS("transform", "none");
   const formItem = (label: string) => createDialog.locator(".ant-form-item").filter({ hasText: label });
 
-  const targetSelector = formItem("目标组织").getByRole("combobox");
-  const outsideTargetSearch = waitForRpc(page, "admin.organization.selector");
+  const targetOrganization = formItem("目标组织");
+  const targetSelector = targetOrganization.getByRole("combobox");
+  const outsideTargetSearch = waitForRpc(page, "admin.organization.selector", scenario.outsideOrganizationCode);
   await targetSelector.fill(scenario.outsideOrganizationCode);
   const outsideTargets = await readRpcData(await outsideTargetSearch, "admin.organization.selector");
   expect(containsScalarValue(outsideTargets, scenario.outsideOrganizationCode)).toBe(false);
-  const inScopeTargetSearch = waitForRpc(page, "admin.organization.selector");
+
+  const inScopeTargetSearch = waitForRpc(
+    page,
+    "admin.organization.selector",
+    scenario.hrResponsibilityTargetOrganizationCode,
+  );
   await targetSelector.fill(scenario.hrResponsibilityTargetOrganizationCode);
-  await inScopeTargetSearch;
-  await page
-    .getByText(new RegExp(escapeRegExp(scenario.hrResponsibilityTargetOrganizationCode), "u"))
-    .last()
-    .click();
+  const inScopeTargets = await readRpcData(await inScopeTargetSearch, "admin.organization.selector");
+  expect(containsScalarValue(inScopeTargets, scenario.hrResponsibilityTargetOrganizationCode)).toBe(true);
+  const targetOption = new RegExp(`\\(${escapeRegExp(scenario.hrResponsibilityTargetOrganizationCode)}\\)$`, "u");
+  const targetDropdown = page.locator(".ant-tree-select-dropdown:visible");
+  await expect(async () => {
+    await targetDropdown.getByText(targetOption).click({ timeout: 2_000 });
+    await expect(targetOrganization.getByTitle(targetOption)).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 10_000 });
+  await expect(targetDropdown).toHaveCount(0);
 
   const responsibilityType = formItem("责任类型");
   const typeSelector = responsibilityType.getByRole("combobox");
@@ -61,14 +74,16 @@ test("HR Admin manages cross-root responsibilities without widening either endpo
   await typeSelector.press("ArrowDown");
   await typeSelector.press("Enter");
   await expect(responsibilityType.getByTitle("分管领导", { exact: true })).toBeVisible();
+  await expect(page.locator(".ant-select-dropdown:visible")).toHaveCount(0);
+
   const employment = formItem("任职");
   const employmentSelector = employment.getByRole("combobox");
-  const employmentSearch = waitForRpc(page, "admin.employment.search");
+  const employmentSearch = waitForRpc(page, "admin.employment.search", scenario.adminUsername);
   await employmentSelector.fill(scenario.adminUsername);
   const employmentChoices = await readRpcData(await employmentSearch, "admin.employment.search");
   expect(containsScalarValue(employmentChoices, scenario.outsideResponsibilityHolderPositionCode)).toBe(false);
   const holderOption = new RegExp(escapeRegExp(scenario.responsibilityHolderPositionCode), "u");
-  await page.getByTitle(holderOption).hover();
+  await page.locator(".ant-select-dropdown:visible").getByTitle(holderOption).hover();
   await employmentSelector.press("Enter");
   await expect(employment.getByTitle(holderOption)).toBeVisible();
   const createProcedure = "admin.organizationResponsibility.createAssignment";
@@ -494,8 +509,13 @@ async function searchAssignments(
   return body.data;
 }
 
-async function waitForRpc(page: Page, procedure: string) {
-  return await page.waitForResponse((response) => isSuccessfulRpcResponse(response, procedure));
+async function waitForRpc(page: Page, procedure: string, inputIncludes?: string) {
+  return await page.waitForResponse(
+    (response) =>
+      isSuccessfulRpcResponse(response, procedure) &&
+      (inputIncludes === undefined ||
+        Boolean(new URL(response.url()).searchParams.get("input")?.includes(inputIncludes))),
+  );
 }
 
 function rpcEntry(response: Response, payload: unknown, procedure: string): unknown {
